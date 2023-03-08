@@ -1,0 +1,23 @@
+
+  ,ggg, ,ggg,_,ggg,   ,ggg,         gg  ,gggggggggggg,            ,ggggggggggg,
+ dP""Y8dP""Y88P""Y8b dP""Y8a        88 dP"""88""""""Y8b,         dP"""88""""""Y8,
+ Yb, `88'  `88'  `88 Yb, `88        88 Yb,  88       `8b,        Yb,  88      `8b
+  `"  88    88    88  `"  88        88  `"  88        `8b         `"  88      ,8P
+      88    88    88      88        88      88         Y8             88aaaad8P"
+      88    88    88      88        88      88         d8 aaaaaaaa    88""""Yb,
+      88    88    88      88        88      88        ,8P """"""""    88     "8b
+      88    88    88      88        88      88       ,8P'             88      `8i
+      88    88    Y8,     Y8b,____,d88,     88______,dP'              88       Yb,
+      88    88    `Y8      "Y888888P"Y8    888888888P"                88        Y8
+
+
+                            Based on CircleMUD 3.1,
+                            Created by Jeremy Elson
+
+                      A derivative of DikuMUD (GAMMA 0.0),
+                created by Hans-Henrik Staerfeldt, Katja Nyboe,
+               Tom Madsen, Michael Seifert, and Sebastian Hammer
+
+                    Rust re-Implementation by Laurent Pautet
+
+By what name do you wish to be known?
