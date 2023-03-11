@@ -8,29 +8,35 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+mod ban;
+mod class;
 mod config;
 mod constants;
 mod db;
+mod interpreter;
 mod modify;
 mod structs;
+mod telnet;
 mod util;
 
 use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
+use crate::interpreter::nanny;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::*;
+use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
 use env_logger::Env;
 use log::{debug, error, info, warn};
 use std::cell::RefCell;
+use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-use std::{env, fs, io, process, thread};
-use std::fs::read;
+use std::{env, fs, process, thread};
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
@@ -40,7 +46,8 @@ pub struct DescriptorData<'a> {
     // file descriptor for socket
     host: String,
     // hostname
-    // byte	bad_pws;		/* number of bad pw attemps this login	*/
+    bad_pws: u8,
+    /* number of bad pw attemps this login	*/
     idle_tics: u8,
     /* tics idle at password prompt		*/
     connected: ConState,
@@ -63,9 +70,8 @@ pub struct DescriptorData<'a> {
     // long	mail_to;		/* name for mail system			*/
     has_prompt: bool,
     /* is the user at a prompt?             */
-    inbuf: [u8; MAX_RAW_INPUT_LENGTH],
+    inbuf: String,
     /* buffer for raw input		*/
-    inbuf_len: u16,
     // char	last_input[MAX_INPUT_LENGTH]; /* the last input			*/
     // char small_outbuf[SMALL_BUFSIZE];  /* standard output buffer		*/
     history: Vec<String>,
@@ -75,7 +81,7 @@ pub struct DescriptorData<'a> {
     // int  bufptr;			/* ptr to end of current output		*/
     // int	bufspace;		/* space left in the output buffer	*/
     // struct txt_block *large_outbuf; /* ptr to large buffer, if we need it */
-    // struct txt_q input;		/* q of unprocessed input		*/
+    input: LinkedList<TxtBlock>,
     character: Option<CharData<'a>>,
     /* linked to char			*/
     // struct char_data *original;	/* original char if switched		*/
@@ -85,7 +91,7 @@ pub struct DescriptorData<'a> {
 }
 
 /* local globals */
-struct MainGlobals<'a> {
+pub struct MainGlobals<'a> {
     db: Option<Rc<RefCell<DB<'a>>>>,
     mother_desc: Option<Box<TcpListener>>,
     descriptor_list: Vec<Rc<RefCell<DescriptorData<'a>>>>,
@@ -271,11 +277,11 @@ fn init_game(globals: Rc<RefCell<MainGlobals>>, _port: u16) {
     // signal_setup();
 
     /* If we made it this far, we will be able to restart without problem. */
-    fs::remove_file(Path::new(db::KILLSCRIPT)).unwrap();
+    fs::remove_file(Path::new(KILLSCRIPT)).unwrap();
 
     info!("Entering game loop.");
 
-    game_loop(&globals);
+    game_loop(globals);
 
     //Crash_save_all();
 
@@ -450,19 +456,19 @@ fn init_socket(port: u16) -> Box<TcpListener> {
  * output and sending it out to players, and calling "heartbeat" functions
  * such as mobile_activity().
  */
-fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
+fn game_loop(main_globals: Rc<RefCell<MainGlobals>>) {
     let opt_time = Duration::from_micros(OPT_USEC as u64);
     let mut process_time;
     let mut temp_time;
     let mut before_sleep;
     // let mut now;
     let mut timeout;
-    // char comm[MAX_INPUT_LENGTH];
+    let mut comm = String::new();
     // struct descriptor_data * d, * next_d;
     let mut pulse: u32 = 0;
     let mut missed_pulses;
     //        let mut maxdesc;
-    //        let mut aliased;
+    let mut aliased = false;
 
     /* initialize various time values */
     // null_time.tv_sec = 0;
@@ -472,9 +478,12 @@ fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
     let mut last_time = Instant::now();
 
     /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
-    while !RefCell::borrow(main_globals).circle_shutdown {
+    while !RefCell::borrow(&main_globals).circle_shutdown {
         /* Sleep if we don't have any connections */
-        if RefCell::borrow_mut(main_globals).descriptor_list.is_empty() {
+        if RefCell::borrow_mut(&main_globals)
+            .descriptor_list
+            .is_empty()
+        {
             debug!("No connections.  Going to sleep.");
             // match listener.accept() {
             //     Ok((_socket, addr)) => {
@@ -546,7 +555,7 @@ fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
         thread::sleep(timeout);
 
         /* If there are new connections waiting, accept them. */
-        let accept_result = RefCell::borrow(main_globals)
+        let accept_result = RefCell::borrow(&main_globals)
             .mother_desc
             .as_ref()
             .unwrap()
@@ -554,7 +563,7 @@ fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
         match accept_result {
             Ok((socket, addr)) => {
                 info!("New connection {}.  Waking up.", addr);
-                new_descriptor(main_globals, socket, addr);
+                new_descriptor(&main_globals, socket, addr);
             }
             Err(e) => match e.kind() {
                 ErrorKind::WouldBlock => (),
@@ -563,65 +572,84 @@ fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
         }
 
         /* Process descriptors with input pending */
-        for d in &RefCell::borrow(main_globals).descriptor_list {
+        for d in &RefCell::borrow(&main_globals).descriptor_list {
             let mut buf = [0 as u8];
-            if RefCell::borrow(d).stream.peek(&mut buf) {
+            let res = RefCell::borrow(d).stream.peek(&mut buf);
+            if res.is_ok() && res.unwrap() != 0 {
                 process_input(d);
             }
         }
 
+        let my_main_globals = RefCell::borrow(&main_globals);
         /* Process commands we just read from process_input */
-        // for (d = descriptor_list; d; d = next_d) {
-        //     next_d = d -> next;
-        //
-        //     /*
-        //      * Not combined to retain --(d->wait) behavior. -gg 2/20/98
-        //      * If no wait state, no subtraction.  If there is a wait
-        //      * state then 1 is subtracted. Therefore we don't go less
-        //      * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
-        //      */
-        //     if (d -> character) {
-        //         GET_WAIT_STATE(d -> character) -= (GET_WAIT_STATE(d -> character) > 0);
-        //
-        //         if (GET_WAIT_STATE(d -> character))
-        //         continue;
-        //     }
-        //
-        //     if (!get_from_q(&d -> input, comm, &aliased))
-        //     continue;
-        //
-        //     if (d -> character) {
-        //         /* Reset the idle timer & pull char back from void if necessary */
-        //         d -> character -> char_specials.timer = 0;
-        //         if (STATE(d) == ConPlaying & &GET_WAS_IN(d -> character) != NOWHERE) {
-        //             if (IN_ROOM(d -> character) != NOWHERE)
-        //             char_from_room(d -> character);
-        //             char_to_room(d -> character, GET_WAS_IN(d -> character));
-        //             GET_WAS_IN(d -> character) = NOWHERE;
-        //             act("$n has returned.", TRUE, d -> character, 0, 0, TO_ROOM);
-        //         }
-        //         GET_WAIT_STATE(d -> character) = 1;
-        //     }
-        //     d -> has_prompt = FALSE;
-        //
-        //     if (d -> str)        /* Writing boards, mail, etc. */
-        //     string_add(d, comm);
-        //     else if (d -> showstr_count) /* Reading something w/ pager */
-        //     show_string(d, comm);
-        //     else if (STATE(d) != ConPlaying) /* In menus, etc. */
-        //     nanny(d, comm);
-        //     else {
-        //         /* else: we're playing normally. */
-        //         if (aliased)        /* To prevent recursive aliases. */
-        //         d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
-        //         else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
-        //         get_from_q(&d ->input, comm, &aliased);
-        //         command_interpreter(d -> character, comm); /* Send it to interpreter */
-        //     }
-        // }
+        for d in &my_main_globals.descriptor_list {
+            /*
+             * Not combined to retain --(d->wait) behavior. -gg 2/20/98
+             * If no wait state, no subtraction.  If there is a wait
+             * state then 1 is subtracted. Therefore we don't go less
+             * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
+             */
+            if RefCell::borrow(d).character.is_some() {
+                let wait_state =
+                    get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap());
+                if wait_state > 0 {
+                    get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) -= 1;
+                }
+
+                if get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) != 0 {
+                    continue;
+                }
+            }
+
+            if !get_from_q(&mut RefCell::borrow_mut(d).input, &mut comm, &mut aliased) {
+                continue;
+            }
+
+            if RefCell::borrow(d).character.is_some() {
+                /* Reset the idle timer & pull char back from void if necessary */
+                RefCell::borrow_mut(d)
+                    .character
+                    .as_mut()
+                    .unwrap()
+                    .char_specials
+                    .timer = 0;
+                if state!(RefCell::borrow_mut(d)) == ConPlaying
+                /* && GET_WAS_IN(d -> character) != NOWHERE */
+                {
+                    // if (IN_ROOM(d -> character) != NOWHERE)
+                    // char_from_room(d -> character);
+                    // char_to_room(d -> character, GET_WAS_IN(d -> character));
+                    // GET_WAS_IN(d -> character) = NOWHERE;
+                    // act("$n has returned.", TRUE, d -> character, 0, 0, TO_ROOM);
+                }
+                get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) = 1;
+            }
+            RefCell::borrow_mut(d).has_prompt = false;
+
+            // if RefCell::borrow(d).str.is_some() {
+            //     /* Writing boards, mail, etc. */
+            //     string_add(d, comm);
+            // }
+            // else
+            // if  RefCell::borrow(d).showstr_count {
+            //     /* Reading something w/ pager */
+            //     show_string(d, comm);
+            // } else
+            if state!(RefCell::borrow(d)) != ConPlaying {
+                /* In menus, etc. */
+                nanny(main_globals.clone(), d.clone(), comm.as_str());
+            } else {
+                /* else: we're playing normally. */
+                // if (aliased)        /* To prevent recursive aliases. */
+                // d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
+                // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
+                // get_from_q(&d ->input, comm, &aliased);
+                // command_interpreter(d -> character, comm); /* Send it to interpreter */
+            }
+        }
 
         /* Send queued output out to the operating system (ultimately to user). */
-        for d in &RefCell::borrow(main_globals).descriptor_list {
+        for d in &RefCell::borrow(&main_globals).descriptor_list {
             if RefCell::borrow(d).output.is_some() {
                 process_output(d);
                 if RefCell::borrow(d).output.is_some()
@@ -633,10 +661,10 @@ fn game_loop(main_globals: &Rc<RefCell<MainGlobals>>) {
         }
 
         /* Print prompts for other descriptors who had no other output */
-        for d in &RefCell::borrow(main_globals).descriptor_list {
+        for d in &RefCell::borrow(&main_globals).descriptor_list {
             if !RefCell::borrow(d).has_prompt
                 && (RefCell::borrow(d).output.is_none()
-                || RefCell::borrow(d).output.as_ref().unwrap().len() != 0)
+                    || RefCell::borrow(d).output.as_ref().unwrap().len() != 0)
             {
                 let text = &make_prompt(d);
                 write_to_descriptor(&mut RefCell::borrow_mut(d).stream, text);
@@ -784,36 +812,30 @@ fn heartbeat(_pulse: u32) {
 /*
  * Turn off echoing (specific to telnet client)
  */
-// void echo_off(struct descriptor_data * d)
-// {
-// char off_string[] =
-// {
-// (char) IAC,
-// (char) WILL,
-// (char) TELOPT_ECHO,
-// (char) 0,
-// };
-//
-// write_to_output(d, "%s", off_string);
-// }
+fn echo_off(d: &mut DescriptorData) {
+    let mut off_string = "".to_string();
+    off_string.push(char::from(IAC));
+    off_string.push(char::from(WILL));
+    off_string.push(char::from(TELOPT_ECHO));
+    off_string.push(char::from(0));
+
+    write_to_output(d, off_string.as_str());
+}
 
 /*
  * Turn on echoing (specific to telnet client)
  */
-// void echo_on(struct descriptor_data * d)
-// {
-// char on_string[] =
-// {
-// (char) IAC,
-// (char) WONT,
-// (char) TELOPT_ECHO,
-// (char) 0
-// };
-//
-// write_to_output(d, "%s", on_string);
-// }
+fn echo_on(d: &mut DescriptorData) {
+    let mut off_string = "".to_string();
+    off_string.push(char::from(IAC));
+    off_string.push(char::from(WONT));
+    off_string.push(char::from(TELOPT_ECHO));
+    off_string.push(char::from(0));
 
-fn make_prompt<'a>(d: &'a Rc<RefCell<DescriptorData>>) -> String {
+    write_to_output(d, off_string.as_str());
+}
+
+fn make_prompt(d: &Rc<RefCell<DescriptorData>>) -> String {
     let mut prompt = "".to_string();
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
@@ -869,9 +891,10 @@ fn make_prompt<'a>(d: &'a Rc<RefCell<DescriptorData>>) -> String {
     } else if RefCell::borrow(d).connected == ConPlaying
         && is_npc!(RefCell::borrow(d).character.as_ref().unwrap())
     {
+        let borrowed_d = RefCell::borrow(d);
         prompt.push_str(&*format!(
             "{}s>",
-            get_name!(RefCell::borrow(d).character.as_ref().unwrap())
+            get_name!(borrowed_d.character.as_ref().unwrap())
         ));
     }
 
@@ -881,46 +904,28 @@ fn make_prompt<'a>(d: &'a Rc<RefCell<DescriptorData>>) -> String {
 /*
  * NOTE: 'txt' must be at most MAX_INPUT_LENGTH big.
  */
-// void write_to_q(const char * txt, struct txt_q * queue, int aliased)
-// {
-// struct txt_block * newt;
-//
-// CREATE(newt, struct txt_block, 1);
-// newt -> text = strdup(txt);
-// newt -> aliased = aliased;
-//
-// /* queue empty? */
-// if ( ! queue -> head) {
-// newt -> next = NULL;
-// queue -> head = queue -> tail = newt;
-// } else {
-// queue -> tail -> next = newt;
-// queue ->tail = newt;
-// newt -> next = NULL;
-// }
-// }
+fn write_to_q(txt: &str, queue: &mut LinkedList<TxtBlock>, aliased: bool) {
+    let newt = TxtBlock {
+        text: String::from(txt),
+        aliased,
+    };
+
+    queue.push_back(newt);
+}
 
 /*
  * NOTE: 'dest' must be at least MAX_INPUT_LENGTH big.
  */
-// int get_from_q(struct txt_q * queue, char *dest, int *aliased)
-// {
-// struct txt_block * tmp;
-//
-// /* queue empty? */
-// if ( ! queue ->head)
-// return (0);
-//
-// strcpy(dest, queue -> head -> text); /* strcpy: OK (mutual MAX_INPUT_LENGTH) */
-// * aliased = queue -> head -> aliased;
-//
-// tmp = queue-> head;
-// queue -> head = queue -> head-> next;
-// free(tmp -> text);
-// free(tmp);
-//
-// return (1);
-// }
+fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut bool) -> bool {
+    let elt = queue.pop_front();
+    if elt.is_none() {
+        return false;
+    }
+    let elt = elt.unwrap();
+    *dest = elt.text;
+    *aliased = elt.aliased;
+    return true;
+}
 
 /* Empty the queues before closing connection */
 // void flush_queues(struct descriptor_data * d)
@@ -938,7 +943,7 @@ fn make_prompt<'a>(d: &'a Rc<RefCell<DescriptorData>>) -> String {
 // }
 
 /* Add a new string to a player's output queue. */
-fn write_to_output(t: Rc<RefCell<DescriptorData>>, txt: &str) {
+fn write_to_output(t: &mut DescriptorData, txt: &str) {
     // static char txt[MAX_STRING_LENGTH];
     // size_t wantsize;
     // int size;
@@ -998,14 +1003,10 @@ fn write_to_output(t: Rc<RefCell<DescriptorData>>, txt: &str) {
     // t -> bufspace = LARGE_BUFSIZE - 1 - t -> bufptr;
     //
     // return (t -> bufspace);
-    if RefCell::borrow(&t).output.is_none() {
-        RefCell::borrow_mut(&t).output = Some(txt.to_string());
+    if t.output.is_none() {
+        t.output = Some(txt.to_string());
     } else {
-        RefCell::borrow_mut(&t)
-            .output
-            .as_mut()
-            .unwrap()
-            .push_str(txt);
+        t.output.as_mut().unwrap().push_str(txt);
     }
 }
 
@@ -1111,6 +1112,7 @@ fn new_descriptor(main_globals: &Rc<RefCell<MainGlobals>>, socket: TcpStream, ad
     let newd = Rc::new(RefCell::new(DescriptorData {
         stream: socket,
         host: "".parse().unwrap(),
+        bad_pws: 0,
         idle_tics: 0,
         connected: ConState::ConGetName,
         desc_num: RefCell::borrow(main_globals).last_desc,
@@ -1121,8 +1123,10 @@ fn new_descriptor(main_globals: &Rc<RefCell<MainGlobals>>, socket: TcpStream, ad
         showstr_page: 0,
         str: None,
         has_prompt: false,
+        inbuf: String::new(),
         history: vec![],
         output: None,
+        input: LinkedList::new(),
         character: None,
     }));
 
@@ -1179,14 +1183,14 @@ fn new_descriptor(main_globals: &Rc<RefCell<MainGlobals>>, socket: TcpStream, ad
         .push(newd.clone());
 
     write_to_output(
-        newd.clone(),
+        &mut RefCell::borrow_mut(&newd),
         format!(
             "{}",
             RefCell::borrow(RefCell::borrow(main_globals).db.as_ref().unwrap())
                 .greetings
                 .borrow()
         )
-            .as_str(),
+        .as_str(),
     );
 }
 
@@ -1436,70 +1440,87 @@ fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
  * Same information about perform_socket_write applies here. I like
  * standards, there are so many of them. -gg 6/30/98
  */
-fn perform_socket_read(mut stream: TcpStream, read_point: &mut [u8]) -> std::io::Result<usize> {
-    let ret = stream.read(read_point);
-    ret
-//
-// # if defined(CIRCLE_ACORN)
-// ret = recv(desc, read_point, space_left, MSG_DONTWAIT);
-// # elif defined(CIRCLE_WINDOWS)
-// ret = recv(desc, read_point, space_left, 0);
-// # else
-// ret = read(desc, read_point, space_left);
-// # endif
-//
-// /* Read was successful. */
-// if (ret > 0)
-// return (ret);
-//
-// /* read() returned 0, meaning we got an EOF. */
-// if (ret == 0) {
-// log("WARNING: EOF on socket read (connection broken by peer)");
-// return ( - 1);
-// }
-//
-// /*
-//  * read returned a value < 0: there was an error
-//  */
-//
-// # if defined(CIRCLE_WINDOWS)    /* Windows */
-// if (WSAGetLastError() == WSAEWOULDBLOCK | | WSAGetLastError() == WSAEINTR)
-// return (0);
-// # else
-//
-// # ifdef EINTR        /* Interrupted system call - various platforms */
-// if (errno == EINTR)
-// return (0);
-// # endif
-//
-// # ifdef EAGAIN        /* POSIX */
-// if (errno == EAGAIN)
-// return (0);
-// # endif
-//
-// # ifdef EWOULDBLOCK    /* BSD */
-// if (errno == EWOULDBLOCK)
-// return (0);
-// # endif /* EWOULDBLOCK */
-//
-// # ifdef EDEADLK        /* Macintosh */
-// if (errno == EDEADLK)
-// return (0);
-// # endif
-//
-// # ifdef ECONNRESET
-// if (errno == ECONNRESET)
-// return ( - 1);
-// # endif
-//
-// #endif /* CIRCLE_WINDOWS */
-//
-// /*
-//  * We don't know what happened, cut them off. This qualifies for
-//  * a SYSERR because we have no idea what happened at this point.
-//  */
-// perror("SYSERR: perform_socket_read: about to lose connection");
-// return ( - 1);
+fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
+    let stream = &mut d.stream;
+    let input = &mut d.inbuf;
+
+    let mut buf = [0 as u8; 4096];
+
+    let r = stream.read(&mut buf);
+    if r.is_err() {
+        error!("{:?}", r);
+        return r;
+    }
+
+    let r = r.unwrap();
+    let s = std::str::from_utf8(&buf[..r]);
+    if s.is_err() {
+        error!("UTF-8 ERROR {:?}", r);
+        return Ok(0);
+    }
+    input.push_str(s.unwrap());
+    return Ok(r);
+    //
+    // # if defined(CIRCLE_ACORN)
+    // ret = recv(desc, read_point, space_left, MSG_DONTWAIT);
+    // # elif defined(CIRCLE_WINDOWS)
+    // ret = recv(desc, read_point, space_left, 0);
+    // # else
+    // ret = read(desc, read_point, space_left);
+    // # endif
+    //
+    // /* Read was successful. */
+    // if (ret > 0)
+    // return (ret);
+    //
+    // /* read() returned 0, meaning we got an EOF. */
+    // if (ret == 0) {
+    // log("WARNING: EOF on socket read (connection broken by peer)");
+    // return ( - 1);
+    // }
+    //
+    // /*
+    //  * read returned a value < 0: there was an error
+    //  */
+    //
+    // # if defined(CIRCLE_WINDOWS)    /* Windows */
+    // if (WSAGetLastError() == WSAEWOULDBLOCK | | WSAGetLastError() == WSAEINTR)
+    // return (0);
+    // # else
+    //
+    // # ifdef EINTR        /* Interrupted system call - various platforms */
+    // if (errno == EINTR)
+    // return (0);
+    // # endif
+    //
+    // # ifdef EAGAIN        /* POSIX */
+    // if (errno == EAGAIN)
+    // return (0);
+    // # endif
+    //
+    // # ifdef EWOULDBLOCK    /* BSD */
+    // if (errno == EWOULDBLOCK)
+    // return (0);
+    // # endif /* EWOULDBLOCK */
+    //
+    // # ifdef EDEADLK        /* Macintosh */
+    // if (errno == EDEADLK)
+    // return (0);
+    // # endif
+    //
+    // # ifdef ECONNRESET
+    // if (errno == ECONNRESET)
+    // return ( - 1);
+    // # endif
+    //
+    // #endif /* CIRCLE_WINDOWS */
+    //
+    // /*
+    //  * We don't know what happened, cut them off. This qualifies for
+    //  * a SYSERR because we have no idea what happened at this point.
+    //  */
+    // perror("SYSERR: perform_socket_read: about to lose connection");
+    // return ( - 1);
 }
 
 /*
@@ -1517,19 +1538,18 @@ fn perform_socket_read(mut stream: TcpStream, read_point: &mut [u8]) -> std::io:
  */
 fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
     let buf_length;
-    let failed_subst;
-    let bytes_read;
-    let space_left;
-    let ptr: &str;
-    let read_point: &mut [u8];
-    let read_point_len;
-    let write_point: &mut [u8];
-    let mut nl_pos: Option<& [u8]> = None;
-    let mut tmp: [u8; MAX_INPUT_LENGTH] = [0; MAX_INPUT_LENGTH];
+    let mut failed_subst;
+    let mut bytes_read;
+    let mut space_left;
+    let mut read_point = 0;
+    let mut write_point = "".to_string();
+    let mut nl_pos: Option<usize> = None;
+    let mut tmp = String::new();
 
     /* first, find the point where we left off reading data */
-    buf_length = RefCell::borrow(t).inbuf_len;
-    read_point = &mut RefCell::borrow_mut(t).inbuf[buf_length..];
+    let mut mut_t = RefCell::borrow_mut(t);
+    buf_length = mut_t.inbuf.len();
+    read_point = buf_length;
     space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
 
     loop {
@@ -1538,7 +1558,8 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
             return -1;
         }
 
-        bytes_read = perform_socket_read(RefCell::borrow_mut(t).stream, read_point);
+        bytes_read = perform_socket_read(&mut mut_t);
+        info!("{} {} {:?}", buf_length, mut_t.inbuf.capacity(), bytes_read);
 
         if bytes_read.is_err() {
             /* Error, disconnect them. */
@@ -1551,20 +1572,20 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         }
 
         /* at this point, we know we got some data from the read */
-        read_point_len = bytes_read;
-        read_point[bytes_read] = 0;
 
         /* search for a newline in the data we just read */
-        for (i, x) in read_point {
-            if x == 0 || nl_pos.is_some() {
+        for i in read_point..read_point + bytes_read {
+            let x = mut_t.inbuf.chars().nth(i).unwrap();
+
+            if nl_pos.is_some() {
                 break;
             }
             if isnewl!(x) {
-                nl_pos = Some(&read_point[i..]);
+                nl_pos = Some(i);
             }
         }
 
-        read_point = &mut read_point[bytes_read..];
+        read_point += bytes_read;
         space_left -= bytes_read;
         if nl_pos.is_some() {
             break;
@@ -1576,58 +1597,57 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
      * can copy the formatted data to a new array for further processing.
      */
 
-    let read_point = & RefCell::borrow(t).inbuf;
+    let read_point = 0;
 
+    let ptr = 0 as usize;
     while nl_pos.is_some() {
-        write_point = &mut tmp;
+        tmp.truncate(0);
         space_left = MAX_INPUT_LENGTH - 1;
 
         /* The '> 1' reserves room for a '$ => $$' expansion. */
-        for (i, x) in read_point {
-            if space_left <= 1 || read_point[i] >= nl_pos {
+        for ptr in 0..mut_t.inbuf.len() {
+            let x = mut_t.inbuf.chars().nth(ptr).unwrap();
+            if space_left <= 1 || ptr >= nl_pos.unwrap() {
                 break;
             }
-            if x == b'\b' as u8 || x == 127 {
+            if x == 8 as char /* \b */ || x == 127 as char {
                 /* handle backspacing or delete key */
-                if write_point > 0 {
-                    write_point -= 1
-                    if tmp[write_point] == b'$' {
-                        write_point -= 1;
+                if !tmp.is_empty() {
+                    tmp.pop();
+                    if !tmp.is_empty() && tmp.chars().last().unwrap() == '$' {
+                        tmp.pop();
                         space_left += 2;
                     } else {
                         space_left += 1;
                     }
                 }
-            } else if (isascii(x) && isprint(x)) {
-                tmp[write_point] = x;
-                write_point += 1;
-                if x == b'$' {
-                    tmp[write_point] = x;
-                    write_point += 1;
+            } else if x.is_ascii() && !x.is_control() {
+                tmp.push(x);
+                if x == '$' {
+                    tmp.push(x);
                     space_left -= 2;
                 } else {
                     space_left -= 1;
                 }
             }
         }
-        tmp[write_point] = 0;
 
-        if (space_left <= 0) && (i < nl_pos) {
-            let buffer = format!("Line too long.  Truncated to:\r\n{}\r\n", str::from_utf8(tmp));
+        if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
+            let buffer = format!("Line too long.  Truncated to:\r\n{}\r\n", tmp);
 
-            if write_to_descriptor(&mut RefCell::borrow_mut(t).stream, str::from_utf8(tmp)) {
+            if write_to_descriptor(&mut RefCell::borrow_mut(t).stream, tmp.as_str()) < 0 {
                 return -1;
             }
         }
 
-// if (t -> snoop_by)
-// write_to_output(t ->snoop_by, "%% %s\r\n", tmp);
+        // if (t -> snoop_by)
+        // write_to_output(t ->snoop_by, "%% %s\r\n", tmp);
         failed_subst = 0;
 
-        if x == b'!' && tmp[i+1] == 0 {
+        if tmp == "!" {
             /* Redo last command. */
             //strcpy(tmp, t -> last_input); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
-        } else if x == b'!' && tmp[i+1] != 0 {
+        } else if tmp.starts_with('!') && tmp.len() > 1 {
             // char * commandln = (tmp + 1);
             // int
             // starting_pos = t -> history_pos,
@@ -1647,7 +1667,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
             //         cnt = HISTORY_SIZE;
             //     }
             // }
-        } else if x == b'^' {
+        } else if tmp.starts_with('^') {
             // if (!(failed_subst = perform_subst(t, t -> last_input, tmp)))
             // strcpy(t -> last_input, tmp);    /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
         } else {
@@ -1662,33 +1682,34 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         }
 
         // if (!failed_subst)
-        // write_to_q(tmp, &t -> input, 0);
+        write_to_q(tmp.as_str(), &mut mut_t.input, false);
 
         /* find the end of this line */
-        while isnewl!(nl_pos[0]) {
-            nl_pos = Some(&nl_pos.unwrap()[1..]);
+        while nl_pos.unwrap() < mut_t.inbuf.len()
+            && isnewl!(mut_t.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+        {
+            nl_pos = Some(nl_pos.unwrap() + 1);
         }
 
         /* see if there's another newline in the input buffer */
-        read_point = ptr = nl_pos;
-        for (nl_pos = NULL; * ptr & & ! nl_pos; ptr + +)
-        if (ISNEWL(*ptr))
-        nl_pos = ptr;
+        let read_point = nl_pos.unwrap();
+        nl_pos = None;
+        for i in read_point..mut_t.inbuf.len() {
+            if isnewl!(mut_t.inbuf.chars().nth(i).unwrap()) {
+                nl_pos = Some(i);
+                break;
+            }
+        }
     }
+    mut_t.inbuf.drain(..read_point + 1);
 
-    /* now move the rest of the buffer up to the beginning for the next pass */
-    write_point = t -> inbuf;
-    while (*read_point)
-        * (write_point + +) = *(read_point + +);
-    *write_point = '\0';
-
-    return (1);
+    return 1;
 }
 
-    /* perform substitution for the '^..^' csh-esque syntax orig is the
-     * orig string, i.e. the one being modified.  subst contains the
-     * substition string, i.e. "^telm^tell"
-     */
+/* perform substitution for the '^..^' csh-esque syntax orig is the
+ * orig string, i.e. the one being modified.  subst contains the
+ * substition string, i.e. "^telm^tell"
+ */
 // int perform_subst(struct descriptor_data * t, char *orig, char *subst)
 // {
 // char newsub[MAX_INPUT_LENGTH + 5];
@@ -1818,13 +1839,13 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // }
 // }
 
-    /*
-     * I tried to universally convert Circle over to POSIX compliance, but
-     * alas, some systems are still straggling behind and don't have all the
-     * appropriate defines.  In particular, NeXT 2.x defines O_NDELAY but not
-     * O_NONBLOCK.  Krusty old NeXT machines!  (Thanks to Michael Jones for
-     * this and various other NeXT fixes.)
-     */
+/*
+ * I tried to universally convert Circle over to POSIX compliance, but
+ * alas, some systems are still straggling behind and don't have all the
+ * appropriate defines.  In particular, NeXT 2.x defines O_NDELAY but not
+ * O_NONBLOCK.  Krusty old NeXT machines!  (Thanks to Michael Jones for
+ * this and various other NeXT fixes.)
+ */
 
 // # if defined(CIRCLE_WINDOWS)
 //
@@ -1881,9 +1902,9 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // }
 //
 // # endif  /* CIRCLE_UNIX || CIRCLE_OS2 || CIRCLE_MACINTOSH */
-    /* ******************************************************************
-    *  signal-handling functions (formerly signals.c).  UNIX only.      *
-    ****************************************************************** */
+/* ******************************************************************
+ *  signal-handling functions (formerly signals.c).  UNIX only.      *
+ ****************************************************************** */
 
 // # if defined(CIRCLE_UNIX) | | defined(CIRCLE_MACINTOSH)
 //
@@ -1928,19 +1949,19 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // }
 //
 // # endif    /* CIRCLE_UNIX */
-    /*
-     * This is an implementation of signal() using sigaction() for portability.
-     * (sigaction() is POSIX; signal() is not.)  Taken from Stevens' _Advanced
-     * Programming in the UNIX Environment_.  We are specifying that all system
-     * calls _not_ be automatically restarted for uniformity, because BSD systems
-     * do not restart select(), even if SA_RESTART is used.
-     *
-     * Note that NeXT 2.x is not POSIX and does not have sigaction; therefore,
-     * I just define it to be the old signal.  If your system doesn't have
-     * sigaction either, you can use the same fix.
-     *
-     * SunOS Release 4.0.2 (sun386) needs this too, according to Tim Aldric.
-     */
+/*
+ * This is an implementation of signal() using sigaction() for portability.
+ * (sigaction() is POSIX; signal() is not.)  Taken from Stevens' _Advanced
+ * Programming in the UNIX Environment_.  We are specifying that all system
+ * calls _not_ be automatically restarted for uniformity, because BSD systems
+ * do not restart select(), even if SA_RESTART is used.
+ *
+ * Note that NeXT 2.x is not POSIX and does not have sigaction; therefore,
+ * I just define it to be the old signal.  If your system doesn't have
+ * sigaction either, you can use the same fix.
+ *
+ * SunOS Release 4.0.2 (sun386) needs this too, according to Tim Aldric.
+ */
 
 // # ifndef POSIX
 // # define my_signal(signo, func) signal(signo, func)
@@ -2001,9 +2022,9 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // }
 //
 // # endif    /* CIRCLE_UNIX || CIRCLE_MACINTOSH */
-    /* ****************************************************************
-    *       Public routines for system-to-player-communication        *
-    **************************************************************** */
+/* ****************************************************************
+ *       Public routines for system-to-player-communication        *
+ **************************************************************** */
 
 // size_t send_to_char(struct char_data * ch, const char * messg, ...)
 // {
@@ -2081,7 +2102,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // # define CHECK_NULL(pointer, expression) \
 // if ((pointer) == NULL) i = ACTNULL; else i = (expression);
 
-    /* higher-level communication: the act() function */
+/* higher-level communication: the act() function */
 // void perform_act(const char * orig, struct char_data * ch, struct obj_data * obj,
 // const void * vict_obj, const struct char_data * to)
 // {

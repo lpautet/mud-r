@@ -7,6 +7,7 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
+
 #[macro_export]
 macro_rules! is_set {
     ($flag:expr, $bit:expr) => {
@@ -38,7 +39,7 @@ macro_rules! prf_flagged {
 #[macro_export]
 macro_rules! prf_flags {
     ($ch:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.saved.pref))
+        (check_player_special!(($ch), ($ch).player_specials.as_ref().unwrap().saved.pref))
     };
 }
 
@@ -59,7 +60,10 @@ macro_rules! check_player_special {
 #[macro_export]
 macro_rules! get_invis_lev {
     ($ch:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.saved.invis_level))
+        (check_player_special!(
+            ($ch),
+            ($ch).player_specials.as_ref().unwrap().saved.invis_level
+        ))
     };
 }
 
@@ -87,7 +91,14 @@ macro_rules! get_move {
 #[macro_export]
 macro_rules! get_pc_name {
     ($ch:expr) => {
-        (($ch).player.name)
+        (($ch).player.name.as_str())
+    };
+}
+
+#[macro_export]
+macro_rules! is_print {
+    ($c:expr) => {
+        (($c) > 31 && ($c) != 127)
     };
 }
 
@@ -95,7 +106,7 @@ macro_rules! get_pc_name {
 macro_rules! get_name {
     ($ch:expr) => {
         (if is_npc!($ch) {
-            ($ch).player.short_descr
+            ($ch).player.short_descr.as_str()
         } else {
             get_pc_name!($ch)
         })
@@ -105,10 +116,44 @@ macro_rules! get_name {
 #[macro_export]
 macro_rules! isnewl {
     ($ch:expr) => {
-        ((ch) == '\n' as u8 || (ch) == '\r' as u8))
-    }
+        (($ch) == '\n' || ($ch) == '\r')
+    };
 }
 
+#[macro_export]
+macro_rules! get_wait_state {
+    ($ch:expr) => {
+        (($ch).wait)
+    };
+}
+
+#[macro_export]
+macro_rules! state {
+    ($d:expr) => {
+        (($d).connected)
+    };
+}
+
+#[macro_export]
+macro_rules! get_passwd {
+    ($ch:expr) => {
+        (($ch).passwd)
+    };
+}
+
+#[macro_export]
+macro_rules! get_class {
+    ($ch:expr) => {
+        (($ch).player.chclass)
+    };
+}
+
+#[macro_export]
+macro_rules! get_pfilepos {
+    ($ch:expr) => {
+        (($ch).pfilepos)
+    };
+}
 /* external globals */
 // extern struct time_data time_info;
 
@@ -554,7 +599,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
 // case 'p':  case 'q':  case 'r':  case 's':  case 't':
 // middle = "P-T";
 // break;
-// case 'u':  case 'v':  case 'w':  case 'x':  case 'y':  case 'z':
+// case 'u':  case 'v':  case 'w':  case 'X':  case 'y':  case 'z':
 // middle = "U-Z";
 // break;
 // default:
