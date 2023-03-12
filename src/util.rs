@@ -39,7 +39,7 @@ macro_rules! prf_flagged {
 #[macro_export]
 macro_rules! prf_flags {
     ($ch:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.as_ref().unwrap().saved.pref))
+        (check_player_special!(($ch), RefCell::borrow(&(($ch).player_specials)).saved.pref))
     };
 }
 
@@ -62,7 +62,7 @@ macro_rules! get_invis_lev {
     ($ch:expr) => {
         (check_player_special!(
             ($ch),
-            ($ch).player_specials.as_ref().unwrap().saved.invis_level
+            RefCell::borrow(&(($ch).player_specials)).saved.invis_level
         ))
     };
 }
@@ -137,7 +137,7 @@ macro_rules! state {
 #[macro_export]
 macro_rules! get_passwd {
     ($ch:expr) => {
-        (($ch).passwd)
+        (($ch).player.passwd)
     };
 }
 
@@ -154,6 +154,115 @@ macro_rules! get_pfilepos {
         (($ch).pfilepos)
     };
 }
+
+#[macro_export]
+macro_rules! get_level {
+    ($ch:expr) => {
+        (($ch).player.level)
+    };
+}
+
+#[macro_export]
+macro_rules! get_exp {
+    ($ch:expr) => {
+        (($ch).points.exp)
+    };
+}
+
+#[macro_export]
+macro_rules! get_max_hit {
+    ($ch:expr) => {
+        (($ch).points.max_hit)
+    };
+}
+
+#[macro_export]
+macro_rules! get_max_mana {
+    ($ch:expr) => {
+        (($ch).points.max_mana)
+    };
+}
+
+#[macro_export]
+macro_rules! get_max_move {
+    ($ch:expr) => {
+        (($ch).points.max_move)
+    };
+}
+
+#[macro_export]
+macro_rules! get_home {
+    ($ch:expr) => {
+        (($ch).player.hometown)
+    };
+}
+
+#[macro_export]
+macro_rules! get_ac {
+    ($ch:expr) => {
+        (($ch).points.armor)
+    };
+}
+
+#[macro_export]
+macro_rules! get_talk {
+    ($ch:expr, $i:expr) => {
+        (check_player_special!(($ch), ($ch).player_specials.saved.talks[($i)]))
+    };
+}
+
+#[macro_export]
+macro_rules! get_cond {
+    ($ch:expr, $i:expr) => {
+        (check_player_special!(($ch), ($ch).player_specials.saved.conditions[($i)]))
+    };
+}
+
+#[macro_export]
+macro_rules! get_loadroom {
+    ($ch:expr) => {
+        (check_player_special!(($ch), ($ch).player_specials.saved.load_room))
+    };
+}
+
+#[macro_export]
+macro_rules! get_sex {
+    ($ch:expr) => {
+        (($ch).player.sex)
+    };
+}
+#[macro_export]
+macro_rules! get_height {
+    ($ch:expr) => {
+        (($ch).player.height)
+    };
+}
+#[macro_export]
+macro_rules! get_weight {
+    ($ch:expr) => {
+        (($ch).player.weight)
+    };
+}
+
+#[macro_export]
+macro_rules! get_idnum {
+    ($ch:expr) => {
+        (($ch).char_specials.saved.idnum)
+    };
+}
+
+#[macro_export]
+macro_rules! aff_flags {
+    ($ch:expr) => {
+        (($ch).char_specials.saved.affected_by)
+    };
+}
+#[macro_export]
+macro_rules! get_save {
+    ($ch:expr, $i:expr) => {
+        (($ch).char_specials.saved.apply_saving_throw[($i)])
+    };
+}
 /* external globals */
 // extern struct time_data time_info;
 
@@ -161,31 +270,31 @@ macro_rules! get_pfilepos {
 // struct time_info_data *real_time_passed(time_t t2, time_t t1);
 // struct time_info_data *mud_time_passed(time_t t2, time_t t1);
 // void prune_crlf(char *txt);
-
+use rand::Rng;
 /* creates a random number in interval [from;to] */
-// int rand_number(int from, int to)
-// {
-// /* error checking in case people call this incorrectly */
-// if (from > to) {
-// int tmp = from;
-// from = to;
-// to = tmp;
-// log("SYSERR: rand_number() should be called with lowest, then highest. (%d, %d), not (%d, %d).", from, to, to, from);
-// }
-//
-// /*
-//  * This should always be of the form:
-//  *
-//  *	((float)(to - from + 1) * rand() / (float)(RAND_MAX + from) + from);
-//  *
-//  * if you are using rand() due to historical non-randomness of the
-//  * lower bits in older implementations.  We always use circle_random()
-//  * though, which shouldn't have that problem. Mean and standard
-//  * deviation of both are identical (within the realm of statistical
-//  * identity) if the rand() implementation is non-broken.
-//  */
-// return ((circle_random() % (to - from + 1)) + from);
-// }
+pub fn rand_number(from: u32, to: u32) -> u32 {
+    /* error checking in case people call this incorrectly */
+    // if from > to {
+    // let  tmp = from;
+    // from = to;
+    // to = tmp;
+    // log("SYSERR: rand_number() should be called with lowest, then highest. (%d, %d), not (%d, %d).", from, to, to, from);
+    // }
+
+    /*
+     * This should always be of the form:
+     *
+     *	((float)(to - from + 1) * rand() / (float)(RAND_MAX + from) + from);
+     *
+     * if you are using rand() due to historical non-randomness of the
+     * lower bits in older implementations.  We always use circle_random()
+     * though, which shouldn't have that problem. Mean and standard
+     * deviation of both are identical (within the realm of statistical
+     * identity) if the rand() implementation is non-broken.
+     */
+    //return (circle_random() % (to - from + 1)) + from;
+    return rand::thread_rng().gen_range(from..to + 1);
+}
 
 /* simulates dice roll */
 // int dice(int num, int size)

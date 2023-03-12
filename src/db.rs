@@ -9,15 +9,30 @@
 ************************************************************************ */
 
 use crate::modify::paginate_string;
-use crate::util::prune_crlf;
-use crate::MainGlobals;
-use log::{error, info};
+use crate::structs::{CharData, CharFileU, LVL_IMPL, MAX_SKILLS, MAX_TONGUE, NOWHERE, SEX_MALE};
+use crate::util::{prune_crlf, rand_number, touch};
+use crate::{
+    aff_flags, check_player_special, get_ac, get_cond, get_exp, get_height, get_hit, get_home,
+    get_idnum, get_level, get_loadroom, get_max_hit, get_max_mana, get_max_move, get_move,
+    get_name, get_pc_name, get_save, get_sex, get_talk, get_weight, is_npc, is_set, mob_flags,
+    MainGlobals, MOB_ISNPC,
+};
+use log::{error, info, warn};
 use std::cell::RefCell;
+use std::fs::File;
+use std::io::{ErrorKind, Seek, SeekFrom};
+use std::path::Path;
 use std::rc::Rc;
-use std::{fs, io};
+use std::{fs, io, mem, slice};
 
 pub const KILLSCRIPT: &str = "./.killscript";
 const GREETINGS_FILE: &str = "text/greetings";
+const PLAYER_FILE: &str = "etc/players";
+
+struct PlayerIndexElement {
+    name: String,
+    id: i64,
+}
 
 pub struct DB<'a> {
     pub(crate) globals: Option<Rc<RefCell<MainGlobals<'a>>>>,
@@ -39,10 +54,11 @@ pub struct DB<'a> {
     // zone_rnum top_of_zone_table = 0;/* top element of zone tab	 */
     // struct message_list fight_messages[MAX_MESSAGES];	/* fighting messages	 */
     //
-    // struct player_index_element *player_table = NULL;	/* index to plr file	 */
-    // FILE *player_fl = NULL;		/* file desc of player file	 */
-    // int top_of_p_table = 0;		/* ref to top of table		 */
-    // long top_idnum = 0;		/* highest idnum in use		 */
+    player_table: Vec<PlayerIndexElement>,
+    /* index to plr file	 */
+    player_fl: Option<RefCell<File>>, /* file desc of player file	 */
+    top_of_p_table: i32,              /* ref to top of table		 */
+    top_idnum: i32,                   /* highest idnum in use		 */
     //
     // int no_mail = 0;		/* mail disabled?		 */
     // int mini_mud = 0;		/* mini-mud mode?		 */
@@ -373,8 +389,12 @@ pub struct DB<'a> {
 //
 /* body of the booting system */
 pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
-    let ret = DB {
+    let mut ret = DB {
         globals: Some(main_globals.clone()),
+        player_table: vec![],
+        player_fl: None,
+        top_of_p_table: 0,
+        top_idnum: 0,
         greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
     };
     // zone_rnum i;
@@ -412,10 +432,10 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
     //
     // log("Loading help entries.");
     // index_boot(DB_BOOT_HLP);
-    //
-    // log("Generating player index.");
-    // build_player_index();
-    //
+
+    info!("Generating player index.");
+    ret.build_player_index();
+
     // log("Loading fight messages.");
     // load_messages();
     //
@@ -559,61 +579,75 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
 // player_table = NULL;
 // top_of_p_table = 0;
 // }
-//
-//
-// /* generate index table for the player file */
-// void build_player_index(void)
-// {
-// int nr = -1, i;
-// long size, recs;
-// struct char_file_u dummy;
-//
-// if (!(player_fl = fopen(PLAYER_FILE, "r+b"))) {
-// if (errno != ENOENT) {
-// perror("SYSERR: fatal error opening playerfile");
-// exit(1);
-// } else {
-// log("No playerfile.  Creating a new one.");
-// touch(PLAYER_FILE);
-// if (!(player_fl = fopen(PLAYER_FILE, "r+b"))) {
-// perror("SYSERR: fatal error opening playerfile");
-// exit(1);
-// }
-// }
-// }
-//
-// fseek(player_fl, 0L, SEEK_END);
-// size = ftell(player_fl);
-// rewind(player_fl);
-// if (size % sizeof(struct char_file_u))
-// log("\aWARNING:  PLAYERFILE IS PROBABLY CORRUPT!");
-// recs = size / sizeof(struct char_file_u);
-// if (recs) {
-// log("   %ld players in database.", recs);
-// CREATE(player_table, struct player_index_element, recs);
-// } else {
-// player_table = NULL;
-// top_of_p_table = -1;
-// return;
-// }
-//
-// for (;;) {
-// fread(&dummy, sizeof(struct char_file_u), 1, player_fl);
-// if (feof(player_fl))
-// break;
-//
-// /* new record */
-// nr++;
-// CREATE(player_table[nr].name, char, strlen(dummy.name) + 1);
-// for (i = 0; (*(player_table[nr].name + i) = LOWER(*(dummy.name + i))); i++)
-// ;
-// player_table[nr].id = dummy.char_specials_saved.idnum;
-// top_idnum = MAX(top_idnum, dummy.char_specials_saved.idnum);
-// }
-//
-// top_of_p_table = nr;
-// }
-//
+
+impl DB<'_> {
+    /* generate index table for the player file */
+    fn build_player_index<'a>(&mut self) {
+        let mut nr = -1;
+        let size: usize;
+        let recs: u64;
+        // struct char_file_u
+        // dummy;
+
+        let mut player_file: File;
+        let mut r = File::open(PLAYER_FILE);
+        if r.is_err() {
+            let err = r.err().unwrap();
+            if err.kind() != ErrorKind::NotFound {
+                error!("SYSERR: fatal error opening playerfile: {}", err);
+                // TODO exit(1)
+                return;
+            } else {
+                info!("No playerfile.  Creating a new one.");
+                touch(Path::new(PLAYER_FILE)).expect("SYSERR: fatal error creating playerfile");
+                player_file = File::open(PLAYER_FILE)
+                    .expect("SYSERR: fatal error opening playerfile after creation");
+            }
+        } else {
+            player_file = r.unwrap();
+        }
+
+        self.player_fl = Some(RefCell::new(player_file));
+
+        let mut file_mut = RefCell::borrow_mut(&self.player_fl.as_ref().unwrap());
+        let size = file_mut
+            .seek(SeekFrom::End(0))
+            .expect("SYSERR: fatal error seeking playerfile");
+        file_mut
+            .rewind()
+            .expect("SYSERR: fatal error rewinding playerfile");
+
+        if size % mem::size_of::<CharFileU>() as u64 != 0 {
+            warn!("WARNING:  PLAYERFILE IS PROBABLY CORRUPT!");
+        }
+        recs = size / mem::size_of::<CharFileU>() as u64;
+        if recs != 0 {
+            info!("   {} players in database.", recs);
+            // CREATE(player_table, struct PlayerIndexElement, recs);
+        } else {
+            // player_table = NULL;
+            self.top_of_p_table = -1;
+            return;
+        }
+
+        // for (; ; ) {
+        //     fread(&dummy, sizeof(struct char_file_u), 1, player_fl);
+        //     if (feof(player_fl))
+        //     break;
+        //
+        //     /* new record */
+        //     nr + +;
+        //     CREATE(player_table[nr].name, char, strlen(dummy.name) + 1);
+        //     for (i = 0; (* (player_table[nr].name + i) = LOWER(* (dummy.name + i))); i+ +)
+        //     ;
+        //     player_table[nr].id = dummy.char_specials_saved.idnum;
+        //     top_idnum = MAX(top_idnum, dummy.char_specials_saved.idnum);
+        // }
+
+        self.top_of_p_table = nr;
+    }
+}
+
 // /*
 //  * Thanks to Andrey (andrey@alex-ua.com) for this bit of code, although I
 //  * did add the 'goto' and changed some "while()" into "do { } while()".
@@ -2123,28 +2157,17 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
 //
 // return (1);
 // }
-//
-//
-//
-//
-//
-// /*************************************************************************
-// *  stuff related to the save/load player system				 *
-// *************************************************************************/
-//
-//
-// long get_ptable_by_name(const char *name)
-// {
-// int i;
-//
-// for (i = 0; i <= top_of_p_table; i++)
-// if (!str_cmp(player_table[i].name, name))
-// return (i);
-//
-// return (-1);
-// }
-//
-//
+
+/*************************************************************************
+*  stuff related to the save/load player system				 *
+*************************************************************************/
+
+impl DB<'_> {
+    fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
+        return self.player_table.iter().position(|pie| pie.name == name);
+    }
+}
+
 // long get_id_by_name(const char *name)
 // {
 // int i;
@@ -2167,24 +2190,33 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
 //
 // return (NULL);
 // }
-//
-//
-// /* Load a char, TRUE if loaded, FALSE if not */
-// int load_char(const char *name, struct char_file_u *char_element)
-// {
-// int player_i;
-//
-// if ((player_i = get_ptable_by_name(name)) >= 0) {
-// fseek(player_fl, player_i * sizeof(struct char_file_u), SEEK_SET);
-// fread(char_element, sizeof(struct char_file_u), 1, player_fl);
-// return (player_i);
-// } else
-// return (-1);
-// }
-//
-//
-//
-//
+use std::io::Read;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+impl DB<'_> {
+    /* Load a char, TRUE if loaded, FALSE if not */
+    pub fn load_char(&mut self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
+        let player_i = self.get_ptable_by_name(name);
+        if player_i.is_none() {
+            return player_i;
+        }
+        let player_i = player_i.unwrap();
+        let mut pfile = RefCell::borrow_mut(&self.player_fl.as_ref().unwrap());
+
+        let record_size = mem::size_of::<CharFileU>();
+        pfile
+            .seek(SeekFrom::Start((player_i * record_size) as u64))
+            .expect("Error while reading player file");
+        unsafe {
+            let config_slice =
+                slice::from_raw_parts_mut(char_element as *mut _ as *mut u8, record_size);
+            // `read_exact()` comes from `Read` impl for `&[u8]`
+            pfile.read_exact(config_slice).unwrap();
+        }
+        return Some(player_i);
+    }
+}
+
 // /*
 //  * write the vital data of a player to the player file
 //  *
@@ -2388,38 +2420,36 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
 // {
 // /* this will be really cool soon */
 // }
-//
-//
-// /*
-//  * Create a new entry in the in-memory index table for the player file.
-//  * If the name already exists, by overwriting a deleted character, then
-//  * we re-use the old position.
-//  */
-// int create_entry(char *name)
-// {
-// int i, pos;
-//
-// if (top_of_p_table == -1) {	/* no table */
-// CREATE(player_table, struct player_index_element, 1);
-// pos = top_of_p_table = 0;
-// } else if ((pos = get_ptable_by_name(name)) == -1) {	/* new name */
-// i = ++top_of_p_table + 1;
-//
-// RECREATE(player_table, struct player_index_element, i);
-// pos = top_of_p_table;
-// }
-//
-// CREATE(player_table[pos].name, char, strlen(name) + 1);
-//
-// /* copy lowercase equivalent of name to table field */
-// for (i = 0; (player_table[pos].name[i] = LOWER(name[i])); i++)
-// /* Nothing */;
-//
-// return (pos);
-// }
-//
-//
-//
+
+/*
+ * Create a new entry in the in-memory index table for the player file.
+ * If the name already exists, by overwriting a deleted character, then
+ * we re-use the old position.
+ */
+impl DB<'_> {
+    pub(crate) fn create_entry(&mut self, name: &str) -> usize {
+        //int i, pos;
+        let mut i: usize;
+        let pos = self.get_ptable_by_name(name);
+
+        if pos.is_none() {
+            /* new name */
+            i = self.player_table.len();
+            self.player_table.push(PlayerIndexElement {
+                name: name.to_lowercase(),
+                id: i as i64,
+            });
+            return i;
+        } else {
+            let pos = pos.unwrap();
+
+            let mut pie = self.player_table.get_mut(pos);
+            pie.as_mut().unwrap().name = name.to_lowercase();
+            return pos;
+        }
+    }
+}
+
 // /************************************************************************
 // *  funcs of a (more or less) general utility nature			*
 // ************************************************************************/
@@ -2717,100 +2747,114 @@ fn file_to_string(name: &str) -> io::Result<String> {
 // IN_ROOM(obj) = NOWHERE;
 // obj->worn_on = NOWHERE;
 // }
-//
-//
-//
-//
-// /*
-//  * Called during character creation after picking character class
-//  * (and then never again for that character).
-//  */
-// void init_char(struct char_data *ch)
-// {
-// int i;
-//
-// /* create a player_special structure */
-// if (ch->player_specials == NULL)
-// CREATE(ch->player_specials, struct player_special_data, 1);
-//
-// /* *** if this is our first player --- he be God *** */
-// if (top_of_p_table == 0) {
-// GET_LEVEL(ch) = LVL_IMPL;
-// GET_EXP(ch) = 7000000;
-//
-// /* The implementor never goes through do_start(). */
-// GET_MAX_HIT(ch) = 500;
-// GET_MAX_MANA(ch) = 100;
-// GET_MAX_MOVE(ch) = 82;
-// GET_HIT(ch) = GET_MAX_HIT(ch);
-// GET_MANA(ch) = GET_MAX_MANA(ch);
-// GET_MOVE(ch) = GET_MAX_MOVE(ch);
-// }
-//
-// set_title(ch, NULL);
-// ch->player.short_descr = NULL;
-// ch->player.long_descr = NULL;
-// ch->player.description = NULL;
-//
-// ch->player.time.birth = time(0);
-// ch->player.time.logon = time(0);
-// ch->player.time.played = 0;
-//
-// GET_HOME(ch) = 1;
-// GET_AC(ch) = 100;
-//
-// for (i = 0; i < MAX_TONGUE; i++)
-// GET_TALK(ch, i) = 0;
-//
-// /*
-//  * make favors for sex -- or in English, we bias the height and weight of the
-//  * character depending on what gender they've chosen for themselves. While it
-//  * is possible to have a tall, heavy female it's not as likely as a male.
-//  *
-//  * Height is in centimeters. Weight is in pounds.  The only place they're
-//  * ever printed (in stock code) is SPELL_IDENTIFY.
-//  */
-// if (GET_SEX(ch) == SEX_MALE) {
-// GET_WEIGHT(ch) = rand_number(120, 180);
-// GET_HEIGHT(ch) = rand_number(160, 200); /* 5'4" - 6'8" */
-// } else {
-// GET_WEIGHT(ch) = rand_number(100, 160);
-// GET_HEIGHT(ch) = rand_number(150, 180); /* 5'0" - 6'0" */
-// }
-//
-// if ((i = get_ptable_by_name(GET_NAME(ch))) != -1)
-// player_table[i].id = GET_IDNUM(ch) = ++top_idnum;
-// else
-// log("SYSERR: init_char: Character '%s' not found in player table.", GET_NAME(ch));
-//
-// for (i = 1; i <= MAX_SKILLS; i++) {
-// if (GET_LEVEL(ch) < LVL_IMPL)
-// SET_SKILL(ch, i, 0);
-// else
-// SET_SKILL(ch, i, 100);
-// }
-//
-// AFF_FLAGS(ch) = 0;
-//
-// for (i = 0; i < 5; i++)
-// GET_SAVE(ch, i) = 0;
-//
-// ch->real_abils.intel = 25;
-// ch->real_abils.wis = 25;
-// ch->real_abils.dex = 25;
-// ch->real_abils.str = 25;
-// ch->real_abils.str_add = 100;
-// ch->real_abils.con = 25;
-// ch->real_abils.cha = 25;
-//
-// for (i = 0; i < 3; i++)
-// GET_COND(ch, i) = (GET_LEVEL(ch) == LVL_IMPL ? -1 : 24);
-//
-// GET_LOADROOM(ch) = NOWHERE;
-// }
-//
-//
-//
+
+/*
+ * Called during character creation after picking character class
+ * (and then never again for that character).
+ */
+impl DB<'_> {
+    fn init_char(&mut self, ch: &mut CharData) {
+        let i: i32;
+
+        /* create a player_special structure */
+        // if ch.player_specials
+        // CREATE(ch->player_specials, struct player_special_data, 1);
+
+        /* *** if this is our first player --- he be God *** */
+        if self.top_of_p_table == 0 {
+            get_level!(ch) = LVL_IMPL;
+            get_exp!(ch) = 7000000;
+
+            /* The implementor never goes through do_start(). */
+            get_max_hit!(ch) = 500;
+            get_max_mana!(ch) = 100;
+            get_max_move!(ch) = 82;
+            get_hit!(ch) = get_max_hit!(ch);
+            get_max_mana!(ch) = get_max_mana!(ch);
+            get_move!(ch) = get_max_move!(ch);
+        }
+
+        //set_title(ch, NULL);
+        ch.player.short_descr = None;
+        ch.player.long_descr = None;
+        ch.player.description = None;
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        ch.player.time.birth = now;
+        ch.player.time.logon = now;
+        ch.player.time.played = 0;
+
+        get_home!(ch) = 1;
+        get_ac!(ch) = 100;
+
+        for i in 0..MAX_TONGUE {
+            get_talk!(ch, i) = 0;
+        }
+
+        /*
+         * make favors for sex -- or in English, we bias the height and weight of the
+         * character depending on what gender they've chosen for themselves. While it
+         * is possible to have a tall, heavy female it's not as likely as a male.
+         *
+         * Height is in centimeters. Weight is in pounds.  The only place they're
+         * ever printed (in stock code) is SPELL_IDENTIFY.
+         */
+        if get_sex!(ch) == SEX_MALE {
+            get_weight!(ch) = rand_number(120, 180) as u8;
+            get_height!(ch) = rand_number(160, 200) as u8; /* 5'4" - 6'8" */
+        } else {
+            get_weight!(ch) = rand_number(100, 160) as u8;
+            get_height!(ch) = rand_number(150, 180) as u8; /* 5'0" - 6'0" */
+        }
+
+        let i = self.get_ptable_by_name(get_name!(ch));
+        if i.is_none() {
+            error!(
+                "SYSERR: init_char: Character '{}' not found in player table.",
+                get_name!(ch)
+            );
+        } else {
+            self.top_idnum += 1;
+            self.player_table.get_mut(i).unwrap().id = self.top_idnum;
+            get_idnum!(ch) = self.top_idnum as i64;
+        }
+
+        for i in 1..MAX_SKILLS {
+            if get_level!(ch) < LVL_IMPL {
+                //set_skill!(ch, i, 0);
+                ch.player_specials.saved.skills[i] = 0;
+            } else {
+                //set_skill!(ch, i, 100);
+                ch.player_specials.saved.skills[i] = 100;
+            }
+        }
+
+        aff_flags!(ch) = 0;
+
+        for i in 0..5 {
+            get_save!(ch, i) = 0;
+        }
+
+        ch.real_abils.intel = 25;
+        ch.real_abils.wis = 25;
+        ch.real_abils.dex = 25;
+        ch.real_abils.str = 25;
+        ch.real_abils.str_add = 100;
+        ch.real_abils.con = 25;
+        ch.real_abils.cha = 25;
+
+        let cond_value = if get_level!(ch) == LVL_IMPL { -1 } else { 24 };
+        for i in 0..3 {
+            get_cond!(ch, i) = cond_value;
+        }
+
+        get_loadroom!(ch) = NOWHERE;
+    }
+}
+
 // /* returns the real number of the room with given virtual number */
 // room_rnum real_room(room_vnum vnum)
 // {
@@ -2820,22 +2864,20 @@ fn file_to_string(name: &str) -> io::Result<String> {
 // top = top_of_world;
 //
 // /* perform binary search on world-table */
-// for (;;) {
+// for (; ; ) {
 // mid = (bot + top) / 2;
 //
-// if ((world + mid)->number == vnum)
+// if ((world + mid) -> number == vnum)
 // return (mid);
-// if (bot >= top)
+// if (bot > = top)
 // return (NOWHERE);
-// if ((world + mid)->number > vnum)
+// if ((world + mid) -> number > vnum)
 // top = mid - 1;
 // else
 // bot = mid + 1;
 // }
 // }
-//
-//
-//
+
 // /* returns the real number of the monster with given virtual number */
 // mob_rnum real_mobile(mob_vnum vnum)
 // {

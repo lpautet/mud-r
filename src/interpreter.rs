@@ -9,8 +9,16 @@
 ************************************************************************ */
 
 use crate::{get_name, is_npc, is_set, mob_flags, MainGlobals};
-use std::borrow::Borrow;
 
+use std::borrow::Borrow;
+use std::num::NonZeroU32;
+
+use hmac::Hmac;
+use pbkdf2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    pbkdf2, Pbkdf2,
+};
+use sha2::Sha256;
 /* This is the Master Command List(tm).
 
 * You can put new commands in, take commands out, change the order
@@ -1057,39 +1065,75 @@ fn _parse_name(arg: &str) -> Option<&str> {
 
 /* deal with newcomers and other non-playing sockets */
 use crate::ban::valid_name;
-use crate::class::parse_class;
+use crate::class::{parse_class, CLASS_MENU};
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDelcnf2,
     ConDisconnect, ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConQclass, ConQsex, ConRmotd,
 };
 use crate::structs::{
-    CharData, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved,
-    PlayerSpecialData, PlayerSpecialDataSaved, CLASS_UNDEFINED, EXDSCR_LENGTH, MAX_NAME_LENGTH,
-    MAX_PWD_LENGTH, MOB_ISNPC,
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
+    CharSpecialData, CharSpecialDataSaved, PlayerSpecialData, PlayerSpecialDataSaved, TimeData,
+    CLASS_UNDEFINED, EXDSCR_LENGTH, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TONGUE,
+    MOB_ISNPC, SEX_FEMALE, SEX_MALE,
 };
 use crate::{
     echo_off, echo_on, get_class, get_passwd, get_pc_name, get_pfilepos, state, write_to_output,
     DescriptorData,
 };
-use log::error;
+use log::{error, info};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorData>>, arg: &str) {
-    let load_result: i32; /* Overloaded variable */
+    let load_result: i8; /* Overloaded variable */
 
     let arg = arg.trim();
     let mut mut_d = RefCell::borrow_mut(&d);
+    let main_globals = RefCell::borrow(&main_globals);
+    info!("nanny: {:?} '{}'", state!(mut_d), arg);
 
     match state!(mut_d) {
         ConGetName => {
             /* wait for input of name */
             if mut_d.character.is_none() {
                 mut_d.character = Some(CharData {
+                    pfilepos: -1,
                     wait: 0,
                     player: CharPlayerData {
+                        passwd: [0; 16],
                         name: String::new(),
-                        short_descr: String::new(),
+                        short_descr: None,
+                        long_descr: None,
+                        description: None,
+                        sex: 0,
+                        chclass: 0,
+                        level: 0,
+                        hometown: 0,
+                        time: TimeData {
+                            birth: 0,
+                            logon: 0,
+                            played: 0,
+                        },
+                        weight: 0,
+                        height: 0,
+                    },
+                    real_abils: CharAbilityData {
+                        str: 0,
+                        str_add: 0,
+                        intel: 0,
+                        wis: 0,
+                        dex: 0,
+                        con: 0,
+                        cha: 0,
+                    },
+                    aff_abils: CharAbilityData {
+                        str: 0,
+                        str_add: 0,
+                        intel: 0,
+                        wis: 0,
+                        dex: 0,
+                        con: 0,
+                        cha: 0,
                     },
                     points: CharPointData {
                         mana: 0,
@@ -1114,16 +1158,45 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                             idnum: 0,
                             act: 0,
                             affected_by: 0,
+                            apply_saving_throw: [0; 5],
                         },
                     },
-                    player_specials: Some(PlayerSpecialData {
+                    player_specials: Rc::new(RefCell::new(PlayerSpecialData {
                         saved: PlayerSpecialDataSaved {
+                            skills: [0; MAX_SKILLS + 1],
                             padding0: 0,
+                            talks: [false; MAX_TONGUE],
+                            wimp_level: 0,
                             freeze_level: 0,
                             invis_level: 0,
+                            load_room: 0,
                             pref: 0,
+                            bad_pws: 0,
+                            conditions: [0; 3],
+                            spare0: 0,
+                            spare1: 0,
+                            spare2: 0,
+                            spare3: 0,
+                            spare4: 0,
+                            spare5: 0,
+                            spells_to_learn: 0,
+                            spare7: 0,
+                            spare8: 0,
+                            spare9: 0,
+                            spare10: 0,
+                            spare11: 0,
+                            spare12: 0,
+                            spare13: 0,
+                            spare14: 0,
+                            spare15: 0,
+                            spare16: 0,
+                            spare17: 0,
+                            spare18: 0,
+                            spare19: 0,
+                            spare20: 0,
+                            spare21: 0,
                         },
-                    }),
+                    })),
                     desc: d.clone(),
                 });
             }
@@ -1140,7 +1213,7 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
 
                 let tmp_name = _parse_name(arg);
 
-                let desc_list = &RefCell::borrow(&main_globals).descriptor_list;
+                let desc_list = &(main_globals.descriptor_list);
                 if tmp_name.is_none()
                     || tmp_name.unwrap().len() < 2
                     || tmp_name.unwrap().len() > MAX_NAME_LENGTH
@@ -1152,56 +1225,142 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                     return;
                 }
                 let buf = tmp_name.unwrap().clone();
-                // if ((player_i = load_char(tmp_name, &tmp_store)) > -1) {
-                //     store_to_char(&tmp_store, d->character);
-                //     GET_PFILEPOS(d->character) = player_i;
-                //
-                //     if (PLR_FLAGGED(d->character, PLR_DELETED)) {
-                //         /* We get a false positive from the original deleted character. */
-                //         free_char(d->character);
-                //         /* Check for multiple creations... */
-                //         if (!Valid_Name(tmp_name)) {
-                //             write_to_output(d, "Invalid name, please try another.\r\nName: ");
-                //             return;
-                //         }
-                //         CREATE(d->character, struct char_data, 1);
-                //         clear_char(d->character);
-                //         CREATE(d->character->player_specials, struct player_special_data, 1);
-                //         d -> character -> desc = d;
-                //         CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
-                //         strcpy(d->character->player.name, CAP(tmp_name));    /* strcpy: OK (size checked above) */
-                //         GET_PFILEPOS(d->character) = player_i;
-                //         write_to_output(d, "Did I get that right, %s (Y/N)? ", tmp_name);
-                //         STATE(d) = CON_NAME_CNFRM;
-                //     } else {
-                //         /* undo it just in case they are set */
-                //         REMOVE_BIT(PLR_FLAGS(d->character),
-                //                    PLR_WRITING | PLR_MAILING | PLR_CRYO);
-                //         REMOVE_BIT(AFF_FLAGS(d->character), AFF_GROUP);
-                //         write_to_output(d, "Password: ");
-                //         echo_off(d);
-                //         d -> idle_tics = 0;
-                //         STATE(d) = CON_PASSWORD;
-                // }
-                // } else {
-                /* player unknown -- make new character */
+                let mut tmp_store = CharFileU {
+                    name: [0; 21],
+                    description: [0; 240],
+                    title: [0; 81],
+                    sex: 0,
+                    chclass: 0,
+                    level: 0,
+                    hometown: 0,
+                    birth: 0,
+                    played: 0,
+                    weight: 0,
+                    height: 0,
+                    pwd: [0; 16],
+                    char_specials_saved: CharSpecialDataSaved {
+                        alignment: 0,
+                        idnum: 0,
+                        act: 0,
+                        affected_by: 0,
+                        apply_saving_throw: [0; 5],
+                    },
+                    player_specials_saved: PlayerSpecialDataSaved {
+                        skills: [0; MAX_SKILLS + 1],
+                        padding0: 0,
+                        talks: [false; MAX_TONGUE],
+                        wimp_level: 0,
+                        freeze_level: 0,
+                        invis_level: 0,
+                        load_room: 0,
+                        pref: 0,
+                        bad_pws: 0,
+                        conditions: [0; 3],
+                        spare0: 0,
+                        spare1: 0,
+                        spare2: 0,
+                        spare3: 0,
+                        spare4: 0,
+                        spare5: 0,
+                        spells_to_learn: 0,
+                        spare7: 0,
+                        spare8: 0,
+                        spare9: 0,
+                        spare10: 0,
+                        spare11: 0,
+                        spare12: 0,
+                        spare13: 0,
+                        spare14: 0,
+                        spare15: 0,
+                        spare16: 0,
+                        spare17: 0,
+                        spare18: 0,
+                        spare19: 0,
+                        spare20: 0,
+                        spare21: 0,
+                    },
+                    abilities: CharAbilityData {
+                        str: 0,
+                        str_add: 0,
+                        intel: 0,
+                        wis: 0,
+                        dex: 0,
+                        con: 0,
+                        cha: 0,
+                    },
+                    points: CharPointData {
+                        mana: 0,
+                        max_mana: 0,
+                        hit: 0,
+                        max_hit: 0,
+                        movem: 0,
+                        max_move: 0,
+                        armor: 0,
+                        gold: 0,
+                        bank_gold: 0,
+                        exp: 0,
+                        hitroll: 0,
+                        damroll: 0,
+                    },
+                    affected: [AffectedType {
+                        _type: 0,
+                        duration: 0,
+                        modifier: 0,
+                        location: 0,
+                        bitvector: 0,
+                    }; 32],
+                    last_logon: 0,
+                    host: [0; 31],
+                };
+                let mut db = RefCell::borrow_mut(&main_globals.db.as_ref().unwrap());
+                let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
+                if player_i.is_some() {
+                    //     store_to_char(&tmp_store, d->character);
+                    //     GET_PFILEPOS(d->character) = player_i;
+                    //
+                    //     if (PLR_FLAGGED(d->character, PLR_DELETED)) {
+                    //         /* We get a false positive from the original deleted character. */
+                    //         free_char(d->character);
+                    //         /* Check for multiple creations... */
+                    //         if (!Valid_Name(tmp_name)) {
+                    //             write_to_output(d, "Invalid name, please try another.\r\nName: ");
+                    //             return;
+                    //         }
+                    //         CREATE(d->character, struct char_data, 1);
+                    //         clear_char(d->character);
+                    //         CREATE(d->character->player_specials, struct player_special_data, 1);
+                    //         d -> character -> desc = d;
+                    //         CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
+                    //         strcpy(d->character->player.name, CAP(tmp_name));    /* strcpy: OK (size checked above) */
+                    //         GET_PFILEPOS(d->character) = player_i;
+                    //         write_to_output(d, "Did I get that right, %s (Y/N)? ", tmp_name);
+                    //         STATE(d) = CON_NAME_CNFRM;
+                    //     } else {
+                    //         /* undo it just in case they are set */
+                    //         REMOVE_BIT(PLR_FLAGS(d->character),
+                    //                    PLR_WRITING | PLR_MAILING | PLR_CRYO);
+                    //         REMOVE_BIT(AFF_FLAGS(d->character), AFF_GROUP);
+                    //         write_to_output(d, "Password: ");
+                    //         echo_off(d);
+                    //         d -> idle_tics = 0;
+                    //         STATE(d) = CON_PASSWORD;
+                    // }
+                } else {
+                    /* player unknown -- make new character */
 
-                /* Check for multiple creations of a character. */
-                if !valid_name(
-                    &RefCell::borrow(&main_globals.clone()).descriptor_list,
-                    tmp_name.unwrap().clone(),
-                ) {
-                    write_to_output(&mut mut_d, "Invalid name, please try another.\r\nName: ");
-                    return;
+                    /* Check for multiple creations of a character. */
+                    if !valid_name(&main_globals.descriptor_list, tmp_name.unwrap().clone()) {
+                        write_to_output(&mut mut_d, "Invalid name, please try another.\r\nName: ");
+                        return;
+                    }
+                    mut_d.character.as_mut().unwrap().player.name = String::from(tmp_name.unwrap());
+
+                    write_to_output(
+                        &mut mut_d,
+                        format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
+                    );
+                    state!(mut_d) = ConNameCnfrm;
                 }
-                mut_d.character.as_mut().unwrap().player.name = String::from(tmp_name.unwrap());
-
-                write_to_output(
-                    &mut mut_d,
-                    format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
-                );
-                state!(mut_d) = ConNameCnfrm;
-                // }
             }
         }
 
@@ -1220,20 +1379,17 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                 //     STATE(d) = CON_CLOSE;
                 //     return;
                 // }
-                write_to_output(
-                    &mut mut_d,
-                    format!(
-                        "New character.\r\nGive me a password for {}: ",
-                        get_pc_name!(RefCell::borrow(&d).character.as_ref().unwrap())
-                    )
-                    .as_str(),
+                let msg = format!(
+                    "New character.\r\nGive me a password for {}: ",
+                    get_pc_name!(mut_d.character.as_ref().unwrap())
                 );
+                write_to_output(&mut mut_d, msg.as_str());
                 echo_off(&mut mut_d);
-                state!(RefCell::borrow_mut(&d)) = ConNewpasswd;
+                state!(mut_d) = ConNewpasswd;
             } else if arg.starts_with('n') || arg.starts_with('N') {
                 write_to_output(&mut mut_d, "Okay, what IS it, then? ");
                 //free_char(d->character);
-                state!(RefCell::borrow_mut(&d)) = ConGetName;
+                state!(mut_d) = ConGetName;
             } else {
                 write_to_output(&mut mut_d, "Please type Yes or No: ");
             }
@@ -1315,81 +1471,109 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
         //         // STATE(d) = CON_RMOTD;
         //     }
         // }
-        // ConNewpasswd | ConChpwdGetnew => {
-        //     if arg.is_empty() || arg.len() > MAX_PWD_LENGTH || arg.len() < 3 || arg == get_pc_name!(RefCell::borrow(d).character.unwrap()) {
-        //         write_to_output(d, "\r\nIllegal password.\r\nPassword: ");
-        //         return;
-        //     }
-        //     get_passwd!(RefCell::borrow_mut(d).character.unwrap()) = crypt(arg, get_pc_name!(RefCell::borrow(d).character.unwrap()));
-        //
-        //     write_to_output(d, "\r\nPlease retype password: ");
-        //     if RefCell::borrow_mut(d) == ConNewpasswd {
-        //         state!(RefCell::borrow_mut(d).connected) = ConCnfpasswd;
-        //     } else {
-        //         state!(RefCell::borrow_mut(d).connected) = ConChpwdVrfy;
-        //     }
-        // }
-        // ConCnfpasswd | ConChpwdVrfy => {
-        //     if get_passwd!(RefCell::borrow(d).character.unwrap()) != crypt(arg, get_pc_name!(RefCell::borrow(d).character.unwrap())) {
-        //         write_to_output(d, "\r\nPasswords don't match... start over.\r\nPassword: ");
-        //         if RefCell::borrow_mut(d) == ConCnfpasswd {
-        //             state!(RefCell::borrow_mut(d).connected) = ConNewpasswd;
-        //         } else {
-        //             state!(RefCell::borrow_mut(d).connected) = ConChpwdGetnew;
-        //         }
-        //     }
-        //     echo_on(d);
-        //
-        //     if RefCell::borrow_mut(d) == ConCnfpasswd {
-        //         write_to_output(d, "\r\nWhat is your sex (M/F)? ");
-        //         state!(RefCell::borrow_mut(d)) = ConQsex;
-        //     } else {
-        //         write_to_output(d, "\r\nDone.\r\n%s", MENU);
-        //         state!(RefCell::borrow_mut(d)) = ConMenu;
-        //     }
-        // }
-        // ConQsex => {
-        //     /* query sex of new user         */
-        //     match arg[0]
-        //     {
-        //         'm' | 'M' => {
-        //             RefCell::borrow_mut(d).character.unwrap().player.sex = SEX_MALE;
-        //         }
-        //         'f' | 'F' => {
-        //             RefCell::borrow_mut(d).character.unwrap().player.sex = SEX_FEMALE;
-        //         }
-        //         _ => {
-        //             write_to_output(d, "That is not a sex..\r\nWhat IS your sex? ");
-        //             return;
-        //         }
-        //     }
-        //
-        //     write_to_output(d, "{}\r\nClass: ", class_menu);
-        //     state!(RefCell::borrow_mut(d)) = ConQclass;
-        // }
-        //
-        // ConQclass => {
-        //     load_result = parse_class(arg[0]);
-        //     if load_result == CLASS_UNDEFINED {
-        //         write_to_output(d, "\r\nThat's not a class.\r\nClass: ");
-        //         return;
-        //     } else {
-        //         get_class!(RefCell::borrow_mut(d).character.unwrap()) = load_result;
-        //     }
-        //
-        //     if get_pfilepos!(RefCell::borrow(d).character.unwrap()) < 0 {
-        //         get_pfilepos!(RefCell::borrow_mut(d).character.unwrap()) = create_entry(get_pc_name!(RefCell::borrow_mut(d).character.unwrap()));
-        //     }
-        //
-        //     /* Now GET_NAME() will work properly. */
-        //     init_char(d->character);
-        //     save_char(d->character);
-        //     write_to_output(d, "%s\r\n*** PRESS RETURN: ", motd);
-        //     state!(RefCell::borrow_mut(d)) = ConRmotd;
-        //
-        //     mudlog(NRM, LVL_IMMORT, TRUE, "{} [{}] new player.", get_pc_name!(RefCell::borrow(d).character.unwrap()), RefCell::borrow(d).host);
-        // }
-        //
+        ConNewpasswd | ConChpwdGetnew => {
+            if arg.is_empty()
+                || arg.len() > MAX_PWD_LENGTH
+                || arg.len() < 3
+                || arg == get_pc_name!(mut_d.character.as_ref().unwrap())
+            {
+                write_to_output(&mut mut_d, "\r\nIllegal password.\r\nPassword: ");
+                return;
+            }
+            let mut character = mut_d.character.as_mut().unwrap();
+            let salt = get_pc_name!(character);
+            pbkdf2::pbkdf2::<Hmac<Sha256>>(
+                arg.as_bytes(),
+                salt.as_bytes(),
+                4,
+                &mut get_passwd!(character),
+            );
+
+            write_to_output(&mut mut_d, "\r\nPlease retype password: ");
+            if state!(mut_d) == ConNewpasswd {
+                state!(mut_d) = ConCnfpasswd;
+            } else {
+                state!(mut_d) = ConChpwdVrfy;
+            }
+        }
+        ConCnfpasswd | ConChpwdVrfy => {
+            let mut character = mut_d.character.as_mut().unwrap();
+            let salt = get_pc_name!(character);
+            let passwd = get_passwd!(character);
+            let mut passwd2 = [0 as u8; 16];
+            pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2);
+            if passwd2 != passwd {
+                write_to_output(
+                    &mut mut_d,
+                    "\r\nPasswords don't match... start over.\r\nPassword: ",
+                );
+                if state!(mut_d) == ConCnfpasswd {
+                    state!(mut_d) = ConNewpasswd;
+                } else {
+                    state!(mut_d) = ConChpwdGetnew;
+                }
+            }
+            echo_on(&mut mut_d);
+
+            if state!(mut_d) == ConCnfpasswd {
+                write_to_output(&mut mut_d, "\r\nWhat is your sex (M/F)? ");
+                state!(mut_d) = ConQsex;
+            }
+            //  else {
+            //     write_to_output(&mut mut_d, "\r\nDone.\r\n%s", MENU);
+            //     state!(mut_d) = ConMenu;
+            // }
+        }
+        ConQsex => {
+            let mut character = mut_d.character.as_mut().unwrap();
+            /* query sex of new user         */
+            match arg.chars().next().unwrap() {
+                'm' | 'M' => {
+                    character.player.sex = SEX_MALE;
+                }
+                'f' | 'F' => {
+                    character.player.sex = SEX_FEMALE;
+                }
+                _ => {
+                    write_to_output(&mut mut_d, "That is not a sex..\r\nWhat IS your sex? ");
+                    return;
+                }
+            }
+
+            write_to_output(&mut mut_d, format!("{}\r\nClass: ", CLASS_MENU).as_str());
+            state!(mut_d) = ConQclass;
+        }
+        ConQclass => {
+            let mut character = mut_d.character.as_mut().unwrap();
+            load_result = parse_class(arg.chars().next().unwrap());
+            if load_result == CLASS_UNDEFINED {
+                write_to_output(&mut mut_d, "\r\nThat's not a class.\r\nClass: ");
+                return;
+            } else {
+                get_class!(character) = load_result;
+            }
+
+            let mut mut_db = RefCell::borrow_mut(main_globals.db.as_ref().unwrap());
+            if get_pfilepos!(character) < 0 {
+                get_pfilepos!(character) = mut_db.create_entry(get_pc_name!(character)) as i32;
+            }
+
+            /* Now GET_NAME() will work properly. */
+            init_char(character);
+            //save_char(character);
+            // write_to_output(&mut mut_d, "%s\r\n*** PRESS RETURN: ", motd);
+            state!(mut_d) = ConRmotd;
+
+            // mudlog(
+            //     NRM,
+            //     LVL_IMMORT,
+            //     TRUE,
+            //     "{} [{}] new player.",
+            //     get_pc_name!(character),
+            //     &mut_d.host,
+            // );
+        }
+
         // ConRmotd => {
         //     /* read CR after printing motd   */
         //     write_to_output(d, "%s", MENU);
@@ -1562,19 +1746,17 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
 
         _ => {
             let char_name;
-            let borrowed_d = RefCell::borrow(&d);
-            if RefCell::borrow(&d).character.is_some() {
-                let useless = MOB_ISNPC;
-                char_name = get_name!(borrowed_d.character.as_ref().unwrap())
+            if mut_d.character.is_some() {
+                char_name = get_name!(mut_d.character.as_ref().unwrap())
             } else {
                 char_name = "<unknown>";
             }
             error!(
                 "SYSERR: Nanny: illegal state of con'ness ({:?}) for '{}'; closing connection.",
-                state!(RefCell::borrow(&d)),
+                state!(mut_d),
                 char_name
             );
-            state!(RefCell::borrow_mut(&d)) = ConDisconnect; /* Safest to do. */
+            state!(mut_d) = ConDisconnect; /* Safest to do. */
         }
     }
 }

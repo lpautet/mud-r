@@ -24,7 +24,7 @@ const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 const PC_CLASS_TYPES: [&str; 4] = ["Magic User", "Cleric", "Thief", "Warrior"];
 
 /* The menu for choosing a class in interpreter.c: */
-const CLASS_MENU: &str = "\r\n\
+pub const CLASS_MENU: &str = "\r\n\
      Select a class:\r\n\
         [C]leric\r\n\
         [T]hief\r\n\
@@ -36,7 +36,7 @@ const CLASS_MENU: &str = "\r\n\
  * new character is selecting a class and by 'set class' in act.wizard.c.
  */
 
-pub fn parse_class(arg: char) -> i32 {
+pub fn parse_class(arg: char) -> i8 {
     let arg = arg.to_lowercase().last().unwrap();
 
     return match arg {

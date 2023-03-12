@@ -104,32 +104,33 @@ pub const MAX_INPUT_LENGTH: usize = 256; /* Max length per *line* of input */
 pub const MAX_RAW_INPUT_LENGTH: usize = 512; /* Max size of *raw* input */
 pub const MAX_MESSAGES: i32 = 60;
 pub const MAX_NAME_LENGTH: usize = 20; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_PWD_LENGTH: usize = 10; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_TITLE_LENGTH: i32 = 80; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const HOST_LENGTH: i32 = 30; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const EXDSCR_LENGTH: i32 = 240; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_TONGUE: i32 = 3; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_SKILLS: i32 = 200; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_AFFECT: i32 = 32; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const MAX_PWD_LENGTH: usize = 16; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const MAX_TITLE_LENGTH: usize = 80; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const HOST_LENGTH: usize = 30; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const EXDSCR_LENGTH: usize = 240; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const MAX_TONGUE: usize = 3; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const MAX_SKILLS: usize = 200; /* Used in char_file_u *DO*NOT*CHANGE* */
+pub const MAX_AFFECT: usize = 32; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_OBJ_AFFECT: i32 = 6; /* Used in obj_file_elem *DO*NOT*CHANGE* */
 pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData<'a> {
-    // int pfilepos;			 /* playerfile pos		  */
-    // mob_rnum nr;                          /* Mob's rnum			  */
-    // room_rnum in_room;                    /* Location (real room number)	  */
-    // room_rnum was_in_room;		 /* location for linkdead people  */
+    pub(crate) pfilepos: i32, /* playerfile pos		  */
+    // MobRnum nr;                          /* Mob's rnum			  */
+    // RoomRnum in_room;                    /* Location (real room number)	  */
+    // RoomRnum was_in_room;		 /* location for linkdead people  */
     pub wait: i32, /* wait for how many loops	  */
     //
-    pub player: CharPlayerData, /* Normal data                   */
-    // struct char_ability_data real_abils;	 /* Abilities without modifiers   */
-    // struct char_ability_data aff_abils;	 /* Abils with spells/stones/etc  */
+    pub player: CharPlayerData,
+    /* Normal data                   */
+    pub real_abils: CharAbilityData, /* Abilities without modifiers   */
+    pub aff_abils: CharAbilityData,  /* Abils with spells/stones/etc  */
     pub points: CharPointData,
     /* Points                        */
     pub char_specials: CharSpecialData<'a>,
     /* PC/NPC specials	  */
-    pub player_specials: Option<PlayerSpecialData>,
+    pub player_specials: Rc<RefCell<PlayerSpecialData>>,
     /* PC specials		  */
     // struct mob_special_data mob_specials;	/* NPC specials		  */
     //
@@ -137,18 +138,21 @@ pub struct CharData<'a> {
     // struct obj_data *equipment[NUM_WEARS];/* Equipment array               */
     //
     // struct obj_data *carrying;            /* Head of list                  */
-    pub(crate) desc: Rc<RefCell<DescriptorData<'a>>>, /* NULL for mobiles              */
-                                                      //
-                                                      // struct CharData *next_in_room;     /* For room->people - list         */
-                                                      // struct CharData *next;             /* For either monster or ppl-list  */
-                                                      // struct CharData *next_fighting;    /* For fighting list               */
-                                                      //
-                                                      // struct follow_type *followers;        /* List of chars followers       */
-                                                      // struct CharData *master;             /* Who is char following?        */
+    pub(crate) desc: Rc<RefCell<DescriptorData<'a>>>,
+    /* NULL for mobiles              */
+    //
+    // struct CharData *next_in_room;     /* For room->people - list         */
+    // struct CharData *next;             /* For either monster or ppl-list  */
+    // struct CharData *next_fighting;    /* For fighting list               */
+    //
+    // struct follow_type *followers;        /* List of chars followers       */
+    // struct CharData *master;             /* Who is char following?        */
 }
 /* ====================================================================== */
 
 /* Char's points.  Used in char_file_u *DO*NOT*CHANGE* */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
 pub struct CharPointData {
     pub mana: i16,
     pub max_mana: i16,
@@ -184,7 +188,8 @@ pub struct CharSpecialData<'a> {
     //
     // int	carry_weight;		/* Carried weight			*/
     // byte carry_items;		/* Number of items carried		*/
-    pub(crate) timer: i32, /* Timer for update			*/
+    pub(crate) timer: i32,
+    /* Timer for update			*/
     //
     pub saved: CharSpecialDataSaved,
     /* constants saved in plrfile	*/
@@ -198,6 +203,8 @@ pub struct CharSpecialData<'a> {
  * playerfile.  If you want to add to the playerfile, use the spares
  * in player_special_data.
  */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
 pub struct CharSpecialDataSaved {
     pub alignment: i32,
     // +-1000 for alignments
@@ -207,7 +214,8 @@ pub struct CharSpecialDataSaved {
     /* act flag for NPC's; player flag for PC's */
     pub affected_by: i64,
     /* Bitvector for spells/skills affected by */
-    // sh_int apply_saving_throw[5]; /* Saving throw (Bonuses)		*/
+    pub apply_saving_throw: [i16; 5],
+    /* Saving throw (Bonuses)		*/
 }
 
 /*
@@ -235,72 +243,92 @@ pub struct PlayerSpecialData {
  * in your new code.  They will automatically be transferred from the
  * playerfile into memory when players log in.
  */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
 pub struct PlayerSpecialDataSaved {
-    //byte skills[MAX_SKILLS+1];	/* array of skills plus skill 0		*/
+    pub skills: [i8; MAX_SKILLS + 1],
+    /* array of skills plus skill 0		*/
     pub(crate) padding0: i8,
     /* used to be spells_to_learn		*/
-    //bool talks[MAX_TONGUE];	/* PC s Tongues 0 for NPC		*/
-    //int	wimp_level;		/* Below this # of hit points, flee!	*/
-    pub(crate) freeze_level: i8,
+    pub talks: [bool; MAX_TONGUE],
+    /* PC s Tongues 0 for NPC		*/
+    pub wimp_level: i32,
+    /* Below this # of hit points, flee!	*/
+    pub freeze_level: i8,
     /* Level of god who froze char, if any	*/
     pub invis_level: i16,
     /* level of invisibility		*/
-    //room_vnum load_room;		/* Which room to place char in		*/
-    pub pref: i64, /*bitvector_t*/
-                   /* preference flags for PC's.		*/
-                   //ubyte bad_pws;		/* number of bad password attemps	*/
-                   //sbyte conditions[3];         /* Drunk, full, thirsty			*/
+    pub load_room: RoomVnum,
+    /* Which room to place char in		*/
+    pub pref: i64,
+    /*bitvector_t*/
+    /* preference flags for PC's.		*/
+    pub bad_pws: u8,
+    /* number of bad password attemps	*/
+    pub conditions: [i16; 3],
+    /* Drunk, full, thirsty			*/
 
-                   /* spares below for future expansion.  You can change the names from
-                      'sparen' to something meaningful, but don't change the order.  */
-
-                   // ubyte spare0;
-                   // ubyte spare1;
-                   // ubyte spare2;
-                   // ubyte spare3;
-                   // ubyte spare4;
-                   // ubyte spare5;
-                   // int spells_to_learn;		/* How many can you learn yet this level*/
-                   // int spare7;
-                   // int spare8;
-                   // int spare9;
-                   // int spare10;
-                   // int spare11;
-                   // int spare12;
-                   // int spare13;
-                   // int spare14;
-                   // int spare15;
-                   // int spare16;
-                   // long	spare17;
-                   // long	spare18;
-                   // long	spare19;
-                   // long	spare20;
-                   // long	spare21;
+    /* spares below for future expansion.  You can change the names from
+       'sparen' to something meaningful, but don't change the order.  */
+    pub(crate) spare0: u8,
+    pub(crate) spare1: u8,
+    pub(crate) spare2: u8,
+    pub(crate) spare3: u8,
+    pub(crate) spare4: u8,
+    pub(crate) spare5: u8,
+    pub spells_to_learn: i32,
+    /* How many can you learn yet this level*/
+    pub(crate) spare7: i32,
+    pub(crate) spare8: i32,
+    pub(crate) spare9: i32,
+    pub(crate) spare10: i32,
+    pub(crate) spare11: i32,
+    pub(crate) spare12: i32,
+    pub(crate) spare13: i32,
+    pub(crate) spare14: i32,
+    pub(crate) spare15: i32,
+    pub(crate) spare16: i32,
+    pub(crate) spare17: i64,
+    pub(crate) spare18: i64,
+    pub(crate) spare19: i64,
+    pub(crate) spare20: i64,
+    pub(crate) spare21: i64,
 }
 
 /* general player-related info, usually PC's and NPC's */
 pub struct CharPlayerData {
-    // char	passwd[MAX_PWD_LENGTH+1]; /* character's password      */
-    pub name: String, /* PC / NPC s name (kill ...  )         */
-    pub short_descr: String, /* for NPC 'actions'                    */
-                      // char	*long_descr;   /* for 'look'			       */
-                      // char	*description;  /* Extra descriptions                   */
-                      // char	*title;        /* PC / NPC's title                     */
-                      // byte sex;           /* PC / NPC's sex                       */
-                      // byte chclass;       /* PC / NPC's class		       */
-                      // byte level;         /* PC / NPC's level                     */
-                      // sh_int hometown;    /* PC s Hometown (zone)                 */
-                      // struct time_data time;  /* PC's AGE in days                 */
-                      // ubyte weight;       /* PC / NPC's weight                    */
-                      // ubyte height;       /* PC / NPC's height                    */
+    pub passwd: [u8; MAX_PWD_LENGTH], /* character's password      */
+    pub name: String,                 /* PC / NPC s name (kill ...  )         */
+    pub short_descr: Option<String>,  /* for NPC 'actions'                    */
+    pub long_descr: Option<String>,   /* for 'look'			       */
+    pub description: Option<String>,  /* Extra descriptions                   */
+    // char	*title;        /* PC / NPC's title                     */
+    pub sex: u8,        /* PC / NPC's sex                       */
+    pub chclass: i8,    /* PC / NPC's class		       */
+    pub level: u8,      /* PC / NPC's level                     */
+    pub hometown: i16,  /* PC s Hometown (zone)                 */
+    pub time: TimeData, /* PC's AGE in days                 */
+    pub weight: u8,     /* PC / NPC's weight                    */
+    pub height: u8,     /* PC / NPC's height                    */
 }
 
+/* These data contain information about a players time data */
+pub struct TimeData {
+    pub(crate) birth: u64,  /* This represents the characters age                */
+    pub(crate) logon: u64,  /* Time of the last logon (used to calculate played) */
+    pub(crate) played: i32, /* This is the total accumulated time played in secs */
+}
+
+pub const NOWHERE: i16 = -1;
+pub const NOTHING: i16 = -1;
+pub const NOBODY: i16 = -1;
+
 /* PC classes */
-pub const CLASS_UNDEFINED: i32 = -1;
-pub const CLASS_MAGIC_USER: i32 = 0;
-pub const CLASS_CLERIC: i32 = 1;
-pub const CLASS_THIEF: i32 = 2;
-pub const CLASS_WARRIOR: i32 = 3;
+pub const CLASS_UNDEFINED: i8 = -1;
+pub const CLASS_MAGIC_USER: i8 = 0;
+pub const CLASS_CLERIC: i8 = 1;
+pub const CLASS_THIEF: i8 = 2;
+pub const CLASS_WARRIOR: i8 = 3;
 
 pub const NUM_CLASSES: i32 = 4; /* This must be the number of classes!! */
 
@@ -308,3 +336,109 @@ pub struct TxtBlock {
     pub text: String,
     pub aliased: bool,
 }
+
+/* ==================== File Structure for Player ======================= */
+/*             BEWARE: Changing it will ruin the playerfile		  */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct CharFileU {
+    /* char_player_data */
+    pub name: [u8; MAX_NAME_LENGTH + 1],
+    pub description: [u8; EXDSCR_LENGTH],
+    pub title: [u8; MAX_TITLE_LENGTH + 1],
+    pub sex: u8,
+    pub chclass: i8,
+    pub level: u8,
+    pub hometown: u16,
+    pub birth: u64,
+    /* Time of birth of character     */
+    pub played: i32,
+    /* Number of secs played in total */
+    pub weight: u8,
+    pub height: u8,
+
+    pub pwd: [u8; MAX_PWD_LENGTH],
+    /* character's password */
+    pub char_specials_saved: CharSpecialDataSaved,
+    pub player_specials_saved: PlayerSpecialDataSaved,
+    pub abilities: CharAbilityData,
+    pub points: CharPointData,
+    pub affected: [AffectedType; MAX_AFFECT],
+
+    pub last_logon: i64,
+    /* Time (in secs) of last logon */
+    pub host: [u8; HOST_LENGTH + 1],
+    /* host of last logon */
+}
+/* ====================================================================== */
+
+/* Char's abilities.  Used in char_file_u *DO*NOT*CHANGE* */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct CharAbilityData {
+    pub(crate) str: i8,
+    pub(crate) str_add: i8,
+    /* 000 - 100 if strength 18             */
+    pub(crate) intel: i8,
+    pub(crate) wis: i8,
+    pub(crate) dex: i8,
+    pub(crate) con: i8,
+    pub(crate) cha: i8,
+}
+
+/* An affect structure.  Used in char_file_u *DO*NOT*CHANGE* */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct AffectedType {
+    pub _type: i16,
+    /* The type of spell that caused this      */
+    pub duration: i16,
+    /* For how long its effects will last      */
+    pub modifier: i8,
+    /* This is added to apropriate ability     */
+    pub location: u8,
+    /* Tells which ability to change(APPLY_XXX)*/
+    pub bitvector: i64,
+    /* Tells which bits to set (AFF_XXX) */
+}
+
+type IDXTYPE = i16;
+
+/* Various virtual (human-reference) number types. */
+type RoomVnum = IDXTYPE;
+type ObjVnum = IDXTYPE;
+type MobVnum = IDXTYPE;
+type ZoneVnum = IDXTYPE;
+type ShopVnum = IDXTYPE;
+
+/* Various real (array-reference) number types. */
+type RoomRnum = IDXTYPE;
+type ObjRnum = IDXTYPE;
+type MobRnum = IDXTYPE;
+type ZoneRnum = IDXTYPE;
+type ShopRnum = IDXTYPE;
+
+pub const SEX_NEUTRAL: u8 = 0;
+pub const SEX_MALE: u8 = 1;
+pub const SEX_FEMALE: u8 = 2;
+
+/*
+ * **DO**NOT** blindly change the number of levels in your MUD merely by
+ * changing these numbers and without changing the rest of the code to match.
+ * Other changes throughout the code are required.  See coding.doc for
+ * details.
+ *
+ * LVL_IMPL should always be the HIGHEST possible immortal level, and
+ * LVL_IMMORT should always be the LOWEST immortal level.  The number of
+ * mortal levels will always be LVL_IMMORT - 1.
+ */
+pub const LVL_IMPL: u8 = 34;
+pub const LVL_GRGOD: u8 = 33;
+pub const LVL_GOD: u8 = 32;
+pub const LVL_IMMORT: u8 = 31;
+
+/* Level of the 'freeze' command */
+pub const LVL_FREEZE: u8 = LVL_GRGOD;
+
+pub const NUM_OF_DIRS: i8 = 6; /* number of directions in a room (nsewud) */
+pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */

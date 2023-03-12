@@ -662,13 +662,13 @@ fn game_loop(main_globals: Rc<RefCell<MainGlobals>>) {
 
         /* Print prompts for other descriptors who had no other output */
         for d in &RefCell::borrow(&main_globals).descriptor_list {
-            if !RefCell::borrow(d).has_prompt
-                && (RefCell::borrow(d).output.is_none()
-                    || RefCell::borrow(d).output.as_ref().unwrap().len() != 0)
+            let mut mut_d = RefCell::borrow_mut(d);
+            if !mut_d.has_prompt
+                && (mut_d.output.is_none() || mut_d.output.as_ref().unwrap().len() != 0)
             {
-                let text = &make_prompt(d);
-                write_to_descriptor(&mut RefCell::borrow_mut(d).stream, text);
-                RefCell::borrow_mut(&d).has_prompt = true;
+                let text = &make_prompt(&mut mut_d);
+                write_to_descriptor(&mut mut_d.stream, text);
+                mut_d.has_prompt = true;
             }
         }
 
@@ -835,67 +835,47 @@ fn echo_on(d: &mut DescriptorData) {
     write_to_output(d, off_string.as_str());
 }
 
-fn make_prompt(d: &Rc<RefCell<DescriptorData>>) -> String {
+fn make_prompt(d: &DescriptorData) -> String {
     let mut prompt = "".to_string();
+    let mut_d = d;
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
 
-    if RefCell::borrow(d).str.is_some() {
+    if mut_d.str.is_some() {
         prompt.push_str("] "); /* strcpy: OK (for 'MAX_PROMPT_LENGTH >= 3') */
-    } else if RefCell::borrow(d).showstr_count != 0 {
+    } else if mut_d.showstr_count != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            RefCell::borrow(d).showstr_page,
-            RefCell::borrow(d).showstr_count
+            mut_d.showstr_page, mut_d.showstr_count
         ));
-    } else if RefCell::borrow(d).connected == ConPlaying
-        && !is_npc!(RefCell::borrow(d).character.as_ref().unwrap())
-    {
-        if get_invis_lev!(RefCell::borrow(d).character.as_ref().unwrap()) != 0
-            && prompt.len() < MAX_PROMPT_LENGTH as usize
-        {
-            prompt.push_str(&*format!(
-                "i{} ",
-                get_invis_lev!(RefCell::borrow(d).character.as_ref().unwrap())
-            ));
-        }
+    } else if mut_d.connected == ConPlaying {
+        let character = mut_d.character.as_ref().unwrap();
+        if !is_npc!(character) {
+            if get_invis_lev!(character) != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let il = get_invis_lev!(character);
+                prompt.push_str(&*format!("i{} ", il));
+            }
 
-        if prf_flagged!(RefCell::borrow(d).character.as_ref().unwrap(), PRF_DISPHP)
-            && prompt.len() < MAX_PROMPT_LENGTH as usize
-        {
-            prompt.push_str(&*format!(
-                "{}H ",
-                get_hit!(RefCell::borrow(d).character.as_ref().unwrap())
-            ));
-        }
+            if prf_flagged!(character, PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let hit = get_hit!(character);
+                prompt.push_str(&*format!("{}H ", hit));
+            }
 
-        if prf_flagged!(RefCell::borrow(d).character.as_ref().unwrap(), PRF_DISPMANA)
-            && prompt.len() < MAX_PROMPT_LENGTH as usize
-        {
-            prompt.push_str(&*format!(
-                "{}M ",
-                get_mana!(RefCell::borrow(d).character.as_ref().unwrap())
-            ));
-        }
+            if prf_flagged!(character, PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let mana = get_mana!(character);
+                prompt.push_str(&*format!("{}M ", mana));
+            }
 
-        if prf_flagged!(RefCell::borrow(d).character.as_ref().unwrap(), PRF_DISPMOVE)
-            && prompt.len() < MAX_PROMPT_LENGTH as usize
-        {
-            prompt.push_str(&*format!(
-                "{}V ",
-                get_move!(RefCell::borrow(d).character.as_ref().unwrap())
-            ));
-        }
+            if prf_flagged!(character, PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let _move = get_move!(character);
+                prompt.push_str(&*format!("{}V ", _move));
+            }
 
-        prompt.push_str("> ");
-    } else if RefCell::borrow(d).connected == ConPlaying
-        && is_npc!(RefCell::borrow(d).character.as_ref().unwrap())
-    {
-        let borrowed_d = RefCell::borrow(d);
-        prompt.push_str(&*format!(
-            "{}s>",
-            get_name!(borrowed_d.character.as_ref().unwrap())
-        ));
+            prompt.push_str("> ");
+        } else if is_npc!(character) {
+            let borrowed_d = mut_d;
+            prompt.push_str(&*format!("{}s>", get_name!(character)));
+        }
     }
 
     prompt
@@ -1228,7 +1208,7 @@ fn process_output(t: &Rc<RefCell<DescriptorData>>) -> i32 {
     }
 
     /* add a prompt */
-    i.push_str(&make_prompt(t));
+    i.push_str(&make_prompt(&mut RefCell::borrow_mut(t)));
 
     /*
      * now, send the output.  If this is an 'interruption', use the prepended
@@ -1597,7 +1577,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
      * can copy the formatted data to a new array for further processing.
      */
 
-    let read_point = 0;
+    let mut read_point = 0;
 
     let ptr = 0 as usize;
     while nl_pos.is_some() {
@@ -1692,7 +1672,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         }
 
         /* see if there's another newline in the input buffer */
-        let read_point = nl_pos.unwrap();
+        read_point = nl_pos.unwrap();
         nl_pos = None;
         for i in read_point..mut_t.inbuf.len() {
             if isnewl!(mut_t.inbuf.chars().nth(i).unwrap()) {
@@ -1701,7 +1681,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
             }
         }
     }
-    mut_t.inbuf.drain(..read_point + 1);
+    mut_t.inbuf.drain(..read_point);
 
     return 1;
 }
