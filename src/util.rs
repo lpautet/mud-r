@@ -8,6 +8,12 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+/* defines for mudlog() */
+pub const OFF: u8 = 0;
+pub const BRF: u8 = 1;
+pub const NRM: u8 = 2;
+pub const CMP: u8 = 3;
+
 #[macro_export]
 macro_rules! is_set {
     ($flag:expr, $bit:expr) => {
@@ -16,32 +22,62 @@ macro_rules! is_set {
 }
 
 #[macro_export]
-macro_rules! mob_flags {
-    ($ch:expr) => {
-        ($ch.char_specials.saved.act)
+macro_rules! set_bit {
+    ($var:expr, $bit:expr) => {
+        (($var) |= ($bit))
     };
 }
 
 #[macro_export]
-macro_rules! is_npc {
-    ($ch:expr) => {{
-        (is_set!(mob_flags!($ch), MOB_ISNPC))
-    }};
-}
-
-#[macro_export]
-macro_rules! prf_flagged {
-    ($ch:expr,$flag:expr) => {
-        (is_set!(prf_flags!($ch), ($flag)))
+macro_rules! remove_bit {
+    ($var:expr, $bit:expr) => {
+        (($var) &= !($bit))
     };
 }
 
 #[macro_export]
-macro_rules! prf_flags {
-    ($ch:expr) => {
-        (check_player_special!(($ch), RefCell::borrow(&(($ch).player_specials)).saved.pref))
+macro_rules! toggle_bit {
+    ($var:expr, $bit:expr) => {
+        (($var) ^= ($bit))
     };
 }
+
+// #[macro_export]
+// macro_rules! is_npc {
+//     ($ch:expr) => {{
+//         (is_set!(mob_flags!($ch), MOB_ISNPC))
+//     }};
+// }
+impl CharData {
+    pub fn is_npc(&self) -> bool {
+        return is_set!(self.char_specials.borrow().saved.act, MOB_ISNPC);
+    }
+}
+
+// #[macro_export]
+// macro_rules! prf_flagged {
+//     ($ch:expr,$flag:expr) => {
+//         (is_set!(prf_flags!($ch), ($flag)))
+//     };
+// }
+impl CharData {
+    pub fn prf_flagged(&self, flag: i64) -> bool {
+        return is_set!(self.prf_flags(), flag);
+    }
+    pub fn prf_flags(&self) -> i64 {
+        check_player_special!(self, self.player_specials.borrow().saved.pref)
+    }
+    pub fn set_prf_flags_bits(&self, flag: i64) {
+        self.player_specials.borrow_mut().saved.pref |= flag;
+    }
+}
+
+// #[macro_export]
+// macro_rules! prf_flags {
+//     ($ch:expr) => {
+//         (check_player_special!(($ch), RefCell::borrow(&(($ch).player_specials)).saved.pref))
+//     };
+// }
 
 /* TODO:
  * Accessing player specific data structures on a mobile is a very bad thing
@@ -56,43 +92,99 @@ macro_rules! check_player_special {
         ($var)
     };
 }
+use crate::structs::{room_rnum, ITEM_INVISIBLE};
+pub use check_player_special;
+use std::borrow::Borrow;
 
-#[macro_export]
-macro_rules! get_invis_lev {
-    ($ch:expr) => {
-        (check_player_special!(
-            ($ch),
-            RefCell::borrow(&(($ch).player_specials)).saved.invis_level
-        ))
-    };
+impl CharData {
+    pub fn get_invis_lev(&self) -> i16 {
+        check_player_special!(self, self.player_specials.borrow().saved.invis_level)
+    }
+    pub fn set_invis_lev(&self, val: i16) {
+        self.player_specials.borrow_mut().saved.invis_level = val;
+    }
+    pub fn get_hit(&self) -> i16 {
+        self.points.borrow().hit
+    }
+    pub fn get_mana(&self) -> i16 {
+        self.points.borrow().mana
+    }
+    pub fn get_move(&self) -> i16 {
+        self.points.borrow().movem
+    }
+    pub fn set_move(&self, val: i16) {
+        self.points.borrow_mut().movem = val;
+    }
+    pub fn set_mana(&self, val: i16) {
+        self.points.borrow_mut().mana = val;
+    }
+    pub fn set_hit(&self, val: i16) {
+        self.points.borrow_mut().hit = val;
+    }
+}
+
+impl DB {
+    pub fn valid_room_rnum(&self, rnum: room_rnum) -> bool {
+        rnum != NOWHERE && rnum < *self.top_of_world.borrow()
+    }
+    pub fn get_room_vnum(&self, rnum: room_vnum) -> i16 {
+        if self.valid_room_rnum(rnum) {
+            self.world.borrow()[rnum as usize].number
+        } else {
+            NOWHERE
+        }
+    }
 }
 
 #[macro_export]
-macro_rules! get_hit {
-    ($ch:expr) => {
-        (($ch).points.hit)
+macro_rules! get_room_spec {
+    ($db:expr, $room:expr) => {
+        (if valid_room_rnum!($room) {
+            (RefCell::borrow(($db).world.get($rnum).unwrap()).func)
+        } else {
+            None
+        })
     };
 }
 
-#[macro_export]
-macro_rules! get_mana {
-    ($ch:expr) => {
-        (($ch).points.mana)
-    };
+// #[macro_export]
+// macro_rules! get_pc_name {
+//     ($ch:expr) => {
+//         (($ch).player.name.as_str())
+//     };
+// }
+
+impl CharData {
+    pub fn get_pc_name(&self) -> Rc<str> {
+        return Rc::from(self.player.borrow().name.as_str());
+    }
 }
 
-#[macro_export]
-macro_rules! get_move {
-    ($ch:expr) => {
-        (($ch).points.movem)
-    };
-}
+// #[macro_export]
+// macro_rules! get_name {
+//     ($ch:expr) => {
+//         (if is_npc!($ch) {
+//             ($ch).player.short_descr.as_str()
+//         } else {
+//             get_pc_name!($ch)
+//         })
+//     };
+// }
 
-#[macro_export]
-macro_rules! get_pc_name {
-    ($ch:expr) => {
-        (($ch).player.name.as_str())
-    };
+impl CharData {
+    pub fn get_name(&self) -> Rc<str> {
+        if self.is_npc() {
+            Rc::from(self.player.borrow().short_descr.as_str())
+        } else {
+            self.get_pc_name()
+        }
+    }
+    pub fn get_title(&self) -> Rc<str> {
+        Rc::from(self.player.borrow().title.as_str())
+    }
+    pub fn set_title(&self, val: &str) {
+        self.player.borrow_mut().title = String::from(val);
+    }
 }
 
 #[macro_export]
@@ -103,166 +195,574 @@ macro_rules! is_print {
 }
 
 #[macro_export]
-macro_rules! get_name {
-    ($ch:expr) => {
-        (if is_npc!($ch) {
-            ($ch).player.short_descr.as_str()
-        } else {
-            get_pc_name!($ch)
-        })
-    };
-}
-
-#[macro_export]
 macro_rules! isnewl {
     ($ch:expr) => {
         (($ch) == '\n' || ($ch) == '\r')
     };
 }
 
-#[macro_export]
-macro_rules! get_wait_state {
-    ($ch:expr) => {
-        (($ch).wait)
-    };
+// #[macro_export]
+// macro_rules! get_wait_state {
+//     ($ch:expr) => {
+//         (($ch).wait)
+//     };
+// }
+impl DescriptorData {
+    pub fn state(&self) -> ConState {
+        *self.connected.borrow()
+    }
+    pub fn set_state(&self, val: ConState) {
+        *self.connected.borrow_mut() = val;
+    }
+}
+
+impl CharData {
+    pub(crate) fn get_wait_state(&self) -> i32 {
+        return *self.wait.borrow();
+    }
+    pub(crate) fn decr_wait_state(&self, val: i32) {
+        *self.wait.borrow_mut() -= val;
+    }
+    pub(crate) fn set_wait_state(&self, val: i32) {
+        *self.wait.borrow_mut() = val;
+    }
+    pub fn get_class(&self) -> i8 {
+        self.player.borrow().chclass
+    }
+    pub fn set_class(&self, val: i8) {
+        self.player.borrow_mut().chclass = val;
+    }
+    pub fn get_pfilepos(&self) -> i32 {
+        *self.pfilepos.borrow()
+    }
+    pub fn set_pfilepos(&self, val: i32) {
+        *self.pfilepos.borrow_mut() = val;
+    }
+    pub fn get_level(&self) -> u8 {
+        self.player.borrow().level
+    }
+    pub fn set_level(&self, val: u8) {
+        self.player.borrow_mut().level = val;
+    }
+    pub fn get_passwd(&self) -> [u8; 16] {
+        self.player.borrow().passwd
+    }
+    pub fn set_passwd(&self, val: [u8; 16]) {
+        self.player.borrow_mut().passwd = val;
+    }
+    pub fn get_exp(&self) -> i32 {
+        self.points.borrow().exp
+    }
+    pub fn set_exp(&self, val: i32) {
+        self.points.borrow_mut().exp = val;
+    }
+    pub fn get_max_move(&self) -> i16 {
+        self.points.borrow().max_move
+    }
+    pub fn get_max_mana(&self) -> i16 {
+        self.points.borrow().max_mana
+    }
+    pub fn get_max_hit(&self) -> i16 {
+        self.points.borrow().max_hit
+    }
+    pub fn set_max_hit(&self, val: i16) {
+        self.points.borrow_mut().max_hit = val;
+    }
+    pub fn incr_max_hit(&self, val: i16) {
+        self.points.borrow_mut().max_hit += val;
+    }
+    pub fn set_max_mana(&self, val: i16) {
+        self.points.borrow_mut().max_mana = val;
+    }
+    pub fn incr_max_mana(&self, val: i16) {
+        self.points.borrow_mut().max_mana += val;
+    }
+    pub fn set_max_move(&self, val: i16) {
+        self.points.borrow_mut().max_move = val;
+    }
+    pub fn incr_max_move(&self, val: i16) {
+        self.points.borrow_mut().max_move += val;
+    }
+    pub fn get_home(&self) -> i16 {
+        self.player.borrow().hometown
+    }
+    pub fn set_home(&self, val: i16) {
+        self.player.borrow_mut().hometown = val;
+    }
+    pub fn get_ac(&self) -> i16 {
+        self.points.borrow().armor
+    }
+    pub fn set_ac(&self, val: i16) {
+        self.points.borrow_mut().armor = val;
+    }
+    pub fn in_room(&self) -> room_rnum {
+        *self.in_room.borrow()
+    }
+    pub fn set_in_room(&self, val: room_rnum) {
+        *self.in_room.borrow_mut() = val;
+    }
+    pub fn get_was_in(&self) -> room_rnum {
+        *self.was_in_room.borrow()
+    }
 }
 
 #[macro_export]
-macro_rules! state {
-    ($d:expr) => {
-        (($d).connected)
-    };
-}
-
-#[macro_export]
-macro_rules! get_passwd {
+macro_rules! get_age {
     ($ch:expr) => {
-        (($ch).player.passwd)
-    };
-}
-
-#[macro_export]
-macro_rules! get_class {
-    ($ch:expr) => {
-        (($ch).player.chclass)
-    };
-}
-
-#[macro_export]
-macro_rules! get_pfilepos {
-    ($ch:expr) => {
-        (($ch).pfilepos)
-    };
-}
-
-#[macro_export]
-macro_rules! get_level {
-    ($ch:expr) => {
-        (($ch).player.level)
-    };
-}
-
-#[macro_export]
-macro_rules! get_exp {
-    ($ch:expr) => {
-        (($ch).points.exp)
-    };
-}
-
-#[macro_export]
-macro_rules! get_max_hit {
-    ($ch:expr) => {
-        (($ch).points.max_hit)
-    };
-}
-
-#[macro_export]
-macro_rules! get_max_mana {
-    ($ch:expr) => {
-        (($ch).points.max_mana)
-    };
-}
-
-#[macro_export]
-macro_rules! get_max_move {
-    ($ch:expr) => {
-        (($ch).points.max_move)
-    };
-}
-
-#[macro_export]
-macro_rules! get_home {
-    ($ch:expr) => {
-        (($ch).player.hometown)
-    };
-}
-
-#[macro_export]
-macro_rules! get_ac {
-    ($ch:expr) => {
-        (($ch).points.armor)
+        (($ch).year)
     };
 }
 
 #[macro_export]
 macro_rules! get_talk {
     ($ch:expr, $i:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.saved.talks[($i)]))
+        (check_player_special!(
+            ($ch),
+            RefCell::borrow(&($ch).player_specials).saved.talks[($i)]
+        ))
+    };
+}
+
+// #[macro_export]
+// macro_rules! get_talk_mut {
+//     ($ch:expr, $i:expr) => {
+//         (check_player_special!(
+//             ($ch),
+//             RefCell::borrow_mut(&($ch).player_specials).saved.talks[($i)]
+//         ))
+//     };
+// }
+
+impl CharData {
+    pub fn get_talk_mut(&self, i: usize) -> bool {
+        check_player_special!(self, self.player_specials.borrow().saved.talks[i])
+    }
+    pub fn set_talk_mut(&self, i: usize, val: bool) {
+        self.player_specials.borrow_mut().saved.talks[i] = val;
+    }
+    pub fn get_cond(&self, i: i32) -> i16 {
+        self.player_specials.borrow().saved.conditions[i as usize]
+    }
+    pub fn set_cond(&self, i: i32, val: i16) {
+        self.player_specials.borrow_mut().saved.conditions[i as usize] = val;
+    }
+    pub fn get_loadroom(&self) -> room_vnum {
+        self.player_specials.borrow().saved.load_room
+    }
+    pub fn set_loadroom(&self, val: room_vnum) {
+        self.player_specials.borrow_mut().saved.load_room = val;
+    }
+    pub fn get_practices(&self) -> i32 {
+        self.player_specials.borrow().saved.spells_to_learn
+    }
+    pub fn set_practices(&self, val: i32) {
+        self.player_specials.borrow_mut().saved.spells_to_learn = val;
+    }
+    pub fn incr_practices(&self, val: i32) {
+        self.player_specials.borrow_mut().saved.spells_to_learn += val;
+    }
+    pub fn get_bad_pws(&self) -> u8 {
+        self.player_specials.borrow().saved.bad_pws
+    }
+    pub fn reset_bad_pws(&self) {
+        self.player_specials.borrow_mut().saved.bad_pws = 0;
+    }
+    pub fn incr_bad_pws(&self) {
+        self.player_specials.borrow_mut().saved.bad_pws += 1;
+    }
+}
+
+#[macro_export]
+macro_rules! get_last_tell {
+    ($ch:expr) => {
+        (check_player_special!(($ch), RefCell::borrow(&($ch).player_specials).last_tell))
     };
 }
 
 #[macro_export]
-macro_rules! get_cond {
-    ($ch:expr, $i:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.saved.conditions[($i)]))
+macro_rules! get_last_tell_mut {
+    ($ch:expr) => {
+        (check_player_special!(($ch), RefCell::borrow_mut(&($ch).player_specials).last_tell))
     };
 }
 
 #[macro_export]
-macro_rules! get_loadroom {
+macro_rules! set_skill {
+    ($ch:expr, $i:expr, $pct:expr) => {{
+        check_player_special!(
+            ($ch),
+            RefCell::borrow_mut(&($ch).player_specials).saved.skills[$i as usize]
+        ) = $pct;
+    }};
+}
+
+impl CharData {
+    pub fn set_skill(&self, i: usize, pct: i8) {
+        self.player_specials.borrow_mut().saved.skills[i as usize] = pct;
+    }
+    pub fn get_sex(&self) -> u8 {
+        self.player.borrow().sex
+    }
+    pub fn set_sex(&self, val: u8) {
+        self.player.borrow_mut().sex = val;
+    }
+    pub fn get_str(&self) -> i8 {
+        self.aff_abils.borrow().str
+    }
+    pub fn get_add(&self) -> i8 {
+        self.aff_abils.borrow().str_add
+    }
+    pub fn get_dex(&self) -> i8 {
+        self.aff_abils.borrow().dex
+    }
+    pub fn get_int(&self) -> i8 {
+        self.aff_abils.borrow().intel
+    }
+    pub fn get_wis(&self) -> i8 {
+        self.aff_abils.borrow().wis
+    }
+    pub fn get_con(&self) -> i8 {
+        self.aff_abils.borrow().con
+    }
+    pub fn get_cha(&self) -> i8 {
+        self.aff_abils.borrow().cha
+    }
+    pub fn get_pos(&self) -> u8 {
+        self.char_specials.borrow().position
+    }
+    pub fn get_idnum(&self) -> i64 {
+        self.char_specials.borrow().saved.idnum
+    }
+    pub fn set_idnum(&self, val: i64) {
+        self.char_specials.borrow_mut().saved.idnum = val;
+    }
+    pub fn fighting(&self) -> Option<Rc<CharData>> {
+        if self.char_specials.borrow().fighting.is_none() {
+            None
+        } else {
+            Some(
+                self.char_specials
+                    .borrow()
+                    .fighting
+                    .as_ref()
+                    .unwrap()
+                    .clone(),
+            )
+        }
+    }
+    pub fn set_fighting(&self, val: Option<Rc<CharData>>) {
+        self.char_specials.borrow_mut().fighting = val;
+    }
+    pub fn aff_flagged(&self, flag: i64) -> bool {
+        is_set!(self.aff_flags(), flag)
+    }
+    pub fn get_weight(&self) -> u8 {
+        self.player.borrow().weight
+    }
+    pub fn set_weight(&self, val: u8) {
+        self.player.borrow_mut().weight = val;
+    }
+    pub fn get_height(&self) -> u8 {
+        self.player.borrow().height
+    }
+    pub fn set_height(&self, val: u8) {
+        self.player.borrow_mut().height = val;
+    }
+    pub fn get_save(&self, i: usize) -> i16 {
+        self.char_specials.borrow().saved.apply_saving_throw[i]
+    }
+    pub fn set_save(&self, i: usize, val: i16) {
+        self.char_specials.borrow_mut().saved.apply_saving_throw[i] = val;
+    }
+    pub fn plr_flagged(&self, flag: i64) -> bool {
+        !self.is_npc() && is_set!(self.plr_flags(), flag)
+    }
+    pub fn plr_flags(&self) -> i64 {
+        self.char_specials.borrow().saved.act
+    }
+    pub fn remove_plr_flag(&self, flag: i64) {
+        self.char_specials.borrow_mut().saved.act &= !flag;
+    }
+}
+
+#[macro_export]
+macro_rules! mob_flags {
     ($ch:expr) => {
-        (check_player_special!(($ch), ($ch).player_specials.saved.load_room))
+        (($ch).char_specials.saved.act)
+    };
+}
+
+impl CharData {
+    pub fn aff_flags(&self) -> i64 {
+        self.char_specials.borrow().saved.affected_by
+    }
+    pub fn set_aff_flags(&self, val: i64) {
+        self.char_specials.borrow_mut().saved.affected_by = val;
+    }
+    pub fn remove_aff_flags(&self, val: i64) {
+        self.char_specials.borrow_mut().saved.affected_by &= !val;
+    }
+    pub fn awake(&self) -> bool {
+        self.get_pos() > POS_SLEEPING
+    }
+    pub fn can_see_in_dark(&self) -> bool {
+        self.aff_flagged(AFF_INFRAVISION) || (!self.is_npc() && self.prf_flagged(PRF_HOLYLIGHT))
+    }
+}
+
+#[macro_export]
+macro_rules! room_flags {
+    ($loc:expr) => {
+        (world[($loc)].room_flags)
+    };
+}
+#[macro_export]
+macro_rules! spell_routines {
+    ($spl:expr) => {
+        (spell_infos[spl].routines)
     };
 }
 
 #[macro_export]
-macro_rules! get_sex {
+macro_rules! class_abbr {
     ($ch:expr) => {
-        (($ch).player.sex)
-    };
-}
-#[macro_export]
-macro_rules! get_height {
-    ($ch:expr) => {
-        (($ch).player.height)
-    };
-}
-#[macro_export]
-macro_rules! get_weight {
-    ($ch:expr) => {
-        (($ch).player.weight)
+        (if is_npc!($ch) {
+            "--"
+        } else {
+            class_abbrevs[get_class($ch) as usize]
+        })
     };
 }
 
-#[macro_export]
-macro_rules! get_idnum {
-    ($ch:expr) => {
-        (($ch).char_specials.saved.idnum)
-    };
+impl CharData {
+    pub fn is_magic_user(&self) -> bool {
+        self.is_npc() && self.get_class() == CLASS_MAGIC_USER
+    }
+    pub fn is_cleric(&self) -> bool {
+        self.is_npc() && self.get_class() == CLASS_CLERIC
+    }
+    pub fn is_thief(&self) -> bool {
+        self.is_npc() && self.get_class() == CLASS_THIEF
+    }
+    pub fn is_warrior(&self) -> bool {
+        self.is_npc() && self.get_class() == CLASS_WARRIOR
+    }
+    pub fn get_real_level(&self) -> u8 {
+        if self.desc.borrow().is_some()
+            && self
+                .desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .original
+                .borrow()
+                .is_some()
+        {
+            self.desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .original
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .get_level()
+        } else {
+            self.get_level()
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! aff_flags {
-    ($ch:expr) => {
-        (($ch).char_specials.saved.affected_by)
-    };
+impl ObjData {
+    pub fn get_obj_extra(&self) -> i32 {
+        self.obj_flags.extra_flags
+    }
+    pub fn obj_flagged(&self, flag: i32) -> bool {
+        is_set!(self.get_obj_extra(), flag)
+    }
 }
-#[macro_export]
-macro_rules! get_save {
-    ($ch:expr, $i:expr) => {
-        (($ch).char_specials.saved.apply_saving_throw[($i)])
-    };
+
+/* Various macros building up to CAN_SEE */
+
+impl DB {
+    pub fn light_ok(&self, sub: &CharData) -> bool {
+        !sub.aff_flagged(AFF_BLIND) && self.is_light(sub.in_room())
+            || sub.aff_flagged(AFF_INFRAVISION)
+    }
 }
+
+pub fn invis_ok(sub: &CharData, obj: &CharData) -> bool {
+    (!obj.aff_flagged(AFF_INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS))
+        && (!obj.aff_flagged(AFF_HIDE) || sub.aff_flagged(AFF_SENSE_LIFE))
+}
+
+pub fn invis_ok_obj(sub: &CharData, obj: &ObjData) -> bool {
+    !obj.obj_flagged(ITEM_INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS)
+}
+
+impl DB {
+    pub fn mort_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+        self.light_ok(sub) && invis_ok(sub, obj)
+    }
+    pub fn can_see_obj_carrier(&self, sub: &CharData, obj: &ObjData) -> bool {
+        (obj.carried_by.borrow().is_none()
+            || self.can_see(sub, obj.carried_by.borrow().as_ref().unwrap().borrow()))
+            && (obj.worn_by.borrow().is_none()
+                || self.can_see(sub, obj.worn_by.borrow().as_ref().unwrap().borrow()))
+    }
+    pub fn mort_can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
+        self.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(sub, obj)
+    }
+    pub fn imm_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+        self.mort_can_see(sub, obj) || (!sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT))
+    }
+    pub fn can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+        self_(sub, obj)
+            || ((sub.get_real_level()
+                >= (if obj.is_npc() {
+                    0
+                } else {
+                    obj.get_invis_lev() as u8
+                }))
+                && self.imm_can_see(sub, obj))
+    }
+}
+
+pub fn self_(sub: &CharData, obj: &CharData) -> bool {
+    sub as *const _ == obj as *const _
+}
+
+impl ObjData {
+    pub fn in_room(&self) -> room_rnum {
+        self.in_room
+    }
+}
+
+impl DB {
+    pub fn pers<'a>(&self, ch: &'a CharData, vict: &CharData) -> Rc<str> {
+        if self.can_see(vict, ch) {
+            ch.get_name()
+        } else {
+            Rc::from("someone")
+        }
+    }
+    pub fn can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
+        self.mort_can_see_obj(sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
+    }
+
+    pub fn objs<'a>(&self, obj: &'a ObjData, vict: &CharData) -> &'a str {
+        if self.can_see_obj(vict, obj) {
+            obj.short_description.as_str()
+        } else {
+            "something"
+        }
+    }
+
+    pub fn objn(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
+        if self.can_see_obj(vict, obj) {
+            fname(obj.name.as_str())
+        } else {
+            Rc::from("something")
+        }
+    }
+}
+
+pub fn hmhr(ch: &CharData) -> &str {
+    if ch.get_sex() != 0 {
+        if ch.get_sex() == SEX_MALE {
+            "him"
+        } else {
+            "her"
+        }
+    } else {
+        "it"
+    }
+}
+
+pub fn hshr(ch: &CharData) -> &str {
+    if ch.get_sex() != 0 {
+        if ch.get_sex() == SEX_MALE {
+            "his"
+        } else {
+            "her"
+        }
+    } else {
+        "its"
+    }
+}
+
+pub fn hssh(ch: &CharData) -> &str {
+    if ch.get_sex() != 0 {
+        if ch.get_sex() == SEX_MALE {
+            "he"
+        } else {
+            "she"
+        }
+    } else {
+        "it"
+    }
+}
+
+pub fn ana(obj: &ObjData) -> &str {
+    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
+        "An"
+    } else {
+        "A"
+    }
+}
+
+pub fn sana(obj: &ObjData) -> &str {
+    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
+        "an"
+    } else {
+        "a"
+    }
+}
+
+impl RoomDirectionData {
+    pub fn exit_flagged(&self, flag: i16) -> bool {
+        is_set!(self.exit_info, flag)
+    }
+}
+
+impl DB {
+    pub fn exit(&self, ch: &CharData, door: usize) -> Option<Rc<RoomDirectionData>> {
+        self.world.borrow()[ch.in_room() as usize].dir_option[door as usize].clone()
+    }
+    pub fn room_flags(&self, loc: room_rnum) -> i32 {
+        return self.world.borrow()[loc as usize].room_flags;
+    }
+    pub fn room_flagged(&self, loc: room_rnum, flag: i64) -> bool {
+        is_set!(self.room_flags(loc), flag as i32)
+    }
+    pub fn sect(&self, loc: room_rnum) -> i32 {
+        if self.valid_room_rnum(loc) {
+            self.world.borrow()[loc as usize].sector_type
+        } else {
+            SECT_INSIDE
+        }
+    }
+}
+
+/* mud-life time */
+pub const SECS_PER_MUD_HOUR: u64 = 75;
+pub const SECS_PER_MUD_DAY: u64 = 24 * SECS_PER_MUD_HOUR;
+pub const SECS_PER_MUD_MONTH: u64 = 35 * SECS_PER_MUD_DAY;
+pub const SECS_PER_MUD_YEAR: u64 = 17 * SECS_PER_MUD_MONTH;
+
+/* real-life time (remember Real Life?) */
+pub const SECS_PER_REAL_MIN: u64 = 60;
+pub const SECS_PER_REAL_HOUR: u64 = 60 * SECS_PER_REAL_MIN;
+pub const SECS_PER_REAL_DAY: u64 = 24 * SECS_PER_REAL_HOUR;
+pub const SECS_PER_REAL_YEAR: u64 = 365 * SECS_PER_REAL_DAY;
+
+pub fn time_now() -> u64 {
+    return SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+}
+
 /* external globals */
 // extern struct time_data time_info;
 
@@ -343,29 +843,60 @@ pub fn prune_crlf(s: &mut String) {
 // mudlog(BRF, LVL_IMMORT, TRUE, "%s hit death trap #%d (%s)", GET_NAME(ch), GET_ROOM_VNUM(IN_ROOM(ch)), world[IN_ROOM(ch)].name);
 // }
 
-// #[macro_export]
-// macro_rules! foo {
-//     ($base: expr, $($args:tt),*) => {{
-//         Err(MyError::new(format!($base, $($args),*)))
-//     }};
+/*
+ * New variable argument log() function.  Works the same as the old for
+ * previously written code but is very nice for new code.
+ */
+// impl MainGlobals {
+//     fn basic_mud_vlog(&self, msg: &str) {
+//         time_t
+//         ct = time(0);
+//         char * time_s = asctime(localtime(&ct));
+//
+//         if (logfile == NULL) {
+//             puts("SYSERR: Using log() before stream was initialized!");
+//             return;
+//         }
+//
+//         if (format == NULL)
+//         format = "SYSERR: log() received a NULL format.";
+//
+//         time_s[strlen(time_s) - 1] = '\0';
+//
+//         fprintf(logfile, "%-15.15s :: ", time_s + 4);
+//         vfprintf(logfile, format, args);
+//         fputc('\n', logfile);
+//         fflush(logfile);
+//     }
 // }
 
 /*
  * New variable argument log() function.  Works the same as the old for
  * previously written code but is very nice for new code.
  */
-use std::fs::OpenOptions;
+use crate::db::DB;
+use crate::handler::fname;
+use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
+use crate::structs::ConState::ConPlaying;
+use crate::structs::{
+    room_vnum, CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND,
+    AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC,
+    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING,
+    PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE,
+    SEX_MALE,
+};
+use crate::{clr, send_to_char, DescriptorData, MainGlobals, _clrlevel, CCGRN, CCNRM};
+use log::{error, info};
+use std::fs::{File, OpenOptions};
 use std::io;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /* So mudlog() can use the same function. */
-// void basic_mud_log(const char *format, ...)
-// {
-// va_list args;
-//
-// va_start(args, format);
-// basic_mud_vlog(format, args);
-// va_end(args);
+// pub fn basic_mud_log(msg: &str) {
+//     basic_mud_vlog(msg);
 // }
 
 /* the "touch" command, essentially. */
@@ -380,74 +911,97 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * mudlog -- log mud messages to a file & to online imm's syslogs
  * based on syslog by Fen Jul 3, 1992
  */
-// void mudlog(int type, int level, int file, const char *str, ...)
-// {
-// char buf[MAX_STRING_LENGTH];
-// struct descriptor_data *i;
-// va_list args;
-//
-// if (str == NULL)
-// return;	/* eh, oh well. */
-//
-// if (file) {
-// va_start(args, str);
-// basic_mud_vlog(str, args);
-// va_end(args);
-// }
-//
-// if (level < 0)
-// return;
-//
-// strcpy(buf, "[ ");	/* strcpy: OK */
-// va_start(args, str);
-// vsnprintf(buf + 2, sizeof(buf) - 6, str, args);
-// va_end(args);
-// strcat(buf, " ]\r\n");	/* strcat: OK */
-//
-// for (i = descriptor_list; i; i = i->next) {
-// if (STATE(i) != ConPlaying || IS_NPC(i->character)) /* switch */
-// continue;
-// if (GET_LEVEL(i->character) < level)
-// continue;
-// if (PLR_FLAGGED(i->character, PLR_WRITING))
-// continue;
-// if (type > (PRF_FLAGGED(i->character, PRF_LOG1) ? 1 : 0) + (PRF_FLAGGED(i->character, PRF_LOG2) ? 2 : 0))
-// continue;
-//
-// send_to_char(i->character, "%s%s%s", CCGRN(i->character, C_NRM), buf, CCNRM(i->character, C_NRM));
-// }
-// }
+impl MainGlobals {
+    pub(crate) fn mudlog(&self, _type: u8, level: i32, file: bool, msg: &str) {
+        if msg == "" {
+            return;
+        }
+        if file {
+            info!("{}", msg);
+            //basic_mud_vlog(msg);
+        }
+
+        if level < 0 {
+            return;
+        }
+
+        let buf = format!("[ {} ]", msg);
+
+        for d in self.descriptor_list.borrow().iter() {
+            let ohc = d.character.borrow();
+            let character = ohc.as_ref().unwrap();
+            if d.state() != ConPlaying || character.is_npc() {
+                /* switch */
+                continue;
+            }
+            if character.get_level() < level as u8 {
+                continue;
+            }
+            if character.plr_flagged(PLR_WRITING) {
+                continue;
+            }
+            let x = if _type > u8::from(character.prf_flagged(PRF_LOG1)) {
+                1
+            } else {
+                0
+            };
+            let x = x + if character.prf_flagged(PRF_LOG2) {
+                2
+            } else {
+                0
+            };
+            if x != 0 {
+                continue;
+            }
+            // if  type > prf_flagged!(character, PRF_LOG1)?
+            // 1: 0) + (PRF_FLAGGED(i->character, PRF_LOG2)?
+            // 2: 0))
+            // continue;
+            send_to_char(
+                &character,
+                format!(
+                    "{}{}{}",
+                    CCGRN!(character, C_NRM),
+                    buf,
+                    CCNRM!(character, C_NRM)
+                )
+                .as_str(),
+            );
+        }
+    }
+}
 
 /*
  * If you don't have a 'const' array, just cast it as such.  It's safer
  * to cast a non-const array as const than to cast a const one as non-const.
  * Doesn't really matter since this function doesn't change the array though.
  */
-// size_t sprintbit(bitvector_t bitvector, const char *names[], char *result, size_t reslen)
-// {
-// size_t len = 0;
-// int nlen;
-// long nr;
-//
-// *result = '\0';
-//
-// for (nr = 0; bitvector && len < reslen; bitvector >>= 1) {
-// if (IS_SET(bitvector, 1)) {
-// nlen = snprintf(result + len, reslen - len, "%s ", *names[nr] != '\n' ? names[nr] : "UNDEFINED");
-// if (len + nlen >= reslen || nlen < 0)
-// break;
-// len += nlen;
-// }
-//
-// if (*names[nr] != '\n')
-// nr++;
-// }
-//
-// if (!*result)
-// len = strlcpy(result, "NOBITS ", reslen);
-//
-// return (len);
-// }
+pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
+    // size_t len = 0;
+    // int nlen;
+    // long nr;
+
+    let mut nr = 0;
+    let mut bitvector = bitvector;
+    loop {
+        if bitvector == 0 {
+            break;
+        }
+        if is_set!(bitvector, 1) {
+            result.push_str(if nr < (names.len() - 1) {
+                names[nr]
+            } else {
+                "UNDEFINED"
+            });
+        }
+        bitvector >>= 1;
+    }
+    if result.len() == 0 {
+        result.push_str("NOBITS");
+    }
+
+    return result.len();
+}
 
 // size_t sprinttype(int type, const char *names[], char *result, size_t reslen)
 // {
@@ -642,26 +1196,31 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * Returns the number of lines advanced in the file. Buffer given must
  * be at least READ_SIZE (256) characters large.
  */
-// int get_line(FILE *fl, char *buf)
-// {
-// char temp[READ_SIZE];
-// int lines = 0;
-// int sl;
-//
-// do {
-// if (!fgets(temp, READ_SIZE, fl))
-// return (0);
-// lines++;
-// } while (*temp == '*' || *temp == '\n' || *temp == '\r');
-//
-// /* Last line of file doesn't always have a \n, but it should. */
-// sl = strlen(temp);
-// while (sl > 0 && (temp[sl - 1] == '\n' || temp[sl - 1] == '\r'))
-// temp[--sl] = '\0';
-//
-// strcpy(buf, temp); /* strcpy: OK, if buf >= READ_SIZE (256) */
-// return (lines);
-// }
+pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
+    //char temp[READ_SIZE];
+    let mut lines = 0;
+    //let sl: i32;
+    let mut temp = String::new();
+
+    loop {
+        temp.clear();
+        let r = reader.read_line(&mut temp);
+        if !r.is_ok() {
+            return 0;
+        }
+        temp = temp.trim_end().to_string();
+        lines += 1;
+        if temp.starts_with('*') || temp.starts_with('\n') || temp.starts_with('\r') {
+            continue;
+        }
+        break;
+    }
+
+    /* Last line of file doesn't always have a \n, but it should. */
+    buf.clear();
+    buf.push_str(temp.trim_end());
+    return lines;
+}
 
 // int get_filename(char *filename, size_t fbufsize, int mode, const char *orig_name)
 // {
@@ -777,24 +1336,35 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * Inside and City rooms are always lit.
  * Outside rooms are dark at sunset and night.
  */
-// int room_is_dark(room_rnum room)
-// {
-// if (!VALID_ROOM_RNUM(room)) {
-// log("room_is_dark: Invalid room rnum %d. (0-%d)", room, top_of_world);
-// return (FALSE);
-// }
-//
-// if (world[room].light)
-// return (FALSE);
-//
-// if (ROOM_FLAGGED(room, ROOM_DARK))
-// return (TRUE);
-//
-// if (SECT(room) == SECT_INSIDE || SECT(room) == SECT_CITY)
-// return (FALSE);
-//
-// if (weather_info.sunlight == SUN_SET || weather_info.sunlight == SUN_DARK)
-// return (TRUE);
-//
-// return (FALSE);
-// }
+impl DB {
+    pub fn is_light(&self, room: room_rnum) -> bool {
+        !self.is_dark(room)
+    }
+    pub fn is_dark(&self, room: room_rnum) -> bool {
+        if !self.valid_room_rnum(room) {
+            error!(
+                "room_is_dark: Invalid room rnum {}. (0-{})",
+                room,
+                self.top_of_world.borrow()
+            );
+            return false;
+        }
+
+        if *self.world.borrow()[room as usize].light.borrow() != 0 {
+            return false;
+        }
+
+        if self.room_flagged(room, ROOM_DARK) {
+            return true;
+        }
+
+        if self.sect(room) == SECT_INSIDE || self.sect(room) == SECT_CITY {
+            return false;
+        }
+
+        // if (weather_info.sunlight == SUN_SET | | weather_info.sunlight == SUN_DARK)
+        // return (TRUE);
+
+        return false;
+    }
+}

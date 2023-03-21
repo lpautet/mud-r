@@ -298,24 +298,27 @@ use crate::{DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub fn paginate_string<'a>(str: &'a str, d: Rc<RefCell<DescriptorData<'a>>>) -> &'a str {
-    let mut dd = RefCell::borrow_mut(&d);
-    if dd.showstr_count != 0 {
-        dd.showstr_vector.push(str);
+pub fn paginate_string<'a>(str: &'a str, d: &'a DescriptorData) -> &'a str {
+    if *d.showstr_count.borrow() != 0 {
+        d.showstr_vector
+            .borrow_mut()
+            .push(Rc::new(RefCell::new(str.to_string())));
     }
 
     let mut s = str;
-    for _i in 1..dd.showstr_count {
+    for _i in 1..*d.showstr_count.borrow() {
         let r = next_page(s);
         if r.is_some() {
-            dd.showstr_vector.push(r.unwrap());
+            d.showstr_vector
+                .borrow_mut()
+                .push(Rc::new(RefCell::new(r.unwrap().to_string())));
             s = r.unwrap();
         } else {
             break;
         }
     }
 
-    dd.showstr_page = 0;
+    *d.showstr_page.borrow_mut() = 0;
     return s;
 }
 

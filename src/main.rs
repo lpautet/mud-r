@@ -7,14 +7,18 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
-
+mod act_informative;
 mod ban;
 mod class;
 mod config;
 mod constants;
 mod db;
+mod handler;
 mod interpreter;
+mod limits;
 mod modify;
+mod screen;
+mod spells;
 mod structs;
 mod telnet;
 mod util;
@@ -22,12 +26,16 @@ mod util;
 use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
-use crate::interpreter::nanny;
+use crate::handler::fname;
+use crate::interpreter::{command_interpreter, nanny};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
+use crate::util::{hmhr, hshr, hssh, sana};
 use env_logger::Env;
 use log::{debug, error, info, warn};
+use std::any::Any;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
@@ -35,77 +43,89 @@ use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
 
-pub struct DescriptorData<'a> {
-    stream: TcpStream,
+pub const TO_ROOM: i32 = 1;
+pub const TO_VICT: i32 = 2;
+pub const TO_NOTVICT: i32 = 3;
+pub const TO_CHAR: i32 = 4;
+pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
+
+pub struct DescriptorData {
+    stream: RefCell<TcpStream>,
     // file descriptor for socket
-    host: String,
+    host: RefCell<String>,
     // hostname
-    bad_pws: u8,
+    bad_pws: RefCell<u8>,
     /* number of bad pw attemps this login	*/
-    idle_tics: u8,
+    idle_tics: RefCell<u8>,
     /* tics idle at password prompt		*/
-    connected: ConState,
+    connected: RefCell<ConState>,
     // mode of 'connectedness'
-    desc_num: u32,
+    desc_num: RefCell<usize>,
     // unique num assigned to desc
     login_time: Instant,
     /* when the person connected		*/
-    showstr_head: &'a str,
+    showstr_head: RefCell<Rc<RefCell<String>>>,
     /* for keeping track of an internal str	*/
-    showstr_vector: Vec<&'a str>,
+    showstr_vector: RefCell<Vec<Rc<RefCell<String>>>>,
     /* for paging through texts		*/
-    showstr_count: i32,
+    showstr_count: RefCell<i32>,
     /* number of pages to page through	*/
-    showstr_page: i32,
+    showstr_page: RefCell<i32>,
     /* which page are we currently showing?	*/
-    str: Option<&'a str>,
+    str: RefCell<Option<String>>,
     /* for the modify-str system		*/
-    // size_t max_str;	        /*		-			*/
+    pub max_str: RefCell<usize>,
+    /*		-			*/
     // long	mail_to;		/* name for mail system			*/
-    has_prompt: bool,
+    has_prompt: RefCell<bool>,
     /* is the user at a prompt?             */
-    inbuf: String,
+    inbuf: RefCell<String>,
     /* buffer for raw input		*/
     // char	last_input[MAX_INPUT_LENGTH]; /* the last input			*/
     // char small_outbuf[SMALL_BUFSIZE];  /* standard output buffer		*/
-    history: Vec<String>,
+    history: RefCell<Vec<String>>,
     /* History of commands, for ! mostly.	*/
     // int	history_pos;		/* Circular array position.		*/
-    output: Option<String>,
+    output: RefCell<String>,
     // int  bufptr;			/* ptr to end of current output		*/
     // int	bufspace;		/* space left in the output buffer	*/
     // struct txt_block *large_outbuf; /* ptr to large buffer, if we need it */
-    input: LinkedList<TxtBlock>,
-    character: Option<CharData<'a>>,
+    input: RefCell<LinkedList<TxtBlock>>,
+    character: RefCell<Option<Rc<CharData>>>,
     /* linked to char			*/
-    // struct char_data *original;	/* original char if switched		*/
+    original: RefCell<Option<Rc<CharData>>>,
+    /* original char if switched		*/
     // struct descriptor_data *snooping; /* Who is this char snooping	*/
     // struct descriptor_data *snoop_by; /* And who is snooping this char	*/
     // struct descriptor_data *next; /* link to next descriptor		*/
 }
 
 /* local globals */
-pub struct MainGlobals<'a> {
-    db: Option<Rc<RefCell<DB<'a>>>>,
-    mother_desc: Option<Box<TcpListener>>,
-    descriptor_list: Vec<Rc<RefCell<DescriptorData<'a>>>>,
-    last_desc: u32,
+pub struct MainGlobals {
+    db: Option<DB>,
+    mother_desc: Option<RefCell<TcpListener>>,
+    descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
+    last_desc: RefCell<usize>,
     // struct txt_block *bufpool = 0;	/* pool of large output buffers */
     // int buf_largecount = 0;		/* # of large buffers which exist */
     // int buf_overflows = 0;		/* # of overflows of output */
     // int buf_switches = 0;		/* # of switches from small to large buf */
-    circle_shutdown: bool,
+    circle_shutdown: RefCell<bool>,
     /* clean shutdown */
-    // int circle_reboot = 0;		/* reboot the game after a shutdown */
-    // int no_specials = 0;		/* Suppress ass. of special routines */
+    circle_reboot: bool,
+    /* reboot the game after a shutdown */
+    no_specials: bool,
+    /* Suppress ass. of special routines */
     // int max_players = 0;		/* max descriptors available */
-    // int tics = 0;			/* for extern checkpointing */
+    tics: i32,
+    /* for extern checkpointing */
     // struct timeval null_time;	/* zero-valued time structure */
     // byte reread_wizlist;		/* signal: SIGUSR1 */
     // byte emergency_unban;		/* signal: SIGUSR2 */
@@ -123,13 +143,16 @@ fn main() -> ExitCode {
     let dir = DFLT_DIR;
     let port = DFLT_PORT;
 
-    let game = Rc::new(RefCell::new(MainGlobals {
-        descriptor_list: Vec::new(),
-        last_desc: 0,
-        circle_shutdown: false,
+    let mut game = MainGlobals {
+        descriptor_list: RefCell::new(Vec::new()),
+        last_desc: RefCell::new(0),
+        circle_shutdown: RefCell::new(false),
+        circle_reboot: false,
+        no_specials: false,
         db: None,
         mother_desc: None,
-    }));
+        tics: 0,
+    };
     //let mut scheck: bool = false; /* for syntax checking mode */
     // ush_int port;
     // int pos = 1;
@@ -235,8 +258,8 @@ fn main() -> ExitCode {
     //     boot_world();
     // } else {
     info!("Running game on port {}.", port);
-    RefCell::borrow_mut(&game).mother_desc = Some(init_socket(port));
-    init_game(game, port);
+    game.mother_desc = Some(RefCell::new(init_socket(port)));
+    game.init_game(port);
     // }
 
     info!("Clearing game world.");
@@ -259,55 +282,58 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/* Init sockets, run game, and cleanup sockets */
-fn init_game(globals: Rc<RefCell<MainGlobals>>, _port: u16) {
-    //socket_t mother_desc;
+impl MainGlobals {
+    /* Init sockets, run game, and cleanup sockets */
+    fn init_game(&mut self, _port: u16) {
+        //socket_t mother_desc;
 
-    /* We don't want to restart if we crash before we get up. */
-    util::touch(Path::new(KILLSCRIPT)).expect("Cannot create KILLSCRIPT path");
+        /* We don't want to restart if we crash before we get up. */
+        util::touch(Path::new(KILLSCRIPT)).expect("Cannot create KILLSCRIPT path");
 
-    // log("Finding player limit.");
-    // max_players = get_max_players();
+        // log("Finding player limit.");
+        // max_players = get_max_players();
 
-    info!("Opening mother connection.");
+        info!("Opening mother connection.");
 
-    RefCell::borrow_mut(&globals).db = Some(Rc::from(RefCell::new(boot_db(Rc::clone(&globals)))));
+        let db = boot_db(&self);
+        self.db = Some(db);
 
-    // info!("Signal trapping.");
-    // signal_setup();
+        // info!("Signal trapping.");
+        // signal_setup();
 
-    /* If we made it this far, we will be able to restart without problem. */
-    fs::remove_file(Path::new(KILLSCRIPT)).unwrap();
+        /* If we made it this far, we will be able to restart without problem. */
+        fs::remove_file(Path::new(KILLSCRIPT)).unwrap();
 
-    info!("Entering game loop.");
+        info!("Entering game loop.");
 
-    game_loop(globals);
+        self.game_loop();
 
-    //Crash_save_all();
+        //Crash_save_all();
 
-    info!("Closing all sockets.");
-    // DESCRIPTOR_LIST.iter_mut().for_each(|descriptor_data| {
-    //     close_socket(descriptor_data);
-    // });
-    //
-    // CLOSE_SOCKET(mother_desc);
-    // fclose(player_fl);
+        info!("Closing all sockets.");
+        // DESCRIPTOR_LIST.iter_mut().for_each(|descriptor_data| {
+        //     close_socket(descriptor_data);
+        // });
+        //
+        // CLOSE_SOCKET(mother_desc);
+        // fclose(player_fl);
 
-    info!("Saving current MUD time.");
-    // save_mud_time(&time_info);
+        info!("Saving current MUD time.");
+        // save_mud_time(&time_info);
 
-    // if (circle_reboot) {
-    //     log("Rebooting.");
-    //     exit(52);            /* what's so great about HHGTTG, anyhow? */
-    // }
-    info!("Normal termination of game.");
+        // if (circle_reboot) {
+        //     log("Rebooting.");
+        //     exit(52);            /* what's so great about HHGTTG, anyhow? */
+        // }
+        info!("Normal termination of game.");
+    }
 }
 
 /*
  * init_socket sets up the mother descriptor - creates the socket, sets
  * its options up, binds it, and listens.
  */
-fn init_socket(port: u16) -> Box<TcpListener> {
+fn init_socket(port: u16) -> TcpListener {
     let socket_addr = SocketAddr::new(("127.0.0.1".parse()).unwrap(), port);
     let listener = TcpListener::bind(socket_addr).unwrap_or_else(|error| {
         error!("SYSERR: Error creating socket {}", error);
@@ -316,7 +342,7 @@ fn init_socket(port: u16) -> Box<TcpListener> {
     listener
         .set_nonblocking(true)
         .expect("Non blocking has issue");
-    Box::new(listener)
+    listener
     //
     // if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
     // perror("");
@@ -456,277 +482,268 @@ fn init_socket(port: u16) -> Box<TcpListener> {
  * output and sending it out to players, and calling "heartbeat" functions
  * such as mobile_activity().
  */
-fn game_loop(main_globals: Rc<RefCell<MainGlobals>>) {
-    let opt_time = Duration::from_micros(OPT_USEC as u64);
-    let mut process_time;
-    let mut temp_time;
-    let mut before_sleep;
-    // let mut now;
-    let mut timeout;
-    let mut comm = String::new();
-    // struct descriptor_data * d, * next_d;
-    let mut pulse: u32 = 0;
-    let mut missed_pulses;
-    //        let mut maxdesc;
-    let mut aliased = false;
+impl MainGlobals {
+    fn game_loop(&self) {
+        let opt_time = Duration::from_micros(OPT_USEC as u64);
+        let mut process_time;
+        let mut temp_time;
+        let mut before_sleep;
+        // let mut now;
+        let mut timeout;
+        let mut comm = String::new();
+        // struct descriptor_data * d, * next_d;
+        let mut pulse: u32 = 0;
+        let mut missed_pulses;
+        //        let mut maxdesc;
+        let mut aliased = false;
 
-    /* initialize various time values */
-    // null_time.tv_sec = 0;
-    // null_time.tv_usec = 0;
-    // FD_ZERO( & null_set);
+        /* initialize various time values */
+        // null_time.tv_sec = 0;
+        // null_time.tv_usec = 0;
+        // FD_ZERO( & null_set);
 
-    let mut last_time = Instant::now();
+        let mut last_time = Instant::now();
 
-    /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
-    while !RefCell::borrow(&main_globals).circle_shutdown {
-        /* Sleep if we don't have any connections */
-        if RefCell::borrow_mut(&main_globals)
-            .descriptor_list
-            .is_empty()
-        {
-            debug!("No connections.  Going to sleep.");
-            // match listener.accept() {
-            //     Ok((_socket, addr)) => {
-            //         log("New connection.  Waking up.");
-            //         last_time = Local::now();
-            //     },
-            //     Err(e) => { log("SYSERR: Could not get client {e:?}") }
-            // }
+        /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
+        while !*RefCell::borrow(&self.circle_shutdown) {
+            /* Sleep if we don't have any connections */
+            if RefCell::borrow(&self.descriptor_list).is_empty() {
+                debug!("No connections.  Going to sleep.");
+                // match listener.accept() {
+                //     Ok((_socket, addr)) => {
+                //         log("New connection.  Waking up.");
+                //         last_time = Local::now();
+                //     },
+                //     Err(e) => { log("SYSERR: Could not get client {e:?}") }
+                // }
+                // FD_ZERO(&input_set);
+                // FD_SET(mother_desc, &input_set);
+                // if (select(mother_desc + 1, &input_set, (fd_set *) 0, (fd_set *) 0, NULL) < 0) {
+                //     if (errno == EINTR)
+                //     log("Waking up to process signal.");
+                //     else
+                //     perror("SYSERR: Select coma");
+                // } else
+                // log("New connection.  Waking up.");
+                // last_time = Local::now();
+                // gettimeofday(&last_time, ( struct timezone
+                // * ) 0);
+            }
+            /* Set up the input, output, and exception sets for select(). */
             // FD_ZERO(&input_set);
+            // FD_ZERO(&output_set);
+            // FD_ZERO(&exc_set);
             // FD_SET(mother_desc, &input_set);
-            // if (select(mother_desc + 1, &input_set, (fd_set *) 0, (fd_set *) 0, NULL) < 0) {
-            //     if (errno == EINTR)
-            //     log("Waking up to process signal.");
-            //     else
-            //     perror("SYSERR: Select coma");
-            // } else
-            // log("New connection.  Waking up.");
-            // last_time = Local::now();
-            // gettimeofday(&last_time, ( struct timezone
-            // * ) 0);
-        }
-        /* Set up the input, output, and exception sets for select(). */
-        // FD_ZERO(&input_set);
-        // FD_ZERO(&output_set);
-        // FD_ZERO(&exc_set);
-        // FD_SET(mother_desc, &input_set);
-        //
-        // maxdesc = mother_desc;
-        // for (d = descriptor_list; d; d = d -> next) {
-        //     # ifndef
-        //     CIRCLE_WINDOWS
-        //     if (d -> descriptor > maxdesc)
-        //     maxdesc = d -> descriptor;
-        //     # endif
-        //     FD_SET(d -> descriptor, &input_set);
-        //     FD_SET(d -> descriptor, &output_set);
-        //     FD_SET(d -> descriptor, &exc_set);
-        // }
+            //
+            // maxdesc = mother_desc;
+            // for (d = descriptor_list; d; d = d -> next) {
+            //     # ifndef
+            //     CIRCLE_WINDOWS
+            //     if (d -> descriptor > maxdesc)
+            //     maxdesc = d -> descriptor;
+            //     # endif
+            //     FD_SET(d -> descriptor, &input_set);
+            //     FD_SET(d -> descriptor, &output_set);
+            //     FD_SET(d -> descriptor, &exc_set);
+            // }
 
-        /*
-         * At this point, we have completed all input, output and heartbeat
-         * activity from the previous iteration, so we have to put ourselves
-         * to sleep until the next 0.1 second tick.  The first step is to
-         * calculate how long we took processing the previous iteration.
-         */
-        before_sleep = Instant::now();
-        process_time = before_sleep - last_time;
-
-        /*
-         * If we were asleep for more than one pass, count missed pulses and sleep
-         * until we're resynchronized with the next upcoming pulse.
-         */
-        //missed_pulses;
-        if (process_time.as_micros() as u32) < OPT_USEC {
-            missed_pulses = 0;
-        } else {
-            missed_pulses = process_time.as_micros() as u32 / OPT_USEC;
-            process_time = process_time
-                + Duration::new(0, 1000 * (process_time.as_micros() as u32 % OPT_USEC));
-        }
-
-        /* Calculate the time we should wake up */
-        temp_time = opt_time - process_time;
-        last_time = before_sleep + temp_time;
-
-        /* Now keep sleeping until that time has come */
-        timeout = last_time - Instant::now();
-
-        thread::sleep(timeout);
-
-        /* If there are new connections waiting, accept them. */
-        let accept_result = RefCell::borrow(&main_globals)
-            .mother_desc
-            .as_ref()
-            .unwrap()
-            .accept();
-        match accept_result {
-            Ok((socket, addr)) => {
-                info!("New connection {}.  Waking up.", addr);
-                new_descriptor(&main_globals, socket, addr);
-            }
-            Err(e) => match e.kind() {
-                ErrorKind::WouldBlock => (),
-                _ => error!("SYSERR: Could not get client {e:?}"),
-            },
-        }
-
-        /* Process descriptors with input pending */
-        for d in &RefCell::borrow(&main_globals).descriptor_list {
-            let mut buf = [0 as u8];
-            let res = RefCell::borrow(d).stream.peek(&mut buf);
-            if res.is_ok() && res.unwrap() != 0 {
-                process_input(d);
-            }
-        }
-
-        let my_main_globals = RefCell::borrow(&main_globals);
-        /* Process commands we just read from process_input */
-        for d in &my_main_globals.descriptor_list {
             /*
-             * Not combined to retain --(d->wait) behavior. -gg 2/20/98
-             * If no wait state, no subtraction.  If there is a wait
-             * state then 1 is subtracted. Therefore we don't go less
-             * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
+             * At this point, we have completed all input, output and heartbeat
+             * activity from the previous iteration, so we have to put ourselves
+             * to sleep until the next 0.1 second tick.  The first step is to
+             * calculate how long we took processing the previous iteration.
              */
-            if RefCell::borrow(d).character.is_some() {
-                let wait_state =
-                    get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap());
-                if wait_state > 0 {
-                    get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) -= 1;
+            before_sleep = Instant::now();
+            process_time = before_sleep - last_time;
+
+            /*
+             * If we were asleep for more than one pass, count missed pulses and sleep
+             * until we're resynchronized with the next upcoming pulse.
+             */
+            //missed_pulses;
+            if (process_time.as_micros() as u32) < OPT_USEC {
+                missed_pulses = 0;
+            } else {
+                missed_pulses = process_time.as_micros() as u32 / OPT_USEC;
+                process_time = process_time
+                    + Duration::new(0, 1000 * (process_time.as_micros() as u32 % OPT_USEC));
+            }
+
+            /* Calculate the time we should wake up */
+            temp_time = opt_time - process_time;
+            last_time = before_sleep + temp_time;
+
+            /* Now keep sleeping until that time has come */
+            timeout = last_time - Instant::now();
+
+            thread::sleep(timeout);
+
+            /* If there are new connections waiting, accept them. */
+            let accept_result = RefCell::borrow(self.mother_desc.as_ref().unwrap()).accept();
+            match accept_result {
+                Ok((socket, addr)) => {
+                    info!("New connection {}.  Waking up.", addr);
+                    self.new_descriptor(socket, addr);
+                }
+                Err(e) => match e.kind() {
+                    ErrorKind::WouldBlock => (),
+                    _ => error!("SYSERR: Could not get client {e:?}"),
+                },
+            }
+
+            /* Process descriptors with input pending */
+            for d in self.descriptor_list.borrow().iter() {
+                let mut buf = [0 as u8];
+                let res = RefCell::borrow(&d.stream).peek(&mut buf);
+                if res.is_ok() && res.unwrap() != 0 {
+                    process_input(d.as_ref());
+                }
+            }
+
+            /* Process commands we just read from process_input */
+            for d in self.descriptor_list.borrow().iter() {
+                /*
+                 * Not combined to retain --(d->wait) behavior. -gg 2/20/98
+                 * If no wait state, no subtraction.  If there is a wait
+                 * state then 1 is subtracted. Therefore we don't go less
+                 * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
+                 */
+                if d.character.borrow().is_some() {
+                    let ohc = d.character.borrow();
+                    let character = ohc.as_ref().unwrap();
+                    let wait_state = character.get_wait_state();
+                    if wait_state > 0 {
+                        character.decr_wait_state(1);
+                    }
+
+                    if character.get_wait_state() != 0 {
+                        continue;
+                    }
                 }
 
-                if get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) != 0 {
+                if !get_from_q(&mut RefCell::borrow_mut(&d.input), &mut comm, &mut aliased) {
                     continue;
                 }
-            }
 
-            if !get_from_q(&mut RefCell::borrow_mut(d).input, &mut comm, &mut aliased) {
-                continue;
-            }
-
-            if RefCell::borrow(d).character.is_some() {
-                /* Reset the idle timer & pull char back from void if necessary */
-                RefCell::borrow_mut(d)
-                    .character
-                    .as_mut()
-                    .unwrap()
-                    .char_specials
-                    .timer = 0;
-                if state!(RefCell::borrow_mut(d)) == ConPlaying
-                /* && GET_WAS_IN(d -> character) != NOWHERE */
-                {
-                    // if (IN_ROOM(d -> character) != NOWHERE)
-                    // char_from_room(d -> character);
-                    // char_to_room(d -> character, GET_WAS_IN(d -> character));
-                    // GET_WAS_IN(d -> character) = NOWHERE;
-                    // act("$n has returned.", TRUE, d -> character, 0, 0, TO_ROOM);
+                if d.character.borrow().is_some() {
+                    /* Reset the idle timer & pull char back from void if necessary */
+                    let ohc = d.character.borrow();
+                    let character = ohc.as_ref().unwrap();
+                    character.char_specials.borrow_mut().timer = 0;
+                    if d.state() == ConPlaying
+                    /* && GET_WAS_IN(d -> character) != NOWHERE */
+                    {
+                        // if (IN_ROOM(d -> character) != NOWHERE)
+                        // char_from_room(d -> character);
+                        // char_to_room(d -> character, GET_WAS_IN(d -> character));
+                        // GET_WAS_IN(d -> character) = NOWHERE;
+                        // act("$n has returned.", TRUE, d -> character, 0, 0, TO_ROOM);
+                    }
+                    character.set_wait_state(1);
                 }
-                get_wait_state!(RefCell::borrow_mut(d).character.as_mut().unwrap()) = 1;
-            }
-            RefCell::borrow_mut(d).has_prompt = false;
+                *d.has_prompt.borrow_mut() = false;
 
-            // if RefCell::borrow(d).str.is_some() {
-            //     /* Writing boards, mail, etc. */
-            //     string_add(d, comm);
+                // if RefCell::borrow(d).str.is_some() {
+                //     /* Writing boards, mail, etc. */
+                //     string_add(d, comm);
+                // }
+                // else
+                // if  RefCell::borrow(d).showstr_count {
+                //     /* Reading something w/ pager */
+                //     show_string(d, comm);
+                // } else
+                if d.state() != ConPlaying {
+                    /* In menus, etc. */
+                    nanny(self, d.clone(), comm.as_str());
+                } else {
+                    /* else: we're playing normally. */
+                    // if (aliased)        /* To prevent recursive aliases. */
+                    // d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
+                    // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
+                    get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
+                    command_interpreter(
+                        d.character.borrow().as_ref().unwrap().as_ref(),
+                        comm.as_str(),
+                    );
+                    /* Send it to interpreter */
+                }
+            }
+
+            /* Send queued output out to the operating system (ultimately to user). */
+            for d in &*self.descriptor_list.borrow() {
+                if !RefCell::borrow(&d.output).is_empty() {
+                    process_output(d);
+                    if !RefCell::borrow(&d.output).is_empty() {
+                        *RefCell::borrow_mut(&d.has_prompt) = true;
+                    }
+                }
+            }
+
+            /* Print prompts for other descriptors who had no other output */
+            for d in &*self.descriptor_list.borrow() {
+                if !*d.has_prompt.borrow() && !d.output.borrow().is_empty() {
+                    let text = &make_prompt(d);
+                    write_to_descriptor(&mut d.stream.borrow_mut(), text);
+                    *d.has_prompt.borrow_mut() = true;
+                }
+            }
+
+            /* Kick out folks in the ConClose or ConDisconnect state */
+            // for (d = descriptor_list; d; d = next_d) {
+            //     next_d = d -> next;
+            //     if (STATE(d) == ConClose | | STATE(d) == ConDisconnect)
+            //     close_socket(d);
             // }
-            // else
-            // if  RefCell::borrow(d).showstr_count {
-            //     /* Reading something w/ pager */
-            //     show_string(d, comm);
-            // } else
-            if state!(RefCell::borrow(d)) != ConPlaying {
-                /* In menus, etc. */
-                nanny(main_globals.clone(), d.clone(), comm.as_str());
-            } else {
-                /* else: we're playing normally. */
-                // if (aliased)        /* To prevent recursive aliases. */
-                // d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
-                // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
-                // get_from_q(&d ->input, comm, &aliased);
-                // command_interpreter(d -> character, comm); /* Send it to interpreter */
+
+            /*
+             * Now, we execute as many pulses as necessary--just one if we haven't
+             * missed any pulses, or make up for lost time if we missed a few
+             * pulses by sleeping for too long.
+             */
+            let mut missed_pulses = missed_pulses + 1;
+
+            if missed_pulses <= 0 {
+                error!(
+                    "SYSERR: **BAD** MISSED_PULSES NOT POSITIVE {}, TIME GOING BACKWARDS!!",
+                    missed_pulses,
+                );
+                missed_pulses = 1;
             }
-        }
 
-        /* Send queued output out to the operating system (ultimately to user). */
-        for d in &RefCell::borrow(&main_globals).descriptor_list {
-            if RefCell::borrow(d).output.is_some() {
-                process_output(d);
-                if RefCell::borrow(d).output.is_some()
-                    && RefCell::borrow(d).output.as_ref().unwrap().len() != 0
-                {
-                    RefCell::borrow_mut(d).has_prompt = true;
-                }
+            /* If we missed more than 30 seconds worth of pulses, just do 30 secs */
+            if missed_pulses > 30 * PASSES_PER_SEC {
+                error!(
+                    "SYSERR: Missed {} seconds worth of pulses.",
+                    missed_pulses / PASSES_PER_SEC,
+                );
+                missed_pulses = 30 * PASSES_PER_SEC;
             }
-        }
 
-        /* Print prompts for other descriptors who had no other output */
-        for d in &RefCell::borrow(&main_globals).descriptor_list {
-            let mut mut_d = RefCell::borrow_mut(d);
-            if !mut_d.has_prompt
-                && (mut_d.output.is_none() || mut_d.output.as_ref().unwrap().len() != 0)
-            {
-                let text = &make_prompt(&mut mut_d);
-                write_to_descriptor(&mut mut_d.stream, text);
-                mut_d.has_prompt = true;
+            /* Now execute the heartbeat functions */
+            while missed_pulses != 0 {
+                pulse += 1;
+                heartbeat(pulse);
+                missed_pulses -= 1;
             }
-        }
 
-        /* Kick out folks in the ConClose or ConDisconnect state */
-        // for (d = descriptor_list; d; d = next_d) {
-        //     next_d = d -> next;
-        //     if (STATE(d) == ConClose | | STATE(d) == ConDisconnect)
-        //     close_socket(d);
-        // }
+            /* Check for any signals we may have received. */
+            // if (reread_wizlist) {
+            //     reread_wizlist = FALSE;
+            //     mudlog(CMP, LVL_IMMORT, TRUE, "Signal received - rereading wizlists.");
+            //     reboot_wizlists();
+            // }
+            // if (emergency_unban) {
+            //     emergency_unban = FALSE;
+            //     mudlog(BRF, LVL_IMMORT, TRUE, "Received SIGUSR2 - completely unrestricting game (emergent)");
+            //     ban_list = NULL;
+            //     circle_restrict = 0;
+            //     num_invalid = 0;
+            // }
 
-        /*
-         * Now, we execute as many pulses as necessary--just one if we haven't
-         * missed any pulses, or make up for lost time if we missed a few
-         * pulses by sleeping for too long.
-         */
-        let mut missed_pulses = missed_pulses + 1;
-
-        if missed_pulses <= 0 {
-            error!(
-                "SYSERR: **BAD** MISSED_PULSES NOT POSITIVE {}, TIME GOING BACKWARDS!!",
-                missed_pulses,
-            );
-            missed_pulses = 1;
-        }
-
-        /* If we missed more than 30 seconds worth of pulses, just do 30 secs */
-        if missed_pulses > 30 * PASSES_PER_SEC {
-            error!(
-                "SYSERR: Missed {} seconds worth of pulses.",
-                missed_pulses / PASSES_PER_SEC,
-            );
-            missed_pulses = 30 * PASSES_PER_SEC;
-        }
-
-        /* Now execute the heartbeat functions */
-        while missed_pulses != 0 {
-            pulse += 1;
-            heartbeat(pulse);
-            missed_pulses -= 1;
-        }
-
-        /* Check for any signals we may have received. */
-        // if (reread_wizlist) {
-        //     reread_wizlist = FALSE;
-        //     mudlog(CMP, LVL_IMMORT, TRUE, "Signal received - rereading wizlists.");
-        //     reboot_wizlists();
-        // }
-        // if (emergency_unban) {
-        //     emergency_unban = FALSE;
-        //     mudlog(BRF, LVL_IMMORT, TRUE, "Received SIGUSR2 - completely unrestricting game (emergent)");
-        //     ban_list = NULL;
-        //     circle_restrict = 0;
-        //     num_invalid = 0;
-        // }
-
-        /* Roll pulse over after 10 hours */
-        if pulse >= (10 * 60 * 60 * PASSES_PER_SEC) {
-            pulse = 0;
+            /* Roll pulse over after 10 hours */
+            if pulse >= (10 * 60 * 60 * PASSES_PER_SEC) {
+                pulse = 0;
+            }
         }
     }
 }
@@ -812,7 +829,7 @@ fn heartbeat(_pulse: u32) {
 /*
  * Turn off echoing (specific to telnet client)
  */
-fn echo_off(d: &mut DescriptorData) {
+fn echo_off(d: &DescriptorData) {
     let mut off_string = "".to_string();
     off_string.push(char::from(IAC));
     off_string.push(char::from(WILL));
@@ -825,7 +842,7 @@ fn echo_off(d: &mut DescriptorData) {
 /*
  * Turn on echoing (specific to telnet client)
  */
-fn echo_on(d: &mut DescriptorData) {
+fn echo_on(d: &DescriptorData) {
     let mut off_string = "".to_string();
     off_string.push(char::from(IAC));
     off_string.push(char::from(WONT));
@@ -841,40 +858,41 @@ fn make_prompt(d: &DescriptorData) -> String {
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
 
-    if mut_d.str.is_some() {
+    if mut_d.str.borrow().is_some() {
         prompt.push_str("] "); /* strcpy: OK (for 'MAX_PROMPT_LENGTH >= 3') */
-    } else if mut_d.showstr_count != 0 {
+    } else if *mut_d.showstr_count.borrow() != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            mut_d.showstr_page, mut_d.showstr_count
+            mut_d.showstr_page.borrow(),
+            mut_d.showstr_count.borrow()
         ));
-    } else if mut_d.connected == ConPlaying {
-        let character = mut_d.character.as_ref().unwrap();
-        if !is_npc!(character) {
-            if get_invis_lev!(character) != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let il = get_invis_lev!(character);
+    } else if *mut_d.connected.borrow() == ConPlaying {
+        let ohc = d.character.borrow();
+        let character = ohc.as_ref().unwrap();
+        if character.is_npc() {
+            if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let il = character.get_invis_lev();
                 prompt.push_str(&*format!("i{} ", il));
             }
 
-            if prf_flagged!(character, PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let hit = get_hit!(character);
+            if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let hit = character.get_hit();
                 prompt.push_str(&*format!("{}H ", hit));
             }
 
-            if prf_flagged!(character, PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let mana = get_mana!(character);
+            if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let mana = character.get_mana();
                 prompt.push_str(&*format!("{}M ", mana));
             }
 
-            if prf_flagged!(character, PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let _move = get_move!(character);
+            if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+                let _move = character.get_move();
                 prompt.push_str(&*format!("{}V ", _move));
             }
 
             prompt.push_str("> ");
-        } else if is_npc!(character) {
-            let borrowed_d = mut_d;
-            prompt.push_str(&*format!("{}s>", get_name!(character)));
+        } else if character.is_npc() {
+            prompt.push_str(&*format!("{}s>", character.get_name()));
         }
     }
 
@@ -923,7 +941,7 @@ fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut
 // }
 
 /* Add a new string to a player's output queue. */
-fn write_to_output(t: &mut DescriptorData, txt: &str) {
+fn write_to_output(t: &DescriptorData, txt: &str) {
     // static char txt[MAX_STRING_LENGTH];
     // size_t wantsize;
     // int size;
@@ -983,11 +1001,7 @@ fn write_to_output(t: &mut DescriptorData, txt: &str) {
     // t -> bufspace = LARGE_BUFSIZE - 1 - t -> bufptr;
     //
     // return (t -> bufspace);
-    if t.output.is_none() {
-        t.output = Some(txt.to_string());
-    } else {
-        t.output.as_mut().unwrap().push_str(txt);
-    }
+    t.output.borrow_mut().push_str(txt);
 }
 
 /* ******************************************************************
@@ -1051,127 +1065,122 @@ fn write_to_output(t: &mut DescriptorData, txt: &str) {
 //
 // return (0);
 // }
+impl MainGlobals {
+    fn new_descriptor(&self, socket: TcpStream, addr: SocketAddr) {
+        // socket_t
+        // desc;
+        // sockets_connected = 0;
+        // socklen_t
+        // i;
+        // static last_desc = 0; /* last descriptor number */
+        // struct descriptor_data *newd;
+        // struct sockaddr_in peer;
+        // struct hostent * from;
 
-fn new_descriptor(main_globals: &Rc<RefCell<MainGlobals>>, socket: TcpStream, addr: SocketAddr) {
-    // socket_t
-    // desc;
-    // sockets_connected = 0;
-    // socklen_t
-    // i;
-    // static last_desc = 0; /* last descriptor number */
-    // struct descriptor_data *newd;
-    // struct sockaddr_in peer;
-    // struct hostent * from;
+        /* accept the new connection */
+        //     i = sizeof(peer);
+        // if ((desc = accept(s, ( struct sockaddr * ) & peer, & i)) == INVALID_SOCKET) {
+        // perror("SYSERR: accept");
+        // return ( - 1);
+        // }
+        /* keep it from blocking */
+        socket
+            .set_nonblocking(true)
+            .expect("Error with setting nonblocking");
+        /* set the send buffer size */
+        // if (set_sendbuf(desc) < 0) {
+        // CLOSE_SOCKET(desc);
+        // return (0);
+        // }
 
-    /* accept the new connection */
-    //     i = sizeof(peer);
-    // if ((desc = accept(s, ( struct sockaddr * ) & peer, & i)) == INVALID_SOCKET) {
-    // perror("SYSERR: accept");
-    // return ( - 1);
-    // }
-    /* keep it from blocking */
-    socket
-        .set_nonblocking(true)
-        .expect("Error with setting nonblocking");
-    /* set the send buffer size */
-    // if (set_sendbuf(desc) < 0) {
-    // CLOSE_SOCKET(desc);
-    // return (0);
-    // }
+        /* make sure we have room for it */
+        // for (newd = descriptor_list; newd; newd = newd -> next)
+        // sockets_connected + +;
 
-    /* make sure we have room for it */
-    // for (newd = descriptor_list; newd; newd = newd -> next)
-    // sockets_connected + +;
+        // if (sockets_connected > = max_players) {
+        // write_to_descriptor(desc, "Sorry, CircleMUD is full right now... please try again later!\r\n");
+        // CLOSE_SOCKET(desc);
+        // return (0);
+        // }
+        /* create a new descriptor */
+        let mut newd = DescriptorData {
+            stream: RefCell::new(socket),
+            host: RefCell::new(String::new()),
+            bad_pws: RefCell::new(0),
+            idle_tics: RefCell::new(0),
+            connected: RefCell::new(ConState::ConGetName),
+            desc_num: RefCell::new(0),
+            login_time: Instant::now(),
+            showstr_head: RefCell::new(Rc::new(RefCell::new(String::new()))),
+            showstr_vector: RefCell::new(vec![]),
+            showstr_count: RefCell::from(0),
+            showstr_page: RefCell::from(0),
+            str: RefCell::new(None),
+            max_str: RefCell::new(0),
+            has_prompt: RefCell::new(false),
+            inbuf: RefCell::from(String::new()),
+            history: RefCell::new(vec![]),
+            output: RefCell::new(String::new()),
+            input: RefCell::new(LinkedList::new()),
+            character: RefCell::new(None),
+            original: RefCell::new(None),
+        };
 
-    // if (sockets_connected > = max_players) {
-    // write_to_descriptor(desc, "Sorry, CircleMUD is full right now... please try again later!\r\n");
-    // CLOSE_SOCKET(desc);
-    // return (0);
-    // }
-    /* create a new descriptor */
-    let newd = Rc::new(RefCell::new(DescriptorData {
-        stream: socket,
-        host: "".parse().unwrap(),
-        bad_pws: 0,
-        idle_tics: 0,
-        connected: ConState::ConGetName,
-        desc_num: RefCell::borrow(main_globals).last_desc,
-        login_time: Instant::now(),
-        showstr_head: "",
-        showstr_vector: vec![],
-        showstr_count: 0,
-        showstr_page: 0,
-        str: None,
-        has_prompt: false,
-        inbuf: String::new(),
-        history: vec![],
-        output: None,
-        input: LinkedList::new(),
-        character: None,
-    }));
-
-    /* find the sitename */
-    if !NAMESERVER_IS_SLOW {
-        let r = dns_lookup::lookup_addr(&addr.ip());
-        if r.is_err() {
-            error!("Error resolving address: {}", r.err().unwrap());
-            RefCell::borrow_mut(&newd).host = addr.ip().to_string();
+        /* find the sitename */
+        if !NAMESERVER_IS_SLOW {
+            let r = dns_lookup::lookup_addr(&addr.ip());
+            if r.is_err() {
+                error!("Error resolving address: {}", r.err().unwrap());
+                *RefCell::borrow_mut(&newd.host) = addr.ip().to_string();
+            } else {
+                *RefCell::borrow_mut(&newd.host) = r.unwrap();
+            }
         } else {
-            RefCell::borrow_mut(&newd).host = r.unwrap();
+            *RefCell::borrow_mut(&newd.host) = addr.ip().to_string();
         }
-    } else {
-        RefCell::borrow_mut(&newd).host = addr.ip().to_string();
+
+        /* determine if the site is banned */
+        // if (isbanned(newd -> host) == BAN_ALL) {
+        //     CLOSE_SOCKET(desc);
+        //     mudlog(CMP, LVL_GOD, TRUE, "Connection attempt denied from [%s]", newd -> host);
+        //     free(newd);
+        //     return (0);
+        // }
+
+        /* initialize descriptor data */
+        //newd -> descriptor = desc;
+        *newd.idle_tics.borrow_mut() = 0;
+        //newd -> output = newd -> small_outbuf;
+        //newd -> bufspace = SMALL_BUFSIZE - 1;
+        newd.login_time = Instant::now();
+        //*newd -> output = '\0';
+        //newd -> bufptr = 0;
+        *newd.has_prompt.borrow_mut() = true; /* prompt is part of greetings */
+        *newd.connected.borrow_mut() = ConState::ConGetName;
+
+        /*
+         * This isn't exactly optimal but allows us to make a design choice.
+         * Do we embed the history in descriptor_data or keep it dynamically
+         * allocated and allow a user defined history size?
+         */
+        //CREATE(newd -> history, char *, HISTORY_SIZE);
+        *RefCell::borrow_mut(&self.last_desc) += 1;
+        if *RefCell::borrow(&self.last_desc) == 1000 {
+            *RefCell::borrow_mut(&self.last_desc) = 1;
+        }
+        *RefCell::borrow_mut(&newd.desc_num) = *RefCell::borrow_mut(&self.last_desc);
+
+        /* prepend to list */
+        // newd -> next = descriptor_list;
+        // descriptor_list = newd;
+        let rc = Rc::new(newd);
+        RefCell::borrow_mut(&self.descriptor_list).push(rc.clone());
+
+        write_to_output(
+            rc.as_ref(),
+            format!("{}", self.db.as_ref().unwrap().greetings.borrow()).as_str(),
+        );
     }
-
-    /* determine if the site is banned */
-    // if (isbanned(newd -> host) == BAN_ALL) {
-    //     CLOSE_SOCKET(desc);
-    //     mudlog(CMP, LVL_GOD, TRUE, "Connection attempt denied from [%s]", newd -> host);
-    //     free(newd);
-    //     return (0);
-    // }
-
-    /* initialize descriptor data */
-    //newd -> descriptor = desc;
-    RefCell::borrow_mut(&newd).idle_tics = 0;
-    //newd -> output = newd -> small_outbuf;
-    //newd -> bufspace = SMALL_BUFSIZE - 1;
-    RefCell::borrow_mut(&newd).login_time = Instant::now();
-    //*newd -> output = '\0';
-    //newd -> bufptr = 0;
-    RefCell::borrow_mut(&newd).has_prompt = true; /* prompt is part of greetings */
-    RefCell::borrow_mut(&newd).connected = ConState::ConGetName;
-
-    /*
-     * This isn't exactly optimal but allows us to make a design choice.
-     * Do we embed the history in descriptor_data or keep it dynamically
-     * allocated and allow a user defined history size?
-     */
-    //CREATE(newd -> history, char *, HISTORY_SIZE);
-    RefCell::borrow_mut(&newd).history = Vec::new();
-    RefCell::borrow_mut(main_globals).last_desc += 1;
-    if RefCell::borrow_mut(main_globals).last_desc == 1000 {
-        RefCell::borrow_mut(main_globals).last_desc = 1;
-    }
-    RefCell::borrow_mut(&newd).desc_num = RefCell::borrow_mut(main_globals).last_desc;
-
-    /* prepend to list */
-    // newd -> next = descriptor_list;
-    // descriptor_list = newd;
-    RefCell::borrow_mut(main_globals)
-        .descriptor_list
-        .push(newd.clone());
-
-    write_to_output(
-        &mut RefCell::borrow_mut(&newd),
-        format!(
-            "{}",
-            RefCell::borrow(RefCell::borrow(main_globals).db.as_ref().unwrap())
-                .greetings
-                .borrow()
-        )
-        .as_str(),
-    );
 }
 
 /*
@@ -1184,7 +1193,7 @@ fn new_descriptor(main_globals: &Rc<RefCell<MainGlobals>>, socket: TcpStream, ad
  *	 2 bytes: extra \r\n for non-comapct
  *      14 bytes: unused
  */
-fn process_output(t: &Rc<RefCell<DescriptorData>>) -> i32 {
+fn process_output(t: &DescriptorData) -> i32 {
     //char i[MAX_SOCK_BUF], * osb = i + 2;
 
     let mut result = 0;
@@ -1193,41 +1202,44 @@ fn process_output(t: &Rc<RefCell<DescriptorData>>) -> i32 {
     let mut i = "\r\n".to_string();
     //strcpy(i, "\r\n"); /* strcpy: OK (for 'MAX_SOCK_BUF >= 3') */
     /* now, append the 'real' output */
-    i.push_str(&RefCell::borrow(t).output.as_ref().unwrap());
+    i.push_str(&RefCell::borrow(&t.output));
 
     /* if we're in the overflow state, notify the user */
     // if (t -> bufspace == 0)
     // strcat(osb, "**OVERFLOW**\r\n"); /* strcpy: OK (osb:MAX_SOCK_BUF-2 reserves space) */
     /* add the extra CRLF if the person isn't in compact mode */
-    if RefCell::borrow(t).connected == ConPlaying
-        && RefCell::borrow(t).character.is_some()
-        && !is_npc!(RefCell::borrow(t).character.as_ref().unwrap())
-        && prf_flagged!(RefCell::borrow(t).character.as_ref().unwrap(), PRF_COMPACT)
+    if *t.connected.borrow() == ConPlaying
+        && t.character.borrow().is_some()
+        && !t.character.borrow().as_ref().unwrap().is_npc()
+        && t.character
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .prf_flagged(PRF_COMPACT)
     {
         i.push_str("\r\n");
     }
 
     /* add a prompt */
-    i.push_str(&make_prompt(&mut RefCell::borrow_mut(t)));
+    i.push_str(&make_prompt(t));
 
     /*
      * now, send the output.  If this is an 'interruption', use the prepended
      * CRLF, otherwise send the straight output sans CRLF.
      */
-    if RefCell::borrow(&t).has_prompt {
-        RefCell::borrow_mut(&t).has_prompt = false;
-        result = write_to_descriptor(&mut RefCell::borrow_mut(&t).stream, &i);
+    if *RefCell::borrow(&t.has_prompt) {
+        *RefCell::borrow_mut(&t.has_prompt) = false;
+        result = write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), &i);
         if result >= 2 {
             result -= 2;
         }
     } else {
-        result = write_to_descriptor(&mut RefCell::borrow_mut(&t).stream, &i[2..]);
+        result = write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), &i[2..]);
     }
 
     if result < 0 {
         /* Oops, fatal error. Bye! */
-        RefCell::borrow(&t)
-            .stream
+        RefCell::borrow(&t.stream)
             .shutdown(Shutdown::Both)
             .expect("SYSERR: cannot close socket");
         return -1;
@@ -1258,7 +1270,7 @@ fn process_output(t: &Rc<RefCell<DescriptorData>>) -> i32 {
     // t ->bufptr = 0;
     // * (t -> output) = '\0';
 
-    RefCell::borrow_mut(&t).output = Some("".to_string());
+    RefCell::borrow_mut(&t.output).clear();
     /*
      * If the overflow message or prompt were partially written, try to save
      * them. There will be enough space for them if this is true.  'result'
@@ -1420,9 +1432,9 @@ fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
  * Same information about perform_socket_write applies here. I like
  * standards, there are so many of them. -gg 6/30/98
  */
-fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
-    let stream = &mut d.stream;
-    let input = &mut d.inbuf;
+fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
+    let mut stream = d.stream.borrow_mut();
+    let mut input = &mut d.inbuf.borrow_mut();
 
     let mut buf = [0 as u8; 4096];
 
@@ -1516,7 +1528,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
+fn process_input(t: &DescriptorData) -> i32 {
     let buf_length;
     let mut failed_subst;
     let mut bytes_read;
@@ -1527,8 +1539,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
     let mut tmp = String::new();
 
     /* first, find the point where we left off reading data */
-    let mut mut_t = RefCell::borrow_mut(t);
-    buf_length = mut_t.inbuf.len();
+    buf_length = t.inbuf.borrow().len();
     read_point = buf_length;
     space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
 
@@ -1538,8 +1549,13 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
             return -1;
         }
 
-        bytes_read = perform_socket_read(&mut mut_t);
-        info!("{} {} {:?}", buf_length, mut_t.inbuf.capacity(), bytes_read);
+        bytes_read = perform_socket_read(t);
+        info!(
+            "{} {} {:?}",
+            buf_length,
+            t.inbuf.borrow().capacity(),
+            bytes_read
+        );
 
         if bytes_read.is_err() {
             /* Error, disconnect them. */
@@ -1555,7 +1571,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 
         /* search for a newline in the data we just read */
         for i in read_point..read_point + bytes_read {
-            let x = mut_t.inbuf.chars().nth(i).unwrap();
+            let x = t.inbuf.borrow().chars().nth(i).unwrap();
 
             if nl_pos.is_some() {
                 break;
@@ -1585,8 +1601,8 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         space_left = MAX_INPUT_LENGTH - 1;
 
         /* The '> 1' reserves room for a '$ => $$' expansion. */
-        for ptr in 0..mut_t.inbuf.len() {
-            let x = mut_t.inbuf.chars().nth(ptr).unwrap();
+        for ptr in 0..t.inbuf.borrow().len() {
+            let x = t.inbuf.borrow().chars().nth(ptr).unwrap();
             if space_left <= 1 || ptr >= nl_pos.unwrap() {
                 break;
             }
@@ -1615,7 +1631,7 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
             let buffer = format!("Line too long.  Truncated to:\r\n{}\r\n", tmp);
 
-            if write_to_descriptor(&mut RefCell::borrow_mut(t).stream, tmp.as_str()) < 0 {
+            if write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), tmp.as_str()) < 0 {
                 return -1;
             }
         }
@@ -1662,11 +1678,11 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         }
 
         // if (!failed_subst)
-        write_to_q(tmp.as_str(), &mut mut_t.input, false);
+        write_to_q(tmp.as_str(), &mut t.input.borrow_mut(), false);
 
         /* find the end of this line */
-        while nl_pos.unwrap() < mut_t.inbuf.len()
-            && isnewl!(mut_t.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+        while nl_pos.unwrap() < t.inbuf.borrow().len()
+            && isnewl!(t.inbuf.borrow().chars().nth(nl_pos.unwrap()).unwrap())
         {
             nl_pos = Some(nl_pos.unwrap() + 1);
         }
@@ -1674,14 +1690,14 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
         /* see if there's another newline in the input buffer */
         read_point = nl_pos.unwrap();
         nl_pos = None;
-        for i in read_point..mut_t.inbuf.len() {
-            if isnewl!(mut_t.inbuf.chars().nth(i).unwrap()) {
+        for i in read_point..t.inbuf.borrow().len() {
+            if isnewl!(t.inbuf.borrow().chars().nth(i).unwrap()) {
                 nl_pos = Some(i);
                 break;
             }
         }
     }
-    mut_t.inbuf.drain(..read_point);
+    t.inbuf.borrow_mut().drain(..read_point);
 
     return 1;
 }
@@ -2006,19 +2022,11 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-// size_t send_to_char(struct char_data * ch, const char * messg, ...)
-// {
-// if (ch -> desc & & messg & & * messg) {
-// size_t left;
-// va_list args;
-//
-// va_start(args, messg);
-// left = vwrite_to_output(ch -> desc, messg, args);
-// va_end(args);
-// return left;
-// }
-// return 0;
-// }
+pub fn send_to_char(ch: &CharData, messg: &str) {
+    if ch.desc.borrow().is_some() && messg != "" {
+        write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
+    }
+}
 
 // void send_to_all(const char * messg, ...)
 // {
@@ -2077,175 +2085,326 @@ fn process_input(t: &Rc<RefCell<DescriptorData>>) -> i32 {
 // }
 // }
 
-// const char * ACTNULL = "<NULL>";
+const ACTNULL: &str = "<NULL>";
 //
 // # define CHECK_NULL(pointer, expression) \
 // if ((pointer) == NULL) i = ACTNULL; else i = (expression);
 
-/* higher-level communication: the act() function */
-// void perform_act(const char * orig, struct char_data * ch, struct obj_data * obj,
-// const void * vict_obj, const struct char_data * to)
-// {
-// const char * i = NULL;
-// char lbuf[MAX_STRING_LENGTH], * buf, * j;
-// bool uppercasenext = FALSE;
-//
-// buf = lbuf;
-//
-// for (; ; ) {
-// if ( * orig == '$') {
-// switch ( * ( + + orig)) {
-// case 'n':
-// i = PERS(ch, to);
-// break;
-// case 'N':
-// CHECK_NULL(vict_obj, PERS(( const struct char_data * ) vict_obj, to));
-// break;
-// case 'm':
-// i = HMHR(ch);
-// break;
-// case 'M':
-// CHECK_NULL(vict_obj, HMHR(( const struct char_data * ) vict_obj));
-// break;
-// case 's':
-// i = HSHR(ch);
-// break;
-// case 'S':
-// CHECK_NULL(vict_obj, HSHR(( const struct char_data * ) vict_obj));
-// break;
-// case 'e':
-// i = HSSH(ch);
-// break;
-// case 'E':
-// CHECK_NULL(vict_obj, HSSH(( const struct char_data * ) vict_obj));
-// break;
-// case 'o':
-// CHECK_NULL(obj, OBJN(obj, to));
-// break;
-// case 'O':
-// CHECK_NULL(vict_obj, OBJN(( const struct obj_data * ) vict_obj, to));
-// break;
-// case 'p':
-// CHECK_NULL(obj, OBJS(obj, to));
-// break;
-// case 'P':
-// CHECK_NULL(vict_obj, OBJS(( const struct obj_data * ) vict_obj, to));
-// break;
-// case 'a':
-// CHECK_NULL(obj, SANA(obj));
-// break;
-// case 'A':
-// CHECK_NULL(vict_obj, SANA(( const struct obj_data * ) vict_obj));
-// break;
-// case 'T':
-// CHECK_NULL(vict_obj, (const char * ) vict_obj);
-// break;
-// case 'F':
-// CHECK_NULL(vict_obj, fname(( const char * ) vict_obj));
-// break;
-// /* uppercase previous word */
-// case 'u':
-// for (j = buf; j > lbuf & & ! isspace((int) *(j - 1)); j - -);
-// if (j != buf)
-// * j = UPPER( * j);
-// i = "";
-// break;
-// /* uppercase next word */
-// case 'U':
-// uppercasenext = TRUE;
-// i = "";
-// break;
-// case '$':
-// i = "$";
-// break;
-// default:
-// log("SYSERR: Illegal $-code to act(): %c", * orig);
-// log("SYSERR: %s", orig);
-// i = "";
-// break;
-// }
-// while (( * buf = * (i ++ )))
-// {
-// if (uppercasenext & & ! isspace((int) * buf))
-// {
-// * buf = UPPER( * buf);
-// uppercasenext = FALSE;
-// }
-// buf + +;
-// }
-// orig + +;
-// } else if ( ! ( * (buf + +) = * (orig + + ))) {
-// break;
-// } else if (uppercasenext & & ! isspace((int) * (buf - 1))) {
-// * (buf - 1) = UPPER( *(buf - 1));
-// uppercasenext = FALSE;
-// }
-// }
-//
-// * ( - - buf) = '\r';
-// *( + + buf) = '\n';
-// * (+ + buf) = '\0';
-//
-// write_to_output(to-> desc, "%s", CAP(lbuf));
-// }
-//
-//
-// # define SENDOK(ch)    ((ch) -> desc & & (to_sleeping | | AWAKE(ch)) & & \
-// (IS_NPC(ch) | | ! PLR_FLAGGED((ch), PLR_WRITING)))
-//
-// void act(const char * str, int hide_invisible, struct char_data * ch,
-// struct obj_data * obj, const void * vict_obj, int type )
-// {
-// const struct char_data * to;
-// int to_sleeping;
-//
-// if ( ! str | | ! * str)
-// return;
-//
-// /*
-//  * Warning: the following TO_SLEEP code is a hack.
-//  *
-//  * I wanted to be able to tell act to deliver a message regardless of sleep
-//  * without adding an additional argument.  TO_SLEEP is 128 (a single bit
-//  * high up).  It's ONLY legal to combine TO_SLEEP with one other TO_x
-//  * command.  It's not legal to combine TO_x's with each other otherwise.
-//  * TO_SLEEP only works because its value "happens to be" a single bit;
-//  * do not change it to something else.  In short, it is a hack.
-//  */
-//
-// /* check if TO_SLEEP is there, and remove it if it is. */
-// if ((to_sleeping = ( type & TO_SLEEP)))
-// type &= ~TO_SLEEP;
-//
-// if (type == TO_CHAR) {
-// if (ch & & SENDOK(ch))
-// perform_act(str, ch, obj, vict_obj, ch);
-// return;
-// }
-//
-// if ( type == TO_VICT) {
-// if ((to = ( const struct char_data *) vict_obj) != NULL & & SENDOK(to))
-// perform_act(str, ch, obj, vict_obj, to);
-// return;
-// }
-// /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
-//
-// if (ch & & IN_ROOM(ch) != NOWHERE)
-// to = world[IN_ROOM(ch)].people;
-// else if (obj & & IN_ROOM(obj) != NOWHERE)
-// to = world[IN_ROOM(obj)].people;
-// else {
-// log("SYSERR: no valid target to act()!");
-// return;
-// }
-//
-// for (; to; to = to -> next_in_room) {
-// if ( ! SENDOK(to) | | (to == ch))
-// continue;
-// if (hide_invisible & & ch & & ! CAN_SEE(to, ch))
-// continue;
-// if ( type != TO_ROOM & & to == vict_obj)
-// continue;
-// perform_act(str, ch, obj, vict_obj, to);
-// }
-// }
+impl DB {
+    /* higher-level communication: the act() function */
+    fn perform_act(
+        &self,
+        orig: &str,
+        ch: Option<&CharData>,
+        obj: Option<&ObjData>,
+        vict_obj: Option<&dyn Any>,
+        to: &CharData,
+    ) {
+        //const char * i = NULL;
+        //char lbuf[MAX_STRING_LENGTH], * buf, * j;
+        let mut uppercasenext = false;
+        let mut orig = orig.to_string();
+        //buf = lbuf;
+        let mut i: Rc<str>;
+        let lbuf = String::new();
+        let mut buf = String::new();
+
+        loop {
+            if orig.starts_with('$') {
+                orig = String::from(orig.remove(0));
+                match orig.chars().into_iter().next().unwrap() {
+                    'n' => {
+                        i = self.pers(ch.unwrap(), to);
+                    }
+                    'N' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            self.pers(vict_obj.unwrap().downcast_ref::<CharData>().unwrap(), to)
+                        };
+                    }
+                    'm' => {
+                        i = Rc::from(hmhr(ch.unwrap()));
+                    }
+                    'M' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(hmhr(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                        };
+                    }
+                    's' => {
+                        i = Rc::from(hshr(ch.unwrap()));
+                    }
+                    'S' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(hshr(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                        };
+                    }
+                    'e' => {
+                        i = Rc::from(hssh(ch.unwrap()));
+                    }
+                    'E' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(hssh(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                        };
+                    }
+                    'o' => {
+                        i = if obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            self.objn(obj.unwrap(), to)
+                        };
+                    }
+                    'O' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            self.objn(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap(), to)
+                        };
+                    }
+                    'p' => {
+                        i = if obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(self.objs(obj.unwrap(), to))
+                        };
+                    }
+                    'P' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(
+                                self.objs(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap(), to),
+                            )
+                        };
+                    }
+                    'a' => {
+                        i = if obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(sana(obj.unwrap()))
+                        };
+                    }
+                    'A' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            Rc::from(sana(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap()))
+                        };
+                    }
+                    'T' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            vict_obj.unwrap().downcast_ref::<Rc<str>>().unwrap().clone()
+                        };
+                    }
+                    'F' => {
+                        i = if vict_obj.is_none() {
+                            Rc::from(ACTNULL)
+                        } else {
+                            fname(vict_obj.unwrap().downcast_ref::<&str>().unwrap())
+                        };
+                    }
+                    /* uppercase previous word */
+                    'u' => {
+                        let pos = buf.rfind(' ');
+                        let posi;
+                        if pos.is_none() {
+                            posi = 0;
+                        } else {
+                            posi = pos.unwrap();
+                        }
+                        let sec_part = buf.split_off(posi);
+                        buf.push_str(sec_part.to_uppercase().as_str());
+                        i = Rc::from("");
+                    }
+                    /* uppercase next word */
+                    'U' => {
+                        uppercasenext = true;
+                        i = Rc::from("");
+                    }
+                    '$' => {
+                        i = Rc::from("$");
+                    }
+                    _ => {
+                        error!("SYSERR: Illegal $-code to act(): {}", orig);
+                        error!("SYSERR: {}", orig);
+                        i = Rc::from("");
+                    }
+                }
+                for c in i.chars() {
+                    if uppercasenext && !c.is_whitespace() {
+                        buf.push(c.to_ascii_uppercase());
+                        uppercasenext = false;
+                    } else {
+                        buf.push(c);
+                    }
+                }
+                orig = String::from(orig.remove(0));
+            } else {
+                if orig.len() == 0 {
+                    break;
+                }
+                let k = orig.remove(0);
+
+                if uppercasenext && !k.is_whitespace() {
+                    buf.push(k.to_ascii_uppercase());
+                    uppercasenext = false;
+                } else {
+                    buf.push(k);
+                }
+            }
+        }
+
+        orig.pop();
+        orig.push_str("\r\n");
+
+        write_to_output(
+            to.desc.borrow().as_ref().unwrap().as_ref(),
+            format!("{}", buf).as_str(),
+        );
+    }
+}
+
+macro_rules! sendok {
+    ($ch:expr, $to_sleeping:expr) => {
+        (($ch).desc.borrow().is_some()
+            && ($to_sleeping != 0 || ($ch).awake())
+            && (($ch).is_npc() || ($ch).plr_flagged(PLR_WRITING)))
+    };
+}
+
+impl DB {
+    pub fn act(
+        &self,
+        str: &str,
+        hide_invisible: bool,
+        ch: Option<Rc<CharData>>,
+        obj: Option<&ObjData>,
+        vict_obj: Option<&dyn Any>,
+        _type: i32,
+    ) {
+        // const struct char_data * to;
+        // int to_sleeping;
+
+        if str.is_empty() {
+            return;
+        }
+
+        /*
+         * Warning: the following TO_SLEEP code is a hack.
+         *
+         * I wanted to be able to tell act to deliver a message regardless of sleep
+         * without adding an additional argument.  TO_SLEEP is 128 (a single bit
+         * high up).  It's ONLY legal to combine TO_SLEEP with one other TO_x
+         * command.  It's not legal to combine TO_x's with each other otherwise.
+         * TO_SLEEP only works because its value "happens to be" a single bit;
+         * do not change it to something else.  In short, it is a hack.
+         */
+
+        /* check if TO_SLEEP is there, and remove it if it is. */
+        let mut _type = _type;
+        let to_sleeping = _type & TO_SLEEP;
+        if to_sleeping != 0 {
+            _type &= !TO_SLEEP;
+        }
+
+        if _type == TO_CHAR {
+            if ch.is_some() && sendok!(ch.as_ref().unwrap(), to_sleeping) {
+                self.perform_act(
+                    str,
+                    Some(ch.as_ref().unwrap().borrow()),
+                    obj,
+                    vict_obj,
+                    ch.as_ref().unwrap().borrow(),
+                );
+            }
+            return;
+        }
+
+        if _type == TO_VICT {
+            let to = vict_obj.unwrap().downcast_ref::<CharData>();
+            if to.is_some() && sendok!(to.unwrap(), to_sleeping) {
+                self.perform_act(str, Some(ch.unwrap().borrow()), obj, vict_obj, to.unwrap());
+            }
+            return;
+        }
+        /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
+        let mut to;
+        let w = self.world.borrow();
+        if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
+            let t = &w[ch.as_ref().unwrap().in_room() as usize].people.borrow();
+            to = if t.is_none() {
+                None
+            } else {
+                let u = t.as_ref().unwrap().clone();
+                Some(u)
+            };
+        } else if obj.is_some() && obj.unwrap().in_room() != NOWHERE {
+            let t = &w[obj.unwrap().in_room() as usize].people.borrow();
+            to = if t.is_none() {
+                None
+            } else {
+                let u = t.as_ref().unwrap().clone();
+                Some(u)
+            };
+        } else {
+            error!("SYSERR: no valid target to act()!");
+            return;
+        }
+
+        while to.is_some() {
+            if !sendok!(to.as_ref().unwrap(), to_sleeping)
+                || Rc::ptr_eq(&to.as_ref().unwrap(), ch.as_ref().unwrap())
+            {
+                continue;
+            }
+            if hide_invisible
+                && ch.is_some()
+                && !self.can_see(to.as_ref().unwrap(), ch.as_ref().unwrap().borrow())
+            {
+                continue;
+            }
+            if _type != TO_ROOM
+                && to.as_ref().unwrap().as_ref() as *const _
+                    == vict_obj.unwrap().downcast_ref::<CharData>().unwrap() as *const _
+            {
+                continue;
+            }
+            self.perform_act(
+                str,
+                Some(ch.as_ref().unwrap().borrow()),
+                obj,
+                vict_obj,
+                to.as_ref().unwrap().as_ref(),
+            );
+            //let t = to.as_ref().unwrap().next_in_room.borrow().as_ref();
+            to = if to
+                .as_ref()
+                .unwrap()
+                .next_in_room
+                .borrow()
+                .as_ref()
+                .is_none()
+            {
+                None
+            } else {
+                Some(
+                    to.as_ref()
+                        .unwrap()
+                        .next_in_room
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                )
+            };
+        }
+    }
+}

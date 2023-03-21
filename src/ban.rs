@@ -221,15 +221,10 @@
 // int num_invalid = 0;
 
 use crate::structs::ConState::ConPlaying;
-use crate::structs::MOB_ISNPC;
-use crate::{get_name, get_pc_name, is_npc, is_set, mob_flags, state, DescriptorData};
-use std::cell::RefCell;
+use crate::DescriptorData;
 use std::rc::Rc;
 
-pub fn valid_name<'a>(
-    descriptor_list: &Vec<Rc<RefCell<DescriptorData<'a>>>>,
-    newname: &str,
-) -> bool {
+pub fn valid_name<'a>(descriptor_list: &Vec<Rc<DescriptorData>>, newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login
@@ -237,19 +232,16 @@ pub fn valid_name<'a>(
      * prompt won't have characters yet.
      */
     for dt in descriptor_list {
-        let dt = RefCell::try_borrow(dt);
-        if dt.is_err() {
-            // this means this is the descriptor we are validating for
+        let character = dt.character.borrow();
+
+        if character.is_none() {
             continue;
         }
-        let dt = dt.unwrap();
-        let character = &dt.character;
 
-        if character.is_some()
-            && get_name!(character.as_ref().unwrap()) != ""
-            && get_name!(character.as_ref().unwrap()) != newname
-        {
-            return state!(dt) == ConPlaying;
+        let character = character.as_ref().unwrap();
+
+        if character.get_name().as_ref() != "" && character.get_name().as_ref() != newname {
+            return dt.state() == ConPlaying;
         }
     }
 

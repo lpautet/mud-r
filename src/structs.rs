@@ -5,7 +5,68 @@ use std::rc::Rc;
 pub const OPT_USEC: u32 = 100000;
 pub const PASSES_PER_SEC: u32 = 1000000 / OPT_USEC;
 
-#[derive(PartialEq, Debug)]
+/* Room flags: used in room_data.room_flags */
+/* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
+pub const ROOM_DARK: i64 = 1 << 0; /* Dark			*/
+pub const ROOM_DEATH: i64 = 1 << 1; /* Death trap		*/
+pub const ROOM_NOMOB: i64 = 1 << 2; /* MOBs not allowed		*/
+pub const ROOM_INDOORS: i64 = 1 << 3; /* Indoors			*/
+pub const ROOM_PEACEFUL: i64 = 1 << 4; /* Violence not allowed	*/
+pub const ROOM_SOUNDPROOF: i64 = 1 << 5; /* Shouts, gossip blocked	*/
+pub const ROOM_NOTRACK: i64 = 1 << 6; /* Track won't go through	*/
+pub const ROOM_NOMAGIC: i64 = 1 << 7; /* Magic not allowed		*/
+pub const ROOM_TUNNEL: i64 = 1 << 8; /* room for only 1 pers	*/
+pub const ROOM_PRIVATE: i64 = 1 << 9; /* Can't teleport in		*/
+pub const ROOM_GODROOM: i64 = 1 << 10; /* LVL_GOD+ only allowed	*/
+pub const ROOM_HOUSE: i64 = 1 << 11; /* (R) Room is a house	*/
+pub const ROOM_HOUSE_CRASH: i64 = 1 << 12; /* (R) House needs saving	*/
+pub const ROOM_ATRIUM: i64 = 1 << 13; /* (R) The door to a house	*/
+pub const ROOM_OLC: i64 = 1 << 14; /* (R) Modifyable/!compress	*/
+pub const ROOM_BFS_MARK: i64 = 1 << 15; /* (R) breath-first srch mrk	*/
+
+/* Exit info: used in room_data.dir_option.exit_info */
+pub const EX_ISDOOR: i16 = 1 << 0; /* Exit is a door		*/
+pub const EX_CLOSED: i16 = 1 << 1; /* The door is closed	*/
+pub const EX_LOCKED: i16 = 1 << 2; /* The door is locked	*/
+pub const EX_PICKPROOF: i16 = 1 << 3; /* Lock can't be picked	*/
+
+/* Sector types: used in room_data.sector_type */
+pub const SECT_INSIDE: i32 = 0; /* Indoors			*/
+pub const SECT_CITY: i32 = 1; /* In a city			*/
+pub const SECT_FIELD: i32 = 2; /* In a field		*/
+pub const SECT_FOREST: i32 = 3; /* In a forest		*/
+pub const SECT_HILLS: i32 = 4; /* In the hills		*/
+pub const SECT_MOUNTAIN: i32 = 5; /* On a mountain		*/
+pub const SECT_WATER_SWIM: i32 = 6; /* Swimmable water		*/
+pub const SECT_WATER_NOSWIM: i32 = 7; /* Water - need a boat	*/
+pub const SECT_FLYING: i32 = 8; /* Wheee!			*/
+pub const SECT_UNDERWATER: i32 = 9; /* Underwater		*/
+
+/* Player conditions */
+pub const DRUNK: i32 = 0;
+pub const FULL: i32 = 1;
+pub const THIRST: i32 = 2;
+
+/* Extra object flags: used by obj_data.obj_flags.extra_flags */
+pub const ITEM_GLOW: i32 = 1 << 0; /* Item is glowing		*/
+pub const ITEM_HUM: i32 = 1 << 1; /* Item is humming		*/
+pub const ITEM_NORENT: i32 = 1 << 2; /* Item cannot be rented	*/
+pub const ITEM_NODONATE: i32 = 1 << 3; /* Item cannot be donated	*/
+pub const ITEM_NOINVIS: i32 = 1 << 4; /* Item cannot be made invis	*/
+pub const ITEM_INVISIBLE: i32 = 1 << 5; /* Item is invisible		*/
+pub const ITEM_MAGIC: i32 = 1 << 6; /* Item is magical		*/
+pub const ITEM_NODROP: i32 = 1 << 7; /* Item is cursed: can't drop	*/
+pub const ITEM_BLESS: i32 = 1 << 8; /* Item is blessed		*/
+pub const ITEM_ANTI_GOOD: i32 = 1 << 9; /* Not usable by good people	*/
+pub const ITEM_ANTI_EVIL: i32 = 1 << 10; /* Not usable by evil people	*/
+pub const ITEM_ANTI_NEUTRAL: i32 = 1 << 11; /* Not usable by neutral people	*/
+pub const ITEM_ANTI_MAGIC_USER: i32 = 1 << 12; /* Not usable by mages		*/
+pub const ITEM_ANTI_CLERIC: i32 = 1 << 13; /* Not usable by clerics	*/
+pub const ITEM_ANTI_THIEF: i32 = 1 << 14; /* Not usable by thieves	*/
+pub const ITEM_ANTI_WARRIOR: i32 = 1 << 15; /* Not usable by warriors	*/
+pub const ITEM_NOSELL: i32 = 1 << 16; /* Shopkeepers won't touch it	*/
+
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ConState {
     ConPlaying,
     /* Playing - Nominal state		*/
@@ -115,44 +176,53 @@ pub const MAX_OBJ_AFFECT: i32 = 6; /* Used in obj_file_elem *DO*NOT*CHANGE* */
 pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
-pub struct CharData<'a> {
-    pub(crate) pfilepos: i32, /* playerfile pos		  */
+pub struct CharData {
+    pub(crate) pfilepos: RefCell<i32>,
+    /* playerfile pos		  */
     // MobRnum nr;                          /* Mob's rnum			  */
-    // RoomRnum in_room;                    /* Location (real room number)	  */
-    // RoomRnum was_in_room;		 /* location for linkdead people  */
-    pub wait: i32, /* wait for how many loops	  */
-    //
-    pub player: CharPlayerData,
+    pub in_room: RefCell<RoomRnum>,
+    /* Location (real room number)	  */
+    pub was_in_room: RefCell<RoomRnum>,
+    /* location for linkdead people  */
+    pub wait: RefCell<i32>,
+    /* wait for how many loops	  */
+    pub player: RefCell<CharPlayerData>,
     /* Normal data                   */
-    pub real_abils: CharAbilityData, /* Abilities without modifiers   */
-    pub aff_abils: CharAbilityData,  /* Abils with spells/stones/etc  */
-    pub points: CharPointData,
+    pub real_abils: RefCell<CharAbilityData>,
+    /* Abilities without modifiers   */
+    pub aff_abils: RefCell<CharAbilityData>,
+    /* Abils with spells/stones/etc  */
+    pub points: RefCell<CharPointData>,
     /* Points                        */
-    pub char_specials: CharSpecialData<'a>,
+    pub char_specials: RefCell<CharSpecialData>,
     /* PC/NPC specials	  */
-    pub player_specials: Rc<RefCell<PlayerSpecialData>>,
+    pub player_specials: RefCell<PlayerSpecialData>,
     /* PC specials		  */
-    // struct mob_special_data mob_specials;	/* NPC specials		  */
+    pub mob_specials: RefCell<MobSpecialData>,
+    /* NPC specials		  */
+    pub affected: RefCell<Vec<AffectedType>>,
+    /* affected by what spells       */
+    // struct ObjData *equipment[NUM_WEARS];/* Equipment array               */
     //
-    // struct affected_type *affected;       /* affected by what spells       */
-    // struct obj_data *equipment[NUM_WEARS];/* Equipment array               */
-    //
-    // struct obj_data *carrying;            /* Head of list                  */
-    pub(crate) desc: Rc<RefCell<DescriptorData<'a>>>,
+    // struct ObjData *carrying;            /* Head of list                  */
+    pub desc: RefCell<Option<Rc<DescriptorData>>>,
     /* NULL for mobiles              */
-    //
-    // struct CharData *next_in_room;     /* For room->people - list         */
-    // struct CharData *next;             /* For either monster or ppl-list  */
-    // struct CharData *next_fighting;    /* For fighting list               */
-    //
-    // struct follow_type *followers;        /* List of chars followers       */
-    // struct CharData *master;             /* Who is char following?        */
+    pub next_in_room: RefCell<Option<Rc<CharData>>>,
+    /* For room->people - list         */
+    pub next: RefCell<Option<Rc<CharData>>>,
+    /* For either monster or ppl-list  */
+    pub next_fighting: RefCell<Option<Rc<CharData>>>,
+    /* For fighting list               */
+    pub followers: RefCell<Vec<FollowType>>,
+    /* List of chars followers       */
+    pub master: RefCell<Option<Rc<CharData>>>,
+    /* Who is char following?        */
 }
 /* ====================================================================== */
 
 /* Char's points.  Used in char_file_u *DO*NOT*CHANGE* */
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CharPointData {
     pub mana: i16,
     pub max_mana: i16,
@@ -177,20 +247,25 @@ pub struct CharPointData {
     /* Any bonus or penalty to the damage roll */
 }
 
-/* Special playing constants shared by PCs and NPCs which aren't in pfile */
-pub struct CharSpecialData<'a> {
-    pub fighting: Option<Rc<RefCell<CharData<'a>>>>,
-    /* Opponent				*/
-    pub hunting: Option<Rc<RefCell<CharData<'a>>>>,
-    /* Char hunted by this char		*/
+/* Structure used for chars following other chars */
+pub struct FollowType {
+    pub follower: Rc<RefCell<CharData>>,
+}
 
-    // byte position;		/* Standing, fighting, sleeping, etc.	*/
-    //
-    // int	carry_weight;		/* Carried weight			*/
-    // byte carry_items;		/* Number of items carried		*/
-    pub(crate) timer: i32,
+/* Special playing constants shared by PCs and NPCs which aren't in pfile */
+pub struct CharSpecialData {
+    pub fighting: Option<Rc<CharData>>,
+    /* Opponent				*/
+    pub hunting: Option<Rc<CharData>>,
+    /* Char hunted by this char		*/
+    pub position: u8,
+    /* Standing, fighting, sleeping, etc.	*/
+    pub carry_weight: i32,
+    /* Carried weight			*/
+    pub carry_items: u8,
+    /* Number of items carried		*/
+    pub timer: i32,
     /* Timer for update			*/
-    //
     pub saved: CharSpecialDataSaved,
     /* constants saved in plrfile	*/
 }
@@ -230,9 +305,23 @@ pub struct PlayerSpecialData {
     // char	*poofin;		/* Description on arrival of a god.     */
     // char	*poofout;		/* Description upon a god's exit.       */
     // struct alias_data *aliases;	/* Character's aliases			*/
-    // long last_tell;		/* idnum of last tell from		*/
+    pub last_tell: i64,
+    /* idnum of last tell from		*/
     // void *last_olc_targ;		/* olc control				*/
     // int last_olc_mode;		/* olc control				*/
+}
+
+/* Specials used by NPCs, not PCs */
+pub struct MobSpecialData {
+    //    memory_rec *memory;	    /* List of attackers to remember	       */
+    pub attack_type: u8,
+    /* The Attack Type Bitvector for NPC's     */
+    pub default_pos: u8,
+    /* Default position for NPC                */
+    pub damnodice: u8,
+    /* The number of damage dice's	       */
+    pub damsizedice: u8,
+    /* The size of the damage dice's           */
 }
 
 /*
@@ -297,26 +386,42 @@ pub struct PlayerSpecialDataSaved {
 
 /* general player-related info, usually PC's and NPC's */
 pub struct CharPlayerData {
-    pub passwd: [u8; MAX_PWD_LENGTH], /* character's password      */
-    pub name: String,                 /* PC / NPC s name (kill ...  )         */
-    pub short_descr: Option<String>,  /* for NPC 'actions'                    */
-    pub long_descr: Option<String>,   /* for 'look'			       */
-    pub description: Option<String>,  /* Extra descriptions                   */
-    // char	*title;        /* PC / NPC's title                     */
-    pub sex: u8,        /* PC / NPC's sex                       */
-    pub chclass: i8,    /* PC / NPC's class		       */
-    pub level: u8,      /* PC / NPC's level                     */
-    pub hometown: i16,  /* PC s Hometown (zone)                 */
-    pub time: TimeData, /* PC's AGE in days                 */
-    pub weight: u8,     /* PC / NPC's weight                    */
-    pub height: u8,     /* PC / NPC's height                    */
+    pub passwd: [u8; MAX_PWD_LENGTH],
+    /* character's password      */
+    pub name: String,
+    /* PC / NPC s name (kill ...  )         */
+    pub short_descr: String,
+    /* for NPC 'actions'                    */
+    pub long_descr: String,
+    /* for 'look'			       */
+    pub description: String,
+    /* Extra descriptions                   */
+    pub title: String,
+    /* PC / NPC's title                     */
+    pub sex: u8,
+    /* PC / NPC's sex                       */
+    pub chclass: i8,
+    /* PC / NPC's class		       */
+    pub level: u8,
+    /* PC / NPC's level                     */
+    pub hometown: i16,
+    /* PC s Hometown (zone)                 */
+    pub time: TimeData,
+    /* PC's AGE in days                 */
+    pub weight: u8,
+    /* PC / NPC's weight                    */
+    pub height: u8,
+    /* PC / NPC's height                    */
 }
 
 /* These data contain information about a players time data */
 pub struct TimeData {
-    pub(crate) birth: u64,  /* This represents the characters age                */
-    pub(crate) logon: u64,  /* Time of the last logon (used to calculate played) */
-    pub(crate) played: i32, /* This is the total accumulated time played in secs */
+    pub(crate) birth: u64,
+    /* This represents the characters age                */
+    pub(crate) logon: u64,
+    /* Time of the last logon (used to calculate played) */
+    pub(crate) played: i32,
+    /* This is the total accumulated time played in secs */
 }
 
 pub const NOWHERE: i16 = -1;
@@ -337,6 +442,59 @@ pub struct TxtBlock {
     pub aliased: bool,
 }
 
+/* Extra description: used in objects, mobiles, and rooms */
+// struct ExtraDescrData {
+//     keyword: String,                 /* Keyword in look/examine          */
+//     description: String,             /* What to see                      */
+//     next: Option<ExtraDescrData>, /* Next in list                     */
+// }
+
+/* object-related structures ******************************************/
+
+/* object flags; used in obj_data */
+pub struct ObjFlagData {
+    pub value: [i32; 4],         /* Values of the item (see list)    */
+    pub type_flag: u8,           /* Type of item			    */
+    pub wear_flags: i32,         /* Where you can wear it	    */
+    pub(crate) extra_flags: i32, /* If it hums, glows, etc.	    */
+    pub weight: i32,             /* Weigt what else                  */
+    pub cost: i32,               /* Value when sold (gp.)            */
+    pub cost_per_day: i32,       /* Cost to keep pr. real day        */
+    pub timer: i32,              /* Timer for object                 */
+    pub bitvector: i64,          /* To set chars bits                */
+}
+
+/* Used in obj_file_elem *DO*NOT*CHANGE* */
+pub struct ObjAffectedType {
+    location: u8, /* Which ability to change (APPLY_XXX) */
+    modifier: i8, /* How much it changes by              */
+}
+
+/* ================== Memory Structure for Objects ================== */
+pub struct ObjData {
+    pub item_number: obj_vnum, /* Where in data-base			*/
+    pub in_room: room_rnum,    /* In what room -1 when conta/carr	*/
+
+    pub obj_flags: ObjFlagData, /* Object information               */
+    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize], /* affects */
+
+    pub(crate) name: String, /* Title of object :get etc.        */
+    pub description: String, /* When in room                     */
+    pub(crate) short_description: String, /* when worn/carry/in cont.         */
+    pub action_description: String, /* What to write when used          */
+    pub ex_description: Option<ExtraDescrData>, /* extra descriptions     */
+    pub carried_by: RefCell<Option<Rc<CharData>>>, /* Carried by :NULL in room/conta   */
+    pub worn_by: RefCell<Option<Rc<CharData>>>, /* Worn by?			      */
+    pub worn_on: i16,        /* Worn where?		      */
+
+    pub in_obj: RefCell<Option<Rc<ObjData>>>, /* In what object NULL when none    */
+    pub contains: RefCell<Option<Rc<ObjData>>>, /* Contains objects                 */
+
+    pub next_content: RefCell<Option<Rc<ObjData>>>, /* For 'contains' lists             */
+    pub next: RefCell<Option<Rc<ObjData>>>,         /* For the object list              */
+}
+/* ======================================================================= */
+
 /* ==================== File Structure for Player ======================= */
 /*             BEWARE: Changing it will ruin the playerfile		  */
 #[repr(C, packed)]
@@ -349,7 +507,7 @@ pub struct CharFileU {
     pub sex: u8,
     pub chclass: i8,
     pub level: u8,
-    pub hometown: u16,
+    pub hometown: i16,
     pub birth: u64,
     /* Time of birth of character     */
     pub played: i32,
@@ -365,7 +523,7 @@ pub struct CharFileU {
     pub points: CharPointData,
     pub affected: [AffectedType; MAX_AFFECT],
 
-    pub last_logon: i64,
+    pub last_logon: u64,
     /* Time (in secs) of last logon */
     pub host: [u8; HOST_LENGTH + 1],
     /* host of last logon */
@@ -374,7 +532,7 @@ pub struct CharFileU {
 
 /* Char's abilities.  Used in char_file_u *DO*NOT*CHANGE* */
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CharAbilityData {
     pub(crate) str: i8,
     pub(crate) str_add: i8,
@@ -388,7 +546,7 @@ pub struct CharAbilityData {
 
 /* An affect structure.  Used in char_file_u *DO*NOT*CHANGE* */
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct AffectedType {
     pub _type: i16,
     /* The type of spell that caused this      */
@@ -432,13 +590,175 @@ pub const SEX_FEMALE: u8 = 2;
  * LVL_IMMORT should always be the LOWEST immortal level.  The number of
  * mortal levels will always be LVL_IMMORT - 1.
  */
-pub const LVL_IMPL: u8 = 34;
-pub const LVL_GRGOD: u8 = 33;
-pub const LVL_GOD: u8 = 32;
-pub const LVL_IMMORT: u8 = 31;
+pub const LVL_IMPL: i16 = 34;
+pub const LVL_GRGOD: i16 = 33;
+pub const LVL_GOD: i16 = 32;
+pub const LVL_IMMORT: i16 = 31;
 
 /* Level of the 'freeze' command */
-pub const LVL_FREEZE: u8 = LVL_GRGOD;
+pub const LVL_FREEZE: u8 = LVL_GRGOD as u8;
 
-pub const NUM_OF_DIRS: i8 = 6; /* number of directions in a room (nsewud) */
+pub const NUM_OF_DIRS: usize = 6; /* number of directions in a room (nsewud) */
 pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */
+
+/* Affect bits: used in char_data.char_specials.saved.affected_by */
+/* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
+pub const AFF_BLIND: i64 = 1 << 0; /* (R) Char is blind		*/
+pub const AFF_INVISIBLE: i64 = 1 << 1; /* Char is invisible		*/
+pub const AFF_DETECT_ALIGN: i64 = 1 << 2; /* Char is sensitive to align*/
+pub const AFF_DETECT_INVIS: i64 = 1 << 3; /* Char can see invis chars  */
+pub const AFF_DETECT_MAGIC: i64 = 1 << 4; /* Char is sensitive to magic*/
+pub const AFF_SENSE_LIFE: i64 = 1 << 5; /* Char can sense hidden life*/
+pub const AFF_WATERWALK: i64 = 1 << 6; /* Char can walk on water	*/
+pub const AFF_SANCTUARY: i64 = 1 << 7; /* Char protected by sanct.	*/
+pub const AFF_GROUP: i64 = 1 << 8; /* (R) Char is grouped	*/
+pub const AFF_CURSE: i64 = 1 << 9; /* Char is cursed		*/
+pub const AFF_INFRAVISION: i64 = 1 << 10; /* Char can see in dark	*/
+pub const AFF_POISON: i64 = 1 << 11; /* (R) Char is poisoned	*/
+pub const AFF_PROTECT_EVIL: i64 = 1 << 12; /* Char protected from evil  */
+pub const AFF_PROTECT_GOOD: i64 = 1 << 13; /* Char protected from good  */
+pub const AFF_SLEEP: i64 = 1 << 14; /* (R) Char magically asleep	*/
+pub const AFF_NOTRACK: i64 = 1 << 15; /* Char can't be tracked	*/
+pub const AFF_UNUSED16: i64 = 1 << 16; /* Room for future expansion	*/
+pub const AFF_UNUSED17: i64 = 1 << 17; /* Room for future expansion	*/
+pub const AFF_SNEAK: i64 = 1 << 18; /* Char can move quietly	*/
+pub const AFF_HIDE: i64 = 1 << 19; /* Char is hidden		*/
+pub const AFF_UNUSED20: i64 = 1 << 20; /* Room for future expansion	*/
+pub const AFF_CHARM: i64 = 1 << 21; /* Char is charmed		*/
+
+/* Player flags: used by char_data.char_specials.act */
+pub const PLR_KILLER: i64 = 1 << 0; /* Player is a player-killer		*/
+pub const PLR_THIEF: i64 = 1 << 1; /* Player is a player-thief		*/
+pub const PLR_FROZEN: i64 = 1 << 2; /* Player is frozen			*/
+pub const PLR_DONTSET: i64 = 1 << 3; /* Don't EVER set (ISNPC bit)	*/
+pub const PLR_WRITING: i64 = 1 << 4; /* Player writing (board/mail/olc)	*/
+pub const PLR_MAILING: i64 = 1 << 5; /* Player is writing mail		*/
+pub const PLR_CRASH: i64 = 1 << 6; /* Player needs to be crash-saved	*/
+pub const PLR_SITEOK: i64 = 1 << 7; /* Player has been site-cleared	*/
+pub const PLR_NOSHOUT: i64 = 1 << 8; /* Player not allowed to shout/goss	*/
+pub const PLR_NOTITLE: i64 = 1 << 9; /* Player not allowed to set title	*/
+pub const PLR_DELETED: i64 = 1 << 10; /* Player deleted - space reusable	*/
+pub const PLR_LOADROOM: i64 = 1 << 11; /* Player uses nonstandard loadroom	*/
+pub const PLR_NOWIZLIST: i64 = 1 << 12; /* Player shouldn't be on wizlist	*/
+pub const PLR_NODELETE: i64 = 1 << 13; /* Player shouldn't be deleted	*/
+pub const PLR_INVSTART: i64 = 1 << 14; /* Player should enter game wizinvis	*/
+pub const PLR_CRYO: i64 = 1 << 15; /* Player is cryo-saved (purge prog)	*/
+pub const PLR_NOTDEADYET: i64 = 1 << 16; /* (R) Player being extracted.	*/
+
+/* Positions */
+pub const POS_DEAD: u8 = 0; /* dead			*/
+pub const POS_MORTALLYW: u8 = 1; /* mortally wounded	*/
+pub const POS_INCAP: u8 = 2; /* incapacitated	*/
+pub const POS_STUNNED: u8 = 3; /* stunned		*/
+pub const POS_SLEEPING: u8 = 4; /* sleeping		*/
+pub const POS_RESTING: u8 = 5; /* resting		*/
+pub const POS_SITTING: u8 = 6; /* sitting		*/
+pub const POS_FIGHTING: u8 = 7; /* fighting		*/
+pub const POS_STANDING: u8 = 8; /* standing		*/
+
+/* Various virtual (human-reference) number types. */
+pub type room_vnum = IDXTYPE;
+pub type obj_vnum = IDXTYPE;
+pub type mob_vnum = IDXTYPE;
+pub type zone_vnum = IDXTYPE;
+pub type shop_vnum = IDXTYPE;
+
+/* Various real (array-reference) number types. */
+pub type room_rnum = IDXTYPE;
+pub type obj_rnum = IDXTYPE;
+pub type mob_rnum = IDXTYPE;
+pub type zone_rnum = IDXTYPE;
+pub type shop_rnum = IDXTYPE;
+
+/* room-related structures ************************************************/
+
+pub struct RoomDirectionData {
+    pub general_description: String,
+    /* When look DIR.			*/
+    pub keyword: String,
+    /* for open/close			*/
+    pub exit_info: i16,
+    /* Exit info			*/
+    pub key: obj_vnum,
+    /* Key's number (-1 for no key)		*/
+    pub to_room: RefCell<room_rnum>,
+    /* Where direction leads (NOWHERE)	*/
+}
+
+/* ================== Memory Structure for room ======================= */
+pub struct RoomData {
+    pub number: room_vnum,
+    /* Rooms number	(vnum)		      */
+    pub zone: zone_rnum,
+    /* Room zone (for resetting)          */
+    pub sector_type: i32,
+    /* sector type (move/hide)            */
+    pub name: String,
+    /* Rooms name 'You are ...'           */
+    pub description: String,
+    /* Shown when entered                 */
+    pub ex_description: Option<Box<ExtraDescrData>>,
+    /* for examine/look       */
+    pub dir_option: [Option<Rc<RoomDirectionData>>; NUM_OF_DIRS],
+    /* Directions */
+    pub room_flags: i32,
+    /* DEATH,DARK ... etc */
+    pub light: RefCell<u8>,
+    /* Number of lightsources in room     */
+    //SPECIAL(*func);
+
+    //struct ObjData *contents;   /* List of items in room              */
+    pub people: RefCell<Option<Rc<CharData>>>,
+    /* List of NPC / PC in room           */
+}
+/* ====================================================================== */
+
+/* Extra description: used in objects, mobiles, and rooms */
+pub struct ExtraDescrData {
+    pub keyword: String,
+    /* Keyword in look/examine          */
+    pub description: String,
+    /* What to see                      */
+    pub next: Option<Box<ExtraDescrData>>,
+    /* Next in list                     */
+}
+
+pub struct DexSkillType {
+    pub p_pocket: i16,
+    pub p_locks: i16,
+    pub traps: i16,
+    pub sneak: i16,
+    pub hide: i16,
+}
+
+pub struct DexAppType {
+    pub reaction: i16,
+    pub miss_att: i16,
+    pub defensive: i16,
+}
+
+pub struct StrAppType {
+    pub tohit: i16,
+    /* To Hit (THAC0) Bonus/Penalty        */
+    pub todam: i16,
+    /* Damage Bonus/Penalty                */
+    pub carry_w: i16,
+    /* Maximum weight that can be carrried */
+    pub wield_w: i16,
+    /* Maximum weight that can be wielded  */
+}
+
+pub struct WisAppType {
+    pub(crate) bonus: u8,
+    /* how many practices player gains per lev */
+}
+
+pub struct IntAppType {
+    pub learn: u8,
+    /* how many % a player learns a spell/skill */
+}
+
+pub struct ConAppType {
+    pub hitp: i16,
+    pub shock: i16,
+}

@@ -8,17 +8,20 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-use crate::{get_name, is_npc, is_set, mob_flags, MainGlobals};
-
-use std::borrow::Borrow;
-use std::num::NonZeroU32;
-
-use hmac::Hmac;
-use pbkdf2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    pbkdf2, Pbkdf2,
+use crate::{
+    MainGlobals, _clrlevel, clr, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
 };
+
+use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
+use crate::structs::{
+    CharData, MobSpecialData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART,
+    POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
+    POS_STUNNED,
+};
+use hmac::Hmac;
 use sha2::Sha256;
+use std::cell::RefCell;
+use std::rc::Rc;
 /* This is the Master Command List(tm).
 
 * You can put new commands in, take commands out, change the order
@@ -31,349 +34,372 @@ use sha2::Sha256;
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-//
-// cpp_extern const struct command_info cmd_info[] = {
-// { "RESERVED", 0, 0, 0, 0 },	/* this must be first -- for specprocs */
-//
-// /* directions must come before other commands but after RESERVED */
-// { "north"    , POS_STANDING, do_move     , 0, SCMD_NORTH },
-// { "east"     , POS_STANDING, do_move     , 0, SCMD_EAST },
-// { "south"    , POS_STANDING, do_move     , 0, SCMD_SOUTH },
-// { "west"     , POS_STANDING, do_move     , 0, SCMD_WEST },
-// { "up"       , POS_STANDING, do_move     , 0, SCMD_UP },
-// { "down"     , POS_STANDING, do_move     , 0, SCMD_DOWN },
-//
-// /* now, the main list */
-// { "at"       , POS_DEAD    , do_at       , LVL_IMMORT, 0 },
-// { "advance"  , POS_DEAD    , do_advance  , LVL_IMPL, 0 },
-// { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
-// { "accuse"   , POS_SITTING , do_action   , 0, 0 },
-// { "applaud"  , POS_RESTING , do_action   , 0, 0 },
-// { "assist"   , POS_FIGHTING, do_assist   , 1, 0 },
-// { "ask"      , POS_RESTING , do_spec_comm, 0, SCMD_ASK },
-// { "auction"  , POS_SLEEPING, do_gen_comm , 0, SCMD_AUCTION },
-// { "autoexit" , POS_DEAD    , do_gen_tog  , 0, SCMD_AUTOEXIT },
-//
-// { "bounce"   , POS_STANDING, do_action   , 0, 0 },
-// { "backstab" , POS_STANDING, do_backstab , 1, 0 },
-// { "ban"      , POS_DEAD    , do_ban      , LVL_GRGOD, 0 },
-// { "balance"  , POS_STANDING, do_not_here , 1, 0 },
-// { "bash"     , POS_FIGHTING, do_bash     , 1, 0 },
-// { "beg"      , POS_RESTING , do_action   , 0, 0 },
-// { "bleed"    , POS_RESTING , do_action   , 0, 0 },
-// { "blush"    , POS_RESTING , do_action   , 0, 0 },
-// { "bow"      , POS_STANDING, do_action   , 0, 0 },
-// { "brb"      , POS_RESTING , do_action   , 0, 0 },
-// { "brief"    , POS_DEAD    , do_gen_tog  , 0, SCMD_BRIEF },
-// { "burp"     , POS_RESTING , do_action   , 0, 0 },
-// { "buy"      , POS_STANDING, do_not_here , 0, 0 },
-// { "bug"      , POS_DEAD    , do_gen_write, 0, SCMD_BUG },
-//
-// { "cast"     , POS_SITTING , do_cast     , 1, 0 },
-// { "cackle"   , POS_RESTING , do_action   , 0, 0 },
-// { "check"    , POS_STANDING, do_not_here , 1, 0 },
-// { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
-// { "clap"     , POS_RESTING , do_action   , 0, 0 },
-// { "clear"    , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
-// { "close"    , POS_SITTING , do_gen_door , 0, SCMD_CLOSE },
-// { "cls"      , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
-// { "consider" , POS_RESTING , do_consider , 0, 0 },
-// { "color"    , POS_DEAD    , do_color    , 0, 0 },
-// { "comfort"  , POS_RESTING , do_action   , 0, 0 },
-// { "comb"     , POS_RESTING , do_action   , 0, 0 },
-// { "commands" , POS_DEAD    , do_commands , 0, SCMD_COMMANDS },
-// { "compact"  , POS_DEAD    , do_gen_tog  , 0, SCMD_COMPACT },
-// { "cough"    , POS_RESTING , do_action   , 0, 0 },
-// { "credits"  , POS_DEAD    , do_gen_ps   , 0, SCMD_CREDITS },
-// { "cringe"   , POS_RESTING , do_action   , 0, 0 },
-// { "cry"      , POS_RESTING , do_action   , 0, 0 },
-// { "cuddle"   , POS_RESTING , do_action   , 0, 0 },
-// { "curse"    , POS_RESTING , do_action   , 0, 0 },
-// { "curtsey"  , POS_STANDING, do_action   , 0, 0 },
-//
-// { "dance"    , POS_STANDING, do_action   , 0, 0 },
-// { "date"     , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_DATE },
-// { "daydream" , POS_SLEEPING, do_action   , 0, 0 },
-// { "dc"       , POS_DEAD    , do_dc       , LVL_GOD, 0 },
-// { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
-// { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
-// { "display"  , POS_DEAD    , do_display  , 0, 0 },
-// { "donate"   , POS_RESTING , do_drop     , 0, SCMD_DONATE },
-// { "drink"    , POS_RESTING , do_drink    , 0, SCMD_DRINK },
-// { "drop"     , POS_RESTING , do_drop     , 0, SCMD_DROP },
-// { "drool"    , POS_RESTING , do_action   , 0, 0 },
-//
-// { "eat"      , POS_RESTING , do_eat      , 0, SCMD_EAT },
-// { "echo"     , POS_SLEEPING, do_echo     , LVL_IMMORT, SCMD_ECHO },
-// { "emote"    , POS_RESTING , do_echo     , 1, SCMD_EMOTE },
-// { ":"        , POS_RESTING, do_echo      , 1, SCMD_EMOTE },
-// { "embrace"  , POS_STANDING, do_action   , 0, 0 },
-// { "enter"    , POS_STANDING, do_enter    , 0, 0 },
-// { "equipment", POS_SLEEPING, do_equipment, 0, 0 },
-// { "exits"    , POS_RESTING , do_exits    , 0, 0 },
-// { "examine"  , POS_SITTING , do_examine  , 0, 0 },
-//
-// { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
-// { "fart"     , POS_RESTING , do_action   , 0, 0 },
-// { "FILL"     , POS_STANDING, do_pour     , 0, SCMD_FILL },
-// { "flee"     , POS_FIGHTING, do_flee     , 1, 0 },
-// { "flip"     , POS_STANDING, do_action   , 0, 0 },
-// { "flirt"    , POS_RESTING , do_action   , 0, 0 },
-// { "follow"   , POS_RESTING , do_follow   , 0, 0 },
-// { "fondle"   , POS_RESTING , do_action   , 0, 0 },
-// { "freeze"   , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_FREEZE },
-// { "french"   , POS_RESTING , do_action   , 0, 0 },
-// { "frown"    , POS_RESTING , do_action   , 0, 0 },
-// { "fume"     , POS_RESTING , do_action   , 0, 0 },
-//
-// { "get"      , POS_RESTING , do_get      , 0, 0 },
-// { "gasp"     , POS_RESTING , do_action   , 0, 0 },
-// { "gecho"    , POS_DEAD    , do_gecho    , LVL_GOD, 0 },
-// { "give"     , POS_RESTING , do_give     , 0, 0 },
-// { "giggle"   , POS_RESTING , do_action   , 0, 0 },
-// { "glare"    , POS_RESTING , do_action   , 0, 0 },
-// { "goto"     , POS_SLEEPING, do_goto     , LVL_IMMORT, 0 },
-// { "gold"     , POS_RESTING , do_gold     , 0, 0 },
-// { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
-// { "group"    , POS_RESTING , do_group    , 1, 0 },
-// { "grab"     , POS_RESTING , do_grab     , 0, 0 },
-// { "grats"    , POS_SLEEPING, do_gen_comm , 0, SCMD_GRATZ },
-// { "greet"    , POS_RESTING , do_action   , 0, 0 },
-// { "grin"     , POS_RESTING , do_action   , 0, 0 },
-// { "groan"    , POS_RESTING , do_action   , 0, 0 },
-// { "grope"    , POS_RESTING , do_action   , 0, 0 },
-// { "grovel"   , POS_RESTING , do_action   , 0, 0 },
-// { "growl"    , POS_RESTING , do_action   , 0, 0 },
-// { "gsay"     , POS_SLEEPING, do_gsay     , 0, 0 },
-// { "gtell"    , POS_SLEEPING, do_gsay     , 0, 0 },
-//
-// { "help"     , POS_DEAD    , do_help     , 0, 0 },
-// { "handbook" , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_HANDBOOK },
-// { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
-// { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
-// { "hide"     , POS_RESTING , do_hide     , 1, 0 },
-// { "hit"      , POS_FIGHTING, do_hit      , 0, SCMD_HIT },
-// { "hold"     , POS_RESTING , do_grab     , 1, 0 },
-// { "holler"   , POS_RESTING , do_gen_comm , 1, SCMD_HOLLER },
-// { "holylight", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_HOLYLIGHT },
-// { "hop"      , POS_RESTING , do_action   , 0, 0 },
-// { "house"    , POS_RESTING , do_house    , 0, 0 },
-// { "hug"      , POS_RESTING , do_action   , 0, 0 },
-//
-// { "inventory", POS_DEAD    , do_inventory, 0, 0 },
-// { "idea"     , POS_DEAD    , do_gen_write, 0, SCMD_IDEA },
-// { "imotd"    , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_IMOTD },
-// { "immlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_IMMLIST },
-// { "info"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_INFO },
-// { "insult"   , POS_RESTING , do_insult   , 0, 0 },
-// { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
-//
-// { "junk"     , POS_RESTING , do_drop     , 0, SCMD_JUNK },
-//
-// { "kill"     , POS_FIGHTING, do_kill     , 0, 0 },
-// { "kick"     , POS_FIGHTING, do_kick     , 1, 0 },
-// { "kiss"     , POS_RESTING , do_action   , 0, 0 },
-//
-// { "look"     , POS_RESTING , do_look     , 0, SCMD_LOOK },
-// { "laugh"    , POS_RESTING , do_action   , 0, 0 },
-// { "last"     , POS_DEAD    , do_last     , LVL_GOD, 0 },
-// { "leave"    , POS_STANDING, do_leave    , 0, 0 },
-// { "levels"   , POS_DEAD    , do_levels   , 0, 0 },
-// { "list"     , POS_STANDING, do_not_here , 0, 0 },
-// { "lick"     , POS_RESTING , do_action   , 0, 0 },
-// { "lock"     , POS_SITTING , do_gen_door , 0, SCMD_LOCK },
-// { "load"     , POS_DEAD    , do_load     , LVL_GOD, 0 },
-// { "love"     , POS_RESTING , do_action   , 0, 0 },
-//
-// { "moan"     , POS_RESTING , do_action   , 0, 0 },
-// { "motd"     , POS_DEAD    , do_gen_ps   , 0, SCMD_MOTD },
-// { "mail"     , POS_STANDING, do_not_here , 1, 0 },
-// { "massage"  , POS_RESTING , do_action   , 0, 0 },
-// { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
-// { "murder"   , POS_FIGHTING, do_hit      , 0, SCMD_MURDER },
-//
-// { "news"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_NEWS },
-// { "nibble"   , POS_RESTING , do_action   , 0, 0 },
-// { "nod"      , POS_RESTING , do_action   , 0, 0 },
-// { "noauction", POS_DEAD    , do_gen_tog  , 0, SCMD_NOAUCTION },
-// { "nogossip" , POS_DEAD    , do_gen_tog  , 0, SCMD_NOGOSSIP },
-// { "nograts"  , POS_DEAD    , do_gen_tog  , 0, SCMD_NOGRATZ },
-// { "nohassle" , POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_NOHASSLE },
-// { "norepeat" , POS_DEAD    , do_gen_tog  , 0, SCMD_NOREPEAT },
-// { "noshout"  , POS_SLEEPING, do_gen_tog  , 1, SCMD_DEAF },
-// { "nosummon" , POS_DEAD    , do_gen_tog  , 1, SCMD_NOSUMMON },
-// { "notell"   , POS_DEAD    , do_gen_tog  , 1, SCMD_NOTELL },
-// { "notitle"  , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_NOTITLE },
-// { "nowiz"    , POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_NOWIZ },
-// { "nudge"    , POS_RESTING , do_action   , 0, 0 },
-// { "nuzzle"   , POS_RESTING , do_action   , 0, 0 },
-//
-// { "olc"      , POS_DEAD    , do_olc      , LVL_IMPL, 0 },
-// { "order"    , POS_RESTING , do_order    , 1, 0 },
-// { "offer"    , POS_STANDING, do_not_here , 1, 0 },
-// { "open"     , POS_SITTING , do_gen_door , 0, SCMD_OPEN },
-//
-// { "put"      , POS_RESTING , do_put      , 0, 0 },
-// { "pat"      , POS_RESTING , do_action   , 0, 0 },
-// { "page"     , POS_DEAD    , do_page     , LVL_GOD, 0 },
-// { "pardon"   , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_PARDON },
-// { "peer"     , POS_RESTING , do_action   , 0, 0 },
-// { "pick"     , POS_STANDING, do_gen_door , 1, SCMD_PICK },
-// { "point"    , POS_RESTING , do_action   , 0, 0 },
-// { "poke"     , POS_RESTING , do_action   , 0, 0 },
-// { "policy"   , POS_DEAD    , do_gen_ps   , 0, SCMD_POLICIES },
-// { "ponder"   , POS_RESTING , do_action   , 0, 0 },
-// { "poofin"   , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFIN },
-// { "poofout"  , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFOUT },
-// { "pour"     , POS_STANDING, do_pour     , 0, SCMD_POUR },
-// { "pout"     , POS_RESTING , do_action   , 0, 0 },
-// { "prompt"   , POS_DEAD    , do_display  , 0, 0 },
-// { "practice" , POS_RESTING , do_practice , 1, 0 },
-// { "pray"     , POS_SITTING , do_action   , 0, 0 },
-// { "puke"     , POS_RESTING , do_action   , 0, 0 },
-// { "punch"    , POS_RESTING , do_action   , 0, 0 },
-// { "purr"     , POS_RESTING , do_action   , 0, 0 },
-// { "purge"    , POS_DEAD    , do_purge    , LVL_GOD, 0 },
-//
-// { "quaff"    , POS_RESTING , do_use      , 0, SCMD_QUAFF },
-// { "qecho"    , POS_DEAD    , do_qcomm    , LVL_IMMORT, SCMD_QECHO },
-// { "quest"    , POS_DEAD    , do_gen_tog  , 0, SCMD_QUEST },
-// { "qui"      , POS_DEAD    , do_quit     , 0, 0 },
-// { "quit"     , POS_DEAD    , do_quit     , 0, SCMD_QUIT },
-// { "qsay"     , POS_RESTING , do_qcomm    , 0, SCMD_QSAY },
-//
-// { "reply"    , POS_SLEEPING, do_reply    , 0, 0 },
-// { "rest"     , POS_RESTING , do_rest     , 0, 0 },
-// { "read"     , POS_RESTING , do_look     , 0, SCMD_READ },
-// { "reload"   , POS_DEAD    , do_reboot   , LVL_IMPL, 0 },
-// { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
-// { "receive"  , POS_STANDING, do_not_here , 1, 0 },
-// { "remove"   , POS_RESTING , do_remove   , 0, 0 },
-// { "rent"     , POS_STANDING, do_not_here , 1, 0 },
-// { "report"   , POS_RESTING , do_report   , 0, 0 },
-// { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
-// { "rescue"   , POS_FIGHTING, do_rescue   , 1, 0 },
-// { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
-// { "return"   , POS_DEAD    , do_return   , 0, 0 },
-// { "roll"     , POS_RESTING , do_action   , 0, 0 },
-// { "roomflags", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_ROOMFLAGS },
-// { "ruffle"   , POS_STANDING, do_action   , 0, 0 },
-//
-// { "say"      , POS_RESTING , do_say      , 0, 0 },
-// { "'"        , POS_RESTING , do_say      , 0, 0 },
-// { "save"     , POS_SLEEPING, do_save     , 0, 0 },
-// { "score"    , POS_DEAD    , do_score    , 0, 0 },
-// { "scream"   , POS_RESTING , do_action   , 0, 0 },
-// { "sell"     , POS_STANDING, do_not_here , 0, 0 },
-// { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
-// { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
-// { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
-// { "shake"    , POS_RESTING , do_action   , 0, 0 },
-// { "shiver"   , POS_RESTING , do_action   , 0, 0 },
-// { "show"     , POS_DEAD    , do_show     , LVL_IMMORT, 0 },
-// { "shrug"    , POS_RESTING , do_action   , 0, 0 },
-// { "shutdow"  , POS_DEAD    , do_shutdown , LVL_IMPL, 0 },
-// { "shutdown" , POS_DEAD    , do_shutdown , LVL_IMPL, SCMD_SHUTDOWN },
-// { "sigh"     , POS_RESTING , do_action   , 0, 0 },
-// { "sing"     , POS_RESTING , do_action   , 0, 0 },
-// { "sip"      , POS_RESTING , do_drink    , 0, SCMD_SIP },
-// { "sit"      , POS_RESTING , do_sit      , 0, 0 },
-// { "skillset" , POS_SLEEPING, do_skillset , LVL_GRGOD, 0 },
-// { "sleep"    , POS_SLEEPING, do_sleep    , 0, 0 },
-// { "slap"     , POS_RESTING , do_action   , 0, 0 },
-// { "slowns"   , POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_SLOWNS },
-// { "smile"    , POS_RESTING , do_action   , 0, 0 },
-// { "smirk"    , POS_RESTING , do_action   , 0, 0 },
-// { "snicker"  , POS_RESTING , do_action   , 0, 0 },
-// { "snap"     , POS_RESTING , do_action   , 0, 0 },
-// { "snarl"    , POS_RESTING , do_action   , 0, 0 },
-// { "sneeze"   , POS_RESTING , do_action   , 0, 0 },
-// { "sneak"    , POS_STANDING, do_sneak    , 1, 0 },
-// { "sniff"    , POS_RESTING , do_action   , 0, 0 },
-// { "snore"    , POS_SLEEPING, do_action   , 0, 0 },
-// { "snowball" , POS_STANDING, do_action   , LVL_IMMORT, 0 },
-// { "snoop"    , POS_DEAD    , do_snoop    , LVL_GOD, 0 },
-// { "snuggle"  , POS_RESTING , do_action   , 0, 0 },
-// { "socials"  , POS_DEAD    , do_commands , 0, SCMD_SOCIALS },
-// { "split"    , POS_SITTING , do_split    , 1, 0 },
-// { "spank"    , POS_RESTING , do_action   , 0, 0 },
-// { "spit"     , POS_STANDING, do_action   , 0, 0 },
-// { "squeeze"  , POS_RESTING , do_action   , 0, 0 },
-// { "stand"    , POS_RESTING , do_stand    , 0, 0 },
-// { "stare"    , POS_RESTING , do_action   , 0, 0 },
-// { "stat"     , POS_DEAD    , do_stat     , LVL_IMMORT, 0 },
-// { "steal"    , POS_STANDING, do_steal    , 1, 0 },
-// { "steam"    , POS_RESTING , do_action   , 0, 0 },
-// { "stroke"   , POS_RESTING , do_action   , 0, 0 },
-// { "strut"    , POS_STANDING, do_action   , 0, 0 },
-// { "sulk"     , POS_RESTING , do_action   , 0, 0 },
-// { "switch"   , POS_DEAD    , do_switch   , LVL_GRGOD, 0 },
-// { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
-//
-// { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
-// { "tackle"   , POS_RESTING , do_action   , 0, 0 },
-// { "take"     , POS_RESTING , do_get      , 0, 0 },
-// { "tango"    , POS_STANDING, do_action   , 0, 0 },
-// { "taunt"    , POS_RESTING , do_action   , 0, 0 },
-// { "taste"    , POS_RESTING , do_eat      , 0, SCMD_TASTE },
-// { "teleport" , POS_DEAD    , do_teleport , LVL_GOD, 0 },
-// { "thank"    , POS_RESTING , do_action   , 0, 0 },
-// { "think"    , POS_RESTING , do_action   , 0, 0 },
-// { "thaw"     , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_THAW },
-// { "title"    , POS_DEAD    , do_title    , 0, 0 },
-// { "tickle"   , POS_RESTING , do_action   , 0, 0 },
-// { "time"     , POS_DEAD    , do_time     , 0, 0 },
-// { "toggle"   , POS_DEAD    , do_toggle   , 0, 0 },
-// { "track"    , POS_STANDING, do_track    , 0, 0 },
-// { "trackthru", POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_TRACK },
-// { "transfer" , POS_SLEEPING, do_trans    , LVL_GOD, 0 },
-// { "twiddle"  , POS_RESTING , do_action   , 0, 0 },
-// { "typo"     , POS_DEAD    , do_gen_write, 0, SCMD_TYPO },
-//
-// { "unlock"   , POS_SITTING , do_gen_door , 0, SCMD_UNLOCK },
-// { "ungroup"  , POS_DEAD    , do_ungroup  , 0, 0 },
-// { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
-// { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
-// { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
-// { "use"      , POS_SITTING , do_use      , 1, SCMD_USE },
-// { "users"    , POS_DEAD    , do_users    , LVL_IMMORT, 0 },
-//
-// { "value"    , POS_STANDING, do_not_here , 0, 0 },
-// { "version"  , POS_DEAD    , do_gen_ps   , 0, SCMD_VERSION },
-// { "visible"  , POS_RESTING , do_visible  , 1, 0 },
-// { "vnum"     , POS_DEAD    , do_vnum     , LVL_IMMORT, 0 },
-// { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
-//
-// { "wake"     , POS_SLEEPING, do_wake     , 0, 0 },
-// { "wave"     , POS_RESTING , do_action   , 0, 0 },
-// { "wear"     , POS_RESTING , do_wear     , 0, 0 },
-// { "weather"  , POS_RESTING , do_weather  , 0, 0 },
-// { "who"      , POS_DEAD    , do_who      , 0, 0 },
-// { "whoami"   , POS_DEAD    , do_gen_ps   , 0, SCMD_WHOAMI },
-// { "where"    , POS_RESTING , do_where    , 1, 0 },
-// { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
-// { "whine"    , POS_RESTING , do_action   , 0, 0 },
-// { "whistle"  , POS_RESTING , do_action   , 0, 0 },
-// { "wield"    , POS_RESTING , do_wield    , 0, 0 },
-// { "wiggle"   , POS_STANDING, do_action   , 0, 0 },
-// { "wimpy"    , POS_DEAD    , do_wimpy    , 0, 0 },
-// { "wink"     , POS_RESTING , do_action   , 0, 0 },
-// { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
-// { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
-// { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
-// { "wizhelp"  , POS_SLEEPING, do_commands , LVL_IMMORT, SCMD_WIZHELP },
-// { "wizlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_WIZLIST },
-// { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
-// { "worship"  , POS_RESTING , do_action   , 0, 0 },
-// { "write"    , POS_STANDING, do_write    , 1, 0 },
-//
-// { "yawn"     , POS_RESTING , do_action   , 0, 0 },
-// { "yodel"    , POS_RESTING , do_action   , 0, 0 },
-//
-// { "zreset"   , POS_DEAD    , do_zreset   , LVL_GRGOD, 0 },
-//
-// { "\n", 0, 0, 0, 0 } };	/* this must be last */
-//
+type Command = fn(ch: &CharData, argument: &str, cmd: usize, subcmd: i32);
+
+struct CommandInfo {
+    command: &'static str,
+    minimum_position: u8,
+    command_pointer: Command,
+    minimum_level: i16,
+    subcmd: i32,
+}
+
+pub fn do_nothing(ch: &CharData, argument: &str, cmd: usize, subcmd: i32) {}
+
+const CMD_INFO: [CommandInfo; 2] = [
+    CommandInfo {
+        command: "",
+        minimum_position: 0,
+        command_pointer: do_nothing,
+        minimum_level: 0,
+        subcmd: 0,
+    },
+    //
+    // /* directions must come before other commands but after RESERVED */
+    // { "north"    , POS_STANDING, do_move     , 0, SCMD_NORTH },
+    // { "east"     , POS_STANDING, do_move     , 0, SCMD_EAST },
+    // { "south"    , POS_STANDING, do_move     , 0, SCMD_SOUTH },
+    // { "west"     , POS_STANDING, do_move     , 0, SCMD_WEST },
+    // { "up"       , POS_STANDING, do_move     , 0, SCMD_UP },
+    // { "down"     , POS_STANDING, do_move     , 0, SCMD_DOWN },
+    //
+    // /* now, the main list */
+    // { "at"       , POS_DEAD    , do_at       , LVL_IMMORT, 0 },
+    // { "advance"  , POS_DEAD    , do_advance  , LVL_IMPL, 0 },
+    // { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
+    // { "accuse"   , POS_SITTING , do_action   , 0, 0 },
+    // { "applaud"  , POS_RESTING , do_action   , 0, 0 },
+    // { "assist"   , POS_FIGHTING, do_assist   , 1, 0 },
+    // { "ask"      , POS_RESTING , do_spec_comm, 0, SCMD_ASK },
+    // { "auction"  , POS_SLEEPING, do_gen_comm , 0, SCMD_AUCTION },
+    // { "autoexit" , POS_DEAD    , do_gen_tog  , 0, SCMD_AUTOEXIT },
+    //
+    // { "bounce"   , POS_STANDING, do_action   , 0, 0 },
+    // { "backstab" , POS_STANDING, do_backstab , 1, 0 },
+    // { "ban"      , POS_DEAD    , do_ban      , LVL_GRGOD, 0 },
+    // { "balance"  , POS_STANDING, do_not_here , 1, 0 },
+    // { "bash"     , POS_FIGHTING, do_bash     , 1, 0 },
+    // { "beg"      , POS_RESTING , do_action   , 0, 0 },
+    // { "bleed"    , POS_RESTING , do_action   , 0, 0 },
+    // { "blush"    , POS_RESTING , do_action   , 0, 0 },
+    // { "bow"      , POS_STANDING, do_action   , 0, 0 },
+    // { "brb"      , POS_RESTING , do_action   , 0, 0 },
+    // { "brief"    , POS_DEAD    , do_gen_tog  , 0, SCMD_BRIEF },
+    // { "burp"     , POS_RESTING , do_action   , 0, 0 },
+    // { "buy"      , POS_STANDING, do_not_here , 0, 0 },
+    // { "bug"      , POS_DEAD    , do_gen_write, 0, SCMD_BUG },
+    //
+    // { "cast"     , POS_SITTING , do_cast     , 1, 0 },
+    // { "cackle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "check"    , POS_STANDING, do_not_here , 1, 0 },
+    // { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
+    // { "clap"     , POS_RESTING , do_action   , 0, 0 },
+    // { "clear"    , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
+    // { "close"    , POS_SITTING , do_gen_door , 0, SCMD_CLOSE },
+    // { "cls"      , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
+    // { "consider" , POS_RESTING , do_consider , 0, 0 },
+    // { "color"    , POS_DEAD    , do_color    , 0, 0 },
+    // { "comfort"  , POS_RESTING , do_action   , 0, 0 },
+    // { "comb"     , POS_RESTING , do_action   , 0, 0 },
+    // { "commands" , POS_DEAD    , do_commands , 0, SCMD_COMMANDS },
+    // { "compact"  , POS_DEAD    , do_gen_tog  , 0, SCMD_COMPACT },
+    // { "cough"    , POS_RESTING , do_action   , 0, 0 },
+    // { "credits"  , POS_DEAD    , do_gen_ps   , 0, SCMD_CREDITS },
+    // { "cringe"   , POS_RESTING , do_action   , 0, 0 },
+    // { "cry"      , POS_RESTING , do_action   , 0, 0 },
+    // { "cuddle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "curse"    , POS_RESTING , do_action   , 0, 0 },
+    // { "curtsey"  , POS_STANDING, do_action   , 0, 0 },
+    //
+    // { "dance"    , POS_STANDING, do_action   , 0, 0 },
+    // { "date"     , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_DATE },
+    // { "daydream" , POS_SLEEPING, do_action   , 0, 0 },
+    // { "dc"       , POS_DEAD    , do_dc       , LVL_GOD, 0 },
+    // { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
+    // { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
+    // { "display"  , POS_DEAD    , do_display  , 0, 0 },
+    // { "donate"   , POS_RESTING , do_drop     , 0, SCMD_DONATE },
+    // { "drink"    , POS_RESTING , do_drink    , 0, SCMD_DRINK },
+    // { "drop"     , POS_RESTING , do_drop     , 0, SCMD_DROP },
+    // { "drool"    , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "eat"      , POS_RESTING , do_eat      , 0, SCMD_EAT },
+    // { "echo"     , POS_SLEEPING, do_echo     , LVL_IMMORT, SCMD_ECHO },
+    // { "emote"    , POS_RESTING , do_echo     , 1, SCMD_EMOTE },
+    // { ":"        , POS_RESTING, do_echo      , 1, SCMD_EMOTE },
+    // { "embrace"  , POS_STANDING, do_action   , 0, 0 },
+    // { "enter"    , POS_STANDING, do_enter    , 0, 0 },
+    // { "equipment", POS_SLEEPING, do_equipment, 0, 0 },
+    // { "exits"    , POS_RESTING , do_exits    , 0, 0 },
+    // { "examine"  , POS_SITTING , do_examine  , 0, 0 },
+    //
+    // { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
+    // { "fart"     , POS_RESTING , do_action   , 0, 0 },
+    // { "FILL"     , POS_STANDING, do_pour     , 0, SCMD_FILL },
+    // { "flee"     , POS_FIGHTING, do_flee     , 1, 0 },
+    // { "flip"     , POS_STANDING, do_action   , 0, 0 },
+    // { "flirt"    , POS_RESTING , do_action   , 0, 0 },
+    // { "follow"   , POS_RESTING , do_follow   , 0, 0 },
+    // { "fondle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "freeze"   , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_FREEZE },
+    // { "french"   , POS_RESTING , do_action   , 0, 0 },
+    // { "frown"    , POS_RESTING , do_action   , 0, 0 },
+    // { "fume"     , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "get"      , POS_RESTING , do_get      , 0, 0 },
+    // { "gasp"     , POS_RESTING , do_action   , 0, 0 },
+    // { "gecho"    , POS_DEAD    , do_gecho    , LVL_GOD, 0 },
+    // { "give"     , POS_RESTING , do_give     , 0, 0 },
+    // { "giggle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "glare"    , POS_RESTING , do_action   , 0, 0 },
+    // { "goto"     , POS_SLEEPING, do_goto     , LVL_IMMORT, 0 },
+    // { "gold"     , POS_RESTING , do_gold     , 0, 0 },
+    // { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
+    // { "group"    , POS_RESTING , do_group    , 1, 0 },
+    // { "grab"     , POS_RESTING , do_grab     , 0, 0 },
+    // { "grats"    , POS_SLEEPING, do_gen_comm , 0, SCMD_GRATZ },
+    // { "greet"    , POS_RESTING , do_action   , 0, 0 },
+    // { "grin"     , POS_RESTING , do_action   , 0, 0 },
+    // { "groan"    , POS_RESTING , do_action   , 0, 0 },
+    // { "grope"    , POS_RESTING , do_action   , 0, 0 },
+    // { "grovel"   , POS_RESTING , do_action   , 0, 0 },
+    // { "growl"    , POS_RESTING , do_action   , 0, 0 },
+    // { "gsay"     , POS_SLEEPING, do_gsay     , 0, 0 },
+    // { "gtell"    , POS_SLEEPING, do_gsay     , 0, 0 },
+    //
+    // { "help"     , POS_DEAD    , do_help     , 0, 0 },
+    // { "handbook" , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_HANDBOOK },
+    // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
+    // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
+    // { "hide"     , POS_RESTING , do_hide     , 1, 0 },
+    // { "hit"      , POS_FIGHTING, do_hit      , 0, SCMD_HIT },
+    // { "hold"     , POS_RESTING , do_grab     , 1, 0 },
+    // { "holler"   , POS_RESTING , do_gen_comm , 1, SCMD_HOLLER },
+    // { "holylight", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_HOLYLIGHT },
+    // { "hop"      , POS_RESTING , do_action   , 0, 0 },
+    // { "house"    , POS_RESTING , do_house    , 0, 0 },
+    // { "hug"      , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "inventory", POS_DEAD    , do_inventory, 0, 0 },
+    // { "idea"     , POS_DEAD    , do_gen_write, 0, SCMD_IDEA },
+    // { "imotd"    , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_IMOTD },
+    // { "immlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_IMMLIST },
+    // { "info"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_INFO },
+    // { "insult"   , POS_RESTING , do_insult   , 0, 0 },
+    // { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
+    //
+    // { "junk"     , POS_RESTING , do_drop     , 0, SCMD_JUNK },
+    //
+    // { "kill"     , POS_FIGHTING, do_kill     , 0, 0 },
+    // { "kick"     , POS_FIGHTING, do_kick     , 1, 0 },
+    // { "kiss"     , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "look"     , POS_RESTING , do_look     , 0, SCMD_LOOK },
+    // { "laugh"    , POS_RESTING , do_action   , 0, 0 },
+    // { "last"     , POS_DEAD    , do_last     , LVL_GOD, 0 },
+    // { "leave"    , POS_STANDING, do_leave    , 0, 0 },
+    // { "levels"   , POS_DEAD    , do_levels   , 0, 0 },
+    // { "list"     , POS_STANDING, do_not_here , 0, 0 },
+    // { "lick"     , POS_RESTING , do_action   , 0, 0 },
+    // { "lock"     , POS_SITTING , do_gen_door , 0, SCMD_LOCK },
+    // { "load"     , POS_DEAD    , do_load     , LVL_GOD, 0 },
+    // { "love"     , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "moan"     , POS_RESTING , do_action   , 0, 0 },
+    // { "motd"     , POS_DEAD    , do_gen_ps   , 0, SCMD_MOTD },
+    // { "mail"     , POS_STANDING, do_not_here , 1, 0 },
+    // { "massage"  , POS_RESTING , do_action   , 0, 0 },
+    // { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
+    // { "murder"   , POS_FIGHTING, do_hit      , 0, SCMD_MURDER },
+    //
+    // { "news"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_NEWS },
+    // { "nibble"   , POS_RESTING , do_action   , 0, 0 },
+    // { "nod"      , POS_RESTING , do_action   , 0, 0 },
+    // { "noauction", POS_DEAD    , do_gen_tog  , 0, SCMD_NOAUCTION },
+    // { "nogossip" , POS_DEAD    , do_gen_tog  , 0, SCMD_NOGOSSIP },
+    // { "nograts"  , POS_DEAD    , do_gen_tog  , 0, SCMD_NOGRATZ },
+    // { "nohassle" , POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_NOHASSLE },
+    // { "norepeat" , POS_DEAD    , do_gen_tog  , 0, SCMD_NOREPEAT },
+    // { "noshout"  , POS_SLEEPING, do_gen_tog  , 1, SCMD_DEAF },
+    // { "nosummon" , POS_DEAD    , do_gen_tog  , 1, SCMD_NOSUMMON },
+    // { "notell"   , POS_DEAD    , do_gen_tog  , 1, SCMD_NOTELL },
+    // { "notitle"  , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_NOTITLE },
+    // { "nowiz"    , POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_NOWIZ },
+    // { "nudge"    , POS_RESTING , do_action   , 0, 0 },
+    // { "nuzzle"   , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "olc"      , POS_DEAD    , do_olc      , LVL_IMPL, 0 },
+    // { "order"    , POS_RESTING , do_order    , 1, 0 },
+    // { "offer"    , POS_STANDING, do_not_here , 1, 0 },
+    // { "open"     , POS_SITTING , do_gen_door , 0, SCMD_OPEN },
+    //
+    // { "put"      , POS_RESTING , do_put      , 0, 0 },
+    // { "pat"      , POS_RESTING , do_action   , 0, 0 },
+    // { "page"     , POS_DEAD    , do_page     , LVL_GOD, 0 },
+    // { "pardon"   , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_PARDON },
+    // { "peer"     , POS_RESTING , do_action   , 0, 0 },
+    // { "pick"     , POS_STANDING, do_gen_door , 1, SCMD_PICK },
+    // { "point"    , POS_RESTING , do_action   , 0, 0 },
+    // { "poke"     , POS_RESTING , do_action   , 0, 0 },
+    // { "policy"   , POS_DEAD    , do_gen_ps   , 0, SCMD_POLICIES },
+    // { "ponder"   , POS_RESTING , do_action   , 0, 0 },
+    // { "poofin"   , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFIN },
+    // { "poofout"  , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFOUT },
+    // { "pour"     , POS_STANDING, do_pour     , 0, SCMD_POUR },
+    // { "pout"     , POS_RESTING , do_action   , 0, 0 },
+    // { "prompt"   , POS_DEAD    , do_display  , 0, 0 },
+    // { "practice" , POS_RESTING , do_practice , 1, 0 },
+    // { "pray"     , POS_SITTING , do_action   , 0, 0 },
+    // { "puke"     , POS_RESTING , do_action   , 0, 0 },
+    // { "punch"    , POS_RESTING , do_action   , 0, 0 },
+    // { "purr"     , POS_RESTING , do_action   , 0, 0 },
+    // { "purge"    , POS_DEAD    , do_purge    , LVL_GOD, 0 },
+    //
+    // { "quaff"    , POS_RESTING , do_use      , 0, SCMD_QUAFF },
+    // { "qecho"    , POS_DEAD    , do_qcomm    , LVL_IMMORT, SCMD_QECHO },
+    // { "quest"    , POS_DEAD    , do_gen_tog  , 0, SCMD_QUEST },
+    // { "qui"      , POS_DEAD    , do_quit     , 0, 0 },
+    // { "quit"     , POS_DEAD    , do_quit     , 0, SCMD_QUIT },
+    // { "qsay"     , POS_RESTING , do_qcomm    , 0, SCMD_QSAY },
+    //
+    // { "reply"    , POS_SLEEPING, do_reply    , 0, 0 },
+    // { "rest"     , POS_RESTING , do_rest     , 0, 0 },
+    // { "read"     , POS_RESTING , do_look     , 0, SCMD_READ },
+    // { "reload"   , POS_DEAD    , do_reboot   , LVL_IMPL, 0 },
+    // { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
+    // { "receive"  , POS_STANDING, do_not_here , 1, 0 },
+    // { "remove"   , POS_RESTING , do_remove   , 0, 0 },
+    // { "rent"     , POS_STANDING, do_not_here , 1, 0 },
+    // { "report"   , POS_RESTING , do_report   , 0, 0 },
+    // { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
+    // { "rescue"   , POS_FIGHTING, do_rescue   , 1, 0 },
+    // { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
+    // { "return"   , POS_DEAD    , do_return   , 0, 0 },
+    // { "roll"     , POS_RESTING , do_action   , 0, 0 },
+    // { "roomflags", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_ROOMFLAGS },
+    // { "ruffle"   , POS_STANDING, do_action   , 0, 0 },
+    //
+    // { "say"      , POS_RESTING , do_say      , 0, 0 },
+    // { "'"        , POS_RESTING , do_say      , 0, 0 },
+    // { "save"     , POS_SLEEPING, do_save     , 0, 0 },
+    // { "score"    , POS_DEAD    , do_score    , 0, 0 },
+    // { "scream"   , POS_RESTING , do_action   , 0, 0 },
+    // { "sell"     , POS_STANDING, do_not_here , 0, 0 },
+    // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
+    // { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
+    // { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
+    // { "shake"    , POS_RESTING , do_action   , 0, 0 },
+    // { "shiver"   , POS_RESTING , do_action   , 0, 0 },
+    // { "show"     , POS_DEAD    , do_show     , LVL_IMMORT, 0 },
+    // { "shrug"    , POS_RESTING , do_action   , 0, 0 },
+    // { "shutdow"  , POS_DEAD    , do_shutdown , LVL_IMPL, 0 },
+    // { "shutdown" , POS_DEAD    , do_shutdown , LVL_IMPL, SCMD_SHUTDOWN },
+    // { "sigh"     , POS_RESTING , do_action   , 0, 0 },
+    // { "sing"     , POS_RESTING , do_action   , 0, 0 },
+    // { "sip"      , POS_RESTING , do_drink    , 0, SCMD_SIP },
+    // { "sit"      , POS_RESTING , do_sit      , 0, 0 },
+    // { "skillset" , POS_SLEEPING, do_skillset , LVL_GRGOD, 0 },
+    // { "sleep"    , POS_SLEEPING, do_sleep    , 0, 0 },
+    // { "slap"     , POS_RESTING , do_action   , 0, 0 },
+    // { "slowns"   , POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_SLOWNS },
+    // { "smile"    , POS_RESTING , do_action   , 0, 0 },
+    // { "smirk"    , POS_RESTING , do_action   , 0, 0 },
+    // { "snicker"  , POS_RESTING , do_action   , 0, 0 },
+    // { "snap"     , POS_RESTING , do_action   , 0, 0 },
+    // { "snarl"    , POS_RESTING , do_action   , 0, 0 },
+    // { "sneeze"   , POS_RESTING , do_action   , 0, 0 },
+    // { "sneak"    , POS_STANDING, do_sneak    , 1, 0 },
+    // { "sniff"    , POS_RESTING , do_action   , 0, 0 },
+    // { "snore"    , POS_SLEEPING, do_action   , 0, 0 },
+    // { "snowball" , POS_STANDING, do_action   , LVL_IMMORT, 0 },
+    // { "snoop"    , POS_DEAD    , do_snoop    , LVL_GOD, 0 },
+    // { "snuggle"  , POS_RESTING , do_action   , 0, 0 },
+    // { "socials"  , POS_DEAD    , do_commands , 0, SCMD_SOCIALS },
+    // { "split"    , POS_SITTING , do_split    , 1, 0 },
+    // { "spank"    , POS_RESTING , do_action   , 0, 0 },
+    // { "spit"     , POS_STANDING, do_action   , 0, 0 },
+    // { "squeeze"  , POS_RESTING , do_action   , 0, 0 },
+    // { "stand"    , POS_RESTING , do_stand    , 0, 0 },
+    // { "stare"    , POS_RESTING , do_action   , 0, 0 },
+    // { "stat"     , POS_DEAD    , do_stat     , LVL_IMMORT, 0 },
+    // { "steal"    , POS_STANDING, do_steal    , 1, 0 },
+    // { "steam"    , POS_RESTING , do_action   , 0, 0 },
+    // { "stroke"   , POS_RESTING , do_action   , 0, 0 },
+    // { "strut"    , POS_STANDING, do_action   , 0, 0 },
+    // { "sulk"     , POS_RESTING , do_action   , 0, 0 },
+    // { "switch"   , POS_DEAD    , do_switch   , LVL_GRGOD, 0 },
+    // { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
+    //
+    // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
+    // { "tackle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "take"     , POS_RESTING , do_get      , 0, 0 },
+    // { "tango"    , POS_STANDING, do_action   , 0, 0 },
+    // { "taunt"    , POS_RESTING , do_action   , 0, 0 },
+    // { "taste"    , POS_RESTING , do_eat      , 0, SCMD_TASTE },
+    // { "teleport" , POS_DEAD    , do_teleport , LVL_GOD, 0 },
+    // { "thank"    , POS_RESTING , do_action   , 0, 0 },
+    // { "think"    , POS_RESTING , do_action   , 0, 0 },
+    // { "thaw"     , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_THAW },
+    // { "title"    , POS_DEAD    , do_title    , 0, 0 },
+    // { "tickle"   , POS_RESTING , do_action   , 0, 0 },
+    // { "time"     , POS_DEAD    , do_time     , 0, 0 },
+    // { "toggle"   , POS_DEAD    , do_toggle   , 0, 0 },
+    // { "track"    , POS_STANDING, do_track    , 0, 0 },
+    // { "trackthru", POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_TRACK },
+    // { "transfer" , POS_SLEEPING, do_trans    , LVL_GOD, 0 },
+    // { "twiddle"  , POS_RESTING , do_action   , 0, 0 },
+    // { "typo"     , POS_DEAD    , do_gen_write, 0, SCMD_TYPO },
+    //
+    // { "unlock"   , POS_SITTING , do_gen_door , 0, SCMD_UNLOCK },
+    // { "ungroup"  , POS_DEAD    , do_ungroup  , 0, 0 },
+    // { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
+    // { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
+    // { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
+    // { "use"      , POS_SITTING , do_use      , 1, SCMD_USE },
+    // { "users"    , POS_DEAD    , do_users    , LVL_IMMORT, 0 },
+    //
+    // { "value"    , POS_STANDING, do_not_here , 0, 0 },
+    // { "version"  , POS_DEAD    , do_gen_ps   , 0, SCMD_VERSION },
+    // { "visible"  , POS_RESTING , do_visible  , 1, 0 },
+    // { "vnum"     , POS_DEAD    , do_vnum     , LVL_IMMORT, 0 },
+    // { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
+    //
+    // { "wake"     , POS_SLEEPING, do_wake     , 0, 0 },
+    // { "wave"     , POS_RESTING , do_action   , 0, 0 },
+    // { "wear"     , POS_RESTING , do_wear     , 0, 0 },
+    // { "weather"  , POS_RESTING , do_weather  , 0, 0 },
+    // { "who"      , POS_DEAD    , do_who      , 0, 0 },
+    // { "whoami"   , POS_DEAD    , do_gen_ps   , 0, SCMD_WHOAMI },
+    // { "where"    , POS_RESTING , do_where    , 1, 0 },
+    // { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
+    // { "whine"    , POS_RESTING , do_action   , 0, 0 },
+    // { "whistle"  , POS_RESTING , do_action   , 0, 0 },
+    // { "wield"    , POS_RESTING , do_wield    , 0, 0 },
+    // { "wiggle"   , POS_STANDING, do_action   , 0, 0 },
+    // { "wimpy"    , POS_DEAD    , do_wimpy    , 0, 0 },
+    // { "wink"     , POS_RESTING , do_action   , 0, 0 },
+    // { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
+    // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
+    // { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
+    // { "wizhelp"  , POS_SLEEPING, do_commands , LVL_IMMORT, SCMD_WIZHELP },
+    // { "wizlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_WIZLIST },
+    // { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
+    // { "worship"  , POS_RESTING , do_action   , 0, 0 },
+    // { "write"    , POS_STANDING, do_write    , 1, 0 },
+    //
+    // { "yawn"     , POS_RESTING , do_action   , 0, 0 },
+    // { "yodel"    , POS_RESTING , do_action   , 0, 0 },
+    //
+    // { "zreset"   , POS_DEAD    , do_zreset   , LVL_GRGOD, 0 },
+    //
+    CommandInfo {
+        command: "\n",
+        minimum_position: 0,
+        command_pointer: do_nothing,
+        minimum_level: 0,
+        subcmd: 0,
+    }, /* this must be last */
+];
 
 const FILL: [&str; 8] = ["in", "from", "with", "the", "on", "at", "to", "\n"];
 
@@ -394,72 +420,87 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-// void command_interpreter(struct char_data *ch, char *argument)
-// {
-// int cmd, length;
-// char *line;
-// char arg[MAX_INPUT_LENGTH];
-//
-// REMOVE_BIT(AFF_FLAGS(ch), AFF_HIDE);
-//
-// /* just drop to next line for hitting CR */
-// skip_spaces(&argument);
-// if (!*argument)
-// return;
-//
-// /*
-//  * special case to handle one-character, non-alphanumeric commands;
-//  * requested by many people so "'hi" or ";godnet test" is possible.
-//  * Patch sent by Eric Green and Stefan Wasilewski.
-//  */
-// if (!isalpha(*argument)) {
-// arg[0] = argument[0];
-// arg[1] = '\0';
-// line = argument + 1;
-// } else
-// line = any_one_arg(argument, arg);
-//
-// /* otherwise, find the command */
-// for (length = strlen(arg), cmd = 0; *cmd_info[cmd].command != '\n'; cmd++)
-// if (!strncmp(cmd_info[cmd].command, arg, length))
-// if (GET_LEVEL(ch) >= cmd_info[cmd].minimum_level)
-// break;
-//
-// if (*cmd_info[cmd].command == '\n')
-// send_to_char(ch, "Huh?!?\r\n");
-// else if (!IS_NPC(ch) && PLR_FLAGGED(ch, PLR_FROZEN) && GET_LEVEL(ch) < LVL_IMPL)
-// send_to_char(ch, "You try, but the mind-numbing cold prevents you...\r\n");
-// else if (cmd_info[cmd].command_pointer == NULL)
-// send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
-// else if (IS_NPC(ch) && cmd_info[cmd].minimum_level >= LVL_IMMORT)
-// send_to_char(ch, "You can't use immortal commands while switched.\r\n");
-// else if (GET_POS(ch) < cmd_info[cmd].minimum_position)
-// switch (GET_POS(ch)) {
-// case POS_DEAD:
-// send_to_char(ch, "Lie still; you are DEAD!!! :-(\r\n");
-// break;
-// case POS_INCAP:
-// case POS_MORTALLYW:
-// send_to_char(ch, "You are in a pretty bad shape, unable to do anything!\r\n");
-// break;
-// case POS_STUNNED:
-// send_to_char(ch, "All you can do right now is think about the stars!\r\n");
-// break;
-// case POS_SLEEPING:
-// send_to_char(ch, "In your dreams, or what?\r\n");
-// break;
-// case POS_RESTING:
-// send_to_char(ch, "Nah... You feel too relaxed to do that..\r\n");
-// break;
-// case POS_SITTING:
-// send_to_char(ch, "Maybe you should get on your feet first?\r\n");
-// break;
-// case POS_FIGHTING:
-// send_to_char(ch, "No way!  You're fighting for your life!\r\n");
-// break;
-// } else if (no_specials || !special(ch, cmd, line))
-// ((*cmd_info[cmd].command_pointer) (ch, line, cmd, cmd_info[cmd].subcmd));
-// }
+pub fn command_interpreter(ch: &CharData, argument: &str) {
+    let cmd: i32;
+    let length: i32;
+    let line: &str;
+    let mut arg = String::new();
+
+    ch.remove_aff_flags(AFF_HIDE);
+
+    /* just drop to next line for hitting CR */
+    let argument = argument.trim_start();
+
+    if argument.len() == 0 {
+        return;
+    }
+    /*
+     * special case to handle one-character, non-alphanumeric commands;
+     * requested by many people so "'hi" or ";godnet test" is possible.
+     * Patch sent by Eric Green and Stefan Wasilewski.
+     */
+    // if (!isalpha(*argument)) {
+    //     arg[0] = argument[0];
+    //     arg[1] = '\0';
+    //     line = argument + 1;
+    // } else {
+    line = any_one_arg(argument, &mut arg);
+    // }
+
+    /* otherwise, find the command */
+    let length = arg.len();
+    let mut cmd_idx = CMD_INFO.len() - 1;
+    let mut cmd = &CMD_INFO[cmd_idx];
+    for (i, cmd_info) in CMD_INFO.iter().enumerate() {
+        if cmd_info.command == arg {
+            if ch.get_level() >= cmd_info.minimum_level as u8 {
+                cmd = &cmd_info;
+                cmd_idx = i;
+                break;
+            }
+        }
+    }
+
+    if cmd.command == "\n" {
+        send_to_char(ch, "Huh?!?\r\n");
+    } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
+        send_to_char(ch, "You try, but the mind-numbing cold prevents you...\r\n");
+        // } else if cmd.command_pointer == do_nothing {
+        //     send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
+    } else if ch.is_npc() && cmd.minimum_level >= LVL_IMMORT {
+        send_to_char(ch, "You can't use immortal commands while switched.\r\n");
+    } else if ch.get_pos() < cmd.minimum_position {
+        match ch.get_pos() {
+            POS_DEAD => {
+                send_to_char(ch, "Lie still; you are DEAD!!! :-(\r\n");
+            }
+            POS_INCAP | POS_MORTALLYW => {
+                send_to_char(
+                    ch,
+                    "You are in a pretty bad shape, unable to do anything!\r\n",
+                );
+            }
+            POS_STUNNED => {
+                send_to_char(ch, "All you can do right now is think about the stars!\r\n");
+            }
+            POS_SLEEPING => {
+                send_to_char(ch, "In your dreams, or what?\r\n");
+            }
+            POS_RESTING => {
+                send_to_char(ch, "Nah... You feel too relaxed to do that..\r\n");
+            }
+            POS_SITTING => {
+                send_to_char(ch, "Maybe you should get on your feet first?\r\n");
+            }
+            POS_FIGHTING => {
+                send_to_char(ch, "No way!  You're fighting for your life!\r\n");
+            }
+            _ => {}
+        }
+    } //else if no_specials || !special(ch, cmd, line) {
+    (cmd.command_pointer)(ch, line, cmd_idx, cmd.subcmd);
+    //}
+}
 
 /**************************************************************************
  * Routines to handle aliasing                                             *
@@ -690,7 +731,7 @@ fn search_block(arg: &str, list: &[&str], exact: bool) -> Option<usize> {
 /*
  * Function to skip over the leading spaces of a string.
  */
-// void skip_spaces(char **string)
+// fn skip_spaces(char **string)
 // {
 // for (; **string && isspace(**string); (*string)++);
 // }
@@ -799,19 +840,19 @@ fn reserved_word(argument: &str) -> bool {
 // }
 
 /* same as one_argument except that it doesn't ignore FILL words */
-// char *any_one_arg(char *argument, char *first_arg)
-// {
-// skip_spaces(&argument);
-//
-// while (*argument && !isspace(*argument)) {
-// *(first_arg++) = LOWER(*argument);
-// argument++;
-// }
-//
-// *first_arg = '\0';
-//
-// return (argument);
-// }
+fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a str {
+    let mut argument = argument.trim_start();
+
+    for c in argument.chars().into_iter() {
+        if c.is_ascii_whitespace() {
+            break;
+        }
+        first_arg.push(c);
+        argument = &argument[1..];
+    }
+
+    return argument;
+}
 
 /*
  * Same as one_argument except that it takes two args and returns the rest;
@@ -864,8 +905,8 @@ fn reserved_word(argument: &str) -> bool {
 // {
 // int cmd;
 //
-// for (cmd = 0; *cmd_info[cmd].command != '\n'; cmd++)
-// if (!strcmp(cmd_info[cmd].command, command))
+// for (cmd = 0; *CMD_INFO[cmd].command != '\n'; cmd++)
+// if (!strcmp(CMD_INFO[cmd].command, command))
 // return (cmd);
 //
 // return (-1);
@@ -930,181 +971,193 @@ fn _parse_name(arg: &str) -> Option<&str> {
     return Some(arg);
 }
 
-// #define RECON		1
-// #define USURP		2
-// #define UNSWITCH	3
+pub const RECON: u8 = 1;
+pub const USURP: u8 = 2;
+pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-// int perform_dupe_check(struct descriptor_data *d)
-// {
-// struct descriptor_data *k, *next_k;
-// struct char_data *target = NULL, *ch, *next_ch;
-// int mode = 0;
-//
-// int id = GET_IDNUM(d->character);
-//
-// /*
-//  * Now that this descriptor has successfully logged in, disconnect all
-//  * other descriptors controlling a character with the same ID number.
-//  */
-//
-// for (k = descriptor_list; k; k = next_k) {
-// next_k = k->next;
-//
-// if (k == d)
-// continue;
-//
-// if (k->original && (GET_IDNUM(k->original) == id)) {
-// /* Original descriptor was switched, booting it and restoring normal body control. */
-//
-// write_to_output(d, "\r\nMultiple login detected -- disconnecting.\r\n");
-// STATE(k) = CON_CLOSE;
-// if (!target) {
-// target = k->original;
-// mode = UNSWITCH;
-// }
-// if (k->character)
-// k->character->desc = NULL;
-// k->character = NULL;
-// k->original = NULL;
-// } else if (k->character && GET_IDNUM(k->character) == id && k->original) {
-// /* Character taking over their own body, while an immortal was switched to it. */
-//
-// do_return(k->character, NULL, 0, 0);
-// } else if (k->character && GET_IDNUM(k->character) == id) {
-// /* Character taking over their own body. */
-//
-// if (!target && STATE(k) == CON_PLAYING) {
-// write_to_output(k, "\r\nThis body has been usurped!\r\n");
-// target = k->character;
-// mode = USURP;
-// }
-// k->character->desc = NULL;
-// k->character = NULL;
-// k->original = NULL;
-// write_to_output(k, "\r\nMultiple login detected -- disconnecting.\r\n");
-// STATE(k) = CON_CLOSE;
-// }
-// }
+fn perform_dupe_check<'a>(
+    main_globals: &MainGlobals,
+    d: &DescriptorData,
+    me: &Rc<DescriptorData>,
+) -> bool {
+    let mut target: Option<Rc<CharData>> = None;
+    let mut mode = 0;
+    let id: i64;
+    let db = main_globals.db.as_ref().unwrap();
 
-// /*
-//  * now, go through the character list, deleting all characters that
-//  * are not already marked for deletion from the above step (i.e., in the
-//  * CON_HANGUP state), and have not already been selected as a target for
-//  * switching into.  In addition, if we haven't already found a target,
-//  * choose one if one is available (while still deleting the other
-//  * duplicates, though theoretically none should be able to exist).
-//  */
-//
-// for (ch = character_list; ch; ch = next_ch) {
-// next_ch = ch->next;
-//
-// if (IS_NPC(ch))
-// continue;
-// if (GET_IDNUM(ch) != id)
-// continue;
-//
-// /* ignore chars with descriptors (already handled by above step) */
-// if (ch->desc)
-// continue;
-//
-// /* don't extract the target char we've found one already */
-// if (ch == target)
-// continue;
-//
-// /* we don't already have a target and found a candidate for switching */
-// if (!target) {
-// target = ch;
-// mode = RECON;
-// continue;
-// }
-//
-// /* we've found a duplicate - blow him away, dumping his eq in limbo. */
-// if (IN_ROOM(ch) != NOWHERE)
-// char_from_room(ch);
-// char_to_room(ch, 1);
-// extract_char(ch);
-// }
-//
-// /* no target for switching into was found - allow login to continue */
-// if (!target)
-// return (0);
-//
-// /* Okay, we've found a target.  Connect d to target. */
-// free_char(d->character); /* get rid of the old char */
-// d->character = target;
-// d->character->desc = d;
-// d->original = NULL;
-// d->character->char_specials.timer = 0;
-// REMOVE_BIT(PLR_FLAGS(d->character), PLR_MAILING | PLR_WRITING);
-// REMOVE_BIT(AFF_FLAGS(d->character), AFF_GROUP);
-// STATE(d) = CON_PLAYING;
-//
-// switch (mode) {
-// case RECON:
-// write_to_output(d, "Reconnecting.\r\n");
-// act("$n has reconnected.", TRUE, d->character, 0, 0, TO_ROOM);
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), TRUE, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
-// break;
-// case USURP:
-// write_to_output(d, "You take over your own body, already in use!\r\n");
-// act("$n suddenly keels over in pain, surrounded by a white aura...\r\n"
-// "$n's body has been taken over by a new spirit!",
-// TRUE, d->character, 0, 0, TO_ROOM);
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), TRUE,
-// "%s has re-logged in ... disconnecting old socket.", GET_NAME(d->character));
-// break;
-// case UNSWITCH:
-// write_to_output(d, "Reconnecting to unswitched char.");
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), TRUE, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
-// break;
-// }
-//
-// return (1);
-// }
+    id = d.character.borrow().as_ref().unwrap().get_idnum();
+
+    /*
+     * Now that this descriptor has successfully logged in, disconnect all
+     * other descriptors controlling a character with the same ID number.
+     */
+    for k in main_globals.descriptor_list.borrow().iter() {
+        if k.original.borrow().is_some() && k.original.borrow().as_ref().unwrap().get_idnum() == id
+        {
+            /* Original descriptor was switched, booting it and restoring normal body control. */
+            write_to_output(d, "\r\nMultiple login detected -- disconnecting.\r\n");
+            k.set_state(ConClose);
+            if target.is_none() {
+                target = k.original.borrow().clone();
+                mode = UNSWITCH;
+            }
+
+            if k.character.borrow().is_some() {
+                *k.character.borrow_mut().as_mut().unwrap().desc.borrow_mut() = None;
+            }
+            *k.character.borrow_mut() = None;
+            *k.original.borrow_mut() = None;
+        } else if k.character.borrow().is_some()
+            && k.character.borrow().as_ref().unwrap().get_idnum() == id
+            && k.original.borrow().is_some()
+        {
+            /* Character taking over their own body, while an immortal was switched to it. */
+            // TODO implement do_return
+            //do_return(k.character, NULL, 0, 0);
+        } else if k.character.borrow().is_some()
+            && k.character.borrow().as_ref().unwrap().get_idnum() == id
+        {
+            /* Character taking over their own body. */
+
+            if target.is_none() && k.state() == ConPlaying {
+                write_to_output(k.as_ref(), "\r\nThis body has been usurped!\r\n");
+                //target = Some(Rc::new(RefCell::new(k.character.as_ref().unwrap())));
+                mode = USURP;
+            }
+            *k.character.borrow().as_ref().unwrap().desc.borrow_mut() = None;
+            *k.character.borrow_mut() = None;
+            *k.original.borrow_mut() = None;
+            write_to_output(
+                k.as_ref(),
+                "\r\nMultiple login detected -- disconnecting.\r\n",
+            );
+            k.set_state(ConClose);
+        }
+    }
+
+    /*
+     * now, go through the character list, deleting all characters that
+     * are not already marked for deletion from the above step (i.e., in the
+     * CON_HANGUP state), and have not already been selected as a target for
+     * switching into.  In addition, if we haven't already found a target,
+     * choose one if one is available (while still deleting the other
+     * duplicates, though theoretically none should be able to exist).
+     */
+    for ch in db.character_list.borrow().iter() {
+        if ch.is_npc() {
+            continue;
+        }
+        if ch.get_idnum() != id {
+            continue;
+        }
+
+        /* ignore chars with descriptors (already handled by above step) */
+        if ch.desc.borrow().is_some() {
+            continue;
+        }
+
+        /* don't extract the target char we've found one already */
+        if target.is_some() && Rc::ptr_eq(ch, target.as_ref().unwrap()) {
+            continue;
+        }
+
+        /* we don't already have a target and found a candidate for switching */
+        if target.is_none() {
+            target = Some(ch.clone());
+            mode = RECON;
+            continue;
+        }
+
+        /* we've found a duplicate - blow him away, dumping his eq in limbo. */
+        // if (IN_ROOM(ch) != NOWHERE)
+        // char_from_room(ch);
+        // char_to_room(ch, 1);
+        // extract_char(ch);
+    }
+
+    /* no target for switching into was found - allow login to continue */
+    if target.is_none() {
+        return false;
+    }
+    let target = target.unwrap();
+
+    /* Okay, we've found a target.  Connect d to target. */
+    //free_char(d->character); /* get rid of the old char */
+    *d.character.borrow_mut() = Some(target);
+    {
+        let c = d.character.borrow();
+        let character = c.as_ref().unwrap();
+        *character.desc.borrow_mut() = Some(me.clone());
+        *d.original.borrow_mut() = None;
+        character.char_specials.borrow_mut().timer = 0;
+        character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
+        character.remove_aff_flags(AFF_GROUP);
+    }
+    d.set_state(ConPlaying);
+
+    match mode {
+        RECON => {
+            write_to_output(d, "Reconnecting.\r\n");
+            //act("$n has reconnected.", true, d->character, 0, 0, TO_ROOM);
+            //mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
+        }
+        USURP => {
+            write_to_output(d, "You take over your own body, already in use!\r\n");
+            //act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d->character, 0, 0, TO_ROOM);
+            //mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s has re-logged in ... disconnecting old socket.", GET_NAME(d->character));
+        }
+        UNSWITCH => {
+            write_to_output(d, "Reconnecting to unswitched char.");
+            //   mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
+        }
+        _ => {}
+    }
+    return true;
+}
 
 /* deal with newcomers and other non-playing sockets */
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
+use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
+use crate::db::{real_room, reset_char, store_to_char};
+use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::structs::ConState::{
-    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDelcnf2,
-    ConDisconnect, ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConQclass, ConQsex, ConRmotd,
+    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
+    ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
 };
 use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
-    CharSpecialData, CharSpecialDataSaved, PlayerSpecialData, PlayerSpecialDataSaved, TimeData,
-    CLASS_UNDEFINED, EXDSCR_LENGTH, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TONGUE,
-    MOB_ISNPC, SEX_FEMALE, SEX_MALE,
+    AffectedType, CharAbilityData, CharFileU, CharPlayerData, CharPointData, CharSpecialData,
+    CharSpecialDataSaved, PlayerSpecialData, PlayerSpecialDataSaved, TimeData, AFF_GROUP,
+    CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS,
+    MAX_TONGUE, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE, SEX_MALE,
 };
-use crate::{
-    echo_off, echo_on, get_class, get_passwd, get_pc_name, get_pfilepos, state, write_to_output,
-    DescriptorData,
-};
+use crate::util::{BRF, NRM};
+use crate::{echo_off, echo_on, write_to_output};
 use log::{error, info};
-use std::cell::{Ref, RefCell};
-use std::rc::Rc;
+use std::cmp::max;
 
-pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorData>>, arg: &str) {
-    let load_result: i8; /* Overloaded variable */
-
+pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
-    let mut mut_d = RefCell::borrow_mut(&d);
-    let main_globals = RefCell::borrow(&main_globals);
-    info!("nanny: {:?} '{}'", state!(mut_d), arg);
+    let db = main_globals.db.as_ref().unwrap();
+    info!("nanny: {:?} '{}'", d.state(), arg);
 
-    match state!(mut_d) {
+    match d.state() {
         ConGetName => {
             /* wait for input of name */
-            if mut_d.character.is_none() {
-                mut_d.character = Some(CharData {
-                    pfilepos: -1,
-                    wait: 0,
-                    player: CharPlayerData {
+            if d.character.borrow().is_none() {
+                *d.character.borrow_mut() = Some(Rc::new(CharData {
+                    pfilepos: RefCell::new(-1),
+                    in_room: RefCell::new(0),
+                    was_in_room: RefCell::new(0),
+                    wait: RefCell::from(0),
+                    player: RefCell::from(CharPlayerData {
                         passwd: [0; 16],
                         name: String::new(),
-                        short_descr: None,
-                        long_descr: None,
-                        description: None,
+                        short_descr: String::new(),
+                        long_descr: String::new(),
+                        description: String::new(),
+                        title: "".to_string(),
                         sex: 0,
                         chclass: 0,
                         level: 0,
@@ -1116,8 +1169,8 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                         },
                         weight: 0,
                         height: 0,
-                    },
-                    real_abils: CharAbilityData {
+                    }),
+                    real_abils: RefCell::from(CharAbilityData {
                         str: 0,
                         str_add: 0,
                         intel: 0,
@@ -1125,8 +1178,8 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                         dex: 0,
                         con: 0,
                         cha: 0,
-                    },
-                    aff_abils: CharAbilityData {
+                    }),
+                    aff_abils: RefCell::from(CharAbilityData {
                         str: 0,
                         str_add: 0,
                         intel: 0,
@@ -1134,8 +1187,8 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                         dex: 0,
                         con: 0,
                         cha: 0,
-                    },
-                    points: CharPointData {
+                    }),
+                    points: RefCell::from(CharPointData {
                         mana: 0,
                         max_mana: 0,
                         hit: 0,
@@ -1148,10 +1201,13 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                         exp: 0,
                         hitroll: 0,
                         damroll: 0,
-                    },
-                    char_specials: CharSpecialData {
+                    }),
+                    char_specials: RefCell::from(CharSpecialData {
                         fighting: None,
                         hunting: None,
+                        position: 0,
+                        carry_weight: 0,
+                        carry_items: 0,
                         timer: 0,
                         saved: CharSpecialDataSaved {
                             alignment: 0,
@@ -1160,8 +1216,8 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                             affected_by: 0,
                             apply_saving_throw: [0; 5],
                         },
-                    },
-                    player_specials: Rc::new(RefCell::new(PlayerSpecialData {
+                    }),
+                    player_specials: RefCell::new(PlayerSpecialData {
                         saved: PlayerSpecialDataSaved {
                             skills: [0; MAX_SKILLS + 1],
                             padding0: 0,
@@ -1196,13 +1252,26 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                             spare20: 0,
                             spare21: 0,
                         },
-                    })),
-                    desc: d.clone(),
-                });
+                        last_tell: 0,
+                    }),
+                    mob_specials: RefCell::from(MobSpecialData {
+                        attack_type: 0,
+                        default_pos: 0,
+                        damnodice: 0,
+                        damsizedice: 0,
+                    }),
+                    affected: RefCell::new(vec![]),
+                    desc: RefCell::new(Some(d.clone())),
+                    next_in_room: RefCell::new(None),
+                    next: RefCell::new(None),
+                    next_fighting: RefCell::new(None),
+                    followers: RefCell::new(vec![]),
+                    master: RefCell::new(None),
+                }));
             }
 
             if arg.is_empty() {
-                state!(mut_d) = ConClose;
+                d.set_state(ConClose);
             } else {
                 let buf: String;
                 let tmp_name: String;
@@ -1213,18 +1282,20 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
 
                 let tmp_name = _parse_name(arg);
 
-                let desc_list = &(main_globals.descriptor_list);
+                let desc_list = main_globals.descriptor_list.borrow();
                 if tmp_name.is_none()
                     || tmp_name.unwrap().len() < 2
                     || tmp_name.unwrap().len() > MAX_NAME_LENGTH
-                    || !valid_name(desc_list, tmp_name.unwrap())
+                    || !valid_name(&desc_list, tmp_name.unwrap())
                     || fill_word(tmp_name.unwrap())
                     || reserved_word(tmp_name.unwrap())
                 {
-                    write_to_output(&mut mut_d, "Invalid name, please try another.\r\nName: ");
+                    write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                     return;
                 }
                 let buf = tmp_name.unwrap().clone();
+                let och = d.character.borrow();
+                let character = och.as_ref().unwrap();
                 let mut tmp_store = CharFileU {
                     name: [0; 21],
                     description: [0; 240],
@@ -1312,381 +1383,482 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
                     last_logon: 0,
                     host: [0; 31],
                 };
-                let mut db = RefCell::borrow_mut(&main_globals.db.as_ref().unwrap());
+                let db = main_globals.db.as_ref().unwrap();
                 let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
-                    //     store_to_char(&tmp_store, d->character);
-                    //     GET_PFILEPOS(d->character) = player_i;
-                    //
-                    //     if (PLR_FLAGGED(d->character, PLR_DELETED)) {
-                    //         /* We get a false positive from the original deleted character. */
-                    //         free_char(d->character);
-                    //         /* Check for multiple creations... */
-                    //         if (!Valid_Name(tmp_name)) {
-                    //             write_to_output(d, "Invalid name, please try another.\r\nName: ");
-                    //             return;
-                    //         }
-                    //         CREATE(d->character, struct char_data, 1);
-                    //         clear_char(d->character);
-                    //         CREATE(d->character->player_specials, struct player_special_data, 1);
-                    //         d -> character -> desc = d;
-                    //         CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
-                    //         strcpy(d->character->player.name, CAP(tmp_name));    /* strcpy: OK (size checked above) */
-                    //         GET_PFILEPOS(d->character) = player_i;
-                    //         write_to_output(d, "Did I get that right, %s (Y/N)? ", tmp_name);
-                    //         STATE(d) = CON_NAME_CNFRM;
-                    //     } else {
-                    //         /* undo it just in case they are set */
-                    //         REMOVE_BIT(PLR_FLAGS(d->character),
-                    //                    PLR_WRITING | PLR_MAILING | PLR_CRYO);
-                    //         REMOVE_BIT(AFF_FLAGS(d->character), AFF_GROUP);
-                    //         write_to_output(d, "Password: ");
-                    //         echo_off(d);
-                    //         d -> idle_tics = 0;
-                    //         STATE(d) = CON_PASSWORD;
-                    // }
+                    store_to_char(&tmp_store, character.as_ref());
+                    character.set_pfilepos(player_i.unwrap() as i32);
+
+                    if character.prf_flagged(PLR_DELETED) {
+                        // TODO: support deleted players
+                        // /* We get a false positive from the original deleted character. */
+                        // free_char(d->character);
+                        // /* Check for multiple creations... */
+                        // if (!Valid_Name(tmp_name)) {
+                        //     write_to_output(d, "Invalid name, please try another.\r\nName: ");
+                        //     return;
+                        // }
+                        // CREATE(d->character, struct char_data, 1);
+                        // clear_char(d->character);
+                        // CREATE(d->character->player_specials, struct player_special_data, 1);
+                        // d -> character -> desc = d;
+                        // CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
+                        // strcpy(d->character->player.name, CAP(tmp_name));    /* strcpy: OK (size checked above) */
+                        // GET_PFILEPOS(d->character) = player_i;
+                        // write_to_output(&mut mut_d, format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str());
+                        // mut_d.state() = ConNameCnfrm;
+                    } else {
+                        {
+                            /* undo it just in case they are set */
+                            character.remove_plr_flag(PLR_WRITING | PLR_MAILING | PLR_CRYO);
+                            character.remove_aff_flags(AFF_GROUP);
+                        }
+                        write_to_output(d.as_ref(), "Password: ");
+                        echo_off(d.as_ref());
+                        *d.idle_tics.borrow_mut() = 0;
+                        d.set_state(ConPassword);
+                    }
                 } else {
                     /* player unknown -- make new character */
 
                     /* Check for multiple creations of a character. */
-                    if !valid_name(&main_globals.descriptor_list, tmp_name.unwrap().clone()) {
-                        write_to_output(&mut mut_d, "Invalid name, please try another.\r\nName: ");
+                    if !valid_name(
+                        &main_globals.descriptor_list.borrow(),
+                        tmp_name.unwrap().clone(),
+                    ) {
+                        write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                         return;
                     }
-                    mut_d.character.as_mut().unwrap().player.name = String::from(tmp_name.unwrap());
+                    let och = d.character.borrow();
+                    let character = och.as_ref().unwrap();
+                    character.player.borrow_mut().name = String::from(tmp_name.unwrap());
 
                     write_to_output(
-                        &mut mut_d,
+                        d.as_ref(),
                         format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
                     );
-                    state!(mut_d) = ConNameCnfrm;
+                    d.set_state(ConNameCnfrm);
                 }
             }
         }
-
         ConNameCnfrm => {
+            let character = d.character.borrow().as_ref().unwrap();
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
+                // TODO: support banning
                 // if (isbanned(d->host) >= BAN_NEW) {
-                //     mudlog(NRM, LVL_GOD, TRUE, "Request for new char %s denied from [%s] (siteban)", GET_PC_NAME(d->character), d->host);
+                //     mudlog(NRM, LVL_GOD, true, "Request for new char %s denied from [%s] (siteban)", GET_PC_NAME(d->character), d->host);
                 //     write_to_output(d, "Sorry, new characters are not allowed from your site!\r\n");
                 //     STATE(d) = CON_CLOSE;
                 //     return;
                 // }
+                // TODO: support restrict
                 // if (circle_restrict) {
                 //     write_to_output(d, "Sorry, new players can't be created at the moment.\r\n");
-                //     mudlog(NRM, LVL_GOD, TRUE, "Request for new char %s denied from [%s] (wizlock)", GET_PC_NAME(d->character), d->host);
+                //     mudlog(NRM, LVL_GOD, true, "Request for new char %s denied from [%s] (wizlock)", GET_PC_NAME(d->character), d->host);
                 //     STATE(d) = CON_CLOSE;
                 //     return;
                 // }
+
                 let msg = format!(
                     "New character.\r\nGive me a password for {}: ",
-                    get_pc_name!(mut_d.character.as_ref().unwrap())
+                    d.character.borrow().as_ref().unwrap().get_pc_name()
                 );
-                write_to_output(&mut mut_d, msg.as_str());
-                echo_off(&mut mut_d);
-                state!(mut_d) = ConNewpasswd;
+                write_to_output(d.as_ref(), msg.as_str());
+                echo_off(d.as_ref());
+                d.set_state(ConNewpasswd);
             } else if arg.starts_with('n') || arg.starts_with('N') {
-                write_to_output(&mut mut_d, "Okay, what IS it, then? ");
+                write_to_output(d.as_ref(), "Okay, what IS it, then? ");
                 //free_char(d->character);
-                state!(mut_d) = ConGetName;
+                d.set_state(ConGetName);
             } else {
-                write_to_output(&mut mut_d, "Please type Yes or No: ");
+                write_to_output(d.as_ref(), "Please type Yes or No: ");
             }
         }
-        // ConPassword => {
-        //     /* get pwd for known player      */
-        //     /*
-        //      * To really prevent duping correctly, the player's record should
-        //      * be reloaded from disk at this point (after the password has been
-        //      * typed).  However I'm afraid that trying to load a character over
-        //      * an already loaded character is going to cause some problem down the
-        //      * road that I can't see at the moment.  So to compensate, I'm going to
-        //      * (1) add a 15 or 20-second time limit for entering a password, and (2)
-        //      * re-add the code to cut off duplicates when a player quits.  JE 6 Feb 96
-        //      */
-        //
-        //     echo_on(d);    /* turn echo back on */
-        //
-        //     /* New echo_on() eats the return on telnet. Extra space better than none. */
-        //     write_to_output(d, "\r\n");
-        //
-        //     if arg.is_empty() {
-        //         state!(RefCell::borrow_mut(d).connected) = ConClose;
-        //     } else {
-        //         // if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
-        //         //     mudlog(BRF, LVL_GOD, TRUE, "Bad PW: %s [%s]", GET_NAME(d->character), d->host);
-        //         //     GET_BAD_PWS(d->character) + +;
-        //         //     save_char(d->character);
-        //         //     if ( + + (d -> bad_pws) > = max_bad_pws) {
-        //         //         /* 3 strikes and you're out. */
-        //         //         write_to_output(d, "Wrong password... disconnecting.\r\n");
-        //         //         STATE(d) = CON_CLOSE;
-        //         //     } else {
-        //         //         write_to_output(d, "Wrong password.\r\nPassword: ");
-        //         //         echo_off(d);
-        //         //     }
-        //         //     return;
-        //         // }
-        //         //
-        //         // /* Password was correct. */
-        //         // load_result = GET_BAD_PWS(d->character);
-        //         // GET_BAD_PWS(d->character) = 0;
-        //         // d -> bad_pws = 0;
-        //         //
-        //         // if (isbanned(d->host) == BAN_SELECT &&
-        //         //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
-        //         //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
-        //         //     STATE(d) = CON_CLOSE;
-        //         //     mudlog(NRM, LVL_GOD, TRUE, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
-        //         //     return;
-        //         // }
-        //         // if (GET_LEVEL(d->character) < circle_restrict) {
-        //         //     write_to_output(d, "The game is temporarily restricted.. try again later.\r\n");
-        //         //     STATE(d) = CON_CLOSE;
-        //         //     mudlog(NRM, LVL_GOD, TRUE, "Request for login denied for %s [%s] (wizlock)", GET_NAME(d->character), d->host);
-        //         //     return;
-        //         // }
-        //         // /* check and make sure no other copies of this player are logged in */
-        //         // if (perform_dupe_check(d)) {
-        //         //     return;
-        //         // }
-        //         //
-        //         // if (GET_LEVEL(d->character) >= LVL_IMMORT) {
-        //         //     write_to_output(d, "%s", imotd);
-        //         // } else {
-        //         //     write_to_output(d, "%s", motd);
-        //         // }
-        //         //
-        //         // mudlog(BRF, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), TRUE, "%s [%s] has connected.", GET_NAME(d->character), d->host);
-        //         //
-        //         // if (load_result) {
-        //         //     write_to_output(d, "\r\n\r\n\007\007\007"
-        //         //                     "%s%d LOGIN FAILURE%s SINCE LAST SUCCESSFUL LOGIN.%s\r\n",
-        //         //                     CCRED(d->character, C_SPR), load_result,
-        //         //                     (load_result > 1)? "S": "", CCNRM(d->character, C_SPR));
-        //         //     GET_BAD_PWS(d->character) = 0;
-        //         // }
-        //         // write_to_output(d, "\r\n*** PRESS RETURN: ");
-        //         // STATE(d) = CON_RMOTD;
-        //     }
-        // }
+        ConPassword => {
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
+            /* get pwd for known player      */
+            /*
+             * To really prevent duping correctly, the player's record should
+             * be reloaded from disk at this point (after the password has been
+             * typed).  However I'm afraid that trying to load a character over
+             * an already loaded character is going to cause some problem down the
+             * road that I can't see at the moment.  So to compensate, I'm going to
+             * (1) add a 15 or 20-second time limit for entering a password, and (2)
+             * re-add the code to cut off duplicates when a player quits.  JE 6 Feb 96
+             */
+
+            echo_on(d.as_ref()); /* turn echo back on */
+
+            /* New echo_on() eats the return on telnet. Extra space better than none. */
+            write_to_output(d.as_ref(), "\r\n");
+
+            if arg.is_empty() {
+                d.set_state(ConClose);
+            } else {
+                let host = d.host.clone();
+                let mut matching_pwd: bool;
+                {
+                    let mut passwd2 = [0 as u8; 16];
+                    let salt = character.get_pc_name();
+                    let passwd = character.get_passwd();
+                    pbkdf2::pbkdf2::<Hmac<Sha256>>(
+                        arg.as_bytes(),
+                        salt.as_bytes(),
+                        4,
+                        &mut passwd2,
+                    )
+                    .expect("Error while encrypting password");
+                    matching_pwd = passwd == passwd2;
+                }
+
+                if !matching_pwd {
+                    main_globals.mudlog(
+                        BRF,
+                        LVL_GOD as i32,
+                        true,
+                        format!("Bad PW: {} [{}]", character.get_name(), d.host.borrow()).as_str(),
+                    );
+
+                    character.incr_bad_pws();
+                    db.save_char(d.character.borrow().as_ref().unwrap());
+                    *d.bad_pws.borrow_mut() += 1;
+                    if *d.bad_pws.borrow() >= MAX_BAD_PWS {
+                        /* 3 strikes and you're out. */
+                        write_to_output(d.as_ref(), "Wrong password... disconnecting.\r\n");
+                        d.set_state(ConClose);
+                    } else {
+                        write_to_output(d.as_ref(), "Wrong password.\r\nPassword: ");
+                        echo_off(d.as_ref());
+                    }
+                    return;
+                }
+
+                /* Password was correct. */
+                let load_result: u8;
+                {
+                    load_result = character.get_bad_pws();
+                    character.reset_bad_pws();
+                }
+                *d.bad_pws.borrow_mut() = 0;
+                // TODO implement ban
+                // if (isbanned(d->host) == BAN_SELECT &&
+                //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
+                //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
+                //     STATE(d) = CON_CLOSE;
+                //     mudlog(NRM, LVL_GOD, true, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
+                //     return;
+                // }
+                // TODO implement restrict
+                // if (GET_LEVEL(d->character) < circle_restrict) {
+                //     write_to_output(d, "The game is temporarily restricted.. try again later.\r\n");
+                //     STATE(d) = CON_CLOSE;
+                //     mudlog(NRM, LVL_GOD, true, "Request for login denied for %s [%s] (wizlock)", GET_NAME(d->character), d->host);
+                //     return;
+                // }
+                /* check and make sure no other copies of this player are logged in */
+                if perform_dupe_check(&main_globals, d.as_ref(), &d) {
+                    return;
+                }
+
+                let level: u8;
+                {
+                    level = character.get_level();
+                }
+                if level >= LVL_IMMORT as u8 {
+                    write_to_output(d.as_ref(), db.imotd.as_str());
+                } else {
+                    write_to_output(d.as_ref(), db.motd.as_str());
+                }
+
+                {
+                    main_globals.mudlog(
+                        BRF,
+                        max(LVL_IMMORT as i32, character.get_invis_lev() as i32),
+                        true,
+                        format!(
+                            "{} [{}] has connected.",
+                            character.get_name(),
+                            d.host.borrow()
+                        )
+                        .as_str(),
+                    );
+                }
+
+                if load_result != 0 {
+                    let color1: &str;
+                    let color2: &str;
+                    {
+                        color1 = CCRED!(character, C_SPR);
+                        color2 = CCNRM!(character, C_SPR);
+                    }
+                    write_to_output(
+                        d.as_ref(),
+                        format!("\r\n\r\n\007\007\007{}{} LOGIN FAILURE{} SINCE LAST SUCCESSFUL LOGIN.{}\r\n",
+                                color1, load_result, if load_result > 1 { "S" } else { "" }, color2).as_str(),
+                    );
+                    character.get_bad_pws();
+                }
+                write_to_output(d.as_ref(), "\r\n*** PRESS RETURN: ");
+                d.set_state(ConRmotd);
+            }
+        }
         ConNewpasswd | ConChpwdGetnew => {
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
             if arg.is_empty()
                 || arg.len() > MAX_PWD_LENGTH
                 || arg.len() < 3
-                || arg == get_pc_name!(mut_d.character.as_ref().unwrap())
+                || arg == character.get_pc_name().as_ref()
             {
-                write_to_output(&mut mut_d, "\r\nIllegal password.\r\nPassword: ");
+                write_to_output(&d, "\r\nIllegal password.\r\nPassword: ");
                 return;
             }
-            let mut character = mut_d.character.as_mut().unwrap();
-            let salt = get_pc_name!(character);
-            pbkdf2::pbkdf2::<Hmac<Sha256>>(
-                arg.as_bytes(),
-                salt.as_bytes(),
-                4,
-                &mut get_passwd!(character),
-            );
-
-            write_to_output(&mut mut_d, "\r\nPlease retype password: ");
-            if state!(mut_d) == ConNewpasswd {
-                state!(mut_d) = ConCnfpasswd;
+            {
+                let salt = character.get_pc_name().to_string();
+                let mut tmp = [0; 16];
+                pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut tmp)
+                    .expect("Error while encrypting new password");
+                character.set_passwd(tmp);
+            }
+            write_to_output(d.as_ref(), "\r\nPlease retype password: ");
+            if d.state() == ConNewpasswd {
+                d.set_state(ConCnfpasswd);
             } else {
-                state!(mut_d) = ConChpwdVrfy;
+                d.set_state(ConChpwdVrfy);
             }
         }
         ConCnfpasswd | ConChpwdVrfy => {
-            let mut character = mut_d.character.as_mut().unwrap();
-            let salt = get_pc_name!(character);
-            let passwd = get_passwd!(character);
-            let mut passwd2 = [0 as u8; 16];
-            pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2);
-            if passwd2 != passwd {
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
+            let mut pwd_equals: bool;
+            {
+                let salt = character.get_pc_name();
+                let passwd = character.get_passwd();
+                let mut passwd2 = [0 as u8; 16];
+                pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
+                    .expect("Error while encrypting confirmation password");
+                pwd_equals = passwd == passwd2;
+            }
+            if !pwd_equals {
                 write_to_output(
-                    &mut mut_d,
+                    d.as_ref(),
                     "\r\nPasswords don't match... start over.\r\nPassword: ",
                 );
-                if state!(mut_d) == ConCnfpasswd {
-                    state!(mut_d) = ConNewpasswd;
+                if d.state() == ConCnfpasswd {
+                    d.set_state(ConNewpasswd);
                 } else {
-                    state!(mut_d) = ConChpwdGetnew;
+                    d.set_state(ConChpwdGetnew);
                 }
             }
-            echo_on(&mut mut_d);
+            echo_on(d.as_ref());
 
-            if state!(mut_d) == ConCnfpasswd {
-                write_to_output(&mut mut_d, "\r\nWhat is your sex (M/F)? ");
-                state!(mut_d) = ConQsex;
+            if d.state() == ConCnfpasswd {
+                write_to_output(d.as_ref(), "\r\nWhat is your sex (M/F)? ");
+                d.set_state(ConQsex);
+            } else {
+                write_to_output(d.as_ref(), format!("\r\nDone.\r\n{}", MENU).as_str());
+                d.set_state(ConMenu);
             }
-            //  else {
-            //     write_to_output(&mut mut_d, "\r\nDone.\r\n%s", MENU);
-            //     state!(mut_d) = ConMenu;
-            // }
         }
         ConQsex => {
-            let mut character = mut_d.character.as_mut().unwrap();
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
             /* query sex of new user         */
             match arg.chars().next().unwrap() {
                 'm' | 'M' => {
-                    character.player.sex = SEX_MALE;
+                    character.player.borrow_mut().sex = SEX_MALE;
                 }
                 'f' | 'F' => {
-                    character.player.sex = SEX_FEMALE;
+                    character.player.borrow_mut().sex = SEX_FEMALE;
                 }
                 _ => {
-                    write_to_output(&mut mut_d, "That is not a sex..\r\nWhat IS your sex? ");
+                    write_to_output(d.as_ref(), "That is not a sex..\r\nWhat IS your sex? ");
                     return;
                 }
             }
 
-            write_to_output(&mut mut_d, format!("{}\r\nClass: ", CLASS_MENU).as_str());
-            state!(mut_d) = ConQclass;
+            write_to_output(d.as_ref(), format!("{}\r\nClass: ", CLASS_MENU).as_str());
+            d.set_state(ConQclass);
         }
         ConQclass => {
-            let mut character = mut_d.character.as_mut().unwrap();
-            load_result = parse_class(arg.chars().next().unwrap());
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
+            let host = d.host.clone();
+            let load_result = parse_class(arg.chars().next().unwrap());
             if load_result == CLASS_UNDEFINED {
-                write_to_output(&mut mut_d, "\r\nThat's not a class.\r\nClass: ");
+                write_to_output(&d, "\r\nThat's not a class.\r\nClass: ");
                 return;
             } else {
-                get_class!(character) = load_result;
+                character.set_class(load_result);
             }
 
-            let mut mut_db = RefCell::borrow_mut(main_globals.db.as_ref().unwrap());
-            if get_pfilepos!(character) < 0 {
-                get_pfilepos!(character) = mut_db.create_entry(get_pc_name!(character)) as i32;
+            {
+                if character.get_pfilepos() < 0 {
+                    character
+                        .set_pfilepos(db.create_entry(character.get_pc_name().as_ref()) as i32);
+                }
+
+                /* Now GET_NAME() will work properly. */
+                db.init_char(character.as_ref());
+                db.save_char(character.as_ref());
             }
+            write_to_output(
+                d.as_ref(),
+                format!("{}\r\n*** PRESS RETURN: ", db.motd).as_str(),
+            );
+            d.set_state(ConRmotd);
 
-            /* Now GET_NAME() will work properly. */
-            init_char(character);
-            //save_char(character);
-            // write_to_output(&mut mut_d, "%s\r\n*** PRESS RETURN: ", motd);
-            state!(mut_d) = ConRmotd;
+            {
+                main_globals.mudlog(
+                    NRM,
+                    LVL_IMMORT as i32,
+                    true,
+                    format!(
+                        "{} [{}] new player.",
+                        character.get_pc_name(),
+                        d.host.borrow()
+                    )
+                    .as_str(),
+                );
+            }
+        }
+        ConRmotd => {
+            /* read CR after printing motd   */
+            write_to_output(d.as_ref(), MENU);
+            d.set_state(ConMenu);
+        }
+        ConMenu => {
+            /* get selection from main menu  */
+            // room_vnum
+            // load_room;
+            let och = d.character.borrow();
+            let character = och.as_ref().unwrap();
+            match arg.chars().last().unwrap() {
+                '0' => {
+                    write_to_output(d.as_ref(), "Goodbye.\r\n");
+                    d.set_state(ConClose);
+                }
 
-            // mudlog(
-            //     NRM,
-            //     LVL_IMMORT,
-            //     TRUE,
-            //     "{} [{}] new player.",
-            //     get_pc_name!(character),
-            //     &mut_d.host,
-            // );
+                '1' => {
+                    {
+                        reset_char(character.as_ref());
+                        // TODO implement aliases
+                        //read_aliases(character);
+                        if character.prf_flagged(PLR_INVSTART) {
+                            character.set_invis_lev(character.get_level() as i16);
+                        }
+
+                        /*
+                         * We have to place the character in a room before equipping them
+                         * or equip_char() will gripe about the person in NOWHERE.
+                         */
+                        let db = main_globals.db.as_ref().unwrap();
+                        let mut load_room = character.get_loadroom();
+                        if load_room != NOWHERE {
+                            let world = db.world.borrow();
+                            load_room = real_room(db.world.borrow().as_ref(), load_room);
+                        }
+
+                        {
+                            /* If char was saved with NOWHERE, or real_room above failed... */
+                            if load_room == NOWHERE {
+                                if character.get_level() >= LVL_IMMORT as u8 {
+                                    load_room = *db.r_immort_start_room.borrow();
+                                } else {
+                                    load_room = *db.r_mortal_start_room.borrow();
+                                }
+                            }
+
+                            if character.plr_flagged(PLR_FROZEN) {
+                                load_room = *db.r_frozen_start_room.borrow();
+                            }
+                        }
+
+                        send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
+                        db.character_list.borrow_mut().push(character.clone());
+                        main_globals.char_to_room(&character, load_room);
+                        //load_result = Crash_load(d->character);
+
+                        /* Clear their load room if it's not persistant. */
+                        // if !PLR_FLAGGED(d->character, PLR_LOADROOM) {
+                        //     GET_LOADROOM(d->character) = NOWHERE;
+                        // }
+                        db.save_char(character.as_ref());
+
+                        db.act(
+                            "$n has entered the game.",
+                            true,
+                            Some(character.clone()),
+                            None,
+                            None,
+                            TO_ROOM as i32,
+                        );
+                    }
+                    d.set_state(ConPlaying);
+                    if character.get_level() == 0 {
+                        main_globals.do_start(character.as_ref());
+                        send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
+                        main_globals
+                            .db
+                            .as_ref()
+                            .unwrap()
+                            .look_at_room(character.as_ref(), false);
+                    }
+                    // if has_mail(GET_IDNUM(d->character)) {
+                    //     send_to_char(d->character, "You have mail waiting.\r\n");
+                    // }
+                    // if load_result == 2 {
+                    //     /* rented items lost */
+                    //     send_to_char(d->character, "\r\n\007You could not afford your rent!\r\n"
+                    //                  "Your possesions have been donated to the Salvation Army!\r\n");
+                    // }
+                    *d.has_prompt.borrow_mut() = false;
+                }
+
+                '2' => {
+                    if !character.player.borrow().description.is_empty() {
+                        let player_description = character.player.borrow().description.clone();
+                        write_to_output(
+                            d.as_ref(),
+                            format!("Old description:\r\n{}", player_description).as_str(),
+                        );
+                        character.player.borrow_mut().description.clear();
+                    }
+                    write_to_output(d.as_ref(), "Enter the new text you'd like others to see when they look at you.\r\nTerminate with a '@' on a new line.\r\n");
+                    let description = character.player.borrow().description.clone();
+                    *d.str.borrow_mut() = Some(description);
+                    *d.max_str.borrow_mut() = EXDSCR_LENGTH;
+                    d.set_state(ConExdesc);
+                }
+
+                // '3' => {
+                //     let db = RefCell::borrow(main_globals.db.as_ref().unwrap());
+                //     page_string(mut_d, db.background, 0);
+                //     mut_d.state() = ConRmotd;
+                // }
+                '4' => {
+                    write_to_output(d.as_ref(), "\r\nEnter your old password: ");
+                    echo_off(d.as_ref());
+                    d.set_state(ConChpwdGetold);
+                }
+
+                '5' => {
+                    write_to_output(d.as_ref(), "\r\nEnter your password for verification: ");
+                    echo_off(d.as_ref());
+                    d.set_state(ConDelcnf1);
+                }
+
+                _ => {
+                    write_to_output(
+                        d.as_ref(),
+                        format!("\r\nThat's not a menu choice!\r\n{}", MENU).as_str(),
+                    );
+                }
+            }
         }
 
-        // ConRmotd => {
-        //     /* read CR after printing motd   */
-        //     write_to_output(d, "%s", MENU);
-        //     state!(RefCell::borrow_mut(d)) = ConMenu;
-        // }
-        //
-        // ConMenu => {
-        //     /* get selection from main menu  */
-        //     // room_vnum
-        //     // load_room;
-        //
-        //     match arg[0] {
-        //         '0' => {
-        //             write_to_output(d, "Goodbye.\r\n");
-        //             state!(RefCell::borrow_mut(d)) = ConClose;
-        //         }
-        //
-        //         '1' => {
-        //             reset_char(d->character);
-        //             read_aliases(d->character);
-        //
-        //             if PLR_FLAGGED(d->character, PLR_INVSTART) {
-        //                 GET_INVIS_LEV(d->character) = GET_LEVEL(d->character);
-        //             }
-        //
-        //             /*
-        //         * We have to place the character in a room before equipping them
-        //         * or equip_char() will gripe about the person in NOWHERE.
-        //         */
-        //             if (load_room = GET_LOADROOM(d->character)) != NOWHERE {
-        //                 load_room = real_room(load_room);
-        //             }
-        //
-        //             /* If char was saved with NOWHERE, or real_room above failed... */
-        //             if load_room == NOWHERE {
-        //                 if GET_LEVEL(d->character) >= LVL_IMMORT {
-        //                     load_room = r_immort_start_room;
-        //                 } else {
-        //                     load_room = r_mortal_start_room;
-        //                 }
-        //             }
-        //
-        //             if PLR_FLAGGED(d->character, PLR_FROZEN) {
-        //                 load_room = r_frozen_start_room;
-        //             }
-        //
-        //             send_to_char(d->character, "%s", WELC_MESSG);
-        //             d -> character -> next = character_list;
-        //             character_list = d -> character;
-        //             char_to_room(d->character, load_room);
-        //             load_result = Crash_load(d->character);
-        //
-        //             /* Clear their load room if it's not persistant. */
-        //             if !PLR_FLAGGED(d->character, PLR_LOADROOM) {
-        //                 GET_LOADROOM(d->character) = NOWHERE;
-        //             }
-        //             save_char(d->character);
-        //
-        //             act("$n has entered the game.", TRUE, d->character, 0, 0, TO_ROOM);
-        //
-        //             STATE(d) = CON_PLAYING;
-        //             if GET_LEVEL(d->character) == 0 {
-        //                 do_start(d->character);
-        //                 send_to_char(d->character, "%s", START_MESSG);
-        //             }
-        //             look_at_room(d->character, 0);
-        //             if has_mail(GET_IDNUM(d->character)) {
-        //                 send_to_char(d->character, "You have mail waiting.\r\n");
-        //             }
-        //             if load_result == 2 {
-        //                 /* rented items lost */
-        //                 send_to_char(d->character, "\r\n\007You could not afford your rent!\r\n"
-        //                              "Your possesions have been donated to the Salvation Army!\r\n");
-        //             }
-        //             d -> has_prompt = 0;
-        //         }
-        //
-        //         '2' => {
-        //             if (d -> character -> player.description) {
-        //                 write_to_output(d, "Old description:\r\n%s", d->character->player.description);
-        //                 free(d->character->player.description);
-        //                 d -> character -> player.description = NULL;
-        //             }
-        //             write_to_output(d, "Enter the new text you'd like others to see when they look at you.\r\n" +
-        //                 "Terminate with a '@' on a new line.\r\n");
-        //             d -> str = &d -> character -> player.description;
-        //             d -> max_str = EXDSCR_LENGTH;
-        //             STATE(d) = CON_EXDESC;
-        //         }
-        //
-        //         '3' => {
-        //             page_string(d, background, 0);
-        //             STATE(d) = CON_RMOTD;
-        //         }
-        //
-        //         '4' => {
-        //             write_to_output(d, "\r\nEnter your old password: ");
-        //             echo_off(d);
-        //             STATE(d) = CON_CHPWD_GETOLD;
-        //         }
-        //
-        //         '5' => {
-        //             write_to_output(d, "\r\nEnter your password for verification: ");
-        //             echo_off(d);
-        //             STATE(d) = CON_DELCNF1;
-        //         }
-        //
-        //         _ => {
-        //             write_to_output(d, "\r\nThat's not a menu choice!\r\n%s", MENU);
-        //         }
-        //     }
-        // }
-        //
         // ConChpwdGetold => {
         //     if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
         //         echo_on(d);
@@ -1728,7 +1900,7 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
         //         delete_aliases(GET_NAME(d -> character));
         //         write_to_output(d, "Character '%s' deleted!\r\n"
         //                         "Goodbye.\r\n", GET_NAME(d -> character));
-        //         mudlog(NRM, LVL_GOD, TRUE, "%s (lev %d) has self-deleted.", GET_NAME(d -> character), GET_LEVEL(d -> character));
+        //         mudlog(NRM, LVL_GOD, true, "%s (lev %d) has self-deleted.", GET_NAME(d -> character), GET_LEVEL(d -> character));
         //         STATE(d) = CON_CLOSE;
         //         return;
         //     } else {
@@ -1746,17 +1918,19 @@ pub fn nanny(main_globals: Rc<RefCell<MainGlobals>>, d: Rc<RefCell<DescriptorDat
 
         _ => {
             let char_name;
-            if mut_d.character.is_some() {
-                char_name = get_name!(mut_d.character.as_ref().unwrap())
+            if d.character.borrow().is_some() {
+                let och = d.character.borrow();
+                let character = och.as_ref().unwrap();
+                char_name = String::from(character.get_name().as_ref());
             } else {
-                char_name = "<unknown>";
+                char_name = "<unknown>".to_string();
             }
             error!(
                 "SYSERR: Nanny: illegal state of con'ness ({:?}) for '{}'; closing connection.",
-                state!(mut_d),
+                d.state(),
                 char_name
             );
-            state!(mut_d) = ConDisconnect; /* Safest to do. */
+            d.set_state(ConDisconnect); /* Safest to do. */
         }
     }
 }

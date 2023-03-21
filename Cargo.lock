@@ -222,6 +222,7 @@ dependencies = [
  "pbkdf2",
  "rand",
  "rand_core",
+ "regex",
  "sha2",
 ]
 

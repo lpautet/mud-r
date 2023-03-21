@@ -148,13 +148,15 @@
 /* ROOM NUMBERS */
 
 /* virtual number of room that mortals should enter at */
-// room_vnum mortal_start_room = 3001;
+use crate::structs::room_vnum;
+
+pub const MORTAL_START_ROOM: room_vnum = 3001;
 
 /* virtual number of room that immorts should enter at by default */
-// room_vnum immort_start_room = 1204;
+pub const IMMORT_START_ROOM: room_vnum = 1204;
 
 /* virtual number of room that frozen players should enter at */
-// room_vnum frozen_start_room = 1202;
+pub const FROZEN_START_ROOM: room_vnum = 1202;
 
 /*
 * virtual numbers of donation rooms.  note: you must change code in
@@ -210,7 +212,7 @@ pub const DFLT_DIR: &str = "lib";
 // int max_filesize = 50000;
 
 /* maximum number of password attempts before disconnection */
-// int max_bad_pws = 3;
+pub const MAX_BAD_PWS: u8 = 3;
 
 /*
 * Rationale for enabling this, as explained by naved@bird.taponline.com.
@@ -243,28 +245,25 @@ pub const DFLT_DIR: &str = "lib";
 
 pub const NAMESERVER_IS_SLOW: bool = false;
 
-// const char *MENU =
-// "\r\n"
-// "Welcome to CircleMUD!\r\n"
-// "0) Exit from CircleMUD.\r\n"
-// "1) Enter the game.\r\n"
-// "2) Enter description.\r\n"
-// "3) Read the background story.\r\n"
-// "4) Change password.\r\n"
-// "5) Delete this character.\r\n"
-// "\r\n"
-// "   Make your choice: ";
+pub const MENU: &str = "
+Welcome to CircleMUD!
+0) Exit from CircleMUD.
+1) Enter the game.
+2) Enter description.
+3) Read the background story.
+4) Change password.
+5) Delete this character.
 
-//
-// const char *WELC_MESSG =
-// "\r\n"
-// "Welcome to the land of CircleMUD!  May your visit here be... Interesting."
-// "\r\n\r\n";
-//
-// const char *START_MESSG =
-// "Welcome.  This is your new CircleMUD character!  You can now earn gold,\r\n"
-// "gain experience, find weapons and equipment, and much more -- while\r\n"
-// "meeting people from around the world!\r\n";
+   Make your choice: ";
+
+pub const WELC_MESSG: &str = "
+Welcome to the land of CircleMUD!  May your visit here be... Interesting.
+\r\n";
+
+pub const START_MESSG: &str =
+    "Welcome.  This is your new CircleMUD character!  You can now earn gold,
+gain experience, find weapons and equipment, and much more -- while
+meeting people from around the world!\r\n";
 
 /****************************************************************************/
 /****************************************************************************/

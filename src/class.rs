@@ -17,7 +17,20 @@
 
 /* Names first */
 
-use crate::structs::{CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR};
+use crate::constants::{CON_APP, WIS_APP};
+use crate::db::DB;
+use crate::spells::{
+    SKILL_BACKSTAB, SKILL_HIDE, SKILL_PICK_LOCK, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
+};
+use crate::structs::{
+    CharData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR, DRUNK,
+    FULL, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
+};
+use crate::util::{rand_number, BRF};
+use crate::{check_player_special, set_skill, MainGlobals};
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::cmp::{max, min};
 
 const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
@@ -93,7 +106,7 @@ pub fn parse_class(arg: char) -> i8 {
 
 /* #define LEARNED_LEVEL	0  % known which is considered "learned" */
 /* #define MAX_PER_PRAC		1  max percent gain in skill per practice */
-/* #define MIN_PER_PRAC		2  min percent gain in skill per practice */
+/* #define min_PER_PRAC		2  min percent gain in skill per practice */
 /* #define PRAC_TYPE		3  should it say 'spell' or 'skill'?	*/
 
 // int prac_params[4][NUM_CLASSES] = {
@@ -1345,180 +1358,187 @@ pub fn parse_class(arg: char) -> i8 {
  * the best 3 out of 4 rolls of a 6-sided die.  Each class then decides
  * which priority will be given for the best to worst stats.
  */
-// void roll_real_abils(struct char_data *ch)
-// {
-// int i, j, k, temp;
-// ubyte table[6];
-// ubyte rolls[4];
-//
-// for (i = 0; i < 6; i++)
-// table[i] = 0;
-//
-// for (i = 0; i < 6; i++) {
-//
-// for (j = 0; j < 4; j++)
-// rolls[j] = rand_number(1, 6);
-//
-// temp = rolls[0] + rolls[1] + rolls[2] + rolls[3] -
-// MIN(rolls[0], MIN(rolls[1], MIN(rolls[2], rolls[3])));
-//
-// for (k = 0; k < 6; k++)
-// if (table[k] < temp) {
-// temp ^= table[k];
-// table[k] ^= temp;
-// temp ^= table[k];
-// }
-// }
-//
-// ch->real_abils.str_add = 0;
-//
-// switch (GET_CLASS(ch)) {
-// case CLASS_MAGIC_USER:
-// ch->real_abils.intel = table[0];
-// ch->real_abils.wis = table[1];
-// ch->real_abils.dex = table[2];
-// ch->real_abils.str = table[3];
-// ch->real_abils.con = table[4];
-// ch->real_abils.cha = table[5];
-// break;
-// case CLASS_CLERIC:
-// ch->real_abils.wis = table[0];
-// ch->real_abils.intel = table[1];
-// ch->real_abils.str = table[2];
-// ch->real_abils.dex = table[3];
-// ch->real_abils.con = table[4];
-// ch->real_abils.cha = table[5];
-// break;
-// case CLASS_THIEF:
-// ch->real_abils.dex = table[0];
-// ch->real_abils.str = table[1];
-// ch->real_abils.con = table[2];
-// ch->real_abils.intel = table[3];
-// ch->real_abils.wis = table[4];
-// ch->real_abils.cha = table[5];
-// break;
-// case CLASS_WARRIOR:
-// ch->real_abils.str = table[0];
-// ch->real_abils.dex = table[1];
-// ch->real_abils.con = table[2];
-// ch->real_abils.wis = table[3];
-// ch->real_abils.intel = table[4];
-// ch->real_abils.cha = table[5];
-// if (ch->real_abils.str == 18)
-// ch->real_abils.str_add = rand_number(0, 100);
-// break;
-// }
-// ch->aff_abils = ch->real_abils;
-// }
+fn roll_real_abils(ch: &CharData) {
+    //int i, j, k, temp;
+    let mut table: [u8; 6] = [0; 6];
+    let mut rolls: [u8; 4] = [0; 4];
+
+    for i in 0..6 {
+        for j in 0..4 {
+            rolls[j] = rand_number(1, 6) as u8;
+        }
+
+        let mut temp = rolls[0] + rolls[1] + rolls[2] + rolls[3]
+            - min(rolls[0], min(rolls[1], min(rolls[2], rolls[3])));
+
+        for k in 0..6 {
+            if table[k] < temp {
+                temp ^= table[k];
+                table[k] ^= temp;
+                temp ^= table[k];
+            }
+        }
+    }
+
+    ch.real_abils.borrow_mut().str_add = 0;
+
+    match ch.get_class() {
+        CLASS_MAGIC_USER => {
+            ch.real_abils.borrow_mut().intel = table[0] as i8;
+            ch.real_abils.borrow_mut().wis = table[1] as i8;
+            ch.real_abils.borrow_mut().dex = table[2] as i8;
+            ch.real_abils.borrow_mut().str = table[3] as i8;
+            ch.real_abils.borrow_mut().con = table[4] as i8;
+            ch.real_abils.borrow_mut().cha = table[5] as i8;
+        }
+        CLASS_CLERIC => {
+            ch.real_abils.borrow_mut().wis = table[0] as i8;
+            ch.real_abils.borrow_mut().intel = table[1] as i8;
+            ch.real_abils.borrow_mut().str = table[2] as i8;
+            ch.real_abils.borrow_mut().dex = table[3] as i8;
+            ch.real_abils.borrow_mut().con = table[4] as i8;
+            ch.real_abils.borrow_mut().cha = table[5] as i8;
+        }
+        CLASS_THIEF => {
+            ch.real_abils.borrow_mut().dex = table[0] as i8;
+            ch.real_abils.borrow_mut().str = table[1] as i8;
+            ch.real_abils.borrow_mut().con = table[2] as i8;
+            ch.real_abils.borrow_mut().intel = table[3] as i8;
+            ch.real_abils.borrow_mut().wis = table[4] as i8;
+            ch.real_abils.borrow_mut().cha = table[5] as i8;
+        }
+        CLASS_WARRIOR => {
+            ch.real_abils.borrow_mut().str = table[0] as i8;
+            ch.real_abils.borrow_mut().dex = table[1] as i8;
+            ch.real_abils.borrow_mut().con = table[2] as i8;
+            ch.real_abils.borrow_mut().wis = table[3] as i8;
+            ch.real_abils.borrow_mut().intel = table[4] as i8;
+            ch.real_abils.borrow_mut().cha = table[5] as i8;
+            if ch.real_abils.borrow_mut().str == 18 {
+                ch.real_abils.borrow_mut().str_add = rand_number(0, 100) as i8;
+            }
+        }
+        _ => {}
+    }
+    *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow();
+}
 
 /* Some initializations for characters, including initial skills */
-// void do_start(struct char_data *ch)
-// {
-// GET_LEVEL(ch) = 1;
-// GET_EXP(ch) = 1;
-//
-// set_title(ch, NULL);
-// roll_real_abils(ch);
-//
-// GET_MAX_HIT(ch)  = 10;
-// GET_MAX_MANA(ch) = 100;
-// GET_MAX_MOVE(ch) = 82;
-//
-// switch (GET_CLASS(ch)) {
-//
-// case CLASS_MAGIC_USER:
-// break;
-//
-// case CLASS_CLERIC:
-// break;
-//
-// case CLASS_THIEF:
-// SET_SKILL(ch, SKILL_SNEAK, 10);
-// SET_SKILL(ch, SKILL_HIDE, 5);
-// SET_SKILL(ch, SKILL_STEAL, 15);
-// SET_SKILL(ch, SKILL_BACKSTAB, 10);
-// SET_SKILL(ch, SKILL_PICK_LOCK, 10);
-// SET_SKILL(ch, SKILL_TRACK, 10);
-// break;
-//
-// case CLASS_WARRIOR:
-// break;
-// }
-//
-// advance_level(ch);
-// mudlog(BRF, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "%s advanced to level %d", GET_NAME(ch), GET_LEVEL(ch));
-//
-// GET_HIT(ch) = GET_MAX_HIT(ch);
-// GET_MANA(ch) = GET_MAX_MANA(ch);
-// GET_MOVE(ch) = GET_MAX_MOVE(ch);
-//
-// GET_COND(ch, THIRST) = 24;
-// GET_COND(ch, FULL) = 24;
-// GET_COND(ch, DRUNK) = 0;
-//
-// if (siteok_everyone)
-// SET_BIT(PLR_FLAGS(ch), PLR_SITEOK);
-// }
+impl MainGlobals {
+    pub fn do_start(&self, ch: &CharData) {
+        ch.set_level(1);
+        ch.set_exp(1);
+
+        ch.set_title("");
+        roll_real_abils(ch);
+
+        ch.set_max_hit(10);
+        ch.set_max_mana(100);
+        ch.set_max_move(82);
+
+        match ch.get_class() {
+            CLASS_MAGIC_USER => {}
+
+            CLASS_CLERIC => {}
+
+            CLASS_THIEF => {
+                set_skill!(ch, SKILL_SNEAK, 10);
+                set_skill!(ch, SKILL_HIDE, 5);
+                set_skill!(ch, SKILL_STEAL, 15);
+                set_skill!(ch, SKILL_BACKSTAB, 10);
+                set_skill!(ch, SKILL_PICK_LOCK, 10);
+                set_skill!(ch, SKILL_TRACK, 10);
+            }
+
+            CLASS_WARRIOR => {}
+            _ => {}
+        }
+
+        advance_level(ch, &self.db.as_ref().unwrap());
+
+        self.mudlog(
+            BRF,
+            max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
+            true,
+            format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
+        );
+
+        ch.set_hit(ch.get_max_hit());
+        ch.set_mana(ch.get_max_mana());
+        ch.set_move(ch.get_max_move());
+
+        ch.set_cond(THIRST, 24);
+        ch.set_cond(FULL, 24);
+        ch.set_cond(DRUNK, 0);
+
+        // if (siteok_everyone)
+        // SET_BIT(PLR_FLAGS(ch), PLR_SITEOK);
+    }
+}
 
 /*
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-// void advance_level(struct char_data *ch)
-// {
-// int add_hp, add_mana = 0, add_move = 0, i;
-//
-// add_hp = con_app[GET_CON(ch)].hitp;
-//
-// switch (GET_CLASS(ch)) {
-//
-// case CLASS_MAGIC_USER:
-// add_hp += rand_number(3, 8);
-// add_mana = rand_number(GET_LEVEL(ch), (int)(1.5 * GET_LEVEL(ch)));
-// add_mana = MIN(add_mana, 10);
-// add_move = rand_number(0, 2);
-// break;
-//
-// case CLASS_CLERIC:
-// add_hp += rand_number(5, 10);
-// add_mana = rand_number(GET_LEVEL(ch), (int)(1.5 * GET_LEVEL(ch)));
-// add_mana = MIN(add_mana, 10);
-// add_move = rand_number(0, 2);
-// break;
-//
-// case CLASS_THIEF:
-// add_hp += rand_number(7, 13);
-// add_mana = 0;
-// add_move = rand_number(1, 3);
-// break;
-//
-// case CLASS_WARRIOR:
-// add_hp += rand_number(10, 15);
-// add_mana = 0;
-// add_move = rand_number(1, 3);
-// break;
-// }
-//
-// ch->points.max_hit += MAX(1, add_hp);
-// ch->points.max_move += MAX(1, add_move);
-//
-// if (GET_LEVEL(ch) > 1)
-// ch->points.max_mana += add_mana;
-//
-// if (IS_MAGIC_USER(ch) || IS_CLERIC(ch))
-// GET_PRACTICES(ch) += MAX(2, wis_app[GET_WIS(ch)].bonus);
-// else
-// GET_PRACTICES(ch) += MIN(2, MAX(1, wis_app[GET_WIS(ch)].bonus));
-//
-// if (GET_LEVEL(ch) >= LVL_IMMORT) {
-// for (i = 0; i < 3; i++)
-// GET_COND(ch, i) = (char) -1;
-// SET_BIT(PRF_FLAGS(ch), PRF_HOLYLIGHT);
-// }
-//
-// snoop_check(ch);
-// save_char(ch);
-// }
+fn advance_level(ch: &CharData, db: &DB) {
+    //int add_hp, add_mana = 0, add_move = 0, i;
+
+    let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
+    let mut add_mana = 0;
+    let mut add_move = 0;
+
+    match ch.get_class() {
+        CLASS_MAGIC_USER => {
+            add_hp += rand_number(3, 8) as i16;
+            add_mana = rand_number(ch.get_level() as u32, (3 * ch.get_level() / 2) as u32);
+            add_mana = min(add_mana, 10);
+            add_move = rand_number(0, 2);
+        }
+
+        CLASS_CLERIC => {
+            add_hp += rand_number(5, 10) as i16;
+            add_mana = rand_number(ch.get_level() as u32, (3 * ch.get_level() / 2) as u32);
+            add_mana = min(add_mana, 10);
+            add_move = rand_number(0, 2);
+        }
+
+        CLASS_THIEF => {
+            add_hp += rand_number(7, 13) as i16;
+            add_mana = 0;
+            add_move = rand_number(1, 3);
+        }
+
+        CLASS_WARRIOR => {
+            add_hp += rand_number(10, 15) as i16;
+            add_mana = 0;
+            add_move = rand_number(1, 3);
+        }
+        _ => {}
+    }
+
+    ch.incr_max_hit(max(1, add_hp));
+    ch.incr_max_move(max(1, add_move) as i16);
+
+    if ch.get_level() > 1 {
+        ch.incr_max_mana(add_mana as i16);
+    }
+
+    if ch.is_magic_user() || ch.is_cleric() {
+        ch.incr_practices(max(2, WIS_APP[ch.get_wis() as usize].bonus) as i32);
+    } else {
+        ch.incr_practices(min(2, max(1, WIS_APP[ch.get_wis() as usize].bonus)) as i32);
+    }
+
+    if ch.get_level() >= LVL_IMMORT as u8 {
+        for i in 0..3 {
+            ch.set_cond(i, -1);
+        }
+        ch.set_prf_flags_bits(PRF_HOLYLIGHT);
+    }
+
+    //snoop_check(ch);
+    db.save_char(ch);
+}
 
 /*
  * This simply calculates the backstab multiplier based on a character's
@@ -1834,292 +1854,499 @@ pub fn parse_class(arg: char) -> i8 {
 /*
  * Default titles of male characters.
  */
-// const char *title_male(int chclass, int level)
-// {
-// if (level <= 0 || level > LVL_IMPL)
-// return "the Man";
-// if (level == LVL_IMPL)
-// return "the Implementor";
-//
-// switch (chclass) {
-//
-// case CLASS_MAGIC_USER:
-// switch (level) {
-// case  1: return "the Apprentice of Magic";
-// case  2: return "the Spell Student";
-// case  3: return "the Scholar of Magic";
-// case  4: return "the Delver in Spells";
-// case  5: return "the Medium of Magic";
-// case  6: return "the Scribe of Magic";
-// case  7: return "the Seer";
-// case  8: return "the Sage";
-// case  9: return "the Illusionist";
-// case 10: return "the Abjurer";
-// case 11: return "the Invoker";
-// case 12: return "the Enchanter";
-// case 13: return "the Conjurer";
-// case 14: return "the Magician";
-// case 15: return "the Creator";
-// case 16: return "the Savant";
-// case 17: return "the Magus";
-// case 18: return "the Wizard";
-// case 19: return "the Warlock";
-// case 20: return "the Sorcerer";
-// case 21: return "the Necromancer";
-// case 22: return "the Thaumaturge";
-// case 23: return "the Student of the Occult";
-// case 24: return "the Disciple of the Uncanny";
-// case 25: return "the Minor Elemental";
-// case 26: return "the Greater Elemental";
-// case 27: return "the Crafter of Magics";
-// case 28: return "the Shaman";
-// case 29: return "the Keeper of Talismans";
-// case 30: return "the Archmage";
-// case LVL_IMMORT: return "the Immortal Warlock";
-// case LVL_GOD: return "the Avatar of Magic";
-// case LVL_GRGOD: return "the God of Magic";
-// default: return "the Mage";
-// }
-// break;
-//
-// case CLASS_CLERIC:
-// switch (level) {
-// case  1: return "the Believer";
-// case  2: return "the Attendant";
-// case  3: return "the Acolyte";
-// case  4: return "the Novice";
-// case  5: return "the Missionary";
-// case  6: return "the Adept";
-// case  7: return "the Deacon";
-// case  8: return "the Vicar";
-// case  9: return "the Priest";
-// case 10: return "the Minister";
-// case 11: return "the Canon";
-// case 12: return "the Levite";
-// case 13: return "the Curate";
-// case 14: return "the Monk";
-// case 15: return "the Healer";
-// case 16: return "the Chaplain";
-// case 17: return "the Expositor";
-// case 18: return "the Bishop";
-// case 19: return "the Arch Bishop";
-// case 20: return "the Patriarch";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Cardinal";
-// case LVL_GOD: return "the Inquisitor";
-// case LVL_GRGOD: return "the God of good and evil";
-// default: return "the Cleric";
-// }
-// break;
-//
-// case CLASS_THIEF:
-// switch (level) {
-// case  1: return "the Pilferer";
-// case  2: return "the Footpad";
-// case  3: return "the Filcher";
-// case  4: return "the Pick-Pocket";
-// case  5: return "the Sneak";
-// case  6: return "the Pincher";
-// case  7: return "the Cut-Purse";
-// case  8: return "the Snatcher";
-// case  9: return "the Sharper";
-// case 10: return "the Rogue";
-// case 11: return "the Robber";
-// case 12: return "the Magsman";
-// case 13: return "the Highwayman";
-// case 14: return "the Burglar";
-// case 15: return "the Thief";
-// case 16: return "the Knifer";
-// case 17: return "the Quick-Blade";
-// case 18: return "the Killer";
-// case 19: return "the Brigand";
-// case 20: return "the Cut-Throat";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Assasin";
-// case LVL_GOD: return "the Demi God of thieves";
-// case LVL_GRGOD: return "the God of thieves and tradesmen";
-// default: return "the Thief";
-// }
-// break;
-//
-// case CLASS_WARRIOR:
-// switch(level) {
-// case  1: return "the Swordpupil";
-// case  2: return "the Recruit";
-// case  3: return "the Sentry";
-// case  4: return "the Fighter";
-// case  5: return "the Soldier";
-// case  6: return "the Warrior";
-// case  7: return "the Veteran";
-// case  8: return "the Swordsman";
-// case  9: return "the Fencer";
-// case 10: return "the Combatant";
-// case 11: return "the Hero";
-// case 12: return "the Myrmidon";
-// case 13: return "the Swashbuckler";
-// case 14: return "the Mercenary";
-// case 15: return "the Swordmaster";
-// case 16: return "the Lieutenant";
-// case 17: return "the Champion";
-// case 18: return "the Dragoon";
-// case 19: return "the Cavalier";
-// case 20: return "the Knight";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Warlord";
-// case LVL_GOD: return "the Extirpator";
-// case LVL_GRGOD: return "the God of war";
-// default: return "the Warrior";
-// }
-// break;
-// }
-//
-// /* Default title for classes which do not have titles defined */
-// return "the Classless";
-// }
+pub fn title_male(chclass: i32, level: i32) -> &'static str {
+    if level <= 0 || level > LVL_IMPL as i32 {
+        return "the Man";
+    }
+    if level == LVL_IMPL as i32 {
+        return "the Implementor";
+    }
+
+    return match chclass as i8 {
+        CLASS_MAGIC_USER => match level as i16 {
+            1 => "the Apprentice of Magic",
+            2 => "the Spell Student",
+            3 => "the Scholar of Magic",
+            4 => "the Delver in Spells",
+            5 => "the Medium of Magic",
+            6 => "the Scribe of Magic",
+            7 => "the Seer",
+            8 => "the Sage",
+            9 => "the Illusionist",
+            10 => "the Abjurer",
+            11 => "the Invoker",
+            12 => "the Enchanter",
+            13 => "the Conjurer",
+            14 => "the Magician",
+            15 => "the Creator",
+            16 => "the Savant",
+            17 => "the Magus",
+            18 => "the Wizard",
+            19 => "the Warlock",
+            20 => "the Sorcerer",
+            21 => "the Necromancer",
+            22 => "the Thaumaturge",
+            23 => "the Student of the Occult",
+            24 => "the Disciple of the Uncanny",
+            25 => "the minor Elemental",
+            26 => "the Greater Elemental",
+            27 => "the Crafter of Magics",
+            28 => "the Shaman",
+            29 => "the Keeper of Talismans",
+            30 => "the Archmage",
+            LVL_IMMORT => "the Immortal Warlock",
+            LVL_GOD => "the Avatar of Magic",
+            LVL_GRGOD => "the God of Magic",
+            _ => "the Mage",
+        },
+        CLASS_CLERIC => {
+            match level as i16 {
+                1 => "the Believer",
+                2 => "the Attendant",
+                3 => "the Acolyte",
+                4 => "the Novice",
+                5 => "the Missionary",
+                6 => "the Adept",
+                7 => "the Deacon",
+                8 => "the Vicar",
+                9 => "the Priest",
+                10 => "the minister",
+                11 => "the Canon",
+                12 => "the Levite",
+                13 => "the Curate",
+                14 => "the Monk",
+                15 => "the Healer",
+                16 => "the Chaplain",
+                17 => "the Expositor",
+                18 => "the Bishop",
+                19 => "the Arch Bishop",
+                20 => "the Patriarch",
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => "the Immortal Cardinal",
+                LVL_GOD => "the Inquisitor",
+                LVL_GRGOD => "the God of good and evil",
+                _ => "the Cleric",
+            }
+        }
+
+        CLASS_THIEF => {
+            match level as i16 {
+                1 => "the Pilferer",
+                2 => "the Footpad",
+                3 => "the Filcher",
+                4 => "the Pick-Pocket",
+                5 => "the Sneak",
+                6 => "the Pincher",
+                7 => "the Cut-Purse",
+                8 => "the Snatcher",
+                9 => "the Sharper",
+                10 => "the Rogue",
+                11 => "the Robber",
+                12 => "the Magsman",
+                13 => "the Highwayman",
+                14 => "the Burglar",
+                15 => "the Thief",
+                16 => "the Knifer",
+                17 => "the Quick-Blade",
+                18 => "the Killer",
+                19 => "the Brigand",
+                20 => "the Cut-Throat",
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => "the Immortal Assasin",
+                LVL_GOD => "the Demi God of thieves",
+                LVL_GRGOD => "the God of thieves and tradesmen",
+                _ => "the Thief",
+            }
+        }
+
+        CLASS_WARRIOR => {
+            match level as i16 {
+                1 => "the Swordpupil",
+                2 => "the Recruit",
+                3 => "the Sentry",
+                4 => "the Fighter",
+                5 => "the Soldier",
+                6 => "the Warrior",
+                7 => "the Veteran",
+                8 => "the Swordsman",
+                9 => "the Fencer",
+                10 => "the Combatant",
+                11 => "the Hero",
+                12 => "the Myrmidon",
+                13 => "the Swashbuckler",
+                14 => "the Mercenary",
+                15 => "the Swordmaster",
+                16 => "the Lieutenant",
+                17 => "the Champion",
+                18 => "the Dragoon",
+                19 => "the Cavalier",
+                20 => "the Knight",
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => "the Immortal Warlord",
+                LVL_GOD => "the Extirpator",
+                LVL_GRGOD => "the God of war",
+                _ => "the Warrior",
+            }
+        }
+        _ => {
+            /* Default title for classes which do not have titles defined */
+            "the Classless"
+        }
+    };
+}
 
 /*
  * Default titles of female characters.
  */
-// const char *title_female(int chclass, int level)
-// {
-// if (level <= 0 || level > LVL_IMPL)
-// return "the Woman";
-// if (level == LVL_IMPL)
-// return "the Implementress";
-//
-// switch (chclass) {
-//
-// case CLASS_MAGIC_USER:
-// switch (level) {
-// case  1: return "the Apprentice of Magic";
-// case  2: return "the Spell Student";
-// case  3: return "the Scholar of Magic";
-// case  4: return "the Delveress in Spells";
-// case  5: return "the Medium of Magic";
-// case  6: return "the Scribess of Magic";
-// case  7: return "the Seeress";
-// case  8: return "the Sage";
-// case  9: return "the Illusionist";
-// case 10: return "the Abjuress";
-// case 11: return "the Invoker";
-// case 12: return "the Enchantress";
-// case 13: return "the Conjuress";
-// case 14: return "the Witch";
-// case 15: return "the Creator";
-// case 16: return "the Savant";
-// case 17: return "the Craftess";
-// case 18: return "the Wizard";
-// case 19: return "the War Witch";
-// case 20: return "the Sorceress";
-// case 21: return "the Necromancress";
-// case 22: return "the Thaumaturgess";
-// case 23: return "the Student of the Occult";
-// case 24: return "the Disciple of the Uncanny";
-// case 25: return "the Minor Elementress";
-// case 26: return "the Greater Elementress";
-// case 27: return "the Crafter of Magics";
-// case 28: return "Shaman";
-// case 29: return "the Keeper of Talismans";
-// case 30: return "Archwitch";
-// case LVL_IMMORT: return "the Immortal Enchantress";
-// case LVL_GOD: return "the Empress of Magic";
-// case LVL_GRGOD: return "the Goddess of Magic";
-// default: return "the Witch";
-// }
-// break;
-//
-// case CLASS_CLERIC:
-// switch (level) {
-// case  1: return "the Believer";
-// case  2: return "the Attendant";
-// case  3: return "the Acolyte";
-// case  4: return "the Novice";
-// case  5: return "the Missionary";
-// case  6: return "the Adept";
-// case  7: return "the Deaconess";
-// case  8: return "the Vicaress";
-// case  9: return "the Priestess";
-// case 10: return "the Lady Minister";
-// case 11: return "the Canon";
-// case 12: return "the Levitess";
-// case 13: return "the Curess";
-// case 14: return "the Nunne";
-// case 15: return "the Healess";
-// case 16: return "the Chaplain";
-// case 17: return "the Expositress";
-// case 18: return "the Bishop";
-// case 19: return "the Arch Lady of the Church";
-// case 20: return "the Matriarch";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Priestess";
-// case LVL_GOD: return "the Inquisitress";
-// case LVL_GRGOD: return "the Goddess of good and evil";
-// default: return "the Cleric";
-// }
-// break;
-//
-// case CLASS_THIEF:
-// switch (level) {
-// case  1: return "the Pilferess";
-// case  2: return "the Footpad";
-// case  3: return "the Filcheress";
-// case  4: return "the Pick-Pocket";
-// case  5: return "the Sneak";
-// case  6: return "the Pincheress";
-// case  7: return "the Cut-Purse";
-// case  8: return "the Snatcheress";
-// case  9: return "the Sharpress";
-// case 10: return "the Rogue";
-// case 11: return "the Robber";
-// case 12: return "the Magswoman";
-// case 13: return "the Highwaywoman";
-// case 14: return "the Burglaress";
-// case 15: return "the Thief";
-// case 16: return "the Knifer";
-// case 17: return "the Quick-Blade";
-// case 18: return "the Murderess";
-// case 19: return "the Brigand";
-// case 20: return "the Cut-Throat";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Assasin";
-// case LVL_GOD: return "the Demi Goddess of thieves";
-// case LVL_GRGOD: return "the Goddess of thieves and tradesmen";
-// default: return "the Thief";
-// }
-// break;
-//
-// case CLASS_WARRIOR:
-// switch(level) {
-// case  1: return "the Swordpupil";
-// case  2: return "the Recruit";
-// case  3: return "the Sentress";
-// case  4: return "the Fighter";
-// case  5: return "the Soldier";
-// case  6: return "the Warrior";
-// case  7: return "the Veteran";
-// case  8: return "the Swordswoman";
-// case  9: return "the Fenceress";
-// case 10: return "the Combatess";
-// case 11: return "the Heroine";
-// case 12: return "the Myrmidon";
-// case 13: return "the Swashbuckleress";
-// case 14: return "the Mercenaress";
-// case 15: return "the Swordmistress";
-// case 16: return "the Lieutenant";
-// case 17: return "the Lady Champion";
-// case 18: return "the Lady Dragoon";
-// case 19: return "the Cavalier";
-// case 20: return "the Lady Knight";
-// /* no one ever thought up these titles 21-30 */
-// case LVL_IMMORT: return "the Immortal Lady of War";
-// case LVL_GOD: return "the Queen of Destruction";
-// case LVL_GRGOD: return "the Goddess of war";
-// default: return "the Warrior";
-// }
-// break;
-// }
-//
-// /* Default title for classes which do not have titles defined */
-// return "the Classless";
-// }
-//
+pub fn title_female(chclass: i32, level: i32) -> &'static str {
+    if level <= 0 || level > LVL_IMPL as i32 {
+        return "the Woman";
+    }
+    if level == LVL_IMPL as i32 {
+        return "the Implementress";
+    }
+
+    match chclass as i8 {
+        CLASS_MAGIC_USER => match level as i16 {
+            1 => {
+                return "the Apprentice of Magic";
+            }
+            2 => {
+                return "the Spell Student";
+            }
+            3 => {
+                return "the Scholar of Magic";
+            }
+            4 => {
+                return "the Delveress in Spells";
+            }
+            5 => {
+                return "the Medium of Magic";
+            }
+            6 => {
+                return "the Scribess of Magic";
+            }
+            7 => {
+                return "the Seeress";
+            }
+            8 => {
+                return "the Sage";
+            }
+            9 => {
+                return "the Illusionist";
+            }
+            10 => {
+                return "the Abjuress";
+            }
+            11 => {
+                return "the Invoker";
+            }
+            12 => {
+                return "the Enchantress";
+            }
+            13 => {
+                return "the Conjuress";
+            }
+            14 => {
+                return "the Witch";
+            }
+            15 => {
+                return "the Creator";
+            }
+            16 => {
+                return "the Savant";
+            }
+            17 => {
+                return "the Craftess";
+            }
+            18 => {
+                return "the Wizard";
+            }
+            19 => {
+                return "the War Witch";
+            }
+            20 => {
+                return "the Sorceress";
+            }
+            21 => {
+                return "the Necromancress";
+            }
+            22 => {
+                return "the Thaumaturgess";
+            }
+            23 => {
+                return "the Student of the Occult";
+            }
+            24 => {
+                return "the Disciple of the Uncanny";
+            }
+            25 => {
+                return "the minor Elementress";
+            }
+            26 => {
+                return "the Greater Elementress";
+            }
+            27 => {
+                return "the Crafter of Magics";
+            }
+            28 => {
+                return "Shaman";
+            }
+            29 => {
+                return "the Keeper of Talismans";
+            }
+            30 => {
+                return "Archwitch";
+            }
+            LVL_IMMORT => {
+                return "the Immortal Enchantress";
+            }
+            LVL_GOD => {
+                return "the Empress of Magic";
+            }
+            LVL_GRGOD => {
+                return "the Goddess of Magic";
+            }
+            _ => {
+                return "the Witch";
+            }
+        },
+
+        CLASS_CLERIC => {
+            match level as i16 {
+                1 => {
+                    return "the Believer";
+                }
+                2 => {
+                    return "the Attendant";
+                }
+                3 => {
+                    return "the Acolyte";
+                }
+                4 => {
+                    return "the Novice";
+                }
+                5 => {
+                    return "the Missionary";
+                }
+                6 => {
+                    return "the Adept";
+                }
+                7 => {
+                    return "the Deaconess";
+                }
+                8 => {
+                    return "the Vicaress";
+                }
+                9 => {
+                    return "the Priestess";
+                }
+                10 => {
+                    return "the Lady minister";
+                }
+                11 => {
+                    return "the Canon";
+                }
+                12 => {
+                    return "the Levitess";
+                }
+                13 => {
+                    return "the Curess";
+                }
+                14 => {
+                    return "the Nunne";
+                }
+                15 => {
+                    return "the Healess";
+                }
+                16 => {
+                    return "the Chaplain";
+                }
+                17 => {
+                    return "the Expositress";
+                }
+                18 => {
+                    return "the Bishop";
+                }
+                19 => {
+                    return "the Arch Lady of the Church";
+                }
+                20 => {
+                    return "the Matriarch";
+                }
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => {
+                    return "the Immortal Priestess";
+                }
+                LVL_GOD => {
+                    return "the Inquisitress";
+                }
+                LVL_GRGOD => {
+                    return "the Goddess of good and evil";
+                }
+                _ => {
+                    return "the Cleric";
+                }
+            }
+        }
+        CLASS_THIEF => {
+            match level as i16 {
+                1 => {
+                    return "the Pilferess";
+                }
+                2 => {
+                    return "the Footpad";
+                }
+                3 => {
+                    return "the Filcheress";
+                }
+                4 => {
+                    return "the Pick-Pocket";
+                }
+                5 => {
+                    return "the Sneak";
+                }
+                6 => {
+                    return "the Pincheress";
+                }
+                7 => {
+                    return "the Cut-Purse";
+                }
+                8 => {
+                    return "the Snatcheress";
+                }
+                9 => {
+                    return "the Sharpress";
+                }
+                10 => {
+                    return "the Rogue";
+                }
+                11 => {
+                    return "the Robber";
+                }
+                12 => {
+                    return "the Magswoman";
+                }
+                13 => {
+                    return "the Highwaywoman";
+                }
+                14 => {
+                    return "the Burglaress";
+                }
+                15 => {
+                    return "the Thief";
+                }
+                16 => {
+                    return "the Knifer";
+                }
+                17 => {
+                    return "the Quick-Blade";
+                }
+                18 => {
+                    return "the Murderess";
+                }
+                19 => {
+                    return "the Brigand";
+                }
+                20 => {
+                    return "the Cut-Throat";
+                }
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => {
+                    return "the Immortal Assasin";
+                }
+                LVL_GOD => {
+                    return "the Demi Goddess of thieves";
+                }
+                LVL_GRGOD => {
+                    return "the Goddess of thieves and tradesmen";
+                }
+                _ => {
+                    return "the Thief";
+                }
+            }
+        }
+
+        CLASS_WARRIOR => {
+            match level as i16 {
+                1 => {
+                    return "the Swordpupil";
+                }
+                2 => {
+                    return "the Recruit";
+                }
+                3 => {
+                    return "the Sentress";
+                }
+                4 => {
+                    return "the Fighter";
+                }
+                5 => {
+                    return "the Soldier";
+                }
+                6 => {
+                    return "the Warrior";
+                }
+                7 => {
+                    return "the Veteran";
+                }
+                8 => {
+                    return "the Swordswoman";
+                }
+                9 => {
+                    return "the Fenceress";
+                }
+                10 => {
+                    return "the Combatess";
+                }
+                11 => {
+                    return "the Heroine";
+                }
+                12 => {
+                    return "the Myrmidon";
+                }
+                13 => {
+                    return "the Swashbuckleress";
+                }
+                14 => {
+                    return "the Mercenaress";
+                }
+                15 => {
+                    return "the Swordmistress";
+                }
+                16 => {
+                    return "the Lieutenant";
+                }
+                17 => {
+                    return "the Lady Champion";
+                }
+                18 => {
+                    return "the Lady Dragoon";
+                }
+                19 => {
+                    return "the Cavalier";
+                }
+                20 => {
+                    return "the Lady Knight";
+                }
+                /* no one ever thought up these titles 21-30 */
+                LVL_IMMORT => {
+                    return "the Immortal Lady of War";
+                }
+                LVL_GOD => {
+                    return "the Queen of Destruction";
+                }
+                LVL_GRGOD => {
+                    return "the Goddess of war";
+                }
+                _ => {
+                    return "the Warrior";
+                }
+            }
+        }
+        _ => {
+            /* Default title for classes which do not have titles defined */
+            return "the Classless";
+        }
+    }
+}

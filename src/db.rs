@@ -7,26 +7,34 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
+use regex::Regex;
 
 use crate::modify::paginate_string;
-use crate::structs::{CharData, CharFileU, LVL_IMPL, MAX_SKILLS, MAX_TONGUE, NOWHERE, SEX_MALE};
-use crate::util::{prune_crlf, rand_number, touch};
-use crate::{
-    aff_flags, check_player_special, get_ac, get_cond, get_exp, get_height, get_hit, get_home,
-    get_idnum, get_level, get_loadroom, get_max_hit, get_max_mana, get_max_move, get_move,
-    get_name, get_pc_name, get_save, get_sex, get_talk, get_weight, is_npc, is_set, mob_flags,
-    MainGlobals, MOB_ISNPC,
+use crate::structs::{
+    obj_vnum, room_rnum, room_vnum, zone_rnum, zone_vnum, AffectedType, CharAbilityData, CharData,
+    CharFileU, CharPointData, CharSpecialDataSaved, ExtraDescrData, PlayerSpecialDataSaved,
+    RoomData, RoomDirectionData, AFF_POISON, EX_ISDOOR, EX_PICKPROOF, HOST_LENGTH, LVL_IMPL,
+    MAX_AFFECT, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, NOBODY,
+    NOWHERE, NUM_OF_DIRS, POS_STANDING, SEX_MALE,
 };
+use crate::util::{get_line, prune_crlf, rand_number, time_now, touch, SECS_PER_REAL_HOUR};
+use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 use log::{error, info, warn};
+use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
-use std::fs::File;
-use std::io::{ErrorKind, Seek, SeekFrom};
+use std::cmp::min;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
+use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::rc::Rc;
-use std::{fs, io, mem, slice};
+use std::{fs, io, mem, process, slice};
 
 pub const KILLSCRIPT: &str = "./.killscript";
+const BACKGROUND_FILE: &str = "text/background";
 const GREETINGS_FILE: &str = "text/greetings";
+const IMOTD_FILE: &str = "text/imotd";
+const MOTD_FILE: &str = "text/motd";
 const PLAYER_FILE: &str = "etc/players";
 
 struct PlayerIndexElement {
@@ -34,13 +42,13 @@ struct PlayerIndexElement {
     id: i64,
 }
 
-pub struct DB<'a> {
-    pub(crate) globals: Option<Rc<RefCell<MainGlobals<'a>>>>,
-    // struct room_data *world = NULL;	/* array of rooms		 */
-    // room_rnum top_of_world = 0;	/* ref to top element of world	 */
-    //
-    // struct char_data *character_list = NULL;	/* global linked list of
-    // 						 * chars	 */
+pub struct DB {
+    //   pub globals: &'a MainGlobals,
+    pub world: RefCell<Vec<Rc<RoomData>>>,
+    pub top_of_world: RefCell<room_rnum>,
+    /* ref to top element of world	 */
+    pub character_list: RefCell<Vec<Rc<CharData>>>,
+    /* global linked list of * chars	 */
     // struct index_data *mob_index;	/* index table for mobile file	 */
     // struct char_data *mob_proto;	/* prototypes for mobs		 */
     // mob_rnum top_of_mobt = 0;	/* top of mobile index table	 */
@@ -49,37 +57,47 @@ pub struct DB<'a> {
     // struct index_data *obj_index;	/* index table for object file	 */
     // struct obj_data *obj_proto;	/* prototypes for objs		 */
     // obj_rnum top_of_objt = 0;	/* top of object index table	 */
-    //
-    // struct zone_data *zone_table;	/* zone table			 */
-    // zone_rnum top_of_zone_table = 0;/* top element of zone tab	 */
+    zone_table: RefCell<Vec<ZoneData>>,
+    /* zone table			 */
+    top_of_zone_table: RefCell<zone_rnum>,
+    /* top element of zone tab	 */
     // struct message_list fight_messages[MAX_MESSAGES];	/* fighting messages	 */
     //
-    player_table: Vec<PlayerIndexElement>,
+    player_table: RefCell<Vec<PlayerIndexElement>>,
     /* index to plr file	 */
-    player_fl: Option<RefCell<File>>, /* file desc of player file	 */
-    top_of_p_table: i32,              /* ref to top of table		 */
-    top_idnum: i32,                   /* highest idnum in use		 */
+    player_fl: RefCell<Option<File>>,
+    /* file desc of player file	 */
+    top_of_p_table: RefCell<i32>,
+    /* ref to top of table		 */
+    top_idnum: RefCell<i32>,
+    /* highest idnum in use		 */
     //
     // int no_mail = 0;		/* mail disabled?		 */
     // int mini_mud = 0;		/* mini-mud mode?		 */
     // int no_rent_check = 0;		/* skip rent check on boot?	 */
     // time_t boot_time = 0;		/* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
-    // room_rnum r_mortal_start_room;	/* rnum of mortal start room	 */
-    // room_rnum r_immort_start_room;	/* rnum of immort start room	 */
-    // room_rnum r_frozen_start_room;	/* rnum of frozen start room	 */
+    pub r_mortal_start_room: RefCell<room_rnum>,
+    /* rnum of mortal start room	 */
+    pub r_immort_start_room: RefCell<room_rnum>,
+    /* rnum of immort start room	 */
+    pub r_frozen_start_room: RefCell<room_rnum>,
+    /* rnum of frozen start room	 */
     //
     // char *credits = NULL;		/* game credits			 */
     // char *news = NULL;		/* mud news			 */
-    // char *motd = NULL;		/* message of the day - mortals */
-    // char *imotd = NULL;		/* message of the day - immorts */
+    pub motd: String,
+    /* message of the day - mortals */
+    pub imotd: String,
+    /* message of the day - immorts */
     pub greetings: RefCell<String>,
     /* opening credits screen	*/
     // char *help = NULL;		/* help screen			 */
     // char *info = NULL;		/* info page			 */
     // char *wizlist = NULL;		/* list of higher gods		 */
     // char *immlist = NULL;		/* list of peon gods		 */
-    // char *background = NULL;	/* background story		 */
+    pub background: String,
+    /* background story		 */
     // char *handbook = NULL;		/* handbook for new immortals	 */
     // char *policies = NULL;		/* policies page		 */
     //
@@ -92,47 +110,62 @@ pub struct DB<'a> {
     // struct reset_q_type reset_q;	/* queue of zones to be reset	 */
 }
 
-// /* local functions */
-// int check_bitvector_names(bitvector_t bits, size_t namecount, const char *whatami, const char *whatbits);
-// int check_object_spell_number(struct obj_data *obj, int val);
-// int check_object_level(struct obj_data *obj, int val);
-// void setup_dir(FILE *fl, int room, int dir);
-// void index_boot(int mode);
-// void discrete_load(FILE *fl, int mode, char *filename);
-// int check_object(struct obj_data *);
-// void parse_room(FILE *fl, int virtual_nr);
-// void parse_mobile(FILE *mob_f, int nr);
-// char *parse_object(FILE *obj_f, int nr);
-// void load_zones(FILE *fl, char *zonename);
-// void load_help(FILE *fl);
-// void assign_mobiles(void);
-// void assign_objects(void);
-// void assign_rooms(void);
-// void assign_the_shopkeepers(void);
-// void build_player_index(void);
-// int is_empty(zone_rnum zone_nr);
-// void reset_zone(zone_rnum zone);
-// int file_to_string(const char *name, char *buf);
-// int file_to_string_alloc(const char *name, char **buf);
-// void reboot_wizlists(void);
-// ACMD(do_reboot);
-// void boot_world(void);
-// int count_alias_records(FILE *fl);
-// int count_hash_records(FILE *fl);
-// bitvector_t asciiflag_conv(char *flag);
-// void parse_simple_mob(FILE *mob_f, int i, int nr);
-// void interpret_espec(const char *keyword, const char *value, int i, int nr);
-// void parse_espec(char *buf, int i, int nr);
-// void parse_enhanced_mob(FILE *mob_f, int i, int nr);
-// void get_one_line(FILE *fl, char *buf);
-// void save_etext(struct char_data *ch);
-// void check_start_rooms(void);
-// void renum_world(void);
-// void renum_zone_table(void);
-// void log_zone_error(zone_rnum zone, int cmd_no, const char *message);
-// void reset_time(void);
-// long get_ptable_by_name(const char *name);
-//
+const REAL: i32 = 0;
+const VIRTUAL: i32 = 1;
+
+/* structure for the reset commands */
+pub struct ResetCom {
+    pub command: char,
+    /* current command                      */
+    pub if_flag: bool,
+    /* if TRUE: exe only if preceding exe'd */
+    pub arg1: i32,
+    /*                                      */
+    pub arg2: i32,
+    /* Arguments to the command             */
+    pub arg3: i32,
+    /*                                      */
+    pub line: i32,
+    /* line number this command appears on  */
+
+    /*
+     *  Commands:              *
+     *  'M': Read a mobile     *
+     *  'O': Read an object    *
+     *  'G': Give obj to mob   *
+     *  'P': Put obj in obj    *
+     *  'G': Obj to char       *
+     *  'E': Obj to char equip *
+     *  'D': Set state of door *
+    */
+}
+
+/* zone definition structure. for the 'zone-table'   */
+pub struct ZoneData {
+    pub name: String,
+    /* name of this zone                  */
+    pub lifespan: i32,
+    /* how long between resets (minutes)  */
+    pub age: i32,
+    /* current age of this zone (minutes) */
+    pub bot: room_vnum,
+    /* starting room number for this zone */
+    pub top: room_vnum,
+    /* upper limit for rooms in this zone */
+    pub reset_mode: i32,
+    /* conditions for reset (see below)   */
+    pub number: zone_vnum,
+    /* virtual number of this zone	  */
+    pub cmd: Vec<ResetCom>,
+    /* command table for reset	          */
+
+    /*
+     * Reset mode:
+     *   0: Don't reset, and don't update age.
+     *   1: Reset if no PC's are located in zone.
+     *   2: Just reset.
+     */
+}
 // /* external functions */
 // void paginate_string(char *str, struct descriptor_data *d);
 // struct time_info_data *mud_time_passed(time_t t2, time_t t1);
@@ -154,9 +187,9 @@ pub struct DB<'a> {
 // /* external vars */
 // extern int no_specials;
 // extern int scheck;
-// extern room_vnum mortal_start_room;
-// extern room_vnum immort_start_room;
-// extern room_vnum frozen_start_room;
+// extern room_vnum MORTAL_START_ROOM;
+// extern room_vnum IMMORT_START_ROOM;
+// extern room_vnum FROZEN_START_ROOM;
 // extern struct descriptor_data *descriptor_list;
 // extern const char *unused_spellname;	/* spell_parser.c */
 //
@@ -251,38 +284,37 @@ pub struct DB<'a> {
 //
 // send_to_char(ch, "%s", OK);
 // }
-//
-//
-// void boot_world(void)
-// {
-// log("Loading zone table.");
-// index_boot(DB_BOOT_ZON);
-//
-// log("Loading rooms.");
-// index_boot(DB_BOOT_WLD);
-//
-// log("Renumbering rooms.");
-// renum_world();
-//
-// log("Checking start rooms.");
-// check_start_rooms();
-//
-// log("Loading mobs and generating index.");
-// index_boot(DB_BOOT_MOB);
-//
-// log("Loading objs and generating index.");
-// index_boot(DB_BOOT_OBJ);
-//
-// log("Renumbering zone table.");
-// renum_zone_table();
-//
-// if (!no_specials) {
-// log("Loading shops.");
-// index_boot(DB_BOOT_SHP);
-// }
-// }
-//
-//
+
+impl DB {
+    fn boot_world(&mut self) {
+        info!("Loading zone table.");
+        self.index_boot(DB_BOOT_ZON);
+
+        info!("Loading rooms.");
+        self.index_boot(DB_BOOT_WLD);
+
+        info!("Renumbering rooms.");
+        self.renum_world();
+
+        info!("Checking start rooms.");
+        self.check_start_rooms();
+
+        // log("Loading mobs and generating index.");
+        // index_boot(DB_BOOT_MOB);
+        //
+        // log("Loading objs and generating index.");
+        // index_boot(DB_BOOT_OBJ);
+
+        info!("Renumbering zone table.");
+        self.renum_zone_table();
+
+        // if (!no_specials) {
+        //     log("Loading shops.");
+        //     index_boot(DB_BOOT_SHP);
+        // }
+    }
+}
+
 // void free_extra_descriptions(struct extra_descr_data *edesc)
 // {
 // struct extra_descr_data *enext;
@@ -388,14 +420,25 @@ pub struct DB<'a> {
 //
 //
 /* body of the booting system */
-pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
+pub fn boot_db<'a>(main_globals: &'a MainGlobals) -> DB {
     let mut ret = DB {
-        globals: Some(main_globals.clone()),
-        player_table: vec![],
-        player_fl: None,
-        top_of_p_table: 0,
-        top_idnum: 0,
+        //   globals: Some(main_globals.clone()),
+        world: RefCell::new(vec![]),
+        top_of_world: RefCell::new(0),
+        character_list: RefCell::new(vec![]),
+        zone_table: RefCell::new(vec![]),
+        top_of_zone_table: RefCell::new(0),
+        player_table: RefCell::new(vec![]),
+        player_fl: RefCell::new(None),
+        top_of_p_table: RefCell::new(0),
+        top_idnum: RefCell::new(0),
+        r_mortal_start_room: RefCell::new(0),
+        r_immort_start_room: RefCell::new(0),
+        r_frozen_start_room: RefCell::new(0),
+        motd: "MOTD placeholder".to_string(),
+        imotd: "IMOTD placeholder".to_string(),
         greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
+        background: "BACKGROUND placeholder".to_string(),
     };
     // zone_rnum i;
     //
@@ -407,28 +450,23 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
     info!("Reading news, credits, help, bground, info & motds.");
     // file_to_string_alloc(NEWS_FILE, &news);
     // file_to_string_alloc(CREDITS_FILE, &credits);
-    // file_to_string_alloc(MOTD_FILE, &motd);
-    // file_to_string_alloc(IMOTD_FILE, &imotd);
+    main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
+    main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
     // file_to_string_alloc(HELP_PAGE_FILE, &help);
     // file_to_string_alloc(INFO_FILE, &info);
     // file_to_string_alloc(WIZLIST_FILE, &wizlist);
     // file_to_string_alloc(IMMLIST_FILE, &immlist);
     // file_to_string_alloc(POLICIES_FILE, &policies);
     // file_to_string_alloc(HANDBOOK_FILE, &handbook);
-    // file_to_string_alloc(BACKGROUND_FILE, &background);
-    if file_to_string_alloc(
-        main_globals,
-        GREETINGS_FILE,
-        &mut ret.greetings.borrow_mut(),
-    ) == 0
-    {
+    main_globals.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
+    if main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings.borrow_mut()) == 0 {
         prune_crlf(&mut ret.greetings.borrow_mut());
     }
     //
     // log("Loading spell definitions.");
     // mag_assign_spells();
     //
-    // boot_world();
+    ret.boot_world();
     //
     // log("Loading help entries.");
     // index_boot(DB_BOOT_HLP);
@@ -580,7 +618,7 @@ pub(crate) fn boot_db(main_globals: Rc<RefCell<MainGlobals>>) -> DB {
 // top_of_p_table = 0;
 // }
 
-impl DB<'_> {
+impl DB {
     /* generate index table for the player file */
     fn build_player_index<'a>(&mut self) {
         let mut nr = -1;
@@ -589,14 +627,13 @@ impl DB<'_> {
         // struct char_file_u
         // dummy;
 
-        let mut player_file: File;
-        let mut r = File::open(PLAYER_FILE);
+        let player_file: File;
+        let r = OpenOptions::new().write(true).read(true).open(PLAYER_FILE);
         if r.is_err() {
             let err = r.err().unwrap();
             if err.kind() != ErrorKind::NotFound {
                 error!("SYSERR: fatal error opening playerfile: {}", err);
-                // TODO exit(1)
-                return;
+                process::exit(1);
             } else {
                 info!("No playerfile.  Creating a new one.");
                 touch(Path::new(PLAYER_FILE)).expect("SYSERR: fatal error creating playerfile");
@@ -607,9 +644,10 @@ impl DB<'_> {
             player_file = r.unwrap();
         }
 
-        self.player_fl = Some(RefCell::new(player_file));
+        *self.player_fl.borrow_mut() = Some(player_file);
 
-        let mut file_mut = RefCell::borrow_mut(&self.player_fl.as_ref().unwrap());
+        let mut t = self.player_fl.borrow_mut();
+        let mut file_mut = t.as_mut().unwrap();
         let size = file_mut
             .seek(SeekFrom::End(0))
             .expect("SYSERR: fatal error seeking playerfile");
@@ -626,7 +664,7 @@ impl DB<'_> {
             // CREATE(player_table, struct PlayerIndexElement, recs);
         } else {
             // player_table = NULL;
-            self.top_of_p_table = -1;
+            *self.top_of_p_table.borrow_mut() = -1;
             return;
         }
 
@@ -644,7 +682,7 @@ impl DB<'_> {
         //     top_idnum = MAX(top_idnum, dummy.char_specials_saved.idnum);
         // }
 
-        self.top_of_p_table = nr;
+        *self.top_of_p_table.borrow_mut() = nr;
     }
 }
 
@@ -692,468 +730,655 @@ impl DB<'_> {
 // log("SYSERR: Unexpected end of help file.");
 // exit(1);	/* Some day we hope to handle these things better... */
 // }
-//
-// /* function to count how many hash-mark delimited records exist in a file */
-// int count_hash_records(FILE *fl)
-// {
-// char buf[128];
-// int count = 0;
-//
-// while (fgets(buf, 128, fl))
-// if (*buf == '#')
-// count++;
-//
-// return (count);
-// }
-//
-//
-//
-// void index_boot(int mode)
-// {
-// const char *index_filename, *prefix = NULL;	/* NULL or egcs 1.1 complains */
-// FILE *db_index, *db_file;
-// int rec_count = 0, size[2];
-// char buf2[PATH_MAX], buf1[MAX_STRING_LENGTH];
-//
-// switch (mode) {
-// case DB_BOOT_WLD:
-// prefix = WLD_PREFIX;
-// break;
-// case DB_BOOT_MOB:
-// prefix = MOB_PREFIX;
-// break;
-// case DB_BOOT_OBJ:
-// prefix = OBJ_PREFIX;
-// break;
-// case DB_BOOT_ZON:
-// prefix = ZON_PREFIX;
-// break;
-// case DB_BOOT_SHP:
-// prefix = SHP_PREFIX;
-// break;
-// case DB_BOOT_HLP:
-// prefix = HLP_PREFIX;
-// break;
-// default:
-// log("SYSERR: Unknown subcommand %d to index_boot!", mode);
-// exit(1);
-// }
-//
-// if (mini_mud)
-// index_filename = MINDEX_FILE;
-// else
-// index_filename = INDEX_FILE;
-//
-// snprintf(buf2, sizeof(buf2), "%s%s", prefix, index_filename);
-// if (!(db_index = fopen(buf2, "r"))) {
-// log("SYSERR: opening index file '%s': %s", buf2, strerror(errno));
-// exit(1);
-// }
-//
-// /* first, count the number of records in the file so we can malloc */
-// fscanf(db_index, "%s\n", buf1);
-// while (*buf1 != '$') {
-// snprintf(buf2, sizeof(buf2), "%s%s", prefix, buf1);
-// if (!(db_file = fopen(buf2, "r"))) {
-// log("SYSERR: File '%s' listed in '%s/%s': %s", buf2, prefix,
-// index_filename, strerror(errno));
-// fscanf(db_index, "%s\n", buf1);
-// continue;
-// } else {
-// if (mode == DB_BOOT_ZON)
-// rec_count++;
-// else if (mode == DB_BOOT_HLP)
-// rec_count += count_alias_records(db_file);
-// else
-// rec_count += count_hash_records(db_file);
-// }
-//
-// fclose(db_file);
-// fscanf(db_index, "%s\n", buf1);
-// }
-//
-// /* Exit if 0 records, unless this is shops */
-// if (!rec_count) {
-// if (mode == DB_BOOT_SHP)
-// return;
-// log("SYSERR: boot error - 0 records counted in %s/%s.", prefix,
-// index_filename);
-// exit(1);
-// }
-//
-// /*
-//  * NOTE: "bytes" does _not_ include strings or other later malloc'd things.
-//  */
-// switch (mode) {
-// case DB_BOOT_WLD:
-// CREATE(world, struct room_data, rec_count);
-// size[0] = sizeof(struct room_data) * rec_count;
-// log("   %d rooms, %d bytes.", rec_count, size[0]);
-// break;
-// case DB_BOOT_MOB:
-// CREATE(mob_proto, struct char_data, rec_count);
-// CREATE(mob_index, struct index_data, rec_count);
-// size[0] = sizeof(struct index_data) * rec_count;
-// size[1] = sizeof(struct char_data) * rec_count;
-// log("   %d mobs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
-// break;
-// case DB_BOOT_OBJ:
-// CREATE(obj_proto, struct obj_data, rec_count);
-// CREATE(obj_index, struct index_data, rec_count);
-// size[0] = sizeof(struct index_data) * rec_count;
-// size[1] = sizeof(struct obj_data) * rec_count;
-// log("   %d objs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
-// break;
-// case DB_BOOT_ZON:
-// CREATE(zone_table, struct zone_data, rec_count);
-// size[0] = sizeof(struct zone_data) * rec_count;
-// log("   %d zones, %d bytes.", rec_count, size[0]);
-// break;
-// case DB_BOOT_HLP:
-// CREATE(help_table, struct help_index_element, rec_count);
-// size[0] = sizeof(struct help_index_element) * rec_count;
-// log("   %d entries, %d bytes.", rec_count, size[0]);
-// break;
-// }
-//
-// rewind(db_index);
-// fscanf(db_index, "%s\n", buf1);
-// while (*buf1 != '$') {
-// snprintf(buf2, sizeof(buf2), "%s%s", prefix, buf1);
-// if (!(db_file = fopen(buf2, "r"))) {
-// log("SYSERR: %s: %s", buf2, strerror(errno));
-// exit(1);
-// }
-// switch (mode) {
-// case DB_BOOT_WLD:
-// case DB_BOOT_OBJ:
-// case DB_BOOT_MOB:
-// discrete_load(db_file, mode, buf2);
-// break;
-// case DB_BOOT_ZON:
-// load_zones(db_file, buf2);
-// break;
-// case DB_BOOT_HLP:
-// /*
-//  * If you think about it, we have a race here.  Although, this is the
-//  * "point-the-gun-at-your-own-foot" type of race.
-//  */
-// load_help(db_file);
-// break;
-// case DB_BOOT_SHP:
-// boot_the_shops(db_file, buf2, rec_count);
-// break;
-// }
-//
-// fclose(db_file);
-// fscanf(db_index, "%s\n", buf1);
-// }
-// fclose(db_index);
-//
-// /* sort the help index */
-// if (mode == DB_BOOT_HLP) {
-// qsort(help_table, top_of_helpt, sizeof(struct help_index_element), hsort);
-// top_of_helpt--;
-// }
-// }
-//
-//
-// void discrete_load(FILE *fl, int mode, char *filename)
-// {
-// int nr = -1, last;
-// char line[READ_SIZE];
-//
-// const char *modes[] = {"world", "mob", "obj"};
-//
-// for (;;) {
-// /*
-//  * we have to do special processing with the obj files because they have
-//  * no end-of-record marker :(
-//  */
-// if (mode != DB_BOOT_OBJ || nr < 0)
-// if (!get_line(fl, line)) {
-// if (nr == -1) {
-// log("SYSERR: %s file %s is empty!", modes[mode], filename);
-// } else {
-// log("SYSERR: Format error in %s after %s #%d\n"
-// "...expecting a new %s, but file ended!\n"
-// "(maybe the file is not terminated with '$'?)", filename,
-// modes[mode], nr, modes[mode]);
-// }
-// exit(1);
-// }
-// if (*line == '$')
-// return;
-//
-// if (*line == '#') {
-// last = nr;
-// if (sscanf(line, "#%d", &nr) != 1) {
-// log("SYSERR: Format error after %s #%d", modes[mode], last);
-// exit(1);
-// }
-// if (nr >= 99999)
-// return;
-// else
-// switch (mode) {
-// case DB_BOOT_WLD:
-// parse_room(fl, nr);
-// break;
-// case DB_BOOT_MOB:
-// parse_mobile(fl, nr);
-// break;
-// case DB_BOOT_OBJ:
-// strlcpy(line, parse_object(fl, nr), sizeof(line));
-// break;
-// }
-// } else {
-// log("SYSERR: Format error in %s file %s near %s #%d", modes[mode],
-// filename, modes[mode], nr);
-// log("SYSERR: ... offending line: '%s'", line);
-// exit(1);
-// }
-// }
-// }
-//
-// bitvector_t asciiflag_conv(char *flag)
-// {
-// bitvector_t flags = 0;
-// int is_num = TRUE;
-// char *p;
-//
-// for (p = flag; *p; p++) {
-// if (islower(*p))
-// flags |= 1 << (*p - 'a');
-// else if (isupper(*p))
-// flags |= 1 << (26 + (*p - 'A'));
-//
-// if (!isdigit(*p))
-// is_num = FALSE;
-// }
-//
-// if (is_num)
-// flags = atol(flag);
-//
-// return (flags);
-// }
-//
-//
-// /* load the rooms */
-// void parse_room(FILE *fl, int virtual_nr)
-// {
-// static int room_nr = 0, zone = 0;
-// int t[10], i;
-// char line[READ_SIZE], flags[128], buf2[MAX_STRING_LENGTH], buf[128];
-// struct extra_descr_data *new_descr;
-//
-// /* This really had better fit or there are other problems. */
-// snprintf(buf2, sizeof(buf2), "room #%d", virtual_nr);
-//
-// if (virtual_nr < zone_table[zone].bot) {
-// log("SYSERR: Room #%d is below zone %d.", virtual_nr, zone);
-// exit(1);
-// }
-// while (virtual_nr > zone_table[zone].top)
-// if (++zone > top_of_zone_table) {
-// log("SYSERR: Room %d is outside of any zone.", virtual_nr);
-// exit(1);
-// }
-// world[room_nr].zone = zone;
-// world[room_nr].number = virtual_nr;
-// world[room_nr].name = fread_string(fl, buf2);
-// world[room_nr].description = fread_string(fl, buf2);
-//
-// if (!get_line(fl, line)) {
-// log("SYSERR: Expecting roomflags/sector type of room #%d but file ended!",
-// virtual_nr);
-// exit(1);
-// }
-//
-// if (sscanf(line, " %d %s %d ", t, flags, t + 2) != 3) {
-// log("SYSERR: Format error in roomflags/sector type of room #%d",
-// virtual_nr);
-// exit(1);
-// }
-// /* t[0] is the zone number; ignored with the zone-file system */
-//
-// world[room_nr].room_flags = asciiflag_conv(flags);
-// sprintf(flags, "object #%d", virtual_nr);	/* sprintf: OK (until 399-bit integers) */
-// check_bitvector_names(world[room_nr].room_flags, room_bits_count, flags, "room");
-//
-// world[room_nr].sector_type = t[2];
-//
-// world[room_nr].func = NULL;
-// world[room_nr].contents = NULL;
-// world[room_nr].people = NULL;
-// world[room_nr].light = 0;	/* Zero light sources */
-//
-// for (i = 0; i < NUM_OF_DIRS; i++)
-// world[room_nr].dir_option[i] = NULL;
-//
-// world[room_nr].ex_description = NULL;
-//
-// snprintf(buf, sizeof(buf), "SYSERR: Format error in room #%d (expecting D/E/S)", virtual_nr);
-//
-// for (;;) {
-// if (!get_line(fl, line)) {
-// log("%s", buf);
-// exit(1);
-// }
-// switch (*line) {
-// case 'D':
-// setup_dir(fl, room_nr, atoi(line + 1));
-// break;
-// case 'E':
-// CREATE(new_descr, struct extra_descr_data, 1);
-// new_descr->keyword = fread_string(fl, buf2);
-// new_descr->description = fread_string(fl, buf2);
-// new_descr->next = world[room_nr].ex_description;
-// world[room_nr].ex_description = new_descr;
-// break;
-// case 'S':			/* end of room */
-// top_of_world = room_nr++;
-// return;
-// default:
-// log("%s", buf);
-// exit(1);
-// }
-// }
-// }
-//
-//
-//
-// /* read direction data */
-// void setup_dir(FILE *fl, int room, int dir)
-// {
-// int t[5];
-// char line[READ_SIZE], buf2[128];
-//
-// snprintf(buf2, sizeof(buf2), "room #%d, direction D%d", GET_ROOM_VNUM(room), dir);
-//
-// CREATE(world[room].dir_option[dir], struct room_direction_data, 1);
-// world[room].dir_option[dir]->general_description = fread_string(fl, buf2);
-// world[room].dir_option[dir]->keyword = fread_string(fl, buf2);
-//
-// if (!get_line(fl, line)) {
-// log("SYSERR: Format error, %s", buf2);
-// exit(1);
-// }
-// if (sscanf(line, " %d %d %d ", t, t + 1, t + 2) != 3) {
-// log("SYSERR: Format error, %s", buf2);
-// exit(1);
-// }
-// if (t[0] == 1)
-// world[room].dir_option[dir]->exit_info = EX_ISDOOR;
-// else if (t[0] == 2)
-// world[room].dir_option[dir]->exit_info = EX_ISDOOR | EX_PICKPROOF;
-// else
-// world[room].dir_option[dir]->exit_info = 0;
-//
-// world[room].dir_option[dir]->key = t[1];
-// world[room].dir_option[dir]->to_room = t[2];
-// }
-//
-//
-// /* make sure the start rooms exist & resolve their vnums to rnums */
-// void check_start_rooms(void)
-// {
-// if ((r_mortal_start_room = real_room(mortal_start_room)) == NOWHERE) {
-// log("SYSERR:  Mortal start room does not exist.  Change in config.c.");
-// exit(1);
-// }
-// if ((r_immort_start_room = real_room(immort_start_room)) == NOWHERE) {
-// if (!mini_mud)
-// log("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
-// r_immort_start_room = r_mortal_start_room;
-// }
-// if ((r_frozen_start_room = real_room(frozen_start_room)) == NOWHERE) {
-// if (!mini_mud)
-// log("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
-// r_frozen_start_room = r_mortal_start_room;
-// }
-// }
-//
-//
-// /* resolve all vnums into rnums in the world */
-// void renum_world(void)
-// {
-// int room, door;
-//
-// for (room = 0; room <= top_of_world; room++)
-// for (door = 0; door < NUM_OF_DIRS; door++)
-// if (world[room].dir_option[door])
-// if (world[room].dir_option[door]->to_room != NOWHERE)
-// world[room].dir_option[door]->to_room =
-// real_room(world[room].dir_option[door]->to_room);
-// }
-//
-//
-// #define ZCMD zone_table[zone].cmd[cmd_no]
-//
-// /*
-//  * "resulve vnums into rnums in the zone reset tables"
-//  *
-//  * Or in English: Once all of the zone reset tables have been loaded, we
-//  * resolve the virtual numbers into real numbers all at once so we don't have
-//  * to do it repeatedly while the game is running.  This does make adding any
-//  * room, mobile, or object a little more difficult while the game is running.
-//  *
-//  * NOTE 1: Assumes NOWHERE == NOBODY == NOTHING.
-//  * NOTE 2: Assumes sizeof(room_rnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
-//  */
-// void renum_zone_table(void)
-// {
-// int cmd_no;
-// room_rnum a, b, c, olda, oldb, oldc;
-// zone_rnum zone;
-// char buf[128];
-//
-// for (zone = 0; zone <= top_of_zone_table; zone++)
-// for (cmd_no = 0; ZCMD.command != 'S'; cmd_no++) {
-// a = b = c = 0;
-// olda = ZCMD.arg1;
-// oldb = ZCMD.arg2;
-// oldc = ZCMD.arg3;
-// switch (ZCMD.command) {
-// case 'M':
-// a = ZCMD.arg1 = real_mobile(ZCMD.arg1);
-// c = ZCMD.arg3 = real_room(ZCMD.arg3);
-// break;
-// case 'O':
-// a = ZCMD.arg1 = real_object(ZCMD.arg1);
-// if (ZCMD.arg3 != NOWHERE)
-// c = ZCMD.arg3 = real_room(ZCMD.arg3);
-// break;
-// case 'G':
-// a = ZCMD.arg1 = real_object(ZCMD.arg1);
-// break;
-// case 'E':
-// a = ZCMD.arg1 = real_object(ZCMD.arg1);
-// break;
-// case 'P':
-// a = ZCMD.arg1 = real_object(ZCMD.arg1);
-// c = ZCMD.arg3 = real_object(ZCMD.arg3);
-// break;
-// case 'D':
-// a = ZCMD.arg1 = real_room(ZCMD.arg1);
-// break;
-// case 'R': /* rem obj from room */
-// a = ZCMD.arg1 = real_room(ZCMD.arg1);
-// b = ZCMD.arg2 = real_object(ZCMD.arg2);
-// break;
-// }
-// if (a == NOWHERE || b == NOWHERE || c == NOWHERE) {
-// if (!mini_mud) {
-// snprintf(buf, sizeof(buf), "Invalid vnum %d, cmd disabled",
-// a == NOWHERE ? olda : b == NOWHERE ? oldb : oldc);
-// log_zone_error(zone, cmd_no, buf);
-// }
-// ZCMD.command = '*';
-// }
-// }
-// }
-//
-//
-//
+
+/* function to count how many hash-mark delimited records exist in a file */
+fn count_hash_records(fl: File) -> i32 {
+    let mut count = 0;
+    let reader = BufReader::new(fl);
+    for l in reader.lines() {
+        if l.is_ok() && l.unwrap().starts_with('#') {
+            count += 1;
+        }
+    }
+    count
+}
+
+const INDEX_FILE: &str = "index"; /* index of world files		*/
+const MINDEX_FILE: &str = "index.mini"; /* ... and for mini-mud-mode	*/
+const WLD_PREFIX: &str = "world/wld/"; /* room definitions	*/
+const MOB_PREFIX: &str = "world/mob/"; /* monster prototypes	*/
+const OBJ_PREFIX: &str = "world/obj/"; /* object prototypes	*/
+const ZON_PREFIX: &str = "world/zon/"; /* zon defs & command tables */
+const SHP_PREFIX: &str = "world/shp/"; /* shop definitions	*/
+//#define HLP_PREFIX	LIB_TEXT"help"SLASH	/* for HELP <keyword>	*/
+/* arbitrary constants used by index_boot() (must be unique) */
+const DB_BOOT_WLD: u8 = 0;
+const DB_BOOT_MOB: u8 = 1;
+const DB_BOOT_OBJ: u8 = 2;
+const DB_BOOT_ZON: u8 = 3;
+const DB_BOOT_SHP: u8 = 4;
+const DB_BOOT_HLP: u8 = 5;
+
+impl DB {
+    fn index_boot(&mut self, mode: u8) {
+        let mut index_filename: &str;
+        let mut prefix: &str; /* NULL or egcs 1.1 complains */
+        let mut rec_count = 0;
+        let mut size: [u8; 2] = [0; 2];
+        //FILE *db_index, *db_file;
+        //int rec_count = 0, size[2];
+        //char buf2[PATH_MAX], buf1[MAX_STRING_LENGTH];
+
+        match mode {
+            DB_BOOT_WLD => {
+                prefix = WLD_PREFIX;
+            }
+            DB_BOOT_MOB => {
+                prefix = MOB_PREFIX;
+            }
+            DB_BOOT_OBJ => {
+                prefix = OBJ_PREFIX;
+            }
+            DB_BOOT_ZON => {
+                prefix = ZON_PREFIX;
+            }
+            DB_BOOT_SHP => {
+                prefix = SHP_PREFIX;
+            }
+            // DB_BOOT_HLP => {
+            //     prefix = HLP_PREFIX;
+            // }
+            _ => {
+                error!("SYSERR: Unknown subcommand {} to index_boot!", mode);
+                process::exit(1);
+            }
+        }
+
+        // if (mini_mud)
+        // index_filename = MINDEX_FILE;
+        // else
+        index_filename = INDEX_FILE;
+
+        let mut buf2 = format!("{}{}", prefix, index_filename);
+        let db_index = File::open(buf2.as_str());
+        if db_index.is_err() {
+            error!(
+                "SYSERR: opening index file '{}': {}",
+                buf2.as_str(),
+                db_index.err().unwrap()
+            );
+            process::exit(1);
+        }
+        let mut db_index = db_index.unwrap();
+
+        let mut reader = BufReader::new(db_index);
+        /* first, count the number of records in the file so we can malloc */
+        let mut buf1 = String::new();
+        reader
+            .read_line(&mut buf1)
+            .expect("Error while reading index file #1");
+        buf1 = buf1.trim_end().to_string();
+        while !buf1.starts_with('$') {
+            let buf2 = format!("{}{}", prefix, buf1.as_str());
+            let db_file = File::open(buf2.as_str());
+            if db_file.is_err() {
+                error!(
+                    "SYSERR: File '{}' listed in '{}{}': {}",
+                    buf2.as_str(),
+                    prefix,
+                    index_filename,
+                    db_file.err().unwrap()
+                );
+                buf1.clear();
+                reader
+                    .read_line(&mut buf1)
+                    .expect("Error while reading index file #2");
+                buf1 = buf1.trim_end().to_string();
+                continue;
+            } else {
+                if mode == DB_BOOT_ZON {
+                    rec_count += 1;
+                    // } else if mode == DB_BOOT_HLP {
+                    //     rec_count += count_alias_records(db_file);
+                } else {
+                    rec_count += count_hash_records(db_file.unwrap());
+                }
+            }
+            buf1.clear();
+            reader
+                .read_line(&mut buf1)
+                .expect("Error while reading index file #3");
+            buf1 = buf1.trim_end().to_string();
+        }
+
+        /* Exit if 0 records, unless this is shops */
+        if rec_count == 0 {
+            if mode == DB_BOOT_SHP {
+                return;
+            }
+            error!(
+                "SYSERR: boot error - 0 records counted in {}{}.",
+                prefix, index_filename
+            );
+            process::exit(1);
+        }
+
+        /*
+         * NOTE: "bytes" does _not_ include strings or other later malloc'd things.
+         */
+        match mode {
+            DB_BOOT_WLD => {
+                //CREATE(world, struct room_data, rec_count);
+                //size[0] = sizeof(struct room_data) *rec_count;
+                self.world.borrow_mut().reserve_exact(rec_count as usize);
+                size[0] = 0;
+                info!("   {} rooms, {} bytes.", rec_count, size[0]);
+            }
+            // DB_BOOT_MOB => {
+            //     CREATE(mob_proto, struct char_data, rec_count);
+            //     CREATE(mob_index, struct index_data, rec_count);
+            //     size[0] = sizeof(struct index_data) *rec_count;
+            //     size[1] = sizeof(struct char_data) *rec_count;
+            //     log("   %d mobs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
+            // }
+            // DB_BOOT_OBJ => {
+            //     CREATE(obj_proto, struct obj_data, rec_count);
+            //     CREATE(obj_index, struct index_data, rec_count);
+            //     size[0] = sizeof(struct index_data) *rec_count;
+            //     size[1] = sizeof(struct obj_data) *rec_count;
+            //     log("   %d objs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
+            // }
+            DB_BOOT_ZON => {
+                // CREATE(zone_table, struct zone_data, rec_count);
+                // size[0] = sizeof(struct zone_data) *rec_count;
+                self.zone_table
+                    .borrow_mut()
+                    .reserve_exact(rec_count as usize);
+                size[0] = 0;
+                info!("   {} zones, {} bytes.", rec_count, size[0]);
+            }
+            // DB_BOOT_HLP => {
+            //     CREATE(help_table, struct help_index_element, rec_count);
+            //     size[0] = sizeof(struct help_index_element) *rec_count;
+            //     log("   %d entries, %d bytes.", rec_count, size[0]);
+            // }
+            _ => {}
+        }
+
+        reader.rewind().expect("Cannot rewind DB index file reader");
+        buf1.clear();
+        reader
+            .read_line(&mut buf1)
+            .expect("Cannot read index line #4");
+        buf1 = buf1.trim_end().to_string();
+        while !buf1.starts_with('$') {
+            buf2 = format!("{}{}", prefix, buf1.as_str());
+            let db_file = File::open(buf2.as_str());
+            if db_file.is_err() {
+                error!("SYSERR: {}: {}", buf2.as_str(), db_file.err().unwrap());
+                process::exit(1);
+            }
+
+            match mode {
+                DB_BOOT_WLD | DB_BOOT_OBJ | DB_BOOT_MOB => {
+                    self.discrete_load(db_file.unwrap(), mode, buf2.as_str());
+                }
+                DB_BOOT_ZON => {
+                    self.load_zones(db_file.unwrap(), buf2.as_str());
+                }
+                //        DB_BOOT_HLP => {
+                //            /*
+                // * If you think about it, we have a race here.  Although, this is the
+                // * "point-the-gun-at-your-own-foot" type of race.
+                // */
+                //             load_help(db_file);
+                //        }
+                // DB_BOOT_SHP => {
+                //     boot_the_shops(db_file, buf2, rec_count);
+                // }
+                _ => {}
+            }
+
+            //fclose(db_file);
+            //fscanf(db_index, "%s\n", buf1);
+            buf1.clear();
+            reader
+                .read_line(&mut buf1)
+                .expect("Error while reading index file #5");
+            buf1 = buf1.trim_end().to_string();
+        }
+        //fclose(db_index);
+
+        /* sort the help index */
+        // if (mode == DB_BOOT_HLP) {
+        //     qsort(help_table, top_of_helpt, sizeof(struct help_index_element), hsort);
+        //     top_of_helpt - -;
+        // }
+    }
+
+    fn discrete_load(&mut self, file: File, mode: u8, filename: &str) {
+        let mut nr = -1;
+        let mut last: i32;
+        let mut line = String::new();
+        let mut reader = BufReader::new(file);
+
+        const MODES: [&'static str; 3] = ["world", "mob", "obj"];
+
+        loop {
+            /*
+             * we have to do special processing with the obj files because they have
+             * no end-of-record marker :(
+             */
+            if mode != DB_BOOT_OBJ || nr < 0 {
+                if get_line(&mut reader, &mut line) == 0 {
+                    if nr == -1 {
+                        error!(
+                            "SYSERR: {} file {} is empty!",
+                            MODES[mode as usize], filename
+                        );
+                    } else {
+                        error!("SYSERR: Format error in {} after {} #{}\n...expecting a new {}, but file ended!\n(maybe the file is not terminated with '$'?)", filename,
+                            MODES[mode as usize], nr, MODES[mode as usize]);
+                    }
+                    process::exit(1);
+                }
+            }
+            if line.starts_with('$') {
+                return;
+            }
+
+            if line.starts_with('#') {
+                last = nr;
+                let regex = Regex::new(r"^#(\d{1,9})").unwrap();
+                let f = regex.captures(line.as_str());
+                if f.is_none() {
+                    error!(
+                        "SYSERR: Format error after {} #{}",
+                        MODES[mode as usize], last
+                    );
+                    process::exit(1);
+                }
+                let f = f.unwrap();
+                nr = f[1].parse::<i32>().unwrap();
+
+                if nr >= 99999 {
+                    return;
+                } else {
+                    match mode {
+                        DB_BOOT_WLD => {
+                            self.parse_room(&mut reader, nr);
+                        }
+                        // DB_BOOT_MOB => {
+                        //     parse_mobile(fl, nr);
+                        // }
+                        // DB_BOOT_OBJ => {
+                        //     strlcpy(line, parse_object(fl, nr), sizeof(line));
+                        // }
+                        _ => {}
+                    }
+                }
+            } else {
+                error!(
+                    "SYSERR: Format error in {} file {} near {} #{}",
+                    MODES[mode as usize], filename, MODES[mode as usize], nr
+                );
+                error!("SYSERR: ... offending line: '{}'", line);
+                process::exit(1);
+            }
+        }
+    }
+}
+
+fn asciiflag_conv(flag: &str) -> i64 {
+    let mut flags: i64 = 0;
+    let mut is_num = true;
+
+    for p in flag.chars() {
+        if p.is_lowercase() {
+            flags |= 1 << (p as u8 - b'a');
+        } else if p.is_uppercase() {
+            flags |= 1 << (26 + p as u8 - b'A');
+        }
+
+        if !p.is_digit(10) {
+            is_num = false;
+        }
+    }
+
+    if is_num {
+        flags = flag.parse::<i64>().unwrap();
+    }
+
+    return flags;
+}
+
+impl DB {
+    /* load the rooms */
+    fn parse_room(&self, reader: &mut BufReader<File>, virtual_nr: i32) {
+        //static int room_nr = 0, zone = 0;
+        let mut t = [0; 10];
+        let mut i: i32;
+        let mut line = String::new();
+        let mut zone = 0;
+        let mut room_nr = self.world.borrow().len();
+        //     char line[READ_SIZE], flags[128], buf2[MAX_STRING_LENGTH], buf[128];
+        // struct extra_descr_data * new_descr;
+
+        /* This really had better fit or there are other problems. */
+        let buf2 = format!("room #{}", virtual_nr);
+
+        if virtual_nr < self.zone_table.borrow()[zone].bot as i32 {
+            error!("SYSERR: Room #{} is below zone {}.", virtual_nr, zone);
+            process::exit(1);
+        }
+        while virtual_nr > self.zone_table.borrow()[zone].top as i32 {
+            zone += 1;
+            if zone >= self.zone_table.borrow().len() {
+                error!("SYSERR: Room {} is outside of any zone.", virtual_nr);
+                process::exit(1);
+            }
+        }
+        let mut rd = RoomData {
+            number: virtual_nr as room_vnum,
+            zone: zone as zone_rnum,
+            sector_type: 0,
+            name: fread_string(reader, buf2.as_str()),
+            description: fread_string(reader, buf2.as_str()),
+            ex_description: None,
+            //dir_option: [None, None, None, None, None, None],
+            dir_option: [None, None, None, None, None, None],
+            room_flags: 0,
+            light: RefCell::new(0),
+            people: RefCell::new(None),
+        };
+
+        if get_line(reader, &mut line) == 0 {
+            error!(
+                "SYSERR: Expecting roomflags/sector type of room #{} but file ended!",
+                virtual_nr,
+            );
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(\d{1,9})\s(\S*)\s(\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error in roomflags/sector type of room #{}",
+                virtual_nr,
+            );
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        t[0] = f[1].parse::<i32>().unwrap();
+        let mut flags = &f[2];
+        t[2] = f[3].parse::<i32>().unwrap();
+
+        /* t[0] is the zone number; ignored with the zone-file system */
+
+        rd.room_flags = asciiflag_conv(flags) as i32;
+        let msg = format!("object #{}", virtual_nr); /* sprintf: OK (until 399-bit integers) */
+        check_bitvector_names(rd.room_flags as i64, ROOM_BITS_COUNT, msg.as_str(), "room");
+
+        rd.sector_type = t[2];
+
+        //rd.func = NULL;
+        //rd.contents = NULL;
+        rd.people = RefCell::new(None);
+        *rd.light.borrow_mut() = 0; /* Zero light sources */
+
+        // for i in 0..NUM_OF_DIRS {
+        //     rd.dir_option[i] = None;
+        // }
+
+        rd.ex_description = None;
+
+        let buf = format!(
+            "SYSERR: Format error in room #{} (expecting D/E/S)",
+            virtual_nr
+        );
+
+        loop {
+            if get_line(reader, &mut line) == 0 {
+                error!("{}", buf);
+                process::exit(1);
+            }
+            match line.remove(0) {
+                'D' => {
+                    self.setup_dir(reader, &mut rd, line.parse::<i32>().unwrap());
+                }
+                'E' => {
+                    //CREATE(new_descr, struct extra_descr_data, 1);
+                    rd.ex_description = Some(Box::new(ExtraDescrData {
+                        keyword: fread_string(reader, buf2.as_str()),
+                        description: fread_string(reader, buf2.as_str()),
+                        next: rd.ex_description,
+                    }));
+                }
+                'S' => {
+                    /* end of room */
+                    *self.top_of_world.borrow_mut() = room_nr as room_rnum;
+                    room_nr += 1;
+                    break;
+                }
+                _ => {
+                    error!("{}", buf);
+                    process::exit(1);
+                }
+            }
+        }
+        self.world.borrow_mut().push(Rc::new(rd));
+        *self.top_of_world.borrow_mut() += 1;
+    }
+
+    /* read direction data */
+    fn setup_dir(&self, reader: &mut BufReader<File>, room: &mut RoomData, dir: i32) {
+        let mut t = [0; 5];
+        let mut line = String::new();
+        // char line[READ_SIZE], buf2[128];
+
+        let buf2 = format!(
+            "room #{}, direction D{}",
+            room.number,
+            //get_room_vnum!(self, room as usize),
+            dir
+        );
+
+        let mut rdr = RoomDirectionData {
+            general_description: fread_string(reader, buf2.as_str()),
+            keyword: fread_string(reader, buf2.as_str()),
+            exit_info: 0,
+            key: 0,
+            to_room: RefCell::new(0),
+        };
+
+        if get_line(reader, &mut line) == 0 {
+            error!("SYSERR: Format error, {}", buf2);
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error, {}", buf2);
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        t[0] = f[1].parse::<i32>().unwrap();
+        t[1] = f[2].parse::<i32>().unwrap();
+        t[2] = f[3].parse::<i32>().unwrap();
+        if t[0] == 1 {
+            rdr.exit_info = EX_ISDOOR;
+        } else if t[0] == 2 {
+            rdr.exit_info = EX_ISDOOR | EX_PICKPROOF;
+        } else {
+            rdr.exit_info = 0;
+        }
+
+        rdr.key = t[1] as obj_vnum;
+        *rdr.to_room.borrow_mut() = t[2] as room_rnum;
+
+        //let mut a = RefCell::borrow_mut(self.world.get(room as usize).unwrap());
+        room.dir_option[dir as usize] = Some(Rc::new(rdr));
+        // let b = &mut a.dir_option;
+        // b[dir as usize] = Some(Box::new(rdr));
+
+        // let mut a = self.world.get(room as usize);
+        // let mut b = a.unwrap();
+        // let &mut c = b.dir_option[dir as usize];
+
+        //b.dir_option[dir as usize] = Box::new(None);
+    }
+
+    // /* make sure the start rooms exist & resolve their vnums to rnums */
+    fn check_start_rooms(&self) {
+        *self.r_mortal_start_room.borrow_mut() =
+            real_room(self.world.borrow().as_ref(), MORTAL_START_ROOM);
+        if *self.r_mortal_start_room.borrow() == NOWHERE {
+            error!("SYSERR:  Mortal start room does not exist.  Change in config.c.");
+            process::exit(1);
+        }
+        *self.r_immort_start_room.borrow_mut() =
+            real_room(self.world.borrow().as_ref(), IMMORT_START_ROOM);
+        if *self.r_immort_start_room.borrow() == NOWHERE {
+            // if (!mini_mud)
+            error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
+            *self.r_immort_start_room.borrow_mut() = *self.r_mortal_start_room.borrow();
+        }
+        *self.r_frozen_start_room.borrow_mut() =
+            real_room(self.world.borrow().as_ref(), FROZEN_START_ROOM);
+        if *self.r_frozen_start_room.borrow() == NOWHERE {
+            // if (!mini_mud)
+            error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
+            *self.r_frozen_start_room.borrow_mut() = *self.r_mortal_start_room.borrow();
+        }
+    }
+}
+
+impl DB {
+    /* resolve all vnums into rnums in the world */
+    fn renum_world(&mut self) {
+        for (i, room_data) in self.world.borrow().iter().enumerate() {
+            for door in 0..NUM_OF_DIRS {
+                let to_room: room_rnum;
+                {
+                    if room_data.dir_option[door].is_none() {
+                        continue;
+                    }
+                    to_room = *room_data.dir_option[door]
+                        .as_ref()
+                        .unwrap()
+                        .to_room
+                        .borrow();
+                }
+                if to_room != NOWHERE {
+                    let rn = real_room(self.world.borrow().as_ref(), to_room);
+                    *room_data.dir_option[door]
+                        .as_ref()
+                        .unwrap()
+                        .to_room
+                        .borrow_mut() = rn;
+                }
+            }
+        }
+    }
+
+    // #define ZCMD zone_table[zone].cmd[cmd_no]
+
+    /*
+     * "resulve vnums into rnums in the zone reset tables"
+     *
+     * Or in English: Once all of the zone reset tables have been loaded, we
+     * resolve the virtual numbers into real numbers all at once so we don't have
+     * to do it repeatedly while the game is running.  This does make adding any
+     * room, mobile, or object a little more difficult while the game is running.
+     *
+     * NOTE 1: Assumes NOWHERE == NOBODY == NOTHING.
+     * NOTE 2: Assumes sizeof(room_rnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
+     */
+
+    fn renum_zone_table(&mut self) {
+        //int cmd_no;
+        //room_rnum a, b, c, olda, oldb, oldc;
+        //zone_rnum zone;
+        //char buf[128];
+        let mut olda = 0;
+        let mut oldb = 0;
+        let mut oldc = 0;
+
+        for zone in self.zone_table.borrow_mut().iter_mut() {
+            for cmd_no in 0..zone.cmd.len() {
+                let zcmd = &mut zone.cmd[cmd_no];
+                if zcmd.command == 'S' {
+                    break;
+                }
+                let mut a = 0;
+                let mut b = 0;
+                let mut c = 0;
+                olda = zcmd.arg1;
+                oldb = zcmd.arg2;
+                oldc = zcmd.arg3;
+                match zcmd.command {
+                    'M' => {
+                        //a = ZCMD.arg1 = real_mobile(ZCMD.arg1);
+                        zcmd.arg3 =
+                            real_room(self.world.borrow().as_ref(), zcmd.arg3 as room_vnum) as i32;
+                        c = zcmd.arg3;
+                    }
+                    'O' => {
+                        //a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                        if zcmd.arg3 != NOWHERE as i32 {
+                            zcmd.arg3 =
+                                real_room(self.world.borrow().as_ref(), zcmd.arg3 as room_vnum)
+                                    as i32;
+                            c = zcmd.arg3;
+                        }
+                    }
+                    'G' => {
+                        //a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                    }
+                    'E' => {
+                        // a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                    }
+                    'P' => {
+                        // a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                        // c = ZCMD.arg3 = real_object(ZCMD.arg3);
+                    }
+                    'D' => {
+                        zcmd.arg1 =
+                            real_room(self.world.borrow().as_ref(), zcmd.arg1 as room_vnum) as i32;
+                        a = zcmd.arg1;
+                    }
+                    'R' => {
+                        /* rem obj from room */
+                        zcmd.arg2 =
+                            real_room(self.world.borrow().as_ref(), zcmd.arg2 as room_vnum) as i32;
+                        b = zcmd.arg2;
+                    }
+                    _ => {}
+                }
+
+                if a == NOWHERE as i32 || b == NOWHERE as i32 || c == NOWHERE as i32 {
+                    // TODO // if ( ! mini_mud) {
+                    format!(
+                        "Invalid vnum {}, cmd disabled",
+                        if a == NOWHERE as i32 {
+                            olda
+                        } else if b == NOWHERE as i32 {
+                            oldb
+                        } else {
+                            oldc
+                        }
+                    );
+                    // TODO log_zone_error(zone, cmd_no, buf);
+                    // }
+                    zcmd.command = '*';
+                }
+            }
+        }
+    }
+}
+
 // void parse_simple_mob(FILE *mob_f, int i, int nr)
 // {
 // int j, t[10];
@@ -1587,107 +1812,199 @@ impl DB<'_> {
 //
 //
 // #define Z	zone_table[zone]
-//
-// /* load the zone table and command tables */
-// void load_zones(FILE *fl, char *zonename)
-// {
-// static zone_rnum zone = 0;
-// int cmd_no, num_of_cmds = 0, line_num = 0, tmp, error;
-// char *ptr, buf[READ_SIZE], zname[READ_SIZE], buf2[MAX_STRING_LENGTH];
-//
-// strlcpy(zname, zonename, sizeof(zname));
-//
-// /* Skip first 3 lines lest we mistake the zone name for a command. */
-// for (tmp = 0; tmp < 3; tmp++)
-// get_line(fl, buf);
-//
-// /*  More accurate count. Previous was always 4 or 5 too high. -gg 2001/1/17
-//  *  Note that if a new zone command is added to reset_zone(), this string
-//  *  will need to be updated to suit. - ae.
-//  */
-// while (get_line(fl, buf))
-// if ((strchr("MOPGERD", buf[0]) && buf[1] == ' ') || (buf[0] == 'S' && buf[1] == '\0'))
-// num_of_cmds++;
-//
-// rewind(fl);
-//
-// if (num_of_cmds == 0) {
-// log("SYSERR: %s is empty!", zname);
-// exit(1);
-// } else
-// CREATE(Z.cmd, struct reset_com, num_of_cmds);
-//
-// line_num += get_line(fl, buf);
-//
-// if (sscanf(buf, "#%hd", &Z.number) != 1) {
-// log("SYSERR: Format error in %s, line %d", zname, line_num);
-// exit(1);
-// }
-// snprintf(buf2, sizeof(buf2), "beginning of zone #%d", Z.number);
-//
-// line_num += get_line(fl, buf);
-// if ((ptr = strchr(buf, '~')) != NULL)	/* take off the '~' if it's there */
-// *ptr = '\0';
-// Z.name = strdup(buf);
-//
-// line_num += get_line(fl, buf);
-// if (sscanf(buf, " %hd %hd %d %d ", &Z.bot, &Z.top, &Z.lifespan, &Z.reset_mode) != 4) {
-// log("SYSERR: Format error in numeric constant line of %s", zname);
-// exit(1);
-// }
-// if (Z.bot > Z.top) {
-// log("SYSERR: Zone %d bottom (%d) > top (%d).", Z.number, Z.bot, Z.top);
-// exit(1);
-// }
-//
-// cmd_no = 0;
-//
-// for (;;) {
-// if ((tmp = get_line(fl, buf)) == 0) {
-// log("SYSERR: Format error in %s - premature end of file", zname);
-// exit(1);
-// }
-// line_num += tmp;
-// ptr = buf;
-// skip_spaces(&ptr);
-//
-// if ((ZCMD.command = *ptr) == '*')
-// continue;
-//
-// ptr++;
-//
-// if (ZCMD.command == 'S' || ZCMD.command == '$') {
-// ZCMD.command = 'S';
-// break;
-// }
-// error = 0;
-// if (strchr("MOEPD", ZCMD.command) == NULL) {	/* a 3-arg command */
-// if (sscanf(ptr, " %d %d %d ", &tmp, &ZCMD.arg1, &ZCMD.arg2) != 3)
-// error = 1;
-// } else {
-// if (sscanf(ptr, " %d %d %d %d ", &tmp, &ZCMD.arg1, &ZCMD.arg2,
-// &ZCMD.arg3) != 4)
-// error = 1;
-// }
-//
-// ZCMD.if_flag = tmp;
-//
-// if (error) {
-// log("SYSERR: Format error in %s, line %d: '%s'", zname, line_num, buf);
-// exit(1);
-// }
-// ZCMD.line = line_num;
-// cmd_no++;
-// }
-//
-// if (num_of_cmds != cmd_no + 1) {
-// log("SYSERR: Zone command count mismatch for %s. Estimated: %d, Actual: %d", zname, num_of_cmds, cmd_no + 1);
-// exit(1);
-// }
-//
-// top_of_zone_table = zone++;
-// }
-//
+
+impl DB {
+    /* load the zone table and command tables */
+    fn load_zones(&mut self, fl: File, zonename: &str) {
+        //static zone_rnum zone = 0;
+        let mut zone: zone_rnum = 0;
+        let mut line_num = 0;
+        let mut z = ZoneData {
+            name: "".to_string(),
+            lifespan: 0,
+            age: 0,
+            bot: 0,
+            top: 0,
+            reset_mode: 0,
+            number: 0,
+            cmd: vec![],
+        };
+
+        //        int
+        //      cmd_no, num_of_cmds = 0, line_num = 0, tmp, error;
+        //    char * ptr, buf[READ_SIZE], zname[READ_SIZE], buf2[MAX_STRING_LENGTH];
+
+        let zname = zonename.clone();
+        //strlcpy(zname, zonename, sizeof(zname));
+
+        let mut buf = String::new();
+        let mut reader = BufReader::new(fl);
+
+        /* Skip first 3 lines lest we mistake the zone name for a command. */
+        for tmp in 0..3 {
+            reader
+                .read_line(&mut buf)
+                .expect("Cannot read header for zon file");
+        }
+
+        /*  More accurate count. Previous was always 4 or 5 too high. -gg 2001/1/17
+         *  Note that if a new zone command is added to reset_zone(), this string
+         *  will need to be updated to suit. - ae.
+         */
+        let mut num_of_cmds = 0;
+
+        buf.clear();
+        while reader.read_line(&mut buf).is_ok() {
+            buf = buf.trim_end().to_string();
+            if buf.len() == 0 {
+                break;
+            }
+            if "MOPGERD".contains(buf.chars().into_iter().next().unwrap()) || buf == "S" {
+                num_of_cmds += 1;
+            }
+            buf.clear();
+        }
+
+        reader.rewind().expect("Cannot rewind zone file");
+
+        if num_of_cmds == 0 {
+            error!("SYSERR: {} is empty!", zname);
+            process::exit(1);
+        } else {
+            z.cmd.reserve_exact(num_of_cmds);
+            //CREATE(Z.cmd, struct reset_com, num_of_cmds);
+        }
+
+        line_num += get_line(&mut reader, &mut buf);
+
+        let regex = Regex::new(r"^#(\d{1,9})").unwrap();
+        let f = regex.captures(buf.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error #1 in {}, line {}", zname, line_num);
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        z.number = f[1].parse::<zone_vnum>().unwrap();
+
+        line_num += get_line(&mut reader, &mut buf);
+        let r = buf.find('~');
+        if r.is_some() {
+            buf.truncate(r.unwrap());
+        }
+        z.name = buf.clone();
+
+        line_num += get_line(&mut reader, &mut buf);
+        let regex = Regex::new(r"^(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
+        let f = regex.captures(buf.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error #1 in numeric constant line of {}",
+                zname,
+            );
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        z.bot = f[1].parse::<room_vnum>().unwrap();
+        z.top = f[2].parse::<room_vnum>().unwrap();
+        z.lifespan = f[3].parse::<i32>().unwrap();
+        z.reset_mode = f[4].parse::<i32>().unwrap();
+
+        if z.bot > z.top {
+            error!(
+                "SYSERR: Zone {} bottom ({}) > top ({}).",
+                z.number, z.bot, z.top
+            );
+            process::exit(1);
+        }
+
+        let mut cmd_no = 0;
+
+        loop {
+            let tmp = get_line(&mut reader, &mut buf);
+            if tmp == 0 {
+                error!("SYSERR: Format error in {} - premature end of file", zname);
+                process::exit(1);
+            }
+            line_num += tmp;
+            buf = buf.trim_start().to_string();
+
+            let mut zcmd = ResetCom {
+                command: 0 as char,
+                if_flag: false,
+                arg1: 0,
+                arg2: 0,
+                arg3: 0,
+                line: 0,
+            };
+
+            let original_buf = buf.clone();
+            zcmd.command = buf.remove(0);
+
+            if zcmd.command == '*' {
+                continue;
+            }
+
+            if zcmd.command == 'S' || zcmd.command == '$' {
+                zcmd.command = 'S';
+                break;
+            }
+            let mut error = 0;
+            let mut tmp: i32 = -1;
+            if "MOEPD".find(zcmd.command).is_none() {
+                /* a 3-arg command */
+                let regex = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
+                let f = regex.captures(buf.as_str());
+                if f.is_none() {
+                    error = 1;
+                } else {
+                    let f = f.unwrap();
+                    tmp = f[1].parse::<i32>().unwrap();
+                    zcmd.arg1 = f[2].parse::<i32>().unwrap();
+                    zcmd.arg2 = f[3].parse::<i32>().unwrap();
+                }
+            } else {
+                let regex = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
+                let f = regex.captures(buf.as_str());
+                if f.is_none() {
+                    error = 1;
+                } else {
+                    let f = f.unwrap();
+                    tmp = f[1].parse::<i32>().unwrap();
+                    zcmd.arg1 = f[2].parse::<i32>().unwrap();
+                    zcmd.arg2 = f[3].parse::<i32>().unwrap();
+                    zcmd.arg3 = f[4].parse::<i32>().unwrap();
+                }
+            }
+
+            zcmd.if_flag = if tmp == 0 { false } else { true };
+
+            if error != 0 {
+                error!(
+                    "SYSERR: Format error in {}, line {}: '{}'",
+                    zname, line_num, original_buf
+                );
+                process::exit(1);
+            }
+            zcmd.line = line_num;
+            cmd_no += 1;
+            z.cmd.push(zcmd);
+        }
+
+        if num_of_cmds != cmd_no + 1 {
+            error!(
+                "SYSERR: Zone command count mismatch for {}. Estimated: {}, Actual: {}",
+                zname,
+                num_of_cmds,
+                cmd_no + 1,
+            );
+            process::exit(1);
+        }
+
+        self.zone_table.borrow_mut().push(z);
+        zone += 1;
+        *self.top_of_zone_table.borrow_mut() = zone;
+    }
+}
 // #undef Z
 //
 //
@@ -1993,7 +2310,7 @@ impl DB<'_> {
 // mudlog(NRM, LVL_GOD, TRUE, "SYSERR: ...offending cmd: '%c' cmd in zone #%d, line %d",
 // ZCMD.command, zone_table[zone].number, ZCMD.line);
 // }
-//
+
 // #define ZONE_ERROR(message) \
 // { log_zone_error(zone, cmd_no, message); last_cmd = 0; }
 //
@@ -2162,9 +2479,13 @@ impl DB<'_> {
 *  stuff related to the save/load player system				 *
 *************************************************************************/
 
-impl DB<'_> {
+impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        return self.player_table.iter().position(|pie| pie.name == name);
+        return self
+            .player_table
+            .borrow()
+            .iter()
+            .position(|pie| pie.name == name);
     }
 }
 
@@ -2190,18 +2511,20 @@ impl DB<'_> {
 //
 // return (NULL);
 // }
+use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
+use crate::constants::ROOM_BITS_COUNT;
 use std::io::Read;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-impl DB<'_> {
+impl DB {
     /* Load a char, TRUE if loaded, FALSE if not */
-    pub fn load_char(&mut self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
+    pub fn load_char(&self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
         let player_i = self.get_ptable_by_name(name);
         if player_i.is_none() {
             return player_i;
         }
         let player_i = player_i.unwrap();
-        let mut pfile = RefCell::borrow_mut(&self.player_fl.as_ref().unwrap());
+        let mut t = self.player_fl.borrow_mut();
+        let mut pfile = t.as_mut().unwrap();
 
         let record_size = mem::size_of::<CharFileU>();
         pfile
@@ -2215,207 +2538,325 @@ impl DB<'_> {
         }
         return Some(player_i);
     }
+
+    /*
+     * write the vital data of a player to the player file
+     *
+     * And that's it! No more fudging around with the load room.
+     * Unfortunately, 'host' modifying is still here due to lack
+     * of that variable in the char_data structure.
+     */
+    pub fn save_char(&self, ch: &CharData) {
+        //struct char_file_u st;
+        let mut st: CharFileU = CharFileU {
+            name: [0; MAX_NAME_LENGTH + 1],
+            description: [0; 240],
+            title: [0; MAX_TITLE_LENGTH + 1],
+            sex: 0,
+            chclass: 0,
+            level: 0,
+            hometown: 0,
+            birth: 0,
+            played: 0,
+            weight: 0,
+            height: 0,
+            pwd: [0; MAX_PWD_LENGTH],
+            char_specials_saved: CharSpecialDataSaved {
+                alignment: 0,
+                idnum: 0,
+                act: 0,
+                affected_by: 0,
+                apply_saving_throw: [0; 5],
+            },
+            player_specials_saved: PlayerSpecialDataSaved {
+                skills: [0; MAX_SKILLS + 1],
+                padding0: 0,
+                talks: [false; MAX_TONGUE],
+                wimp_level: 0,
+                freeze_level: 0,
+                invis_level: 0,
+                load_room: 0,
+                pref: 0,
+                bad_pws: 0,
+                conditions: [0; 3],
+                spare0: 0,
+                spare1: 0,
+                spare2: 0,
+                spare3: 0,
+                spare4: 0,
+                spare5: 0,
+                spells_to_learn: 0,
+                spare7: 0,
+                spare8: 0,
+                spare9: 0,
+                spare10: 0,
+                spare11: 0,
+                spare12: 0,
+                spare13: 0,
+                spare14: 0,
+                spare15: 0,
+                spare16: 0,
+                spare17: 0,
+                spare18: 0,
+                spare19: 0,
+                spare20: 0,
+                spare21: 0,
+            },
+            abilities: CharAbilityData {
+                str: 0,
+                str_add: 0,
+                intel: 0,
+                wis: 0,
+                dex: 0,
+                con: 0,
+                cha: 0,
+            },
+            points: CharPointData {
+                mana: 0,
+                max_mana: 0,
+                hit: 0,
+                max_hit: 0,
+                movem: 0,
+                max_move: 0,
+                armor: 0,
+                gold: 0,
+                bank_gold: 0,
+                exp: 0,
+                hitroll: 0,
+                damroll: 0,
+            },
+            affected: [AffectedType {
+                _type: 0,
+                duration: 0,
+                modifier: 0,
+                location: 0,
+                bitvector: 0,
+            }; MAX_AFFECT],
+            last_logon: 0,
+            host: [0; HOST_LENGTH + 1],
+        };
+
+        if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
+            return;
+        }
+
+        char_to_store(ch, &mut st);
+
+        {
+            copy_to_stored(
+                &mut st.host,
+                ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
+            );
+        }
+        // strncpy(st.host, ch -> desc -> host, HOST_LENGTH);    /* strncpy: OK (s.host:HOST_LENGTH+1) */
+        // st.host[HOST_LENGTH] = '\0';
+
+        let record_size = mem::size_of::<CharFileU>();
+        //self.player_fl.fseek(SeekFrom::Start((get_pfilepos!(ch) * record_size) as u64)).expect("Error while seeking for writing player");
+        unsafe {
+            let player_slice = slice::from_raw_parts(&mut st as *mut _ as *mut u8, record_size);
+            self.player_fl
+                .borrow_mut()
+                .as_mut()
+                .unwrap()
+                .write_all_at(
+                    player_slice,
+                    (ch.get_pfilepos() * record_size as i32) as u64,
+                )
+                .expect("Error while writing player record to file");
+        }
+    }
 }
 
-// /*
-//  * write the vital data of a player to the player file
-//  *
-//  * And that's it! No more fudging around with the load room.
-//  * Unfortunately, 'host' modifying is still here due to lack
-//  * of that variable in the char_data structure.
-//  */
-// void save_char(struct char_data *ch)
-// {
-// struct char_file_u st;
-//
-// if (IS_NPC(ch) || !ch->desc || GET_PFILEPOS(ch) < 0)
-// return;
-//
-// char_to_store(ch, &st);
-//
-// strncpy(st.host, ch->desc->host, HOST_LENGTH);	/* strncpy: OK (s.host:HOST_LENGTH+1) */
-// st.host[HOST_LENGTH] = '\0';
-//
-// fseek(player_fl, GET_PFILEPOS(ch) * sizeof(struct char_file_u), SEEK_SET);
-// fwrite(&st, sizeof(struct char_file_u), 1, player_fl);
-// }
-//
-//
-//
-// /* copy data from the file structure to a char struct */
-// void store_to_char(struct char_file_u *st, struct char_data *ch)
-// {
-// int i;
-//
-// /* to save memory, only PC's -- not MOB's -- have player_specials */
-// if (ch->player_specials == NULL)
-// CREATE(ch->player_specials, struct player_special_data, 1);
-//
-// GET_SEX(ch) = st->sex;
-// GET_CLASS(ch) = st->chclass;
-// GET_LEVEL(ch) = st->level;
-//
-// ch->player.short_descr = NULL;
-// ch->player.long_descr = NULL;
-// ch->player.title = strdup(st->title);
-// ch->player.description = strdup(st->description);
-//
-// ch->player.hometown = st->hometown;
-// ch->player.time.birth = st->birth;
-// ch->player.time.played = st->played;
-// ch->player.time.logon = time(0);
-//
-// ch->player.weight = st->weight;
-// ch->player.height = st->height;
-//
-// ch->real_abils = st->abilities;
-// ch->aff_abils = st->abilities;
-// ch->points = st->points;
-// ch->char_specials.saved = st->char_specials_saved;
-// ch->player_specials->saved = st->player_specials_saved;
-// POOFIN(ch) = NULL;
-// POOFOUT(ch) = NULL;
-// GET_LAST_TELL(ch) = NOBODY;
-//
-// if (ch->points.max_mana < 100)
-// ch->points.max_mana = 100;
-//
-// ch->char_specials.carry_weight = 0;
-// ch->char_specials.carry_items = 0;
-// ch->points.armor = 100;
-// ch->points.hitroll = 0;
-// ch->points.damroll = 0;
-//
-// if (ch->player.name)
-// free(ch->player.name);
-// ch->player.name = strdup(st->name);
-// strlcpy(ch->player.passwd, st->pwd, sizeof(ch->player.passwd));
-//
-// /* Add all spell effects */
-// for (i = 0; i < MAX_AFFECT; i++) {
-// if (st->affected[i].type)
-// affect_to_char(ch, &st->affected[i]);
-// }
-//
-// /*
-//  * If you're not poisioned and you've been away for more than an hour of
-//  * real time, we'll set your HMV back to full
-//  */
-//
-// if (!AFF_FLAGGED(ch, AFF_POISON) &&
-// time(0) - st->last_logon >= SECS_PER_REAL_HOUR) {
-// GET_HIT(ch) = GET_MAX_HIT(ch);
-// GET_MOVE(ch) = GET_MAX_MOVE(ch);
-// GET_MANA(ch) = GET_MAX_MANA(ch);
-// }
-// }				/* store_to_char */
-//
-//
-//
-//
-// /* copy vital data from a players char-structure to the file structure */
-// void char_to_store(struct char_data *ch, struct char_file_u *st)
-// {
-// int i;
-// struct affected_type *af;
-// struct obj_data *char_eq[NUM_WEARS];
-//
-// /* Unaffect everything a character can be affected by */
-//
-// for (i = 0; i < NUM_WEARS; i++) {
-// if (GET_EQ(ch, i))
-// char_eq[i] = unequip_char(ch, i);
-// else
-// char_eq[i] = NULL;
-// }
-//
-// for (af = ch->affected, i = 0; i < MAX_AFFECT; i++) {
-// if (af) {
-// st->affected[i] = *af;
-// st->affected[i].next = 0;
-// af = af->next;
-// } else {
-// st->affected[i].type = 0;	/* Zero signifies not used */
-// st->affected[i].duration = 0;
-// st->affected[i].modifier = 0;
-// st->affected[i].location = 0;
-// st->affected[i].bitvector = 0;
-// st->affected[i].next = 0;
-// }
-// }
-//
-//
-// /*
-//  * remove the affections so that the raw values are stored; otherwise the
-//  * effects are doubled when the char logs back in.
-//  */
-//
-// while (ch->affected)
-// affect_remove(ch, ch->affected);
-//
-// if ((i >= MAX_AFFECT) && af && af->next)
-// log("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
-//
-// ch->aff_abils = ch->real_abils;
-//
-// st->birth = ch->player.time.birth;
-// st->played = ch->player.time.played;
-// st->played += time(0) - ch->player.time.logon;
-// st->last_logon = time(0);
-//
-// ch->player.time.played = st->played;
-// ch->player.time.logon = time(0);
-//
-// st->hometown = ch->player.hometown;
-// st->weight = GET_WEIGHT(ch);
-// st->height = GET_HEIGHT(ch);
-// st->sex = GET_SEX(ch);
-// st->chclass = GET_CLASS(ch);
-// st->level = GET_LEVEL(ch);
-// st->abilities = ch->real_abils;
-// st->points = ch->points;
-// st->char_specials_saved = ch->char_specials.saved;
-// st->player_specials_saved = ch->player_specials->saved;
-//
-// st->points.armor = 100;
-// st->points.hitroll = 0;
-// st->points.damroll = 0;
-//
-// if (GET_TITLE(ch))
-// strlcpy(st->title, GET_TITLE(ch), MAX_TITLE_LENGTH);
-// else
-// *st->title = '\0';
-//
-// if (ch->player.description) {
-// if (strlen(ch->player.description) >= sizeof(st->description)) {
-// log("SYSERR: char_to_store: %s's description length: %d, max: %d! "
-// "Truncated.", GET_PC_NAME(ch), strlen(ch->player.description),
-// sizeof(st->description));
-// ch->player.description[sizeof(st->description) - 3] = '\0';
-// strcat(ch->player.description, "\r\n");	/* strcat: OK (previous line makes room) */
-// }
-// strcpy(st->description, ch->player.description);	/* strcpy: OK (checked above) */
-// } else
-// *st->description = '\0';
-//
-// strcpy(st->name, GET_NAME(ch));	/* strcpy: OK (that's what GET_NAME came from) */
-// strcpy(st->pwd, GET_PASSWD(ch));	/* strcpy: OK (that's what GET_PASSWD came from) */
-//
-// /* add spell and eq affections back in now */
-// for (i = 0; i < MAX_AFFECT; i++) {
-// if (st->affected[i].type)
-// affect_to_char(ch, &st->affected[i]);
-// }
-//
-// for (i = 0; i < NUM_WEARS; i++) {
-// if (char_eq[i])
-// equip_char(ch, char_eq[i], i);
-// }
-// /*   affect_total(ch); unnecessary, I think !?! */
-// }				/* Char to store */
-//
-//
-//
+/* copy data from the file structure to a char struct */
+pub fn store_to_char(st: &CharFileU, ch: &CharData) {
+    //int i;
+
+    /* to save memory, only PC's -- not MOB's -- have player_specials */
+    // if (ch->player_specials == NULL)
+    // CREATE(ch->player_specials, struct player_special_data, 1);
+
+    ch.set_sex(st.sex);
+    ch.set_class(st.chclass);
+    ch.set_level(st.level);
+
+    ch.player.borrow_mut().short_descr = String::new();
+    ch.player.borrow_mut().long_descr = String::new();
+    //ch.player.title = st.title;
+    ch.player.borrow_mut().description = std::str::from_utf8(&st.description).unwrap().to_string();
+
+    ch.player.borrow_mut().hometown = st.hometown;
+    ch.player.borrow_mut().time.birth = st.birth;
+    ch.player.borrow_mut().time.played = st.played;
+    ch.player.borrow_mut().time.logon = time_now();
+
+    ch.player.borrow_mut().weight = st.weight;
+    ch.player.borrow_mut().height = st.height;
+
+    *ch.real_abils.borrow_mut() = st.abilities;
+    *ch.aff_abils.borrow_mut() = st.abilities;
+    *ch.points.borrow_mut() = st.points;
+    ch.char_specials.borrow_mut().saved = st.char_specials_saved;
+    RefCell::borrow_mut(&ch.player_specials).saved = st.player_specials_saved;
+    // POOFIN(ch) = NULL;
+    // POOFOUT(ch) = NULL;
+    // GET_LAST_TELL(ch) = NOBODY;
+
+    if ch.points.borrow().max_mana < 100 {
+        ch.points.borrow_mut().max_mana = 100;
+    }
+
+    ch.char_specials.borrow_mut().carry_weight = 0;
+    ch.char_specials.borrow_mut().carry_items = 0;
+    ch.points.borrow_mut().armor = 100;
+    ch.points.borrow_mut().hitroll = 0;
+    ch.points.borrow_mut().damroll = 0;
+
+    // if (ch.player.name)
+    // free(ch.player.name);
+    ch.player.borrow_mut().name = std::str::from_utf8(&st.name)
+        .expect("Error while loading player name from file")
+        .parse()
+        .unwrap();
+    ch.player.borrow_mut().passwd.copy_from_slice(&st.pwd);
+
+    /* Add all spell effects */
+    for i in 0..MAX_AFFECT {
+        if st.affected[i]._type != 0 {
+            ch.affected.borrow_mut().push(st.affected[i]);
+        }
+    }
+
+    /*
+     * If you're not poisioned and you've been away for more than an hour of
+     * real time, we'll set your HMV back to full
+     */
+
+    if !ch.aff_flagged(AFF_POISON) && time_now() - st.last_logon >= SECS_PER_REAL_HOUR {
+        ch.set_hit(ch.get_max_hit());
+        ch.set_move(ch.get_max_move());
+        ch.set_mana(ch.get_max_mana());
+    }
+} /* store_to_char */
+
+/* copy vital data from a players char-structure to the file structure */
+fn char_to_store(ch: &CharData, st: &mut CharFileU) {
+    //int i;
+    //struct affected_type *af;
+    //struct obj_data *char_eq[NUM_WEARS];
+
+    /* Unaffect everything a character can be affected by */
+
+    // for (i = 0; i < NUM_WEARS; i++) {
+    // if (GET_EQ(ch, i))
+    // char_eq[i] = unequip_char(ch, i);
+    // else
+    // char_eq[i] = NULL;
+    // }
+    if ch.affected.borrow().len() > MAX_AFFECT {
+        error!("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
+    }
+
+    for i in 0..MAX_AFFECT {
+        let a = ch.affected.borrow();
+        let af = a.get(i);
+        if af.is_some() {
+            let af = af.unwrap();
+            st.affected[i] = *af;
+        } else {
+            st.affected[i]._type = 0; /* Zero signifies not used */
+            st.affected[i].duration = 0;
+            st.affected[i].modifier = 0;
+            st.affected[i].location = 0;
+            st.affected[i].bitvector = 0;
+        }
+    }
+
+    /*
+     * remove the affections so that the raw values are stored; otherwise the
+     * effects are doubled when the char logs back in.
+     */
+
+    ch.affected.borrow_mut().clear();
+    // while (ch->affected)
+    // affect_remove(ch, ch->affected);
+
+    *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow();
+
+    st.birth = ch.player.borrow().time.birth;
+    st.played = ch.player.borrow().time.played;
+    st.played += (time_now() - ch.player.borrow().time.logon) as i32;
+    st.last_logon = time_now();
+
+    ch.player.borrow_mut().time.played = st.played;
+    ch.player.borrow_mut().time.logon = time_now();
+
+    st.hometown = ch.player.borrow().hometown;
+    st.weight = ch.get_weight();
+    st.height = ch.get_height();
+    st.sex = ch.get_sex();
+    st.chclass = ch.get_class();
+    st.level = ch.get_level();
+    st.abilities = *ch.real_abils.borrow();
+    st.points = *ch.points.borrow();
+    st.char_specials_saved = ch.char_specials.borrow().saved;
+    st.player_specials_saved = RefCell::borrow(&ch.player_specials).saved;
+
+    st.points.armor = 100;
+    st.points.hitroll = 0;
+    st.points.damroll = 0;
+
+    // if (GET_TITLE(ch)) {
+    //     strlcpy(st.title, GET_TITLE(ch), MAX_TITLE_LENGTH);
+    // } else {
+    //     *st.title = '\0';
+    // }
+    if !ch.player.borrow().description.is_empty() {
+        if ch.player.borrow().description.len() >= st.description.len() {
+            error!(
+                "SYSERR: char_to_store: {}'s description length: {}, max: {}!  Truncated.",
+                ch.get_pc_name(),
+                ch.player.borrow().description.len(),
+                st.description.len()
+            );
+            ch.player
+                .borrow_mut()
+                .description
+                .truncate(st.description.len() - 3);
+            ch.player.borrow_mut().description.push_str("\r\n");
+        }
+        copy_to_stored(&mut st.description, &ch.player.borrow().description);
+        //strcpy(st.description, ch.player.description);    /* strcpy: OK (checked above) */
+    } else {
+        st.description[0] = 0;
+    }
+    copy_to_stored(&mut st.name, ch.get_name().as_ref());
+    st.pwd.copy_from_slice(&ch.get_passwd());
+
+    /* add spell and eq affections back in now */
+    for i in 0..MAX_AFFECT {
+        if st.affected[i]._type != 0 {
+            ch.affected.borrow_mut().push(st.affected[i]);
+        }
+    }
+
+    // for (i = 0; i < NUM_WEARS; i+ +) {
+    //     if (char_eq[i]) {
+    //         equip_char(ch, char_eq[i], i);
+    //     }
+    // }
+    /*   affect_total(ch); unnecessary, I think !?! */
+} /* Char to store */
+
+fn copy_to_stored(to: &mut [u8], from: &str) {
+    let bytes = from.as_bytes();
+    let bytes_copied = min(to.len(), from.len());
+    to[0..bytes_copied].copy_from_slice(&bytes[0..bytes_copied]);
+    if bytes_copied != to.len() {
+        to[bytes_copied] = 0;
+    }
+}
+
 // void save_etext(struct char_data *ch)
 // {
 // /* this will be really cool soon */
@@ -2426,16 +2867,16 @@ impl DB<'_> {
  * If the name already exists, by overwriting a deleted character, then
  * we re-use the old position.
  */
-impl DB<'_> {
-    pub(crate) fn create_entry(&mut self, name: &str) -> usize {
+impl DB {
+    pub(crate) fn create_entry(&self, name: &str) -> usize {
         //int i, pos;
-        let mut i: usize;
+        let i: usize;
         let pos = self.get_ptable_by_name(name);
 
         if pos.is_none() {
             /* new name */
-            i = self.player_table.len();
-            self.player_table.push(PlayerIndexElement {
+            i = self.player_table.borrow().len();
+            self.player_table.borrow_mut().push(PlayerIndexElement {
                 name: name.to_lowercase(),
                 id: i as i64,
             });
@@ -2443,60 +2884,70 @@ impl DB<'_> {
         } else {
             let pos = pos.unwrap();
 
-            let mut pie = self.player_table.get_mut(pos);
+            let mut pt = self.player_table.borrow_mut();
+            let mut pie = pt.get_mut(pos);
             pie.as_mut().unwrap().name = name.to_lowercase();
             return pos;
         }
     }
 }
 
-// /************************************************************************
-// *  funcs of a (more or less) general utility nature			*
-// ************************************************************************/
-//
-//
-// /* read and allocate space for a '~'-terminated string from a given file */
-// char *fread_string(FILE *fl, const char *error)
-// {
-// char buf[MAX_STRING_LENGTH], tmp[513];
-// char *point;
-// int done = 0, length = 0, templength;
-//
-// *buf = '\0';
-//
-// do {
-// if (!fgets(tmp, 512, fl)) {
-// log("SYSERR: fread_string: format error at or near %s", error);
-// exit(1);
-// }
-// /* If there is a '~', end the string; else put an "\r\n" over the '\n'. */
-// if ((point = strchr(tmp, '~')) != NULL) {
-// *point = '\0';
-// done = 1;
-// } else {
-// point = tmp + strlen(tmp) - 1;
-// *(point++) = '\r';
-// *(point++) = '\n';
-// *point = '\0';
-// }
-//
-// templength = strlen(tmp);
-//
-// if (length + templength >= MAX_STRING_LENGTH) {
-// log("SYSERR: fread_string: string too large (db.c)");
-// log("%s", error);
-// exit(1);
-// } else {
-// strcat(buf + length, tmp);	/* strcat: OK (size checked above) */
-// length += templength;
-// }
-// } while (!done);
-//
-// /* allocate space for the new string and copy it */
-// return (strlen(buf) ? strdup(buf) : NULL);
-// }
-//
-//
+/************************************************************************
+*  funcs of a (more or less) general utility nature			*
+************************************************************************/
+
+/* read and allocate space for a '~'-terminated string from a given file */
+fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
+    let mut buf = String::new();
+    let mut tmp = String::new();
+    // char buf[MAX_STRING_LENGTH], tmp[513];
+    // char *point;
+    // int done = 0, length = 0, templength;
+    //
+    // *buf = '\0';
+    let mut done = false;
+    loop {
+        tmp.clear();
+        let r = reader.read_line(&mut tmp);
+        if r.is_err() {
+            error!(
+                "SYSERR: fread_string: format error at or near {}: {}",
+                error,
+                r.err().unwrap()
+            );
+            process::exit(1);
+        }
+
+        /* If there is a '~', end the string; else put an "\r\n" over the '\n'. */
+        let point = tmp.find('~');
+        if point.is_some() {
+            tmp.truncate(point.unwrap());
+            done = true;
+        } else {
+        }
+
+        buf.push_str(tmp.as_str());
+        // templength = strlen(tmp);
+
+        // if (length + templength >= MAX_STRING_LENGTH) {
+        // log("SYSERR: fread_string: string too large (db.c)");
+        // log("%s", error);
+        // exit(1);
+        // } else {
+        // strcat(buf + length, tmp);	/* strcat: OK (size checked above) */
+        // length += templength;
+        // }
+        if done {
+            break;
+        }
+    }
+
+    /* allocate space for the new string and copy it */
+    return buf;
+    //return (strlen(buf)?;
+    //strdup(buf): NULL);
+}
+
 // /* release memory allocated for a char struct */
 // void free_char(struct char_data *ch)
 // {
@@ -2605,46 +3056,45 @@ impl DB<'_> {
  * replace, give everybody using it a different copy so
  * as to avoid special cases.
  */
-fn file_to_string_alloc<'a>(
-    mg: Rc<RefCell<MainGlobals>>,
-    name: &'a str,
-    buf: &'a mut String,
-) -> i32 {
-    //int temppage;
-    //char temp[MAX_STRING_LENGTH];
-    //struct descriptor_data *in_use;
+impl MainGlobals {
+    fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut String) -> i32 {
+        //int temppage;
+        //char temp[MAX_STRING_LENGTH];
+        //struct descriptor_data *in_use;
 
-    let mut main_globals = RefCell::borrow_mut(&mg);
-    for in_use in &main_globals.descriptor_list {
-        if RefCell::borrow_mut(&in_use).showstr_vector[0] == buf {
+        for in_use in &*self.descriptor_list.borrow() {
+            if RefCell::borrow(&in_use.showstr_vector.borrow()[0]).as_str() == buf {
+                return -1;
+            }
+        }
+
+        /* Lets not free() what used to be there unless we succeeded. */
+        let r = file_to_string(name);
+        if r.is_err() {
             return -1;
         }
-    }
+        let temp = r.unwrap();
 
-    /* Lets not free() what used to be there unless we succeeded. */
-    let r = file_to_string(name);
-    if r.is_err() {
-        return -1;
-    }
-    let temp = r.unwrap();
+        for in_use in &*self.descriptor_list.borrow() {
+            // if (!in_use->showstr_count || *in_use->showstr_vector != *buf)
+            // continue;
+            if *RefCell::borrow(&in_use.showstr_count) == 0
+                || RefCell::borrow(&RefCell::borrow(&in_use.showstr_vector)[0]).as_str() != buf
+            {
+                continue;
+            }
 
-    for in_use in main_globals.descriptor_list.iter_mut() {
-        // if (!in_use->showstr_count || *in_use->showstr_vector != *buf)
-        // continue;
-        if RefCell::borrow_mut(in_use).showstr_count == 0
-            || RefCell::borrow_mut(in_use).showstr_vector[0] != buf
-        {
-            continue;
+            let temppage = RefCell::borrow(&in_use.showstr_page);
+            *RefCell::borrow_mut(&in_use.showstr_head) = in_use.showstr_vector.borrow()[0].clone();
+            *RefCell::borrow_mut(&in_use.showstr_page) = *temppage;
+            paginate_string(
+                RefCell::borrow(&in_use.showstr_head.borrow()).as_str(),
+                in_use,
+            );
         }
-
-        let temppage = RefCell::borrow_mut(in_use).showstr_page;
-        RefCell::borrow_mut(in_use).showstr_head =
-            RefCell::borrow_mut(in_use).showstr_vector[0].clone();
-        RefCell::borrow_mut(in_use).showstr_page = temppage;
-        paginate_string(RefCell::borrow_mut(in_use).showstr_head, in_use.clone());
+        *buf = temp;
+        return 0;
     }
-    *buf = temp;
-    return 0;
 }
 
 /* read contents of a text file, and place in buf */
@@ -2688,39 +3138,39 @@ fn file_to_string(name: &str) -> io::Result<String> {
 // return (0);
 //}
 
-// /* clear some of the the working variables of a char */
-// void reset_char(struct char_data *ch)
-// {
-// int i;
-//
-// for (i = 0; i < NUM_WEARS; i++)
-// GET_EQ(ch, i) = NULL;
-//
-// ch->followers = NULL;
-// ch->master = NULL;
-// IN_ROOM(ch) = NOWHERE;
-// ch->carrying = NULL;
-// ch->next = NULL;
-// ch->next_fighting = NULL;
-// ch->next_in_room = NULL;
-// FIGHTING(ch) = NULL;
-// ch->char_specials.position = POS_STANDING;
-// ch->mob_specials.default_pos = POS_STANDING;
-// ch->char_specials.carry_weight = 0;
-// ch->char_specials.carry_items = 0;
-//
-// if (GET_HIT(ch) <= 0)
-// GET_HIT(ch) = 1;
-// if (GET_MOVE(ch) <= 0)
-// GET_MOVE(ch) = 1;
-// if (GET_MANA(ch) <= 0)
-// GET_MANA(ch) = 1;
-//
-// GET_LAST_TELL(ch) = NOBODY;
-// }
-//
-//
-//
+/* clear some of the the working variables of a char */
+pub fn reset_char(ch: &CharData) {
+    // TODO implement WEAR
+    // for (i = 0; i < NUM_WEARS; i++)
+    // GET_EQ(ch, i) = NULL;
+
+    ch.followers.borrow_mut().clear();
+    *ch.master.borrow_mut() = None;
+    ch.set_in_room(NOWHERE);
+    // TODO implement carrying
+    //ch->carrying = NULL;
+    *ch.next.borrow_mut() = None;
+    *ch.next_fighting.borrow_mut() = None;
+    *ch.next_in_room.borrow_mut() = None;
+    ch.set_fighting(None);
+    ch.char_specials.borrow_mut().position = POS_STANDING;
+    ch.mob_specials.borrow_mut().default_pos = POS_STANDING;
+    ch.char_specials.borrow_mut().carry_weight = 0;
+    ch.char_specials.borrow_mut().carry_items = 0;
+
+    if ch.get_hit() <= 0 {
+        ch.set_hit(1);
+    }
+    if ch.get_move() <= 0 {
+        ch.set_move(1);
+    }
+    if ch.get_mana() <= 0 {
+        ch.set_mana(1);
+    }
+
+    get_last_tell_mut!(ch) = NOBODY as i64;
+}
+
 // /* clear ALL the working variables of a char; do NOT free any space alloc'ed */
 // void clear_char(struct char_data *ch)
 // {
@@ -2752,8 +3202,8 @@ fn file_to_string(name: &str) -> io::Result<String> {
  * Called during character creation after picking character class
  * (and then never again for that character).
  */
-impl DB<'_> {
-    fn init_char(&mut self, ch: &mut CharData) {
+impl DB {
+    pub(crate) fn init_char(&self, ch: &CharData) {
         let i: i32;
 
         /* create a player_special structure */
@@ -2761,37 +3211,34 @@ impl DB<'_> {
         // CREATE(ch->player_specials, struct player_special_data, 1);
 
         /* *** if this is our first player --- he be God *** */
-        if self.top_of_p_table == 0 {
-            get_level!(ch) = LVL_IMPL;
-            get_exp!(ch) = 7000000;
+        if *self.top_of_p_table.borrow() == 0 {
+            ch.set_level(LVL_IMPL as u8);
+            ch.set_exp(7000000);
 
             /* The implementor never goes through do_start(). */
-            get_max_hit!(ch) = 500;
-            get_max_mana!(ch) = 100;
-            get_max_move!(ch) = 82;
-            get_hit!(ch) = get_max_hit!(ch);
-            get_max_mana!(ch) = get_max_mana!(ch);
-            get_move!(ch) = get_max_move!(ch);
+            ch.set_max_hit(500);
+            ch.set_max_mana(100);
+            ch.set_max_move(82);
+            ch.set_hit(ch.get_max_hit());
+            ch.set_mana(ch.get_max_mana());
+            ch.set_move(ch.get_max_move());
         }
 
         //set_title(ch, NULL);
-        ch.player.short_descr = None;
-        ch.player.long_descr = None;
-        ch.player.description = None;
+        ch.player.borrow_mut().short_descr = String::new();
+        ch.player.borrow_mut().long_descr = String::new();
+        ch.player.borrow_mut().description = String::new();
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        ch.player.time.birth = now;
-        ch.player.time.logon = now;
-        ch.player.time.played = 0;
+        let now = time_now();
+        ch.player.borrow_mut().time.birth = now;
+        ch.player.borrow_mut().time.logon = now;
+        ch.player.borrow_mut().time.played = 0;
 
-        get_home!(ch) = 1;
-        get_ac!(ch) = 100;
+        ch.set_home(1);
+        ch.set_ac(100);
 
         for i in 0..MAX_TONGUE {
-            get_talk!(ch, i) = 0;
+            ch.set_talk_mut(i, false);
         }
 
         /*
@@ -2802,81 +3249,88 @@ impl DB<'_> {
          * Height is in centimeters. Weight is in pounds.  The only place they're
          * ever printed (in stock code) is SPELL_IDENTIFY.
          */
-        if get_sex!(ch) == SEX_MALE {
-            get_weight!(ch) = rand_number(120, 180) as u8;
-            get_height!(ch) = rand_number(160, 200) as u8; /* 5'4" - 6'8" */
+        if ch.get_sex() == SEX_MALE {
+            ch.set_weight(rand_number(120, 180) as u8);
+            ch.set_height(rand_number(160, 200) as u8); /* 5'4" - 6'8" */
         } else {
-            get_weight!(ch) = rand_number(100, 160) as u8;
-            get_height!(ch) = rand_number(150, 180) as u8; /* 5'0" - 6'0" */
+            ch.set_weight(rand_number(100, 160) as u8);
+            ch.set_height(rand_number(150, 180) as u8); /* 5'0" - 6'0" */
         }
 
-        let i = self.get_ptable_by_name(get_name!(ch));
+        let i = self.get_ptable_by_name(ch.get_name().as_ref());
         if i.is_none() {
             error!(
                 "SYSERR: init_char: Character '{}' not found in player table.",
-                get_name!(ch)
+                ch.get_name()
             );
         } else {
-            self.top_idnum += 1;
-            self.player_table.get_mut(i).unwrap().id = self.top_idnum;
-            get_idnum!(ch) = self.top_idnum as i64;
+            let i = i.unwrap();
+            *self.top_idnum.borrow_mut() += 1;
+            self.player_table.borrow_mut()[i].id = *self.top_idnum.borrow() as i64;
+            ch.set_idnum(*self.top_idnum.borrow() as i64);
         }
 
         for i in 1..MAX_SKILLS {
-            if get_level!(ch) < LVL_IMPL {
+            if ch.get_level() < LVL_IMPL as u8 {
                 //set_skill!(ch, i, 0);
-                ch.player_specials.saved.skills[i] = 0;
+                RefCell::borrow_mut(&ch.player_specials).saved.skills[i] = 0;
             } else {
                 //set_skill!(ch, i, 100);
-                ch.player_specials.saved.skills[i] = 100;
+                RefCell::borrow_mut(&ch.player_specials).saved.skills[i] = 100;
             }
         }
 
-        aff_flags!(ch) = 0;
+        ch.set_aff_flags(0);
 
         for i in 0..5 {
-            get_save!(ch, i) = 0;
+            ch.set_save(i, 0);
         }
 
-        ch.real_abils.intel = 25;
-        ch.real_abils.wis = 25;
-        ch.real_abils.dex = 25;
-        ch.real_abils.str = 25;
-        ch.real_abils.str_add = 100;
-        ch.real_abils.con = 25;
-        ch.real_abils.cha = 25;
+        ch.real_abils.borrow_mut().intel = 25;
+        ch.real_abils.borrow_mut().wis = 25;
+        ch.real_abils.borrow_mut().dex = 25;
+        ch.real_abils.borrow_mut().str = 25;
+        ch.real_abils.borrow_mut().str_add = 100;
+        ch.real_abils.borrow_mut().con = 25;
+        ch.real_abils.borrow_mut().cha = 25;
 
-        let cond_value = if get_level!(ch) == LVL_IMPL { -1 } else { 24 };
+        let cond_value = if ch.get_level() == LVL_IMPL as u8 {
+            -1
+        } else {
+            24
+        };
         for i in 0..3 {
-            get_cond!(ch, i) = cond_value;
+            ch.set_cond(i, cond_value);
         }
-
-        get_loadroom!(ch) = NOWHERE;
+        ch.set_loadroom(NOWHERE);
     }
 }
 
 // /* returns the real number of the room with given virtual number */
-// room_rnum real_room(room_vnum vnum)
-// {
-// room_rnum bot, top, mid;
-//
-// bot = 0;
-// top = top_of_world;
-//
-// /* perform binary search on world-table */
-// for (; ; ) {
-// mid = (bot + top) / 2;
-//
-// if ((world + mid) -> number == vnum)
-// return (mid);
-// if (bot > = top)
-// return (NOWHERE);
-// if ((world + mid) -> number > vnum)
-// top = mid - 1;
-// else
-// bot = mid + 1;
-// }
-// }
+pub fn real_room(world: &Vec<Rc<RoomData>>, vnum: room_vnum) -> room_rnum {
+    let mut bot = 0 as room_rnum;
+    let mut top = (world.len() - 1) as room_rnum;
+    let mut mid: room_rnum;
+
+    /* perform binary search on world-table */
+    loop {
+        mid = (bot + top) / 2;
+
+        if world[mid as usize].number == vnum {
+            return mid;
+        }
+
+        if bot >= top {
+            return NOWHERE;
+        }
+
+        if world[mid as usize].number > vnum {
+            top = mid - 1;
+        } else {
+            bot = mid + 1;
+        }
+    }
+}
 
 // /* returns the real number of the monster with given virtual number */
 // mob_rnum real_mobile(mob_vnum vnum)
@@ -3069,23 +3523,28 @@ impl DB<'_> {
 //
 // return (error);
 // }
-//
-// int check_bitvector_names(bitvector_t bits, size_t namecount, const char *whatami, const char *whatbits)
-// {
-// unsigned int flagnum;
-// bool error = FALSE;
-//
-// /* See if any bits are set above the ones we know about. */
-// if (bits <= (~(bitvector_t)0 >> (sizeof(bitvector_t) * 8 - namecount)))
-// return (FALSE);
-//
-// for (flagnum = namecount; flagnum < sizeof(bitvector_t) * 8; flagnum++)
-// if ((1 << flagnum) & bits) {
-// log("SYSERR: %s has unknown %s flag, bit %d (0 through %d known).", whatami, whatbits, flagnum, namecount - 1);
-// error = TRUE;
-// }
-//
-// return (error);
-// }
-//
-//
+
+fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &str) -> bool {
+    let mut flagnum: u32;
+    let mut error = false;
+
+    /* See if any bits are set above the ones we know about. */
+    if bits <= (!0 as i64 >> (64 - namecount)) {
+        return false;
+    }
+
+    for flagnum in namecount..64 {
+        if ((1 << flagnum) & bits) != 0 {
+            error!(
+                "SYSERR: {} has unknown {} flag, bit {} (0 through {} known).",
+                whatami,
+                whatbits,
+                flagnum,
+                namecount - 1
+            );
+            error = true;
+        }
+    }
+
+    return error;
+}
