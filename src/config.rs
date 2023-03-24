@@ -51,7 +51,7 @@
 /*  how many people can get into a tunnel?  The default is two, but there
 *  is also an alternate message in the case of one person being allowed.
 */
-//static mut TUNNEL_SIZE: i32 = 2;
+pub const TUNNEL_SIZE: i32 = 2;
 
 /* exp change limits */
 // int max_exp_gain = 100000;	/* max gainable per kill */

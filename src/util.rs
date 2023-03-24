@@ -92,7 +92,7 @@ macro_rules! check_player_special {
         ($var)
     };
 }
-use crate::structs::{room_rnum, ITEM_INVISIBLE};
+use crate::structs::{obj_vnum, room_rnum, MobRnum, RoomRnum, ITEM_INVISIBLE, NOTHING};
 pub use check_player_special;
 use std::borrow::Borrow;
 
@@ -111,6 +111,9 @@ impl CharData {
     }
     pub fn get_move(&self) -> i16 {
         self.points.borrow().movem
+    }
+    pub fn incr_move(&self, val: i16) {
+        self.points.borrow_mut().movem += val;
     }
     pub fn set_move(&self, val: i16) {
         self.points.borrow_mut().movem = val;
@@ -180,10 +183,10 @@ impl CharData {
         }
     }
     pub fn get_title(&self) -> Rc<str> {
-        Rc::from(self.player.borrow().title.as_str())
+        Rc::from(self.player.borrow().title.as_ref().unwrap().as_str())
     }
-    pub fn set_title(&self, val: &str) {
-        self.player.borrow_mut().title = String::from(val);
+    pub fn set_title(&self, val: Option<String>) {
+        self.player.borrow_mut().title = val;
     }
 }
 
@@ -209,22 +212,22 @@ macro_rules! isnewl {
 // }
 impl DescriptorData {
     pub fn state(&self) -> ConState {
-        *self.connected.borrow()
+        self.connected.get()
     }
     pub fn set_state(&self, val: ConState) {
-        *self.connected.borrow_mut() = val;
+        self.connected.set(val);
     }
 }
 
 impl CharData {
     pub(crate) fn get_wait_state(&self) -> i32 {
-        return *self.wait.borrow();
+        return self.wait.get();
     }
     pub(crate) fn decr_wait_state(&self, val: i32) {
-        *self.wait.borrow_mut() -= val;
+        self.wait.set(self.wait.get() - val);
     }
     pub(crate) fn set_wait_state(&self, val: i32) {
-        *self.wait.borrow_mut() = val;
+        self.wait.set(val);
     }
     pub fn get_class(&self) -> i8 {
         self.player.borrow().chclass
@@ -256,11 +259,29 @@ impl CharData {
     pub fn set_exp(&self, val: i32) {
         self.points.borrow_mut().exp = val;
     }
+    pub fn set_gold(&self, val: i32) {
+        self.points.borrow_mut().gold = val
+    }
+    pub fn get_gold(&self) -> i32 {
+        self.points.borrow().gold
+    }
     pub fn get_max_move(&self) -> i16 {
         self.points.borrow().max_move
     }
     pub fn get_max_mana(&self) -> i16 {
         self.points.borrow().max_mana
+    }
+    pub fn get_hitroll(&self) -> i8 {
+        self.points.borrow().hitroll
+    }
+    pub fn set_damroll(&self, val: i8) {
+        self.points.borrow_mut().damroll = val;
+    }
+    pub fn get_damroll(&self) -> i8 {
+        self.points.borrow().damroll
+    }
+    pub fn set_hitroll(&self, val: i8) {
+        self.points.borrow_mut().hitroll = val;
     }
     pub fn get_max_hit(&self) -> i16 {
         self.points.borrow().max_hit
@@ -296,13 +317,16 @@ impl CharData {
         self.points.borrow_mut().armor = val;
     }
     pub fn in_room(&self) -> room_rnum {
-        *self.in_room.borrow()
+        self.in_room.get()
     }
     pub fn set_in_room(&self, val: room_rnum) {
-        *self.in_room.borrow_mut() = val;
+        self.in_room.set(val);
     }
     pub fn get_was_in(&self) -> room_rnum {
-        *self.was_in_room.borrow()
+        self.was_in_room.get()
+    }
+    pub fn set_was_in(&self, val: RoomRnum) {
+        self.was_in_room.set(val)
     }
 }
 
@@ -339,6 +363,12 @@ impl CharData {
     }
     pub fn set_talk_mut(&self, i: usize, val: bool) {
         self.player_specials.borrow_mut().saved.talks[i] = val;
+    }
+    pub fn get_mob_rnum(&self) -> MobRnum {
+        self.nr
+    }
+    pub fn set_mob_rnum(&mut self, val: MobRnum) {
+        self.nr = val;
     }
     pub fn get_cond(&self, i: i32) -> i16 {
         self.player_specials.borrow().saved.conditions[i as usize]
@@ -430,6 +460,9 @@ impl CharData {
     pub fn get_pos(&self) -> u8 {
         self.char_specials.borrow().position
     }
+    pub fn set_pos(&self, val: u8) {
+        self.char_specials.borrow_mut().position = val;
+    }
     pub fn get_idnum(&self) -> i64 {
         self.char_specials.borrow().saved.idnum
     }
@@ -452,6 +485,12 @@ impl CharData {
     }
     pub fn set_fighting(&self, val: Option<Rc<CharData>>) {
         self.char_specials.borrow_mut().fighting = val;
+    }
+    pub fn get_alignment(&self) -> i32 {
+        self.char_specials.borrow().saved.alignment
+    }
+    pub fn set_alignment(&self, val: i32) {
+        self.char_specials.borrow_mut().saved.alignment = val;
     }
     pub fn aff_flagged(&self, flag: i64) -> bool {
         is_set!(self.aff_flags(), flag)
@@ -477,11 +516,33 @@ impl CharData {
     pub fn plr_flagged(&self, flag: i64) -> bool {
         !self.is_npc() && is_set!(self.plr_flags(), flag)
     }
+    pub fn mob_flagged(&self, flag: i64) -> bool {
+        self.is_npc() && is_set!(self.mob_flags(), flag)
+    }
     pub fn plr_flags(&self) -> i64 {
         self.char_specials.borrow().saved.act
     }
     pub fn remove_plr_flag(&self, flag: i64) {
         self.char_specials.borrow_mut().saved.act &= !flag;
+    }
+    pub fn mob_flags(&self) -> i64 {
+        self.char_specials.borrow().saved.act
+    }
+    pub fn remove_mob_flags_bit(&self, flag: i64) {
+        self.char_specials.borrow_mut().saved.act &= !flag;
+    }
+    pub fn set_mob_flags(&self, flags: i64) {
+        self.char_specials.borrow_mut().saved.act = flags;
+    }
+    pub fn set_mob_flags_bit(&self, flag: i64) {
+        self.char_specials.borrow_mut().saved.act |= flag;
+    }
+
+    pub fn get_default_pos(&self) -> u8 {
+        self.mob_specials.default_pos
+    }
+    pub fn set_default_pos(&mut self, val: u8) {
+        self.mob_specials.default_pos = val;
     }
 }
 
@@ -574,11 +635,73 @@ impl CharData {
 }
 
 impl ObjData {
+    pub fn get_obj_type(&self) -> u8 {
+        self.obj_flags.type_flag
+    }
+    pub fn set_obj_type(&mut self, val: u8) {
+        self.obj_flags.type_flag = val;
+    }
+
     pub fn get_obj_extra(&self) -> i32 {
         self.obj_flags.extra_flags
     }
+    pub fn set_obj_extra(&mut self, val: i32) {
+        self.obj_flags.extra_flags = val;
+    }
+    pub fn get_obj_wear(&self) -> i32 {
+        self.obj_flags.wear_flags
+    }
+    pub fn set_obj_wear(&mut self, val: i32) {
+        self.obj_flags.wear_flags = val;
+    }
+    pub fn get_obj_val(&self, val: usize) -> i32 {
+        self.obj_flags.value[val]
+    }
+    pub fn set_obj_val(&mut self, val: usize, v: i32) {
+        self.obj_flags.value[val] = v;
+    }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
+    }
+    pub fn get_obj_weight(&self) -> i32 {
+        self.obj_flags.weight
+    }
+    pub fn set_obj_weight(&mut self, val: i32) {
+        self.obj_flags.weight = val;
+    }
+    pub fn get_obj_cost(&self) -> i32 {
+        self.obj_flags.cost
+    }
+    pub fn set_obj_cost(&mut self, val: i32) {
+        self.obj_flags.cost = val;
+    }
+    pub fn get_obj_rent(&self) -> i32 {
+        self.obj_flags.cost_per_day
+    }
+    pub fn set_obj_rent(&mut self, val: i32) {
+        self.obj_flags.cost_per_day = val;
+    }
+    pub fn get_obj_rnum(&self) -> obj_vnum {
+        self.item_number
+    }
+    pub fn get_obj_affect(&self) -> i64 {
+        self.obj_flags.bitvector
+    }
+    pub fn set_in_room(&mut self, val: RoomRnum) {
+        self.in_room = val;
+    }
+}
+
+impl DB {
+    pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
+        obj.get_obj_rnum() < self.obj_index.len() as i16 && obj.get_obj_rnum() != NOTHING
+    }
+    pub fn get_obj_vnum(&self, obj: &ObjData) -> i16 {
+        if self.valid_obj_rnum(obj) {
+            self.obj_index[obj.get_obj_rnum() as usize].vnum
+        } else {
+            NOTHING
+        }
     }
 }
 
@@ -1279,18 +1402,9 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
 // return (1);
 // }
 
-//
-// int num_pc_in_room(struct room_data *room)
-// {
-// int i = 0;
-// struct char_data *ch;
-//
-// for (ch = room->people; ch != NULL; ch = ch->next_in_room)
-// if (!IS_NPC(ch))
-// i++;
-//
-// return (i);
-// }
+pub fn num_pc_in_room(room: &RoomData) -> i32 {
+    room.peoples.borrow().len() as i32
+}
 
 /*
  * This function (derived from basic fork(); abort(); idea by Erwin S.
@@ -1350,7 +1464,7 @@ impl DB {
             return false;
         }
 
-        if *self.world.borrow()[room as usize].light.borrow() != 0 {
+        if self.world.borrow()[room as usize].light.get() != 0 {
             return false;
         }
 

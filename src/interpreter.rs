@@ -16,12 +16,27 @@ use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
     CharData, MobSpecialData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART,
     POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STUNNED,
+    POS_STANDING, POS_STUNNED,
 };
 use hmac::Hmac;
 use sha2::Sha256;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+/*
+ * SUBCOMMANDS
+ *   You can define these however you want to, and the definitions of the
+ *   subcommands are independent from function to function.
+ */
+
+/* directions */
+pub const SCMD_NORTH: i32 = 1;
+pub const SCMD_EAST: i32 = 2;
+pub const SCMD_SOUTH: i32 = 3;
+pub const SCMD_WEST: i32 = 4;
+pub const SCMD_UP: i32 = 5;
+pub const SCMD_DOWN: i32 = 6;
+
 /* This is the Master Command List(tm).
 
 * You can put new commands in, take commands out, change the order
@@ -34,7 +49,7 @@ use std::rc::Rc;
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-type Command = fn(ch: &CharData, argument: &str, cmd: usize, subcmd: i32);
+type Command = fn(db: &DB, ch: Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
 
 struct CommandInfo {
     command: &'static str,
@@ -44,9 +59,9 @@ struct CommandInfo {
     subcmd: i32,
 }
 
-pub fn do_nothing(ch: &CharData, argument: &str, cmd: usize, subcmd: i32) {}
+pub fn do_nothing(db: &DB, ch: Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-const CMD_INFO: [CommandInfo; 2] = [
+const CMD_INFO: [CommandInfo; 8] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -56,14 +71,49 @@ const CMD_INFO: [CommandInfo; 2] = [
     },
     //
     // /* directions must come before other commands but after RESERVED */
-    // { "north"    , POS_STANDING, do_move     , 0, SCMD_NORTH },
-    // { "east"     , POS_STANDING, do_move     , 0, SCMD_EAST },
-    // { "south"    , POS_STANDING, do_move     , 0, SCMD_SOUTH },
-    // { "west"     , POS_STANDING, do_move     , 0, SCMD_WEST },
-    // { "up"       , POS_STANDING, do_move     , 0, SCMD_UP },
-    // { "down"     , POS_STANDING, do_move     , 0, SCMD_DOWN },
-    //
-    // /* now, the main list */
+    CommandInfo {
+        command: "north",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_NORTH,
+    },
+    CommandInfo {
+        command: "east",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_EAST,
+    },
+    CommandInfo {
+        command: "south",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_SOUTH,
+    },
+    CommandInfo {
+        command: "west",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_WEST,
+    },
+    CommandInfo {
+        command: "up",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_UP,
+    },
+    CommandInfo {
+        command: "down",
+        minimum_position: POS_STANDING,
+        command_pointer: do_move,
+        minimum_level: 0,
+        subcmd: SCMD_DOWN,
+    },
+    /* now, the main list */
     // { "at"       , POS_DEAD    , do_at       , LVL_IMMORT, 0 },
     // { "advance"  , POS_DEAD    , do_advance  , LVL_IMPL, 0 },
     // { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
@@ -420,11 +470,12 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(ch: &CharData, argument: &str) {
+pub fn command_interpreter(db: &DB, rch: Rc<CharData>, argument: &str) {
     let cmd: i32;
     let length: i32;
     let line: &str;
     let mut arg = String::new();
+    let ch = rch.as_ref();
 
     ch.remove_aff_flags(AFF_HIDE);
 
@@ -498,7 +549,7 @@ pub fn command_interpreter(ch: &CharData, argument: &str) {
             _ => {}
         }
     } //else if no_specials || !special(ch, cmd, line) {
-    (cmd.command_pointer)(ch, line, cmd_idx, cmd.subcmd);
+    (cmd.command_pointer)(db, rch, line, cmd_idx, cmd.subcmd);
     //}
 }
 
@@ -984,7 +1035,7 @@ fn perform_dupe_check<'a>(
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
-    let db = main_globals.db.as_ref().unwrap();
+    let db = &main_globals.db;
 
     id = d.character.borrow().as_ref().unwrap().get_idnum();
 
@@ -1117,10 +1168,11 @@ fn perform_dupe_check<'a>(
 }
 
 /* deal with newcomers and other non-playing sockets */
+use crate::act_movement::do_move;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{real_room, reset_char, store_to_char};
+use crate::db::{real_room, reset_char, store_to_char, DB};
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
@@ -1139,7 +1191,7 @@ use std::cmp::max;
 
 pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
-    let db = main_globals.db.as_ref().unwrap();
+    let db = &main_globals.db;
     info!("nanny: {:?} '{}'", d.state(), arg);
 
     match d.state() {
@@ -1148,16 +1200,17 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             if d.character.borrow().is_none() {
                 *d.character.borrow_mut() = Some(Rc::new(CharData {
                     pfilepos: RefCell::new(-1),
-                    in_room: RefCell::new(0),
-                    was_in_room: RefCell::new(0),
-                    wait: RefCell::from(0),
+                    nr: 0,
+                    in_room: Cell::new(0),
+                    was_in_room: Cell::new(0),
+                    wait: Cell::from(0),
                     player: RefCell::from(CharPlayerData {
                         passwd: [0; 16],
                         name: String::new(),
                         short_descr: String::new(),
                         long_descr: String::new(),
                         description: String::new(),
-                        title: "".to_string(),
+                        title: Option::from("".to_string()),
                         sex: 0,
                         chclass: 0,
                         level: 0,
@@ -1254,12 +1307,12 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         },
                         last_tell: 0,
                     }),
-                    mob_specials: RefCell::from(MobSpecialData {
+                    mob_specials: MobSpecialData {
                         attack_type: 0,
                         default_pos: 0,
                         damnodice: 0,
                         damsizedice: 0,
-                    }),
+                    },
                     affected: RefCell::new(vec![]),
                     desc: RefCell::new(Some(d.clone())),
                     next_in_room: RefCell::new(None),
@@ -1383,7 +1436,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     last_logon: 0,
                     host: [0; 31],
                 };
-                let db = main_globals.db.as_ref().unwrap();
+                let db = &main_globals.db;
                 let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
                     store_to_char(&tmp_store, character.as_ref());
@@ -1415,7 +1468,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         }
                         write_to_output(d.as_ref(), "Password: ");
                         echo_off(d.as_ref());
-                        *d.idle_tics.borrow_mut() = 0;
+                        d.idle_tics.set(0);
                         d.set_state(ConPassword);
                     }
                 } else {
@@ -1523,8 +1576,8 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                     character.incr_bad_pws();
                     db.save_char(d.character.borrow().as_ref().unwrap());
-                    *d.bad_pws.borrow_mut() += 1;
-                    if *d.bad_pws.borrow() >= MAX_BAD_PWS {
+                    d.bad_pws.set(d.bad_pws.get() + 1);
+                    if d.bad_pws.get() >= MAX_BAD_PWS {
                         /* 3 strikes and you're out. */
                         write_to_output(d.as_ref(), "Wrong password... disconnecting.\r\n");
                         d.set_state(ConClose);
@@ -1541,7 +1594,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     load_result = character.get_bad_pws();
                     character.reset_bad_pws();
                 }
-                *d.bad_pws.borrow_mut() = 0;
+                d.bad_pws.set(0);
                 // TODO implement ban
                 // if (isbanned(d->host) == BAN_SELECT &&
                 //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
@@ -1743,6 +1796,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                 '1' => {
                     {
+                        info!("[DEBUG] Player Entering game ... ");
                         reset_char(character.as_ref());
                         // TODO implement aliases
                         //read_aliases(character);
@@ -1754,31 +1808,28 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                          * We have to place the character in a room before equipping them
                          * or equip_char() will gripe about the person in NOWHERE.
                          */
-                        let db = main_globals.db.as_ref().unwrap();
                         let mut load_room = character.get_loadroom();
                         if load_room != NOWHERE {
                             let world = db.world.borrow();
                             load_room = real_room(db.world.borrow().as_ref(), load_room);
                         }
 
-                        {
-                            /* If char was saved with NOWHERE, or real_room above failed... */
-                            if load_room == NOWHERE {
-                                if character.get_level() >= LVL_IMMORT as u8 {
-                                    load_room = *db.r_immort_start_room.borrow();
-                                } else {
-                                    load_room = *db.r_mortal_start_room.borrow();
-                                }
+                        /* If char was saved with NOWHERE, or real_room above failed... */
+                        if load_room == NOWHERE {
+                            if character.get_level() >= LVL_IMMORT as u8 {
+                                load_room = *db.r_immort_start_room.borrow();
+                            } else {
+                                load_room = *db.r_mortal_start_room.borrow();
                             }
+                        }
 
-                            if character.plr_flagged(PLR_FROZEN) {
-                                load_room = *db.r_frozen_start_room.borrow();
-                            }
+                        if character.plr_flagged(PLR_FROZEN) {
+                            load_room = *db.r_frozen_start_room.borrow();
                         }
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
                         db.character_list.borrow_mut().push(character.clone());
-                        main_globals.char_to_room(&character, load_room);
+                        db.char_to_room(character.clone(), load_room);
                         //load_result = Crash_load(d->character);
 
                         /* Clear their load room if it's not persistant. */
@@ -1800,11 +1851,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     if character.get_level() == 0 {
                         main_globals.do_start(character.as_ref());
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
-                        main_globals
-                            .db
-                            .as_ref()
-                            .unwrap()
-                            .look_at_room(character.as_ref(), false);
+                        main_globals.db.look_at_room(character.as_ref(), false);
                     }
                     // if has_mail(GET_IDNUM(d->character)) {
                     //     send_to_char(d->character, "You have mail waiting.\r\n");
@@ -1814,7 +1861,8 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     //     send_to_char(d->character, "\r\n\007You could not afford your rent!\r\n"
                     //                  "Your possesions have been donated to the Salvation Army!\r\n");
                     // }
-                    *d.has_prompt.borrow_mut() = false;
+                    d.has_prompt.set(false);
+                    info!("[DEBUG] Player entering game done");
                 }
 
                 '2' => {
@@ -1829,7 +1877,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     write_to_output(d.as_ref(), "Enter the new text you'd like others to see when they look at you.\r\nTerminate with a '@' on a new line.\r\n");
                     let description = character.player.borrow().description.clone();
                     *d.str.borrow_mut() = Some(description);
-                    *d.max_str.borrow_mut() = EXDSCR_LENGTH;
+                    d.max_str.set(EXDSCR_LENGTH);
                     d.set_state(ConExdesc);
                 }
 

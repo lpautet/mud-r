@@ -280,7 +280,7 @@ impl DB {
         send_to_char(ch, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
         for door in 0..NUM_OF_DIRS {
             if self.exit(ch, door).is_none()
-                || *self.exit(ch, door).as_ref().unwrap().to_room.borrow() == NOWHERE
+                || self.exit(ch, door).as_ref().unwrap().to_room.get() == NOWHERE
             {
                 continue;
             }

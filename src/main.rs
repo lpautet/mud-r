@@ -8,6 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 mod act_informative;
+mod act_movement;
 mod ban;
 mod class;
 mod config;
@@ -36,7 +37,7 @@ use env_logger::Env;
 use log::{debug, error, info, warn};
 use std::any::Any;
 use std::borrow::Borrow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
@@ -61,13 +62,13 @@ pub struct DescriptorData {
     // file descriptor for socket
     host: RefCell<String>,
     // hostname
-    bad_pws: RefCell<u8>,
+    bad_pws: Cell<u8>,
     /* number of bad pw attemps this login	*/
-    idle_tics: RefCell<u8>,
+    idle_tics: Cell<u8>,
     /* tics idle at password prompt		*/
-    connected: RefCell<ConState>,
+    connected: Cell<ConState>,
     // mode of 'connectedness'
-    desc_num: RefCell<usize>,
+    desc_num: Cell<usize>,
     // unique num assigned to desc
     login_time: Instant,
     /* when the person connected		*/
@@ -75,16 +76,16 @@ pub struct DescriptorData {
     /* for keeping track of an internal str	*/
     showstr_vector: RefCell<Vec<Rc<RefCell<String>>>>,
     /* for paging through texts		*/
-    showstr_count: RefCell<i32>,
+    showstr_count: Cell<i32>,
     /* number of pages to page through	*/
-    showstr_page: RefCell<i32>,
+    showstr_page: Cell<i32>,
     /* which page are we currently showing?	*/
     str: RefCell<Option<String>>,
     /* for the modify-str system		*/
-    pub max_str: RefCell<usize>,
+    pub max_str: Cell<usize>,
     /*		-			*/
     // long	mail_to;		/* name for mail system			*/
-    has_prompt: RefCell<bool>,
+    has_prompt: Cell<bool>,
     /* is the user at a prompt?             */
     inbuf: RefCell<String>,
     /* buffer for raw input		*/
@@ -109,15 +110,15 @@ pub struct DescriptorData {
 
 /* local globals */
 pub struct MainGlobals {
-    db: Option<DB>,
+    db: DB,
     mother_desc: Option<RefCell<TcpListener>>,
     descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
-    last_desc: RefCell<usize>,
+    last_desc: Cell<usize>,
     // struct txt_block *bufpool = 0;	/* pool of large output buffers */
     // int buf_largecount = 0;		/* # of large buffers which exist */
     // int buf_overflows = 0;		/* # of overflows of output */
     // int buf_switches = 0;		/* # of switches from small to large buf */
-    circle_shutdown: RefCell<bool>,
+    circle_shutdown: Cell<bool>,
     /* clean shutdown */
     circle_reboot: bool,
     /* reboot the game after a shutdown */
@@ -145,11 +146,11 @@ fn main() -> ExitCode {
 
     let mut game = MainGlobals {
         descriptor_list: RefCell::new(Vec::new()),
-        last_desc: RefCell::new(0),
-        circle_shutdown: RefCell::new(false),
+        last_desc: Cell::new(0),
+        circle_shutdown: Cell::new(false),
         circle_reboot: false,
         no_specials: false,
-        db: None,
+        db: DB::new(),
         mother_desc: None,
         tics: 0,
     };
@@ -295,8 +296,7 @@ impl MainGlobals {
 
         info!("Opening mother connection.");
 
-        let db = boot_db(&self);
-        self.db = Some(db);
+        self.db = DB::boot_db(self);
 
         // info!("Signal trapping.");
         // signal_setup();
@@ -505,7 +505,7 @@ impl MainGlobals {
         let mut last_time = Instant::now();
 
         /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
-        while !*RefCell::borrow(&self.circle_shutdown) {
+        while !self.circle_shutdown.get() {
             /* Sleep if we don't have any connections */
             if RefCell::borrow(&self.descriptor_list).is_empty() {
                 debug!("No connections.  Going to sleep.");
@@ -641,7 +641,7 @@ impl MainGlobals {
                     }
                     character.set_wait_state(1);
                 }
-                *d.has_prompt.borrow_mut() = false;
+                d.has_prompt.set(false);
 
                 // if RefCell::borrow(d).str.is_some() {
                 //     /* Writing boards, mail, etc. */
@@ -662,7 +662,8 @@ impl MainGlobals {
                     // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
                     get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
                     command_interpreter(
-                        d.character.borrow().as_ref().unwrap().as_ref(),
+                        &self.db,
+                        d.character.borrow().as_ref().unwrap().clone(),
                         comm.as_str(),
                     );
                     /* Send it to interpreter */
@@ -674,17 +675,17 @@ impl MainGlobals {
                 if !RefCell::borrow(&d.output).is_empty() {
                     process_output(d);
                     if !RefCell::borrow(&d.output).is_empty() {
-                        *RefCell::borrow_mut(&d.has_prompt) = true;
+                        d.has_prompt.set(true);
                     }
                 }
             }
 
             /* Print prompts for other descriptors who had no other output */
             for d in &*self.descriptor_list.borrow() {
-                if !*d.has_prompt.borrow() && !d.output.borrow().is_empty() {
+                if !d.has_prompt.get() && !d.output.borrow().is_empty() {
                     let text = &make_prompt(d);
                     write_to_descriptor(&mut d.stream.borrow_mut(), text);
-                    *d.has_prompt.borrow_mut() = true;
+                    d.has_prompt.set(true);
                 }
             }
 
@@ -860,13 +861,13 @@ fn make_prompt(d: &DescriptorData) -> String {
 
     if mut_d.str.borrow().is_some() {
         prompt.push_str("] "); /* strcpy: OK (for 'MAX_PROMPT_LENGTH >= 3') */
-    } else if *mut_d.showstr_count.borrow() != 0 {
+    } else if mut_d.showstr_count.get() != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            mut_d.showstr_page.borrow(),
-            mut_d.showstr_count.borrow()
+            mut_d.showstr_page.get(),
+            mut_d.showstr_count.get()
         ));
-    } else if *mut_d.connected.borrow() == ConPlaying {
+    } else if mut_d.connected.get() == ConPlaying {
         let ohc = d.character.borrow();
         let character = ohc.as_ref().unwrap();
         if character.is_npc() {
@@ -1106,18 +1107,18 @@ impl MainGlobals {
         let mut newd = DescriptorData {
             stream: RefCell::new(socket),
             host: RefCell::new(String::new()),
-            bad_pws: RefCell::new(0),
-            idle_tics: RefCell::new(0),
-            connected: RefCell::new(ConState::ConGetName),
-            desc_num: RefCell::new(0),
+            bad_pws: Cell::new(0),
+            idle_tics: Cell::new(0),
+            connected: Cell::new(ConState::ConGetName),
+            desc_num: Cell::new(0),
             login_time: Instant::now(),
             showstr_head: RefCell::new(Rc::new(RefCell::new(String::new()))),
             showstr_vector: RefCell::new(vec![]),
-            showstr_count: RefCell::from(0),
-            showstr_page: RefCell::from(0),
+            showstr_count: Cell::from(0),
+            showstr_page: Cell::from(0),
             str: RefCell::new(None),
-            max_str: RefCell::new(0),
-            has_prompt: RefCell::new(false),
+            max_str: Cell::new(0),
+            has_prompt: Cell::new(false),
             inbuf: RefCell::from(String::new()),
             history: RefCell::new(vec![]),
             output: RefCell::new(String::new()),
@@ -1149,14 +1150,14 @@ impl MainGlobals {
 
         /* initialize descriptor data */
         //newd -> descriptor = desc;
-        *newd.idle_tics.borrow_mut() = 0;
+        newd.idle_tics.set(0);
         //newd -> output = newd -> small_outbuf;
         //newd -> bufspace = SMALL_BUFSIZE - 1;
         newd.login_time = Instant::now();
         //*newd -> output = '\0';
         //newd -> bufptr = 0;
-        *newd.has_prompt.borrow_mut() = true; /* prompt is part of greetings */
-        *newd.connected.borrow_mut() = ConState::ConGetName;
+        newd.has_prompt.set(true); /* prompt is part of greetings */
+        newd.connected.set(ConState::ConGetName);
 
         /*
          * This isn't exactly optimal but allows us to make a design choice.
@@ -1164,11 +1165,11 @@ impl MainGlobals {
          * allocated and allow a user defined history size?
          */
         //CREATE(newd -> history, char *, HISTORY_SIZE);
-        *RefCell::borrow_mut(&self.last_desc) += 1;
-        if *RefCell::borrow(&self.last_desc) == 1000 {
-            *RefCell::borrow_mut(&self.last_desc) = 1;
+        self.last_desc.set(self.last_desc.get() + 1);
+        if self.last_desc.get() == 1000 {
+            self.last_desc.set(1);
         }
-        *RefCell::borrow_mut(&newd.desc_num) = *RefCell::borrow_mut(&self.last_desc);
+        newd.desc_num.set(self.last_desc.get());
 
         /* prepend to list */
         // newd -> next = descriptor_list;
@@ -1178,7 +1179,7 @@ impl MainGlobals {
 
         write_to_output(
             rc.as_ref(),
-            format!("{}", self.db.as_ref().unwrap().greetings.borrow()).as_str(),
+            format!("{}", self.db.greetings.borrow()).as_str(),
         );
     }
 }
@@ -1208,7 +1209,7 @@ fn process_output(t: &DescriptorData) -> i32 {
     // if (t -> bufspace == 0)
     // strcat(osb, "**OVERFLOW**\r\n"); /* strcpy: OK (osb:MAX_SOCK_BUF-2 reserves space) */
     /* add the extra CRLF if the person isn't in compact mode */
-    if *t.connected.borrow() == ConPlaying
+    if t.connected.get() == ConPlaying
         && t.character.borrow().is_some()
         && !t.character.borrow().as_ref().unwrap().is_npc()
         && t.character
@@ -1227,8 +1228,8 @@ fn process_output(t: &DescriptorData) -> i32 {
      * now, send the output.  If this is an 'interruption', use the prepended
      * CRLF, otherwise send the straight output sans CRLF.
      */
-    if *RefCell::borrow(&t.has_prompt) {
-        *RefCell::borrow_mut(&t.has_prompt) = false;
+    if t.has_prompt.get() {
+        t.has_prompt.set(false);
         result = write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), &i);
         if result >= 2 {
             result -= 2;
@@ -2336,43 +2337,29 @@ impl DB {
             return;
         }
         /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
-        let mut to;
         let w = self.world.borrow();
+        let char_list;
         if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
-            let t = &w[ch.as_ref().unwrap().in_room() as usize].people.borrow();
-            to = if t.is_none() {
-                None
-            } else {
-                let u = t.as_ref().unwrap().clone();
-                Some(u)
-            };
+            char_list = &w[ch.as_ref().unwrap().in_room() as usize].peoples;
         } else if obj.is_some() && obj.unwrap().in_room() != NOWHERE {
-            let t = &w[obj.unwrap().in_room() as usize].people.borrow();
-            to = if t.is_none() {
-                None
-            } else {
-                let u = t.as_ref().unwrap().clone();
-                Some(u)
-            };
+            char_list = &w[obj.unwrap().in_room() as usize].peoples;
         } else {
             error!("SYSERR: no valid target to act()!");
             return;
         }
 
-        while to.is_some() {
-            if !sendok!(to.as_ref().unwrap(), to_sleeping)
-                || Rc::ptr_eq(&to.as_ref().unwrap(), ch.as_ref().unwrap())
-            {
+        for to in char_list.borrow().iter() {
+            if !sendok!(to.as_ref(), to_sleeping) || Rc::ptr_eq(to, ch.as_ref().unwrap()) {
                 continue;
             }
             if hide_invisible
                 && ch.is_some()
-                && !self.can_see(to.as_ref().unwrap(), ch.as_ref().unwrap().borrow())
+                && !self.can_see(to.as_ref(), ch.as_ref().unwrap().borrow())
             {
                 continue;
             }
             if _type != TO_ROOM
-                && to.as_ref().unwrap().as_ref() as *const _
+                && to.as_ref() as *const _
                     == vict_obj.unwrap().downcast_ref::<CharData>().unwrap() as *const _
             {
                 continue;
@@ -2382,29 +2369,8 @@ impl DB {
                 Some(ch.as_ref().unwrap().borrow()),
                 obj,
                 vict_obj,
-                to.as_ref().unwrap().as_ref(),
+                to.as_ref(),
             );
-            //let t = to.as_ref().unwrap().next_in_room.borrow().as_ref();
-            to = if to
-                .as_ref()
-                .unwrap()
-                .next_in_room
-                .borrow()
-                .as_ref()
-                .is_none()
-            {
-                None
-            } else {
-                Some(
-                    to.as_ref()
-                        .unwrap()
-                        .next_in_room
-                        .borrow()
-                        .as_ref()
-                        .unwrap()
-                        .clone(),
-                )
-            };
         }
     }
 }

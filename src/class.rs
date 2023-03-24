@@ -28,7 +28,6 @@ use crate::structs::{
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, set_skill, MainGlobals};
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 
@@ -1429,7 +1428,7 @@ impl MainGlobals {
         ch.set_level(1);
         ch.set_exp(1);
 
-        ch.set_title("");
+        ch.set_title(Some("".to_string()));
         roll_real_abils(ch);
 
         ch.set_max_hit(10);
@@ -1454,7 +1453,7 @@ impl MainGlobals {
             _ => {}
         }
 
-        advance_level(ch, &self.db.as_ref().unwrap());
+        advance_level(ch, &self.db);
 
         self.mudlog(
             BRF,

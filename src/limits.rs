@@ -179,7 +179,7 @@ pub fn set_title(ch: &mut CharData, title: &str) {
         }
     }
 
-    ch.set_title(title);
+    ch.set_title(Some(title.parse().unwrap()));
 }
 
 // void run_autowiz(void)

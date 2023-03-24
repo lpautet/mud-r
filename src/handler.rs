@@ -8,8 +8,11 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use crate::db::DB;
 use crate::structs::{room_rnum, CharData, NOWHERE};
 use log::error;
+use std::borrow::BorrowMut;
+use std::process;
 use std::rc::Rc;
 
 use crate::MainGlobals;
@@ -350,58 +353,58 @@ pub fn fname(namelist: &str) -> Rc<str> {
 // if (!found)
 // affect_to_char(ch, af);
 // }
-//
-//
-// /* move a player out of a room */
-// void char_from_room(struct char_data *ch)
-// {
-// struct char_data *temp;
-//
-// if (ch == NULL || IN_ROOM(ch) == NOWHERE) {
-// log("SYSERR: NULL character or NOWHERE in %s, char_from_room", __FILE__);
-// exit(1);
-// }
-//
-// if (FIGHTING(ch) != NULL)
-// stop_fighting(ch);
-//
-// if (GET_EQ(ch, WEAR_LIGHT) != NULL)
-// if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
-// if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2))	/* Light is ON */
-// world[IN_ROOM(ch)].light--;
-//
-// REMOVE_FROM_LIST(ch, world[IN_ROOM(ch)].people, next_in_room);
-// IN_ROOM(ch) = NOWHERE;
-// ch->next_in_room = NULL;
-// }
-//
-//
-/* place a character in a room */
-impl MainGlobals {
-    pub(crate) fn char_to_room(&self, ch: &Rc<CharData>, room: room_rnum) {
-        if room == NOWHERE || room > self.db.as_ref().unwrap().top_of_world.borrow().to_owned() {
+impl DB {
+    /* move a player out of a room */
+    pub fn char_from_room(&self, rch: Rc<CharData>) {
+        //struct char_data *temp;
+        let ch = rch.as_ref();
+
+        if ch.in_room() == NOWHERE {
+            error!("SYSERR: NULL character or NOWHERE in char_from_room");
+            process::exit(1);
+        }
+
+        // TODO implement fighting
+        // if ch.fighting().is_some {
+        //     stop_fighting(ch);
+        // }
+
+        // TODO implement objects
+        // if (GET_EQ(ch, WEAR_LIGHT) != NULL)
+        // if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
+        // if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2))	/* Light is ON */
+        // world[IN_ROOM(ch)].light--;
+
+        let w = self.world.borrow();
+        let mut list = w[ch.in_room() as usize].peoples.borrow_mut();
+        list.retain(|c_rch| !Rc::ptr_eq(c_rch, &rch));
+    }
+
+    /* place a character in a room */
+    pub(crate) fn char_to_room(&self, ch: Rc<CharData>, room: room_rnum) {
+        if room == NOWHERE || room > self.top_of_world.borrow().to_owned() {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
                 room,
-                self.db.as_ref().unwrap().top_of_world.borrow(),
+                self.top_of_world.borrow(),
                 'x'
             );
         } else {
-            *ch.next_in_room.borrow_mut() = self.db.as_ref().unwrap().world.borrow()[room as usize]
-                .people
-                .borrow()
-                .clone();
-            *self.db.as_ref().unwrap().world.borrow_mut()[room as usize]
-                .people
-                .borrow_mut() = Some(ch.clone());
+            self.world.borrow()[room as usize]
+                .peoples
+                .borrow_mut()
+                .push(ch.clone());
+            // *ch.next_in_room.borrow_mut() =
+            //     self.world.borrow()[room as usize].people.borrow().clone();
+            // *self.world.borrow_mut()[room as usize].people.borrow_mut() = Some(ch.clone());
             ch.set_in_room(room);
 
             // if (GET_EQ(ch, WEAR_LIGHT))
             // if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
             // if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2))    /* Light ON */
-            *self.db.as_ref().unwrap().world.borrow()[room as usize]
+            self.world.borrow()[room as usize]
                 .light
-                .borrow_mut() += 1;
+                .replace(self.world.borrow()[room as usize].light.take() + 1);
 
             /* Stop fighting now, if we left. */
             // if (FIGHTING(ch) && IN_ROOM(ch) != IN_ROOM(FIGHTING(ch))) {

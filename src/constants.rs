@@ -115,33 +115,31 @@ pub const ROOM_BITS: [&str; 17] = [
 // "DEAD",    /* You should never see this. */
 // "\n"
 // };
-//
-//
-// /* MOB_x */
-// const char *action_bits[] = {
-// "SPEC",
-// "SENTINEL",
-// "SCAVENGER",
-// "ISNPC",
-// "AWARE",
-// "AGGR",
-// "STAY-ZONE",
-// "WIMPY",
-// "AGGR_EVIL",
-// "AGGR_GOOD",
-// "AGGR_NEUTRAL",
-// "MEMORY",
-// "HELPER",
-// "NO_CHARM",
-// "NO_SUMMN",
-// "NO_SLEEP",
-// "NO_BASH",
-// "NO_BLIND",
-// "DEAD",    /* You should never see this. */
-// "\n"
-// };
-//
-//
+
+/* MOB_x */
+pub const ACTION_BITS: [&str; 20] = [
+    "SPEC",
+    "SENTINEL",
+    "SCAVENGER",
+    "ISNPC",
+    "AWARE",
+    "AGGR",
+    "STAY-ZONE",
+    "WIMPY",
+    "AGGR_EVIL",
+    "AGGR_GOOD",
+    "AGGR_NEUTRAL",
+    "MEMORY",
+    "HELPER",
+    "NO_CHARM",
+    "NO_SUMMN",
+    "NO_SLEEP",
+    "NO_BASH",
+    "NO_BLIND",
+    "DEAD", /* You should never see this. */
+    "\n",
+];
+
 // /* PRF_x */
 // const char *preference_bits[] = {
 // "BRIEF",
@@ -168,37 +166,34 @@ pub const ROOM_BITS: [&str; 17] = [
 // "RMFLG",
 // "\n"
 // };
-//
-//
-// /* AFF_x */
-// const char *affected_bits[] =
-// {
-// "BLIND",
-// "INVIS",
-// "DET-ALIGN",
-// "DET-INVIS",
-// "DET-MAGIC",
-// "SENSE-LIFE",
-// "WATWALK",
-// "SANCT",
-// "GROUP",
-// "CURSE",
-// "INFRA",
-// "POISON",
-// "PROT-EVIL",
-// "PROT-GOOD",
-// "SLEEP",
-// "NO_TRACK",
-// "UNUSED",
-// "UNUSED",
-// "SNEAK",
-// "HIDE",
-// "UNUSED",
-// "CHARM",
-// "\n"
-// };
-//
-//
+
+/* AFF_x */
+pub const AFFECTED_BITS: [&str; 23] = [
+    "BLIND",
+    "INVIS",
+    "DET-ALIGN",
+    "DET-INVIS",
+    "DET-MAGIC",
+    "SENSE-LIFE",
+    "WATWALK",
+    "SANCT",
+    "GROUP",
+    "CURSE",
+    "INFRA",
+    "POISON",
+    "PROT-EVIL",
+    "PROT-GOOD",
+    "SLEEP",
+    "NO_TRACK",
+    "UNUSED",
+    "UNUSED",
+    "SNEAK",
+    "HIDE",
+    "UNUSED",
+    "CHARM",
+    "\n",
+];
+
 // /* CON_x */
 // const char *connected_types[] = {
 // "Playing",
@@ -301,52 +296,35 @@ pub const ROOM_BITS: [&str; 17] = [
 // "FOUNTAIN",
 // "\n"
 // };
-//
-//
-// /* ITEM_WEAR_ (wear bitvector) */
-// const char *wear_bits[] = {
-// "TAKE",
-// "FINGER",
-// "NECK",
-// "BODY",
-// "HEAD",
-// "LEGS",
-// "FEET",
-// "HANDS",
-// "ARMS",
-// "SHIELD",
-// "ABOUT",
-// "WAIST",
-// "WRIST",
-// "WIELD",
-// "HOLD",
-// "\n"
-// };
-//
-//
-// /* ITEM_x (extra bits) */
-// const char *extra_bits[] = {
-// "GLOW",
-// "HUM",
-// "NO_RENT",
-// "NO_DONATE",
-// "NO_INVIS",
-// "INVISIBLE",
-// "MAGIC",
-// "NO_DROP",
-// "BLESS",
-// "ANTI_GOOD",
-// "ANTI_EVIL",
-// "ANTI_NEUTRAL",
-// "ANTI_MAGE",
-// "ANTI_CLERIC",
-// "ANTI_THIEF",
-// "ANTI_WARRIOR",
-// "NO_SELL",
-// "\n"
-// };
-//
-//
+
+/* ITEM_WEAR_ (wear bitvector) */
+pub const WEAR_BITS: [&str; 16] = [
+    "TAKE", "FINGER", "NECK", "BODY", "HEAD", "LEGS", "FEET", "HANDS", "ARMS", "SHIELD", "ABOUT",
+    "WAIST", "WRIST", "WIELD", "HOLD", "\n",
+];
+
+/* ITEM_x (extra bits) */
+pub const EXTRA_BITS: [&str; 18] = [
+    "GLOW",
+    "HUM",
+    "NO_RENT",
+    "NO_DONATE",
+    "NO_INVIS",
+    "INVISIBLE",
+    "MAGIC",
+    "NO_DROP",
+    "BLESS",
+    "ANTI_GOOD",
+    "ANTI_EVIL",
+    "ANTI_NEUTRAL",
+    "ANTI_MAGE",
+    "ANTI_CLERIC",
+    "ANTI_THIEF",
+    "ANTI_WARRIOR",
+    "NO_SELL",
+    "\n",
+];
+
 // /* APPLY_x */
 // const char *apply_types[] = {
 // "NONE",
@@ -1132,22 +1110,20 @@ pub const WIS_APP: [WisAppType; 26] = [
 // 5,
 // 4
 // };
-//
-//
-// int movement_loss[] =
-// {
-// 1,	/* Inside     */
-// 1,	/* City       */
-// 2,	/* Field      */
-// 3,	/* Forest     */
-// 4,	/* Hills      */
-// 6,	/* Mountains  */
-// 4,	/* Swimming   */
-// 1,	/* Unswimable */
-// 1,	/* Flying     */
-// 5     /* Underwater */
-// };
-//
+
+pub const MOVEMENT_LOSS: [i32; 10] = [
+    1, /* Inside     */
+    1, /* City       */
+    2, /* Field      */
+    3, /* Forest     */
+    4, /* Hills      */
+    6, /* Mountains  */
+    4, /* Swimming   */
+    1, /* Unswimable */
+    1, /* Flying     */
+    5, /* Underwater */
+];
+
 // /* Not used in sprinttype(). */
 // const char *weekdays[] = {
 // "the Day of the Moon",
@@ -1188,11 +1164,8 @@ pub const WIS_APP: [WisAppType; 26] = [
  * Various arrays we count so we can check the world files.  These
  * must be at the bottom of the file so they're pre-declared.
  */
-// action_bits_count = sizeof(action_bits) / sizeof(action_bits[0]) - 1,
+pub const ACTION_BITS_COUNT: usize = ACTION_BITS.len() - 1;
 pub const ROOM_BITS_COUNT: usize = ROOM_BITS.len() - 1;
-// affected_bits_count = sizeof(affected_bits) / sizeof(affected_bits[0]) - 1,
-// extra_bits_count = sizeof(extra_bits) / sizeof(extra_bits[0]) - 1,
-// wear_bits_count = sizeof(wear_bits) / sizeof(wear_bits[0]) - 1;
-//
-//
-//
+pub const AFFECTED_BITS_COUNT: usize = AFFECTED_BITS.len() - 1;
+pub const EXTRA_BITS_COUNT: usize = EXTRA_BITS.len() - 1;
+pub const WEAR_BITS_COUNT: usize = WEAR_BITS.len() - 1;

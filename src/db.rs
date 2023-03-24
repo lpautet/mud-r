@@ -12,16 +12,19 @@ use regex::Regex;
 use crate::modify::paginate_string;
 use crate::structs::{
     obj_vnum, room_rnum, room_vnum, zone_rnum, zone_vnum, AffectedType, CharAbilityData, CharData,
-    CharFileU, CharPointData, CharSpecialDataSaved, ExtraDescrData, PlayerSpecialDataSaved,
-    RoomData, RoomDirectionData, AFF_POISON, EX_ISDOOR, EX_PICKPROOF, HOST_LENGTH, LVL_IMPL,
-    MAX_AFFECT, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, NOBODY,
-    NOWHERE, NUM_OF_DIRS, POS_STANDING, SEX_MALE,
+    CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved,
+    ExtraDescrData, IndexData, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData,
+    ObjFlagData, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData,
+    TimeData, AFF_POISON, APPLY_NONE, EX_ISDOOR, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON,
+    ITEM_FOUNTAIN, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH,
+    MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD,
+    MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS,
+    POS_STANDING, SEX_MALE,
 };
 use crate::util::{get_line, prune_crlf, rand_number, time_now, touch, SECS_PER_REAL_HOUR};
 use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 use log::{error, info, warn};
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
@@ -43,23 +46,24 @@ struct PlayerIndexElement {
 }
 
 pub struct DB {
-    //   pub globals: &'a MainGlobals,
     pub world: RefCell<Vec<Rc<RoomData>>>,
     pub top_of_world: RefCell<room_rnum>,
     /* ref to top element of world	 */
     pub character_list: RefCell<Vec<Rc<CharData>>>,
     /* global linked list of * chars	 */
-    // struct index_data *mob_index;	/* index table for mobile file	 */
-    // struct char_data *mob_proto;	/* prototypes for mobs		 */
+    pub mob_index: Vec<IndexData>,
+    /* index table for mobile file	 */
+    pub mob_protos: Vec<Rc<CharData>>,
+    /* prototypes for mobs		 */
     // mob_rnum top_of_mobt = 0;	/* top of mobile index table	 */
     //
-    // struct obj_data *object_list = NULL;	/* global linked list of objs	 */
-    // struct index_data *obj_index;	/* index table for object file	 */
-    // struct obj_data *obj_proto;	/* prototypes for objs		 */
+    pub object_list: RefCell<Vec<Rc<ObjData>>>, /* global linked list of objs	 */
+    pub obj_index: Vec<IndexData>,              /* index table for object file	 */
+    pub obj_proto: Vec<Rc<ObjData>>,            /* prototypes for objs		 */
     // obj_rnum top_of_objt = 0;	/* top of object index table	 */
     zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
-    top_of_zone_table: RefCell<zone_rnum>,
+    //top_of_zone_table: RefCell<zone_rnum>,
     /* top element of zone tab	 */
     // struct message_list fight_messages[MAX_MESSAGES];	/* fighting messages	 */
     //
@@ -166,37 +170,11 @@ pub struct ZoneData {
      *   2: Just reset.
      */
 }
-// /* external functions */
-// void paginate_string(char *str, struct descriptor_data *d);
-// struct time_info_data *mud_time_passed(time_t t2, time_t t1);
-// void free_alias(struct alias_data *a);
-// void load_messages(void);
-// void weather_and_time(int mode);
-// void mag_assign_spells(void);
-// void boot_social_messages(void);
-// void update_obj_file(void);	/* In objsave.c */
-// void sort_commands(void);
-// void sort_spells(void);
-// void load_banned(void);
-// void Read_Invalid_List(void);
-// void boot_the_shops(FILE *shop_f, char *filename, int rec_count);
-// int hsort(const void *a, const void *b);
-// void prune_crlf(char *txt);
-// void destroy_shops(void);
-//
-// /* external vars */
-// extern int no_specials;
-// extern int scheck;
-// extern room_vnum MORTAL_START_ROOM;
-// extern room_vnum IMMORT_START_ROOM;
-// extern room_vnum FROZEN_START_ROOM;
-// extern struct descriptor_data *descriptor_list;
-// extern const char *unused_spellname;	/* spell_parser.c */
-//
-// /*************************************************************************
-// *  routines for booting the system                                       *
-// *************************************************************************/
-//
+
+/*************************************************************************
+*  routines for booting the system                                       *
+*************************************************************************/
+
 // /* this is necessary for the autowiz system */
 // void reboot_wizlists(void)
 // {
@@ -299,11 +277,11 @@ impl DB {
         info!("Checking start rooms.");
         self.check_start_rooms();
 
-        // log("Loading mobs and generating index.");
-        // index_boot(DB_BOOT_MOB);
-        //
-        // log("Loading objs and generating index.");
-        // index_boot(DB_BOOT_OBJ);
+        info!("Loading mobs and generating index.");
+        self.index_boot(DB_BOOT_MOB);
+
+        info!("Loading objs and generating index.");
+        self.index_boot(DB_BOOT_OBJ);
 
         info!("Renumbering zone table.");
         self.renum_zone_table();
@@ -419,121 +397,131 @@ impl DB {
 // }
 //
 //
-/* body of the booting system */
-pub fn boot_db<'a>(main_globals: &'a MainGlobals) -> DB {
-    let mut ret = DB {
-        //   globals: Some(main_globals.clone()),
-        world: RefCell::new(vec![]),
-        top_of_world: RefCell::new(0),
-        character_list: RefCell::new(vec![]),
-        zone_table: RefCell::new(vec![]),
-        top_of_zone_table: RefCell::new(0),
-        player_table: RefCell::new(vec![]),
-        player_fl: RefCell::new(None),
-        top_of_p_table: RefCell::new(0),
-        top_idnum: RefCell::new(0),
-        r_mortal_start_room: RefCell::new(0),
-        r_immort_start_room: RefCell::new(0),
-        r_frozen_start_room: RefCell::new(0),
-        motd: "MOTD placeholder".to_string(),
-        imotd: "IMOTD placeholder".to_string(),
-        greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
-        background: "BACKGROUND placeholder".to_string(),
-    };
-    // zone_rnum i;
-    //
-    info!("Boot db -- BEGIN.");
-    //
-    // log("Resetting the game time:");
-    // reset_time();
-    //
-    info!("Reading news, credits, help, bground, info & motds.");
-    // file_to_string_alloc(NEWS_FILE, &news);
-    // file_to_string_alloc(CREDITS_FILE, &credits);
-    main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
-    main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
-    // file_to_string_alloc(HELP_PAGE_FILE, &help);
-    // file_to_string_alloc(INFO_FILE, &info);
-    // file_to_string_alloc(WIZLIST_FILE, &wizlist);
-    // file_to_string_alloc(IMMLIST_FILE, &immlist);
-    // file_to_string_alloc(POLICIES_FILE, &policies);
-    // file_to_string_alloc(HANDBOOK_FILE, &handbook);
-    main_globals.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
-    if main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings.borrow_mut()) == 0 {
-        prune_crlf(&mut ret.greetings.borrow_mut());
+impl DB {
+    pub fn new() -> DB {
+        DB {
+            //   globals: Some(main_globals.clone()),
+            world: RefCell::new(vec![]),
+            top_of_world: RefCell::new(0),
+            character_list: RefCell::new(vec![]),
+            mob_index: vec![],
+            mob_protos: vec![],
+            object_list: RefCell::new(vec![]),
+            obj_index: vec![],
+            obj_proto: vec![],
+            zone_table: RefCell::new(vec![]),
+            //top_of_zone_table: RefCell::new(0),
+            player_table: RefCell::new(vec![]),
+            player_fl: RefCell::new(None),
+            top_of_p_table: RefCell::new(0),
+            top_idnum: RefCell::new(0),
+            r_mortal_start_room: RefCell::new(0),
+            r_immort_start_room: RefCell::new(0),
+            r_frozen_start_room: RefCell::new(0),
+            motd: "MOTD placeholder".to_string(),
+            imotd: "IMOTD placeholder".to_string(),
+            greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
+            background: "BACKGROUND placeholder".to_string(),
+        }
     }
-    //
-    // log("Loading spell definitions.");
-    // mag_assign_spells();
-    //
-    ret.boot_world();
-    //
-    // log("Loading help entries.");
-    // index_boot(DB_BOOT_HLP);
 
-    info!("Generating player index.");
-    ret.build_player_index();
+    /* body of the booting system */
+    pub fn boot_db(main_globals: &MainGlobals) -> DB {
+        let mut ret = DB::new();
+        // zone_rnum i;
+        //
+        info!("Boot db -- BEGIN.");
+        //
+        // log("Resetting the game time:");
+        // reset_time();
+        //
+        info!("Reading news, credits, help, bground, info & motds.");
+        // file_to_string_alloc(NEWS_FILE, &news);
+        // file_to_string_alloc(CREDITS_FILE, &credits);
+        main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
+        main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
+        // file_to_string_alloc(HELP_PAGE_FILE, &help);
+        // file_to_string_alloc(INFO_FILE, &info);
+        // file_to_string_alloc(WIZLIST_FILE, &wizlist);
+        // file_to_string_alloc(IMMLIST_FILE, &immlist);
+        // file_to_string_alloc(POLICIES_FILE, &policies);
+        // file_to_string_alloc(HANDBOOK_FILE, &handbook);
+        main_globals.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
+        if main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings.borrow_mut()) == 0 {
+            prune_crlf(&mut ret.greetings.borrow_mut());
+        }
+        //
+        // log("Loading spell definitions.");
+        // mag_assign_spells();
+        //
+        ret.boot_world();
+        //
+        // log("Loading help entries.");
+        // index_boot(DB_BOOT_HLP);
 
-    // log("Loading fight messages.");
-    // load_messages();
-    //
-    // log("Loading social messages.");
-    // boot_social_messages();
-    //
-    // log("Assigning function pointers:");
-    //
-    // if (!no_specials) {
-    // log("   Mobiles.");
-    // assign_mobiles();
-    // log("   Shopkeepers.");
-    // assign_the_shopkeepers();
-    // log("   Objects.");
-    // assign_objects();
-    // log("   Rooms.");
-    // assign_rooms();
-    // }
-    //
-    // log("Assigning spell and skill levels.");
-    // init_spell_levels();
-    //
-    // log("Sorting command list and spells.");
-    // sort_commands();
-    // sort_spells();
-    //
-    // log("Booting mail system.");
-    // if (!scan_file()) {
-    // log("    Mail boot failed -- Mail system disabled");
-    // no_mail = 1;
-    // }
-    // log("Reading banned site and invalid-name list.");
-    // load_banned();
-    // Read_Invalid_List();
-    //
-    // if (!no_rent_check) {
-    // log("Deleting timed-out crash and rent files:");
-    // update_obj_file();
-    // log("   Done.");
-    // }
-    //
-    // /* Moved here so the object limit code works. -gg 6/24/98 */
-    // if (!mini_mud) {
-    // log("Booting houses.");
-    // House_boot();
-    // }
-    //
-    // for (i = 0; i <= top_of_zone_table; i++) {
-    // log("Resetting #%d: %s (rooms %d-%d).", zone_table[i].number,
-    // zone_table[i].name, zone_table[i].bot, zone_table[i].top);
-    // reset_zone(i);
-    // }
-    //
-    // reset_q.head = reset_q.tail = NULL;
-    //
-    // boot_time = time(0);
-    //
-    info!("Boot db -- DONE.");
+        info!("Generating player index.");
+        ret.build_player_index();
 
-    return ret;
+        // log("Loading fight messages.");
+        // load_messages();
+        //
+        // log("Loading social messages.");
+        // boot_social_messages();
+        //
+        // log("Assigning function pointers:");
+        //
+        // if (!no_specials) {
+        // log("   Mobiles.");
+        // assign_mobiles();
+        // log("   Shopkeepers.");
+        // assign_the_shopkeepers();
+        // log("   Objects.");
+        // assign_objects();
+        // log("   Rooms.");
+        // assign_rooms();
+        // }
+        //
+        // log("Assigning spell and skill levels.");
+        // init_spell_levels();
+        //
+        // log("Sorting command list and spells.");
+        // sort_commands();
+        // sort_spells();
+        //
+        // log("Booting mail system.");
+        // if (!scan_file()) {
+        // log("    Mail boot failed -- Mail system disabled");
+        // no_mail = 1;
+        // }
+        // log("Reading banned site and invalid-name list.");
+        // load_banned();
+        // Read_Invalid_List();
+        //
+        // if (!no_rent_check) {
+        // log("Deleting timed-out crash and rent files:");
+        // update_obj_file();
+        // log("   Done.");
+        // }
+        //
+        // /* Moved here so the object limit code works. -gg 6/24/98 */
+        // if (!mini_mud) {
+        // log("Booting houses.");
+        // House_boot();
+        // }
+        //
+        // for (i = 0; i <= top_of_zone_table; i++) {
+        // log("Resetting #%d: %s (rooms %d-%d).", zone_table[i].number,
+        // zone_table[i].name, zone_table[i].bot, zone_table[i].top);
+        // reset_zone(i);
+        // }
+        //
+        // reset_q.head = reset_q.tail = NULL;
+        //
+        // boot_time = time(0);
+        //
+        info!("Boot db -- DONE.");
+        ret
+    }
 }
 
 //
@@ -764,7 +752,7 @@ impl DB {
         let mut index_filename: &str;
         let mut prefix: &str; /* NULL or egcs 1.1 complains */
         let mut rec_count = 0;
-        let mut size: [u8; 2] = [0; 2];
+        let mut size: [usize; 2] = [0; 2];
         //FILE *db_index, *db_file;
         //int rec_count = 0, size[2];
         //char buf2[PATH_MAX], buf1[MAX_STRING_LENGTH];
@@ -868,33 +856,35 @@ impl DB {
          */
         match mode {
             DB_BOOT_WLD => {
-                //CREATE(world, struct room_data, rec_count);
-                //size[0] = sizeof(struct room_data) *rec_count;
                 self.world.borrow_mut().reserve_exact(rec_count as usize);
-                size[0] = 0;
+                size[0] = mem::size_of::<CharData>() * rec_count as usize;
                 info!("   {} rooms, {} bytes.", rec_count, size[0]);
             }
-            // DB_BOOT_MOB => {
-            //     CREATE(mob_proto, struct char_data, rec_count);
-            //     CREATE(mob_index, struct index_data, rec_count);
-            //     size[0] = sizeof(struct index_data) *rec_count;
-            //     size[1] = sizeof(struct char_data) *rec_count;
-            //     log("   %d mobs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
-            // }
-            // DB_BOOT_OBJ => {
-            //     CREATE(obj_proto, struct obj_data, rec_count);
-            //     CREATE(obj_index, struct index_data, rec_count);
-            //     size[0] = sizeof(struct index_data) *rec_count;
-            //     size[1] = sizeof(struct obj_data) *rec_count;
-            //     log("   %d objs, %d bytes in index, %d bytes in prototypes.", rec_count, size[0], size[1]);
-            // }
+            DB_BOOT_MOB => {
+                size[0] = mem::size_of::<IndexData>() * rec_count as usize;
+                size[1] = mem::size_of::<CharData>() * rec_count as usize;
+                self.mob_protos.reserve_exact(rec_count as usize);
+                self.mob_index.reserve_exact(rec_count as usize);
+                info!(
+                    "   {} mobs, {} bytes in index, {} bytes in prototypes.",
+                    rec_count, size[0], size[1],
+                );
+            }
+            DB_BOOT_OBJ => {
+                self.obj_proto.reserve_exact(rec_count as usize);
+                self.obj_index.reserve_exact(rec_count as usize);
+                size[0] = mem::size_of::<IndexData>() * rec_count as usize;
+                size[1] = mem::size_of::<ObjData>() * rec_count as usize;
+                info!(
+                    "   {} objs, {} bytes in index, {} bytes in prototypes.",
+                    rec_count, size[0], size[1]
+                );
+            }
             DB_BOOT_ZON => {
-                // CREATE(zone_table, struct zone_data, rec_count);
-                // size[0] = sizeof(struct zone_data) *rec_count;
                 self.zone_table
                     .borrow_mut()
                     .reserve_exact(rec_count as usize);
-                size[0] = 0;
+                size[0] = mem::size_of::<ZoneData>() * rec_count as usize;
                 info!("   {} zones, {} bytes.", rec_count, size[0]);
             }
             // DB_BOOT_HLP => {
@@ -1008,12 +998,15 @@ impl DB {
                         DB_BOOT_WLD => {
                             self.parse_room(&mut reader, nr);
                         }
-                        // DB_BOOT_MOB => {
-                        //     parse_mobile(fl, nr);
-                        // }
-                        // DB_BOOT_OBJ => {
-                        //     strlcpy(line, parse_object(fl, nr), sizeof(line));
-                        // }
+                        DB_BOOT_MOB => {
+                            self.parse_mobile(&mut reader, nr);
+                        }
+                        DB_BOOT_OBJ => {
+                            line = self
+                                .parse_object(&mut reader, nr as MobVnum)
+                                .parse()
+                                .unwrap();
+                        }
                         _ => {}
                     }
                 }
@@ -1084,12 +1077,12 @@ impl DB {
             sector_type: 0,
             name: fread_string(reader, buf2.as_str()),
             description: fread_string(reader, buf2.as_str()),
-            ex_description: None,
+            ex_descriptions: vec![],
             //dir_option: [None, None, None, None, None, None],
             dir_option: [None, None, None, None, None, None],
             room_flags: 0,
-            light: RefCell::new(0),
-            people: RefCell::new(None),
+            light: Cell::new(0),
+            peoples: RefCell::new(vec![]),
         };
 
         if get_line(reader, &mut line) == 0 {
@@ -1124,14 +1117,12 @@ impl DB {
 
         //rd.func = NULL;
         //rd.contents = NULL;
-        rd.people = RefCell::new(None);
-        *rd.light.borrow_mut() = 0; /* Zero light sources */
+        rd.peoples = RefCell::new(vec![]);
+        rd.light.set(0); /* Zero light sources */
 
         // for i in 0..NUM_OF_DIRS {
         //     rd.dir_option[i] = None;
         // }
-
-        rd.ex_description = None;
 
         let buf = format!(
             "SYSERR: Format error in room #{} (expecting D/E/S)",
@@ -1149,11 +1140,10 @@ impl DB {
                 }
                 'E' => {
                     //CREATE(new_descr, struct extra_descr_data, 1);
-                    rd.ex_description = Some(Box::new(ExtraDescrData {
+                    rd.ex_descriptions.push(ExtraDescrData {
                         keyword: fread_string(reader, buf2.as_str()),
                         description: fread_string(reader, buf2.as_str()),
-                        next: rd.ex_description,
-                    }));
+                    });
                 }
                 'S' => {
                     /* end of room */
@@ -1189,7 +1179,7 @@ impl DB {
             keyword: fread_string(reader, buf2.as_str()),
             exit_info: 0,
             key: 0,
-            to_room: RefCell::new(0),
+            to_room: Cell::new(0),
         };
 
         if get_line(reader, &mut line) == 0 {
@@ -1216,7 +1206,7 @@ impl DB {
         }
 
         rdr.key = t[1] as obj_vnum;
-        *rdr.to_room.borrow_mut() = t[2] as room_rnum;
+        rdr.to_room.set(t[2] as room_rnum);
 
         //let mut a = RefCell::borrow_mut(self.world.get(room as usize).unwrap());
         room.dir_option[dir as usize] = Some(Rc::new(rdr));
@@ -1265,19 +1255,11 @@ impl DB {
                     if room_data.dir_option[door].is_none() {
                         continue;
                     }
-                    to_room = *room_data.dir_option[door]
-                        .as_ref()
-                        .unwrap()
-                        .to_room
-                        .borrow();
+                    to_room = room_data.dir_option[door].as_ref().unwrap().to_room.get();
                 }
                 if to_room != NOWHERE {
                     let rn = real_room(self.world.borrow().as_ref(), to_room);
-                    *room_data.dir_option[door]
-                        .as_ref()
-                        .unwrap()
-                        .to_room
-                        .borrow_mut() = rn;
+                    room_data.dir_option[door].as_ref().unwrap().to_room.set(rn);
                 }
             }
         }
@@ -1377,443 +1359,686 @@ impl DB {
             }
         }
     }
-}
 
-// void parse_simple_mob(FILE *mob_f, int i, int nr)
-// {
-// int j, t[10];
-// char line[READ_SIZE];
-//
-// mob_proto[i].real_abils.str = 11;
-// mob_proto[i].real_abils.intel = 11;
-// mob_proto[i].real_abils.wis = 11;
-// mob_proto[i].real_abils.dex = 11;
-// mob_proto[i].real_abils.con = 11;
-// mob_proto[i].real_abils.cha = 11;
-//
-// if (!get_line(mob_f, line)) {
-// log("SYSERR: Format error in mob #%d, file ended after S flag!", nr);
-// exit(1);
-// }
-//
-// if (sscanf(line, " %d %d %d %dd%d+%d %dd%d+%d ",
-// t, t + 1, t + 2, t + 3, t + 4, t + 5, t + 6, t + 7, t + 8) != 9) {
-// log("SYSERR: Format error in mob #%d, first line after S flag\n"
-// "...expecting line of form '# # # #d#+# #d#+#'", nr);
-// exit(1);
-// }
-//
-// GET_LEVEL(mob_proto + i) = t[0];
-// GET_HITROLL(mob_proto + i) = 20 - t[1];
-// GET_AC(mob_proto + i) = 10 * t[2];
-//
-// /* max hit = 0 is a flag that H, M, V is xdy+z */
-// GET_MAX_HIT(mob_proto + i) = 0;
-// GET_HIT(mob_proto + i) = t[3];
-// GET_MANA(mob_proto + i) = t[4];
-// GET_MOVE(mob_proto + i) = t[5];
-//
-// GET_MAX_MANA(mob_proto + i) = 10;
-// GET_MAX_MOVE(mob_proto + i) = 50;
-//
-// mob_proto[i].mob_specials.damnodice = t[6];
-// mob_proto[i].mob_specials.damsizedice = t[7];
-// GET_DAMROLL(mob_proto + i) = t[8];
-//
-// if (!get_line(mob_f, line)) {
-// log("SYSERR: Format error in mob #%d, second line after S flag\n"
-// "...expecting line of form '# #', but file ended!", nr);
-// exit(1);
-// }
-//
-// if (sscanf(line, " %d %d ", t, t + 1) != 2) {
-// log("SYSERR: Format error in mob #%d, second line after S flag\n"
-// "...expecting line of form '# #'", nr);
-// exit(1);
-// }
-//
-// GET_GOLD(mob_proto + i) = t[0];
-// GET_EXP(mob_proto + i) = t[1];
-//
-// if (!get_line(mob_f, line)) {
-// log("SYSERR: Format error in last line of mob #%d\n"
-// "...expecting line of form '# # #', but file ended!", nr);
-// exit(1);
-// }
-//
-// if (sscanf(line, " %d %d %d ", t, t + 1, t + 2) != 3) {
-// log("SYSERR: Format error in last line of mob #%d\n"
-// "...expecting line of form '# # #'", nr);
-// exit(1);
-// }
-//
-// GET_POS(mob_proto + i) = t[0];
-// GET_DEFAULT_POS(mob_proto + i) = t[1];
-// GET_SEX(mob_proto + i) = t[2];
-//
-// GET_CLASS(mob_proto + i) = 0;
-// GET_WEIGHT(mob_proto + i) = 200;
-// GET_HEIGHT(mob_proto + i) = 198;
-//
-// /*
-//  * these are now save applies; base save numbers for MOBs are now from
-//  * the warrior save table.
-//  */
-// for (j = 0; j < 5; j++)
-// GET_SAVE(mob_proto + i, j) = 0;
-// }
-//
-//
-// /*
-//  * interpret_espec is the function that takes espec keywords and values
-//  * and assigns the correct value to the mob as appropriate.  Adding new
-//  * e-specs is absurdly easy -- just add a new CASE statement to this
-//  * function!  No other changes need to be made anywhere in the code.
-//  *
-//  * CASE		: Requires a parameter through 'value'.
-//  * BOOL_CASE	: Being specified at all is its value.
-//  */
-//
-// #define CASE(test)	\
-// if (value && !matched && !str_cmp(keyword, test) && (matched = TRUE))
-//
-// #define BOOL_CASE(test)	\
-// if (!value && !matched && !str_cmp(keyword, test) && (matched = TRUE))
-//
-// #define RANGE(low, high)	\
-// (num_arg = MAX((low), MIN((high), (num_arg))))
-//
-// void interpret_espec(const char *keyword, const char *value, int i, int nr)
-// {
-// int num_arg = 0, matched = FALSE;
-//
-// /*
-//  * If there isn't a colon, there is no value.  While Boolean options are
-//  * possible, we don't actually have any.  Feel free to make some.
-// */
-// if (value)
-// num_arg = atoi(value);
-//
-// CASE("BareHandAttack") {
-// RANGE(0, 99);
-// mob_proto[i].mob_specials.attack_type = num_arg;
-// }
-//
-// CASE("Str") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.str = num_arg;
-// }
-//
-// CASE("StrAdd") {
-// RANGE(0, 100);
-// mob_proto[i].real_abils.str_add = num_arg;
-// }
-//
-// CASE("Int") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.intel = num_arg;
-// }
-//
-// CASE("Wis") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.wis = num_arg;
-// }
-//
-// CASE("Dex") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.dex = num_arg;
-// }
-//
-// CASE("Con") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.con = num_arg;
-// }
-//
-// CASE("Cha") {
-// RANGE(3, 25);
-// mob_proto[i].real_abils.cha = num_arg;
-// }
-//
-// if (!matched) {
-// log("SYSERR: Warning: unrecognized espec keyword %s in mob #%d",
-// keyword, nr);
-// }
-// }
-//
-// #undef CASE
-// #undef BOOL_CASE
-// #undef RANGE
-//
-// void parse_espec(char *buf, int i, int nr)
-// {
-// char *ptr;
-//
-// if ((ptr = strchr(buf, ':')) != NULL) {
-// *(ptr++) = '\0';
-// while (isspace(*ptr))
-// ptr++;
-// }
-// interpret_espec(buf, ptr, i, nr);
-// }
-//
-//
-// void parse_enhanced_mob(FILE *mob_f, int i, int nr)
-// {
-// char line[READ_SIZE];
-//
-// parse_simple_mob(mob_f, i, nr);
-//
-// while (get_line(mob_f, line)) {
-// if (!strcmp(line, "E"))	/* end of the enhanced section */
-// return;
-// else if (*line == '#') {	/* we've hit the next mob, maybe? */
-// log("SYSERR: Unterminated E section in mob #%d", nr);
-// exit(1);
-// } else
-// parse_espec(line, i, nr);
-// }
-//
-// log("SYSERR: Unexpected end of file reached after mob #%d", nr);
-// exit(1);
-// }
-//
-//
-// void parse_mobile(FILE *mob_f, int nr)
-// {
-// static int i = 0;
-// int j, t[10];
-// char line[READ_SIZE], *tmpptr, letter;
-// char f1[128], f2[128], buf2[128];
-//
-// mob_index[i].vnum = nr;
-// mob_index[i].number = 0;
-// mob_index[i].func = NULL;
-//
-// clear_char(mob_proto + i);
-//
-// /*
-//  * Mobiles should NEVER use anything in the 'player_specials' structure.
-//  * The only reason we have every mob in the game share this copy of the
-//  * structure is to save newbie coders from themselves. -gg 2/25/98
-//  */
-// mob_proto[i].player_specials = &dummy_mob;
-// sprintf(buf2, "mob vnum %d", nr);	/* sprintf: OK (for 'buf2 >= 19') */
-//
-// /***** String data *****/
-// mob_proto[i].player.name = fread_string(mob_f, buf2);
-// tmpptr = mob_proto[i].player.short_descr = fread_string(mob_f, buf2);
-// if (tmpptr && *tmpptr)
-// if (!str_cmp(fname(tmpptr), "a") || !str_cmp(fname(tmpptr), "an") ||
-// !str_cmp(fname(tmpptr), "the"))
-// *tmpptr = LOWER(*tmpptr);
-// mob_proto[i].player.long_descr = fread_string(mob_f, buf2);
-// mob_proto[i].player.description = fread_string(mob_f, buf2);
-// GET_TITLE(mob_proto + i) = NULL;
-//
-// /* *** Numeric data *** */
-// if (!get_line(mob_f, line)) {
-// log("SYSERR: Format error after string section of mob #%d\n"
-// "...expecting line of form '# # # {S | E}', but file ended!", nr);
-// exit(1);
-// }
-//
-// #ifdef CIRCLE_ACORN	/* Ugh. */
-// if (sscanf(line, "%s %s %d %s", f1, f2, t + 2, &letter) != 4) {
-// #else
-// if (sscanf(line, "%s %s %d %c", f1, f2, t + 2, &letter) != 4) {
-// #endif
-// log("SYSERR: Format error after string section of mob #%d\n"
-// "...expecting line of form '# # # {S | E}'", nr);
-// exit(1);
-// }
-//
-// MOB_FLAGS(mob_proto + i) = asciiflag_conv(f1);
-// SET_BIT(MOB_FLAGS(mob_proto + i), MOB_ISNPC);
-// if (MOB_FLAGGED(mob_proto + i, MOB_NOTDEADYET)) {
-// /* Rather bad to load mobiles with this bit already set. */
-// log("SYSERR: Mob #%d has reserved bit MOB_NOTDEADYET set.", nr);
-// REMOVE_BIT(MOB_FLAGS(mob_proto + i), MOB_NOTDEADYET);
-// }
-// check_bitvector_names(MOB_FLAGS(mob_proto + i), action_bits_count, buf2, "mobile");
-//
-// AFF_FLAGS(mob_proto + i) = asciiflag_conv(f2);
-// check_bitvector_names(AFF_FLAGS(mob_proto + i), affected_bits_count, buf2, "mobile affect");
-//
-// GET_ALIGNMENT(mob_proto + i) = t[2];
-//
-// /* AGGR_TO_ALIGN is ignored if the mob is AGGRESSIVE. */
-// if (MOB_FLAGGED(mob_proto + i, MOB_AGGRESSIVE) && MOB_FLAGGED(mob_proto + i, MOB_AGGR_GOOD | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL))
-// log("SYSERR: Mob #%d both Aggressive and Aggressive_to_Alignment.", nr);
-//
-// switch (UPPER(letter)) {
-// case 'S':	/* Simple monsters */
-// parse_simple_mob(mob_f, i, nr);
-// break;
-// case 'E':	/* Circle3 Enhanced monsters */
-// parse_enhanced_mob(mob_f, i, nr);
-// break;
-// /* add new mob types here.. */
-// default:
-// log("SYSERR: Unsupported mob type '%c' in mob #%d", letter, nr);
-// exit(1);
-// }
-//
-// mob_proto[i].aff_abils = mob_proto[i].real_abils;
-//
-// for (j = 0; j < NUM_WEARS; j++)
-// mob_proto[i].equipment[j] = NULL;
-//
-// mob_proto[i].nr = i;
-// mob_proto[i].desc = NULL;
-//
-// top_of_mobt = i++;
-// }
-//
-//
-//
-//
-// /* read all objects from obj file; generate index and prototypes */
-// char *parse_object(FILE *obj_f, int nr)
-// {
-// static int i = 0;
-// static char line[READ_SIZE];
-// int t[10], j, retval;
-// char *tmpptr;
-// char f1[READ_SIZE], f2[READ_SIZE], buf2[128];
-// struct extra_descr_data *new_descr;
-//
-// obj_index[i].vnum = nr;
-// obj_index[i].number = 0;
-// obj_index[i].func = NULL;
-//
-// clear_object(obj_proto + i);
-// obj_proto[i].item_number = i;
-//
-// sprintf(buf2, "object #%d", nr);	/* sprintf: OK (for 'buf2 >= 19') */
-//
-// /* *** string data *** */
-// if ((obj_proto[i].name = fread_string(obj_f, buf2)) == NULL) {
-// log("SYSERR: Null obj name or format error at or near %s", buf2);
-// exit(1);
-// }
-// tmpptr = obj_proto[i].short_description = fread_string(obj_f, buf2);
-// if (tmpptr && *tmpptr)
-// if (!str_cmp(fname(tmpptr), "a") || !str_cmp(fname(tmpptr), "an") ||
-// !str_cmp(fname(tmpptr), "the"))
-// *tmpptr = LOWER(*tmpptr);
-//
-// tmpptr = obj_proto[i].description = fread_string(obj_f, buf2);
-// if (tmpptr && *tmpptr)
-// CAP(tmpptr);
-// obj_proto[i].action_description = fread_string(obj_f, buf2);
-//
-// /* *** numeric data *** */
-// if (!get_line(obj_f, line)) {
-// log("SYSERR: Expecting first numeric line of %s, but file ended!", buf2);
-// exit(1);
-// }
-// if ((retval = sscanf(line, " %d %s %s", t, f1, f2)) != 3) {
-// log("SYSERR: Format error in first numeric line (expecting 3 args, got %d), %s", retval, buf2);
-// exit(1);
-// }
-//
-// /* Object flags checked in check_object(). */
-// GET_OBJ_TYPE(obj_proto + i) = t[0];
-// GET_OBJ_EXTRA(obj_proto + i) = asciiflag_conv(f1);
-// GET_OBJ_WEAR(obj_proto + i) = asciiflag_conv(f2);
-//
-// if (!get_line(obj_f, line)) {
-// log("SYSERR: Expecting second numeric line of %s, but file ended!", buf2);
-// exit(1);
-// }
-// if ((retval = sscanf(line, "%d %d %d %d", t, t + 1, t + 2, t + 3)) != 4) {
-// log("SYSERR: Format error in second numeric line (expecting 4 args, got %d), %s", retval, buf2);
-// exit(1);
-// }
-// GET_OBJ_VAL(obj_proto + i, 0) = t[0];
-// GET_OBJ_VAL(obj_proto + i, 1) = t[1];
-// GET_OBJ_VAL(obj_proto + i, 2) = t[2];
-// GET_OBJ_VAL(obj_proto + i, 3) = t[3];
-//
-// if (!get_line(obj_f, line)) {
-// log("SYSERR: Expecting third numeric line of %s, but file ended!", buf2);
-// exit(1);
-// }
-// if ((retval = sscanf(line, "%d %d %d", t, t + 1, t + 2)) != 3) {
-// log("SYSERR: Format error in third numeric line (expecting 3 args, got %d), %s", retval, buf2);
-// exit(1);
-// }
-// GET_OBJ_WEIGHT(obj_proto + i) = t[0];
-// GET_OBJ_COST(obj_proto + i) = t[1];
-// GET_OBJ_RENT(obj_proto + i) = t[2];
-//
-// /* check to make sure that weight of containers exceeds curr. quantity */
-// if (GET_OBJ_TYPE(obj_proto + i) == ITEM_DRINKCON || GET_OBJ_TYPE(obj_proto + i) == ITEM_FOUNTAIN) {
-// if (GET_OBJ_WEIGHT(obj_proto + i) < GET_OBJ_VAL(obj_proto + i, 1))
-// GET_OBJ_WEIGHT(obj_proto + i) = GET_OBJ_VAL(obj_proto + i, 1) + 5;
-// }
-//
-// /* *** extra descriptions and affect fields *** */
-//
-// for (j = 0; j < MAX_OBJ_AFFECT; j++) {
-// obj_proto[i].affected[j].location = APPLY_NONE;
-// obj_proto[i].affected[j].modifier = 0;
-// }
-//
-// strcat(buf2, ", after numeric constants\n"	/* strcat: OK (for 'buf2 >= 87') */
-// "...expecting 'E', 'A', '$', or next object number");
-// j = 0;
-//
-// for (;;) {
-// if (!get_line(obj_f, line)) {
-// log("SYSERR: Format error in %s", buf2);
-// exit(1);
-// }
-// switch (*line) {
-// case 'E':
-// CREATE(new_descr, struct extra_descr_data, 1);
-// new_descr->keyword = fread_string(obj_f, buf2);
-// new_descr->description = fread_string(obj_f, buf2);
-// new_descr->next = obj_proto[i].ex_description;
-// obj_proto[i].ex_description = new_descr;
-// break;
-// case 'A':
-// if (j >= MAX_OBJ_AFFECT) {
-// log("SYSERR: Too many A fields (%d max), %s", MAX_OBJ_AFFECT, buf2);
-// exit(1);
-// }
-// if (!get_line(obj_f, line)) {
-// log("SYSERR: Format error in 'A' field, %s\n"
-// "...expecting 2 numeric constants but file ended!", buf2);
-// exit(1);
-// }
-//
-// if ((retval = sscanf(line, " %d %d ", t, t + 1)) != 2) {
-// log("SYSERR: Format error in 'A' field, %s\n"
-// "...expecting 2 numeric arguments, got %d\n"
-// "...offending line: '%s'", buf2, retval, line);
-// exit(1);
-// }
-// obj_proto[i].affected[j].location = t[0];
-// obj_proto[i].affected[j].modifier = t[1];
-// j++;
-// break;
-// case '$':
-// case '#':
-// check_object(obj_proto + i);
-// top_of_objt = i++;
-// return (line);
-// default:
-// log("SYSERR: Format error in (%c): %s", *line, buf2);
-// exit(1);
-// }
-// }
-// }
-//
-//
-// #define Z	zone_table[zone]
+    fn parse_simple_mob(&mut self, reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
+        // int j, t[10];
+        // char line[READ_SIZE];
+        let mut line = String::new();
 
-impl DB {
+        mobch.real_abils.borrow_mut().str = 11;
+        mobch.real_abils.borrow_mut().intel = 11;
+        mobch.real_abils.borrow_mut().wis = 11;
+        mobch.real_abils.borrow_mut().dex = 11;
+        mobch.real_abils.borrow_mut().con = 11;
+        mobch.real_abils.borrow_mut().cha = 11;
+
+        if get_line(reader, &mut line) == 0 {
+            error!(
+                "SYSERR: Format error in mob #{}, file ended after S flag!",
+                nr
+            );
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error in mob #{}, first line after S flag\n...expecting line of form '# # # #d#+# #d#+#'", nr);
+            process::exit(1);
+        }
+        let t = f.unwrap();
+
+        mobch.set_level(t[1].parse::<u8>().unwrap());
+        mobch.set_hitroll(20 - t[2].parse::<i8>().unwrap());
+        mobch.set_ac(10 * t[3].parse::<i16>().unwrap());
+
+        /* max hit = 0 is a flag that H, M, V is xdy+z */
+        mobch.set_max_hit(0);
+        mobch.set_hit(t[4].parse::<i16>().unwrap());
+        mobch.set_mana(t[5].parse::<i16>().unwrap());
+        mobch.set_move(t[6].parse::<i16>().unwrap());
+
+        mobch.set_max_mana(10);
+        mobch.set_max_move(50);
+
+        mobch.mob_specials.damnodice = t[7].parse::<u8>().unwrap();
+        mobch.mob_specials.damsizedice = t[8].parse::<u8>().unwrap();
+        mobch.set_damroll(t[9].parse::<i8>().unwrap());
+
+        if get_line(reader, &mut line) == 0 {
+            error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #', but file ended!", nr);
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #'", nr);
+            process::exit(1);
+        }
+        let t = f.unwrap();
+
+        mobch.set_gold(t[1].parse::<i32>().unwrap());
+        mobch.set_exp(t[2].parse::<i32>().unwrap());
+
+        if get_line(reader, &mut line) == 0 {
+            error!("SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #', but file ended!", nr);
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #'",
+                nr
+            );
+            process::exit(1);
+        }
+        let t = f.unwrap();
+
+        mobch.set_pos(t[1].parse::<u8>().unwrap());
+        mobch.set_default_pos(t[2].parse::<u8>().unwrap());
+        mobch.set_sex(t[3].parse::<u8>().unwrap());
+
+        mobch.set_class(0);
+        mobch.set_weight(200);
+        mobch.set_height(198);
+
+        /*
+         * these are now save applies; base save numbers for MOBs are now from
+         * the warrior save table.
+         */
+        for j in 0..5 {
+            mobch.set_save(j, 0);
+        }
+    }
+
+    /*
+     * interpret_espec is the function that takes espec keywords and values
+     * and assigns the correct value to the mob as appropriate.  Adding new
+     * e-specs is absurdly easy -- just add a new CASE statement to this
+     * function!  No other changes need to be made anywhere in the code.
+     *
+     * CASE		: Requires a parameter through 'value'.
+     * BOOL_CASE	: Being specified at all is its value.
+     */
+
+    // # define
+    // CASE(test)    \
+    // if (value && !matched && !str_cmp(keyword, test) && (matched = TRUE))
+    //
+    // # define
+    // BOOL_CASE(test)    \
+    // if (!value && !matched && !str_cmp(keyword, test) && (matched = TRUE))
+    //
+    // # define
+    // RANGE(low, high)    \
+    // (num_arg = MAX((low), MIN((high), (num_arg))))
+
+    // void
+    // interpret_espec(const char
+    // *keyword, const char
+    // *value, int
+    // i, int
+    // nr)
+    // {
+    //     int
+    //     num_arg = 0, matched = FALSE;
+    //
+    //     /*
+    //      * If there isn't a colon, there is no value.  While Boolean options are
+    //      * possible, we don't actually have any.  Feel free to make some.
+    //     */
+    //     if (value)
+    //     num_arg = atoi(value);
+    //
+    //     CASE("BareHandAttack")
+    //     {
+    //         RANGE(0, 99);
+    //         mob_proto[i].mob_specials.attack_type = num_arg;
+    //     }
+    //
+    //     CASE("Str")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.str = num_arg;
+    //     }
+    //
+    //     CASE("StrAdd")
+    //     {
+    //         RANGE(0, 100);
+    //         mob_proto[i].real_abils.str_add = num_arg;
+    //     }
+    //
+    //     CASE("Int")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.intel = num_arg;
+    //     }
+    //
+    //     CASE("Wis")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.wis = num_arg;
+    //     }
+    //
+    //     CASE("Dex")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.dex = num_arg;
+    //     }
+    //
+    //     CASE("Con")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.con = num_arg;
+    //     }
+    //
+    //     CASE("Cha")
+    //     {
+    //         RANGE(3, 25);
+    //         mob_proto[i].real_abils.cha = num_arg;
+    //     }
+    //
+    //     if (!matched) {
+    //         log("SYSERR: Warning: unrecognized espec keyword %s in mob #%d",
+    //             keyword, nr);
+    //     }
+    // }
+    //
+    // # undef
+    // CASE
+    // # undef
+    // BOOL_CASE
+    // # undef
+    // RANGE
+
+    // fn parse_espec(char * buf, int i, int nr)
+    // {
+    //     char * ptr;
+    //
+    //     if ((ptr = strchr(buf, ':')) != NULL) {
+    //         *(ptr + +) = '\0';
+    //         while (isspace(*ptr))
+    //         ptr + +;
+    //     }
+    //     interpret_espec(buf, ptr, i, nr);
+    // }
+
+    fn parse_enhanced_mob(&mut self, reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
+        // char
+        // line[READ_SIZE];
+        let mut line = String::new();
+
+        self.parse_simple_mob(reader, mobch, nr);
+
+        while get_line(reader, &mut line) != 0 {
+            if line == "E" {
+                /* end of the enhanced section */
+                return;
+            } else if line.starts_with('#') {
+                /* we've hit the next mob, maybe? */
+                error!("SYSERR: Unterminated E section in mob #{}", nr);
+                process::exit(1);
+            } else {
+                // TODO implement spec proc
+                //parse_espec(line, i, nr);
+            }
+        }
+
+        error!("SYSERR: Unexpected end of file reached after mob #{}", nr);
+        process::exit(1);
+    }
+
+    fn parse_mobile(&mut self, reader: &mut BufReader<File>, nr: i32) {
+        //static int i = 0;
+        // int j, t[10];
+        // char line[READ_SIZE], * tmpptr, letter;
+        // char f1[128], f2[128], buf2[128];
+        let mut line = String::new();
+
+        let mut i = self.mob_index.len();
+        self.mob_index.push(IndexData {
+            vnum: nr as MobVnum,
+            number: 0,
+        });
+
+        let mut mobch = CharData {
+            pfilepos: RefCell::new(0),
+            nr: 0,
+            in_room: Cell::new(0),
+            was_in_room: Cell::new(0),
+            wait: Cell::new(0),
+            player: RefCell::new(CharPlayerData {
+                passwd: [0; 16],
+                name: "".to_string(),
+                short_descr: "".to_string(),
+                long_descr: "".to_string(),
+                description: "".to_string(),
+                title: Option::from("".to_string()),
+                sex: 0,
+                chclass: 0,
+                level: 0,
+                hometown: 0,
+                time: TimeData {
+                    birth: 0,
+                    logon: 0,
+                    played: 0,
+                },
+                weight: 0,
+                height: 0,
+            }),
+            real_abils: RefCell::new(CharAbilityData {
+                str: 0,
+                str_add: 0,
+                intel: 0,
+                wis: 0,
+                dex: 0,
+                con: 0,
+                cha: 0,
+            }),
+            aff_abils: RefCell::new(CharAbilityData {
+                str: 0,
+                str_add: 0,
+                intel: 0,
+                wis: 0,
+                dex: 0,
+                con: 0,
+                cha: 0,
+            }),
+            points: RefCell::new(CharPointData {
+                mana: 0,
+                max_mana: 0,
+                hit: 0,
+                max_hit: 0,
+                movem: 0,
+                max_move: 0,
+                armor: 0,
+                gold: 0,
+                bank_gold: 0,
+                exp: 0,
+                hitroll: 0,
+                damroll: 0,
+            }),
+            char_specials: RefCell::new(CharSpecialData {
+                fighting: None,
+                hunting: None,
+                position: 0,
+                carry_weight: 0,
+                carry_items: 0,
+                timer: 0,
+                saved: CharSpecialDataSaved {
+                    alignment: 0,
+                    idnum: 0,
+                    act: 0,
+                    affected_by: 0,
+                    apply_saving_throw: [0; 5],
+                },
+            }),
+            player_specials: RefCell::new(PlayerSpecialData {
+                saved: PlayerSpecialDataSaved {
+                    skills: [0; MAX_SKILLS + 1],
+                    padding0: 0,
+                    talks: [false; MAX_TONGUE],
+                    wimp_level: 0,
+                    freeze_level: 0,
+                    invis_level: 0,
+                    load_room: 0,
+                    pref: 0,
+                    bad_pws: 0,
+                    conditions: [0; 3],
+                    spare0: 0,
+                    spare1: 0,
+                    spare2: 0,
+                    spare3: 0,
+                    spare4: 0,
+                    spare5: 0,
+                    spells_to_learn: 0,
+                    spare7: 0,
+                    spare8: 0,
+                    spare9: 0,
+                    spare10: 0,
+                    spare11: 0,
+                    spare12: 0,
+                    spare13: 0,
+                    spare14: 0,
+                    spare15: 0,
+                    spare16: 0,
+                    spare17: 0,
+                    spare18: 0,
+                    spare19: 0,
+                    spare20: 0,
+                    spare21: 0,
+                },
+                last_tell: 0,
+            }),
+            mob_specials: MobSpecialData {
+                attack_type: 0,
+                default_pos: 0,
+                damnodice: 0,
+                damsizedice: 0,
+            },
+            affected: RefCell::new(vec![]),
+            desc: RefCell::new(None),
+            next_in_room: RefCell::new(None),
+            next: RefCell::new(None),
+            next_fighting: RefCell::new(None),
+            followers: RefCell::new(vec![]),
+            master: RefCell::new(None),
+        };
+        clear_char(&mut mobch);
+
+        /*
+         * Mobiles should NEVER use anything in the 'player_specials' structure.
+         * The only reason we have every mob in the game share this copy of the
+         * structure is to save newbie coders from themselves. -gg 2/25/98
+         */
+        // TODO mobch.player_specials = &dummy_mob;
+        let buf2 = format!("mob vnum {}", nr);
+
+        /***** String data *****/
+        mobch.player.borrow_mut().name = fread_string(reader, buf2.as_str());
+        let mut tmpstr = fread_string(reader, buf2.as_str());
+        if !tmpstr.is_empty() {
+            let f1 = fname(tmpstr.as_str());
+            let f = f1.as_ref();
+            if f == "a" || f == "an" || f == "the" {
+                let c = tmpstr.remove(0);
+                tmpstr.insert(0, char::to_ascii_lowercase(&c));
+            }
+        }
+        mobch.player.borrow_mut().short_descr = tmpstr;
+        mobch.player.borrow_mut().long_descr = fread_string(reader, buf2.as_str());
+        mobch.player.borrow_mut().description = fread_string(reader, buf2.as_str());
+        mobch.set_title(None);
+
+        /* *** Numeric data *** */
+        if get_line(reader, &mut line) == 0 {
+            error!("SYSERR: Format error after string section of mob #{}\n...expecting line of form '# # # {{S | E}}', but file ended!", nr);
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(\S+)\s(\S+)\s(-?\+?\d{1,9})\s([SE])").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error after string section of mob #{}\n...expecting line of form '# # # {{S | E}}'", nr);
+            process::exit(1);
+        }
+        let f = f.unwrap();
+
+        mobch.set_mob_flags(asciiflag_conv(&f[1]));
+        mobch.set_mob_flags_bit(MOB_ISNPC);
+        if mobch.mob_flagged(MOB_NOTDEADYET) {
+            /* Rather bad to load mobiles with this bit already set. */
+            error!("SYSERR: Mob #{} has reserved bit MOB_NOTDEADYET set.", nr);
+            mobch.remove_mob_flags_bit(MOB_NOTDEADYET);
+        }
+        check_bitvector_names(
+            mobch.mob_flags(),
+            ACTION_BITS_COUNT,
+            buf2.as_str(),
+            "mobile",
+        );
+
+        mobch.set_aff_flags(asciiflag_conv(&f[2]));
+        check_bitvector_names(
+            mobch.aff_flags(),
+            AFFECTED_BITS_COUNT,
+            buf2.as_str(),
+            "mobile affect",
+        );
+
+        mobch.set_alignment(f[3].parse::<i32>().unwrap());
+
+        /* AGGR_TO_ALIGN is ignored if the mob is AGGRESSIVE. */
+        if mobch.mob_flagged(MOB_AGGRESSIVE)
+            && mobch.mob_flagged(MOB_AGGR_GOOD | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL)
+        {
+            error!(
+                "SYSERR: Mob #{} both Aggressive and Aggressive_to_Alignment.",
+                nr
+            );
+        }
+
+        match f[4].to_uppercase().as_str() {
+            "S" => {
+                /* Simple monsters */
+                self.parse_simple_mob(reader, &mut mobch, nr);
+            }
+            "E" => {
+                /* Circle3 Enhanced monsters */
+                self.parse_enhanced_mob(reader, &mut mobch, nr);
+            }
+            /* add new mob types here.. */
+            _ => {
+                error!("SYSERR: Unsupported mob type '{}' in mob #{}", &f[4], nr);
+                process::exit(1);
+            }
+        }
+
+        *mobch.aff_abils.borrow_mut() = *mobch.real_abils.borrow();
+
+        // TODO implement equipment
+        // for j in 0..NUM_WEARS {
+        //     mobch.equipment[j] = NULL;
+        // }
+
+        mobch.nr = self.mob_protos.len() as MobRnum;
+        mobch.desc = RefCell::new(None);
+
+        self.mob_protos.push(Rc::from(mobch));
+    }
+
+    /* read all objects from obj file; generate index and prototypes */
+    fn parse_object(&mut self, reader: &mut BufReader<File>, nr: MobVnum) -> String {
+        // static int i = 0;
+        //static char line[READ_SIZE];
+        // int t[10], j, retval;
+        // char * tmpptr;
+        // char f1[READ_SIZE], f2[READ_SIZE], buf2[128];
+        // struct extra_descr_data * new_descr;
+        let mut line = String::new();
+
+        let i = self.obj_index.len() as ObjVnum;
+        self.obj_index.push(IndexData {
+            vnum: nr,
+            number: 0,
+            // func
+        });
+
+        let mut obj = ObjData {
+            item_number: 0,
+            in_room: 0,
+            obj_flags: ObjFlagData {
+                value: [0; 4],
+                type_flag: 0,
+                wear_flags: 0,
+                extra_flags: 0,
+                weight: 0,
+                cost: 0,
+                cost_per_day: 0,
+                timer: 0,
+                bitvector: 0,
+            },
+            affected: [ObjAffectedType {
+                location: 0,
+                modifier: 0,
+            }; 6],
+            name: "".to_string(),
+            description: "".to_string(),
+            short_description: "".to_string(),
+            action_description: "".to_string(),
+            ex_descriptions: vec![],
+            carried_by: RefCell::new(None),
+            worn_by: RefCell::new(None),
+            worn_on: 0,
+            in_obj: RefCell::new(None),
+            contains: RefCell::new(None),
+            next_content: RefCell::new(None),
+            next: RefCell::new(None),
+        };
+
+        clear_object(&mut obj);
+        obj.item_number = i;
+
+        let buf2 = format!("object #{}", nr); /* sprintf: OK (for 'buf2 >= 19') */
+
+        /* *** string data *** */
+        obj.name = fread_string(reader, &buf2);
+        if obj.name.is_empty() {
+            error!("SYSERR: Null obj name or format error at or near {}", buf2);
+            process::exit(1);
+        }
+        let mut tmpstr = fread_string(reader, &buf2);
+        if !tmpstr.is_empty() {
+            let f = fname(tmpstr.as_str());
+            if f.as_ref() == "a" || f.as_ref() == "an" || f.as_ref() == "the" {
+                let c = tmpstr.remove(0);
+                tmpstr.insert(0, char::to_ascii_lowercase(&c));
+            }
+        }
+        obj.short_description = tmpstr;
+
+        let tmpptr = fread_string(reader, &buf2);
+        obj.description = tmpptr;
+        obj.action_description = fread_string(reader, &buf2);
+
+        /* *** numeric data *** */
+        if get_line(reader, &mut line) == 0 {
+            error!(
+                "SYSERR: Expecting first numeric line of {}, but file ended!",
+                buf2
+            );
+            process::exit(1);
+        }
+
+        let regex = Regex::new(r"^(\d{1,9})\s(\S+)\s(\S+)").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error in first numeric line (expecting 3 args), {}",
+                buf2
+            );
+            process::exit(1);
+        }
+        let f = f.unwrap();
+
+        /* Object flags checked in check_object(). */
+        obj.set_obj_type(f[1].parse::<u8>().unwrap());
+        obj.set_obj_extra(asciiflag_conv(&f[2]) as i32);
+        obj.set_obj_wear(asciiflag_conv(&f[3]) as i32);
+
+        if get_line(reader, &mut line) == 0 {
+            error!(
+                "SYSERR: Expecting second numeric line of {}, but file ended!",
+                buf2
+            );
+            process::exit(1);
+        }
+        let regex =
+            Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error in second numeric line (expecting 4 args), {}",
+                buf2
+            );
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        obj.set_obj_val(0, f[1].parse::<i32>().unwrap());
+        obj.set_obj_val(1, f[2].parse::<i32>().unwrap());
+        obj.set_obj_val(2, f[3].parse::<i32>().unwrap());
+        obj.set_obj_val(3, f[4].parse::<i32>().unwrap());
+
+        if get_line(reader, &mut line) == 0 {
+            error!(
+                "SYSERR: Expecting third numeric line of {}, but file ended!",
+                buf2
+            );
+            process::exit(1);
+        }
+        let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!(
+                "SYSERR: Format error in third numeric line (expecting 3 args), {}",
+                buf2
+            );
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        obj.set_obj_weight(f[1].parse::<i32>().unwrap());
+        obj.set_obj_cost(f[2].parse::<i32>().unwrap());
+        obj.set_obj_rent(f[3].parse::<i32>().unwrap());
+
+        /* check to make sure that weight of containers exceeds curr. quantity */
+        if obj.get_obj_type() == ITEM_DRINKCON as u8 || obj.get_obj_type() == ITEM_FOUNTAIN as u8 {
+            if obj.get_obj_weight() < obj.get_obj_val(1) {
+                obj.set_obj_weight(obj.get_obj_val(1) + 5);
+            }
+        }
+
+        /* *** extra descriptions and affect fields *** */
+        for j in 0..MAX_OBJ_AFFECT {
+            obj.affected[j as usize].location = APPLY_NONE as u8;
+            obj.affected[j as usize].modifier = 0;
+        }
+
+        let buf2 = ", after numeric constants\n...expecting 'E', 'A', '$', or next object number";
+        let mut j = 0;
+
+        loop {
+            if get_line(reader, &mut line) == 0 {
+                error!("SYSERR: Format error in {}", buf2);
+                process::exit(1);
+            }
+            match line.chars().next().unwrap() {
+                'E' => {
+                    let new_descr = ExtraDescrData {
+                        keyword: fread_string(reader, buf2),
+                        description: fread_string(reader, buf2),
+                    };
+                    obj.ex_descriptions.push(new_descr);
+                }
+                'A' => {
+                    if obj.ex_descriptions.len() >= MAX_OBJ_AFFECT as usize {
+                        error!(
+                            "SYSERR: Too many A fields ({} max), {}",
+                            MAX_OBJ_AFFECT, buf2
+                        );
+                        process::exit(1);
+                    }
+                    if get_line(reader, &mut line) == 0 {
+                        error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric constants but file ended!", buf2);
+                        process::exit(1);
+                    }
+                    let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
+                    let f = regex.captures(line.as_str());
+                    if f.is_none() {
+                        error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric arguments\n...offending line: '{}'", buf2, line);
+                        process::exit(1);
+                    }
+                    let f = f.unwrap();
+
+                    obj.affected[j].location = f[1].parse::<i32>().unwrap() as u8;
+                    obj.affected[j].modifier = f[2].parse().unwrap();
+                    j += 1;
+                }
+                '$' | '#' => {
+                    self.check_object(&obj);
+                    self.obj_proto.push(Rc::from(obj));
+                    return line.clone();
+                }
+                _ => {
+                    error!("SYSERR: Format error in ({}): {}", line, buf2);
+                    process::exit(1);
+                }
+            }
+        }
+    }
+
     /* load the zone table and command tables */
     fn load_zones(&mut self, fl: File, zonename: &str) {
         //static zone_rnum zone = 0;
@@ -2002,7 +2227,7 @@ impl DB {
 
         self.zone_table.borrow_mut().push(z);
         zone += 1;
-        *self.top_of_zone_table.borrow_mut() = zone;
+        //*self.top_of_zone_table.borrow_mut() = zone;
     }
 }
 // #undef Z
@@ -2512,7 +2737,10 @@ impl DB {
 // return (NULL);
 // }
 use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
-use crate::constants::ROOM_BITS_COUNT;
+use crate::constants::{
+    ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
+};
+use crate::handler::fname;
 use std::io::Read;
 
 impl DB {
@@ -3078,15 +3306,15 @@ impl MainGlobals {
         for in_use in &*self.descriptor_list.borrow() {
             // if (!in_use->showstr_count || *in_use->showstr_vector != *buf)
             // continue;
-            if *RefCell::borrow(&in_use.showstr_count) == 0
+            if in_use.showstr_count.get() == 0
                 || RefCell::borrow(&RefCell::borrow(&in_use.showstr_vector)[0]).as_str() != buf
             {
                 continue;
             }
 
-            let temppage = RefCell::borrow(&in_use.showstr_page);
+            let temppage = in_use.showstr_page.get();
             *RefCell::borrow_mut(&in_use.showstr_head) = in_use.showstr_vector.borrow()[0].clone();
-            *RefCell::borrow_mut(&in_use.showstr_page) = *temppage;
+            in_use.showstr_page.set(temppage);
             paginate_string(
                 RefCell::borrow(&in_use.showstr_head.borrow()).as_str(),
                 in_use,
@@ -3154,7 +3382,7 @@ pub fn reset_char(ch: &CharData) {
     *ch.next_in_room.borrow_mut() = None;
     ch.set_fighting(None);
     ch.char_specials.borrow_mut().position = POS_STANDING;
-    ch.mob_specials.borrow_mut().default_pos = POS_STANDING;
+    //ch.mob_specials.borrow_mut().default_pos = POS_STANDING;
     ch.char_specials.borrow_mut().carry_weight = 0;
     ch.char_specials.borrow_mut().carry_items = 0;
 
@@ -3171,32 +3399,29 @@ pub fn reset_char(ch: &CharData) {
     get_last_tell_mut!(ch) = NOBODY as i64;
 }
 
-// /* clear ALL the working variables of a char; do NOT free any space alloc'ed */
-// void clear_char(struct char_data *ch)
-// {
-// memset((char *) ch, 0, sizeof(struct char_data));
-//
-// IN_ROOM(ch) = NOWHERE;
-// GET_PFILEPOS(ch) = -1;
-// GET_MOB_RNUM(ch) = NOBODY;
-// GET_WAS_IN(ch) = NOWHERE;
-// GET_POS(ch) = POS_STANDING;
-// ch->mob_specials.default_pos = POS_STANDING;
-//
-// GET_AC(ch) = 100;		/* Basic Armor */
-// if (ch->points.max_mana < 100)
-// ch->points.max_mana = 100;
-// }
-//
-//
-// void clear_object(struct obj_data *obj)
-// {
-// memset((char *) obj, 0, sizeof(struct obj_data));
-//
-// obj->item_number = NOTHING;
-// IN_ROOM(obj) = NOWHERE;
-// obj->worn_on = NOWHERE;
-// }
+/* clear ALL the working variables of a char; do NOT free any space alloc'ed */
+fn clear_char(ch: &mut CharData) {
+    //memset((char *) ch, 0, sizeof(struct char_data));
+
+    ch.set_in_room(NOWHERE);
+    ch.set_pfilepos(-1);
+
+    ch.set_mob_rnum(NOBODY);
+    ch.set_was_in(NOWHERE);
+    ch.set_pos(POS_STANDING);
+    ch.mob_specials.default_pos = POS_STANDING;
+
+    ch.set_ac(100); /* Basic Armor */
+    if ch.points.borrow().max_mana < 100 {
+        ch.points.borrow_mut().max_mana = 100;
+    }
+}
+
+fn clear_object(obj: &mut ObjData) {
+    obj.item_number = NOTHING;
+    obj.set_in_room(NOWHERE);
+    obj.worn_on = NOWHERE;
+}
 
 /*
  * Called during character creation after picking character class
@@ -3402,69 +3627,105 @@ pub fn real_room(world: &Vec<Rc<RoomData>>, vnum: room_vnum) -> room_rnum {
 // bot = mid + 1;
 // }
 // }
-//
-//
-// /*
-//  * Extend later to include more checks.
-//  *
-//  * TODO: Add checks for unknown bitvectors.
-//  */
-// int check_object(struct obj_data *obj)
-// {
-// char objname[MAX_INPUT_LENGTH + 32];
-// int error = FALSE;
-//
-// if (GET_OBJ_WEIGHT(obj) < 0 && (error = TRUE))
-// log("SYSERR: Object #%d (%s) has negative weight (%d).",
-// GET_OBJ_VNUM(obj), obj->short_description, GET_OBJ_WEIGHT(obj));
-//
-// if (GET_OBJ_RENT(obj) < 0 && (error = TRUE))
-// log("SYSERR: Object #%d (%s) has negative cost/day (%d).",
-// GET_OBJ_VNUM(obj), obj->short_description, GET_OBJ_RENT(obj));
-//
-// snprintf(objname, sizeof(objname), "Object #%d (%s)", GET_OBJ_VNUM(obj), obj->short_description);
-// error |= check_bitvector_names(GET_OBJ_WEAR(obj), wear_bits_count, objname, "object wear");
-// error |= check_bitvector_names(GET_OBJ_EXTRA(obj), extra_bits_count, objname, "object extra");
-// error |= check_bitvector_names(GET_OBJ_AFFECT(obj), affected_bits_count, objname, "object affect");
-//
-// switch (GET_OBJ_TYPE(obj)) {
-// case ITEM_DRINKCON:
-// {
-// char onealias[MAX_INPUT_LENGTH], *space = strrchr(obj->name, ' ');
-//
-// strlcpy(onealias, space ? space + 1 : obj->name, sizeof(onealias));
-// if (search_block(onealias, drinknames, TRUE) < 0 && (error = TRUE))
-// log("SYSERR: Object #%d (%s) doesn't have drink type as last alias. (%s)",
-// GET_OBJ_VNUM(obj), obj->short_description, obj->name);
-// }
-// /* Fall through. */
-// case ITEM_FOUNTAIN:
-// if (GET_OBJ_VAL(obj, 1) > GET_OBJ_VAL(obj, 0) && (error = TRUE))
-// log("SYSERR: Object #%d (%s) contains (%d) more than maximum (%d).",
-// GET_OBJ_VNUM(obj), obj->short_description,
-// GET_OBJ_VAL(obj, 1), GET_OBJ_VAL(obj, 0));
-// break;
-// case ITEM_SCROLL:
-// case ITEM_POTION:
-// error |= check_object_level(obj, 0);
-// error |= check_object_spell_number(obj, 1);
-// error |= check_object_spell_number(obj, 2);
-// error |= check_object_spell_number(obj, 3);
-// break;
-// case ITEM_WAND:
-// case ITEM_STAFF:
-// error |= check_object_level(obj, 0);
-// error |= check_object_spell_number(obj, 3);
-// if (GET_OBJ_VAL(obj, 2) > GET_OBJ_VAL(obj, 1) && (error = TRUE))
-// log("SYSERR: Object #%d (%s) has more charges (%d) than maximum (%d).",
-// GET_OBJ_VNUM(obj), obj->short_description,
-// GET_OBJ_VAL(obj, 2), GET_OBJ_VAL(obj, 1));
-// break;
-// }
-//
-// return (error);
-// }
-//
+
+/*
+ * Extend later to include more checks.
+ *
+ * TODO: Add checks for unknown bitvectors.
+ */
+impl DB {
+    fn check_object(&self, obj: &ObjData) -> bool {
+        let mut error = false;
+
+        if obj.get_obj_weight() < 0 {
+            error = true;
+            info!(
+                "SYSERR: Object #{} ({}) has negative weight ({}).",
+                self.get_obj_vnum(obj),
+                obj.short_description,
+                obj.get_obj_weight()
+            );
+        }
+
+        if obj.get_obj_rent() < 0 {
+            error = true;
+            error!(
+                "SYSERR: Object #{} ({}) has negative cost/day ({}).",
+                self.get_obj_vnum(obj),
+                obj.short_description,
+                obj.get_obj_rent()
+            );
+        }
+
+        let objname = format!(
+            "Object #{} ({})",
+            self.get_obj_vnum(obj),
+            obj.short_description
+        );
+        error |= check_bitvector_names(
+            obj.get_obj_wear() as i64,
+            WEAR_BITS_COUNT,
+            objname.as_str(),
+            "object wear",
+        );
+        error |= check_bitvector_names(
+            obj.get_obj_extra() as i64,
+            EXTRA_BITS_COUNT,
+            objname.as_str(),
+            "object extra",
+        );
+        error |= check_bitvector_names(
+            obj.get_obj_affect(),
+            AFFECTED_BITS_COUNT,
+            objname.as_str(),
+            "object affect",
+        );
+
+        // match obj.get_obj_type()
+        // {
+        //     ITEM_DRINKCON => {
+        //         char
+        //         onealias[MAX_INPUT_LENGTH], *space = strrchr(obj->name, ' ');
+        //
+        //         strlcpy(onealias, space? space + 1: obj->name, sizeof(onealias));
+        //         if (search_block(onealias, drinknames, TRUE) < 0 && (error = TRUE))
+        //         log("SYSERR: Object #%d (%s) doesn't have drink type as last alias. (%s)",
+        //             GET_OBJ_VNUM(obj), obj->short_description, obj->name);
+        //     }
+        //     /* Fall through. */
+        //     case
+        //     ITEM_FOUNTAIN:
+        //     if (GET_OBJ_VAL(obj, 1) > GET_OBJ_VAL(obj, 0) && (error = TRUE))
+        //     log("SYSERR: Object #%d (%s) contains (%d) more than maximum (%d).",
+        //         GET_OBJ_VNUM(obj), obj->short_description,
+        //         GET_OBJ_VAL(obj, 1), GET_OBJ_VAL(obj, 0));
+        //     break;
+        //     case
+        //     ITEM_SCROLL:
+        //         case
+        //     ITEM_POTION:
+        //         error |= check_object_level(obj, 0);
+        //     error |= check_object_spell_number(obj, 1);
+        //     error |= check_object_spell_number(obj, 2);
+        //     error |= check_object_spell_number(obj, 3);
+        //     break;
+        //     case
+        //     ITEM_WAND:
+        //         case
+        //     ITEM_STAFF:
+        //         error |= check_object_level(obj, 0);
+        //     error |= check_object_spell_number(obj, 3);
+        //     if (GET_OBJ_VAL(obj, 2) > GET_OBJ_VAL(obj, 1) && (error = TRUE))
+        //     log("SYSERR: Object #%d (%s) has more charges (%d) than maximum (%d).",
+        //         GET_OBJ_VNUM(obj), obj->short_description,
+        //         GET_OBJ_VAL(obj, 2), GET_OBJ_VAL(obj, 1));
+        //     break;
+        // }
+
+        return error;
+    }
+}
+
 // int check_object_spell_number(struct obj_data *obj, int val)
 // {
 // int error = FALSE;

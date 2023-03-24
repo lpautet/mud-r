@@ -299,14 +299,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub fn paginate_string<'a>(str: &'a str, d: &'a DescriptorData) -> &'a str {
-    if *d.showstr_count.borrow() != 0 {
+    if d.showstr_count.get() != 0 {
         d.showstr_vector
             .borrow_mut()
             .push(Rc::new(RefCell::new(str.to_string())));
     }
 
     let mut s = str;
-    for _i in 1..*d.showstr_count.borrow() {
+    for _i in 1..d.showstr_count.get() {
         let r = next_page(s);
         if r.is_some() {
             d.showstr_vector
@@ -318,7 +318,7 @@ pub fn paginate_string<'a>(str: &'a str, d: &'a DescriptorData) -> &'a str {
         }
     }
 
-    *d.showstr_page.borrow_mut() = 0;
+    d.showstr_page.set(0);
     return s;
 }
 
