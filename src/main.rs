@@ -113,7 +113,7 @@ pub struct MainGlobals {
     db: DB,
     mother_desc: Option<RefCell<TcpListener>>,
     descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
-    // last_desc: Cell<usize>,
+    last_desc: Cell<usize>,
     // struct txt_block *bufpool = 0;	/* pool of large output buffers */
     // int buf_largecount = 0;		/* # of large buffers which exist */
     // int buf_overflows = 0;		/* # of overflows of output */
@@ -146,7 +146,7 @@ fn main() -> ExitCode {
 
     let mut game = MainGlobals {
         descriptor_list: RefCell::new(Vec::new()),
-        //  last_desc: Cell::new(0),
+        last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
         circle_reboot: false,
         no_specials: false,
@@ -575,7 +575,6 @@ impl MainGlobals {
             /* Now keep sleeping until that time has come */
             timeout = last_time - Instant::now();
 
-            info!("Sleeping {:?} ", timeout);
             thread::sleep(timeout);
 
             /* If there are new connections waiting, accept them. */
@@ -630,14 +629,21 @@ impl MainGlobals {
                     let ohc = d.character.borrow();
                     let character = ohc.as_ref().unwrap();
                     character.char_specials.borrow_mut().timer = 0;
-                    if d.state() == ConPlaying
-                    /* && GET_WAS_IN(d -> character) != NOWHERE */
-                    {
-                        // if (IN_ROOM(d -> character) != NOWHERE)
-                        // char_from_room(d -> character);
-                        // char_to_room(d -> character, GET_WAS_IN(d -> character));
-                        // GET_WAS_IN(d -> character) = NOWHERE;
-                        // act("$n has returned.", TRUE, d -> character, 0, 0, TO_ROOM);
+                    if d.state() == ConPlaying && character.get_was_in() != NOWHERE {
+                        if character.in_room.get() != NOWHERE {
+                            self.db.char_from_room(character.clone());
+                        }
+                        self.db
+                            .char_to_room(Some(character.clone()), character.get_was_in());
+                        character.set_was_in(NOWHERE);
+                        self.db.act(
+                            "$n has returned.",
+                            true,
+                            d.character.borrow().clone(),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
                     }
                     character.set_wait_state(1);
                 }
@@ -1165,11 +1171,11 @@ impl MainGlobals {
          * allocated and allow a user defined history size?
          */
         //CREATE(newd -> history, char *, HISTORY_SIZE);
-        // self.last_desc.set(self.last_desc.get() + 1);
-        // if self.last_desc.get() == 1000 {
-        //     self.last_desc.set(1);
-        // }
-        // newd.desc_num.set(self.last_desc.get());
+        self.last_desc.set(self.last_desc.get() + 1);
+        if self.last_desc.get() == 1000 {
+            self.last_desc.set(1);
+        }
+        newd.desc_num.set(self.last_desc.get());
 
         /* prepend to list */
         // newd -> next = descriptor_list;
@@ -2024,6 +2030,7 @@ fn process_input(t: &DescriptorData) -> i32 {
  **************************************************************** */
 
 pub fn send_to_char(ch: &CharData, messg: &str) {
+    info!("send to char {} {} ", ch.desc.borrow().is_some(), messg);
     if ch.desc.borrow().is_some() && messg != "" {
         write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
     }

@@ -27,7 +27,7 @@ use crate::util::{
 use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 use log::{error, info, warn};
 use std::cell::{Cell, RefCell};
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
 use std::os::unix::fs::FileExt;
@@ -117,6 +117,7 @@ pub struct DB {
     // struct weather_data weather_info;	/* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
     // struct reset_q_type reset_q;	/* queue of zones to be reset	 */
+    pub extractions_pending: Cell<i32>,
 }
 
 const REAL: i32 = 0;
@@ -427,6 +428,7 @@ impl DB {
             imotd: "IMOTD placeholder".to_string(),
             greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
             background: "BACKGROUND placeholder".to_string(),
+            extractions_pending: Cell::new(0),
         }
     }
 
@@ -612,6 +614,18 @@ impl DB {
 // top_of_p_table = 0;
 // }
 
+pub fn parse_c_string(cstr: &[u8]) -> String {
+    let mut ret: String = std::str::from_utf8(cstr)
+        .expect(format!("Error while parsing C string {:?}", cstr).as_str())
+        .parse()
+        .unwrap();
+    let p = ret.find('\0');
+    if p.is_some() {
+        ret.truncate(p.unwrap());
+    }
+    ret
+}
+
 impl DB {
     /* generate index table for the player file */
     fn build_player_index<'a>(&mut self) {
@@ -660,19 +674,40 @@ impl DB {
             return;
         }
 
-        // loop {
-        //     fread(&dummy, sizeof(struct char_file_u), 1, player_fl);
-        //     if (feof(player_fl))
-        //     break;
-        //
-        //     /* new record */
-        //     nr + +;
-        //     CREATE(player_table[nr].name, char, strlen(dummy.name) + 1);
-        //     for (i = 0; (* (player_table[nr].name + i) = LOWER(* (dummy.name + i))); i+ +)
-        //     ;
-        //     player_table[nr].id = dummy.char_specials_saved.idnum;
-        //     top_idnum = MAX(top_idnum, dummy.char_specials_saved.idnum);
-        // }
+        loop {
+            let mut dummy = CharFileU::new();
+
+            unsafe {
+                let config_slice = slice::from_raw_parts_mut(
+                    &mut dummy as *mut _ as *mut u8,
+                    mem::size_of::<CharFileU>(),
+                );
+                // `read_exact()` comes from `Read` impl for `&[u8]`
+                let r = file_mut.read_exact(config_slice);
+                if r.is_err() {
+                    let r = r.err().unwrap();
+                    if r.kind() == ErrorKind::UnexpectedEof {
+                        break;
+                    }
+                    error!(
+                        "[SYSERR] Error while reading player file for indexing: {}",
+                        r
+                    );
+                    process::exit(1);
+                }
+            }
+
+            let mut pie = PlayerIndexElement {
+                name: parse_c_string(&dummy.name),
+                id: dummy.char_specials_saved.idnum,
+            };
+            pie.name = pie.name.to_lowercase();
+            self.player_table.borrow_mut().push(pie);
+            self.top_idnum.set(max(
+                self.top_idnum.get(),
+                dummy.char_specials_saved.idnum as i32,
+            ));
+        }
 
         // *self.top_of_p_table.borrow_mut() = nr;
     }
@@ -2730,11 +2765,10 @@ impl DB {
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        return self
-            .player_table
-            .borrow()
-            .iter()
-            .position(|pie| pie.name == name);
+        return self.player_table.borrow().iter().position(|pie| {
+            info!("{} {}", pie.name, name);
+            pie.name == name
+        });
     }
 }
 
@@ -2800,7 +2834,43 @@ impl DB {
      */
     pub fn save_char(&self, ch: &CharData) {
         //struct char_file_u st;
-        let mut st: CharFileU = CharFileU {
+        let mut st: CharFileU = CharFileU::new();
+
+        if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
+            return;
+        }
+
+        char_to_store(ch, &mut st);
+
+        {
+            copy_to_stored(
+                &mut st.host,
+                ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
+            );
+        }
+        // strncpy(st.host, ch -> desc -> host, HOST_LENGTH);    /* strncpy: OK (s.host:HOST_LENGTH+1) */
+        // st.host[HOST_LENGTH] = '\0';
+
+        let record_size = mem::size_of::<CharFileU>();
+        //self.player_fl.fseek(SeekFrom::Start((get_pfilepos!(ch) * record_size) as u64)).expect("Error while seeking for writing player");
+        unsafe {
+            let player_slice = slice::from_raw_parts(&mut st as *mut _ as *mut u8, record_size);
+            self.player_fl
+                .borrow_mut()
+                .as_mut()
+                .unwrap()
+                .write_all_at(
+                    player_slice,
+                    (ch.get_pfilepos() * record_size as i32) as u64,
+                )
+                .expect("Error while writing player record to file");
+        }
+    }
+}
+
+impl CharFileU {
+    pub fn new() -> CharFileU {
+        CharFileU {
             name: [0; MAX_NAME_LENGTH + 1],
             description: [0; 240],
             title: [0; MAX_TITLE_LENGTH + 1],
@@ -2886,36 +2956,6 @@ impl DB {
             }; MAX_AFFECT],
             last_logon: 0,
             host: [0; HOST_LENGTH + 1],
-        };
-
-        if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
-            return;
-        }
-
-        char_to_store(ch, &mut st);
-
-        {
-            copy_to_stored(
-                &mut st.host,
-                ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
-            );
-        }
-        // strncpy(st.host, ch -> desc -> host, HOST_LENGTH);    /* strncpy: OK (s.host:HOST_LENGTH+1) */
-        // st.host[HOST_LENGTH] = '\0';
-
-        let record_size = mem::size_of::<CharFileU>();
-        //self.player_fl.fseek(SeekFrom::Start((get_pfilepos!(ch) * record_size) as u64)).expect("Error while seeking for writing player");
-        unsafe {
-            let player_slice = slice::from_raw_parts(&mut st as *mut _ as *mut u8, record_size);
-            self.player_fl
-                .borrow_mut()
-                .as_mut()
-                .unwrap()
-                .write_all_at(
-                    player_slice,
-                    (ch.get_pfilepos() * record_size as i32) as u64,
-                )
-                .expect("Error while writing player record to file");
         }
     }
 }
@@ -2935,7 +2975,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
     ch.player.borrow_mut().short_descr = String::new();
     ch.player.borrow_mut().long_descr = String::new();
     //ch.player.title = st.title;
-    ch.player.borrow_mut().description = std::str::from_utf8(&st.description).unwrap().to_string();
+    ch.player.borrow_mut().description = parse_c_string(&st.description);
 
     ch.player.borrow_mut().hometown = st.hometown;
     ch.player.borrow_mut().time.birth = st.birth;
@@ -2966,10 +3006,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 
     // if (ch.player.name)
     // free(ch.player.name);
-    ch.player.borrow_mut().name = std::str::from_utf8(&st.name)
-        .expect("Error while loading player name from file")
-        .parse()
-        .unwrap();
+    ch.player.borrow_mut().name = parse_c_string(&st.name);
     ch.player.borrow_mut().passwd.copy_from_slice(&st.pwd);
 
     /* Add all spell effects */
@@ -3423,7 +3460,7 @@ pub fn reset_char(ch: &CharData) {
 }
 
 /* clear ALL the working variables of a char; do NOT free any space alloc'ed */
-fn clear_char(ch: &mut CharData) {
+pub fn clear_char(ch: &mut CharData) {
     //memset((char *) ch, 0, sizeof(struct char_data));
 
     ch.set_in_room(NOWHERE);

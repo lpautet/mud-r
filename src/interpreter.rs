@@ -9,14 +9,15 @@
 ************************************************************************ */
 
 use crate::{
-    MainGlobals, _clrlevel, clr, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
+    MainGlobals, _clrlevel, clr, main, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED,
+    TO_ROOM,
 };
 
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
     CharData, MobSpecialData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART,
-    POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STANDING, POS_STUNNED,
+    PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING,
+    POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use hmac::Hmac;
 use sha2::Sha256;
@@ -490,13 +491,12 @@ pub fn command_interpreter(db: &DB, rch: Rc<CharData>, argument: &str) {
      * requested by many people so "'hi" or ";godnet test" is possible.
      * Patch sent by Eric Green and Stefan Wasilewski.
      */
-    // if (!isalpha(*argument)) {
-    //     arg[0] = argument[0];
-    //     arg[1] = '\0';
-    //     line = argument + 1;
-    // } else {
-    line = any_one_arg(argument, &mut arg);
-    // }
+    if !argument.chars().next().unwrap().is_alphanumeric() {
+        arg = argument.chars().next().unwrap().to_string();
+        line = &argument[1..];
+    } else {
+        line = any_one_arg(argument, &mut arg);
+    }
 
     /* otherwise, find the command */
     let length = arg.len();
@@ -1027,11 +1027,7 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check<'a>(
-    main_globals: &MainGlobals,
-    d: &DescriptorData,
-    me: &Rc<DescriptorData>,
-) -> bool {
+fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
@@ -1044,10 +1040,17 @@ fn perform_dupe_check<'a>(
      * other descriptors controlling a character with the same ID number.
      */
     for k in main_globals.descriptor_list.borrow().iter() {
+        if Rc::ptr_eq(k, &d) {
+            continue;
+        }
+
         if k.original.borrow().is_some() && k.original.borrow().as_ref().unwrap().get_idnum() == id
         {
             /* Original descriptor was switched, booting it and restoring normal body control. */
-            write_to_output(d, "\r\nMultiple login detected -- disconnecting.\r\n");
+            write_to_output(
+                d.as_ref(),
+                "\r\nMultiple login detected -- disconnecting.\r\n",
+            );
             k.set_state(ConClose);
             if target.is_none() {
                 target = k.original.borrow().clone();
@@ -1121,10 +1124,11 @@ fn perform_dupe_check<'a>(
         }
 
         /* we've found a duplicate - blow him away, dumping his eq in limbo. */
-        // if (IN_ROOM(ch) != NOWHERE)
-        // char_from_room(ch);
-        // char_to_room(ch, 1);
-        // extract_char(ch);
+        if ch.in_room != Cell::from(NOWHERE) {
+            db.char_from_room(ch.clone());
+        }
+        db.char_to_room(Some(ch.clone()), 1);
+        db.extract_char(ch.clone());
     }
 
     /* no target for switching into was found - allow login to continue */
@@ -1139,7 +1143,7 @@ fn perform_dupe_check<'a>(
     {
         let c = d.character.borrow();
         let character = c.as_ref().unwrap();
-        *character.desc.borrow_mut() = Some(me.clone());
+        *character.desc.borrow_mut() = Some(d.clone());
         *d.original.borrow_mut() = None;
         character.char_specials.borrow_mut().timer = 0;
         character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
@@ -1149,18 +1153,66 @@ fn perform_dupe_check<'a>(
 
     match mode {
         RECON => {
-            write_to_output(d, "Reconnecting.\r\n");
-            //act("$n has reconnected.", true, d->character, 0, 0, TO_ROOM);
-            //mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
+            write_to_output(d.as_ref(), "Reconnecting.\r\n");
+            db.act(
+                "$n has reconnected.",
+                true,
+                d.character.borrow().clone(),
+                None,
+                None,
+                TO_ROOM,
+            );
+            main_globals.mudlog(
+                NRM,
+                max(
+                    LVL_IMMORT as i32,
+                    d.character.borrow().as_ref().unwrap().get_invis_lev() as i32,
+                ),
+                true,
+                format!(
+                    "{} [{}] has reconnected.",
+                    d.character.borrow().as_ref().unwrap().get_name(),
+                    d.host.borrow()
+                )
+                .as_str(),
+            );
         }
         USURP => {
-            write_to_output(d, "You take over your own body, already in use!\r\n");
-            //act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d->character, 0, 0, TO_ROOM);
-            //mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s has re-logged in ... disconnecting old socket.", GET_NAME(d->character));
+            write_to_output(
+                d.as_ref(),
+                "You take over your own body, already in use!\r\n",
+            );
+            db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().clone(), None, None, TO_ROOM);
+            main_globals.mudlog(
+                NRM,
+                max(
+                    LVL_IMMORT as i32,
+                    d.character.borrow().as_ref().unwrap().get_invis_lev() as i32,
+                ),
+                true,
+                format!(
+                    "{} has re-logged in ... disconnecting old socket.",
+                    d.character.borrow().as_ref().unwrap().get_name()
+                )
+                .as_str(),
+            );
         }
         UNSWITCH => {
-            write_to_output(d, "Reconnecting to unswitched char.");
-            //   mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(d->character)), true, "%s [%s] has reconnected.", GET_NAME(d->character), d->host);
+            write_to_output(d.as_ref(), "Reconnecting to unswitched char.");
+            main_globals.mudlog(
+                NRM,
+                max(
+                    LVL_IMMORT as i32,
+                    d.character.borrow().as_ref().unwrap().get_invis_lev() as i32,
+                ),
+                true,
+                format!(
+                    "{} [{}] has reconnected.",
+                    d.character.borrow().as_ref().unwrap().get_name(),
+                    d.host.borrow()
+                )
+                .as_str(),
+            );
         }
         _ => {}
     }
@@ -1172,7 +1224,7 @@ use crate::act_movement::do_move;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{reset_char, store_to_char, DB};
+use crate::db::{clear_char, reset_char, store_to_char, DB};
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
@@ -1198,7 +1250,10 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
         ConGetName => {
             /* wait for input of name */
             if d.character.borrow().is_none() {
-                *d.character.borrow_mut() = Some(Rc::from(CharData::new()));
+                let mut ch = CharData::new();
+                clear_char(&mut ch);
+                *ch.desc.borrow_mut() = Some(d.clone());
+                *d.character.borrow_mut() = Some(Rc::from(ch));
             }
 
             if arg.is_empty() {
@@ -1227,93 +1282,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                 let buf = tmp_name.unwrap().clone();
                 let och = d.character.borrow();
                 let character = och.as_ref().unwrap();
-                let mut tmp_store = CharFileU {
-                    name: [0; 21],
-                    description: [0; 240],
-                    title: [0; 81],
-                    sex: 0,
-                    chclass: 0,
-                    level: 0,
-                    hometown: 0,
-                    birth: 0,
-                    played: 0,
-                    weight: 0,
-                    height: 0,
-                    pwd: [0; 16],
-                    char_specials_saved: CharSpecialDataSaved {
-                        alignment: 0,
-                        idnum: 0,
-                        act: 0,
-                        affected_by: 0,
-                        apply_saving_throw: [0; 5],
-                    },
-                    player_specials_saved: PlayerSpecialDataSaved {
-                        skills: [0; MAX_SKILLS + 1],
-                        padding0: 0,
-                        talks: [false; MAX_TONGUE],
-                        wimp_level: 0,
-                        freeze_level: 0,
-                        invis_level: 0,
-                        load_room: 0,
-                        pref: 0,
-                        bad_pws: 0,
-                        conditions: [0; 3],
-                        spare0: 0,
-                        spare1: 0,
-                        spare2: 0,
-                        spare3: 0,
-                        spare4: 0,
-                        spare5: 0,
-                        spells_to_learn: 0,
-                        spare7: 0,
-                        spare8: 0,
-                        spare9: 0,
-                        spare10: 0,
-                        spare11: 0,
-                        spare12: 0,
-                        spare13: 0,
-                        spare14: 0,
-                        spare15: 0,
-                        spare16: 0,
-                        spare17: 0,
-                        spare18: 0,
-                        spare19: 0,
-                        spare20: 0,
-                        spare21: 0,
-                    },
-                    abilities: CharAbilityData {
-                        str: 0,
-                        str_add: 0,
-                        intel: 0,
-                        wis: 0,
-                        dex: 0,
-                        con: 0,
-                        cha: 0,
-                    },
-                    points: CharPointData {
-                        mana: 0,
-                        max_mana: 0,
-                        hit: 0,
-                        max_hit: 0,
-                        movem: 0,
-                        max_move: 0,
-                        armor: 0,
-                        gold: 0,
-                        bank_gold: 0,
-                        exp: 0,
-                        hitroll: 0,
-                        damroll: 0,
-                    },
-                    affected: [AffectedType {
-                        _type: 0,
-                        duration: 0,
-                        modifier: 0,
-                        location: 0,
-                        bitvector: 0,
-                    }; 32],
-                    last_logon: 0,
-                    host: [0; 31],
-                };
+                let mut tmp_store = CharFileU::new();
                 let db = &main_globals.db;
                 let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
@@ -1339,11 +1308,9 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         // write_to_output(&mut mut_d, format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str());
                         // mut_d.state() = ConNameCnfrm;
                     } else {
-                        {
-                            /* undo it just in case they are set */
-                            character.remove_plr_flag(PLR_WRITING | PLR_MAILING | PLR_CRYO);
-                            character.remove_aff_flags(AFF_GROUP);
-                        }
+                        /* undo it just in case they are set */
+                        character.remove_plr_flag(PLR_WRITING | PLR_MAILING | PLR_CRYO);
+                        character.remove_aff_flags(AFF_GROUP);
                         write_to_output(d.as_ref(), "Password: ");
                         echo_off(d.as_ref());
                         d.idle_tics.set(0);
@@ -1468,10 +1435,8 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                 /* Password was correct. */
                 let load_result: u8;
-                {
-                    load_result = character.get_bad_pws();
-                    character.reset_bad_pws();
-                }
+                load_result = character.get_bad_pws();
+                character.reset_bad_pws();
                 d.bad_pws.set(0);
                 // TODO implement ban
                 // if (isbanned(d->host) == BAN_SELECT &&
@@ -1489,7 +1454,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                 //     return;
                 // }
                 /* check and make sure no other copies of this player are logged in */
-                if perform_dupe_check(&main_globals, d.as_ref(), &d) {
+                if perform_dupe_check(&main_globals, d.clone()) {
                     return;
                 }
 
@@ -1711,9 +1676,9 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         //load_result = Crash_load(d->character);
 
                         /* Clear their load room if it's not persistant. */
-                        // if !PLR_FLAGGED(d->character, PLR_LOADROOM) {
-                        //     GET_LOADROOM(d->character) = NOWHERE;
-                        // }
+                        if !character.plr_flagged(PLR_LOADROOM) {
+                            character.set_loadroom(NOWHERE);
+                        }
                         db.save_char(character.as_ref());
 
                         db.act(

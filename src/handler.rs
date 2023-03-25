@@ -13,8 +13,8 @@ use crate::structs::{
     room_rnum, CharData, ObjData, ObjRnum, RoomData, RoomRnum, APPLY_CHA, APPLY_CHAR_WEIGHT,
     APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_EXP, APPLY_HIT, APPLY_HITROLL, APPLY_MOVE,
     APPLY_SAVING_PARA, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT,
-    LVL_GRGOD, MAX_OBJ_AFFECT, NOTHING, NOWHERE, NUM_CLASSES, NUM_WEARS, PLR_CRASH, ROOM_HOUSE,
-    ROOM_HOUSE_CRASH, WEAR_LIGHT,
+    LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_CLASSES, NUM_WEARS, PLR_CRASH,
+    PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_LIGHT,
 };
 use log::error;
 use std::cmp::{max, min};
@@ -1092,32 +1092,33 @@ impl DB {
 // if (IS_NPC(ch) || !ch->desc)
 // free_char(ch);
 // }
-//
-//
-// /*
-//  * Q: Why do we do this?
-//  * A: Because trying to iterate over the character
-//  *    list with 'ch = ch->next' does bad things if
-//  *    the current character happens to die. The
-//  *    trivial workaround of 'vict = next_vict'
-//  *    doesn't work if the _next_ person in the list
-//  *    gets killed, for example, by an area spell.
-//  *
-//  * Q: Why do we leave them on the character_list?
-//  * A: Because code doing 'vict = vict->next' would
-//  *    get really confused otherwise.
-//  */
-// void extract_char(struct char_data *ch)
-// {
-// if (IS_NPC(ch))
-// SET_BIT(MOB_FLAGS(ch), MOB_NOTDEADYET);
-// else
-// SET_BIT(PLR_FLAGS(ch), PLR_NOTDEADYET);
-//
-// extractions_pending++;
-// }
-//
-//
+
+impl DB {
+    /*
+     * Q: Why do we do this?
+     * A: Because trying to iterate over the character
+     *    list with 'ch = ch->next' does bad things if
+     *    the current character happens to die. The
+     *    trivial workaround of 'vict = next_vict'
+     *    doesn't work if the _next_ person in the list
+     *    gets killed, for example, by an area spell.
+     *
+     * Q: Why do we leave them on the character_list?
+     * A: Because code doing 'vict = vict->next' would
+     *    get really confused otherwise.
+     */
+    pub fn extract_char(&self, ch: Rc<CharData>) {
+        if ch.is_npc() {
+            ch.set_mob_flags_bit(MOB_NOTDEADYET);
+        } else {
+            ch.set_plr_flag_bit(PLR_NOTDEADYET);
+        }
+
+        let n = self.extractions_pending.get();
+        self.extractions_pending.set(n + 1);
+    }
+}
+
 // /*
 //  * I'm not particularly pleased with the MOB/PLR
 //  * hoops that have to be jumped through but it
