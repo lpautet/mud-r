@@ -253,7 +253,7 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
     }
 
     if ch.desc.borrow().is_some() {
-        db.look_at_room(ch, false);
+        db.look_at_room(&rch, false);
     }
 
     // if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_DEATH) && GET_LEVEL(ch) < LVL_IMMORT) {

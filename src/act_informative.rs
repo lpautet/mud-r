@@ -10,96 +10,116 @@
 
 // /* local globals */
 // int *cmd_sort_info;
-//
-// /* For show_obj_to_char 'mode'.	/-- arbitrary */
-// #define SHOW_OBJ_LONG		0
-// #define SHOW_OBJ_SHORT		1
-// #define SHOW_OBJ_ACTION		2
-//
-//
-// void show_obj_to_char(struct obj_data *obj, struct char_data *ch, int mode)
-// {
-// if (!obj || !ch) {
-// log("SYSERR: NULL pointer in show_obj_to_char(): obj=%p ch=%p", obj, ch);
-// return;
-// }
-//
-// switch (mode) {
-// case SHOW_OBJ_LONG:
-// send_to_char(ch, "%s", obj->description);
-// break;
-//
-// case SHOW_OBJ_SHORT:
-// send_to_char(ch, "%s", obj->short_description);
-// break;
-//
-// case SHOW_OBJ_ACTION:
-// switch (GET_OBJ_TYPE(obj)) {
-// case ITEM_NOTE:
-// if (obj->action_description) {
-// char notebuf[MAX_NOTE_LENGTH + 64];
-//
-// snprintf(notebuf, sizeof(notebuf), "There is something written on it:\r\n\r\n%s", obj->action_description);
-// page_string(ch->desc, notebuf, TRUE);
-// } else
-// send_to_char(ch, "It's blank.\r\n");
-// return;
-//
-// case ITEM_DRINKCON:
-// send_to_char(ch, "It looks like a drink container.");
-// break;
-//
-// default:
-// send_to_char(ch, "You see nothing special..");
-// break;
-// }
-// break;
-//
-// default:
-// log("SYSERR: Bad display mode (%d) in show_obj_to_char().", mode);
-// return;
-// }
-//
-// show_obj_modifiers(obj, ch);
-// send_to_char(ch, "\r\n");
-// }
-//
-//
-// void show_obj_modifiers(struct obj_data *obj, struct char_data *ch)
-// {
-// if (OBJ_FLAGGED(obj, ITEM_INVISIBLE))
-// send_to_char(ch, " (invisible)");
-//
-// if (OBJ_FLAGGED(obj, ITEM_BLESS) && AFF_FLAGGED(ch, AFF_DETECT_ALIGN))
-// send_to_char(ch, " ..It glows blue!");
-//
-// if (OBJ_FLAGGED(obj, ITEM_MAGIC) && AFF_FLAGGED(ch, AFF_DETECT_MAGIC))
-// send_to_char(ch, " ..It glows yellow!");
-//
-// if (OBJ_FLAGGED(obj, ITEM_GLOW))
-// send_to_char(ch, " ..It has a soft glowing aura!");
-//
-// if (OBJ_FLAGGED(obj, ITEM_HUM))
-// send_to_char(ch, " ..It emits a faint humming sound!");
-// }
-//
-//
-// void list_obj_to_char(struct obj_data *list, struct char_data *ch, int mode, int show)
-// {
-// struct obj_data *i;
-// bool found = FALSE;
-//
-// for (i = list; i; i = i->next_content) {
-// if (CAN_SEE_OBJ(ch, i)) {
-// show_obj_to_char(i, ch, mode);
-// found = TRUE;
-// }
-// }
-// if (!found && show)
-// send_to_char(ch, " Nothing.\r\n");
-// }
-//
-//
+
+/* For show_obj_to_char 'mode'.	/-- arbitrary */
+use std::rc::Rc;
+
+use log::error;
+
+use crate::constants::{DIRS, ROOM_BITS};
+use crate::db::DB;
+use crate::modify::page_string;
+use crate::screen::{C_NRM, KCYN, KGRN, KNRM, KNUL, KYEL};
+use crate::structs::AFF_INFRAVISION;
+use crate::structs::{
+    CharData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY,
+    EX_CLOSED, ITEM_BLESS, ITEM_DRINKCON, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, NOWHERE,
+    NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2,
+};
+use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
+use crate::util::sprintbit;
+use crate::{_clrlevel, clr, send_to_char, CCCYN, CCGRN, CCYEL};
+use crate::{CCNRM, TO_VICT};
+
+pub const SHOW_OBJ_LONG: i32 = 0;
+pub const SHOW_OBJ_SHORT: i32 = 1;
+pub const SHOW_OBJ_ACTION: i32 = 2;
+
+pub fn show_obj_to_char(obj: &ObjData, ch: &CharData, mode: i32) {
+    // if (!obj || !ch) {
+    // log("SYSERR: NULL pointer in show_obj_to_char(): obj=%p ch=%p", obj, ch);
+    // return;
+    // }
+
+    match mode {
+        SHOW_OBJ_LONG => {
+            send_to_char(ch, format!("{}", obj.description).as_str());
+        }
+
+        SHOW_OBJ_SHORT => {
+            send_to_char(ch, format!("{}", obj.short_description).as_str());
+        }
+
+        SHOW_OBJ_ACTION => match obj.get_obj_type() {
+            ITEM_NOTE => {
+                if !obj.action_description.is_empty() {
+                    let notebuf = format!(
+                        "There is something written on it:\r\n\r\n{}",
+                        obj.action_description
+                    );
+                    page_string(ch.desc.borrow().clone(), notebuf.as_str(), true);
+                } else {
+                    send_to_char(ch, "It's blank.\r\n");
+                }
+                return;
+            }
+            ITEM_DRINKCON => {
+                send_to_char(ch, "It looks like a drink container.");
+            }
+
+            _ => {
+                send_to_char(ch, "You see nothing special..");
+            }
+        },
+
+        _ => {
+            error!("SYSERR: Bad display mode ({}) in show_obj_to_char().", mode);
+            return;
+        }
+    }
+
+    show_obj_modifiers(obj, ch);
+    send_to_char(ch, "\r\n");
+}
+
+pub fn show_obj_modifiers(obj: &ObjData, ch: &CharData) {
+    if obj.obj_flagged(ITEM_INVISIBLE) {
+        send_to_char(ch, " (invisible)");
+    }
+
+    if obj.obj_flagged(ITEM_BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
+        send_to_char(ch, " ..It glows blue!");
+    }
+
+    if obj.obj_flagged(ITEM_MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
+        send_to_char(ch, " ..It glows yellow!");
+    }
+
+    if obj.obj_flagged(ITEM_GLOW) {
+        send_to_char(ch, " ..It has a soft glowing aura!");
+    }
+
+    if obj.obj_flagged(ITEM_HUM) {
+        send_to_char(ch, " ..It emits a faint humming sound!");
+    }
+}
+
+impl DB {
+    pub fn list_obj_to_char(&self, list: &Vec<Rc<ObjData>>, ch: &CharData, mode: i32, show: bool) {
+        let mut found = true;
+
+        for obj in list {
+            if self.can_see_obj(ch, obj) {
+                show_obj_to_char(obj, ch, mode);
+                found = true;
+            }
+        }
+        if !found && show {
+            send_to_char(ch, " Nothing.\r\n");
+        }
+    }
+}
+
 // void diag_char_to_char(struct char_data *i, struct char_data *ch)
 // {
 // struct {
@@ -174,106 +194,156 @@
 // send_to_char(ch, "You can't see anything.\r\n");
 // }
 // }
-//
-//
-// void list_one_char(struct char_data *i, struct char_data *ch)
-// {
-// const char *positions[] = {
-// " is lying here, dead.",
-// " is lying here, mortally wounded.",
-// " is lying here, incapacitated.",
-// " is lying here, stunned.",
-// " is sleeping here.",
-// " is resting here.",
-// " is sitting here.",
-// "!FIGHTING!",
-// " is standing here."
-// };
-//
-// if (IS_NPC(i) && i->player.long_descr && GET_POS(i) == GET_DEFAULT_POS(i)) {
-// if (AFF_FLAGGED(i, AFF_INVISIBLE))
-// send_to_char(ch, "*");
-//
-// if (AFF_FLAGGED(ch, AFF_DETECT_ALIGN)) {
-// if (IS_EVIL(i))
-// send_to_char(ch, "(Red Aura) ");
-// else if (IS_GOOD(i))
-// send_to_char(ch, "(Blue Aura) ");
-// }
-// send_to_char(ch, "%s", i->player.long_descr);
-//
-// if (AFF_FLAGGED(i, AFF_SANCTUARY))
-// act("...$e glows with a bright light!", FALSE, i, 0, ch, TO_VICT);
-// if (AFF_FLAGGED(i, AFF_BLIND))
-// act("...$e is groping around blindly!", FALSE, i, 0, ch, TO_VICT);
-//
-// return;
-// }
-//
-// if (IS_NPC(i))
-// send_to_char(ch, "%c%s", UPPER(*i->player.short_descr), i->player.short_descr + 1);
-// else
-// send_to_char(ch, "%s %s", i->player.name, GET_TITLE(i));
-//
-// if (AFF_FLAGGED(i, AFF_INVISIBLE))
-// send_to_char(ch, " (invisible)");
-// if (AFF_FLAGGED(i, AFF_HIDE))
-// send_to_char(ch, " (hidden)");
-// if (!IS_NPC(i) && !i->desc)
-// send_to_char(ch, " (linkless)");
-// if (!IS_NPC(i) && PLR_FLAGGED(i, PLR_WRITING))
-// send_to_char(ch, " (writing)");
-//
-// if (GET_POS(i) != POS_FIGHTING)
-// send_to_char(ch, "%s", positions[(int) GET_POS(i)]);
-// else {
-// if (FIGHTING(i)) {
-// send_to_char(ch, " is here, fighting ");
-// if (FIGHTING(i) == ch)
-// send_to_char(ch, "YOU!");
-// else {
-// if (IN_ROOM(i) == IN_ROOM(FIGHTING(i)))
-// send_to_char(ch, "%s!", PERS(FIGHTING(i), ch));
-// else
-// send_to_char(ch,  "someone who has already left!");
-// }
-// } else			/* NIL fighting pointer */
-// send_to_char(ch, " is here struggling with thin air.");
-// }
-//
-// if (AFF_FLAGGED(ch, AFF_DETECT_ALIGN)) {
-// if (IS_EVIL(i))
-// send_to_char(ch, " (Red Aura)");
-// else if (IS_GOOD(i))
-// send_to_char(ch, " (Blue Aura)");
-// }
-// send_to_char(ch, "\r\n");
-//
-// if (AFF_FLAGGED(i, AFF_SANCTUARY))
-// act("...$e glows with a bright light!", FALSE, i, 0, ch, TO_VICT);
-// }
-//
-//
-//
-// void list_char_to_char(struct char_data *list, struct char_data *ch)
-// {
-// struct char_data *i;
-//
-// for (i = list; i; i = i->next_in_room)
-// if (ch != i) {
-// if (CAN_SEE(ch, i))
-// list_one_char(i, ch);
-// else if (IS_DARK(IN_ROOM(ch)) && !CAN_SEE_IN_DARK(ch) &&
-// AFF_FLAGGED(i, AFF_INFRAVISION))
-// send_to_char(ch, "You see a pair of glowing red eyes looking your way.\r\n");
-// }
-// }
-
-use crate::screen::{C_NRM, KCYN, KNRM, KNUL};
-use crate::structs::{CharData, EX_CLOSED, NOWHERE, NUM_OF_DIRS, PRF_COLOR_1, PRF_COLOR_2};
-use crate::{_clrlevel, clr, send_to_char, CCCYN};
 
 impl DB {
+    pub fn list_one_char(&self, i: Rc<CharData>, ch: &Rc<CharData>) {
+        const POSITIONS: [&str; 9] = [
+            " is lying here, dead.",
+            " is lying here, mortally wounded.",
+            " is lying here, incapacitated.",
+            " is lying here, stunned.",
+            " is sleeping here.",
+            " is resting here.",
+            " is sitting here.",
+            "!FIGHTING!",
+            " is standing here.",
+        ];
+
+        if i.is_npc()
+            && !i.player.borrow().long_descr.is_empty()
+            && i.get_pos() == i.get_default_pos()
+        {
+            if i.aff_flagged(AFF_INVISIBLE) {
+                send_to_char(ch, "*");
+            }
+
+            if ch.aff_flagged(AFF_DETECT_ALIGN) {
+                if i.is_evil() {
+                    send_to_char(ch, "(Red Aura) ");
+                } else if i.is_good() {
+                    send_to_char(ch, "(Blue Aura) ");
+                }
+            }
+            send_to_char(ch, i.player.borrow().long_descr.as_str());
+
+            if i.aff_flagged(AFF_SANCTUARY) {
+                self.act(
+                    "...$e glows with a bright light!",
+                    false,
+                    Some(i.clone()),
+                    None,
+                    Some(ch),
+                    TO_VICT,
+                );
+            }
+            if i.aff_flagged(AFF_BLIND) {
+                self.act(
+                    "...$e is groping around blindly!",
+                    false,
+                    Some(i.clone()),
+                    None,
+                    Some(ch),
+                    TO_VICT,
+                );
+            }
+            return;
+        }
+
+        if i.is_npc() {
+            send_to_char(
+                ch,
+                format!(
+                    "{}{}",
+                    i.player.borrow().short_descr.as_str()[0..1].to_uppercase(),
+                    &i.player.borrow().short_descr.as_str()[1..]
+                )
+                .as_str(),
+            );
+        } else {
+            send_to_char(
+                ch,
+                format!("{} {}", i.player.borrow().name.as_str(), i.get_title()).as_str(),
+            );
+        }
+
+        if i.aff_flagged(AFF_INVISIBLE) {
+            send_to_char(ch, " (invisible)");
+        }
+        if i.aff_flagged(AFF_HIDE) {
+            send_to_char(ch, " (hidden)");
+        }
+        if !i.is_npc() && i.desc.borrow().is_none() {
+            send_to_char(ch, " (linkless)");
+        }
+        if !i.is_npc() && i.plr_flagged(PLR_WRITING) {
+            send_to_char(ch, " (writing)");
+        }
+        if i.get_pos() != POS_FIGHTING {
+            send_to_char(ch, POSITIONS[i.get_pos() as usize]);
+        } else {
+            if i.fighting().is_some() {
+                send_to_char(ch, " is here, fighting ");
+                if Rc::ptr_eq(i.fighting().as_ref().unwrap(), &ch) {
+                    send_to_char(ch, "YOU!");
+                } else {
+                    if i.in_room() == i.fighting().as_ref().unwrap().in_room() {
+                        send_to_char(
+                            ch,
+                            format!(
+                                "{}!",
+                                self.pers(i.fighting().as_ref().unwrap(), ch.as_ref())
+                            )
+                            .as_str(),
+                        );
+                    } else {
+                        send_to_char(ch, "someone who has already left!");
+                    }
+                }
+            } else {
+                /* NIL fighting pointer */
+                send_to_char(ch, " is here struggling with thin air.");
+            }
+        }
+
+        if ch.aff_flagged(AFF_DETECT_ALIGN) {
+            if i.is_evil() {
+                send_to_char(ch, " (Red Aura)");
+            } else if i.is_good() {
+                send_to_char(ch, " (Blue Aura)");
+            }
+        }
+        send_to_char(ch, "\r\n");
+
+        if i.aff_flagged(AFF_SANCTUARY) {
+            self.act(
+                "...$e glows with a bright light!",
+                false,
+                Some(i.clone()),
+                None,
+                Some(ch),
+                TO_VICT,
+            );
+        }
+    }
+
+    pub fn list_char_to_char(&self, list: &Vec<Rc<CharData>>, ch: Rc<CharData>) {
+        for i in list {
+            if !Rc::ptr_eq(i, &ch) {
+                if self.can_see(ch.as_ref(), i) {
+                    self.list_one_char(i.clone(), &ch);
+                } else if self.is_dark(ch.in_room())
+                    && !ch.can_see_in_dark()
+                    && i.aff_flagged(AFF_INFRAVISION)
+                {
+                    send_to_char(
+                        ch.as_ref(),
+                        "You see a pair of glowing red eyes looking your way.\r\n",
+                    );
+                }
+            }
+        }
+    }
+
     pub fn do_auto_exits(&self, ch: &CharData) {
         //int door, slen = 0;
         let mut slen = 0;
@@ -339,14 +409,8 @@ impl DB {
 // send_to_char(ch, " None.\r\n");
 // }
 
-use crate::constants::{DIRS, ROOM_BITS};
-use crate::db::DB;
-use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
-use crate::util::sprintbit;
-use crate::CCNRM;
-
 impl DB {
-    pub fn look_at_room(&self, ch: &CharData, ignore_brief: bool) {
+    pub fn look_at_room(&self, ch: &Rc<CharData>, ignore_brief: bool) {
         let mut buf = String::new();
         if ch.desc.borrow().is_none() {
             return;
@@ -399,11 +463,25 @@ impl DB {
         }
 
         /* now list characters & objects */
-        // send_to_char(ch, "%s", CCGRN(ch, C_NRM));
-        // list_obj_to_char(world[IN_ROOM(ch)].contents, ch, SHOW_OBJ_LONG, FALSE);
-        // send_to_char(ch, "%s", CCYEL(ch, C_NRM));
-        // list_char_to_char(world[IN_ROOM(ch)].people, ch);
-        // send_to_char(ch, "%s", CCNRM(ch, C_NRM));
+        send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+        self.list_obj_to_char(
+            self.world.borrow()[ch.in_room() as usize]
+                .contents
+                .borrow()
+                .as_ref(),
+            ch,
+            SHOW_OBJ_LONG,
+            false,
+        );
+        send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
+        self.list_char_to_char(
+            self.world.borrow()[ch.in_room() as usize]
+                .peoples
+                .borrow()
+                .as_ref(),
+            ch.clone(),
+        );
+        send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
     }
 }
 

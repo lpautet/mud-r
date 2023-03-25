@@ -72,9 +72,9 @@ pub struct DescriptorData {
     // unique num assigned to desc
     login_time: Instant,
     /* when the person connected		*/
-    showstr_head: RefCell<Rc<RefCell<String>>>,
+    showstr_head: RefCell<Option<Rc<str>>>,
     /* for keeping track of an internal str	*/
-    showstr_vector: RefCell<Vec<Rc<RefCell<String>>>>,
+    showstr_vector: RefCell<Vec<Rc<str>>>,
     /* for paging through texts		*/
     showstr_count: Cell<i32>,
     /* number of pages to page through	*/
@@ -1118,7 +1118,7 @@ impl MainGlobals {
             connected: Cell::new(ConState::ConGetName),
             desc_num: Cell::new(0),
             login_time: Instant::now(),
-            showstr_head: RefCell::new(Rc::new(RefCell::new(String::new()))),
+            showstr_head: RefCell::new(None),
             showstr_vector: RefCell::new(vec![]),
             showstr_count: Cell::from(0),
             showstr_page: Cell::from(0),
@@ -2030,7 +2030,6 @@ fn process_input(t: &DescriptorData) -> i32 {
  **************************************************************** */
 
 pub fn send_to_char(ch: &CharData, messg: &str) {
-    info!("send to char {} {} ", ch.desc.borrow().is_some(), messg);
     if ch.desc.borrow().is_some() && messg != "" {
         write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
     }

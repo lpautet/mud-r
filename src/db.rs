@@ -643,7 +643,10 @@ impl DB {
             } else {
                 info!("No playerfile.  Creating a new one.");
                 touch(Path::new(PLAYER_FILE)).expect("SYSERR: fatal error creating playerfile");
-                player_file = File::open(PLAYER_FILE)
+                player_file = OpenOptions::new()
+                    .write(true)
+                    .read(true)
+                    .open(PLAYER_FILE)
                     .expect("SYSERR: fatal error opening playerfile after creation");
             }
         } else {
@@ -2842,17 +2845,15 @@ impl DB {
 
         char_to_store(ch, &mut st);
 
-        {
-            copy_to_stored(
-                &mut st.host,
-                ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
-            );
-        }
-        // strncpy(st.host, ch -> desc -> host, HOST_LENGTH);    /* strncpy: OK (s.host:HOST_LENGTH+1) */
-        // st.host[HOST_LENGTH] = '\0';
+        copy_to_stored(
+            &mut st.host,
+            ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
+        );
 
         let record_size = mem::size_of::<CharFileU>();
-        //self.player_fl.fseek(SeekFrom::Start((get_pfilepos!(ch) * record_size) as u64)).expect("Error while seeking for writing player");
+        // self.player_fl.borrow_mut().as_mut().unwrap()
+        //     .fseek(SeekFrom::Start((ch.get_pfilepos() * record_size) as u64))
+        //     .expect("Error while seeking for writing player");
         unsafe {
             let player_slice = slice::from_raw_parts(&mut st as *mut _ as *mut u8, record_size);
             self.player_fl
@@ -2861,7 +2862,7 @@ impl DB {
                 .unwrap()
                 .write_all_at(
                     player_slice,
-                    (ch.get_pfilepos() * record_size as i32) as u64,
+                    (ch.get_pfilepos() as usize * record_size) as u64,
                 )
                 .expect("Error while writing player record to file");
         }
@@ -3352,7 +3353,7 @@ impl MainGlobals {
         //struct descriptor_data *in_use;
 
         for in_use in &*self.descriptor_list.borrow() {
-            if RefCell::borrow(&in_use.showstr_vector.borrow()[0]).as_str() == buf {
+            if &in_use.showstr_vector.borrow_mut()[0].as_ref() == buf {
                 return -1;
             }
         }
@@ -3367,19 +3368,15 @@ impl MainGlobals {
         for in_use in &*self.descriptor_list.borrow() {
             // if (!in_use->showstr_count || *in_use->showstr_vector != *buf)
             // continue;
-            if in_use.showstr_count.get() == 0
-                || RefCell::borrow(&RefCell::borrow(&in_use.showstr_vector)[0]).as_str() != buf
+            if in_use.showstr_count.get() == 0 || in_use.showstr_vector.borrow()[0].as_ref() != buf
             {
                 continue;
             }
 
             let temppage = in_use.showstr_page.get();
-            *RefCell::borrow_mut(&in_use.showstr_head) = in_use.showstr_vector.borrow()[0].clone();
+            *in_use.showstr_head.borrow_mut() = Some(in_use.showstr_vector.borrow()[0].clone());
             in_use.showstr_page.set(temppage);
-            paginate_string(
-                RefCell::borrow(&in_use.showstr_head.borrow()).as_str(),
-                in_use,
-            );
+            paginate_string(in_use.showstr_head.borrow().as_ref().unwrap(), in_use);
         }
         *buf = temp;
         return 0;
@@ -3496,7 +3493,7 @@ impl DB {
         // CREATE(ch->player_specials, struct player_special_data, 1);
 
         /* *** if this is our first player --- he be God *** */
-        if self.player_table.borrow().is_empty() {
+        if self.player_table.borrow().len() == 1 {
             ch.set_level(LVL_IMPL as u8);
             ch.set_exp(7000000);
 

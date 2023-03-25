@@ -891,7 +891,7 @@ fn reserved_word(argument: &str) -> bool {
 // }
 
 /* same as one_argument except that it doesn't ignore FILL words */
-fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a str {
+pub fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a str {
     let mut argument = argument.trim_start();
 
     for c in argument.chars().into_iter() {
@@ -1033,6 +1033,14 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
     let id: i64;
     let db = &main_globals.db;
 
+    info!(
+        "[1] {}",
+        if d.character.try_borrow_mut().is_err() {
+            "NO!"
+        } else {
+            "yes"
+        }
+    );
     id = d.character.borrow().as_ref().unwrap().get_idnum();
 
     /*
@@ -1098,6 +1106,15 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
      * choose one if one is available (while still deleting the other
      * duplicates, though theoretically none should be able to exist).
      */
+    info!(
+        "[2] {}",
+        if d.character.try_borrow_mut().is_err() {
+            "NO!"
+        } else {
+            "yes"
+        }
+    );
+
     for ch in db.character_list.borrow().iter() {
         if ch.is_npc() {
             continue;
@@ -1132,6 +1149,15 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
     }
 
     /* no target for switching into was found - allow login to continue */
+    info!(
+        "[3] {}",
+        if d.character.try_borrow_mut().is_err() {
+            "NO!"
+        } else {
+            "yes"
+        }
+    );
+
     if target.is_none() {
         return false;
     }
@@ -1374,8 +1400,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             }
         }
         ConPassword => {
-            let och = d.character.borrow();
-            let character = och.as_ref().unwrap();
             /* get pwd for known player      */
             /*
              * To really prevent duping correctly, the player's record should
@@ -1391,6 +1415,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
             /* New echo_on() eats the return on telnet. Extra space better than none. */
             write_to_output(d.as_ref(), "\r\n");
+            let load_result: i32;
 
             if arg.is_empty() {
                 d.set_state(ConClose);
@@ -1398,6 +1423,8 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                 let host = d.host.clone();
                 let mut matching_pwd: bool;
                 {
+                    let och = d.character.borrow();
+                    let character = och.as_ref().unwrap();
                     let mut passwd2 = [0 as u8; 16];
                     let salt = character.get_pc_name();
                     let passwd = character.get_passwd();
@@ -1409,54 +1436,56 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     )
                     .expect("Error while encrypting password");
                     matching_pwd = passwd == passwd2;
-                }
 
-                if !matching_pwd {
-                    main_globals.mudlog(
-                        BRF,
-                        LVL_GOD as i32,
-                        true,
-                        format!("Bad PW: {} [{}]", character.get_name(), d.host.borrow()).as_str(),
-                    );
+                    if !matching_pwd {
+                        main_globals.mudlog(
+                            BRF,
+                            LVL_GOD as i32,
+                            true,
+                            format!("Bad PW: {} [{}]", character.get_name(), d.host.borrow())
+                                .as_str(),
+                        );
 
-                    character.incr_bad_pws();
-                    db.save_char(d.character.borrow().as_ref().unwrap());
-                    d.bad_pws.set(d.bad_pws.get() + 1);
-                    if d.bad_pws.get() >= MAX_BAD_PWS {
-                        /* 3 strikes and you're out. */
-                        write_to_output(d.as_ref(), "Wrong password... disconnecting.\r\n");
-                        d.set_state(ConClose);
-                    } else {
-                        write_to_output(d.as_ref(), "Wrong password.\r\nPassword: ");
-                        echo_off(d.as_ref());
+                        character.incr_bad_pws();
+                        db.save_char(d.character.borrow().as_ref().unwrap());
+                        d.bad_pws.set(d.bad_pws.get() + 1);
+                        if d.bad_pws.get() >= MAX_BAD_PWS {
+                            /* 3 strikes and you're out. */
+                            write_to_output(d.as_ref(), "Wrong password... disconnecting.\r\n");
+                            d.set_state(ConClose);
+                        } else {
+                            write_to_output(d.as_ref(), "Wrong password.\r\nPassword: ");
+                            echo_off(d.as_ref());
+                        }
+                        return;
                     }
-                    return;
-                }
 
-                /* Password was correct. */
-                let load_result: u8;
-                load_result = character.get_bad_pws();
-                character.reset_bad_pws();
-                d.bad_pws.set(0);
-                // TODO implement ban
-                // if (isbanned(d->host) == BAN_SELECT &&
-                //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
-                //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
-                //     STATE(d) = CON_CLOSE;
-                //     mudlog(NRM, LVL_GOD, true, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
-                //     return;
-                // }
-                // TODO implement restrict
-                // if (GET_LEVEL(d->character) < circle_restrict) {
-                //     write_to_output(d, "The game is temporarily restricted.. try again later.\r\n");
-                //     STATE(d) = CON_CLOSE;
-                //     mudlog(NRM, LVL_GOD, true, "Request for login denied for %s [%s] (wizlock)", GET_NAME(d->character), d->host);
-                //     return;
-                // }
+                    /* Password was correct. */
+                    load_result = character.get_bad_pws() as i32;
+                    character.reset_bad_pws();
+                    d.bad_pws.set(0);
+                    // TODO implement ban
+                    // if (isbanned(d->host) == BAN_SELECT &&
+                    //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
+                    //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
+                    //     STATE(d) = CON_CLOSE;
+                    //     mudlog(NRM, LVL_GOD, true, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
+                    //     return;
+                    // }
+                    // TODO implement restrict
+                    // if (GET_LEVEL(d->character) < circle_restrict) {
+                    //     write_to_output(d, "The game is temporarily restricted.. try again later.\r\n");
+                    //     STATE(d) = CON_CLOSE;
+                    //     mudlog(NRM, LVL_GOD, true, "Request for login denied for %s [%s] (wizlock)", GET_NAME(d->character), d->host);
+                    //     return;
+                    // }
+                }
                 /* check and make sure no other copies of this player are logged in */
                 if perform_dupe_check(&main_globals, d.clone()) {
                     return;
                 }
+                let och = d.character.borrow();
+                let character = och.as_ref().unwrap();
 
                 let level: u8;
                 {
@@ -1694,7 +1723,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     if character.get_level() == 0 {
                         main_globals.do_start(character.as_ref());
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
-                        main_globals.db.look_at_room(character.as_ref(), false);
+                        main_globals.db.look_at_room(och.as_ref().unwrap(), false);
                     }
                     // if has_mail(GET_IDNUM(d->character)) {
                     //     send_to_char(d->character, "You have mail waiting.\r\n");
@@ -1705,7 +1734,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     //                  "Your possesions have been donated to the Salvation Army!\r\n");
                     // }
                     d.has_prompt.set(false);
-                    info!("[DEBUG] Player entering game done");
                 }
 
                 '2' => {

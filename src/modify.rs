@@ -281,37 +281,40 @@ fn next_page(str: &str) -> Option<&str> {
     return None;
 }
 
-// /* Function that returns the number of pages in the string. */
-// int count_pages(char *str)
-// {
-// int pages;
-//
-// for (pages = 1; (str = next_page(str)); pages++);
-// return (pages);
-// }
+/* Function that returns the number of pages in the string. */
+fn count_pages(msg: &str) -> i32 {
+    let mut msg = msg;
+    let mut pages = 1;
+    loop {
+        let r = next_page(msg);
+        if r.is_none() {
+            break;
+        }
+        pages += 1;
+    }
+    pages
+}
 
 /* This function assigns all the pointers for showstr_vector for the
  * page_string function, after showstr_vector has been allocated and
  * showstr_count set.
  */
-use crate::{DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
+use crate::interpreter::any_one_arg;
+use crate::{send_to_char, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
 use std::cell::RefCell;
+use std::cmp::{max, min};
 use std::rc::Rc;
 
-pub fn paginate_string<'a>(str: &'a str, d: &'a DescriptorData) -> &'a str {
+pub fn paginate_string<'a>(msg: &'a str, d: &'a DescriptorData) -> &'a str {
     if d.showstr_count.get() != 0 {
-        d.showstr_vector
-            .borrow_mut()
-            .push(Rc::new(RefCell::new(str.to_string())));
+        d.showstr_vector.borrow_mut().push(Rc::from(msg));
     }
 
-    let mut s = str;
+    let mut s = msg;
     for _i in 1..d.showstr_count.get() {
         let r = next_page(s);
         if r.is_some() {
-            d.showstr_vector
-                .borrow_mut()
-                .push(Rc::new(RefCell::new(r.unwrap().to_string())));
+            d.showstr_vector.borrow_mut().push(Rc::from(r.unwrap()));
             s = r.unwrap();
         } else {
             break;
@@ -322,106 +325,122 @@ pub fn paginate_string<'a>(str: &'a str, d: &'a DescriptorData) -> &'a str {
     return s;
 }
 
-// /* The call that gets the paging ball rolling... */
-// void page_string(struct descriptor_data *d, char *str, int keep_internal)
-// {
-// char actbuf[MAX_INPUT_LENGTH] = "";
-//
-// if (!d)
-// return;
-//
-// if (!str || !*str)
-// return;
-//
-// d->showstr_count = count_pages(str);
-// CREATE(d->showstr_vector, char *, d->showstr_count);
-//
-// if (keep_internal) {
-// d->showstr_head = strdup(str);
-// paginate_string(d->showstr_head, d);
-// } else
-// paginate_string(str, d);
-//
-// show_string(d, actbuf);
-// }
-//
-//
-// /* The call that displays the next page. */
-// void show_string(struct descriptor_data *d, char *input)
-// {
-// char buffer[MAX_STRING_LENGTH], buf[MAX_INPUT_LENGTH];
-// int diff;
-//
-// any_one_arg(input, buf);
-//
-// /* Q is for quit. :) */
-// if (LOWER(*buf) == 'q') {
-// free(d->showstr_vector);
-// d->showstr_vector = NULL;
-// d->showstr_count = 0;
-// if (d->showstr_head) {
-// free(d->showstr_head);
-// d->showstr_head = NULL;
-// }
-// return;
-// }
-// /* R is for refresh, so back up one page internally so we can display
-//  * it again.
-//  */
-// else if (LOWER(*buf) == 'r')
-// d->showstr_page = MAX(0, d->showstr_page - 1);
-//
-// /* B is for back, so back up two pages internally so we can display the
-//  * correct page here.
-//  */
-// else if (LOWER(*buf) == 'b')
-// d->showstr_page = MAX(0, d->showstr_page - 2);
-//
-// /* Feature to 'goto' a page.  Just type the number of the page and you
-//  * are there!
-//  */
-// else if (isdigit(*buf))
-// d->showstr_page = MAX(0, MIN(atoi(buf) - 1, d->showstr_count - 1));
-//
-// else if (*buf) {
-// send_to_char(d->character, "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n");
-// return;
-// }
-// /* If we're displaying the last page, just send it to the character, and
-//  * then free up the space we used.
-//  */
-// if (d->showstr_page + 1 >= d->showstr_count) {
-// send_to_char(d->character, "%s", d->showstr_vector[d->showstr_page]);
-// free(d->showstr_vector);
-// d->showstr_vector = NULL;
-// d->showstr_count = 0;
-// if (d->showstr_head) {
-// free(d->showstr_head);
-// d->showstr_head = NULL;
-// }
-// }
-// /* Or if we have more to show.... */
-// else {
-// diff = d->showstr_vector[d->showstr_page + 1] - d->showstr_vector[d->showstr_page];
-// if (diff > MAX_STRING_LENGTH - 3) /* 3=\r\n\0 */
-// diff = MAX_STRING_LENGTH - 3;
-// strncpy(buffer, d->showstr_vector[d->showstr_page], diff);	/* strncpy: OK (size truncated above) */
-// /*
-//  * Fix for prompt overwriting last line in compact mode submitted by
-//  * Peter Ajamian <peter@pajamian.dhs.org> on 04/21/2001
-//  */
-// if (buffer[diff - 2] == '\r' && buffer[diff - 1]=='\n')
-// buffer[diff] = '\0';
-// else if (buffer[diff - 2] == '\n' && buffer[diff - 1] == '\r')
-// /* This is backwards.  Fix it. */
-// strcpy(buffer + diff - 2, "\r\n");	/* strcpy: OK (size checked) */
-// else if (buffer[diff - 1] == '\r' || buffer[diff - 1] == '\n')
-// /* Just one of \r\n.  Overwrite it. */
-// strcpy(buffer + diff - 1, "\r\n");	/* strcpy: OK (size checked) */
-// else
-// /* Tack \r\n onto the end to fix bug with prompt overwriting last line. */
-// strcpy(buffer + diff, "\r\n");	/* strcpy: OK (size checked) */
-// send_to_char(d->character, "%s", buffer);
-// d->showstr_page++;
-// }
-// }
+/* The call that gets the paging ball rolling... */
+pub fn page_string(d: Option<Rc<DescriptorData>>, msg: &str, keep_internal: bool) {
+    if d.is_none() {
+        return;
+    }
+
+    let d = d.as_ref().unwrap();
+
+    if msg.is_empty() {
+        return;
+    }
+
+    d.showstr_count.set(count_pages(msg));
+    d.showstr_vector
+        .borrow_mut()
+        .reserve_exact(d.showstr_count.get() as usize);
+
+    if keep_internal {
+        *d.showstr_head.borrow_mut() = Some(Rc::from(msg));
+        paginate_string(d.showstr_head.borrow().as_ref().unwrap(), d);
+    } else {
+        paginate_string(msg, d);
+    }
+
+    let actbuf = "";
+    show_string(d.clone(), actbuf);
+}
+
+/* The call that displays the next page. */
+fn show_string(d: Rc<DescriptorData>, input: &str) {
+    // char buffer[MAX_STRING_LENGTH], buf[MAX_INPUT_LENGTH];
+    // int diff;
+
+    let mut buf = String::new();
+    any_one_arg(input, &mut buf);
+
+    /* Q is for quit. :) */
+    let cmd = buf.chars().next().unwrap().to_ascii_lowercase();
+    if cmd == 'q' {
+        // free(d->showstr_vector);
+        d.showstr_vector.borrow_mut().clear();
+        d.showstr_count.set(0);
+        //     if d.showstr_head
+        //
+        // if (d->showstr_head) {
+        // free(d->showstr_head);
+        // d->showstr_head = NULL;
+        //}
+        return;
+    }
+    /* R is for refresh, so back up one page internally so we can display
+     * it again.
+     */
+    else if cmd == 'r' {
+        d.showstr_page.set(max(0, d.showstr_page.get() - 1));
+    }
+    /* B is for back, so back up two pages internally so we can display the
+     * correct page here.
+     */
+    else if cmd == 'b' {
+        d.showstr_page.set(max(0, d.showstr_page.get() - 2));
+    }
+    /* Feature to 'goto' a page.  Just type the number of the page and you
+     * are there!
+     */
+    else if cmd.is_digit(10) {
+        let nr = buf.parse::<i32>();
+        if nr.is_err() {
+            send_to_char(
+                d.character.borrow().as_ref().unwrap().as_ref(),
+                "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
+            );
+        }
+        d.showstr_page
+            .set(max(0, min(nr.unwrap() - 1, d.showstr_count.get() - 1)));
+    } else if !buf.is_empty() {
+        send_to_char(
+            d.character.borrow().as_ref().unwrap().as_ref(),
+            "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
+        );
+        return;
+    }
+    /* If we're displaying the last page, just send it to the character, and
+     * then free up the space we used.
+     */
+    if d.showstr_page.get() + 1 >= d.showstr_count.get() {
+        send_to_char(
+            d.character.borrow().as_ref().unwrap().as_ref(),
+            d.showstr_vector.borrow()[d.showstr_page.get() as usize].as_ref(),
+        );
+        d.showstr_vector.borrow_mut().clear();
+        d.showstr_count.set(0);
+        if d.showstr_head.borrow().is_some() {
+            *d.showstr_head.borrow_mut() = None;
+        }
+    }
+    /* Or if we have more to show.... */
+    else {
+        let sv = d.showstr_vector.borrow();
+        let buffer = sv[d.showstr_page.get() as usize].as_ref();
+        /*
+         * Fix for prompt overwriting last line in compact mode submitted by
+         * Peter Ajamian <peter@pajamian.dhs.org> on 04/21/2001
+         */
+        // if (buffer[diff - 2] == '\r' && buffer[diff - 1]=='\n')
+        // buffer[diff] = '\0';
+        // else if (buffer[diff - 2] == '\n' && buffer[diff - 1] == '\r')
+        // /* This is backwards.  Fix it. */
+        // strcpy(buffer + diff - 2, "\r\n");	/* strcpy: OK (size checked) */
+        // else if (buffer[diff - 1] == '\r' || buffer[diff - 1] == '\n')
+        // /* Just one of \r\n.  Overwrite it. */
+        // strcpy(buffer + diff - 1, "\r\n");	/* strcpy: OK (size checked) */
+        // else
+        // /* Tack \r\n onto the end to fix bug with prompt overwriting last line. */
+        // strcpy(buffer + diff, "\r\n");	/* strcpy: OK (size checked) */
+        send_to_char(d.character.borrow().as_ref().unwrap(), buffer);
+        d.showstr_page.set(d.showstr_page.get() + 1);
+    }
+}

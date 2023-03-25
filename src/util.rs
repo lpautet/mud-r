@@ -1138,9 +1138,13 @@ impl MainGlobals {
         let buf = format!("[ {} ]", msg);
 
         for d in self.descriptor_list.borrow().iter() {
+            if d.state() != ConPlaying {
+                /* switch */
+                continue;
+            }
             let ohc = d.character.borrow();
             let character = ohc.as_ref().unwrap();
-            if d.state() != ConPlaying || character.is_npc() {
+            if character.is_npc() {
                 /* switch */
                 continue;
             }

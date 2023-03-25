@@ -50,29 +50,29 @@ pub const THIRST: i32 = 2;
 /* object-related defines ********************************************/
 
 /* Item types: used by obj_data.obj_flags.type_flag */
-pub const ITEM_LIGHT: i32 = 1; /* Item is a light source	*/
-pub const ITEM_SCROLL: i32 = 2; /* Item is a scroll		*/
-pub const ITEM_WAND: i32 = 3; /* Item is a wand		*/
-pub const ITEM_STAFF: i32 = 4; /* Item is a staff		*/
-pub const ITEM_WEAPON: i32 = 5; /* Item is a weapon		*/
-pub const ITEM_FIREWEAPON: i32 = 6; /* Unimplemented		*/
-pub const ITEM_MISSILE: i32 = 7; /* Unimplemented		*/
-pub const ITEM_TREASURE: i32 = 8; /* Item is a treasure, not gold	*/
-pub const ITEM_ARMOR: i32 = 9; /* Item is armor		*/
-pub const ITEM_POTION: i32 = 10; /* Item is a potion		*/
-pub const ITEM_WORN: i32 = 11; /* Unimplemented		*/
-pub const ITEM_OTHER: i32 = 12; /* Misc object			*/
-pub const ITEM_TRASH: i32 = 13; /* Trash - shopkeeps won't buy	*/
-pub const ITEM_TRAP: i32 = 14; /* Unimplemented		*/
-pub const ITEM_CONTAINER: i32 = 15; /* Item is a container		*/
-pub const ITEM_NOTE: i32 = 16; /* Item is note 		*/
-pub const ITEM_DRINKCON: i32 = 17; /* Item is a drink container	*/
-pub const ITEM_KEY: i32 = 18; /* Item is a key		*/
-pub const ITEM_FOOD: i32 = 19; /* Item is food			*/
-pub const ITEM_MONEY: i32 = 20; /* Item is money (gold)		*/
-pub const ITEM_PEN: i32 = 21; /* Item is a pen		*/
-pub const ITEM_BOAT: i32 = 22; /* Item is a boat		*/
-pub const ITEM_FOUNTAIN: i32 = 23; /* Item is a fountain		*/
+pub const ITEM_LIGHT: u8 = 1; /* Item is a light source	*/
+pub const ITEM_SCROLL: u8 = 2; /* Item is a scroll		*/
+pub const ITEM_WAND: u8 = 3; /* Item is a wand		*/
+pub const ITEM_STAFF: u8 = 4; /* Item is a staff		*/
+pub const ITEM_WEAPON: u8 = 5; /* Item is a weapon		*/
+pub const ITEM_FIREWEAPON: u8 = 6; /* Unimplemented		*/
+pub const ITEM_MISSILE: u8 = 7; /* Unimplemented		*/
+pub const ITEM_TREASURE: u8 = 8; /* Item is a treasure, not gold	*/
+pub const ITEM_ARMOR: u8 = 9; /* Item is armor		*/
+pub const ITEM_POTION: u8 = 10; /* Item is a potion		*/
+pub const ITEM_WORN: u8 = 11; /* Unimplemented		*/
+pub const ITEM_OTHER: u8 = 12; /* Misc object			*/
+pub const ITEM_TRASH: u8 = 13; /* Trash - shopkeeps won't buy	*/
+pub const ITEM_TRAP: u8 = 14; /* Unimplemented		*/
+pub const ITEM_CONTAINER: u8 = 15; /* Item is a container		*/
+pub const ITEM_NOTE: u8 = 16; /* Item is note 		*/
+pub const ITEM_DRINKCON: u8 = 17; /* Item is a drink container	*/
+pub const ITEM_KEY: u8 = 18; /* Item is a key		*/
+pub const ITEM_FOOD: u8 = 19; /* Item is food			*/
+pub const ITEM_MONEY: u8 = 20; /* Item is money (gold)		*/
+pub const ITEM_PEN: u8 = 21; /* Item is a pen		*/
+pub const ITEM_BOAT: u8 = 22; /* Item is a boat		*/
+pub const ITEM_FOUNTAIN: u8 = 23; /* Item is a fountain		*/
 
 /* Take/Wear flags: used by obj_data.obj_flags.wear_flags */
 pub const ITEM_WEAR_TAKE: i32 = 1 << 0; /* Item can be takes		*/
