@@ -14,14 +14,16 @@ use crate::structs::{
     obj_vnum, room_rnum, room_vnum, zone_rnum, zone_vnum, AffectedType, CharAbilityData, CharData,
     CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved,
     ExtraDescrData, IndexData, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData,
-    ObjFlagData, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData,
-    TimeData, AFF_POISON, APPLY_NONE, EX_ISDOOR, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON,
-    ITEM_FOUNTAIN, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH,
-    MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD,
-    MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS,
-    POS_STANDING, SEX_MALE,
+    ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData,
+    RoomDirectionData, RoomRnum, TimeData, ZoneRnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR,
+    EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, LVL_GOD, LVL_IMPL,
+    MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH,
+    MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC,
+    MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_STANDING, SEX_MALE,
 };
-use crate::util::{get_line, prune_crlf, rand_number, time_now, touch, SECS_PER_REAL_HOUR};
+use crate::util::{
+    dice, get_line, prune_crlf, rand_number, time_now, touch, NRM, SECS_PER_REAL_HOUR,
+};
 use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 use log::{error, info, warn};
 use std::cell::{Cell, RefCell};
@@ -47,7 +49,7 @@ struct PlayerIndexElement {
 
 pub struct DB {
     pub world: RefCell<Vec<Rc<RoomData>>>,
-    pub top_of_world: RefCell<room_rnum>,
+    //pub top_of_world: RefCell<room_rnum>,
     /* ref to top element of world	 */
     pub character_list: RefCell<Vec<Rc<CharData>>>,
     /* global linked list of * chars	 */
@@ -57,9 +59,12 @@ pub struct DB {
     /* prototypes for mobs		 */
     // mob_rnum top_of_mobt = 0;	/* top of mobile index table	 */
     //
-    pub object_list: RefCell<Vec<Rc<ObjData>>>, /* global linked list of objs	 */
-    pub obj_index: Vec<IndexData>,              /* index table for object file	 */
-    pub obj_proto: Vec<Rc<ObjData>>,            /* prototypes for objs		 */
+    pub object_list: RefCell<Vec<Rc<ObjData>>>,
+    /* global linked list of objs	 */
+    pub obj_index: Vec<IndexData>,
+    /* index table for object file	 */
+    pub obj_proto: Vec<Rc<ObjData>>,
+    /* prototypes for objs		 */
     // obj_rnum top_of_objt = 0;	/* top of object index table	 */
     zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
@@ -71,9 +76,9 @@ pub struct DB {
     /* index to plr file	 */
     player_fl: RefCell<Option<File>>,
     /* file desc of player file	 */
-    top_of_p_table: RefCell<i32>,
+    //top_of_p_table: RefCell<i32>,
     /* ref to top of table		 */
-    top_idnum: RefCell<i32>,
+    top_idnum: Cell<i32>,
     /* highest idnum in use		 */
     //
     // int no_mail = 0;		/* mail disabled?		 */
@@ -119,7 +124,7 @@ const VIRTUAL: i32 = 1;
 
 /* structure for the reset commands */
 pub struct ResetCom {
-    pub command: char,
+    pub command: Cell<char>,
     /* current command                      */
     pub if_flag: bool,
     /* if TRUE: exe only if preceding exe'd */
@@ -150,7 +155,7 @@ pub struct ZoneData {
     /* name of this zone                  */
     pub lifespan: i32,
     /* how long between resets (minutes)  */
-    pub age: i32,
+    pub age: Cell<i32>,
     /* current age of this zone (minutes) */
     pub bot: room_vnum,
     /* starting room number for this zone */
@@ -402,7 +407,7 @@ impl DB {
         DB {
             //   globals: Some(main_globals.clone()),
             world: RefCell::new(vec![]),
-            top_of_world: RefCell::new(0),
+            //        top_of_world: RefCell::new(0),
             character_list: RefCell::new(vec![]),
             mob_index: vec![],
             mob_protos: vec![],
@@ -413,8 +418,8 @@ impl DB {
             //top_of_zone_table: RefCell::new(0),
             player_table: RefCell::new(vec![]),
             player_fl: RefCell::new(None),
-            top_of_p_table: RefCell::new(0),
-            top_idnum: RefCell::new(0),
+            //      top_of_p_table: RefCell::new(0),
+            top_idnum: Cell::new(0),
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),
@@ -428,8 +433,7 @@ impl DB {
     /* body of the booting system */
     pub fn boot_db(main_globals: &MainGlobals) -> DB {
         let mut ret = DB::new();
-        // zone_rnum i;
-        //
+
         info!("Boot db -- BEGIN.");
         //
         // log("Resetting the game time:");
@@ -508,13 +512,15 @@ impl DB {
         // log("Booting houses.");
         // House_boot();
         // }
-        //
-        // for (i = 0; i <= top_of_zone_table; i++) {
-        // log("Resetting #%d: %s (rooms %d-%d).", zone_table[i].number,
-        // zone_table[i].name, zone_table[i].bot, zone_table[i].top);
-        // reset_zone(i);
-        // }
-        //
+
+        for (i, zone) in ret.zone_table.borrow().iter().enumerate() {
+            info!(
+                "Resetting #{}: {} (rooms {}-{}).",
+                zone.number, zone.name, zone.bot, zone.top
+            );
+            ret.reset_zone(main_globals, i);
+        }
+
         // reset_q.head = reset_q.tail = NULL;
         //
         // boot_time = time(0);
@@ -612,8 +618,6 @@ impl DB {
         let mut nr = -1;
         let size: usize;
         let recs: u64;
-        // struct char_file_u
-        // dummy;
 
         let player_file: File;
         let r = OpenOptions::new().write(true).read(true).open(PLAYER_FILE);
@@ -649,14 +653,14 @@ impl DB {
         recs = size / mem::size_of::<CharFileU>() as u64;
         if recs != 0 {
             info!("   {} players in database.", recs);
-            // CREATE(player_table, struct PlayerIndexElement, recs);
+            self.player_table.borrow_mut().reserve_exact(recs as usize);
         } else {
             // player_table = NULL;
-            *self.top_of_p_table.borrow_mut() = -1;
+            //*self.top_of_p_table.borrow_mut() = -1;
             return;
         }
 
-        // for (; ; ) {
+        // loop {
         //     fread(&dummy, sizeof(struct char_file_u), 1, player_fl);
         //     if (feof(player_fl))
         //     break;
@@ -670,7 +674,7 @@ impl DB {
         //     top_idnum = MAX(top_idnum, dummy.char_specials_saved.idnum);
         // }
 
-        *self.top_of_p_table.borrow_mut() = nr;
+        // *self.top_of_p_table.borrow_mut() = nr;
     }
 }
 
@@ -1080,8 +1084,9 @@ impl DB {
             ex_descriptions: vec![],
             //dir_option: [None, None, None, None, None, None],
             dir_option: [None, None, None, None, None, None],
-            room_flags: 0,
+            room_flags: Cell::new(0),
             light: Cell::new(0),
+            contents: RefCell::new(vec![]),
             peoples: RefCell::new(vec![]),
         };
 
@@ -1109,9 +1114,14 @@ impl DB {
 
         /* t[0] is the zone number; ignored with the zone-file system */
 
-        rd.room_flags = asciiflag_conv(flags) as i32;
+        rd.room_flags.set(asciiflag_conv(flags) as i32);
         let msg = format!("object #{}", virtual_nr); /* sprintf: OK (until 399-bit integers) */
-        check_bitvector_names(rd.room_flags as i64, ROOM_BITS_COUNT, msg.as_str(), "room");
+        check_bitvector_names(
+            rd.room_flags.get() as i64,
+            ROOM_BITS_COUNT,
+            msg.as_str(),
+            "room",
+        );
 
         rd.sector_type = t[2];
 
@@ -1147,7 +1157,7 @@ impl DB {
                 }
                 'S' => {
                     /* end of room */
-                    *self.top_of_world.borrow_mut() = room_nr as room_rnum;
+                    // *self.top_of_world.borrow_mut() = room_nr as room_rnum;
                     room_nr += 1;
                     break;
                 }
@@ -1158,7 +1168,7 @@ impl DB {
             }
         }
         self.world.borrow_mut().push(Rc::new(rd));
-        *self.top_of_world.borrow_mut() += 1;
+        // *self.top_of_world.borrow_mut() += 1;
     }
 
     /* read direction data */
@@ -1177,7 +1187,7 @@ impl DB {
         let mut rdr = RoomDirectionData {
             general_description: fread_string(reader, buf2.as_str()),
             keyword: fread_string(reader, buf2.as_str()),
-            exit_info: 0,
+            exit_info: Cell::from(0),
             key: 0,
             to_room: Cell::new(0),
         };
@@ -1198,11 +1208,11 @@ impl DB {
         t[1] = f[2].parse::<i32>().unwrap();
         t[2] = f[3].parse::<i32>().unwrap();
         if t[0] == 1 {
-            rdr.exit_info = EX_ISDOOR;
+            rdr.exit_info.set(EX_ISDOOR);
         } else if t[0] == 2 {
-            rdr.exit_info = EX_ISDOOR | EX_PICKPROOF;
+            rdr.exit_info.set(EX_ISDOOR | EX_PICKPROOF);
         } else {
-            rdr.exit_info = 0;
+            rdr.exit_info.set(0);
         }
 
         rdr.key = t[1] as obj_vnum;
@@ -1222,21 +1232,18 @@ impl DB {
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
     fn check_start_rooms(&self) {
-        *self.r_mortal_start_room.borrow_mut() =
-            real_room(self.world.borrow().as_ref(), MORTAL_START_ROOM);
+        *self.r_mortal_start_room.borrow_mut() = self.real_room(MORTAL_START_ROOM);
         if *self.r_mortal_start_room.borrow() == NOWHERE {
             error!("SYSERR:  Mortal start room does not exist.  Change in config.c.");
             process::exit(1);
         }
-        *self.r_immort_start_room.borrow_mut() =
-            real_room(self.world.borrow().as_ref(), IMMORT_START_ROOM);
+        *self.r_immort_start_room.borrow_mut() = self.real_room(IMMORT_START_ROOM);
         if *self.r_immort_start_room.borrow() == NOWHERE {
             // if (!mini_mud)
             error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
             *self.r_immort_start_room.borrow_mut() = *self.r_mortal_start_room.borrow();
         }
-        *self.r_frozen_start_room.borrow_mut() =
-            real_room(self.world.borrow().as_ref(), FROZEN_START_ROOM);
+        *self.r_frozen_start_room.borrow_mut() = self.real_room(FROZEN_START_ROOM);
         if *self.r_frozen_start_room.borrow() == NOWHERE {
             // if (!mini_mud)
             error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
@@ -1258,7 +1265,7 @@ impl DB {
                     to_room = room_data.dir_option[door].as_ref().unwrap().to_room.get();
                 }
                 if to_room != NOWHERE {
-                    let rn = real_room(self.world.borrow().as_ref(), to_room);
+                    let rn = self.real_room(to_room);
                     room_data.dir_option[door].as_ref().unwrap().to_room.set(rn);
                 }
             }
@@ -1291,7 +1298,7 @@ impl DB {
         for zone in self.zone_table.borrow_mut().iter_mut() {
             for cmd_no in 0..zone.cmd.len() {
                 let zcmd = &mut zone.cmd[cmd_no];
-                if zcmd.command == 'S' {
+                if zcmd.command.get() == 'S' {
                     break;
                 }
                 let mut a = 0;
@@ -1300,41 +1307,44 @@ impl DB {
                 olda = zcmd.arg1;
                 oldb = zcmd.arg2;
                 oldc = zcmd.arg3;
-                match zcmd.command {
+                match zcmd.command.get() {
                     'M' => {
-                        //a = ZCMD.arg1 = real_mobile(ZCMD.arg1);
-                        zcmd.arg3 =
-                            real_room(self.world.borrow().as_ref(), zcmd.arg3 as room_vnum) as i32;
+                        zcmd.arg1 = self.real_mobile(zcmd.arg1 as MobVnum) as i32;
+                        a = zcmd.arg1;
+                        zcmd.arg3 = self.real_room(zcmd.arg3 as room_vnum) as i32;
                         c = zcmd.arg3;
                     }
                     'O' => {
-                        //a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                        zcmd.arg1 = self.real_object(zcmd.arg1 as ObjVnum) as i32;
+                        a = zcmd.arg1;
                         if zcmd.arg3 != NOWHERE as i32 {
-                            zcmd.arg3 =
-                                real_room(self.world.borrow().as_ref(), zcmd.arg3 as room_vnum)
-                                    as i32;
+                            zcmd.arg3 = self.real_room(zcmd.arg3 as room_vnum) as i32;
                             c = zcmd.arg3;
                         }
                     }
                     'G' => {
-                        //a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                        zcmd.arg1 = self.real_object(zcmd.arg1 as ObjVnum) as i32;
+                        a = zcmd.arg1;
                     }
                     'E' => {
-                        // a = ZCMD.arg1 = real_object(ZCMD.arg1);
+                        zcmd.arg1 = self.real_object(zcmd.arg1 as ObjVnum) as i32;
+                        a = zcmd.arg1;
                     }
                     'P' => {
-                        // a = ZCMD.arg1 = real_object(ZCMD.arg1);
-                        // c = ZCMD.arg3 = real_object(ZCMD.arg3);
+                        zcmd.arg1 = self.real_object(zcmd.arg1 as ObjVnum) as i32;
+                        a = zcmd.arg1;
+                        zcmd.arg3 = self.real_object(zcmd.arg3 as ObjVnum) as i32;
+                        c = zcmd.arg3;
                     }
                     'D' => {
-                        zcmd.arg1 =
-                            real_room(self.world.borrow().as_ref(), zcmd.arg1 as room_vnum) as i32;
+                        zcmd.arg1 = self.real_room(zcmd.arg1 as room_vnum) as i32;
                         a = zcmd.arg1;
                     }
                     'R' => {
                         /* rem obj from room */
-                        zcmd.arg2 =
-                            real_room(self.world.borrow().as_ref(), zcmd.arg2 as room_vnum) as i32;
+                        zcmd.arg1 = self.real_room(zcmd.arg1 as room_vnum) as i32;
+                        a = zcmd.arg1;
+                        zcmd.arg2 = self.real_room(zcmd.arg2 as room_vnum) as i32;
                         b = zcmd.arg2;
                     }
                     _ => {}
@@ -1354,7 +1364,7 @@ impl DB {
                     );
                     // TODO log_zone_error(zone, cmd_no, buf);
                     // }
-                    zcmd.command = '*';
+                    zcmd.command.set('*');
                 }
             }
         }
@@ -1601,132 +1611,10 @@ impl DB {
         let mut i = self.mob_index.len();
         self.mob_index.push(IndexData {
             vnum: nr as MobVnum,
-            number: 0,
+            number: Cell::from(0),
         });
 
-        let mut mobch = CharData {
-            pfilepos: RefCell::new(0),
-            nr: 0,
-            in_room: Cell::new(0),
-            was_in_room: Cell::new(0),
-            wait: Cell::new(0),
-            player: RefCell::new(CharPlayerData {
-                passwd: [0; 16],
-                name: "".to_string(),
-                short_descr: "".to_string(),
-                long_descr: "".to_string(),
-                description: "".to_string(),
-                title: Option::from("".to_string()),
-                sex: 0,
-                chclass: 0,
-                level: 0,
-                hometown: 0,
-                time: TimeData {
-                    birth: 0,
-                    logon: 0,
-                    played: 0,
-                },
-                weight: 0,
-                height: 0,
-            }),
-            real_abils: RefCell::new(CharAbilityData {
-                str: 0,
-                str_add: 0,
-                intel: 0,
-                wis: 0,
-                dex: 0,
-                con: 0,
-                cha: 0,
-            }),
-            aff_abils: RefCell::new(CharAbilityData {
-                str: 0,
-                str_add: 0,
-                intel: 0,
-                wis: 0,
-                dex: 0,
-                con: 0,
-                cha: 0,
-            }),
-            points: RefCell::new(CharPointData {
-                mana: 0,
-                max_mana: 0,
-                hit: 0,
-                max_hit: 0,
-                movem: 0,
-                max_move: 0,
-                armor: 0,
-                gold: 0,
-                bank_gold: 0,
-                exp: 0,
-                hitroll: 0,
-                damroll: 0,
-            }),
-            char_specials: RefCell::new(CharSpecialData {
-                fighting: None,
-                hunting: None,
-                position: 0,
-                carry_weight: 0,
-                carry_items: 0,
-                timer: 0,
-                saved: CharSpecialDataSaved {
-                    alignment: 0,
-                    idnum: 0,
-                    act: 0,
-                    affected_by: 0,
-                    apply_saving_throw: [0; 5],
-                },
-            }),
-            player_specials: RefCell::new(PlayerSpecialData {
-                saved: PlayerSpecialDataSaved {
-                    skills: [0; MAX_SKILLS + 1],
-                    padding0: 0,
-                    talks: [false; MAX_TONGUE],
-                    wimp_level: 0,
-                    freeze_level: 0,
-                    invis_level: 0,
-                    load_room: 0,
-                    pref: 0,
-                    bad_pws: 0,
-                    conditions: [0; 3],
-                    spare0: 0,
-                    spare1: 0,
-                    spare2: 0,
-                    spare3: 0,
-                    spare4: 0,
-                    spare5: 0,
-                    spells_to_learn: 0,
-                    spare7: 0,
-                    spare8: 0,
-                    spare9: 0,
-                    spare10: 0,
-                    spare11: 0,
-                    spare12: 0,
-                    spare13: 0,
-                    spare14: 0,
-                    spare15: 0,
-                    spare16: 0,
-                    spare17: 0,
-                    spare18: 0,
-                    spare19: 0,
-                    spare20: 0,
-                    spare21: 0,
-                },
-                last_tell: 0,
-            }),
-            mob_specials: MobSpecialData {
-                attack_type: 0,
-                default_pos: 0,
-                damnodice: 0,
-                damsizedice: 0,
-            },
-            affected: RefCell::new(vec![]),
-            desc: RefCell::new(None),
-            next_in_room: RefCell::new(None),
-            next: RefCell::new(None),
-            next_fighting: RefCell::new(None),
-            followers: RefCell::new(vec![]),
-            master: RefCell::new(None),
-        };
+        let mut mobch = CharData::new();
         clear_char(&mut mobch);
 
         /*
@@ -1819,10 +1707,9 @@ impl DB {
 
         *mobch.aff_abils.borrow_mut() = *mobch.real_abils.borrow();
 
-        // TODO implement equipment
-        // for j in 0..NUM_WEARS {
-        //     mobch.equipment[j] = NULL;
-        // }
+        for j in 0..NUM_WEARS {
+            mobch.equipment.borrow_mut()[j as usize] = None;
+        }
 
         mobch.nr = self.mob_protos.len() as MobRnum;
         mobch.desc = RefCell::new(None);
@@ -1843,19 +1730,19 @@ impl DB {
         let i = self.obj_index.len() as ObjVnum;
         self.obj_index.push(IndexData {
             vnum: nr,
-            number: 0,
+            number: Cell::from(0),
             // func
         });
 
         let mut obj = ObjData {
             item_number: 0,
-            in_room: 0,
+            in_room: Cell::new(0),
             obj_flags: ObjFlagData {
                 value: [0; 4],
                 type_flag: 0,
                 wear_flags: 0,
                 extra_flags: 0,
-                weight: 0,
+                weight: Cell::new(0),
                 cost: 0,
                 cost_per_day: 0,
                 timer: 0,
@@ -1872,9 +1759,9 @@ impl DB {
             ex_descriptions: vec![],
             carried_by: RefCell::new(None),
             worn_by: RefCell::new(None),
-            worn_on: 0,
+            worn_on: Cell::new(0),
             in_obj: RefCell::new(None),
-            contains: RefCell::new(None),
+            contains: RefCell::new(vec![]),
             next_content: RefCell::new(None),
             next: RefCell::new(None),
         };
@@ -2014,7 +1901,7 @@ impl DB {
                         error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric constants but file ended!", buf2);
                         process::exit(1);
                     }
-                    let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
+                    let regex = Regex::new(r"^(-?\+?\d{1,9})\s+(-?\+?\d{1,9})").unwrap();
                     let f = regex.captures(line.as_str());
                     if f.is_none() {
                         error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric arguments\n...offending line: '{}'", buf2, line);
@@ -2047,7 +1934,7 @@ impl DB {
         let mut z = ZoneData {
             name: "".to_string(),
             lifespan: 0,
-            age: 0,
+            age: Cell::from(0),
             bot: 0,
             top: 0,
             reset_mode: 0,
@@ -2154,7 +2041,7 @@ impl DB {
             buf = buf.trim_start().to_string();
 
             let mut zcmd = ResetCom {
-                command: 0 as char,
+                command: Cell::new(0 as char),
                 if_flag: false,
                 arg1: 0,
                 arg2: 0,
@@ -2163,19 +2050,19 @@ impl DB {
             };
 
             let original_buf = buf.clone();
-            zcmd.command = buf.remove(0);
+            zcmd.command.set(buf.remove(0));
 
-            if zcmd.command == '*' {
+            if zcmd.command.get() == '*' {
                 continue;
             }
 
-            if zcmd.command == 'S' || zcmd.command == '$' {
-                zcmd.command = 'S';
+            if zcmd.command.get() == 'S' || zcmd.command.get() == '$' {
+                zcmd.command.set('S');
                 break;
             }
             let mut error = 0;
             let mut tmp: i32 = -1;
-            if "MOEPD".find(zcmd.command).is_none() {
+            if "MOEPD".find(zcmd.command.get()).is_none() {
                 /* a 3-arg command */
                 let regex = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
                 let f = regex.captures(buf.as_str());
@@ -2377,48 +2264,60 @@ impl DB {
 //
 // return (ch);
 // }
-//
-//
-// /* create a new mobile from a prototype */
-// struct char_data *read_mobile(mob_vnum nr, int type) /* and mob_rnum */
-// {
-// mob_rnum i;
-// struct char_data *mob;
-//
-// if (type == VIRTUAL) {
-// if ((i = real_mobile(nr)) == NOBODY) {
-// log("WARNING: Mobile vnum %d does not exist in database.", nr);
-// return (NULL);
-// }
-// } else
-// i = nr;
-//
-// CREATE(mob, struct char_data, 1);
-// clear_char(mob);
-// *mob = mob_proto[i];
-// mob->next = character_list;
-// character_list = mob;
-//
-// if (!mob->points.max_hit) {
-// mob->points.max_hit = dice(mob->points.hit, mob->points.mana) +
-// mob->points.move;
-// } else
-// mob->points.max_hit = rand_number(mob->points.hit, mob->points.mana);
-//
-// mob->points.hit = mob->points.max_hit;
-// mob->points.mana = mob->points.max_mana;
-// mob->points.move = mob->points.max_move;
-//
-// mob->player.time.birth = time(0);
-// mob->player.time.played = 0;
-// mob->player.time.logon = time(0);
-//
-// mob_index[i].number++;
-//
-// return (mob);
-// }
-//
-//
+
+impl DB {
+    /* create a new mobile from a prototype */
+    fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */ {
+        let mut i;
+        if _type == VIRTUAL {
+            i = self.real_mobile(nr);
+            if i == NOBODY {
+                warn!("WARNING: Mobile vnum {} does not exist in database.", nr);
+                return None;
+            }
+        } else {
+            i = nr;
+        }
+
+        // let mut mob = CharData::new();
+        // clear_char(&mut mob);
+        let mut mob = self.mob_protos[i as usize].make_copy();
+
+        if mob.points.borrow().max_hit == 0 {
+            let max_hit = dice(
+                mob.points.borrow().hit as i32,
+                mob.points.borrow().mana as i32,
+            ) + mob.points.borrow().movem as i32;
+            mob.points.borrow_mut().max_hit = (max_hit) as i16;
+        } else {
+            let max_hit = rand_number(
+                mob.points.borrow().hit as u32,
+                mob.points.borrow().mana as u32,
+            ) as i16;
+            mob.points.borrow_mut().max_hit = max_hit;
+        }
+
+        {
+            let mut mp = mob.points.borrow_mut();
+            mp.hit = mp.max_hit;
+            mp.mana = mp.max_mana;
+            mp.movem = mp.max_move;
+        }
+        mob.player.borrow_mut().time.birth = time_now();
+        mob.player.borrow_mut().time.played = 0;
+        mob.player.borrow_mut().time.logon = time_now();
+
+        self.mob_index[i as usize]
+            .number
+            .set(self.mob_index[i as usize].number.get() + 1);
+
+        let rc = Rc::from(mob);
+        self.character_list.borrow_mut().push(rc.clone());
+
+        Some(rc)
+    }
+}
+
 // /* create an object, and add it to the object list */
 // struct obj_data *create_obj(void)
 // {
@@ -2431,32 +2330,37 @@ impl DB {
 //
 // return (obj);
 // }
-//
-//
-// /* create a new object from a prototype */
-// struct obj_data *read_object(obj_vnum nr, int type) /* and obj_rnum */
-// {
-// struct obj_data *obj;
-// obj_rnum i = type == VIRTUAL ? real_object(nr) : nr;
-//
-// if (i == NOTHING || i > top_of_objt) {
-// log("Object (%c) %d does not exist in database.", type == VIRTUAL ? 'V' : 'R', nr);
-// return (NULL);
-// }
-//
-// CREATE(obj, struct obj_data, 1);
-// clear_object(obj);
-// *obj = obj_proto[i];
-// obj->next = object_list;
-// object_list = obj;
-//
-// obj_index[i].number++;
-//
-// return (obj);
-// }
-//
-//
-//
+
+impl DB {
+    /* create a new object from a prototype */
+    fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
+        let i = if _type == VIRTUAL {
+            self.real_object(nr)
+        } else {
+            nr
+        };
+
+        if i == NOTHING || i >= self.obj_index.len() as i16 {
+            warn!(
+                "Object ({}) {} does not exist in database.",
+                if _type == VIRTUAL { 'V' } else { 'R' },
+                nr
+            );
+            return None;
+        }
+
+        let mut obj = self.obj_proto[i as usize].make_copy();
+        let rc = Rc::from(obj);
+        self.object_list.borrow_mut().push(rc.clone());
+
+        self.obj_index[i as usize]
+            .number
+            .set(self.obj_index[i as usize].number.get() + 1);
+
+        Some(rc)
+    }
+}
+
 // #define ZO_DEAD  999
 //
 // /* update zone ages, queue for reset if necessary, and dequeue when possible */
@@ -2529,156 +2433,276 @@ impl DB {
 // }
 // }
 //
-// void log_zone_error(zone_rnum zone, int cmd_no, const char *message)
-// {
-// mudlog(NRM, LVL_GOD, TRUE, "SYSERR: zone file: %s", message);
-// mudlog(NRM, LVL_GOD, TRUE, "SYSERR: ...offending cmd: '%c' cmd in zone #%d, line %d",
-// ZCMD.command, zone_table[zone].number, ZCMD.line);
-// }
 
 // #define ZONE_ERROR(message) \
 // { log_zone_error(zone, cmd_no, message); last_cmd = 0; }
-//
-// /* execute the reset command table of a given zone */
-// void reset_zone(zone_rnum zone)
-// {
-// int cmd_no, last_cmd = 0;
-// struct char_data *mob = NULL;
-// struct obj_data *obj, *obj_to;
-//
-// for (cmd_no = 0; ZCMD.command != 'S'; cmd_no++) {
-//
-// if (ZCMD.if_flag && !last_cmd)
-// continue;
-//
-// /*  This is the list of actual zone commands.  If any new
-//  *  zone commands are added to the game, be certain to update
-//  *  the list of commands in load_zone() so that the counting
-//  *  will still be correct. - ae.
-//  */
-// switch (ZCMD.command) {
-// case '*':			/* ignore command */
-// last_cmd = 0;
-// break;
-//
-// case 'M':			/* read a mobile */
-// if (mob_index[ZCMD.arg1].number < ZCMD.arg2) {
-// mob = read_mobile(ZCMD.arg1, REAL);
-// char_to_room(mob, ZCMD.arg3);
-// last_cmd = 1;
-// } else
-// last_cmd = 0;
-// break;
-//
-// case 'O':			/* read an object */
-// if (obj_index[ZCMD.arg1].number < ZCMD.arg2) {
-// if (ZCMD.arg3 != NOWHERE) {
-// obj = read_object(ZCMD.arg1, REAL);
-// obj_to_room(obj, ZCMD.arg3);
-// last_cmd = 1;
-// } else {
-// obj = read_object(ZCMD.arg1, REAL);
-// IN_ROOM(obj) = NOWHERE;
-// last_cmd = 1;
-// }
-// } else
-// last_cmd = 0;
-// break;
-//
-// case 'P':			/* object to object */
-// if (obj_index[ZCMD.arg1].number < ZCMD.arg2) {
-// obj = read_object(ZCMD.arg1, REAL);
-// if (!(obj_to = get_obj_num(ZCMD.arg3))) {
-// ZONE_ERROR("target obj not found, command disabled");
-// ZCMD.command = '*';
-// break;
-// }
-// obj_to_obj(obj, obj_to);
-// last_cmd = 1;
-// } else
-// last_cmd = 0;
-// break;
-//
-// case 'G':			/* obj_to_char */
-// if (!mob) {
-// ZONE_ERROR("attempt to give obj to non-existant mob, command disabled");
-// ZCMD.command = '*';
-// break;
-// }
-// if (obj_index[ZCMD.arg1].number < ZCMD.arg2) {
-// obj = read_object(ZCMD.arg1, REAL);
-// obj_to_char(obj, mob);
-// last_cmd = 1;
-// } else
-// last_cmd = 0;
-// break;
-//
-// case 'E':			/* object to equipment list */
-// if (!mob) {
-// ZONE_ERROR("trying to equip non-existant mob, command disabled");
-// ZCMD.command = '*';
-// break;
-// }
-// if (obj_index[ZCMD.arg1].number < ZCMD.arg2) {
-// if (ZCMD.arg3 < 0 || ZCMD.arg3 >= NUM_WEARS) {
-// ZONE_ERROR("invalid equipment pos number");
-// } else {
-// obj = read_object(ZCMD.arg1, REAL);
-// equip_char(mob, obj, ZCMD.arg3);
-// last_cmd = 1;
-// }
-// } else
-// last_cmd = 0;
-// break;
-//
-// case 'R': /* rem obj from room */
-// if ((obj = get_obj_in_list_num(ZCMD.arg2, world[ZCMD.arg1].contents)) != NULL)
-// extract_obj(obj);
-// last_cmd = 1;
-// break;
-//
-//
-// case 'D':			/* set state of door */
-// if (ZCMD.arg2 < 0 || ZCMD.arg2 >= NUM_OF_DIRS ||
-// (world[ZCMD.arg1].dir_option[ZCMD.arg2] == NULL)) {
-// ZONE_ERROR("door does not exist, command disabled");
-// ZCMD.command = '*';
-// } else
-// switch (ZCMD.arg3) {
-// case 0:
-// REMOVE_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_LOCKED);
-// REMOVE_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_CLOSED);
-// break;
-// case 1:
-// SET_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_CLOSED);
-// REMOVE_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_LOCKED);
-// break;
-// case 2:
-// SET_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_LOCKED);
-// SET_BIT(world[ZCMD.arg1].dir_option[ZCMD.arg2]->exit_info,
-// EX_CLOSED);
-// break;
-// }
-// last_cmd = 1;
-// break;
-//
-// default:
-// ZONE_ERROR("unknown cmd in reset table; cmd disabled");
-// ZCMD.command = '*';
-// break;
-// }
-// }
-//
-// zone_table[zone].age = 0;
-// }
-//
-//
-//
+
+/* execute the reset command table of a given zone */
+impl DB {
+    fn log_zone_error(
+        &self,
+        main_globals: &MainGlobals,
+        zone: usize,
+        cmd_no: i32,
+        zcmd: &ResetCom,
+        message: &str,
+        last_cmd: &mut i32,
+    ) {
+        main_globals.mudlog(
+            NRM,
+            LVL_GOD as i32,
+            true,
+            format!("SYSERR: zone file: {}", message).as_str(),
+        );
+        main_globals.mudlog(
+            NRM,
+            LVL_GOD as i32,
+            true,
+            format!(
+                "SYSERR: ...offending cmd: '{}' cmd in zone #{}, line {}",
+                zcmd.command.get(),
+                self.zone_table.borrow()[zone as usize].number,
+                zcmd.line
+            )
+            .as_str(),
+        );
+        *last_cmd = 0;
+    }
+
+    fn reset_zone(&self, main_globals: &MainGlobals, zone: usize) {
+        //int cmd_no, last_cmd = 0;
+        //struct char_data *mob = NULL;
+        //struct obj_data * obj, *obj_to;
+        let mut last_cmd = 0;
+        let mut obj: Option<Rc<ObjData>>;
+        let mut mob = None;
+        for cmd_no in 0..self.zone_table.borrow()[zone as usize].cmd.len() {
+            let zcmd = &self.zone_table.borrow()[zone as usize].cmd[cmd_no as usize];
+            if zcmd.command.get() == 'S' {
+                break;
+            }
+            if zcmd.if_flag && last_cmd == 0 {
+                continue;
+            }
+
+            /*  This is the list of actual zone commands.  If any new
+             *  zone commands are added to the game, be certain to update
+             *  the list of commands in load_zone() so that the counting
+             *  will still be correct. - ae.
+             */
+            match zcmd.command.get() {
+                '*' => {
+                    /* ignore command */
+                    last_cmd = 0;
+                    break;
+                }
+
+                'M' => {
+                    /* read a mobile */
+                    if self.mob_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
+                        mob = self.read_mobile(zcmd.arg1 as MobVnum, REAL);
+                        self.char_to_room(mob.clone(), zcmd.arg3 as room_rnum);
+                        last_cmd = 1;
+                    } else {
+                        last_cmd = 0;
+                    }
+                }
+
+                'O' => {
+                    /* read an object */
+                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
+                        if zcmd.arg3 != NOWHERE as i32 {
+                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                            self.obj_to_room(obj, zcmd.arg3 as RoomRnum);
+                            last_cmd = 1;
+                        } else {
+                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                            obj.as_ref().unwrap().in_room.set(NOWHERE);
+                            last_cmd = 1;
+                        }
+                    } else {
+                        last_cmd = 0;
+                    }
+                }
+
+                'P' => {
+                    /* object to object */
+                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
+                        obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                        let obj_to = self.get_obj_num(zcmd.arg3 as ObjRnum);
+                        if obj_to.is_none() {
+                            self.log_zone_error(
+                                main_globals,
+                                zone,
+                                cmd_no as i32,
+                                zcmd,
+                                "target obj not found, command disabled",
+                                &mut last_cmd,
+                            );
+                            zcmd.command.set('*');
+                            break;
+                        }
+                        self.obj_to_obj(obj, obj_to);
+                        last_cmd = 1;
+                    } else {
+                        last_cmd = 0;
+                    }
+                }
+
+                'G' => {
+                    /* obj_to_char */
+                    if mob.is_none() {
+                        self.log_zone_error(
+                            main_globals,
+                            zone,
+                            cmd_no as i32,
+                            zcmd,
+                            "attempt to give obj to non-existant mob, command disabled",
+                            &mut last_cmd,
+                        );
+
+                        zcmd.command.set('*');
+                        break;
+                    }
+                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
+                        obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                        DB::obj_to_char(obj, mob.clone());
+                        last_cmd = 1;
+                    } else {
+                        last_cmd = 0;
+                    }
+                }
+
+                'E' => {
+                    /* object to equipment list */
+                    if mob.is_none() {
+                        self.log_zone_error(
+                            main_globals,
+                            zone,
+                            cmd_no as i32,
+                            zcmd,
+                            "trying to equip non-existant mob, command disabled",
+                            &mut last_cmd,
+                        );
+
+                        zcmd.command.set('*');
+                        break;
+                    }
+                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
+                        if zcmd.arg3 < 0 || zcmd.arg3 >= NUM_WEARS as i32 {
+                            self.log_zone_error(
+                                main_globals,
+                                zone,
+                                cmd_no as i32,
+                                zcmd,
+                                "invalid equipment pos number",
+                                &mut last_cmd,
+                            );
+                        } else {
+                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                            self.equip_char(mob.clone(), obj, zcmd.arg3 as i8);
+                            last_cmd = 1;
+                        }
+                    } else {
+                        last_cmd = 0;
+                    }
+                }
+
+                'R' => {
+                    /* rem obj from room */
+                    obj = self.get_obj_in_list_num(
+                        zcmd.arg2 as i16,
+                        self.world.borrow()[zcmd.arg1 as usize]
+                            .contents
+                            .borrow()
+                            .as_ref(),
+                    );
+                    if obj.is_some() {
+                        self.extract_obj(obj.unwrap());
+                    }
+                    last_cmd = 1;
+                }
+
+                'D' => {
+                    /* set state of door */
+                    if zcmd.arg2 < 0
+                        || zcmd.arg2 >= NUM_OF_DIRS as i32
+                        || (self.world.borrow()[zcmd.arg1 as usize].dir_option[zcmd.arg2 as usize]
+                            .is_none())
+                    {
+                        self.log_zone_error(
+                            main_globals,
+                            zone,
+                            cmd_no as i32,
+                            zcmd,
+                            "door does not exist, command disabled",
+                            &mut last_cmd,
+                        );
+                        zcmd.command.set('*');
+                    } else {
+                        match zcmd.arg3 {
+                            0 => {
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .remove_exit_info_bit(EX_LOCKED as i32);
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .remove_exit_info_bit(EX_CLOSED as i32);
+                            }
+
+                            1 => {
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .set_exit_info_bit(EX_LOCKED as i32);
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .remove_exit_info_bit(EX_CLOSED as i32);
+                            }
+
+                            2 => {
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .set_exit_info_bit(EX_LOCKED as i32);
+                                self.world.borrow()[zcmd.arg1 as usize].dir_option
+                                    [zcmd.arg2 as usize]
+                                    .as_ref()
+                                    .unwrap()
+                                    .set_exit_info_bit(EX_CLOSED as i32);
+                            }
+                            _ => {}
+                        }
+                    }
+                    last_cmd = 1;
+                }
+
+                _ => {
+                    self.log_zone_error(
+                        main_globals,
+                        zone,
+                        cmd_no as i32,
+                        zcmd,
+                        "unknown cmd in reset table; cmd disabled",
+                        &mut last_cmd,
+                    );
+                    zcmd.command.set('*');
+                }
+            }
+        }
+
+        self.zone_table.borrow()[zone as usize].age.set(0);
+    }
+}
+
 // /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
 // int is_empty(zone_rnum zone_nr)
 // {
@@ -3368,15 +3392,14 @@ fn file_to_string(name: &str) -> io::Result<String> {
 
 /* clear some of the the working variables of a char */
 pub fn reset_char(ch: &CharData) {
-    // TODO implement WEAR
-    // for (i = 0; i < NUM_WEARS; i++)
-    // GET_EQ(ch, i) = NULL;
+    for i in 0..NUM_WEARS {
+        ch.set_eq(i, None);
+    }
 
     ch.followers.borrow_mut().clear();
     *ch.master.borrow_mut() = None;
     ch.set_in_room(NOWHERE);
-    // TODO implement carrying
-    //ch->carrying = NULL;
+    ch.carrying.borrow_mut().clear();
     *ch.next.borrow_mut() = None;
     *ch.next_fighting.borrow_mut() = None;
     *ch.next_in_room.borrow_mut() = None;
@@ -3420,7 +3443,7 @@ fn clear_char(ch: &mut CharData) {
 fn clear_object(obj: &mut ObjData) {
     obj.item_number = NOTHING;
     obj.set_in_room(NOWHERE);
-    obj.worn_on = NOWHERE;
+    obj.worn_on.set(NOWHERE);
 }
 
 /*
@@ -3436,7 +3459,7 @@ impl DB {
         // CREATE(ch->player_specials, struct player_special_data, 1);
 
         /* *** if this is our first player --- he be God *** */
-        if *self.top_of_p_table.borrow() == 0 {
+        if self.player_table.borrow().is_empty() {
             ch.set_level(LVL_IMPL as u8);
             ch.set_exp(7000000);
 
@@ -3490,9 +3513,10 @@ impl DB {
             );
         } else {
             let i = i.unwrap();
-            *self.top_idnum.borrow_mut() += 1;
-            self.player_table.borrow_mut()[i].id = *self.top_idnum.borrow() as i64;
-            ch.set_idnum(*self.top_idnum.borrow() as i64);
+            //*self.top_idnum.borrow_mut() += 1;
+            let top_n = self.player_table.borrow().len();
+            self.player_table.borrow_mut()[i].id = top_n as i64; //*self.top_idnum.borrow() as i64;
+            ch.set_idnum(top_n as i64); /*self.top_idnum.borrow()*/
         }
 
         for i in 1..MAX_SKILLS {
@@ -3531,80 +3555,38 @@ impl DB {
     }
 }
 
-// /* returns the real number of the room with given virtual number */
-pub fn real_room(world: &Vec<Rc<RoomData>>, vnum: room_vnum) -> room_rnum {
-    let mut bot = 0 as room_rnum;
-    let mut top = (world.len() - 1) as room_rnum;
-    let mut mid: room_rnum;
-
-    /* perform binary search on world-table */
-    loop {
-        mid = (bot + top) / 2;
-
-        if world[mid as usize].number == vnum {
-            return mid;
-        }
-
-        if bot >= top {
+impl DB {
+    // /* returns the real number of the room with given virtual number */
+    pub fn real_room(&self, vnum: room_vnum) -> RoomRnum {
+        let r = self
+            .world
+            .borrow()
+            .binary_search_by_key(&vnum, |idx| idx.number);
+        if r.is_err() {
             return NOWHERE;
         }
+        r.unwrap() as RoomRnum
+    }
 
-        if world[mid as usize].number > vnum {
-            top = mid - 1;
-        } else {
-            bot = mid + 1;
+    /* returns the real number of the monster with given virtual number */
+    pub fn real_mobile(&self, vnum: MobVnum) -> MobRnum {
+        let r = self.mob_index.binary_search_by_key(&vnum, |idx| idx.vnum);
+        if r.is_err() {
+            return NOBODY;
         }
+        r.unwrap() as MobRnum
+    }
+
+    /* returns the real number of the object with given virtual number */
+    pub fn real_object(&self, vnum: ObjVnum) -> ObjRnum {
+        let r = self.obj_index.binary_search_by_key(&vnum, |idx| idx.vnum);
+        if r.is_err() {
+            return NOBODY;
+        }
+        r.unwrap() as ObjRnum
     }
 }
 
-// /* returns the real number of the monster with given virtual number */
-// mob_rnum real_mobile(mob_vnum vnum)
-// {
-// mob_rnum bot, top, mid;
-//
-// bot = 0;
-// top = top_of_mobt;
-//
-// /* perform binary search on mob-table */
-// for (;;) {
-// mid = (bot + top) / 2;
-//
-// if ((mob_index + mid)->vnum == vnum)
-// return (mid);
-// if (bot >= top)
-// return (NOBODY);
-// if ((mob_index + mid)->vnum > vnum)
-// top = mid - 1;
-// else
-// bot = mid + 1;
-// }
-// }
-//
-//
-// /* returns the real number of the object with given virtual number */
-// obj_rnum real_object(obj_vnum vnum)
-// {
-// obj_rnum bot, top, mid;
-//
-// bot = 0;
-// top = top_of_objt;
-//
-// /* perform binary search on obj-table */
-// for (;;) {
-// mid = (bot + top) / 2;
-//
-// if ((obj_index + mid)->vnum == vnum)
-// return (mid);
-// if (bot >= top)
-// return (NOTHING);
-// if ((obj_index + mid)->vnum > vnum)
-// top = mid - 1;
-// else
-// bot = mid + 1;
-// }
-// }
-//
-//
 // /* returns the real number of the zone with given virtual number */
 // room_rnum real_zone(room_vnum vnum)
 // {
@@ -3808,4 +3790,267 @@ fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &
     }
 
     return error;
+}
+
+const NONE_OBJDATA: Option<Rc<ObjData>> = None;
+
+impl CharData {
+    pub fn new() -> CharData {
+        CharData {
+            pfilepos: RefCell::new(0),
+            nr: 0,
+            in_room: Cell::new(0),
+            was_in_room: Cell::new(0),
+            wait: Cell::new(0),
+            player: RefCell::new(CharPlayerData {
+                passwd: [0; 16],
+                name: "".to_string(),
+                short_descr: "".to_string(),
+                long_descr: "".to_string(),
+                description: "".to_string(),
+                title: Option::from("".to_string()),
+                sex: 0,
+                chclass: 0,
+                level: 0,
+                hometown: 0,
+                time: TimeData {
+                    birth: 0,
+                    logon: 0,
+                    played: 0,
+                },
+                weight: 0,
+                height: 0,
+            }),
+            real_abils: RefCell::new(CharAbilityData {
+                str: 0,
+                str_add: 0,
+                intel: 0,
+                wis: 0,
+                dex: 0,
+                con: 0,
+                cha: 0,
+            }),
+            aff_abils: RefCell::new(CharAbilityData {
+                str: 0,
+                str_add: 0,
+                intel: 0,
+                wis: 0,
+                dex: 0,
+                con: 0,
+                cha: 0,
+            }),
+            points: RefCell::new(CharPointData {
+                mana: 0,
+                max_mana: 0,
+                hit: 0,
+                max_hit: 0,
+                movem: 0,
+                max_move: 0,
+                armor: 0,
+                gold: 0,
+                bank_gold: 0,
+                exp: 0,
+                hitroll: 0,
+                damroll: 0,
+            }),
+            char_specials: RefCell::new(CharSpecialData {
+                fighting: None,
+                hunting: None,
+                position: 0,
+                carry_weight: 0,
+                carry_items: 0,
+                timer: 0,
+                saved: CharSpecialDataSaved {
+                    alignment: 0,
+                    idnum: 0,
+                    act: 0,
+                    affected_by: 0,
+                    apply_saving_throw: [0; 5],
+                },
+            }),
+            player_specials: RefCell::new(PlayerSpecialData {
+                saved: PlayerSpecialDataSaved {
+                    skills: [0; MAX_SKILLS + 1],
+                    padding0: 0,
+                    talks: [false; MAX_TONGUE],
+                    wimp_level: 0,
+                    freeze_level: 0,
+                    invis_level: 0,
+                    load_room: 0,
+                    pref: 0,
+                    bad_pws: 0,
+                    conditions: [0; 3],
+                    spare0: 0,
+                    spare1: 0,
+                    spare2: 0,
+                    spare3: 0,
+                    spare4: 0,
+                    spare5: 0,
+                    spells_to_learn: 0,
+                    spare7: 0,
+                    spare8: 0,
+                    spare9: 0,
+                    spare10: 0,
+                    spare11: 0,
+                    spare12: 0,
+                    spare13: 0,
+                    spare14: 0,
+                    spare15: 0,
+                    spare16: 0,
+                    spare17: 0,
+                    spare18: 0,
+                    spare19: 0,
+                    spare20: 0,
+                    spare21: 0,
+                },
+                last_tell: 0,
+            }),
+            mob_specials: MobSpecialData {
+                attack_type: 0,
+                default_pos: 0,
+                damnodice: 0,
+                damsizedice: 0,
+            },
+            affected: RefCell::new(vec![]),
+            equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
+            carrying: RefCell::new(vec![]),
+            desc: RefCell::new(None),
+            next_in_room: RefCell::new(None),
+            next: RefCell::new(None),
+            next_fighting: RefCell::new(None),
+            followers: RefCell::new(vec![]),
+            master: RefCell::new(None),
+        }
+    }
+    fn make_copy(&self) -> CharData {
+        CharData {
+            pfilepos: RefCell::new(self.get_pfilepos()),
+            nr: self.nr,
+            in_room: Cell::new(self.in_room()),
+            was_in_room: Cell::new(self.was_in_room.get()),
+            wait: Cell::new(self.wait.get()),
+            player: RefCell::new(CharPlayerData {
+                passwd: self.player.borrow().passwd,
+                name: self.player.borrow().name.clone(),
+                short_descr: self.player.borrow().short_descr.clone(),
+                long_descr: self.player.borrow().long_descr.clone(),
+                description: self.player.borrow().description.clone(),
+                title: Option::from("".to_string()),
+                sex: self.player.borrow().sex,
+                chclass: self.player.borrow().chclass,
+                level: self.player.borrow().level,
+                hometown: self.player.borrow().hometown,
+                time: self.player.borrow().time,
+                weight: self.player.borrow().weight,
+                height: self.player.borrow().height,
+            }),
+            real_abils: RefCell::new(*self.real_abils.borrow()),
+            aff_abils: RefCell::new(*self.aff_abils.borrow()),
+            points: RefCell::new(*self.points.borrow()),
+            char_specials: RefCell::new(CharSpecialData {
+                fighting: None,
+                hunting: None,
+                position: self.char_specials.borrow().position,
+                carry_weight: self.char_specials.borrow().carry_weight,
+                carry_items: self.char_specials.borrow().carry_items,
+                timer: self.char_specials.borrow().timer,
+                saved: self.char_specials.borrow().saved,
+            }),
+            player_specials: RefCell::new(PlayerSpecialData {
+                saved: PlayerSpecialDataSaved {
+                    skills: [0; MAX_SKILLS + 1],
+                    padding0: 0,
+                    talks: [false; MAX_TONGUE],
+                    wimp_level: 0,
+                    freeze_level: 0,
+                    invis_level: 0,
+                    load_room: 0,
+                    pref: 0,
+                    bad_pws: 0,
+                    conditions: [0; 3],
+                    spare0: 0,
+                    spare1: 0,
+                    spare2: 0,
+                    spare3: 0,
+                    spare4: 0,
+                    spare5: 0,
+                    spells_to_learn: 0,
+                    spare7: 0,
+                    spare8: 0,
+                    spare9: 0,
+                    spare10: 0,
+                    spare11: 0,
+                    spare12: 0,
+                    spare13: 0,
+                    spare14: 0,
+                    spare15: 0,
+                    spare16: 0,
+                    spare17: 0,
+                    spare18: 0,
+                    spare19: 0,
+                    spare20: 0,
+                    spare21: 0,
+                },
+                last_tell: 0,
+            }),
+            mob_specials: MobSpecialData {
+                attack_type: self.mob_specials.attack_type,
+                default_pos: self.mob_specials.default_pos,
+                damnodice: self.mob_specials.damnodice,
+                damsizedice: self.mob_specials.damsizedice,
+            },
+            affected: RefCell::new(vec![]),
+            equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
+            carrying: RefCell::new(vec![]),
+            desc: RefCell::new(None),
+            next_in_room: RefCell::new(None),
+            next: RefCell::new(None),
+            next_fighting: RefCell::new(None),
+            followers: RefCell::new(vec![]),
+            master: RefCell::new(None),
+        }
+    }
+}
+
+impl ObjData {
+    fn make_copy(&self) -> ObjData {
+        let mut ret = ObjData {
+            item_number: self.item_number,
+            in_room: Cell::from(self.in_room.get()),
+            obj_flags: ObjFlagData {
+                value: self.obj_flags.value,
+                type_flag: self.obj_flags.type_flag,
+                wear_flags: self.obj_flags.wear_flags,
+                extra_flags: self.obj_flags.extra_flags,
+                weight: Cell::from(self.obj_flags.weight.get()),
+                cost: self.obj_flags.cost,
+                cost_per_day: self.obj_flags.cost_per_day,
+                timer: self.obj_flags.timer,
+                bitvector: self.obj_flags.bitvector,
+            },
+            affected: [ObjAffectedType {
+                location: 0,
+                modifier: 0,
+            }; 6],
+            name: self.name.clone(),
+            description: self.description.clone(),
+            short_description: self.short_description.clone(),
+            action_description: self.action_description.clone(),
+            ex_descriptions: vec![],
+            carried_by: RefCell::new(None),
+            worn_by: RefCell::new(None),
+            worn_on: Cell::new(0),
+            in_obj: RefCell::new(None),
+            contains: RefCell::new(vec![]),
+            next_content: RefCell::new(None),
+            next: RefCell::new(None),
+        };
+        for x in &self.ex_descriptions {
+            ret.ex_descriptions.push(ExtraDescrData {
+                keyword: x.keyword.clone(),
+                description: x.description.clone(),
+            })
+        }
+        ret
+    }
 }

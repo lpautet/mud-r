@@ -23,8 +23,9 @@ use crate::spells::{
     SKILL_BACKSTAB, SKILL_HIDE, SKILL_PICK_LOCK, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
 };
 use crate::structs::{
-    CharData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR, DRUNK,
-    FULL, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
+    CharData, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR,
+    DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF, ITEM_ANTI_WARRIOR,
+    LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, set_skill, MainGlobals};
@@ -1567,22 +1568,24 @@ fn advance_level(ch: &CharData, db: &DB) {
  * invalid_class is used by handler.c to determine if a piece of equipment is
  * usable by a particular class, based on the ITEM_ANTI_{class} bitvectors.
  */
-// int invalid_class(struct char_data *ch, struct obj_data *obj)
-// {
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_MAGIC_USER) && IS_MAGIC_USER(ch))
-// return TRUE;
-//
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_CLERIC) && IS_CLERIC(ch))
-// return TRUE;
-//
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_WARRIOR) && IS_WARRIOR(ch))
-// return TRUE;
-//
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_THIEF) && IS_THIEF(ch))
-// return TRUE;
-//
-// return FALSE;
-// }
+pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
+    if obj.obj_flagged(ITEM_ANTI_MAGIC_USER) && ch.is_magic_user() {
+        return true;
+    }
+
+    if obj.obj_flagged(ITEM_ANTI_CLERIC) && ch.is_cleric() {
+        return true;
+    }
+    if obj.obj_flagged(ITEM_ANTI_WARRIOR) && ch.is_warrior() {
+        return true;
+    }
+
+    if obj.obj_flagged(ITEM_ANTI_THIEF) && ch.is_thief() {
+        return true;
+    }
+
+    false
+}
 
 /*
  * SPELLS AND SKILLS.  This area defines which spells are assigned to

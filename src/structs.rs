@@ -2,8 +2,8 @@ use crate::DescriptorData;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-pub const OPT_USEC: u32 = 100000;
-pub const PASSES_PER_SEC: u32 = 1000000 / OPT_USEC;
+pub const OPT_USEC: u128 = 100000;
+pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
 
 /* Room flags: used in room_data.room_flags */
 /* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
@@ -91,6 +91,30 @@ pub const ITEM_WEAR_WRIST: i32 = 1 << 12; /* Can be worn on wrist 	*/
 pub const ITEM_WEAR_WIELD: i32 = 1 << 13; /* Can be wielded		*/
 pub const ITEM_WEAR_HOLD: i32 = 1 << 14; /* Can be held		*/
 
+/* Character equipment positions: used as index for char_data.equipment[] */
+/* NOTE: Don't confuse these constants with the ITEM_ bitvectors
+which control the valid places you can wear a piece of equipment */
+pub const WEAR_LIGHT: i32 = 0;
+pub const WEAR_FINGER_R: i32 = 1;
+pub const WEAR_FINGER_L: i32 = 2;
+pub const WEAR_NECK_1: i32 = 3;
+pub const WEAR_NECK_2: i32 = 4;
+pub const WEAR_BODY: i32 = 5;
+pub const WEAR_HEAD: i32 = 6;
+pub const WEAR_LEGS: i32 = 7;
+pub const WEAR_FEET: i32 = 8;
+pub const WEAR_HANDS: i32 = 9;
+pub const WEAR_ARMS: i32 = 10;
+pub const WEAR_SHIELD: i32 = 11;
+pub const WEAR_ABOUT: i32 = 12;
+pub const WEAR_WAIST: i32 = 13;
+pub const WEAR_WRIST_R: i32 = 14;
+pub const WEAR_WRIST_L: i32 = 15;
+pub const WEAR_WIELD: i32 = 16;
+pub const WEAR_HOLD: i32 = 17;
+
+pub const NUM_WEARS: i8 = 18;
+
 /* Extra object flags: used by obj_data.obj_flags.extra_flags */
 pub const ITEM_GLOW: i32 = 1 << 0; /* Item is glowing		*/
 pub const ITEM_HUM: i32 = 1 << 1; /* Item is humming		*/
@@ -111,31 +135,31 @@ pub const ITEM_ANTI_WARRIOR: i32 = 1 << 15; /* Not usable by warriors	*/
 pub const ITEM_NOSELL: i32 = 1 << 16; /* Shopkeepers won't touch it	*/
 
 /* Modifier constants used with obj affects ('A' fields) */
-pub const APPLY_NONE: i32 = 0; /* No effect			*/
-pub const APPLY_STR: i32 = 1; /* Apply to strength		*/
-pub const APPLY_DEX: i32 = 2; /* Apply to dexterity		*/
-pub const APPLY_INT: i32 = 3; /* Apply to intelligence	*/
-pub const APPLY_WIS: i32 = 4; /* Apply to wisdom		*/
-pub const APPLY_CON: i32 = 5; /* Apply to constitution	*/
-pub const APPLY_CHA: i32 = 6; /* Apply to charisma		*/
-pub const APPLY_CLASS: i32 = 7; /* Reserved			*/
-pub const APPLY_LEVEL: i32 = 8; /* Reserved			*/
-pub const APPLY_AGE: i32 = 9; /* Apply to age			*/
-pub const APPLY_CHAR_WEIGHT: i32 = 10; /* Apply to weight		*/
-pub const APPLY_CHAR_HEIGHT: i32 = 11; /* Apply to height		*/
-pub const APPLY_MANA: i32 = 12; /* Apply to max mana		*/
-pub const APPLY_HIT: i32 = 13; /* Apply to max hit points	*/
-pub const APPLY_MOVE: i32 = 14; /* Apply to max move points	*/
-pub const APPLY_GOLD: i32 = 15; /* Reserved			*/
-pub const APPLY_EXP: i32 = 16; /* Reserved			*/
-pub const APPLY_AC: i32 = 17; /* Apply to Armor Class		*/
-pub const APPLY_HITROLL: i32 = 18; /* Apply to hitroll		*/
-pub const APPLY_DAMROLL: i32 = 19; /* Apply to damage roll		*/
-pub const APPLY_SAVING_PARA: i32 = 20; /* Apply to save throw: paralz	*/
-pub const APPLY_SAVING_ROD: i32 = 21; /* Apply to save throw: rods	*/
-pub const APPLY_SAVING_PETRI: i32 = 22; /* Apply to save throw: petrif	*/
-pub const APPLY_SAVING_BREATH: i32 = 23; /* Apply to save throw: breath	*/
-pub const APPLY_SAVING_SPELL: i32 = 24; /* Apply to save throw: spells	*/
+pub const APPLY_NONE: i8 = 0; /* No effect			*/
+pub const APPLY_STR: i8 = 1; /* Apply to strength		*/
+pub const APPLY_DEX: i8 = 2; /* Apply to dexterity		*/
+pub const APPLY_INT: i8 = 3; /* Apply to intelligence	*/
+pub const APPLY_WIS: i8 = 4; /* Apply to wisdom		*/
+pub const APPLY_CON: i8 = 5; /* Apply to constitution	*/
+pub const APPLY_CHA: i8 = 6; /* Apply to charisma		*/
+pub const APPLY_CLASS: i8 = 7; /* Reserved			*/
+pub const APPLY_LEVEL: i8 = 8; /* Reserved			*/
+pub const APPLY_AGE: i8 = 9; /* Apply to age			*/
+pub const APPLY_CHAR_WEIGHT: i8 = 10; /* Apply to weight		*/
+pub const APPLY_CHAR_HEIGHT: i8 = 11; /* Apply to height		*/
+pub const APPLY_MANA: i8 = 12; /* Apply to max mana		*/
+pub const APPLY_HIT: i8 = 13; /* Apply to max hit points	*/
+pub const APPLY_MOVE: i8 = 14; /* Apply to max move points	*/
+pub const APPLY_GOLD: i8 = 15; /* Reserved			*/
+pub const APPLY_EXP: i8 = 16; /* Reserved			*/
+pub const APPLY_AC: i8 = 17; /* Apply to Armor Class		*/
+pub const APPLY_HITROLL: i8 = 18; /* Apply to hitroll		*/
+pub const APPLY_DAMROLL: i8 = 19; /* Apply to damage roll		*/
+pub const APPLY_SAVING_PARA: i8 = 20; /* Apply to save throw: paralz	*/
+pub const APPLY_SAVING_ROD: i8 = 21; /* Apply to save throw: rods	*/
+pub const APPLY_SAVING_PETRI: i8 = 22; /* Apply to save throw: petrif	*/
+pub const APPLY_SAVING_BREATH: i8 = 23; /* Apply to save throw: breath	*/
+pub const APPLY_SAVING_SPELL: i8 = 24; /* Apply to save throw: spells	*/
 
 /* Container flags - value[1] */
 pub const CONT_CLOSEABLE: i32 = 1 << 0; /* Container can be closed	*/
@@ -256,7 +280,8 @@ pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 pub struct CharData {
     pub(crate) pfilepos: RefCell<i32>,
     /* playerfile pos		  */
-    pub nr: MobRnum, /* Mob's rnum			  */
+    pub nr: MobRnum,
+    /* Mob's rnum			  */
     pub in_room: Cell<RoomRnum>,
     /* Location (real room number)	  */
     pub was_in_room: Cell<RoomRnum>,
@@ -279,9 +304,10 @@ pub struct CharData {
     /* NPC specials		  */
     pub affected: RefCell<Vec<AffectedType>>,
     /* affected by what spells       */
-    // struct ObjData *equipment[NUM_WEARS];/* Equipment array               */
-    //
-    // struct ObjData *carrying;            /* Head of list                  */
+    pub equipment: RefCell<[Option<Rc<ObjData>>; NUM_WEARS as usize]>,
+    /* Equipment array               */
+    pub carrying: RefCell<Vec<Rc<ObjData>>>,
+    /* Head of list                  */
     pub desc: RefCell<Option<Rc<DescriptorData>>>,
     /* NULL for mobiles              */
     pub next_in_room: RefCell<Option<Rc<CharData>>>,
@@ -492,6 +518,7 @@ pub struct CharPlayerData {
 }
 
 /* These data contain information about a players time data */
+#[derive(Copy, Clone)]
 pub struct TimeData {
     pub(crate) birth: u64,
     /* This represents the characters age                */
@@ -530,47 +557,70 @@ pub struct TxtBlock {
 
 /* object flags; used in obj_data */
 pub struct ObjFlagData {
-    pub value: [i32; 4],         /* Values of the item (see list)    */
-    pub type_flag: u8,           /* Type of item			    */
-    pub wear_flags: i32,         /* Where you can wear it	    */
-    pub(crate) extra_flags: i32, /* If it hums, glows, etc.	    */
-    pub weight: i32,             /* Weigt what else                  */
-    pub cost: i32,               /* Value when sold (gp.)            */
-    pub cost_per_day: i32,       /* Cost to keep pr. real day        */
-    pub timer: i32,              /* Timer for object                 */
-    pub bitvector: i64,          /* To set chars bits                */
+    pub value: [i32; 4],
+    /* Values of the item (see list)    */
+    pub type_flag: u8,
+    /* Type of item			    */
+    pub wear_flags: i32,
+    /* Where you can wear it	    */
+    pub(crate) extra_flags: i32,
+    /* If it hums, glows, etc.	    */
+    pub weight: Cell<i32>,
+    /* Weigt what else                  */
+    pub cost: i32,
+    /* Value when sold (gp.)            */
+    pub cost_per_day: i32,
+    /* Cost to keep pr. real day        */
+    pub timer: i32,
+    /* Timer for object                 */
+    pub bitvector: i64,
+    /* To set chars bits                */
 }
 
 /* Used in obj_file_elem *DO*NOT*CHANGE* */
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct ObjAffectedType {
-    pub(crate) location: u8, /* Which ability to change (APPLY_XXX) */
-    pub(crate) modifier: i8, /* How much it changes by              */
+    pub(crate) location: u8,
+    /* Which ability to change (APPLY_XXX) */
+    pub(crate) modifier: i8,
+    /* How much it changes by              */
 }
 
 /* ================== Memory Structure for Objects ================== */
 pub struct ObjData {
-    pub item_number: obj_vnum, /* Where in data-base			*/
-    pub in_room: room_rnum,    /* In what room -1 when conta/carr	*/
-
-    pub obj_flags: ObjFlagData, /* Object information               */
-    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize], /* affects */
-
-    pub(crate) name: String, /* Title of object :get etc.        */
-    pub description: String, /* When in room                     */
-    pub(crate) short_description: String, /* when worn/carry/in cont.         */
-    pub action_description: String, /* What to write when used          */
-    pub ex_descriptions: Vec<ExtraDescrData>, /* extra descriptions     */
-    pub carried_by: RefCell<Option<Rc<CharData>>>, /* Carried by :NULL in room/conta   */
-    pub worn_by: RefCell<Option<Rc<CharData>>>, /* Worn by?			      */
-    pub worn_on: i16,        /* Worn where?		      */
-
-    pub in_obj: RefCell<Option<Rc<ObjData>>>, /* In what object NULL when none    */
-    pub contains: RefCell<Option<Rc<ObjData>>>, /* Contains objects                 */
-
-    pub next_content: RefCell<Option<Rc<ObjData>>>, /* For 'contains' lists             */
-    pub next: RefCell<Option<Rc<ObjData>>>,         /* For the object list              */
+    pub item_number: obj_vnum,
+    /* Where in data-base			*/
+    pub in_room: Cell<RoomRnum>,
+    /* In what room -1 when conta/carr	*/
+    pub obj_flags: ObjFlagData,
+    /* Object information               */
+    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize],
+    /* affects */
+    pub(crate) name: String,
+    /* Title of object :get etc.        */
+    pub description: String,
+    /* When in room                     */
+    pub(crate) short_description: String,
+    /* when worn/carry/in cont.         */
+    pub action_description: String,
+    /* What to write when used          */
+    pub ex_descriptions: Vec<ExtraDescrData>,
+    /* extra descriptions     */
+    pub carried_by: RefCell<Option<Rc<CharData>>>,
+    /* Carried by :NULL in room/conta   */
+    pub worn_by: RefCell<Option<Rc<CharData>>>,
+    /* Worn by?			      */
+    pub worn_on: Cell<i16>,
+    /* Worn where?		      */
+    pub in_obj: RefCell<Option<Rc<ObjData>>>,
+    /* In what object NULL when none    */
+    pub contains: RefCell<Vec<Rc<ObjData>>>,
+    /* Contains objects                 */
+    pub next_content: RefCell<Option<Rc<ObjData>>>,
+    /* For 'contains' lists             */
+    pub next: RefCell<Option<Rc<ObjData>>>,
+    /* For the object list              */
 }
 /* ======================================================================= */
 
@@ -756,7 +806,7 @@ pub struct RoomDirectionData {
     /* When look DIR.			*/
     pub keyword: String,
     /* for open/close			*/
-    pub exit_info: i16,
+    pub exit_info: Cell<i16>,
     /* Exit info			*/
     pub key: obj_vnum,
     /* Key's number (-1 for no key)		*/
@@ -780,13 +830,12 @@ pub struct RoomData {
     /* for examine/look       */
     pub dir_option: [Option<Rc<RoomDirectionData>>; NUM_OF_DIRS],
     /* Directions */
-    pub room_flags: i32,
+    pub room_flags: Cell<i32>,
     /* DEATH,DARK ... etc */
     pub light: Cell<u8>,
     /* Number of lightsources in room     */
     //SPECIAL(*func);
-
-    //struct ObjData *contents;   /* List of items in room              */
+    pub contents: RefCell<Vec<Rc<ObjData>>>, /* List of items in room              */
     pub peoples: RefCell<Vec<Rc<CharData>>>,
     /* List of NPC / PC in room           */
 }
@@ -848,8 +897,10 @@ pub struct ConAppType {
  * NOTE: Assumes sizeof(mob_vnum) >= sizeof(obj_vnum)
  */
 pub struct IndexData {
-    pub vnum: MobVnum, /* virtual number of this mob/obj		*/
-    pub number: i32,   /* number of existing units of this mob/obj	*/
-                       // TODO implement spec proc
-                       //SPECIAL(*func);
+    pub vnum: MobVnum,
+    /* virtual number of this mob/obj		*/
+    pub number: Cell<i32>,
+    /* number of existing units of this mob/obj	*/
+    // TODO implement spec proc
+    //SPECIAL(*func);
 }

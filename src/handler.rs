@@ -9,13 +9,22 @@
 ************************************************************************ */
 
 use crate::db::DB;
-use crate::structs::{room_rnum, CharData, NOWHERE};
+use crate::structs::{
+    room_rnum, CharData, ObjData, ObjRnum, RoomData, RoomRnum, APPLY_CHA, APPLY_CHAR_WEIGHT,
+    APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_EXP, APPLY_HIT, APPLY_HITROLL, APPLY_MOVE,
+    APPLY_SAVING_PARA, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT,
+    LVL_GRGOD, MAX_OBJ_AFFECT, NOTHING, NOWHERE, NUM_CLASSES, NUM_WEARS, PLR_CRASH, ROOM_HOUSE,
+    ROOM_HOUSE_CRASH, WEAR_LIGHT,
+};
 use log::error;
-use std::borrow::BorrowMut;
+use std::cmp::{max, min};
 use std::process;
 use std::rc::Rc;
 
-use crate::MainGlobals;
+use crate::class::invalid_class;
+use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
+use crate::util::SECS_PER_MUD_YEAR;
+use crate::{MainGlobals, TO_CHAR, TO_ROOM};
 
 // /* local vars */
 // int extractions_pending = 0;
@@ -74,186 +83,215 @@ pub fn fname(namelist: &str) -> Rc<str> {
 // curname++;			/* first char of new name */
 // }
 // }
-//
-//
-//
-// void affect_modify(struct char_data *ch, byte loc, sbyte mod,
-// bitvector_t bitv, bool add)
-// {
-// if (add)
-// SET_BIT(AFF_FLAGS(ch), bitv);
-// else {
-// REMOVE_BIT(AFF_FLAGS(ch), bitv);
-// mod = -mod;
-// }
-//
-// switch (loc) {
-// case APPLY_NONE:
-// break;
-//
-// case APPLY_STR:
-// GET_STR(ch) += mod;
-// break;
-// case APPLY_DEX:
-// GET_DEX(ch) += mod;
-// break;
-// case APPLY_INT:
-// GET_INT(ch) += mod;
-// break;
-// case APPLY_WIS:
-// GET_WIS(ch) += mod;
-// break;
-// case APPLY_CON:
-// GET_CON(ch) += mod;
-// break;
-// case APPLY_CHA:
-// GET_CHA(ch) += mod;
-// break;
-//
-// case APPLY_CLASS:
-// /* ??? GET_CLASS(ch) += mod; */
-// break;
-//
-// /*
-//  * My personal thoughts on these two would be to set the person to the
-//  * value of the apply.  That way you won't have to worry about people
-//  * making +1 level things to be imp (you restrict anything that gives
-//  * immortal level of course).  It also makes more sense to set someone
-//  * to a class rather than adding to the class number. -gg
-//  */
-//
-// case APPLY_LEVEL:
-// /* ??? GET_LEVEL(ch) += mod; */
-// break;
-//
-// case APPLY_AGE:
-// ch->player.time.birth -= (mod * SECS_PER_MUD_YEAR);
-// break;
-//
-// case APPLY_CHAR_WEIGHT:
-// GET_WEIGHT(ch) += mod;
-// break;
-//
-// case APPLY_CHAR_HEIGHT:
-// GET_HEIGHT(ch) += mod;
-// break;
-//
-// case APPLY_MANA:
-// GET_MAX_MANA(ch) += mod;
-// break;
-//
-// case APPLY_HIT:
-// GET_MAX_HIT(ch) += mod;
-// break;
-//
-// case APPLY_MOVE:
-// GET_MAX_MOVE(ch) += mod;
-// break;
-//
-// case APPLY_GOLD:
-// break;
-//
-// case APPLY_EXP:
-// break;
-//
-// case APPLY_AC:
-// GET_AC(ch) += mod;
-// break;
-//
-// case APPLY_HITROLL:
-// GET_HITROLL(ch) += mod;
-// break;
-//
-// case APPLY_DAMROLL:
-// GET_DAMROLL(ch) += mod;
-// break;
-//
-// case APPLY_SAVING_PARA:
-// GET_SAVE(ch, SAVING_PARA) += mod;
-// break;
-//
-// case APPLY_SAVING_ROD:
-// GET_SAVE(ch, SAVING_ROD) += mod;
-// break;
-//
-// case APPLY_SAVING_PETRI:
-// GET_SAVE(ch, SAVING_PETRI) += mod;
-// break;
-//
-// case APPLY_SAVING_BREATH:
-// GET_SAVE(ch, SAVING_BREATH) += mod;
-// break;
-//
-// case APPLY_SAVING_SPELL:
-// GET_SAVE(ch, SAVING_SPELL) += mod;
-// break;
-//
-// default:
-// log("SYSERR: Unknown apply adjust %d attempt (%s, affect_modify).", loc, __FILE__);
-// break;
-//
-// } /* switch */
-// }
-//
-//
-//
-// /* This updates a character by subtracting everything he is affected by */
-// /* restoring original abilities, and then affecting all again           */
-// void affect_total(struct char_data *ch)
-// {
-// struct affected_type *af;
-// int i, j;
-//
-// for (i = 0; i < NUM_WEARS; i++) {
-// if (GET_EQ(ch, i))
-// for (j = 0; j < MAX_OBJ_AFFECT; j++)
-// affect_modify(ch, GET_EQ(ch, i)->affected[j].location,
-// GET_EQ(ch, i)->affected[j].modifier,
-// GET_OBJ_AFFECT(GET_EQ(ch, i)), FALSE);
-// }
-//
-//
-// for (af = ch->affected; af; af = af->next)
-// affect_modify(ch, af->location, af->modifier, af->bitvector, FALSE);
-//
-// ch->aff_abils = ch->real_abils;
-//
-// for (i = 0; i < NUM_WEARS; i++) {
-// if (GET_EQ(ch, i))
-// for (j = 0; j < MAX_OBJ_AFFECT; j++)
-// affect_modify(ch, GET_EQ(ch, i)->affected[j].location,
-// GET_EQ(ch, i)->affected[j].modifier,
-// GET_OBJ_AFFECT(GET_EQ(ch, i)), TRUE);
-// }
-//
-//
-// for (af = ch->affected; af; af = af->next)
-// affect_modify(ch, af->location, af->modifier, af->bitvector, TRUE);
-//
-// /* Make certain values are between 0..25, not < 0 and not > 25! */
-//
-// i = (IS_NPC(ch) || GET_LEVEL(ch) >= LVL_GRGOD) ? 25 : 18;
-//
-// GET_DEX(ch) = MAX(0, MIN(GET_DEX(ch), i));
-// GET_INT(ch) = MAX(0, MIN(GET_INT(ch), i));
-// GET_WIS(ch) = MAX(0, MIN(GET_WIS(ch), i));
-// GET_CON(ch) = MAX(0, MIN(GET_CON(ch), i));
-// GET_CHA(ch) = MAX(0, MIN(GET_CHA(ch), i));
-// GET_STR(ch) = MAX(0, GET_STR(ch));
-//
-// if (IS_NPC(ch)) {
-// GET_STR(ch) = MIN(GET_STR(ch), i);
-// } else {
-// if (GET_STR(ch) > 18) {
-// i = GET_ADD(ch) + ((GET_STR(ch) - 18) * 10);
-// GET_ADD(ch) = MIN(i, 100);
-// GET_STR(ch) = 18;
-// }
-// }
-// }
-//
-//
-//
+
+fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
+    let mut _mod = _mod;
+    if add {
+        ch.set_aff_flags(bitv);
+    } else {
+        ch.remove_aff_flags(bitv);
+        _mod = -_mod;
+    }
+
+    match loc {
+        APPLY_NONE => {}
+
+        APPLY_STR => {
+            ch.incr_str(_mod as i8);
+        }
+        APPLY_DEX => {
+            ch.incr_dex(_mod as i8);
+        }
+        APPLY_INT => {
+            ch.incr_int(_mod as i8);
+        }
+        APPLY_WIS => {
+            ch.incr_wis(_mod as i8);
+        }
+        APPLY_CON => {
+            ch.incr_con(_mod as i8);
+        }
+        APPLY_CHA => {
+            ch.incr_cha(_mod as i8);
+        }
+
+        APPLY_CLASS => { /* ??? GET_CLASS(ch) += mod; */ }
+
+        /*
+         * My personal thoughts on these two would be to set the person to the
+         * value of the apply.  That way you won't have to worry about people
+         * making +1 level things to be imp (you restrict anything that gives
+         * immortal level of course).  It also makes more sense to set someone
+         * to a class rather than adding to the class number. -gg
+         */
+        APPLY_LEVEL => { /* ??? GET_LEVEL(ch) += mod; */ }
+
+        APPLY_AGE => {
+            ch.player.borrow_mut().time.birth -= _mod as u64 * SECS_PER_MUD_YEAR;
+        }
+
+        APPLY_CHAR_WEIGHT => {
+            ch.set_weight(ch.get_weight() + _mod as u8);
+        }
+
+        APPLY_CHAR_HEIGHT => {
+            ch.set_height(ch.get_height() + _mod as u8);
+        }
+
+        APPLY_MANA => {
+            ch.incr_max_mana(_mod as i16);
+        }
+
+        APPLY_HIT => {
+            ch.incr_max_hit(_mod as i16);
+        }
+
+        APPLY_MOVE => {
+            ch.incr_max_move(_mod as i16);
+        }
+
+        APPLY_GOLD => {}
+
+        APPLY_EXP => {}
+
+        APPLY_AC => {
+            ch.set_ac(ch.get_ac() + _mod as i16);
+        }
+
+        APPLY_HITROLL => {
+            ch.set_hitroll(ch.get_hitroll() + _mod as i8);
+        }
+
+        APPLY_DAMROLL => {
+            ch.set_damroll(ch.get_damroll() + _mod as i8);
+        }
+
+        APPLY_SAVING_PARA => {
+            ch.set_save(
+                SAVING_PARA as usize,
+                ch.get_save(SAVING_PARA as usize) + _mod as i16,
+            );
+        }
+        APPLY_SAVING_ROD => {
+            ch.set_save(
+                SAVING_ROD as usize,
+                ch.get_save(SAVING_ROD as usize) + _mod as i16,
+            );
+        }
+        APPLY_SAVING_PETRI => {
+            ch.set_save(
+                SAVING_PETRI as usize,
+                ch.get_save(SAVING_PETRI as usize) + _mod as i16,
+            );
+        }
+
+        APPLY_SAVING_BREATH => {
+            ch.set_save(
+                SAVING_BREATH as usize,
+                ch.get_save(SAVING_BREATH as usize) + _mod as i16,
+            );
+        }
+
+        APPLY_SAVING_SPELL => {
+            ch.set_save(
+                SAVING_SPELL as usize,
+                ch.get_save(SAVING_SPELL as usize) + _mod,
+            );
+        }
+
+        _ => {
+            error!(
+                "SYSERR: Unknown apply adjust {} attempt (affect_modify).",
+                loc
+            );
+        }
+    } /* switch */
+}
+
+/* This updates a character by subtracting everything he is affected by */
+/* restoring original abilities, and then affecting all again           */
+fn affect_total(ch: &CharData) {
+    //struct affected_type *af;
+    //int i, j;
+
+    for i in 0..NUM_WEARS {
+        if ch.get_eq(i).is_some() {
+            let eq = ch.get_eq(i).unwrap();
+            for j in 0..MAX_OBJ_AFFECT {
+                affect_modify(
+                    ch,
+                    eq.affected[j as usize].location as i8,
+                    eq.affected[j as usize].modifier as i16,
+                    eq.get_obj_affect(),
+                    false,
+                );
+            }
+        }
+    }
+
+    for af in ch.affected.borrow().iter() {
+        affect_modify(
+            ch,
+            af.location as i8,
+            af.modifier as i16,
+            af.bitvector,
+            false,
+        );
+    }
+
+    *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow_mut();
+
+    for i in 0..NUM_WEARS {
+        if ch.get_eq(i).is_some() {
+            let eq = ch.get_eq(i).unwrap();
+            for j in 0..MAX_OBJ_AFFECT {
+                affect_modify(
+                    ch,
+                    eq.affected[j as usize].location as i8,
+                    eq.affected[j as usize].modifier as i16,
+                    eq.get_obj_affect(),
+                    true,
+                )
+            }
+        }
+    }
+
+    for af in ch.affected.borrow().iter() {
+        affect_modify(
+            ch,
+            af.location as i8,
+            af.modifier as i16,
+            af.bitvector,
+            true,
+        );
+    }
+
+    /* Make certain values are between 0..25, not < 0 and not > 25! */
+
+    let mut i = if ch.is_npc() || ch.get_level() >= LVL_GRGOD as u8 {
+        25
+    } else {
+        18
+    };
+
+    ch.set_dex(max(0, min(ch.get_dex(), i)));
+    ch.set_int(max(0, min(ch.get_int(), i)));
+    ch.set_wis(max(0, min(ch.get_wis(), i)));
+    ch.set_con(max(0, min(ch.get_con(), i)));
+    ch.set_cha(max(0, min(ch.get_cha(), i)));
+    ch.set_str(max(0, ch.get_str()));
+
+    if ch.is_npc() {
+        ch.set_str(min(ch.get_str(), i));
+    } else {
+        if ch.get_str() > 18 {
+            i = ch.get_add() + ((ch.get_str() - 18) * 10);
+            ch.set_add(min(i, 100));
+            ch.set_str(18);
+        }
+    }
+}
+
 // /* Insert an affect_type in a char_data structure
 //    Automatically sets apropriate bits and apply's */
 // void affect_to_char(struct char_data *ch, struct affected_type *af)
@@ -381,15 +419,16 @@ impl DB {
     }
 
     /* place a character in a room */
-    pub(crate) fn char_to_room(&self, ch: Rc<CharData>, room: room_rnum) {
-        if room == NOWHERE || room > self.top_of_world.borrow().to_owned() {
+    pub(crate) fn char_to_room(&self, ch: Option<Rc<CharData>>, room: room_rnum) {
+        if ch.is_none() && room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
                 room,
-                self.top_of_world.borrow(),
+                self.world.borrow().len(),
                 'x'
             );
         } else {
+            let ch = ch.unwrap();
             self.world.borrow()[room as usize]
                 .peoples
                 .borrow_mut()
@@ -413,184 +452,244 @@ impl DB {
             // }
         }
     }
+
+    /* give an object to a char   */
+    pub fn obj_to_char(object: Option<Rc<ObjData>>, ch: Option<Rc<CharData>>) {
+        if object.is_some() && ch.is_some() {
+            let object = object.unwrap();
+            let ch = ch.unwrap();
+            ch.carrying.borrow_mut().push(object.clone());
+            *object.carried_by.borrow_mut() = Some(ch.clone());
+            object.as_ref().set_in_room(NOWHERE);
+
+            ch.incr_is_carrying_w(object.get_obj_weight());
+            ch.incr_is_carrying_n();
+
+            /* set flag for crash-save system, but not on mobs! */
+            if !ch.is_npc() {
+                ch.set_plr_flag_bit(PLR_CRASH)
+            }
+        } else {
+            error!("SYSERR: NULL obj  or char passed to obj_to_char.");
+        }
+    }
+
+    /* take an object from a char */
+    pub fn obj_from_char(object: Option<Rc<ObjData>>) {
+        if object.is_none() {
+            error!("SYSERR: NULL object passed to obj_from_char.");
+            return;
+        }
+        let object = object.unwrap();
+        object
+            .carried_by
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .carrying
+            .borrow_mut()
+            .retain(|x| !Rc::ptr_eq(x, &object));
+
+        /* set flag for crash-save system, but not on mobs! */
+        if !object.carried_by.borrow().as_ref().unwrap().is_npc() {
+            object
+                .carried_by
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .set_plr_flag_bit(PLR_CRASH);
+        }
+
+        object
+            .carried_by
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .incr_is_carrying_w(-object.get_obj_weight());
+        object
+            .carried_by
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .decr_is_carrying_n();
+        *object.carried_by.borrow_mut() = None;
+    }
+}
+/* Return the effect of a piece of armor in position eq_pos */
+fn apply_ac(ch: &CharData, eq_pos: i16) -> i32 {
+    if ch.get_eq(eq_pos as i8).is_none() {
+        //core_dump();
+        return 0;
+    }
+    if ch.get_eq(eq_pos as i8).unwrap().get_obj_type() != ITEM_ARMOR as u8 {
+        return 0;
+    }
+
+    let mut factor;
+
+    match eq_pos {
+        WEAR_BODY => {
+            factor = 3;
+        } /* 30% */
+        WEAR_HEAD => {
+            factor = 2;
+        } /* 20% */
+        WEAR_LEGS => {
+            factor = 2;
+        } /* 20% */
+        _ => {
+            factor = 1;
+        } /* all others 10% */
+    }
+    factor * ch.get_eq(eq_pos as i8).unwrap().get_obj_val(0)
 }
 
-// /* give an object to a char   */
-// void obj_to_char(struct obj_data *object, struct char_data *ch)
-// {
-// if (object && ch) {
-// object->next_content = ch->carrying;
-// ch->carrying = object;
-// object->carried_by = ch;
-// IN_ROOM(object) = NOWHERE;
-// IS_CARRYING_W(ch) += GET_OBJ_WEIGHT(object);
-// IS_CARRYING_N(ch)++;
-//
-// /* set flag for crash-save system, but not on mobs! */
-// if (!IS_NPC(ch))
-// SET_BIT(PLR_FLAGS(ch), PLR_CRASH);
-// } else
-// log("SYSERR: NULL obj (%p) or char (%p) passed to obj_to_char.", object, ch);
-// }
-//
-//
-// /* take an object from a char */
-// void obj_from_char(struct obj_data *object)
-// {
-// struct obj_data *temp;
-//
-// if (object == NULL) {
-// log("SYSERR: NULL object passed to obj_from_char.");
-// return;
-// }
-// REMOVE_FROM_LIST(object, object->carried_by->carrying, next_content);
-//
-// /* set flag for crash-save system, but not on mobs! */
-// if (!IS_NPC(object->carried_by))
-// SET_BIT(PLR_FLAGS(object->carried_by), PLR_CRASH);
-//
-// IS_CARRYING_W(object->carried_by) -= GET_OBJ_WEIGHT(object);
-// IS_CARRYING_N(object->carried_by)--;
-// object->carried_by = NULL;
-// object->next_content = NULL;
-// }
-//
-//
-//
-// /* Return the effect of a piece of armor in position eq_pos */
-// int apply_ac(struct char_data *ch, int eq_pos)
-// {
-// int factor;
-//
-// if (GET_EQ(ch, eq_pos) == NULL) {
-// core_dump();
-// return (0);
-// }
-//
-// if (!(GET_OBJ_TYPE(GET_EQ(ch, eq_pos)) == ITEM_ARMOR))
-// return (0);
-//
-// switch (eq_pos) {
-//
-// case WEAR_BODY:
-// factor = 3;
-// break;			/* 30% */
-// case WEAR_HEAD:
-// factor = 2;
-// break;			/* 20% */
-// case WEAR_LEGS:
-// factor = 2;
-// break;			/* 20% */
-// default:
-// factor = 1;
-// break;			/* all others 10% */
-// }
-//
-// return (factor * GET_OBJ_VAL(GET_EQ(ch, eq_pos), 0));
-// }
-//
-// int invalid_align(struct char_data *ch, struct obj_data *obj)
-// {
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_EVIL) && IS_EVIL(ch))
-// return TRUE;
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_GOOD) && IS_GOOD(ch))
-// return TRUE;
-// if (OBJ_FLAGGED(obj, ITEM_ANTI_NEUTRAL) && IS_NEUTRAL(ch))
-// return TRUE;
-// return FALSE;
-// }
-//
-// void equip_char(struct char_data *ch, struct obj_data *obj, int pos)
-// {
-// int j;
-//
-// if (pos < 0 || pos >= NUM_WEARS) {
-// core_dump();
-// return;
-// }
-//
-// if (GET_EQ(ch, pos)) {
-// log("SYSERR: Char is already equipped: %s, %s", GET_NAME(ch),
-// obj->short_description);
-// return;
-// }
-// if (obj->carried_by) {
-// log("SYSERR: EQUIP: Obj is carried_by when equip.");
-// return;
-// }
-// if (IN_ROOM(obj) != NOWHERE) {
-// log("SYSERR: EQUIP: Obj is in_room when equip.");
-// return;
-// }
-// if (invalid_align(ch, obj) || invalid_class(ch, obj)) {
-// act("You are zapped by $p and instantly let go of it.", FALSE, ch, obj, 0, TO_CHAR);
-// act("$n is zapped by $p and instantly lets go of it.", FALSE, ch, obj, 0, TO_ROOM);
-// /* Changed to drop in inventory instead of the ground. */
-// obj_to_char(obj, ch);
-// return;
-// }
-//
-// GET_EQ(ch, pos) = obj;
-// obj->worn_by = ch;
-// obj->worn_on = pos;
-//
-// if (GET_OBJ_TYPE(obj) == ITEM_ARMOR)
-// GET_AC(ch) -= apply_ac(ch, pos);
-//
-// if (IN_ROOM(ch) != NOWHERE) {
-// if (pos == WEAR_LIGHT && GET_OBJ_TYPE(obj) == ITEM_LIGHT)
-// if (GET_OBJ_VAL(obj, 2))	/* if light is ON */
-// world[IN_ROOM(ch)].light++;
-// } else
-// log("SYSERR: IN_ROOM(ch) = NOWHERE when equipping char %s.", GET_NAME(ch));
-//
-// for (j = 0; j < MAX_OBJ_AFFECT; j++)
-// affect_modify(ch, obj->affected[j].location,
-// obj->affected[j].modifier,
-// GET_OBJ_AFFECT(obj), TRUE);
-//
-// affect_total(ch);
-// }
-//
-//
-//
-// struct obj_data *unequip_char(struct char_data *ch, int pos)
-// {
-// int j;
-// struct obj_data *obj;
-//
-// if ((pos < 0 || pos >= NUM_WEARS) || GET_EQ(ch, pos) == NULL) {
-// core_dump();
-// return (NULL);
-// }
-//
-// obj = GET_EQ(ch, pos);
-// obj->worn_by = NULL;
-// obj->worn_on = -1;
-//
-// if (GET_OBJ_TYPE(obj) == ITEM_ARMOR)
-// GET_AC(ch) += apply_ac(ch, pos);
-//
-// if (IN_ROOM(ch) != NOWHERE) {
-// if (pos == WEAR_LIGHT && GET_OBJ_TYPE(obj) == ITEM_LIGHT)
-// if (GET_OBJ_VAL(obj, 2))	/* if light is ON */
-// world[IN_ROOM(ch)].light--;
-// } else
-// log("SYSERR: IN_ROOM(ch) = NOWHERE when unequipping char %s.", GET_NAME(ch));
-//
-// GET_EQ(ch, pos) = NULL;
-//
-// for (j = 0; j < MAX_OBJ_AFFECT; j++)
-// affect_modify(ch, obj->affected[j].location,
-// obj->affected[j].modifier,
-// GET_OBJ_AFFECT(obj), FALSE);
-//
-// affect_total(ch);
-//
-// return (obj);
-// }
-//
-//
+fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
+    if obj.obj_flagged(ITEM_ANTI_EVIL) && ch.is_evil() {
+        return true;
+    };
+    if obj.obj_flagged(ITEM_ANTI_GOOD) && ch.is_good() {
+        return true;
+    }
+    if obj.obj_flagged(ITEM_ANTI_NEUTRAL) && ch.is_neutral() {
+        return true;
+    }
+    false
+}
+
+impl DB {
+    pub(crate) fn equip_char(&self, ch: Option<Rc<CharData>>, obj: Option<Rc<ObjData>>, pos: i8) {
+        //int j;
+
+        if pos < 0 || pos >= NUM_WEARS {
+            //core_dump();
+            return;
+        }
+        let ch = ch.unwrap();
+        let obj = obj.unwrap();
+
+        if ch.get_eq(pos).is_some() {
+            error!(
+                "SYSERR: Char is already equipped: {}, {}",
+                ch.get_name(),
+                obj.short_description
+            );
+            return;
+        }
+        if obj.carried_by.borrow().is_some() {
+            error!("SYSERR: EQUIP: Obj is carried_by when equip.");
+            return;
+        }
+        if obj.in_room() != NOWHERE {
+            error!("SYSERR: EQUIP: Obj is in_room when equip.");
+            return;
+        }
+        if invalid_align(ch.as_ref(), obj.as_ref()) || invalid_class(ch.as_ref(), obj.as_ref()) {
+            self.act(
+                "You are zapped by $p and instantly let go of it.",
+                false,
+                Some(ch.clone()),
+                Some(obj.as_ref()),
+                None,
+                TO_CHAR,
+            );
+            self.act(
+                "$n is zapped by $p and instantly lets go of it.",
+                false,
+                Some(ch.clone()),
+                Some(obj.as_ref()),
+                None,
+                TO_ROOM,
+            );
+            /* Changed to drop in inventory instead of the ground. */
+            DB::obj_to_char(Some(obj.clone()), Some(ch.clone()));
+            return;
+        }
+
+        ch.set_eq(pos, Some(obj.clone()));
+        *obj.worn_by.borrow_mut() = Some(ch.clone());
+        obj.worn_on.set(pos as i16);
+
+        if obj.get_obj_type() == ITEM_ARMOR as u8 {
+            ch.set_ac(ch.get_ac() - apply_ac(ch.as_ref(), pos as i16) as i16);
+        }
+
+        if ch.in_room() != NOWHERE {
+            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
+                if obj.get_obj_val(2) != 0 {
+                    /* if light is ON */
+                    self.world.borrow()[ch.in_room() as usize]
+                        .light
+                        .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
+                }
+            }
+        } else {
+            error!(
+                "SYSERR: IN_ROOM(ch) = NOWHERE when equipping char {}.",
+                ch.get_name()
+            );
+        }
+
+        for j in 0..MAX_OBJ_AFFECT {
+            affect_modify(
+                ch.as_ref(),
+                obj.affected[j as usize].location as i8,
+                obj.affected[j as usize].modifier as i16,
+                obj.get_obj_affect(),
+                true,
+            );
+        }
+
+        affect_total(ch.as_ref());
+    }
+
+    pub fn unequip_char(&self, ch: Rc<CharData>, pos: i8) -> Option<Rc<ObjData>> {
+        if pos < 0 || pos > NUM_WEARS || ch.get_eq(pos).is_none() {
+            //core_dump();
+            return None;
+        }
+
+        let obj = ch.get_eq(pos).unwrap();
+        *obj.worn_by.borrow_mut() = None;
+        obj.worn_on.set(-1);
+
+        if obj.get_obj_type() == ITEM_ARMOR as u8 {
+            ch.set_ac(ch.get_ac() + apply_ac(ch.as_ref(), pos as i16) as i16);
+        }
+
+        if ch.in_room() != NOWHERE {
+            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
+                if obj.get_obj_val(2) != 0 {
+                    self.world.borrow()[ch.in_room() as usize]
+                        .light
+                        .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                }
+            }
+        } else {
+            error!(
+                "SYSERR: IN_ROOM(ch) = NOWHERE when unequipping char {}.",
+                ch.get_name()
+            );
+        }
+
+        ch.set_eq(pos, None);
+
+        for j in 0..MAX_OBJ_AFFECT {
+            affect_modify(
+                ch.as_ref(),
+                obj.affected[j as usize].location as i8,
+                obj.affected[j as usize].modifier as i16,
+                obj.get_obj_affect(),
+                false,
+            );
+        }
+
+        affect_total(ch.as_ref());
+
+        Some(obj.clone())
+    }
+}
+
 // int get_number(char **name)
 // {
 // int i;
@@ -612,37 +711,29 @@ impl DB {
 // }
 // return (1);
 // }
-//
-//
-//
-// /* Search a given list for an object number, and return a ptr to that obj */
-// struct obj_data *get_obj_in_list_num(int num, struct obj_data *list)
-// {
-// struct obj_data *i;
-//
-// for (i = list; i; i = i->next_content)
-// if (GET_OBJ_RNUM(i) == num)
-// return (i);
-//
-// return (NULL);
-// }
-//
-//
-//
-// /* search the entire world for an object number, and return a pointer  */
-// struct obj_data *get_obj_num(obj_rnum nr)
-// {
-// struct obj_data *i;
-//
-// for (i = object_list; i; i = i->next)
-// if (GET_OBJ_RNUM(i) == nr)
-// return (i);
-//
-// return (NULL);
-// }
-//
-//
-//
+
+impl DB {
+    /* Search a given list for an object number, and return a ptr to that obj */
+    pub fn get_obj_in_list_num(&self, num: i16, list: &Vec<Rc<ObjData>>) -> Option<Rc<ObjData>> {
+        for o in list {
+            if o.get_obj_rnum() == num {
+                return Some(o.clone());
+            }
+        }
+        None
+    }
+
+    /* search the entire world for an object number, and return a pointer  */
+    pub(crate) fn get_obj_num(&self, nr: ObjRnum) -> Option<Rc<ObjData>> {
+        for o in self.object_list.borrow_mut().iter() {
+            if o.get_obj_rnum() == nr {
+                return Some(o.clone());
+            }
+        }
+        None
+    }
+}
+
 // /* search a room for a char, and return a pointer if found..  */
 // struct char_data *get_char_room(char *name, int *number, room_rnum room)
 // {
@@ -678,97 +769,137 @@ impl DB {
 //
 // return (NULL);
 // }
-//
-//
-//
-// /* put an object in a room */
-// void obj_to_room(struct obj_data *object, room_rnum room)
-// {
-// if (!object || room == NOWHERE || room > top_of_world)
-// log("SYSERR: Illegal value(s) passed to obj_to_room. (Room #%d/%d, obj %p)",
-// room, top_of_world, object);
-// else {
-// object->next_content = world[room].contents;
-// world[room].contents = object;
-// IN_ROOM(object) = room;
-// object->carried_by = NULL;
-// if (ROOM_FLAGGED(room, ROOM_HOUSE))
-// SET_BIT(ROOM_FLAGS(room), ROOM_HOUSE_CRASH);
-// }
-// }
-//
-//
-// /* Take an object from a room */
-// void obj_from_room(struct obj_data *object)
-// {
-// struct obj_data *temp;
-//
-// if (!object || IN_ROOM(object) == NOWHERE) {
-// log("SYSERR: NULL object (%p) or obj not in a room (%d) passed to obj_from_room",
-// object, IN_ROOM(object));
-// return;
-// }
-//
-// REMOVE_FROM_LIST(object, world[IN_ROOM(object)].contents, next_content);
-//
-// if (ROOM_FLAGGED(IN_ROOM(object), ROOM_HOUSE))
-// SET_BIT(ROOM_FLAGS(IN_ROOM(object)), ROOM_HOUSE_CRASH);
-// IN_ROOM(object) = NOWHERE;
-// object->next_content = NULL;
-// }
-//
-//
-// /* put an object in an object (quaint)  */
-// void obj_to_obj(struct obj_data *obj, struct obj_data *obj_to)
-// {
-// struct obj_data *tmp_obj;
-//
-// if (!obj || !obj_to || obj == obj_to) {
-// log("SYSERR: NULL object (%p) or same source (%p) and target (%p) obj passed to obj_to_obj.",
-// obj, obj, obj_to);
-// return;
-// }
-//
-// obj->next_content = obj_to->contains;
-// obj_to->contains = obj;
-// obj->in_obj = obj_to;
-//
-// for (tmp_obj = obj->in_obj; tmp_obj->in_obj; tmp_obj = tmp_obj->in_obj)
-// GET_OBJ_WEIGHT(tmp_obj) += GET_OBJ_WEIGHT(obj);
-//
-// /* top level object.  Subtract weight from inventory if necessary. */
-// GET_OBJ_WEIGHT(tmp_obj) += GET_OBJ_WEIGHT(obj);
-// if (tmp_obj->carried_by)
-// IS_CARRYING_W(tmp_obj->carried_by) += GET_OBJ_WEIGHT(obj);
-// }
-//
-//
-// /* remove an object from an object */
-// void obj_from_obj(struct obj_data *obj)
-// {
-// struct obj_data *temp, *obj_from;
-//
-// if (obj->in_obj == NULL) {
-// log("SYSERR: (%s): trying to illegally extract obj from obj.", __FILE__);
-// return;
-// }
-// obj_from = obj->in_obj;
-// REMOVE_FROM_LIST(obj, obj_from->contains, next_content);
-//
-// /* Subtract weight from containers container */
-// for (temp = obj->in_obj; temp->in_obj; temp = temp->in_obj)
-// GET_OBJ_WEIGHT(temp) -= GET_OBJ_WEIGHT(obj);
-//
-// /* Subtract weight from char that carries the object */
-// GET_OBJ_WEIGHT(temp) -= GET_OBJ_WEIGHT(obj);
-// if (temp->carried_by)
-// IS_CARRYING_W(temp->carried_by) -= GET_OBJ_WEIGHT(obj);
-//
-// obj->in_obj = NULL;
-// obj->next_content = NULL;
-// }
-//
-//
+
+impl DB {
+    /* put an object in a room */
+    pub fn obj_to_room(&self, object: Option<Rc<ObjData>>, room: RoomRnum) {
+        if object.is_none() || room == NOWHERE || room >= self.world.borrow().len() as i16 {
+            error!(
+                "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{}, {})",
+                room,
+                self.world.borrow().len(),
+                object.is_some()
+            );
+        } else {
+            let object = object.unwrap();
+            object.as_ref().set_in_room(room);
+            *object.carried_by.borrow_mut() = None;
+            if self.room_flagged(room, ROOM_HOUSE) {
+                self.set_room_flags_bit(room, ROOM_HOUSE_CRASH)
+            }
+            self.world.borrow()[room as usize]
+                .contents
+                .borrow_mut()
+                .push(object);
+        }
+    }
+
+    /* Take an object from a room */
+    pub fn obj_from_room(&self, object: Option<Rc<ObjData>>) {
+        // struct obj_data *temp;
+
+        if object.is_none() {
+            error!("SYSERR: NULL object  passed to obj_from_room");
+            return;
+        }
+        let object = object.unwrap();
+
+        if object.in_room() == NOWHERE {
+            error!(
+                "SYSERR: obj not in a room ({}) passed to obj_from_room",
+                object.in_room(),
+            );
+            return;
+        }
+
+        self.world.borrow()[object.in_room() as usize]
+            .contents
+            .borrow_mut()
+            .retain(|x| !Rc::ptr_eq(x, &object));
+
+        if self.room_flagged(object.in_room(), ROOM_HOUSE) {
+            self.set_room_flags_bit(object.in_room(), ROOM_HOUSE_CRASH);
+        }
+    }
+
+    /* put an object in an object (quaint)  */
+    pub fn obj_to_obj(&self, obj: Option<Rc<ObjData>>, obj_to: Option<Rc<ObjData>>) {
+        if obj.is_none() || obj_to.is_none() {
+            error!("SYSERR: None obj passed to obj_to_obj.");
+            return;
+        }
+        let obj = obj.unwrap();
+        let obj_to = obj_to.unwrap();
+        if Rc::ptr_eq(&obj, &obj_to) {
+            error!("SYSERR: same source and target  obj passed to obj_to_obj.");
+            return;
+        }
+
+        obj_to.contains.borrow_mut().push(obj.clone());
+        *obj.in_obj.borrow_mut() = Some(obj_to.clone());
+
+        let mut tmp_obj = obj.clone();
+        loop {
+            if tmp_obj.in_obj.borrow().is_none() {
+                break;
+            }
+
+            tmp_obj.set_obj_weight(obj.get_obj_weight());
+            let n = tmp_obj.in_obj.borrow().as_ref().unwrap().clone();
+            tmp_obj = n.clone();
+        }
+
+        /* top level object.  Subtract weight from inventory if necessary. */
+        tmp_obj.incr_obj_weight(obj.get_obj_weight());
+        if tmp_obj.carried_by.borrow().is_some() {
+            tmp_obj
+                .carried_by
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .incr_is_carrying_w(obj.get_obj_weight());
+        }
+    }
+
+    /* remove an object from an object */
+    fn obj_from_obj(obj: Rc<ObjData>) {
+        if obj.in_obj.borrow().is_none() {
+            error!("SYSERR:  trying to illegally extract obj from obj.");
+            return;
+        }
+        let oio = obj.in_obj.borrow();
+        let obj_from = oio.as_ref().unwrap();
+        obj_from
+            .contains
+            .borrow_mut()
+            .retain(|o| !Rc::ptr_eq(o, &obj));
+
+        /* Subtract weight from containers container */
+        let oio = obj.in_obj.borrow();
+        let mut temp = oio.as_ref().unwrap().clone();
+        loop {
+            if temp.in_obj.borrow().is_none() {
+                break;
+            }
+            temp.incr_obj_weight(-obj.get_obj_weight());
+            let n = temp.in_obj.borrow().as_ref().unwrap().clone();
+            temp = n;
+        }
+
+        /* Subtract weight from char that carries the object */
+        temp.incr_obj_weight(-obj.get_obj_weight());
+
+        if temp.carried_by.borrow().is_some() {
+            temp.carried_by
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .incr_is_carrying_w(-obj.get_obj_weight());
+        }
+
+        *obj.in_obj.borrow_mut() = None;
+    }
+}
 // /* Set all carried_by to point to new owner */
 // void object_list_new_owner(struct obj_data *list, struct char_data *ch)
 // {
@@ -778,36 +909,49 @@ impl DB {
 // list->carried_by = ch;
 // }
 // }
-//
-//
-// /* Extract an object from the world */
-// void extract_obj(struct obj_data *obj)
-// {
-// struct obj_data *temp;
-//
-// if (obj->worn_by != NULL)
-// if (unequip_char(obj->worn_by, obj->worn_on) != obj)
-// log("SYSERR: Inconsistent worn_by and worn_on pointers!!");
-// if (IN_ROOM(obj) != NOWHERE)
-// obj_from_room(obj);
-// else if (obj->carried_by)
-// obj_from_char(obj);
-// else if (obj->in_obj)
-// obj_from_obj(obj);
-//
-// /* Get rid of the contents of the object, as well. */
-// while (obj->contains)
-// extract_obj(obj->contains);
-//
-// REMOVE_FROM_LIST(obj, object_list, next);
-//
-// if (GET_OBJ_RNUM(obj) != NOTHING)
-// (obj_index[GET_OBJ_RNUM(obj)].number)--;
-// free_obj(obj);
-// }
-//
-//
-//
+
+impl DB {
+    /* Extract an object from the world */
+    pub fn extract_obj(&self, obj: Rc<ObjData>) {
+        if obj.worn_by.borrow().is_some() {
+            if Rc::ptr_eq(
+                self.unequip_char(
+                    obj.worn_by.borrow().as_ref().unwrap().clone(),
+                    obj.worn_on.get() as i8,
+                )
+                .as_ref()
+                .unwrap(),
+                &obj,
+            ) {
+                error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
+            }
+        }
+
+        if obj.in_room() != NOWHERE {
+            self.obj_from_room(Some(obj.clone()));
+        } else if obj.carried_by.borrow().is_some() {
+            DB::obj_from_char(Some(obj.clone()));
+        } else if obj.in_obj.borrow().is_some() {
+            DB::obj_from_obj(obj.clone());
+        }
+        /* Get rid of the contents of the object, as well. */
+        for o in obj.contains.borrow().iter() {
+            self.extract_obj(o.clone());
+        }
+
+        self.object_list
+            .borrow_mut()
+            .retain(|o| !Rc::ptr_eq(&obj, o));
+
+        if obj.get_obj_rnum() != NOTHING {
+            self.obj_index[obj.get_obj_rnum() as usize]
+                .number
+                .set(self.obj_index[obj.get_obj_rnum() as usize].number.get() - 1);
+        }
+        //free_obj(obj);
+    }
+}
+
 // void update_object(struct obj_data *obj, int use)
 // {
 // if (GET_OBJ_TIMER(obj) > 0)

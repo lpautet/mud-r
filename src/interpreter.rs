@@ -1172,7 +1172,7 @@ use crate::act_movement::do_move;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{real_room, reset_char, store_to_char, DB};
+use crate::db::{reset_char, store_to_char, DB};
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
@@ -1198,129 +1198,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
         ConGetName => {
             /* wait for input of name */
             if d.character.borrow().is_none() {
-                *d.character.borrow_mut() = Some(Rc::new(CharData {
-                    pfilepos: RefCell::new(-1),
-                    nr: 0,
-                    in_room: Cell::new(0),
-                    was_in_room: Cell::new(0),
-                    wait: Cell::from(0),
-                    player: RefCell::from(CharPlayerData {
-                        passwd: [0; 16],
-                        name: String::new(),
-                        short_descr: String::new(),
-                        long_descr: String::new(),
-                        description: String::new(),
-                        title: Option::from("".to_string()),
-                        sex: 0,
-                        chclass: 0,
-                        level: 0,
-                        hometown: 0,
-                        time: TimeData {
-                            birth: 0,
-                            logon: 0,
-                            played: 0,
-                        },
-                        weight: 0,
-                        height: 0,
-                    }),
-                    real_abils: RefCell::from(CharAbilityData {
-                        str: 0,
-                        str_add: 0,
-                        intel: 0,
-                        wis: 0,
-                        dex: 0,
-                        con: 0,
-                        cha: 0,
-                    }),
-                    aff_abils: RefCell::from(CharAbilityData {
-                        str: 0,
-                        str_add: 0,
-                        intel: 0,
-                        wis: 0,
-                        dex: 0,
-                        con: 0,
-                        cha: 0,
-                    }),
-                    points: RefCell::from(CharPointData {
-                        mana: 0,
-                        max_mana: 0,
-                        hit: 0,
-                        max_hit: 0,
-                        movem: 0,
-                        max_move: 0,
-                        armor: 0,
-                        gold: 0,
-                        bank_gold: 0,
-                        exp: 0,
-                        hitroll: 0,
-                        damroll: 0,
-                    }),
-                    char_specials: RefCell::from(CharSpecialData {
-                        fighting: None,
-                        hunting: None,
-                        position: 0,
-                        carry_weight: 0,
-                        carry_items: 0,
-                        timer: 0,
-                        saved: CharSpecialDataSaved {
-                            alignment: 0,
-                            idnum: 0,
-                            act: 0,
-                            affected_by: 0,
-                            apply_saving_throw: [0; 5],
-                        },
-                    }),
-                    player_specials: RefCell::new(PlayerSpecialData {
-                        saved: PlayerSpecialDataSaved {
-                            skills: [0; MAX_SKILLS + 1],
-                            padding0: 0,
-                            talks: [false; MAX_TONGUE],
-                            wimp_level: 0,
-                            freeze_level: 0,
-                            invis_level: 0,
-                            load_room: 0,
-                            pref: 0,
-                            bad_pws: 0,
-                            conditions: [0; 3],
-                            spare0: 0,
-                            spare1: 0,
-                            spare2: 0,
-                            spare3: 0,
-                            spare4: 0,
-                            spare5: 0,
-                            spells_to_learn: 0,
-                            spare7: 0,
-                            spare8: 0,
-                            spare9: 0,
-                            spare10: 0,
-                            spare11: 0,
-                            spare12: 0,
-                            spare13: 0,
-                            spare14: 0,
-                            spare15: 0,
-                            spare16: 0,
-                            spare17: 0,
-                            spare18: 0,
-                            spare19: 0,
-                            spare20: 0,
-                            spare21: 0,
-                        },
-                        last_tell: 0,
-                    }),
-                    mob_specials: MobSpecialData {
-                        attack_type: 0,
-                        default_pos: 0,
-                        damnodice: 0,
-                        damsizedice: 0,
-                    },
-                    affected: RefCell::new(vec![]),
-                    desc: RefCell::new(Some(d.clone())),
-                    next_in_room: RefCell::new(None),
-                    next: RefCell::new(None),
-                    next_fighting: RefCell::new(None),
-                    followers: RefCell::new(vec![]),
-                    master: RefCell::new(None),
-                }));
+                *d.character.borrow_mut() = Some(Rc::from(CharData::new()));
             }
 
             if arg.is_empty() {
@@ -1811,7 +1689,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         let mut load_room = character.get_loadroom();
                         if load_room != NOWHERE {
                             let world = db.world.borrow();
-                            load_room = real_room(db.world.borrow().as_ref(), load_room);
+                            load_room = db.real_room(load_room);
                         }
 
                         /* If char was saved with NOWHERE, or real_room above failed... */
@@ -1829,7 +1707,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
                         db.character_list.borrow_mut().push(character.clone());
-                        db.char_to_room(character.clone(), load_room);
+                        db.char_to_room(Some(character.clone()), load_room);
                         //load_result = Crash_load(d->character);
 
                         /* Clear their load room if it's not persistant. */

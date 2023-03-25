@@ -143,16 +143,13 @@ pub const SKILL_TRACK: i32 = 140; /* Reserved Skill[] DO NOT CHANGE */
 //
 // /* new attack types can be added here - up to TYPE_SUFFERING */
 // #define TYPE_SUFFERING		     399
-//
-//
-//
-// #define SAVING_PARA   0
-// #define SAVING_ROD    1
-// #define SAVING_PETRI  2
-// #define SAVING_BREATH 3
-// #define SAVING_SPELL  4
-//
-//
+
+pub const SAVING_PARA: i32 = 0;
+pub const SAVING_ROD: i32 = 1;
+pub const SAVING_PETRI: i32 = 2;
+pub const SAVING_BREATH: i32 = 3;
+pub const SAVING_SPELL: i32 = 4;
+
 // #define TAR_IGNORE      (1 << 0)
 // #define TAR_CHAR_ROOM   (1 << 1)
 // #define TAR_CHAR_WORLD  (1 << 2)

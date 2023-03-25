@@ -233,7 +233,7 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
     was_in = ch.in_room();
     db.char_from_room(rch.clone());
     db.char_to_room(
-        rch.clone(),
+        Some(rch.clone()),
         db.world.borrow()[was_in as usize].dir_option[dir as usize]
             .as_ref()
             .unwrap()

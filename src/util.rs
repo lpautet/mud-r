@@ -128,7 +128,7 @@ impl CharData {
 
 impl DB {
     pub fn valid_room_rnum(&self, rnum: room_rnum) -> bool {
-        rnum != NOWHERE && rnum < *self.top_of_world.borrow()
+        rnum != NOWHERE && rnum < self.world.borrow().len() as i16
     }
     pub fn get_room_vnum(&self, rnum: room_vnum) -> i16 {
         if self.valid_room_rnum(rnum) {
@@ -439,23 +439,62 @@ impl CharData {
     pub fn get_str(&self) -> i8 {
         self.aff_abils.borrow().str
     }
+    pub fn set_str(&self, val: i8) {
+        self.aff_abils.borrow_mut().str = val;
+    }
+    pub fn incr_str(&self, val: i8) {
+        self.aff_abils.borrow_mut().str += val;
+    }
+    pub fn incr_dex(&self, val: i8) {
+        self.aff_abils.borrow_mut().dex += val;
+    }
+    pub fn incr_int(&self, val: i8) {
+        self.aff_abils.borrow_mut().intel += val;
+    }
+    pub fn incr_wis(&self, val: i8) {
+        self.aff_abils.borrow_mut().wis += val;
+    }
+    pub fn incr_con(&self, val: i8) {
+        self.aff_abils.borrow_mut().con += val;
+    }
+    pub fn incr_cha(&self, val: i8) {
+        self.aff_abils.borrow_mut().cha += val;
+    }
     pub fn get_add(&self) -> i8 {
         self.aff_abils.borrow().str_add
+    }
+    pub fn set_add(&self, val: i8) {
+        self.aff_abils.borrow_mut().str_add = val;
     }
     pub fn get_dex(&self) -> i8 {
         self.aff_abils.borrow().dex
     }
+    pub fn set_dex(&self, val: i8) {
+        self.aff_abils.borrow_mut().dex = val;
+    }
     pub fn get_int(&self) -> i8 {
         self.aff_abils.borrow().intel
+    }
+    pub fn set_int(&self, val: i8) {
+        self.aff_abils.borrow_mut().intel = val;
     }
     pub fn get_wis(&self) -> i8 {
         self.aff_abils.borrow().wis
     }
+    pub fn set_wis(&self, val: i8) {
+        self.aff_abils.borrow_mut().wis = val;
+    }
     pub fn get_con(&self) -> i8 {
         self.aff_abils.borrow().con
     }
+    pub fn set_con(&self, val: i8) {
+        self.aff_abils.borrow_mut().con = val;
+    }
     pub fn get_cha(&self) -> i8 {
         self.aff_abils.borrow().cha
+    }
+    pub fn set_cha(&self, val: i8) {
+        self.aff_abils.borrow_mut().cha = val;
     }
     pub fn get_pos(&self) -> u8 {
         self.char_specials.borrow().position
@@ -524,6 +563,9 @@ impl CharData {
     }
     pub fn remove_plr_flag(&self, flag: i64) {
         self.char_specials.borrow_mut().saved.act &= !flag;
+    }
+    pub fn set_plr_flag_bit(&self, flag: i64) {
+        self.char_specials.borrow_mut().saved.act |= flag;
     }
     pub fn mob_flags(&self) -> i64 {
         self.char_specials.borrow().saved.act
@@ -632,6 +674,36 @@ impl CharData {
             self.get_level()
         }
     }
+    pub fn get_eq(&self, pos: i8) -> Option<Rc<ObjData>> {
+        self.equipment.borrow()[pos as usize].clone()
+    }
+    pub fn set_eq(&self, pos: i8, val: Option<Rc<ObjData>>) {
+        self.equipment.borrow_mut()[pos as usize] = val;
+    }
+    pub fn is_good(&self) -> bool {
+        self.get_alignment() >= 350
+    }
+    pub fn is_evil(&self) -> bool {
+        self.get_alignment() <= -350
+    }
+    pub fn is_neutral(&self) -> bool {
+        !self.is_good() && !self.is_evil()
+    }
+    pub fn is_carrying_w(&self) -> i32 {
+        self.char_specials.borrow().carry_weight
+    }
+    pub fn incr_is_carrying_w(&self, val: i32) {
+        self.char_specials.borrow_mut().carry_weight += val;
+    }
+    pub fn is_carrying_n(&self) -> u8 {
+        self.char_specials.borrow().carry_items
+    }
+    pub fn incr_is_carrying_n(&self) {
+        self.char_specials.borrow_mut().carry_weight += 1;
+    }
+    pub fn decr_is_carrying_n(&self) {
+        self.char_specials.borrow_mut().carry_weight -= 1;
+    }
 }
 
 impl ObjData {
@@ -664,10 +736,13 @@ impl ObjData {
         is_set!(self.get_obj_extra(), flag)
     }
     pub fn get_obj_weight(&self) -> i32 {
-        self.obj_flags.weight
+        self.obj_flags.weight.get()
     }
-    pub fn set_obj_weight(&mut self, val: i32) {
-        self.obj_flags.weight = val;
+    pub fn set_obj_weight(&self, val: i32) {
+        self.obj_flags.weight.set(val);
+    }
+    pub fn incr_obj_weight(&self, val: i32) {
+        self.obj_flags.weight.set(val + self.get_obj_weight());
     }
     pub fn get_obj_cost(&self) -> i32 {
         self.obj_flags.cost
@@ -687,8 +762,8 @@ impl ObjData {
     pub fn get_obj_affect(&self) -> i64 {
         self.obj_flags.bitvector
     }
-    pub fn set_in_room(&mut self, val: RoomRnum) {
-        self.in_room = val;
+    pub fn set_in_room(&self, val: RoomRnum) {
+        self.in_room.set(val);
     }
 }
 
@@ -757,7 +832,7 @@ pub fn self_(sub: &CharData, obj: &CharData) -> bool {
 
 impl ObjData {
     pub fn in_room(&self) -> room_rnum {
-        self.in_room
+        self.in_room.get()
     }
 }
 
@@ -844,7 +919,13 @@ pub fn sana(obj: &ObjData) -> &str {
 
 impl RoomDirectionData {
     pub fn exit_flagged(&self, flag: i16) -> bool {
-        is_set!(self.exit_info, flag)
+        is_set!(self.exit_info.get(), flag)
+    }
+    pub fn remove_exit_info_bit(&self, flag: i32) {
+        self.exit_info.set(self.exit_info.get() & !flag as i16);
+    }
+    pub fn set_exit_info_bit(&self, flag: i32) {
+        self.exit_info.set(self.exit_info.get() | !flag as i16);
     }
 }
 
@@ -853,10 +934,14 @@ impl DB {
         self.world.borrow()[ch.in_room() as usize].dir_option[door as usize].clone()
     }
     pub fn room_flags(&self, loc: room_rnum) -> i32 {
-        return self.world.borrow()[loc as usize].room_flags;
+        self.world.borrow()[loc as usize].room_flags.get()
     }
     pub fn room_flagged(&self, loc: room_rnum, flag: i64) -> bool {
         is_set!(self.room_flags(loc), flag as i32)
+    }
+    pub fn set_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
+        let flags = self.room_flags(loc) | flags as i32;
+        self.world.borrow()[loc as usize].room_flags.set(flags);
     }
     pub fn sect(&self, loc: room_rnum) -> i32 {
         if self.valid_room_rnum(loc) {
@@ -920,18 +1005,20 @@ pub fn rand_number(from: u32, to: u32) -> u32 {
 }
 
 /* simulates dice roll */
-// int dice(int num, int size)
-// {
-// int sum = 0;
-//
-// if (size <= 0 || num <= 0)
-// return (0);
-//
-// while (num-- > 0)
-// sum += rand_number(1, size);
-//
-// return (sum);
-// }
+pub fn dice(num: i32, size: i32) -> i32 {
+    let mut sum: i32 = 0;
+    let mut num = num;
+    if size <= 0 || num <= 0 {
+        return 0;
+    }
+
+    while num > 0 {
+        num -= 1;
+        sum += rand_number(1, size as u32) as i32;
+    }
+
+    return sum;
+}
 
 /* Be wary of sign issues with this. */
 // int MIN(int a, int b)
@@ -1459,7 +1546,7 @@ impl DB {
             error!(
                 "room_is_dark: Invalid room rnum {}. (0-{})",
                 room,
-                self.top_of_world.borrow()
+                self.world.borrow().len()
             );
             return false;
         }

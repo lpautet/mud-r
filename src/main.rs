@@ -36,7 +36,7 @@ use crate::util::{hmhr, hshr, hssh, sana};
 use env_logger::Env;
 use log::{debug, error, info, warn};
 use std::any::Any;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::cell::{Cell, RefCell};
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
@@ -113,7 +113,7 @@ pub struct MainGlobals {
     db: DB,
     mother_desc: Option<RefCell<TcpListener>>,
     descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
-    last_desc: Cell<usize>,
+    // last_desc: Cell<usize>,
     // struct txt_block *bufpool = 0;	/* pool of large output buffers */
     // int buf_largecount = 0;		/* # of large buffers which exist */
     // int buf_overflows = 0;		/* # of overflows of output */
@@ -146,7 +146,7 @@ fn main() -> ExitCode {
 
     let mut game = MainGlobals {
         descriptor_list: RefCell::new(Vec::new()),
-        last_desc: Cell::new(0),
+        //  last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
         circle_reboot: false,
         no_specials: false,
@@ -286,8 +286,6 @@ fn main() -> ExitCode {
 impl MainGlobals {
     /* Init sockets, run game, and cleanup sockets */
     fn init_game(&mut self, _port: u16) {
-        //socket_t mother_desc;
-
         /* We don't want to restart if we crash before we get up. */
         util::touch(Path::new(KILLSCRIPT)).expect("Cannot create KILLSCRIPT path");
 
@@ -492,7 +490,7 @@ impl MainGlobals {
         let mut timeout;
         let mut comm = String::new();
         // struct descriptor_data * d, * next_d;
-        let mut pulse: u32 = 0;
+        let mut pulse: u128 = 0;
         let mut missed_pulses;
         //        let mut maxdesc;
         let mut aliased = false;
@@ -507,7 +505,7 @@ impl MainGlobals {
         /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
         while !self.circle_shutdown.get() {
             /* Sleep if we don't have any connections */
-            if RefCell::borrow(&self.descriptor_list).is_empty() {
+            if self.descriptor_list.borrow().is_empty() {
                 debug!("No connections.  Going to sleep.");
                 // match listener.accept() {
                 //     Ok((_socket, addr)) => {
@@ -561,12 +559,13 @@ impl MainGlobals {
              * until we're resynchronized with the next upcoming pulse.
              */
             //missed_pulses;
-            if (process_time.as_micros() as u32) < OPT_USEC {
+            if process_time.as_micros() < OPT_USEC {
                 missed_pulses = 0;
             } else {
-                missed_pulses = process_time.as_micros() as u32 / OPT_USEC;
-                process_time = process_time
-                    + Duration::new(0, 1000 * (process_time.as_micros() as u32 % OPT_USEC));
+                missed_pulses = process_time.as_micros() / OPT_USEC;
+                let secs = process_time.as_micros() / 1000000;
+                let usecs = process_time.as_micros() % 1000000;
+                process_time = process_time + Duration::new(secs as u64, usecs as u32);
             }
 
             /* Calculate the time we should wake up */
@@ -576,10 +575,11 @@ impl MainGlobals {
             /* Now keep sleeping until that time has come */
             timeout = last_time - Instant::now();
 
+            info!("Sleeping {:?} ", timeout);
             thread::sleep(timeout);
 
             /* If there are new connections waiting, accept them. */
-            let accept_result = RefCell::borrow(self.mother_desc.as_ref().unwrap()).accept();
+            let accept_result = self.mother_desc.as_ref().unwrap().borrow().accept();
             match accept_result {
                 Ok((socket, addr)) => {
                     info!("New connection {}.  Waking up.", addr);
@@ -749,7 +749,7 @@ impl MainGlobals {
     }
 }
 
-fn heartbeat(_pulse: u32) {
+fn heartbeat(_pulse: u128) {
     // static int
     // mins_since_crashsave = 0;
     //
@@ -1165,11 +1165,11 @@ impl MainGlobals {
          * allocated and allow a user defined history size?
          */
         //CREATE(newd -> history, char *, HISTORY_SIZE);
-        self.last_desc.set(self.last_desc.get() + 1);
-        if self.last_desc.get() == 1000 {
-            self.last_desc.set(1);
-        }
-        newd.desc_num.set(self.last_desc.get());
+        // self.last_desc.set(self.last_desc.get() + 1);
+        // if self.last_desc.get() == 1000 {
+        //     self.last_desc.set(1);
+        // }
+        // newd.desc_num.set(self.last_desc.get());
 
         /* prepend to list */
         // newd -> next = descriptor_list;
