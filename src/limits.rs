@@ -7,167 +7,167 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
-use crate::class::{title_female, title_male};
-// /* When age < 15 return the value p0 */
-// /* When age in 15..29 calculate the line between p1 & p2 */
-// /* When age in 30..44 calculate the line between p2 & p3 */
-// /* When age in 45..59 calculate the line between p3 & p4 */
-// /* When age in 60..79 calculate the line between p4 & p5 */
-// /* When age >= 80 return the value p6 */
-// int graf(int grafage, int p0, int p1, int p2, int p3, int p4, int p5, int p6)
-// {
-//
-// if (grafage < 15)
-// return (p0);					/* < 15   */
-// else if (grafage <= 29)
-// return (p1 + (((grafage - 15) * (p2 - p1)) / 15));	/* 15..29 */
-// else if (grafage <= 44)
-// return (p2 + (((grafage - 30) * (p3 - p2)) / 15));	/* 30..44 */
-// else if (grafage <= 59)
-// return (p3 + (((grafage - 45) * (p4 - p3)) / 15));	/* 45..59 */
-// else if (grafage <= 79)
-// return (p4 + (((grafage - 60) * (p5 - p4)) / 20));	/* 60..79 */
-// else
-// return (p6);					/* >= 80 */
-// }
-//
-//
-// /*
-//  * The hit_limit, mana_limit, and move_limit functions are gone.  They
-//  * added an unnecessary level of complexity to the internal structure,
-//  * weren't particularly useful, and led to some annoying bugs.  From the
-//  * players' point of view, the only difference the removal of these
-//  * functions will make is that a character's age will now only affect
-//  * the HMV gain per tick, and _not_ the HMV maximums.
-//  */
-//
-// /* manapoint gain pr. game hour */
-// int mana_gain(struct char_data *ch)
-// {
-// int gain;
-//
-// if (IS_NPC(ch)) {
-// /* Neat and fast */
-// gain = GET_LEVEL(ch);
-// } else {
-// gain = graf(age(ch)->year, 4, 8, 12, 16, 12, 10, 8);
-//
-// /* Class calculations */
-//
-// /* Skill/Spell calculations */
-//
-// /* Position calculations    */
-// switch (GET_POS(ch)) {
-// case POS_SLEEPING:
-// gain *= 2;
-// break;
-// case POS_RESTING:
-// gain += (gain / 2);	/* Divide by 2 */
-// break;
-// case POS_SITTING:
-// gain += (gain / 4);	/* Divide by 4 */
-// break;
-// }
-//
-// if (IS_MAGIC_USER(ch) || IS_CLERIC(ch))
-// gain *= 2;
-//
-// if ((GET_COND(ch, FULL) == 0) || (GET_COND(ch, THIRST) == 0))
-// gain /= 4;
-// }
-//
-// if (AFF_FLAGGED(ch, AFF_POISON))
-// gain /= 4;
-//
-// return (gain);
-// }
-//
-//
-// /* Hitpoint gain pr. game hour */
-// int hit_gain(struct char_data *ch)
-// {
-// int gain;
-//
-// if (IS_NPC(ch)) {
-// /* Neat and fast */
-// gain = GET_LEVEL(ch);
-// } else {
-//
-// gain = graf(age(ch)->year, 8, 12, 20, 32, 16, 10, 4);
-//
-// /* Class/Level calculations */
-//
-// /* Skill/Spell calculations */
-//
-// /* Position calculations    */
-//
-// switch (GET_POS(ch)) {
-// case POS_SLEEPING:
-// gain += (gain / 2);	/* Divide by 2 */
-// break;
-// case POS_RESTING:
-// gain += (gain / 4);	/* Divide by 4 */
-// break;
-// case POS_SITTING:
-// gain += (gain / 8);	/* Divide by 8 */
-// break;
-// }
-//
-// if (IS_MAGIC_USER(ch) || IS_CLERIC(ch))
-// gain /= 2;	/* Ouch. */
-//
-// if ((GET_COND(ch, FULL) == 0) || (GET_COND(ch, THIRST) == 0))
-// gain /= 4;
-// }
-//
-// if (AFF_FLAGGED(ch, AFF_POISON))
-// gain /= 4;
-//
-// return (gain);
-// }
-//
-//
-//
-// /* move gain pr. game hour */
-// int move_gain(struct char_data *ch)
-// {
-// int gain;
-//
-// if (IS_NPC(ch)) {
-// /* Neat and fast */
-// gain = GET_LEVEL(ch);
-// } else {
-// gain = graf(age(ch)->year, 16, 20, 24, 20, 16, 12, 10);
-//
-// /* Class/Level calculations */
-//
-// /* Skill/Spell calculations */
-//
-//
-// /* Position calculations    */
-// switch (GET_POS(ch)) {
-// case POS_SLEEPING:
-// gain += (gain / 2);	/* Divide by 2 */
-// break;
-// case POS_RESTING:
-// gain += (gain / 4);	/* Divide by 4 */
-// break;
-// case POS_SITTING:
-// gain += (gain / 8);	/* Divide by 8 */
-// break;
-// }
-//
-// if ((GET_COND(ch, FULL) == 0) || (GET_COND(ch, THIRST) == 0))
-// gain /= 4;
-// }
-//
-// if (AFF_FLAGGED(ch, AFF_POISON))
-// gain /= 4;
-//
-// return (gain);
-// }
+use std::cmp::{max, min};
+use std::rc::Rc;
 
-use crate::structs::{CharData, SEX_FEMALE};
+use crate::class::{title_female, title_male};
+use crate::config::{IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID};
+use crate::db::DB;
+use crate::structs::ConState::ConDisconnect;
+use crate::structs::{
+    CharData, AFF_POISON, FULL, LVL_GOD, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST,
+};
+use crate::structs::{DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_STUNNED, SEX_FEMALE};
+use crate::util::{age, CMP};
+use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+
+/* When age < 15 return the value p0 */
+/* When age in 15..29 calculate the line between p1 & p2 */
+/* When age in 30..44 calculate the line between p2 & p3 */
+/* When age in 45..59 calculate the line between p3 & p4 */
+/* When age in 60..79 calculate the line between p4 & p5 */
+/* When age >= 80 return the value p6 */
+fn graf(grafage: i32, p0: i32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32) -> i32 {
+    return if grafage < 15 {
+        p0 /* < 15   */
+    } else if grafage <= 29 {
+        p1 + (((grafage - 15) * (p2 - p1)) / 15) /* 15..29 */
+    } else if grafage <= 44 {
+        p2 + (((grafage - 30) * (p3 - p2)) / 15) /* 30..44 */
+    } else if grafage <= 59 {
+        p3 + (((grafage - 45) * (p4 - p3)) / 15) /* 45..59 */
+    } else if grafage <= 79 {
+        p4 + (((grafage - 60) * (p5 - p4)) / 20) /* 60..79 */
+    } else {
+        p6 /* >= 80 */
+    };
+}
+
+/*
+ * The hit_limit, mana_limit, and move_limit functions are gone.  They
+ * added an unnecessary level of complexity to the internal structure,
+ * weren't particularly useful, and led to some annoying bugs.  From the
+ * players' point of view, the only difference the removal of these
+ * functions will make is that a character's age will now only affect
+ * the HMV gain per tick, and _not_ the HMV maximums.
+ */
+
+/* manapoint gain pr. game hour */
+fn mana_gain(ch: &CharData) -> u8 {
+    let mut gain;
+
+    if ch.is_npc() {
+        /* Neat and fast */
+        gain = ch.get_level();
+    } else {
+        gain = graf(age(ch).year as i32, 4, 8, 12, 16, 12, 10, 8) as u8;
+
+        /* Class calculations */
+
+        /* Skill/Spell calculations */
+
+        /* Position calculations    */
+        match ch.get_pos() {
+            POS_SLEEPING => {
+                gain *= 2; /* Divide by 2 */
+            }
+            POS_RESTING => {
+                gain += gain / 2; /* Divide by 4 */
+            }
+            POS_SITTING => {
+                gain += gain / 4; /* Divide by 8 */
+            }
+        }
+        if ch.is_magic_user() || ch.is_cleric() {
+            gain *= 2;
+        }
+        if ch.get_cond(FULL) == 0 || ch.get_cond(THIRST) == 0 {
+            gain /= 4;
+        }
+        if ch.aff_flagged(AFF_POISON) {
+            gain /= 4;
+        }
+    }
+    gain
+}
+
+/* Hitpoint gain pr. game hour */
+fn hit_gain(ch: &CharData) -> u8 {
+    let mut gain;
+    if ch.is_npc() {
+        /* Neat and fast */
+        gain = ch.get_level();
+    } else {
+        gain = graf(age(ch).year as i32, 8, 12, 20, 32, 16, 10, 4) as u8;
+
+        /* Class/Level calculations */
+
+        /* Skill/Spell calculations */
+
+        /* Position calculations    */
+
+        match ch.get_pos() {
+            POS_SLEEPING => {
+                gain += gain / 2; /* Divide by 2 */
+            }
+            POS_RESTING => {
+                gain += gain / 4; /* Divide by 4 */
+            }
+            POS_SITTING => {
+                gain += gain / 8; /* Divide by 8 */
+            }
+        }
+        if ch.is_magic_user() || ch.is_cleric() {
+            gain /= 2; /* Ouch. */
+        }
+        if ch.get_cond(FULL) == 0 || ch.get_cond(THIRST) == 0 {
+            gain /= 4;
+        }
+
+        if ch.aff_flagged(AFF_POISON) {
+            gain /= 4;
+        }
+    }
+    gain
+}
+
+/* move gain pr. game hour */
+fn move_gain(ch: &CharData) -> u8 {
+    let mut gain;
+
+    if ch.is_npc() {
+        /* Neat and fast */
+        gain = ch.get_level();
+    } else {
+        gain = graf(age(ch).year as i32, 16, 20, 24, 20, 16, 12, 10) as u8;
+
+        /* Class/Level calculations */
+
+        /* Skill/Spell calculations */
+
+        /* Position calculations    */
+        match ch.get_pos() {
+            POS_SLEEPING => {
+                gain += gain / 2; /* Divide by 2 */
+            }
+            POS_RESTING => {
+                gain += gain / 4; /* Divide by 4 */
+            }
+            POS_SITTING => {
+                gain += gain / 8; /* Divide by 8 */
+            }
+        }
+
+        if ch.get_cond(FULL) == 0 || ch.get_cond(THIRST) == 0 {
+            gain /= 4;
+        }
+
+        if ch.aff_flagged(AFF_POISON) {
+            gain /= 4;
+        }
+    }
+    gain
+}
 
 pub fn set_title(ch: &mut CharData, title: &str) {
     let mut title = title;
@@ -284,155 +284,212 @@ pub fn set_title(ch: &mut CharData, title: &str) {
 // }
 // }
 // }
-//
-//
-// void gain_condition(struct char_data *ch, int condition, int value)
-// {
-// bool intoxicated;
-//
-// if (IS_NPC(ch) || GET_COND(ch, condition) == -1)	/* No change */
-// return;
-//
-// intoxicated = (GET_COND(ch, DRUNK) > 0);
-//
-// GET_COND(ch, condition) += value;
-//
-// GET_COND(ch, condition) = MAX(0, GET_COND(ch, condition));
-// GET_COND(ch, condition) = MIN(24, GET_COND(ch, condition));
-//
-// if (GET_COND(ch, condition) || PLR_FLAGGED(ch, PLR_WRITING))
-// return;
-//
-// switch (condition) {
-// case FULL:
-// send_to_char(ch, "You are hungry.\r\n");
-// break;
-// case THIRST:
-// send_to_char(ch, "You are thirsty.\r\n");
-// break;
-// case DRUNK:
-// if (intoxicated)
-// send_to_char(ch, "You are now sober.\r\n");
-// break;
-// default:
-// break;
-// }
-//
-// }
-//
-//
-// void check_idling(struct char_data *ch)
-// {
-// if (++(ch->char_specials.timer) > idle_void) {
-// if (GET_WAS_IN(ch) == NOWHERE && IN_ROOM(ch) != NOWHERE) {
-// GET_WAS_IN(ch) = IN_ROOM(ch);
-// if (FIGHTING(ch)) {
-// stop_fighting(FIGHTING(ch));
-// stop_fighting(ch);
-// }
-// act("$n disappears into the void.", TRUE, ch, 0, 0, TO_ROOM);
-// send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-// save_char(ch);
-// Crash_crashsave(ch);
-// char_from_room(ch);
-// char_to_room(ch, 1);
-// } else if (ch->char_specials.timer > idle_rent_time) {
-// if (IN_ROOM(ch) != NOWHERE)
-// char_from_room(ch);
-// char_to_room(ch, 3);
-// if (ch->desc) {
-// STATE(ch->desc) = CON_DISCONNECT;
-// /*
-//  * For the 'if (d->character)' test in close_socket().
-//  * -gg 3/1/98 (Happy anniversary.)
-//  */
-// ch->desc->character = NULL;
-// ch->desc = NULL;
-// }
-// if (free_rent)
-// Crash_rentsave(ch, 0);
-// else
-// Crash_idlesave(ch);
-// mudlog(CMP, LVL_GOD, TRUE, "%s force-rented and extracted (idle).", GET_NAME(ch));
-// extract_char(ch);
-// }
-// }
-// }
-//
-//
-//
-// /* Update PCs, NPCs, and objects */
-// void point_update(void)
-// {
-// struct char_data *i, *next_char;
-// struct obj_data *j, *next_thing, *jj, *next_thing2;
-//
-// /* characters */
-// for (i = character_list; i; i = next_char) {
-// next_char = i->next;
-//
-// gain_condition(i, FULL, -1);
-// gain_condition(i, DRUNK, -1);
-// gain_condition(i, THIRST, -1);
-//
-// if (GET_POS(i) >= POS_STUNNED) {
-// GET_HIT(i) = MIN(GET_HIT(i) + hit_gain(i), GET_MAX_HIT(i));
-// GET_MANA(i) = MIN(GET_MANA(i) + mana_gain(i), GET_MAX_MANA(i));
-// GET_MOVE(i) = MIN(GET_MOVE(i) + move_gain(i), GET_MAX_MOVE(i));
-// if (AFF_FLAGGED(i, AFF_POISON))
-// if (damage(i, i, 2, SPELL_POISON) == -1)
-// continue;	/* Oops, they died. -gg 6/24/98 */
-// if (GET_POS(i) <= POS_STUNNED)
-// update_pos(i);
-// } else if (GET_POS(i) == POS_INCAP) {
-// if (damage(i, i, 1, TYPE_SUFFERING) == -1)
-// continue;
-// } else if (GET_POS(i) == POS_MORTALLYW) {
-// if (damage(i, i, 2, TYPE_SUFFERING) == -1)
-// continue;
-// }
-// if (!IS_NPC(i)) {
-// update_char_objects(i);
-// if (GET_LEVEL(i) < idle_max_level)
-// check_idling(i);
-// }
-// }
-//
-// /* objects */
-// for (j = object_list; j; j = next_thing) {
-// next_thing = j->next;	/* Next in object list */
-//
-// /* If this is a corpse */
-// if (IS_CORPSE(j)) {
-// /* timer count down */
-// if (GET_OBJ_TIMER(j) > 0)
-// GET_OBJ_TIMER(j)--;
-//
-// if (!GET_OBJ_TIMER(j)) {
-//
-// if (j->carried_by)
-// act("$p decays in your hands.", FALSE, j->carried_by, j, 0, TO_CHAR);
-// else if ((IN_ROOM(j) != NOWHERE) && (world[IN_ROOM(j)].people)) {
-// act("A quivering horde of maggots consumes $p.",
-// TRUE, world[IN_ROOM(j)].people, j, 0, TO_ROOM);
-// act("A quivering horde of maggots consumes $p.",
-// TRUE, world[IN_ROOM(j)].people, j, 0, TO_CHAR);
-// }
-// for (jj = j->contains; jj; jj = next_thing2) {
-// next_thing2 = jj->next_content;	/* Next in inventory */
-// obj_from_obj(jj);
-//
-// if (j->in_obj)
-// obj_to_obj(jj, j->in_obj);
-// else if (j->carried_by)
-// obj_to_room(jj, IN_ROOM(j->carried_by));
-// else if (IN_ROOM(j) != NOWHERE)
-// obj_to_room(jj, IN_ROOM(j));
-// else
-// core_dump();
-// }
-// extract_obj(j);
-// }
-// }
-// }
-// }
+
+impl DB {
+    fn gain_condition(&self, ch: &CharData, condition: i32, value: i32) {
+        //bool intoxicated;
+
+        if ch.is_npc() || ch.get_cond(condition) == -1 {
+            /* No change */
+            return;
+        }
+
+        let intoxicated = ch.get_cond(DRUNK) > 0;
+
+        ch.incr_cond(condition, value as i16);
+        let mut v = ch.get_cond(condition);
+        v = max(0, v);
+        v = min(24, v);
+        ch.set_cond(condition, v);
+
+        if ch.get_cond(condition) == 0 || ch.plr_flagged(PLR_WRITING) {
+            return;
+        }
+
+        match condition {
+            FULL => {
+                send_to_char(ch, "You are hungry.\r\n");
+            }
+            THIRST => {
+                send_to_char(ch, "You are thirsty.\r\n");
+            }
+            DRUNK => {
+                if intoxicated {
+                    send_to_char(ch, "You are now sober.\r\n");
+                }
+            }
+            _ => {}
+        }
+    }
+}
+impl DB {
+    fn check_idling(&self, main_globals: &MainGlobals, ch: &Rc<CharData>) {
+        ch.char_specials
+            .borrow()
+            .timer
+            .set(ch.char_specials.borrow().timer.get() + 1);
+        if ch.char_specials.borrow().timer.get() > IDLE_VOID {
+            if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
+                ch.set_was_in(ch.in_room());
+                // TODO implement fighting
+                // if (FIGHTING(ch)) {
+                // stop_fighting(FIGHTING(ch));
+                // stop_fighting(ch);
+                // }
+                self.act(
+                    "$n disappears into the void.",
+                    true,
+                    Some(ch.clone()),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
+                self.save_char(ch);
+                // TODO implement crashsave
+                // Crash_crashsave(ch);
+                self.char_from_room(ch.clone());
+                self.char_to_room(Some(ch.clone()), 1);
+            } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
+                if ch.in_room() != NOWHERE {
+                    self.char_from_room(ch.clone());
+                }
+                self.char_to_room(Some(ch.clone()), 3);
+                if ch.desc.borrow().is_some() {
+                    ch.desc.borrow().as_ref().unwrap().set_state(ConDisconnect);
+
+                    /*
+                     * For the 'if (d->character)' test in close_socket().
+                     * -gg 3/1/98 (Happy anniversary.)
+                     */
+                    *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = None;
+                    *ch.desc.borrow_mut() = None;
+                }
+                // if (free_rent)
+                // Crash_rentsave(ch, 0);
+                // else
+                // Crash_idlesave(ch);
+                main_globals.mudlog(
+                    CMP,
+                    LVL_GOD as i32,
+                    true,
+                    format!("{} force-rented and extracted (idle).", ch.get_name()).as_str(),
+                );
+                self.extract_char(ch.clone());
+            }
+        }
+    }
+
+    /* Update PCs, NPCs, and objects */
+    pub fn point_update(&self, main_globals: &MainGlobals) {
+        // struct char_data * i, * next_char;
+        // struct obj_data * j, * next_thing, * jj, *next_thing2;
+
+        /* characters */
+        for i in self.character_list.borrow().iter() {
+            self.gain_condition(i, FULL, -1);
+            self.gain_condition(i, DRUNK, -1);
+            self.gain_condition(i, THIRST, -1);
+
+            if i.get_pos() >= POS_STUNNED {
+                i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
+                i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
+                i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
+                if i.aff_flagged(AFF_POISON) {
+                    // TODO implement damage
+                    // if (damage(i, i, 2, SPELL_POISON) == -1) {
+                    //     continue; /* Oops, they died. -gg 6/24/98 */
+                    // }
+                }
+                if i.get_pos() <= POS_STUNNED {
+                    // TODO implement fighting
+                    // update_pos(i);
+                }
+            } else if i.get_pos() == POS_INCAP {
+                // TODO implement damage
+                // if (damage(i, i, 1, TYPE_SUFFERING) == -1)
+                // continue;
+            } else if i.get_pos() == POS_MORTALLYW {
+                // TODO implement damage
+                // if (damage(i, i, 2, TYPE_SUFFERING) == -1)
+                // continue;
+            }
+            if !i.is_npc() {
+                self.update_char_objects(i);
+                if i.get_level() < IDLE_MAX_LEVEL as u8 {
+                    self.check_idling(main_globals, i);
+                }
+            }
+        }
+
+        /* objects */
+        for j in self.object_list.borrow().iter() {
+            /* If this is a corpse */
+            if j.is_corpse() {
+                /* timer count down */
+                if j.get_obj_timer() > 0 {
+                    j.decr_obj_timer(1)
+                }
+
+                if j.get_obj_timer() == 0 {
+                    if j.carried_by.borrow().is_some() {
+                        self.act(
+                            "$p decays in your hands.",
+                            false,
+                            j.carried_by.borrow().clone(),
+                            Some(j.as_ref()),
+                            None,
+                            TO_CHAR,
+                        );
+                    } else if j.in_room() != NOWHERE
+                        && self.world.borrow()[j.in_room() as usize]
+                            .peoples
+                            .borrow()
+                            .len()
+                            != 0
+                    {
+                        self.act(
+                            "A quivering horde of maggots consumes $p.",
+                            true,
+                            Some(
+                                self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]
+                                    .clone(),
+                            ),
+                            Some(j.as_ref()),
+                            None,
+                            TO_ROOM,
+                        );
+                        self.act(
+                            "A quivering horde of maggots consumes $p.",
+                            true,
+                            Some(
+                                self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]
+                                    .clone(),
+                            ),
+                            Some(j.as_ref()),
+                            None,
+                            TO_CHAR,
+                        );
+                    }
+                    for jj in j.contains.borrow().iter() {
+                        DB::obj_from_obj(jj.clone());
+
+                        if j.in_obj.borrow().is_some() {
+                            self.obj_to_obj(Some(jj.clone()), j.in_obj.borrow().clone());
+                        } else if j.carried_by.borrow().is_some() {
+                            self.obj_to_room(
+                                Some(jj.clone()),
+                                j.carried_by.borrow().as_ref().unwrap().in_room(),
+                            );
+                        } else if j.in_room() != NOWHERE {
+                            self.obj_to_room(Some(jj.clone()), j.in_room());
+                        } else {
+                            //   core_dump();
+                        }
+                    }
+                    self.extract_obj(j.clone());
+                }
+            }
+        }
+    }
+}

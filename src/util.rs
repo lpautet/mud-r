@@ -52,6 +52,17 @@ impl CharData {
     pub fn is_npc(&self) -> bool {
         return is_set!(self.char_specials.borrow().saved.act, MOB_ISNPC);
     }
+    pub fn memory(&self) -> &RefCell<Vec<i64>> {
+        &self.mob_specials.memory
+    }
+}
+
+impl DB {
+    pub fn is_mob(&self, ch: &CharData) -> bool {
+        ch.is_npc()
+            && ch.get_mob_rnum() != NOBODY
+            && ch.get_mob_rnum() < self.mob_protos.len() as i16
+    }
 }
 
 // #[macro_export]
@@ -92,9 +103,13 @@ macro_rules! check_player_special {
         ($var)
     };
 }
-use crate::structs::{obj_vnum, room_rnum, MobRnum, RoomRnum, ITEM_INVISIBLE, NOTHING};
+use crate::structs::{
+    obj_vnum, room_rnum, MobRnum, RoomRnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
+    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
+};
 pub use check_player_special;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 
 impl CharData {
     pub fn get_invis_lev(&self) -> i16 {
@@ -375,6 +390,9 @@ impl CharData {
     }
     pub fn set_cond(&self, i: i32, val: i16) {
         self.player_specials.borrow_mut().saved.conditions[i as usize] = val;
+    }
+    pub fn incr_cond(&self, i: i32, val: i16) {
+        self.player_specials.borrow_mut().saved.conditions[i as usize] += val;
     }
     pub fn get_loadroom(&self) -> room_vnum {
         self.player_specials.borrow().saved.load_room
@@ -727,10 +745,13 @@ impl ObjData {
         self.obj_flags.wear_flags = val;
     }
     pub fn get_obj_val(&self, val: usize) -> i32 {
-        self.obj_flags.value[val]
+        self.obj_flags.value[val].get()
     }
     pub fn set_obj_val(&mut self, val: usize, v: i32) {
-        self.obj_flags.value[val] = v;
+        self.obj_flags.value[val].set(v);
+    }
+    pub fn decr_obj_val(&self, val: usize) {
+        self.obj_flags.value[val].set(self.obj_flags.value[val].get() - 1);
     }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
@@ -764,6 +785,69 @@ impl ObjData {
     }
     pub fn set_in_room(&self, val: RoomRnum) {
         self.in_room.set(val);
+    }
+    pub fn is_corpse(&self) -> bool {
+        self.get_obj_type() == ITEM_CONTAINER && self.get_obj_val(3) == 1
+    }
+    pub fn get_obj_timer(&self) -> i32 {
+        self.obj_flags.timer.get()
+    }
+    pub fn decr_obj_timer(&self, val: i32) {
+        self.obj_flags.timer.set(self.obj_flags.timer.get() - val);
+    }
+}
+
+impl ObjData {
+    pub fn objwear_flagged(&self, flag: i32) -> bool {
+        is_set!(self.get_obj_wear(), flag)
+    }
+    pub fn can_wear(&self, part: i32) -> bool {
+        self.objwear_flagged(part)
+    }
+}
+
+impl CharData {
+    pub fn can_carry_obj(&self, obj: &ObjData) -> bool {
+        (self.is_carrying_w() + obj.get_obj_weight()) <= self.can_carry_w() as i32
+            && (self.is_carrying_n() + 1) <= self.can_carry_n() as u8
+    }
+    pub fn can_carry_w(&self) -> i16 {
+        STR_APP[self.strength_apply_index() as usize].carry_w
+    }
+    pub fn can_carry_n(&self) -> i32 {
+        (5 + self.get_dex() as i32 >> 1) + (self.get_level() as i32 >> 1)
+    }
+    pub fn strength_apply_index(&self) -> i8 {
+        if self.get_add() == 0 || self.get_str() != 18 {
+            self.get_str()
+        } else if self.get_add() <= 50 {
+            26
+        } else if self.get_add() <= 75 {
+            27
+        } else if self.get_add() <= 90 {
+            28
+        } else if self.get_add() <= 99 {
+            29
+        } else {
+            30
+        }
+    }
+}
+
+impl DB {
+    pub fn outside(&self, ch: &CharData) -> bool {
+        !self.room_flagged(ch.in_room(), ROOM_INDOORS)
+    }
+    pub fn can_get_obj(&self, ch: &CharData, obj: &ObjData) -> bool {
+        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(ch, obj)
+    }
+    pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
+        self.exit(ch, door).is_some()
+            && self.exit(ch, door).as_ref().unwrap().to_room.get() != NOWHERE
+            && !is_set!(
+                self.exit(ch, door).as_ref().unwrap().exit_info.get(),
+                EX_CLOSED
+            )
     }
 }
 
@@ -1084,6 +1168,7 @@ pub fn prune_crlf(s: &mut String) {
  * New variable argument log() function.  Works the same as the old for
  * previously written code but is very nice for new code.
  */
+use crate::constants::STR_APP;
 use crate::db::DB;
 use crate::handler::fname;
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
@@ -1095,8 +1180,12 @@ use crate::structs::{
     PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE,
     SEX_MALE,
 };
-use crate::{clr, send_to_char, DescriptorData, MainGlobals, _clrlevel, CCGRN, CCNRM};
+use crate::{
+    clr, send_to_char, DescriptorData, MainGlobals, _clrlevel, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT,
+    TO_VICT,
+};
 use log::{error, info};
+use regex::internal::Char;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufRead, BufReader};
@@ -1250,49 +1339,47 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
 // }
 
 /* Calculate the MUD time passed over the last t2-t1 centuries (secs) */
-// struct time_info_data *mud_time_passed(time_t t2, time_t t1)
-// {
-// long secs;
-// static struct time_info_data now;
-//
-// secs = t2 - t1;
-//
-// now.hours = (secs / SECS_PER_MUD_HOUR) % 24;	/* 0..23 hours */
-// secs -= SECS_PER_MUD_HOUR * now.hours;
-//
-// now.day = (secs / SECS_PER_MUD_DAY) % 35;	/* 0..34 days  */
-// secs -= SECS_PER_MUD_DAY * now.day;
-//
-// now.month = (secs / SECS_PER_MUD_MONTH) % 17;	/* 0..16 months */
-// secs -= SECS_PER_MUD_MONTH * now.month;
-//
-// now.year = (secs / SECS_PER_MUD_YEAR);	/* 0..XX? years */
-//
-// return (&now);
-// }
+pub fn mud_time_passed(t2: u64, t1: u64) -> TimeInfoData {
+    let mut now = TimeInfoData {
+        hours: 0,
+        day: 0,
+        month: 0,
+        year: 0,
+    };
+    let mut secs = t2 - t1;
 
-// time_t mud_time_to_secs(struct time_info_data *now)
-// {
-// time_t when = 0;
-//
-// when += now->year  * SECS_PER_MUD_YEAR;
-// when += now->month * SECS_PER_MUD_MONTH;
-// when += now->day   * SECS_PER_MUD_DAY;
-// when += now->hours * SECS_PER_MUD_HOUR;
-//
-// return (time(NULL) - when);
-// }
+    now.hours = ((secs / SECS_PER_MUD_HOUR) % 24) as i32; /* 0..23 hours */
+    secs -= SECS_PER_MUD_HOUR as u64 * now.hours as u64;
 
-// struct time_info_data *age(struct char_data *ch)
-// {
-// static struct time_info_data player_age;
-//
-// player_age = *mud_time_passed(time(0), ch->player.time.birth);
-//
-// player_age.year += 17;	/* All players start at 17 */
-//
-// return (&player_age);
-// }
+    now.day = ((secs / SECS_PER_MUD_DAY) % 35) as i32; /* 0..34 days  */
+    secs -= SECS_PER_MUD_DAY as u64 * now.day as u64;
+
+    now.month = ((secs / SECS_PER_MUD_MONTH) % 17) as i32; /* 0..16 months */
+    secs -= SECS_PER_MUD_MONTH as u64 * now.month as u64;
+
+    now.year = (secs / SECS_PER_MUD_YEAR) as i16; /* 0..XX? years */
+
+    now
+}
+
+pub fn mud_time_to_secs(now: &TimeInfoData) -> u64 {
+    let mut when: u64 = 0;
+
+    when += now.year as u64 * SECS_PER_MUD_YEAR;
+    when += now.month as u64 * SECS_PER_MUD_MONTH;
+    when += now.day as u64 * SECS_PER_MUD_DAY;
+    when += now.hours as u64 * SECS_PER_MUD_HOUR;
+
+    time_now() - when
+}
+
+pub fn age(ch: &CharData) -> TimeInfoData {
+    let mut player_age = mud_time_passed(time_now(), ch.player.borrow().time.birth);
+
+    player_age.year += 17; /* All players start at 17 */
+
+    player_age
+}
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
@@ -1310,72 +1397,106 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
-// void stop_follower(struct char_data *ch)
-// {
-// struct follow_type *j, *k;
-//
-// if (ch->master == NULL) {
-// core_dump();
-// return;
-// }
-//
-// if (AFF_FLAGGED(ch, AFF_CHARM)) {
-// act("You realize that $N is a jerk!", FALSE, ch, 0, ch->master, TO_CHAR);
-// act("$n realizes that $N is a jerk!", FALSE, ch, 0, ch->master, TO_NOTVICT);
-// act("$n hates your guts!", FALSE, ch, 0, ch->master, TO_VICT);
-// if (affected_by_spell(ch, SPELL_CHARM))
-// affect_from_char(ch, SPELL_CHARM);
-// } else {
-// act("You stop following $N.", FALSE, ch, 0, ch->master, TO_CHAR);
-// act("$n stops following $N.", TRUE, ch, 0, ch->master, TO_NOTVICT);
-// act("$n stops following you.", TRUE, ch, 0, ch->master, TO_VICT);
-// }
-//
-// if (ch->master->followers->follower == ch) {	/* Head of follower-list? */
-// k = ch->master->followers;
-// ch->master->followers = k->next;
-// free(k);
-// } else {			/* locate follower who is not head of list */
-// for (k = ch->master->followers; k->next->follower != ch; k = k->next);
-//
-// j = k->next;
-// k->next = j->next;
-// free(j);
-// }
-//
-// ch->master = NULL;
-// REMOVE_BIT(AFF_FLAGS(ch), AFF_CHARM | AFF_GROUP);
-// }
+impl DB {
+    pub fn stop_follower(&self, ch: &Rc<CharData>) {
+        if ch.master.borrow().is_none() {
+            return;
+        }
 
-//
-// int num_followers_charmed(struct char_data *ch)
-// {
-// struct follow_type *lackey;
-// int total = 0;
-//
-// for (lackey = ch->followers; lackey; lackey = lackey->next)
-// if (AFF_FLAGGED(lackey->follower, AFF_CHARM) && lackey->follower->master == ch)
-// total++;
-//
-// return (total);
-// }
-//
+        if ch.aff_flagged(AFF_CHARM) {
+            self.act(
+                "You realize that $N is a jerk!",
+                false,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_CHAR,
+            );
+            self.act(
+                "$n realizes that $N is a jerk!",
+                false,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_NOTVICT,
+            );
+            self.act(
+                "$n hates your guts!",
+                false,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_VICT,
+            );
+            // TODO implement spell
+            // if (affected_by_spell(ch, SPELL_CHARM)) {
+            //     affect_from_char(ch, SPELL_CHARM);
+            // }
+        } else {
+            self.act(
+                "You stop following $N.",
+                false,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_CHAR,
+            );
+            self.act(
+                "$n stops following $N.",
+                true,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_NOTVICT,
+            );
+            self.act(
+                "$n stops following you.",
+                true,
+                Some(ch.clone()),
+                None,
+                Some(ch.master.borrow().as_ref().unwrap()),
+                TO_VICT,
+            );
+        }
 
-/* Called when a character that follows/is followed dies */
-// void die_follower(struct char_data *ch)
-// {
-// struct follow_type *j, *k;
-//
-// if (ch->master)
-// stop_follower(ch);
-//
-// for (k = ch->followers; k; k = j) {
-// j = k->next;
-// stop_follower(k->follower);
-// }
-// }
-//
-//
+        ch.master
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .followers
+            .borrow_mut()
+            .retain(|c| Rc::ptr_eq(&c.follower, ch));
+
+        *ch.master.borrow_mut() = None;
+        ch.remove_aff_flags(AFF_CHARM | AFF_GROUP);
+    }
+}
+
+pub fn num_followers_charmed(ch: &Rc<CharData>) -> i32 {
+    let mut total = 0;
+
+    for lackey in ch.followers.borrow().iter() {
+        if lackey.follower.aff_flagged(AFF_CHARM)
+            && Rc::ptr_eq(lackey.follower.master.borrow().as_ref().unwrap(), ch)
+        {
+            total += 1;
+        }
+    }
+    total
+}
+
+impl DB {
+    /* Called when a character that follows/is followed dies */
+    pub fn die_follower(&self, ch: &Rc<CharData>) {
+        if ch.master.borrow().is_some() {
+            self.stop_follower(ch);
+        }
+
+        for k in ch.followers.borrow().iter() {
+            self.stop_follower(&k.follower);
+        }
+    }
+}
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */

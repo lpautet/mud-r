@@ -10,11 +10,11 @@
 
 use crate::db::DB;
 use crate::structs::{
-    room_rnum, CharData, ObjData, ObjRnum, RoomData, RoomRnum, APPLY_CHA, APPLY_CHAR_WEIGHT,
-    APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_EXP, APPLY_HIT, APPLY_HITROLL, APPLY_MOVE,
-    APPLY_SAVING_PARA, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT,
-    LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_CLASSES, NUM_WEARS, PLR_CRASH,
-    PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_LIGHT,
+    room_rnum, CharData, ObjData, ObjRnum, RoomRnum, APPLY_CHA, APPLY_CHAR_WEIGHT, APPLY_CLASS,
+    APPLY_CON, APPLY_DAMROLL, APPLY_EXP, APPLY_HIT, APPLY_HITROLL, APPLY_MOVE, APPLY_SAVING_PARA,
+    ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, LVL_GRGOD,
+    MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET,
+    ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_LIGHT,
 };
 use log::error;
 use std::cmp::{max, min};
@@ -22,9 +22,11 @@ use std::process;
 use std::rc::Rc;
 
 use crate::class::invalid_class;
+use crate::config::MENU;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
+use crate::structs::ConState::{ConClose, ConMenu};
 use crate::util::SECS_PER_MUD_YEAR;
-use crate::{MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
 
 // /* local vars */
 // int extractions_pending = 0;
@@ -473,48 +475,48 @@ impl DB {
             error!("SYSERR: NULL obj  or char passed to obj_to_char.");
         }
     }
-
-    /* take an object from a char */
-    pub fn obj_from_char(object: Option<Rc<ObjData>>) {
-        if object.is_none() {
-            error!("SYSERR: NULL object passed to obj_from_char.");
-            return;
-        }
-        let object = object.unwrap();
-        object
-            .carried_by
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .carrying
-            .borrow_mut()
-            .retain(|x| !Rc::ptr_eq(x, &object));
-
-        /* set flag for crash-save system, but not on mobs! */
-        if !object.carried_by.borrow().as_ref().unwrap().is_npc() {
-            object
-                .carried_by
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .set_plr_flag_bit(PLR_CRASH);
-        }
-
-        object
-            .carried_by
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .incr_is_carrying_w(-object.get_obj_weight());
-        object
-            .carried_by
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .decr_is_carrying_n();
-        *object.carried_by.borrow_mut() = None;
-    }
 }
+/* take an object from a char */
+pub fn obj_from_char(object: Option<Rc<ObjData>>) {
+    if object.is_none() {
+        error!("SYSERR: NULL object passed to obj_from_char.");
+        return;
+    }
+    let object = object.unwrap();
+    object
+        .carried_by
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .carrying
+        .borrow_mut()
+        .retain(|x| !Rc::ptr_eq(x, &object));
+
+    /* set flag for crash-save system, but not on mobs! */
+    if !object.carried_by.borrow().as_ref().unwrap().is_npc() {
+        object
+            .carried_by
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .set_plr_flag_bit(PLR_CRASH);
+    }
+
+    object
+        .carried_by
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .incr_is_carrying_w(-object.get_obj_weight());
+    object
+        .carried_by
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .decr_is_carrying_n();
+    *object.carried_by.borrow_mut() = None;
+}
+
 /* Return the effect of a piece of armor in position eq_pos */
 fn apply_ac(ch: &CharData, eq_pos: i16) -> i32 {
     if ch.get_eq(eq_pos as i8).is_none() {
@@ -862,7 +864,7 @@ impl DB {
     }
 
     /* remove an object from an object */
-    fn obj_from_obj(obj: Rc<ObjData>) {
+    pub(crate) fn obj_from_obj(obj: Rc<ObjData>) {
         if obj.in_obj.borrow().is_none() {
             error!("SYSERR:  trying to illegally extract obj from obj.");
             return;
@@ -930,7 +932,7 @@ impl DB {
         if obj.in_room() != NOWHERE {
             self.obj_from_room(Some(obj.clone()));
         } else if obj.carried_by.borrow().is_some() {
-            DB::obj_from_char(Some(obj.clone()));
+            obj_from_char(Some(obj.clone()));
         } else if obj.in_obj.borrow().is_some() {
             DB::obj_from_obj(obj.clone());
         }
@@ -952,148 +954,189 @@ impl DB {
     }
 }
 
-// void update_object(struct obj_data *obj, int use)
-// {
-// if (GET_OBJ_TIMER(obj) > 0)
-// GET_OBJ_TIMER(obj) -= use;
-// if (obj->contains)
-// update_object(obj->contains, use);
-// if (obj->next_content)
-// update_object(obj->next_content, use);
-// }
-//
-//
-// void update_char_objects(struct char_data *ch)
-// {
-// int i;
-//
-// if (GET_EQ(ch, WEAR_LIGHT) != NULL)
-// if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
-// if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2) > 0) {
-// i = --GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2);
-// if (i == 1) {
-// send_to_char(ch, "Your light begins to flicker and fade.\r\n");
-// act("$n's light begins to flicker and fade.", FALSE, ch, 0, 0, TO_ROOM);
-// } else if (i == 0) {
-// send_to_char(ch, "Your light sputters out and dies.\r\n");
-// act("$n's light sputters out and dies.", FALSE, ch, 0, 0, TO_ROOM);
-// world[IN_ROOM(ch)].light--;
-// }
-// }
-//
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i))
-// update_object(GET_EQ(ch, i), 2);
-//
-// if (ch->carrying)
-// update_object(ch->carrying, 1);
-// }
-//
-//
-// /* Extract a ch completely from the world, and leave his stuff behind */
-// void extract_char_final(struct char_data *ch)
-// {
-// struct char_data *k, *temp;
-// struct descriptor_data *d;
-// struct obj_data *obj;
-// int i;
-//
-// if (IN_ROOM(ch) == NOWHERE) {
-// log("SYSERR: NOWHERE extracting char %s. (%s, extract_char_final)",
-// GET_NAME(ch), __FILE__);
-// exit(1);
-// }
-//
-// /*
-//  * We're booting the character of someone who has switched so first we
-//  * need to stuff them back into their own body.  This will set ch->desc
-//  * we're checking below this loop to the proper value.
-//  */
-// if (!IS_NPC(ch) && !ch->desc) {
-// for (d = descriptor_list; d; d = d->next)
-// if (d->original == ch) {
-// do_return(d->character, NULL, 0, 0);
-// break;
-// }
-// }
-//
-// if (ch->desc) {
-// /*
-//  * This time we're extracting the body someone has switched into
-//  * (not the body of someone switching as above) so we need to put
-//  * the switcher back to their own body.
-//  *
-//  * If this body is not possessed, the owner won't have a
-//  * body after the removal so dump them to the main menu.
-//  */
-// if (ch->desc->original)
-// do_return(ch, NULL, 0, 0);
-// else {
-// /*
-//  * Now we boot anybody trying to log in with the same character, to
-//  * help guard against duping.  CON_DISCONNECT is used to close a
-//  * descriptor without extracting the d->character associated with it,
-//  * for being link-dead, so we want CON_CLOSE to clean everything up.
-//  * If we're here, we know it's a player so no IS_NPC check required.
-//  */
-// for (d = descriptor_list; d; d = d->next) {
-// if (d == ch->desc)
-// continue;
-// if (d->character && GET_IDNUM(ch) == GET_IDNUM(d->character))
-// STATE(d) = CON_CLOSE;
-// }
-// STATE(ch->desc) = CON_MENU;
-// write_to_output(ch->desc, "%s", MENU);
-// }
-// }
-//
-// /* On with the character's assets... */
-//
-// if (ch->followers || ch->master)
-// die_follower(ch);
-//
-// /* transfer objects to room, if any */
-// while (ch->carrying) {
-// obj = ch->carrying;
-// obj_from_char(obj);
-// obj_to_room(obj, IN_ROOM(ch));
-// }
-//
-// /* transfer equipment to room, if any */
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i))
-// obj_to_room(unequip_char(ch, i), IN_ROOM(ch));
-//
-// if (FIGHTING(ch))
-// stop_fighting(ch);
-//
-// for (k = combat_list; k; k = temp) {
-// temp = k->next_fighting;
-// if (FIGHTING(k) == ch)
-// stop_fighting(k);
-// }
-// /* we can't forget the hunters either... */
-// for (temp = character_list; temp; temp = temp->next)
-// if (HUNTING(temp) == ch)
-// HUNTING(temp) = NULL;
-//
-// char_from_room(ch);
-//
-// if (IS_NPC(ch)) {
-// if (GET_MOB_RNUM(ch) != NOTHING)	/* prototyped */
-// mob_index[GET_MOB_RNUM(ch)].number--;
-// clearMemory(ch);
-// } else {
-// save_char(ch);
-// Crash_delete_crashfile(ch);
-// }
-//
-// /* If there's a descriptor, they're in the menu now. */
-// if (IS_NPC(ch) || !ch->desc)
-// free_char(ch);
-// }
+fn update_object_list(list: &Vec<Rc<ObjData>>, _use: i32) {
+    for obj in list {
+        update_object(obj, _use);
+    }
+}
+
+fn update_object(obj: &ObjData, _use: i32) {
+    if obj.get_obj_timer() > 0 {
+        obj.decr_obj_timer(_use);
+    }
+    update_object_list(obj.contains.borrow().as_ref(), _use);
+}
 
 impl DB {
+    pub(crate) fn update_char_objects(&self, ch: &Rc<CharData>) {
+        let i;
+        if ch.get_eq(WEAR_LIGHT as i8).is_some() {
+            if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
+                if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) > 0 {
+                    ch.get_eq(WEAR_LIGHT as i8)
+                        .as_ref()
+                        .unwrap()
+                        .decr_obj_val(2);
+                    i = ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2);
+                    if i == 1 {
+                        send_to_char(ch, "Your light begins to flicker and fade.\r\n");
+                        self.act(
+                            "$n's light begins to flicker and fade.",
+                            false,
+                            Some(ch.clone()),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                    } else if i == 0 {
+                        send_to_char(ch, "Your light sputters out and dies.\r\n");
+                        self.act(
+                            "$n's light sputters out and dies.",
+                            false,
+                            Some(ch.clone()),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                        self.world.borrow()[ch.in_room() as usize]
+                            .light
+                            .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                    }
+                }
+            }
+        }
+        for i in 0..NUM_WEARS {
+            update_object(ch.get_eq(i).as_ref().unwrap(), 2);
+        }
+
+        if !ch.carrying.borrow().is_empty() {
+            update_object_list(ch.carrying.borrow().as_ref(), 2);
+        }
+    }
+
+    /* Extract a ch completely from the world, and leave his stuff behind */
+    fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &MainGlobals) {
+        if ch.in_room() == NOWHERE {
+            error!(
+                "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
+                ch.get_name()
+            );
+            process::exit(1);
+        }
+
+        /*
+         * We're booting the character of someone who has switched so first we
+         * need to stuff them back into their own body.  This will set ch->desc
+         * we're checking below this loop to the proper value.
+         */
+        if !ch.is_npc() && ch.desc.borrow().is_none() {
+            // TODO implement do_return
+            // for (d = descriptor_list; d; d = d->next)
+            // if (d -> original == ch) {
+            //     do_return(d->character, NULL, 0, 0);
+            //     break;
+            // }
+        }
+
+        if ch.desc.borrow().is_some() {
+            /*
+             * This time we're extracting the body someone has switched into
+             * (not the body of someone switching as above) so we need to put
+             * the switcher back to their own body.
+             *
+             * If this body is not possessed, the owner won't have a
+             * body after the removal so dump them to the main menu.
+             */
+            if ch
+                .desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .original
+                .borrow()
+                .is_some()
+            {
+                // TODO implement do_return
+                //do_return(ch, NULL, 0, 0);
+            } else {
+                /*
+                 * Now we boot anybody trying to log in with the same character, to
+                 * help guard against duping.  CON_DISCONNECT is used to close a
+                 * descriptor without extracting the d->character associated with it,
+                 * for being link-dead, so we want CON_CLOSE to clean everything up.
+                 * If we're here, we know it's a player so no IS_NPC check required.
+                 */
+                for d in main_globals.descriptor_list.borrow().iter() {
+                    if Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap()) {
+                        continue;
+                    }
+
+                    if d.character.borrow().is_some()
+                        && ch.get_idnum() == d.character.borrow().as_ref().unwrap().get_idnum()
+                    {
+                        d.set_state(ConClose);
+                    }
+                }
+                ch.desc.borrow().as_ref().unwrap().set_state(ConMenu);
+
+                write_to_output(ch.desc.borrow().as_ref().unwrap(), MENU);
+            }
+        }
+
+        /* On with the character's assets... */
+
+        if ch.followers.borrow().len() != 0 || ch.master.borrow().is_some() {
+            self.die_follower(ch);
+        }
+
+        /* transfer objects to room, if any */
+        for obj in ch.carrying.borrow().iter() {
+            obj_from_char(Some(obj.clone()));
+            self.obj_to_room(Some(obj.clone()), ch.in_room());
+        }
+
+        /* transfer equipment to room, if any */
+        for i in 0..NUM_WEARS {
+            if ch.get_eq(i).is_some() {
+                self.obj_to_room(self.unequip_char(ch.clone(), i), ch.in_room())
+            }
+        }
+
+        // TODO implement fighting
+        // if (FIGHTING(ch))
+        // stop_fighting(ch);
+
+        // for (k = combat_list; k; k = temp) {
+        //     temp = k -> next_fighting;
+        //     if (FIGHTING(k) == ch)
+        //     stop_fighting(k);
+        // }
+        /* we can't forget the hunters either... */
+        // TODO implement hunting
+        // for (temp = character_list; temp; temp = temp->next)
+        // if (HUNTING(temp) == ch)
+        // HUNTING(temp) = NULL;
+
+        self.char_from_room(ch.clone());
+
+        if ch.is_npc() {
+            if ch.get_mob_rnum() != NOTHING {
+                self.mob_index[ch.get_mob_rnum() as usize]
+                    .number
+                    .set(self.mob_index[ch.get_mob_rnum() as usize].number.get() - 1);
+            }
+            ch.clearMemory()
+        } else {
+            self.save_char(ch);
+            // TODO implement crash delete
+            // Crash_delete_crashfile(ch);
+        }
+
+        /* If there's a descriptor, they're in the menu now. */
+        // if (IS_NPC(ch) || !ch -> desc)
+        // free_char(ch);
+    }
+
     /*
      * Q: Why do we do this?
      * A: Because trying to iterate over the character
@@ -1119,52 +1162,53 @@ impl DB {
     }
 }
 
-// /*
-//  * I'm not particularly pleased with the MOB/PLR
-//  * hoops that have to be jumped through but it
-//  * hardly calls for a completely new variable.
-//  * Ideally it would be its own list, but that
-//  * would change the '->next' pointer, potentially
-//  * confusing some code. Ugh. -gg 3/15/2001
-//  *
-//  * NOTE: This doesn't handle recursive extractions.
-//  */
-// void extract_pending_chars(void)
-// {
-// struct char_data *vict, *next_vict, *prev_vict;
-//
-// if (extractions_pending < 0)
-// log("SYSERR: Negative (%d) extractions pending.", extractions_pending);
-//
-// for (vict = character_list, prev_vict = NULL; vict && extractions_pending; vict = next_vict) {
-// next_vict = vict->next;
-//
-// if (MOB_FLAGGED(vict, MOB_NOTDEADYET))
-// REMOVE_BIT(MOB_FLAGS(vict), MOB_NOTDEADYET);
-// else if (PLR_FLAGGED(vict, PLR_NOTDEADYET))
-// REMOVE_BIT(PLR_FLAGS(vict), PLR_NOTDEADYET);
-// else {
-// /* Last non-free'd character to continue chain from. */
-// prev_vict = vict;
-// continue;
-// }
-//
-// extract_char_final(vict);
-// extractions_pending--;
-//
-// if (prev_vict)
-// prev_vict->next = next_vict;
-// else
-// character_list = next_vict;
-// }
-//
-// if (extractions_pending > 0)
-// log("SYSERR: Couldn't find %d extractions as counted.", extractions_pending);
-//
-// extractions_pending = 0;
-// }
-//
-//
+/*
+ * I'm not particularly pleased with the MOB/PLR
+ * hoops that have to be jumped through but it
+ * hardly calls for a completely new variable.
+ * Ideally it would be its own list, but that
+ * would change the '->next' pointer, potentially
+ * confusing some code. Ugh. -gg 3/15/2001
+ *
+ * NOTE: This doesn't handle recursive extractions.
+ */
+impl DB {
+    pub fn extract_pending_chars(&self, main_globals: &MainGlobals) {
+        // struct char_data * vict, * next_vict, * prev_vict;
+
+        if self.extractions_pending.get() < 0 {
+            error!(
+                "SYSERR: Negative ({}) extractions pending.",
+                self.extractions_pending.get()
+            );
+        }
+
+        for vict in self.character_list.borrow().iter() {
+            if vict.mob_flagged(MOB_NOTDEADYET) {
+                vict.remove_mob_flags_bit(MOB_NOTDEADYET);
+            } else if vict.plr_flagged(PLR_NOTDEADYET) {
+                vict.remove_plr_flag(PLR_NOTDEADYET);
+            } else {
+                /* Last non-free'd character to continue chain from. */
+                continue;
+            }
+
+            self.extract_char_final(vict, main_globals);
+            self.extractions_pending
+                .set(self.extractions_pending.get() - 1);
+        }
+
+        if self.extractions_pending.get() > 0 {
+            error!(
+                "SYSERR: Couldn't find {} extractions as counted.",
+                self.extractions_pending.get()
+            );
+        }
+
+        self.extractions_pending.set(0);
+    }
+}
+
 // /* ***********************************************************************
 // * Here follows high-level versions of some earlier routines, ie functions*
 // * which incorporate the actual player-data                               *.

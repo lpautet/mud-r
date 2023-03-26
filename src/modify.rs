@@ -301,7 +301,6 @@ fn count_pages(msg: &str) -> i32 {
  */
 use crate::interpreter::any_one_arg;
 use crate::{send_to_char, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 

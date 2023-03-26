@@ -17,22 +17,24 @@ mod db;
 mod handler;
 mod interpreter;
 mod limits;
+mod mobact;
 mod modify;
 mod screen;
 mod spells;
 mod structs;
 mod telnet;
 mod util;
+mod weather;
 
 use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny};
-use crate::structs::ConState::ConPlaying;
+use crate::structs::ConState::{ConClose, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{hmhr, hshr, hssh, sana};
+use crate::util::{hmhr, hshr, hssh, sana, SECS_PER_MUD_HOUR};
 use env_logger::Env;
 use log::{debug, error, info, warn};
 use std::any::Any;
@@ -132,6 +134,7 @@ pub struct MainGlobals {
     // byte emergency_unban;		/* signal: SIGUSR2 */
     /* Where to send the log messages. */
     // const char *text_overflow = "**OVERFLOW**\r\n";
+    mins_since_crashsave: Cell<u32>,
 }
 
 /***********************************************************************
@@ -153,6 +156,7 @@ fn main() -> ExitCode {
         db: DB::new(),
         mother_desc: None,
         tics: 0,
+        mins_since_crashsave: Cell::new(0),
     };
     //let mut scheck: bool = false; /* for syntax checking mode */
     // ush_int port;
@@ -317,7 +321,7 @@ impl MainGlobals {
         // fclose(player_fl);
 
         info!("Saving current MUD time.");
-        // save_mud_time(&time_info);
+        save_mud_time(&self.db.time_info.borrow());
 
         // if (circle_reboot) {
         //     log("Rebooting.");
@@ -628,7 +632,7 @@ impl MainGlobals {
                     /* Reset the idle timer & pull char back from void if necessary */
                     let ohc = d.character.borrow();
                     let character = ohc.as_ref().unwrap();
-                    character.char_specials.borrow_mut().timer = 0;
+                    character.char_specials.borrow().timer.set(0);
                     if d.state() == ConPlaying && character.get_was_in() != NOWHERE {
                         if character.in_room.get() != NOWHERE {
                             self.db.char_from_room(character.clone());
@@ -729,7 +733,7 @@ impl MainGlobals {
             /* Now execute the heartbeat functions */
             while missed_pulses != 0 {
                 pulse += 1;
-                heartbeat(pulse);
+                self.heartbeat(pulse);
                 missed_pulses -= 1;
             }
 
@@ -755,46 +759,55 @@ impl MainGlobals {
     }
 }
 
-fn heartbeat(_pulse: u128) {
-    // static int
-    // mins_since_crashsave = 0;
-    //
-    // if (!(pulse % PULSE_ZONE))
-    // zone_update();
-    //
-    // if (!(pulse % PULSE_IDLEPWD))        /* 15 seconds */
-    // check_idle_passwords();
-    //
-    // if (!(pulse % PULSE_MOBILE))
-    // mobile_activity();
-    //
-    // if (!(pulse % PULSE_VIOLENCE))
-    // perform_violence();
-    //
-    // if (!(pulse % (SECS_PER_MUD_HOUR * PASSES_PER_SEC))) {
-    //     weather_and_time(1);
-    //     affect_update();
-    //     point_update();
-    //     fflush(player_fl);
-    // }
-    //
-    // if (auto_save & &!(pulse % PULSE_AUTOSAVE)) {
-    //     /* 1 minute */
-    //     if ( + + mins_since_crashsave > = autosave_time) {
-    //         mins_since_crashsave = 0;
-    //         Crash_save_all();
-    //         House_save_all();
-    //     }
-    // }
-    //
-    // if (!(pulse % PULSE_USAGE))
-    // record_usage();
-    //
-    // if (!(pulse % PULSE_TIMESAVE))
-    // save_mud_time(&time_info);
-    //
-    // /* Every pulse! Don't want them to stink the place up... */
-    // extract_pending_chars();
+impl MainGlobals {
+    fn heartbeat(&self, pulse: u128) {
+        if pulse % PULSE_ZONE == 0 {
+            self.db.zone_update(self);
+        }
+
+        if pulse % PULSE_IDLEPWD == 0 {
+            /* 15 seconds */
+            self.check_idle_passwords();
+        }
+
+        if pulse % PULSE_MOBILE == 0 {
+            self.db.mobile_activity();
+        }
+
+        // TODO implement fighting
+        // if (!(pulse % PULSE_VIOLENCE))
+        // perform_violence();
+
+        if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
+            // TODO implement weather and time
+            self.weather_and_time(1);
+            // TODO implement spells
+            // affect_update();
+            self.db.point_update(self);
+            //fflush(player_fl);
+        }
+
+        // TODO implement autosave
+        // if (auto_save && !(pulse % PULSE_AUTOSAVE)) {
+        //     /* 1 minute */
+        //     if ( + + mins_since_crashsave > = autosave_time) {
+        //         mins_since_crashsave = 0;
+        //         Crash_save_all();
+        //         House_save_all();
+        //     }
+        // }
+
+        if pulse % PULSE_USAGE == 0 {
+            self.record_usage();
+        }
+
+        if pulse % PULSE_TIMESAVE == 0 {
+            save_mud_time(&self.db.time_info.borrow());
+        }
+
+        /* Every pulse! Don't want them to stink the place up... */
+        self.db.extract_pending_chars(self);
+    }
 }
 
 /* ******************************************************************
@@ -806,33 +819,38 @@ fn heartbeat(_pulse: u128) {
  *  for which tv_usec is unsigned (and thus comparisons for something
  *  being < 0 fail).  Based on code submitted by ss@sirocco.cup.hp.com.
  */
-//
-// void record_usage(void)
-// {
-// int sockets_connected = 0, sockets_playing = 0;
-// struct descriptor_data * d;
-//
-// for (d = descriptor_list; d; d = d -> next) {
-// sockets_connected + +;
-// if (STATE(d) == ConPlaying)
-// sockets_playing + +;
-// }
-//
-// log("nusage: %-3d sockets connected, %-3d sockets playing",
-// sockets_connected, sockets_playing);
-//
-// #ifdef RUSAGE    /* Not RUSAGE_SELF because it doesn't guarantee prototype. */
-// {
-// struct rusage ru;
-//
-// getrusage(RUSAGE_SELF, & ru);
-// log("rusage: user time: %ld sec, system time: %ld sec, max res size: %ld",
-// ru.ru_utime.tv_sec, ru.ru_stime.tv_sec, ru.ru_maxrss);
-// }
-// # endif
-//
-// }
+impl MainGlobals {
+    fn record_usage(&self) {
+        let mut sockets_connected = 0;
+        let mut sockets_playing = 0;
 
+        for d in self.descriptor_list.borrow().iter() {
+            sockets_connected += 1;
+            if d.state() == ConPlaying {
+                sockets_playing += 1;
+            }
+        }
+
+        info!(
+            "nusage: {} sockets connected, {} sockets playing",
+            sockets_connected, sockets_playing
+        );
+
+        // # ifdef
+        // RUSAGE    /* Not RUSAGE_SELF because it doesn't guarantee prototype. */
+        // {
+        //     struct rusage ru;
+        //
+        //     getrusage(RUSAGE_SELF,
+        //     & ru);
+        //     log("rusage: user time: %ld sec, system time: %ld sec, max res size: %ld",
+        //     ru.ru_utime.tv_sec,
+        //     ru.ru_stime.tv_sec,
+        //     ru.ru_maxrss);
+        // }
+        // # endif
+    }
+}
 /*
  * Turn off echoing (specific to telnet client)
  */
@@ -1823,25 +1841,23 @@ fn process_input(t: &DescriptorData) -> i32 {
 // free(d);
 // }
 
-// void check_idle_passwords(void)
-// {
-// struct descriptor_data * d, * next_d;
-//
-// for (d = descriptor_list; d; d = next_d) {
-// next_d = d -> next;
-// if (STATE(d) != ConPassword & & STATE(d) != ConGetName)
-// continue;
-// if ( ! d ->idle_tics) {
-// d -> idle_tics + +;
-// continue;
-// } else {
-// echo_on(d);
-// write_to_output(d, "\r\nTimed out... goodbye.\r\n");
-// STATE(d) = ConClose;
-// }
-// }
-// }
-
+impl MainGlobals {
+    fn check_idle_passwords(&self) {
+        //struct descriptor_data * d, * next_d;
+        for d in self.descriptor_list.borrow().iter() {
+            if d.state() != ConPassword && d.state() != ConGetName {
+                continue;
+            }
+            if d.idle_tics.get() == 0 {
+                d.idle_tics.set(1);
+            } else {
+                echo_on(d.as_ref());
+                write_to_output(d, "\r\nTimed out... goodbye.\r\n");
+                d.set_state(ConClose);
+            }
+        }
+    }
+}
 /*
  * I tried to universally convert Circle over to POSIX compliance, but
  * alas, some systems are still straggling behind and don't have all the
@@ -2053,26 +2069,26 @@ pub fn send_to_char(ch: &CharData, messg: &str) {
 // }
 // }
 
-// void send_to_outdoor(const char * messg, ...)
-// {
-// struct descriptor_data * i;
-//
-// if ( ! messg || ! * messg)
-// return;
-//
-// for (i = descriptor_list; i; i = i -> next) {
-// va_list args;
-//
-// if (STATE(i) != ConPlaying | | i -> character == NULL)
-// continue;
-// if ( ! AWAKE(i -> character) | | ! OUTSIDE(i -> character))
-// continue;
-//
-// va_start(args, messg);
-// vwrite_to_output(i, messg, args);
-// va_end(args);
-// }
-// }
+impl MainGlobals {
+    fn send_to_outdoor(&self, messg: &str) {
+        if messg.is_empty() {
+            return;
+        }
+
+        for i in self.descriptor_list.borrow().iter() {
+            if i.state() != ConPlaying || i.character.borrow().is_none() {
+                continue;
+            }
+            let character = i.character.borrow();
+            if !character.as_ref().unwrap().awake() || !self.db.outside(character.as_ref().unwrap())
+            {
+                continue;
+            }
+
+            write_to_output(i, messg);
+        }
+    }
+}
 
 // void send_to_room(room_rnum room, const char * messg, ...)
 // {

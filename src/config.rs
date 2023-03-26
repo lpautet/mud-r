@@ -61,11 +61,11 @@ pub const TUNNEL_SIZE: i32 = 2;
 // int max_pc_corpse_time = 10;
 
 /* How many ticks before a player is sent to the void or idle-rented. */
-// int idle_void = 8;
-// int idle_rent_time = 48;
+pub const IDLE_VOID: i32 = 8;
+pub const IDLE_RENT_TIME: i32 = 48;
 
 /* This level and up is immune to idling, LVL_IMPL+1 will disable it. */
-// int idle_max_level = LVL_GOD;
+pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 
 /* should items in death traps automatically be junked? */
 // int dts_are_dumps = YES;
@@ -148,7 +148,7 @@ pub const TUNNEL_SIZE: i32 = 2;
 /* ROOM NUMBERS */
 
 /* virtual number of room that mortals should enter at */
-use crate::structs::room_vnum;
+use crate::structs::{room_vnum, LVL_GOD};
 
 pub const MORTAL_START_ROOM: room_vnum = 3001;
 

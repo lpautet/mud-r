@@ -15,32 +15,46 @@ use crate::structs::{
     CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved,
     ExtraDescrData, IndexData, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData,
     ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData,
-    RoomDirectionData, RoomRnum, TimeData, ZoneRnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR,
-    EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, LVL_GOD, LVL_IMPL,
-    MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH,
-    MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC,
-    MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_STANDING, SEX_MALE,
+    RoomDirectionData, RoomRnum, TimeData, TimeInfoData, WeatherData, ZoneRnum, AFF_POISON,
+    APPLY_NONE, EX_CLOSED, EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON,
+    ITEM_FOUNTAIN, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT,
+    MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL,
+    MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE,
+    NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS,
+    SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
-    dice, get_line, prune_crlf, rand_number, time_now, touch, NRM, SECS_PER_REAL_HOUR,
+    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
+    CMP, NRM, SECS_PER_REAL_HOUR,
 };
 use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 use log::{error, info, warn};
 use std::cell::{Cell, RefCell};
 use std::cmp::{max, min};
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, ErrorKind, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::rc::Rc;
 use std::{fs, io, mem, process, slice};
 
-pub const KILLSCRIPT: &str = "./.killscript";
+const CREDITS_FILE: &str = "./text/credits";
+const NEWS_FILE: &str = "./text/news";
+const MOTD_FILE: &str = "./text/motd";
+const IMOTD_FILE: &str = "./text/imotd";
+const GREETINGS_FILE: &str = "./text/greetings";
+const HELP_PAGE_FILE: &str = "./text./help/screen";
+const INFO_FILE: &str = "./text/info";
+const WIZLIST_FILE: &str = "./text/wilist";
+const IMMLIST_FILE: &str = "./text/immlist";
 const BACKGROUND_FILE: &str = "text/background";
-const GREETINGS_FILE: &str = "text/greetings";
-const IMOTD_FILE: &str = "text/imotd";
-const MOTD_FILE: &str = "text/motd";
+const POLICIES_FILE: &str = "text/policies";
+const HANDBOOK: &str = "text/handbook";
+
+pub const KILLSCRIPT: &str = "./.killscript";
+
 const PLAYER_FILE: &str = "etc/players";
+const TIME_FILE: &str = "etc/time";
 
 struct PlayerIndexElement {
     name: String,
@@ -84,7 +98,8 @@ pub struct DB {
     // int no_mail = 0;		/* mail disabled?		 */
     // int mini_mud = 0;		/* mini-mud mode?		 */
     // int no_rent_check = 0;		/* skip rent check on boot?	 */
-    // time_t boot_time = 0;		/* time of mud boot		 */
+    pub boot_time: Cell<u128>,
+    /* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
     pub r_mortal_start_room: RefCell<room_rnum>,
     /* rnum of mortal start room	 */
@@ -113,11 +128,15 @@ pub struct DB {
     // struct help_index_element *help_table = 0;	/* the help table	 */
     // int top_of_helpt = 0;		/* top of help index table	 */
     //
-    // struct time_info_data time_info;/* the infomation about the time    */
-    // struct weather_data weather_info;	/* the infomation about the weather */
+    pub time_info: RefCell<TimeInfoData>,
+    /* the infomation about the time    */
+    pub weather_info: RefCell<WeatherData>,
+    /* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
     // struct reset_q_type reset_q;	/* queue of zones to be reset	 */
+    pub reset_q: RefCell<Vec<ZoneRnum>>,
     pub extractions_pending: Cell<i32>,
+    pub timer: Cell<u128>,
 }
 
 const REAL: i32 = 0;
@@ -421,6 +440,7 @@ impl DB {
             player_fl: RefCell::new(None),
             //      top_of_p_table: RefCell::new(0),
             top_idnum: Cell::new(0),
+            boot_time: Cell::new(0),
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),
@@ -428,7 +448,21 @@ impl DB {
             imotd: "IMOTD placeholder".to_string(),
             greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
             background: "BACKGROUND placeholder".to_string(),
+            time_info: RefCell::new(TimeInfoData {
+                hours: 0,
+                day: 0,
+                month: 0,
+                year: 0,
+            }),
+            weather_info: RefCell::new(WeatherData {
+                pressure: 0,
+                change: 0,
+                sky: 0,
+                sunlight: 0,
+            }),
+            reset_q: RefCell::new(vec![]),
             extractions_pending: Cell::new(0),
+            timer: Cell::new(0),
         }
     }
 
@@ -437,10 +471,10 @@ impl DB {
         let mut ret = DB::new();
 
         info!("Boot db -- BEGIN.");
-        //
-        // log("Resetting the game time:");
-        // reset_time();
-        //
+
+        info!("Resetting the game time:");
+        ret.reset_time();
+
         info!("Reading news, credits, help, bground, info & motds.");
         // file_to_string_alloc(NEWS_FILE, &news);
         // file_to_string_alloc(CREDITS_FILE, &credits);
@@ -530,74 +564,85 @@ impl DB {
         info!("Boot db -- DONE.");
         ret
     }
+
+    /* reset the time in the game from file */
+    fn reset_time(&self) {
+        //time_t beginning_of_time = 0;
+        //FILE *bgtime;
+
+        let bgtime = OpenOptions::new()
+            .read(true)
+            .open(TIME_FILE)
+            .expect(format!("SYSERR: Can't open '{}'", TIME_FILE).as_str());
+        let mut reader = BufReader::new(bgtime);
+        let mut line = String::new();
+        reader
+            .read_line(&mut line)
+            .expect(format!("SYSERR: Can't read from '{}'", TIME_FILE).as_str());
+        let mut beginning_of_time = line
+            .parse::<u128>()
+            .expect(format!("SYSERR: Invalid mud time: {}", line).as_str());
+
+        if beginning_of_time == 0 {
+            beginning_of_time = 650336715;
+        }
+
+        *self.time_info.borrow_mut() = mud_time_passed(time_now(), beginning_of_time as u64);
+
+        if self.time_info.borrow().hours <= 4 {
+            self.weather_info.borrow_mut().sunlight = SUN_DARK;
+        } else if self.time_info.borrow().hours == 5 {
+            self.weather_info.borrow_mut().sunlight = SUN_RISE;
+        } else if self.time_info.borrow().hours <= 20 {
+            self.weather_info.borrow_mut().sunlight = SUN_LIGHT;
+        } else if self.time_info.borrow().hours == 21 {
+            self.weather_info.borrow_mut().sunlight = SUN_SET;
+        } else {
+            self.weather_info.borrow_mut().sunlight = SUN_DARK;
+        }
+
+        info!(
+            "   Current Gametime: {}H {}D %{}M {}Y.",
+            self.time_info.borrow().hours,
+            self.time_info.borrow().day,
+            self.time_info.borrow().month,
+            self.time_info.borrow().year
+        );
+
+        self.weather_info.borrow_mut().pressure = 960;
+        if (self.time_info.borrow().month >= 7) && (self.time_info.borrow().month <= 12) {
+            self.weather_info.borrow_mut().pressure += dice(1, 50);
+        } else {
+            self.weather_info.borrow_mut().pressure += dice(1, 80);
+        }
+
+        self.weather_info.borrow_mut().change = 0;
+
+        if self.weather_info.borrow().pressure <= 980 {
+            self.weather_info.borrow_mut().sky = SKY_LIGHTNING;
+        } else if self.weather_info.borrow().pressure <= 1000 {
+            self.weather_info.borrow_mut().sky = SKY_RAINING;
+        } else if self.weather_info.borrow().pressure <= 1020 {
+            self.weather_info.borrow_mut().sky = SKY_CLOUDY;
+        } else {
+            self.weather_info.borrow_mut().sky = SKY_CLOUDLESS;
+        }
+    }
 }
 
-//
-//
-// /* reset the time in the game from file */
-// void reset_time(void)
-// {
-// time_t beginning_of_time = 0;
-// FILE *bgtime;
-//
-// if ((bgtime = fopen(TIME_FILE, "r")) == NULL)
-// log("SYSERR: Can't read from '%s' time file.", TIME_FILE);
-// else {
-// fscanf(bgtime, "%ld\n", &beginning_of_time);
-// fclose(bgtime);
-// }
-// if (beginning_of_time == 0)
-// beginning_of_time = 650336715;
-//
-// time_info = *mud_time_passed(time(0), beginning_of_time);
-//
-// if (time_info.hours <= 4)
-// weather_info.sunlight = SUN_DARK;
-// else if (time_info.hours == 5)
-// weather_info.sunlight = SUN_RISE;
-// else if (time_info.hours <= 20)
-// weather_info.sunlight = SUN_LIGHT;
-// else if (time_info.hours == 21)
-// weather_info.sunlight = SUN_SET;
-// else
-// weather_info.sunlight = SUN_DARK;
-//
-// log("   Current Gametime: %dH %dD %dM %dY.", time_info.hours,
-// time_info.day, time_info.month, time_info.year);
-//
-// weather_info.pressure = 960;
-// if ((time_info.month >= 7) && (time_info.month <= 12))
-// weather_info.pressure += dice(1, 50);
-// else
-// weather_info.pressure += dice(1, 80);
-//
-// weather_info.change = 0;
-//
-// if (weather_info.pressure <= 980)
-// weather_info.sky = SKY_LIGHTNING;
-// else if (weather_info.pressure <= 1000)
-// weather_info.sky = SKY_RAINING;
-// else if (weather_info.pressure <= 1020)
-// weather_info.sky = SKY_CLOUDY;
-// else
-// weather_info.sky = SKY_CLOUDLESS;
-// }
-//
-//
-// /* Write the time in 'when' to the MUD-time file. */
-// void save_mud_time(struct time_info_data *when)
-// {
-// FILE *bgtime;
-//
-// if ((bgtime = fopen(TIME_FILE, "w")) == NULL)
-// log("SYSERR: Can't write to '%s' time file.", TIME_FILE);
-// else {
-// fprintf(bgtime, "%ld\n", mud_time_to_secs(when));
-// fclose(bgtime);
-// }
-// }
-//
-//
+/* Write the time in 'when' to the MUD-time file. */
+pub fn save_mud_time(when: &TimeInfoData) {
+    let mut bgtime = OpenOptions::new()
+        .write(true)
+        .open(TIME_FILE)
+        .expect(format!("SYSERR: Cannot open time file: {}", TIME_FILE).as_str());
+    let mut writer = BufWriter::new(bgtime);
+    let content = format!("{}\n", mud_time_to_secs(when));
+    writer
+        .write_all(content.as_bytes())
+        .expect(format!("SYSERR: Cannot write to time file: {}", TIME_FILE).as_str());
+}
+
 // void free_player_index(void)
 // {
 // int tp;
@@ -1776,14 +1821,14 @@ impl DB {
             item_number: 0,
             in_room: Cell::new(0),
             obj_flags: ObjFlagData {
-                value: [0; 4],
+                value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
                 type_flag: 0,
                 wear_flags: 0,
                 extra_flags: 0,
                 weight: Cell::new(0),
                 cost: 0,
                 cost_per_day: 0,
-                timer: 0,
+                timer: Cell::new(0),
                 bitvector: 0,
             },
             affected: [ObjAffectedType {
@@ -2399,84 +2444,70 @@ impl DB {
     }
 }
 
-// #define ZO_DEAD  999
-//
-// /* update zone ages, queue for reset if necessary, and dequeue when possible */
-// void zone_update(void)
-// {
-// int i;
-// struct reset_q_element *update_u, *temp;
-// static int timer = 0;
-//
-// /* jelson 10/22/92 */
-// if (((++timer * PULSE_ZONE) / PASSES_PER_SEC) >= 60) {
-// /* one minute has passed */
-// /*
-//  * NOT accurate unless PULSE_ZONE is a multiple of PASSES_PER_SEC or a
-//  * factor of 60
-//  */
-//
-// timer = 0;
-//
-// /* since one minute has passed, increment zone ages */
-// for (i = 0; i <= top_of_zone_table; i++) {
-// if (zone_table[i].age < zone_table[i].lifespan &&
-// zone_table[i].reset_mode)
-// (zone_table[i].age)++;
-//
-// if (zone_table[i].age >= zone_table[i].lifespan &&
-// zone_table[i].age < ZO_DEAD && zone_table[i].reset_mode) {
-// /* enqueue zone */
-//
-// CREATE(update_u, struct reset_q_element, 1);
-//
-// update_u->zone_to_reset = i;
-// update_u->next = 0;
-//
-// if (!reset_q.head)
-// reset_q.head = reset_q.tail = update_u;
-// else {
-// reset_q.tail->next = update_u;
-// reset_q.tail = update_u;
-// }
-//
-// zone_table[i].age = ZO_DEAD;
-// }
-// }
-// }	/* end - one minute has passed */
-//
-//
-// /* dequeue zones (if possible) and reset */
-// /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
-// for (update_u = reset_q.head; update_u; update_u = update_u->next)
-// if (zone_table[update_u->zone_to_reset].reset_mode == 2 ||
-// is_empty(update_u->zone_to_reset)) {
-// reset_zone(update_u->zone_to_reset);
-// mudlog(CMP, LVL_GOD, FALSE, "Auto zone reset: %s", zone_table[update_u->zone_to_reset].name);
-// /* dequeue */
-// if (update_u == reset_q.head)
-// reset_q.head = reset_q.head->next;
-// else {
-// for (temp = reset_q.head; temp->next != update_u;
-// temp = temp->next);
-//
-// if (!update_u->next)
-// reset_q.tail = temp;
-//
-// temp->next = update_u->next;
-// }
-//
-// free(update_u);
-// break;
-// }
-// }
-//
+const ZO_DEAD: i32 = 999;
 
-// #define ZONE_ERROR(message) \
-// { log_zone_error(zone, cmd_no, message); last_cmd = 0; }
-
-/* execute the reset command table of a given zone */
 impl DB {
+    /* update zone ages, queue for reset if necessary, and dequeue when possible */
+    pub(crate) fn zone_update(&self, main_globals: &MainGlobals) {
+        // int i;
+        // struct ResetQElement * update_u, * temp;
+        // static int timer = 0;
+
+        /* jelson 10/22/92 */
+        self.timer.set(self.timer.get());
+        if (self.timer.get() * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
+            /* one minute has passed */
+            /*
+             * NOT accurate unless PULSE_ZONE is a multiple of PASSES_PER_SEC or a
+             * factor of 60
+             */
+
+            self.timer.set(0);
+
+            /* since one minute has passed, increment zone ages */
+            for (i, zone) in self.zone_table.borrow().iter().enumerate() {
+                if zone.age.get() < zone.lifespan && zone.reset_mode != 0 {
+                    zone.age.set(zone.age.get() + 1);
+                }
+
+                if zone.age.get() >= zone.lifespan
+                    && zone.age.get() < ZO_DEAD
+                    && zone.reset_mode != 0
+                {
+                    /* enqueue zone */
+                    self.reset_q.borrow_mut().push(i as RoomRnum);
+
+                    zone.age.set(ZO_DEAD);
+                }
+            }
+        } /* end - one minute has passed */
+
+        /* dequeue zones (if possible) and reset */
+        /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
+        for update_u in self.reset_q.borrow().iter() {
+            if self.zone_table.borrow()[*update_u as usize].reset_mode == 2
+                || main_globals.is_empty(*update_u)
+            {
+                self.reset_zone(main_globals, *update_u as usize);
+                main_globals.mudlog(
+                    CMP,
+                    LVL_GOD as i32,
+                    false,
+                    format!(
+                        "Auto zone reset: {}",
+                        self.zone_table.borrow()[*update_u as usize].name
+                    )
+                    .as_str(),
+                );
+            }
+        }
+        self.reset_q.borrow_mut().clear();
+    }
+
+    // #define ZONE_ERROR(message) \
+    // { log_zone_error(zone, cmd_no, message); last_cmd = 0; }
+
+    /* execute the reset command table of a given zone */
     fn log_zone_error(
         &self,
         main_globals: &MainGlobals,
@@ -2742,29 +2773,32 @@ impl DB {
 }
 
 // /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
-// int is_empty(zone_rnum zone_nr)
-// {
-// struct descriptor_data *i;
-//
-// for (i = descriptor_list; i; i = i->next) {
-// if (STATE(i) != CON_PLAYING)
-// continue;
-// if (IN_ROOM(i->character) == NOWHERE)
-// continue;
-// if (GET_LEVEL(i->character) >= LVL_IMMORT)
-// continue;
-// if (world[IN_ROOM(i->character)].zone != zone_nr)
-// continue;
-//
-// return (0);
-// }
-//
-// return (1);
-// }
-
+impl MainGlobals {
+    fn is_empty(&self, zone_nr: ZoneRnum) -> bool {
+        for i in self.descriptor_list.borrow().iter() {
+            if i.state() != ConPlaying {
+                continue;
+            }
+            if i.character.borrow().as_ref().unwrap().in_room() == NOWHERE {
+                continue;
+            }
+            if i.character.borrow().as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
+                continue;
+            }
+            if self.db.world.borrow()[i.character.borrow().as_ref().unwrap().in_room() as usize]
+                .zone
+                != zone_nr
+            {
+                continue;
+            }
+            return false;
+        }
+        true
+    }
+}
 /*************************************************************************
-*  stuff related to the save/load player system				 *
-*************************************************************************/
+ *  stuff related to the save/load player system				 *
+ *************************************************************************/
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
@@ -2802,6 +2836,7 @@ use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
 use crate::handler::fname;
+use crate::structs::ConState::ConPlaying;
 use std::io::Read;
 
 impl DB {
@@ -3183,8 +3218,8 @@ impl DB {
 }
 
 /************************************************************************
-*  funcs of a (more or less) general utility nature			*
-************************************************************************/
+ *  funcs of a (more or less) general utility nature			*
+ ************************************************************************/
 
 /* read and allocate space for a '~'-terminated string from a given file */
 fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
@@ -3893,7 +3928,7 @@ impl CharData {
                 position: 0,
                 carry_weight: 0,
                 carry_items: 0,
-                timer: 0,
+                timer: Cell::new(0),
                 saved: CharSpecialDataSaved {
                     alignment: 0,
                     idnum: 0,
@@ -3940,6 +3975,7 @@ impl CharData {
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {
+                memory: RefCell::new(vec![]),
                 attack_type: 0,
                 default_pos: 0,
                 damnodice: 0,
@@ -3987,7 +4023,7 @@ impl CharData {
                 position: self.char_specials.borrow().position,
                 carry_weight: self.char_specials.borrow().carry_weight,
                 carry_items: self.char_specials.borrow().carry_items,
-                timer: self.char_specials.borrow().timer,
+                timer: Cell::from(self.char_specials.borrow().timer.get()),
                 saved: self.char_specials.borrow().saved,
             }),
             player_specials: RefCell::new(PlayerSpecialData {
@@ -4028,6 +4064,7 @@ impl CharData {
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {
+                memory: RefCell::new(vec![]),
                 attack_type: self.mob_specials.attack_type,
                 default_pos: self.mob_specials.default_pos,
                 damnodice: self.mob_specials.damnodice,
@@ -4052,14 +4089,19 @@ impl ObjData {
             item_number: self.item_number,
             in_room: Cell::from(self.in_room.get()),
             obj_flags: ObjFlagData {
-                value: self.obj_flags.value,
+                value: [
+                    Cell::from(self.obj_flags.value[0].get()),
+                    Cell::from(self.obj_flags.value[1].get()),
+                    Cell::from(self.obj_flags.value[2].get()),
+                    Cell::from(self.obj_flags.value[3].get()),
+                ],
                 type_flag: self.obj_flags.type_flag,
                 wear_flags: self.obj_flags.wear_flags,
                 extra_flags: self.obj_flags.extra_flags,
                 weight: Cell::from(self.obj_flags.weight.get()),
                 cost: self.obj_flags.cost,
                 cost_per_day: self.obj_flags.cost_per_day,
-                timer: self.obj_flags.timer,
+                timer: Cell::from(self.obj_flags.timer.get()),
                 bitvector: self.obj_flags.bitvector,
             },
             affected: [ObjAffectedType {

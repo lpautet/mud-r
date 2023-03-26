@@ -5,6 +5,15 @@ use std::rc::Rc;
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
 
+pub const PULSE_ZONE: u128 = 10 * PASSES_PER_SEC;
+pub const PULSE_MOBILE: u128 = 10 * PASSES_PER_SEC;
+pub const PULSE_VIOLENCE: u128 = 2 * PASSES_PER_SEC;
+pub const PULSE_AUTOSAVE: u128 = 60 * PASSES_PER_SEC;
+pub const PULSE_IDLEPWD: u128 = 15 * PASSES_PER_SEC;
+pub const PULSE_SANITY: u128 = 30 * PASSES_PER_SEC;
+pub const PULSE_USAGE: u128 = 5 * 60 * PASSES_PER_SEC; /* 5 mins */
+pub const PULSE_TIMESAVE: u128 = 30 * 60 * PASSES_PER_SEC; /* should be >= SECS_PER_MUD_HOUR */
+
 /* Room flags: used in room_data.room_flags */
 /* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
 pub const ROOM_DARK: i64 = 1 << 0; /* Dark			*/
@@ -46,6 +55,18 @@ pub const SECT_UNDERWATER: i32 = 9; /* Underwater		*/
 pub const DRUNK: i32 = 0;
 pub const FULL: i32 = 1;
 pub const THIRST: i32 = 2;
+
+/* Sun state for weather_data */
+pub const SUN_DARK: i32 = 0;
+pub const SUN_RISE: i32 = 1;
+pub const SUN_LIGHT: i32 = 2;
+pub const SUN_SET: i32 = 3;
+
+/* Sky conditions for weather_data */
+pub const SKY_CLOUDLESS: i32 = 0;
+pub const SKY_CLOUDY: i32 = 1;
+pub const SKY_RAINING: i32 = 2;
+pub const SKY_LIGHTNING: i32 = 3;
 
 /* object-related defines ********************************************/
 
@@ -352,7 +373,7 @@ pub struct CharPointData {
 
 /* Structure used for chars following other chars */
 pub struct FollowType {
-    pub follower: Rc<RefCell<CharData>>,
+    pub follower: Rc<CharData>,
 }
 
 /* Special playing constants shared by PCs and NPCs which aren't in pfile */
@@ -367,7 +388,7 @@ pub struct CharSpecialData {
     /* Carried weight			*/
     pub carry_items: u8,
     /* Number of items carried		*/
-    pub timer: i32,
+    pub timer: Cell<i32>,
     /* Timer for update			*/
     pub saved: CharSpecialDataSaved,
     /* constants saved in plrfile	*/
@@ -416,7 +437,8 @@ pub struct PlayerSpecialData {
 
 /* Specials used by NPCs, not PCs */
 pub struct MobSpecialData {
-    //    memory_rec *memory;	    /* List of attackers to remember	       */
+    pub memory: RefCell<Vec<i64>>,
+    /* List of attackers to remember	       */
     pub attack_type: u8,
     /* The Attack Type Bitvector for NPC's     */
     pub default_pos: u8,
@@ -485,6 +507,15 @@ pub struct PlayerSpecialDataSaved {
     pub(crate) spare19: i64,
     pub(crate) spare20: i64,
     pub(crate) spare21: i64,
+}
+
+/* This structure is purely intended to be an easy way to transfer */
+/* and return information about time (real or mudwise).            */
+pub struct TimeInfoData {
+    pub hours: i32,
+    pub day: i32,
+    pub month: i32,
+    pub year: i16,
 }
 
 /* general player-related info, usually PC's and NPC's */
@@ -557,7 +588,7 @@ pub struct TxtBlock {
 
 /* object flags; used in obj_data */
 pub struct ObjFlagData {
-    pub value: [i32; 4],
+    pub value: [Cell<i32>; 4],
     /* Values of the item (see list)    */
     pub type_flag: u8,
     /* Type of item			    */
@@ -571,7 +602,7 @@ pub struct ObjFlagData {
     /* Value when sold (gp.)            */
     pub cost_per_day: i32,
     /* Cost to keep pr. real day        */
-    pub timer: i32,
+    pub timer: Cell<i32>,
     /* Timer for object                 */
     pub bitvector: i64,
     /* To set chars bits                */
@@ -889,6 +920,13 @@ pub struct IntAppType {
 pub struct ConAppType {
     pub hitp: i16,
     pub shock: i16,
+}
+
+pub struct WeatherData {
+    pub pressure: i32, /* How is the pressure ( Mb ) */
+    pub change: i32,   /* How fast and what way does it change. */
+    pub sky: i32,      /* How is the sky. */
+    pub sunlight: i32, /* And how much sun. */
 }
 
 /*

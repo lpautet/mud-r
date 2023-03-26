@@ -9,19 +9,18 @@
 ************************************************************************ */
 
 use crate::{
-    MainGlobals, _clrlevel, clr, main, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED,
-    TO_ROOM,
+    MainGlobals, _clrlevel, clr, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
 };
 
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, MobSpecialData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART,
-    PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING,
-    POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    CharData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM,
+    POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
+    POS_STANDING, POS_STUNNED,
 };
 use hmac::Hmac;
 use sha2::Sha256;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 /*
@@ -1171,7 +1170,7 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
         let character = c.as_ref().unwrap();
         *character.desc.borrow_mut() = Some(d.clone());
         *d.original.borrow_mut() = None;
-        character.char_specials.borrow_mut().timer = 0;
+        character.char_specials.borrow_mut().timer.set(0);
         character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
         character.remove_aff_flags(AFF_GROUP);
     }
@@ -1257,10 +1256,9 @@ use crate::structs::ConState::{
     ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
 };
 use crate::structs::{
-    AffectedType, CharAbilityData, CharFileU, CharPlayerData, CharPointData, CharSpecialData,
-    CharSpecialDataSaved, PlayerSpecialData, PlayerSpecialDataSaved, TimeData, AFF_GROUP,
-    CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH, MAX_PWD_LENGTH, MAX_SKILLS,
-    MAX_TONGUE, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE, SEX_MALE,
+    CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
+    MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
+    SEX_MALE,
 };
 use crate::util::{BRF, NRM};
 use crate::{echo_off, echo_on, write_to_output};
