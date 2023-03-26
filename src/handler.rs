@@ -10,11 +10,14 @@
 
 use crate::db::DB;
 use crate::structs::{
-    room_rnum, CharData, ObjData, ObjRnum, RoomRnum, APPLY_CHA, APPLY_CHAR_WEIGHT, APPLY_CLASS,
-    APPLY_CON, APPLY_DAMROLL, APPLY_EXP, APPLY_HIT, APPLY_HITROLL, APPLY_MOVE, APPLY_SAVING_PARA,
-    ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, LVL_GRGOD,
-    MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET,
-    ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_LIGHT,
+    CharData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT,
+    APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD,
+    APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE,
+    APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD,
+    APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL,
+    ITEM_ARMOR, ITEM_LIGHT, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS,
+    PLR_CRASH, PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS,
+    WEAR_LIGHT,
 };
 use log::error;
 use std::cmp::{max, min};
@@ -43,7 +46,7 @@ use crate::{send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
 // /* external functions */
 // int invalid_class(struct char_data *ch, struct obj_data *obj);
 // void remove_follower(struct char_data *ch);
-// void clearMemory(struct char_data *ch);
+// void clear_memory(struct char_data *ch);
 // ACMD(do_return);
 
 pub fn fname(namelist: &str) -> Rc<str> {
@@ -421,7 +424,7 @@ impl DB {
     }
 
     /* place a character in a room */
-    pub(crate) fn char_to_room(&self, ch: Option<Rc<CharData>>, room: room_rnum) {
+    pub(crate) fn char_to_room(&self, ch: Option<Rc<CharData>>, room: RoomRnum) {
         if ch.is_none() && room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
@@ -527,7 +530,7 @@ fn apply_ac(ch: &CharData, eq_pos: i16) -> i32 {
         return 0;
     }
 
-    let mut factor;
+    let factor;
 
     match eq_pos {
         WEAR_BODY => {
@@ -737,7 +740,7 @@ impl DB {
 }
 
 // /* search a room for a char, and return a pointer if found..  */
-// struct char_data *get_char_room(char *name, int *number, room_rnum room)
+// struct char_data *get_char_room(char *name, int *number, RoomRnum room)
 // {
 // struct char_data *i;
 // int num;
@@ -1006,7 +1009,9 @@ impl DB {
             }
         }
         for i in 0..NUM_WEARS {
-            update_object(ch.get_eq(i).as_ref().unwrap(), 2);
+            if ch.get_eq(i).is_some() {
+                update_object(ch.get_eq(i).as_ref().unwrap(), 2);
+            }
         }
 
         if !ch.carrying.borrow().is_empty() {
@@ -1125,7 +1130,7 @@ impl DB {
                     .number
                     .set(self.mob_index[ch.get_mob_rnum() as usize].number.get() - 1);
             }
-            ch.clearMemory()
+            ch.clear_memory()
         } else {
             self.save_char(ch);
             // TODO implement crash delete

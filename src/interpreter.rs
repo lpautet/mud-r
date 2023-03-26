@@ -49,7 +49,7 @@ pub const SCMD_DOWN: i32 = 6;
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-type Command = fn(db: &DB, ch: Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
+type Command = fn(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
 
 struct CommandInfo {
     command: &'static str,
@@ -59,9 +59,9 @@ struct CommandInfo {
     subcmd: i32,
 }
 
-pub fn do_nothing(db: &DB, ch: Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
+pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-const CMD_INFO: [CommandInfo; 8] = [
+const CMD_INFO: [CommandInfo; 9] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -69,8 +69,7 @@ const CMD_INFO: [CommandInfo; 8] = [
         minimum_level: 0,
         subcmd: 0,
     },
-    //
-    // /* directions must come before other commands but after RESERVED */
+    /* directions must come before other commands but after RESERVED */
     CommandInfo {
         command: "north",
         minimum_position: POS_STANDING,
@@ -333,6 +332,13 @@ const CMD_INFO: [CommandInfo; 8] = [
     // { "'"        , POS_RESTING , do_say      , 0, 0 },
     // { "save"     , POS_SLEEPING, do_save     , 0, 0 },
     // { "score"    , POS_DEAD    , do_score    , 0, 0 },
+    CommandInfo {
+        command: "score",
+        minimum_position: POS_DEAD,
+        command_pointer: do_score,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "scream"   , POS_RESTING , do_action   , 0, 0 },
     // { "sell"     , POS_STANDING, do_not_here , 0, 0 },
     // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
@@ -470,9 +476,7 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(db: &DB, rch: Rc<CharData>, argument: &str) {
-    let cmd: i32;
-    let length: i32;
+pub fn command_interpreter(game: &MainGlobals, rch: &Rc<CharData>, argument: &str) {
     let line: &str;
     let mut arg = String::new();
     let ch = rch.as_ref();
@@ -498,7 +502,6 @@ pub fn command_interpreter(db: &DB, rch: Rc<CharData>, argument: &str) {
     }
 
     /* otherwise, find the command */
-    let length = arg.len();
     let mut cmd_idx = CMD_INFO.len() - 1;
     let mut cmd = &CMD_INFO[cmd_idx];
     for (i, cmd_info) in CMD_INFO.iter().enumerate() {
@@ -548,7 +551,7 @@ pub fn command_interpreter(db: &DB, rch: Rc<CharData>, argument: &str) {
             _ => {}
         }
     } //else if no_specials || !special(ch, cmd, line) {
-    (cmd.command_pointer)(db, rch, line, cmd_idx, cmd.subcmd);
+    (cmd.command_pointer)(game, rch, line, cmd_idx, cmd.subcmd);
     //}
 }
 
@@ -1026,20 +1029,12 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool {
+fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
     let db = &main_globals.db;
 
-    info!(
-        "[1] {}",
-        if d.character.try_borrow_mut().is_err() {
-            "NO!"
-        } else {
-            "yes"
-        }
-    );
     id = d.character.borrow().as_ref().unwrap().get_idnum();
 
     /*
@@ -1105,14 +1100,6 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
      * choose one if one is available (while still deleting the other
      * duplicates, though theoretically none should be able to exist).
      */
-    info!(
-        "[2] {}",
-        if d.character.try_borrow_mut().is_err() {
-            "NO!"
-        } else {
-            "yes"
-        }
-    );
 
     for ch in db.character_list.borrow().iter() {
         if ch.is_npc() {
@@ -1148,14 +1135,6 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
     }
 
     /* no target for switching into was found - allow login to continue */
-    info!(
-        "[3] {}",
-        if d.character.try_borrow_mut().is_err() {
-            "NO!"
-        } else {
-            "yes"
-        }
-    );
 
     if target.is_none() {
         return false;
@@ -1245,6 +1224,7 @@ fn perform_dupe_check<'a>(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> 
 }
 
 /* deal with newcomers and other non-playing sockets */
+use crate::act_informative::do_score;
 use crate::act_movement::do_move;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
@@ -1262,13 +1242,12 @@ use crate::structs::{
 };
 use crate::util::{BRF, NRM};
 use crate::{echo_off, echo_on, write_to_output};
-use log::{error, info};
+use log::error;
 use std::cmp::max;
 
 pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
     let db = &main_globals.db;
-    info!("nanny: {:?} '{}'", d.state(), arg);
 
     match d.state() {
         ConGetName => {
@@ -1283,13 +1262,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             if arg.is_empty() {
                 d.set_state(ConClose);
             } else {
-                let buf: String;
-                let tmp_name: String;
-                // struct char_file_u
-                // tmp_store;
-                // int
-                // player_i;
-
                 let tmp_name = _parse_name(arg);
 
                 let desc_list = main_globals.descriptor_list.borrow();
@@ -1303,7 +1275,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                     return;
                 }
-                let buf = tmp_name.unwrap().clone();
                 let och = d.character.borrow();
                 let character = och.as_ref().unwrap();
                 let mut tmp_store = CharFileU::new();
@@ -1364,7 +1335,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             }
         }
         ConNameCnfrm => {
-            let character = d.character.borrow().as_ref().unwrap();
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
                 // TODO: support banning
@@ -1418,8 +1388,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             if arg.is_empty() {
                 d.set_state(ConClose);
             } else {
-                let host = d.host.clone();
-                let mut matching_pwd: bool;
+                let matching_pwd: bool;
                 {
                     let och = d.character.borrow();
                     let character = och.as_ref().unwrap();
@@ -1555,7 +1524,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
         ConCnfpasswd | ConChpwdVrfy => {
             let och = d.character.borrow();
             let character = och.as_ref().unwrap();
-            let mut pwd_equals: bool;
+            let pwd_equals: bool;
             {
                 let salt = character.get_pc_name();
                 let passwd = character.get_passwd();
@@ -1608,7 +1577,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
         ConQclass => {
             let och = d.character.borrow();
             let character = och.as_ref().unwrap();
-            let host = d.host.clone();
             let load_result = parse_class(arg.chars().next().unwrap());
             if load_result == CLASS_UNDEFINED {
                 write_to_output(&d, "\r\nThat's not a class.\r\nClass: ");
@@ -1666,7 +1634,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                 '1' => {
                     {
-                        info!("[DEBUG] Player Entering game ... ");
                         reset_char(character.as_ref());
                         // TODO implement aliases
                         //read_aliases(character);
@@ -1680,7 +1647,6 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                          */
                         let mut load_room = character.get_loadroom();
                         if load_room != NOWHERE {
-                            let world = db.world.borrow();
                             load_room = db.real_room(load_room);
                         }
 

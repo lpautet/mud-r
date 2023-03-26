@@ -72,12 +72,12 @@ impl MainGlobals {
 
         let diff;
         if (time_info.month >= 9) && (time_info.month <= 16) {
-            diff = (if weather_info.pressure > 985 { -2 } else { 2 });
+            diff = if weather_info.pressure > 985 { -2 } else { 2 };
         } else {
-            diff = (if weather_info.pressure > 1015 { -2 } else { 2 });
+            diff = if weather_info.pressure > 1015 { -2 } else { 2 };
         }
 
-        weather_info.change += (dice(1, 4) * diff + dice(2, 6) - dice(2, 6));
+        weather_info.change += dice(1, 4) * diff + dice(2, 6) - dice(2, 6);
 
         weather_info.change = min(weather_info.change, 12);
         weather_info.change = max(weather_info.change, -12);
@@ -100,40 +100,40 @@ impl MainGlobals {
                 }
             }
             SKY_CLOUDY => {
-                if (weather_info.pressure < 970) {
+                if weather_info.pressure < 970 {
                     change = 2;
-                } else if (weather_info.pressure < 990) {
-                    if (dice(1, 4) == 1) {
+                } else if weather_info.pressure < 990 {
+                    if dice(1, 4) == 1 {
                         change = 2;
                     } else {
                         change = 0;
                     }
-                } else if (weather_info.pressure > 1030) {
-                    if (dice(1, 4) == 1) {
+                } else if weather_info.pressure > 1030 {
+                    if dice(1, 4) == 1 {
                         change = 3;
                     }
                 }
             }
             SKY_RAINING => {
-                if (weather_info.pressure < 970) {
-                    if (dice(1, 4) == 1) {
+                if weather_info.pressure < 970 {
+                    if dice(1, 4) == 1 {
                         change = 4;
                     } else {
                         change = 0;
                     }
-                } else if (weather_info.pressure > 1030) {
+                } else if weather_info.pressure > 1030 {
                     change = 5;
-                } else if (weather_info.pressure > 1010) {
-                    if (dice(1, 4) == 1) {
+                } else if weather_info.pressure > 1010 {
+                    if dice(1, 4) == 1 {
                         change = 5;
                     }
                 }
             }
             SKY_LIGHTNING => {
-                if (weather_info.pressure > 1010) {
+                if weather_info.pressure > 1010 {
                     change = 6;
-                } else if (weather_info.pressure > 990) {
-                    if (dice(1, 4) == 1) {
+                } else if weather_info.pressure > 990 {
+                    if dice(1, 4) == 1 {
                         change = 6;
                     }
                 }

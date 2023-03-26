@@ -60,22 +60,24 @@ impl DB {
                 {
                     let mut max = 1;
                     let mut best_obj = None;
-                    let world = self.world.borrow();
-                    let contents = world[ch.in_room() as usize].contents.borrow();
-                    for obj in contents.iter() {
-                        if self.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
-                            best_obj = Some(obj);
-                            max = obj.get_obj_cost();
+                    {
+                        let world = self.world.borrow();
+                        let contents = world[ch.in_room() as usize].contents.borrow();
+                        for obj in contents.iter() {
+                            if self.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
+                                best_obj = Some(obj.clone());
+                                max = obj.get_obj_cost();
+                            }
                         }
                     }
                     if best_obj.is_some() {
-                        self.obj_from_room(Some(best_obj.unwrap().clone()));
-                        DB::obj_to_char(Some(best_obj.unwrap().clone()), Some(ch.clone()));
+                        self.obj_from_room(Some(best_obj.as_ref().unwrap().clone()));
+                        DB::obj_to_char(Some(best_obj.as_ref().unwrap().clone()), Some(ch.clone()));
                         self.act(
                             "$n gets $p.",
                             false,
                             Some(ch.clone()),
-                            Some(best_obj.unwrap().as_ref()),
+                            Some(best_obj.as_ref().unwrap()),
                             None,
                             TO_ROOM,
                         );
@@ -99,7 +101,7 @@ impl DB {
                         .zone
                         == self.world.borrow()[ch.in_room() as usize].zone)
             {
-                perform_move(self, ch.clone(), door as i32, 1);
+                perform_move(self, ch, door as i32, 1);
             }
 
             /* Aggressive Mobs */
@@ -299,7 +301,7 @@ impl DB {
 
 impl CharData {
     /* erase ch's memory */
-    pub fn clearMemory(&self) {
+    pub fn clear_memory(&self) {
         self.memory().borrow_mut().clear();
     }
 }
@@ -320,7 +322,7 @@ impl DB {
         if master.is_none() || slave.aff_flagged(AFF_CHARM) {
             return false;
         }
-        let master = master.unwrap();
+        // let master = master.unwrap();
         // TODO implement snarl
         // if (!self.snarl_cmd)
         // self.snarl_cmd = find_command("snarl");

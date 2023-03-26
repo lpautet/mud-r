@@ -14,6 +14,7 @@ mod class;
 mod config;
 mod constants;
 mod db;
+mod fight;
 mod handler;
 mod interpreter;
 mod limits;
@@ -31,15 +32,16 @@ use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny};
-use crate::structs::ConState::{ConClose, ConGetName, ConPassword, ConPlaying};
+use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{hmhr, hshr, hssh, sana, SECS_PER_MUD_HOUR};
+use crate::util::{hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
 use env_logger::Env;
 use log::{debug, error, info, warn};
 use std::any::Any;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
+use std::cmp::max;
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
@@ -158,7 +160,7 @@ fn main() -> ExitCode {
         tics: 0,
         mins_since_crashsave: Cell::new(0),
     };
-    //let mut scheck: bool = false; /* for syntax checking mode */
+    let mut scheck: bool = false; /* for syntax checking mode */
     // ush_int port;
     // int pos = 1;
 
@@ -259,13 +261,14 @@ fn main() -> ExitCode {
 
     info!("Using {} as data directory.", dir);
 
-    // if scheck {
-    //     boot_world();
-    // } else {
-    info!("Running game on port {}.", port);
-    game.mother_desc = Some(RefCell::new(init_socket(port)));
-    game.init_game(port);
-    // }
+    if scheck {
+        let mut db = DB::new();
+        db.boot_world();
+    } else {
+        info!("Running game on port {}.", port);
+        game.mother_desc = Some(RefCell::new(init_socket(port)));
+        game.init_game(port);
+    }
 
     info!("Clearing game world.");
     // destroy_db();
@@ -313,9 +316,10 @@ impl MainGlobals {
         //Crash_save_all();
 
         info!("Closing all sockets.");
-        // DESCRIPTOR_LIST.iter_mut().for_each(|descriptor_data| {
-        //     close_socket(descriptor_data);
-        // });
+        self.descriptor_list
+            .borrow()
+            .iter()
+            .for_each(|d| self.close_socket(d));
         //
         // CLOSE_SOCKET(mother_desc);
         // fclose(player_fl);
@@ -672,8 +676,8 @@ impl MainGlobals {
                     // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
                     get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
                     command_interpreter(
-                        &self.db,
-                        d.character.borrow().as_ref().unwrap().clone(),
+                        self,
+                        d.character.borrow().as_ref().unwrap(),
                         comm.as_str(),
                     );
                     /* Send it to interpreter */
@@ -1221,8 +1225,6 @@ impl MainGlobals {
 fn process_output(t: &DescriptorData) -> i32 {
     //char i[MAX_SOCK_BUF], * osb = i + 2;
 
-    let mut result = 0;
-
     /* we may need this \r\n for later -- see below */
     let mut i = "\r\n".to_string();
     //strcpy(i, "\r\n"); /* strcpy: OK (for 'MAX_SOCK_BUF >= 3') */
@@ -1247,6 +1249,7 @@ fn process_output(t: &DescriptorData) -> i32 {
 
     /* add a prompt */
     i.push_str(&make_prompt(t));
+    let mut result;
 
     /*
      * now, send the output.  If this is an 'interruption', use the prepended
@@ -1557,16 +1560,13 @@ fn process_input(t: &DescriptorData) -> i32 {
     let buf_length;
     let mut failed_subst;
     let mut bytes_read;
-    let mut space_left;
     let mut read_point = 0;
-    let mut write_point = "".to_string();
     let mut nl_pos: Option<usize> = None;
     let mut tmp = String::new();
 
     /* first, find the point where we left off reading data */
     buf_length = t.inbuf.borrow().len();
-    read_point = buf_length;
-    space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
+    let mut space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
 
     loop {
         if space_left <= 0 {
@@ -1575,12 +1575,6 @@ fn process_input(t: &DescriptorData) -> i32 {
         }
 
         bytes_read = perform_socket_read(t);
-        info!(
-            "{} {} {:?}",
-            buf_length,
-            t.inbuf.borrow().capacity(),
-            bytes_read
-        );
 
         if bytes_read.is_err() {
             /* Error, disconnect them. */
@@ -1654,8 +1648,6 @@ fn process_input(t: &DescriptorData) -> i32 {
         }
 
         if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-            let buffer = format!("Line too long.  Truncated to:\r\n{}\r\n", tmp);
-
             if write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), tmp.as_str()) < 0 {
                 return -1;
             }
@@ -1778,70 +1770,125 @@ fn process_input(t: &DescriptorData) -> i32 {
 // return (0);
 // }
 
-// void close_socket(struct descriptor_data * d)
-// {
-// struct descriptor_data * temp;
-//
-// REMOVE_FROM_LIST(d, descriptor_list, next);
-// CLOSE_SOCKET(d -> descriptor);
-// flush_queues(d);
-//
-// /* Forget snooping */
-// if (d ->snooping)
-// d -> snooping -> snoop_by = NULL;
-//
-// if (d -> snoop_by) {
-// write_to_output(d -> snoop_by, "Your victim is no longer among us.\r\n");
-// d-> snoop_by -> snooping = NULL;
-// }
-//
-// if (d -> character) {
-// /* If we're switched, this resets the mobile taken. */
-// d -> character -> desc = NULL;
-//
-// /* Plug memory leak, from Eric Green. */
-// if (! IS_NPC(d -> character) & & PLR_FLAGGED(d -> character, PLR_MAILING) & & d-> str) {
-// if ( * (d -> str))
-// free( * (d -> str));
-// free(d -> str);
-// }
-//
-// if (STATE(d) == ConPlaying | | STATE(d) == ConDisconnect) {
-// struct char_data * link_challenged = d -> original ? d-> original: d -> character;
-//
-// /* We are guaranteed to have a person. */
-// act("$n has lost $s link.", TRUE, link_challenged, 0, 0, TO_ROOM);
-// save_char(link_challenged);
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(link_challenged)), TRUE, "Closing link to: %s.", GET_NAME(link_challenged));
-// } else {
-// mudlog(CMP, LVL_IMMORT, TRUE, "Losing player: %s.", GET_NAME(d -> character) ? GET_NAME(d-> character): "<null>");
-// free_char(d-> character);
-// }
-// } else
-// mudlog(CMP, LVL_IMMORT, TRUE, "Losing descriptor without char.");
-//
-// /* JE 2/22/95 -- part of my unending quest to make switch stable */
-// if (d -> original & & d-> original -> desc)
-// d -> original -> desc = NULL;
-//
-// /* Clear the command history. */
-// if (d -> history) {
-// int cnt;
-// for (cnt = 0; cnt < HISTORY_SIZE; cnt + + )
-// if (d-> history[cnt])
-// free(d ->history[cnt]);
-// free(d ->history);
-// }
-//
-// if (d -> showstr_head)
-// free(d ->showstr_head);
-// if (d -> showstr_count)
-// free(d -> showstr_vector);
-//
-// free(d);
-// }
-
 impl MainGlobals {
+    pub fn close_socket(&self, d: &Rc<DescriptorData>) {
+        self.descriptor_list
+            .borrow_mut()
+            .retain(|c| !Rc::ptr_eq(c, d));
+
+        d.stream
+            .borrow_mut()
+            .shutdown(Shutdown::Both)
+            .expect("SYSERR while closing socket");
+        //CLOSE_SOCKET(d -> descriptor);
+        // flush_queues(d);
+
+        /* Forget snooping */
+        // TODO implement snooping
+        // if (d ->snooping)
+        // d -> snooping -> snoop_by = NULL;
+        //
+        // if (d -> snoop_by) {
+        // write_to_output(d -> snoop_by, "Your victim is no longer among us.\r\n");
+        // d-> snoop_by -> snooping = NULL;
+        // }
+
+        if d.character.borrow().is_some() {
+            /* If we're switched, this resets the mobile taken. */
+            *d.character.borrow().as_ref().unwrap().desc.borrow_mut() = None;
+
+            /* Plug memory leak, from Eric Green. */
+            //     if !d.character.borrow().as_ref().unwrap().is_npc() &&
+            //         d.character.borrow().as_ref().unwrap().plr_flagged( PLR_MAILING)
+            // if (! IS_NPC(d -> character) & & PLR_FLAGGED(d -> character, PLR_MAILING) & & d-> str) {
+            // if ( * (d -> str))
+            // free( * (d -> str));
+            // free(d -> str);
+            // }
+
+            if d.state() == ConPlaying || d.state() == ConDisconnect {
+                let original = d.original.borrow();
+                let link_challenged = if original.is_some() {
+                    original.as_ref().unwrap()
+                } else {
+                    original.as_ref().unwrap()
+                };
+
+                /* We are guaranteed to have a person. */
+                self.db.act(
+                    "$n has lost $s link.",
+                    true,
+                    Some(link_challenged.clone()),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                self.db.save_char(link_challenged);
+                self.mudlog(
+                    NRM,
+                    max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),
+                    true,
+                    format!("Closing link to: {}.", link_challenged.get_name()).as_str(),
+                );
+            } else {
+                let name = d.character.borrow().as_ref().unwrap().get_name();
+                self.mudlog(
+                    CMP,
+                    LVL_IMMORT as i32,
+                    true,
+                    format!(
+                        "Losing player: {}.",
+                        if name.is_empty() {
+                            name.as_ref()
+                        } else {
+                            "<null>"
+                        }
+                    )
+                    .as_str(),
+                );
+                // free_char(d-> character);
+            }
+        } else {
+            self.mudlog(
+                CMP,
+                LVL_IMMORT as i32,
+                true,
+                "Losing descriptor without char.",
+            );
+        }
+
+        /* JE 2/22/95 -- part of my unending quest to make switch stable */
+        if d.original.borrow().is_some()
+            && d.original
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .desc
+                .borrow()
+                .is_some()
+        {
+            *d.original.borrow().as_ref().unwrap().desc.borrow_mut() = None;
+        }
+
+        /* Clear the command history. */
+        // TODO implement command history
+        // if (d -> history) {
+        //     int
+        //     cnt;
+        //     for (cnt = 0; cnt < HISTORY_SIZE; cnt + +)
+        //     if (d -> history[cnt])
+        //     free(d ->history[cnt]);
+        //     free(d ->history);
+        // }
+
+        // if (d -> showstr_head)
+        // free(d ->showstr_head);
+        // if (d -> showstr_count)
+        // free(d -> showstr_vector);
+        //
+        // free(d);
+    }
+
     fn check_idle_passwords(&self) {
         //struct descriptor_data * d, * next_d;
         for d in self.descriptor_list.borrow().iter() {

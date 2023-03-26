@@ -148,24 +148,24 @@ pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 /* ROOM NUMBERS */
 
 /* virtual number of room that mortals should enter at */
-use crate::structs::{room_vnum, LVL_GOD};
+use crate::structs::{RoomRnum, LVL_GOD};
 
-pub const MORTAL_START_ROOM: room_vnum = 3001;
+pub const MORTAL_START_ROOM: RoomRnum = 3001;
 
 /* virtual number of room that immorts should enter at by default */
-pub const IMMORT_START_ROOM: room_vnum = 1204;
+pub const IMMORT_START_ROOM: RoomRnum = 1204;
 
 /* virtual number of room that frozen players should enter at */
-pub const FROZEN_START_ROOM: room_vnum = 1202;
+pub const FROZEN_START_ROOM: RoomRnum = 1202;
 
 /*
 * virtual numbers of donation rooms.  note: you must change code in
 * do_drop of act.item.c if you change the number of non-NOWHERE
 * donation rooms.
 */
-// room_vnum donation_room_1 = 3063;
-// room_vnum donation_room_2 = NOWHERE;	/* unused - room for expansion */
-// room_vnum donation_room_3 = NOWHERE;	/* unused - room for expansion */
+// RoomRnum donation_room_1 = 3063;
+// RoomRnum donation_room_2 = NOWHERE;	/* unused - room for expansion */
+// RoomRnum donation_room_3 = NOWHERE;	/* unused - room for expansion */
 /****************************************************************************/
 /****************************************************************************/
 

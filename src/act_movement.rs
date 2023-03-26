@@ -17,7 +17,7 @@ use crate::structs::{
     ROOM_GODROOM, ROOM_TUNNEL, SECT_WATER_NOSWIM,
 };
 use crate::util::num_pc_in_room;
-use crate::{send_to_char, TO_ROOM};
+use crate::{send_to_char, MainGlobals, TO_ROOM};
 use std::borrow::Borrow;
 use std::rc::Rc;
 
@@ -70,7 +70,7 @@ use std::rc::Rc;
  *   1 : If succes.
  *   0 : If fail
  */
-pub fn perform_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check: i32) -> i32 {
+pub fn perform_move(db: &DB, rch: &Rc<CharData>, dir: i32, need_specials_check: i32) -> i32 {
     let ch = rch.as_ref();
     //struct follow_type *k, *next;
 
@@ -108,7 +108,7 @@ pub fn perform_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check: i
         }
     } else {
         if ch.followers.borrow().is_empty() {
-            return do_simple_move(db, rch, dir, need_specials_check);
+            return do_simple_move(db, rch.clone(), dir, need_specials_check);
         }
 
         // TODO implement follower
@@ -265,12 +265,13 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
     return 1;
 }
 
-pub fn do_move(db: &DB, ch: Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_move(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.
      * It cannot be done in perform_move because perform_move is called
      * by other functions which do not require the remapping.
      */
+    let db = &game.db;
     perform_move(db, ch, subcmd - 1, 0);
 }
 //

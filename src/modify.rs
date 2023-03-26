@@ -283,7 +283,7 @@ fn next_page(str: &str) -> Option<&str> {
 
 /* Function that returns the number of pages in the string. */
 fn count_pages(msg: &str) -> i32 {
-    let mut msg = msg;
+    let msg = msg;
     let mut pages = 1;
     loop {
         let r = next_page(msg);

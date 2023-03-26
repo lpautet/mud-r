@@ -16,19 +16,25 @@ use std::rc::Rc;
 
 use log::error;
 
-use crate::constants::{DIRS, ROOM_BITS};
+use crate::class::level_exp;
+use crate::constants::{DIRS, ROOM_BITS, WEAR_WHERE};
 use crate::db::DB;
+use crate::fight::compute_armor_class;
 use crate::modify::page_string;
 use crate::screen::{C_NRM, KCYN, KGRN, KNRM, KNUL, KYEL};
-use crate::structs::AFF_INFRAVISION;
 use crate::structs::{
     CharData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY,
-    EX_CLOSED, ITEM_BLESS, ITEM_DRINKCON, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, NOWHERE,
-    NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2,
+    EX_CLOSED, ITEM_BLESS, ITEM_DRINKCON, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC,
+    ITEM_NOTE, NOWHERE, NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2,
 };
 use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
-use crate::util::sprintbit;
-use crate::{_clrlevel, clr, send_to_char, CCCYN, CCGRN, CCYEL};
+use crate::structs::{
+    AFF_CHARM, AFF_DETECT_INVIS, AFF_INFRAVISION, AFF_POISON, DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
+    POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
+    POS_STUNNED, PRF_SUMMONABLE, THIRST,
+};
+use crate::util::{age, real_time_passed, sprintbit, time_now};
+use crate::{_clrlevel, clr, send_to_char, MainGlobals, CCCYN, CCGRN, CCYEL};
 use crate::{CCNRM, TO_VICT};
 
 pub const SHOW_OBJ_LONG: i32 = 0;
@@ -156,11 +162,11 @@ impl DB {
 // int j, found;
 // struct obj_data *tmp_obj;
 //
-// if (!ch->desc)
+// if (!ch.desc)
 // return;
 //
-// if (i->player.description)
-// send_to_char(ch, "%s", i->player.description);
+// if (i.player.description)
+// send_to_char(ch, "%s", i.player.description);
 // else
 // act("You see nothing special about $m.", FALSE, i, 0, ch, TO_VICT);
 //
@@ -176,14 +182,14 @@ impl DB {
 // act("$n is using:", FALSE, i, 0, ch, TO_VICT);
 // for (j = 0; j < NUM_WEARS; j++)
 // if (GET_EQ(i, j) && CAN_SEE_OBJ(ch, GET_EQ(i, j))) {
-// send_to_char(ch, "%s", wear_where[j]);
+// send_to_char(ch, "%s", WEAR_WHERE[j]);
 // show_obj_to_char(GET_EQ(i, j), ch, SHOW_OBJ_SHORT);
 // }
 // }
 // if (ch != i && (IS_THIEF(ch) || GET_LEVEL(ch) >= LVL_IMMORT)) {
 // found = FALSE;
 // act("\r\nYou attempt to peek at $s inventory:", FALSE, i, 0, ch, TO_VICT);
-// for (tmp_obj = i->carrying; tmp_obj; tmp_obj = tmp_obj->next_content) {
+// for (tmp_obj = i.carrying; tmp_obj; tmp_obj = tmp_obj.next_content) {
 // if (CAN_SEE_OBJ(ch, tmp_obj) && (rand_number(0, 20) < GET_LEVEL(ch))) {
 // show_obj_to_char(tmp_obj, ch, SHOW_OBJ_SHORT);
 // found = TRUE;
@@ -354,7 +360,6 @@ impl DB {
             {
                 continue;
             }
-            let x = self.exit(ch, door);
             if self
                 .exit(ch, door)
                 .as_ref()
@@ -390,7 +395,7 @@ impl DB {
 // send_to_char(ch, "Obvious exits:\r\n");
 //
 // for (door = 0; door < NUM_OF_DIRS; door++) {
-// if (!EXIT(ch, door) || EXIT(ch, door)->to_room == NOWHERE)
+// if (!EXIT(ch, door) || EXIT(ch, door).to_room == NOWHERE)
 // continue;
 // if (EXIT_FLAGGED(EXIT(ch, door), EX_CLOSED))
 // continue;
@@ -398,11 +403,11 @@ impl DB {
 // len++;
 //
 // if (GET_LEVEL(ch) >= LVL_IMMORT)
-// send_to_char(ch, "%-5s - [%5d] %s\r\n", dirs[door], GET_ROOM_VNUM(EXIT(ch, door)->to_room),
-// world[EXIT(ch, door)->to_room].name);
+// send_to_char(ch, "%-5s - [%5d] %s\r\n", dirs[door], GET_ROOM_VNUM(EXIT(ch, door).to_room),
+// world[EXIT(ch, door).to_room].name);
 // else
-// send_to_char(ch, "%-5s - %s\r\n", dirs[door], IS_DARK(EXIT(ch, door)->to_room) &&
-// !CAN_SEE_IN_DARK(ch) ? "Too dark to tell." : world[EXIT(ch, door)->to_room].name);
+// send_to_char(ch, "%-5s - %s\r\n", dirs[door], IS_DARK(EXIT(ch, door).to_room) &&
+// !CAN_SEE_IN_DARK(ch) ? "Too dark to tell." : world[EXIT(ch, door).to_room].name);
 // }
 //
 // if (!len)
@@ -411,7 +416,6 @@ impl DB {
 
 impl DB {
     pub fn look_at_room(&self, ch: &Rc<CharData>, ignore_brief: bool) {
-        let mut buf = String::new();
         if ch.desc.borrow().is_none() {
             return;
         }
@@ -488,15 +492,15 @@ impl DB {
 // void look_in_direction(struct char_data *ch, int dir)
 // {
 // if (EXIT(ch, dir)) {
-// if (EXIT(ch, dir)->general_description)
-// send_to_char(ch, "%s", EXIT(ch, dir)->general_description);
+// if (EXIT(ch, dir).general_description)
+// send_to_char(ch, "%s", EXIT(ch, dir).general_description);
 // else
 // send_to_char(ch, "You see nothing special.\r\n");
 //
-// if (EXIT_FLAGGED(EXIT(ch, dir), EX_CLOSED) && EXIT(ch, dir)->keyword)
-// send_to_char(ch, "The %s is closed.\r\n", fname(EXIT(ch, dir)->keyword));
-// else if (EXIT_FLAGGED(EXIT(ch, dir), EX_ISDOOR) && EXIT(ch, dir)->keyword)
-// send_to_char(ch, "The %s is open.\r\n", fname(EXIT(ch, dir)->keyword));
+// if (EXIT_FLAGGED(EXIT(ch, dir), EX_CLOSED) && EXIT(ch, dir).keyword)
+// send_to_char(ch, "The %s is closed.\r\n", fname(EXIT(ch, dir).keyword));
+// else if (EXIT_FLAGGED(EXIT(ch, dir), EX_ISDOOR) && EXIT(ch, dir).keyword)
+// send_to_char(ch, "The %s is open.\r\n", fname(EXIT(ch, dir).keyword));
 // } else
 // send_to_char(ch, "Nothing special there...\r\n");
 // }
@@ -523,7 +527,7 @@ impl DB {
 // if (OBJVAL_FLAGGED(obj, CONT_CLOSED))
 // send_to_char(ch, "It is closed.\r\n");
 // else {
-// send_to_char(ch, "%s", fname(obj->name));
+// send_to_char(ch, "%s", fname(obj.name));
 // switch (bits) {
 // case FIND_OBJ_INV:
 // send_to_char(ch, " (carried): \r\n");
@@ -536,7 +540,7 @@ impl DB {
 // break;
 // }
 //
-// list_obj_to_char(obj->contains, ch, SHOW_OBJ_SHORT, TRUE);
+// list_obj_to_char(obj.contains, ch, SHOW_OBJ_SHORT, TRUE);
 // }
 // } else {		/* item must be a fountain or drink container */
 // if (GET_OBJ_VAL(obj, 1) <= 0)
@@ -561,9 +565,9 @@ impl DB {
 // {
 // struct extra_descr_data *i;
 //
-// for (i = list; i; i = i->next)
-// if (isname(word, i->keyword))
-// return (i->description);
+// for (i = list; i; i = i.next)
+// if (isname(word, i.keyword))
+// return (i.description);
 //
 // return (NULL);
 // }
@@ -584,7 +588,7 @@ impl DB {
 // struct obj_data *obj, *found_obj = NULL;
 // char *desc;
 //
-// if (!ch->desc)
+// if (!ch.desc)
 // return;
 //
 // if (!*arg) {
@@ -614,31 +618,31 @@ impl DB {
 //
 // /* Does the argument match an extra desc in the room? */
 // if ((desc = find_exdesc(arg, world[IN_ROOM(ch)].ex_description)) != NULL && ++i == fnum) {
-// page_string(ch->desc, desc, FALSE);
+// page_string(ch.desc, desc, FALSE);
 // return;
 // }
 //
 // /* Does the argument match an extra desc in the char's equipment? */
 // for (j = 0; j < NUM_WEARS && !found; j++)
 // if (GET_EQ(ch, j) && CAN_SEE_OBJ(ch, GET_EQ(ch, j)))
-// if ((desc = find_exdesc(arg, GET_EQ(ch, j)->ex_description)) != NULL && ++i == fnum) {
+// if ((desc = find_exdesc(arg, GET_EQ(ch, j).ex_description)) != NULL && ++i == fnum) {
 // send_to_char(ch, "%s", desc);
 // found = TRUE;
 // }
 //
 // /* Does the argument match an extra desc in the char's inventory? */
-// for (obj = ch->carrying; obj && !found; obj = obj->next_content) {
+// for (obj = ch.carrying; obj && !found; obj = obj.next_content) {
 // if (CAN_SEE_OBJ(ch, obj))
-// if ((desc = find_exdesc(arg, obj->ex_description)) != NULL && ++i == fnum) {
+// if ((desc = find_exdesc(arg, obj.ex_description)) != NULL && ++i == fnum) {
 // send_to_char(ch, "%s", desc);
 // found = TRUE;
 // }
 // }
 //
 // /* Does the argument match an extra desc of an object in the room? */
-// for (obj = world[IN_ROOM(ch)].contents; obj && !found; obj = obj->next_content)
+// for (obj = world[IN_ROOM(ch)].contents; obj && !found; obj = obj.next_content)
 // if (CAN_SEE_OBJ(ch, obj))
-// if ((desc = find_exdesc(arg, obj->ex_description)) != NULL && ++i == fnum) {
+// if ((desc = find_exdesc(arg, obj.ex_description)) != NULL && ++i == fnum) {
 // send_to_char(ch, "%s", desc);
 // found = TRUE;
 // }
@@ -660,7 +664,7 @@ impl DB {
 // {
 // int look_type;
 //
-// if (!ch->desc)
+// if (!ch.desc)
 // return;
 //
 // if (GET_POS(ch) < POS_SLEEPING)
@@ -738,146 +742,231 @@ impl DB {
 // else
 // send_to_char(ch, "You have %d gold coins.\r\n", GET_GOLD(ch));
 // }
-//
-//
-// ACMD(do_score)
-// {
-// struct time_info_data playing_time;
-//
-// if (IS_NPC(ch))
-// return;
-//
-// send_to_char(ch, "You are %d years old.\r\n", GET_AGE(ch));
-//
-// if (age(ch)->month == 0 && age(ch)->day == 0)
-// send_to_char(ch, "  It's your birthday today.\r\n");
-// else
-// send_to_char(ch, "\r\n");
-//
-// send_to_char(ch, "You have %d(%d) hit, %d(%d) mana and %d(%d) movement points.\r\n",
-// GET_HIT(ch), GET_MAX_HIT(ch), GET_MANA(ch), GET_MAX_MANA(ch),
-// GET_MOVE(ch), GET_MAX_MOVE(ch));
-//
-// send_to_char(ch, "Your armor class is %d/10, and your alignment is %d.\r\n",
-// compute_armor_class(ch), GET_ALIGNMENT(ch));
-//
-// send_to_char(ch, "You have scored %d exp, and have %d gold coins.\r\n",
-// GET_EXP(ch), GET_GOLD(ch));
-//
-// if (GET_LEVEL(ch) < LVL_IMMORT)
-// send_to_char(ch, "You need %d exp to reach your next level.\r\n",
-// level_exp(GET_CLASS(ch), GET_LEVEL(ch) + 1) - GET_EXP(ch));
-//
-// playing_time = *real_time_passed((time(0) - ch->player.time.logon) +
-// ch->player.time.played, 0);
-// send_to_char(ch, "You have been playing for %d day%s and %d hour%s.\r\n",
-// playing_time.day, playing_time.day == 1 ? "" : "s",
-// playing_time.hours, playing_time.hours == 1 ? "" : "s");
-//
-// send_to_char(ch, "This ranks you as %s %s (level %d).\r\n",
-// GET_NAME(ch), GET_TITLE(ch), GET_LEVEL(ch));
-//
-// switch (GET_POS(ch)) {
-// case POS_DEAD:
-// send_to_char(ch, "You are DEAD!\r\n");
-// break;
-// case POS_MORTALLYW:
-// send_to_char(ch, "You are mortally wounded!  You should seek help!\r\n");
-// break;
-// case POS_INCAP:
-// send_to_char(ch, "You are incapacitated, slowly fading away...\r\n");
-// break;
-// case POS_STUNNED:
-// send_to_char(ch, "You are stunned!  You can't move!\r\n");
-// break;
-// case POS_SLEEPING:
-// send_to_char(ch, "You are sleeping.\r\n");
-// break;
-// case POS_RESTING:
-// send_to_char(ch, "You are resting.\r\n");
-// break;
-// case POS_SITTING:
-// send_to_char(ch, "You are sitting.\r\n");
-// break;
-// case POS_FIGHTING:
-// send_to_char(ch, "You are fighting %s.\r\n", FIGHTING(ch) ? PERS(FIGHTING(ch), ch) : "thin air");
-// break;
-// case POS_STANDING:
-// send_to_char(ch, "You are standing.\r\n");
-// break;
-// default:
-// send_to_char(ch, "You are floating.\r\n");
-// break;
+
+// macro_rules! acmd {
+//     ($n:ident) => {
+//         $n(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32)
+//     }
 // }
 //
-// if (GET_COND(ch, DRUNK) > 10)
-// send_to_char(ch, "You are intoxicated.\r\n");
+// pub fn acmd!(do_test) {
 //
-// if (GET_COND(ch, FULL) == 0)
-// send_to_char(ch, "You are hungry.\r\n");
-//
-// if (GET_COND(ch, THIRST) == 0)
-// send_to_char(ch, "You are thirsty.\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_BLIND))
-// send_to_char(ch, "You have been blinded!\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_INVISIBLE))
-// send_to_char(ch, "You are invisible.\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_DETECT_INVIS))
-// send_to_char(ch, "You are sensitive to the presence of invisible things.\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_SANCTUARY))
-// send_to_char(ch, "You are protected by Sanctuary.\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_POISON))
-// send_to_char(ch, "You are poisoned!\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_CHARM))
-// send_to_char(ch, "You have been charmed!\r\n");
-//
-// if (affected_by_spell(ch, SPELL_ARMOR))
-// send_to_char(ch, "You feel protected.\r\n");
-//
-// if (AFF_FLAGGED(ch, AFF_INFRAVISION))
-// send_to_char(ch, "Your eyes are glowing red.\r\n");
-//
-// if (PRF_FLAGGED(ch, PRF_SUMMONABLE))
-// send_to_char(ch, "You are summonable by other players.\r\n");
 // }
-//
-//
-// ACMD(do_inventory)
-// {
-// send_to_char(ch, "You are carrying:\r\n");
-// list_obj_to_char(ch->carrying, ch, SHOW_OBJ_SHORT, TRUE);
-// }
-//
-//
-// ACMD(do_equipment)
-// {
-// int i, found = 0;
-//
-// send_to_char(ch, "You are using:\r\n");
-// for (i = 0; i < NUM_WEARS; i++) {
-// if (GET_EQ(ch, i)) {
-// if (CAN_SEE_OBJ(ch, GET_EQ(ch, i))) {
-// send_to_char(ch, "%s", wear_where[i]);
-// show_obj_to_char(GET_EQ(ch, i), ch, SHOW_OBJ_SHORT);
-// found = TRUE;
-// } else {
-// send_to_char(ch, "%s", wear_where[i]);
-// send_to_char(ch, "Something.\r\n");
-// found = TRUE;
-// }
-// }
-// }
-// if (!found)
-// send_to_char(ch, " Nothing.\r\n");
-// }
-//
-//
+
+pub fn do_score(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    if ch.is_npc() {
+        return;
+    }
+
+    send_to_char(
+        ch,
+        format!("You are {} years old.\r\n", ch.get_age()).as_str(),
+    );
+
+    if age(ch).month == 0 && age(ch).day == 0 {
+        send_to_char(ch, "  It's your birthday today.\r\n");
+    } else {
+        send_to_char(ch, "\r\n");
+    }
+
+    send_to_char(
+        ch,
+        format!(
+            "You have {}({}) hit, {}({}) mana and {}({}) movement points.\r\n",
+            ch.get_hit(),
+            ch.get_max_hit(),
+            ch.get_mana(),
+            ch.get_max_mana(),
+            ch.get_move(),
+            ch.get_max_move()
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "Your armor class is {}/10, and your alignment is {}.\r\n",
+            compute_armor_class(ch),
+            ch.get_alignment()
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "You have scored {} exp, and have {} gold coins.\r\n",
+            ch.get_exp(),
+            ch.get_gold()
+        )
+        .as_str(),
+    );
+
+    if ch.get_level() < LVL_IMMORT as u8 {
+        send_to_char(
+            ch,
+            format!(
+                "You need {} exp to reach your next level.\r\n",
+                level_exp(ch.get_class(), (ch.get_level() + 1) as i16) - ch.get_exp()
+            )
+            .as_str(),
+        );
+    }
+
+    let playing_time = real_time_passed(
+        (time_now() - ch.player.borrow().time.logon) + ch.player.borrow().time.played as u64,
+        0,
+    );
+    send_to_char(
+        ch,
+        format!(
+            "You have been playing for {} day{} and {} hour{}.\r\n",
+            playing_time.day,
+            if playing_time.day == 1 { "" } else { "s" },
+            playing_time.hours,
+            if playing_time.hours == 1 { "" } else { "s" }
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "This ranks you as {} {} (level {}).\r\n",
+            ch.get_name(),
+            ch.get_title(),
+            ch.get_level()
+        )
+        .as_str(),
+    );
+
+    match ch.get_pos() {
+        POS_DEAD => {
+            send_to_char(ch, "You are DEAD!\r\n");
+        }
+        POS_MORTALLYW => {
+            send_to_char(ch, "You are mortally wounded!  You should seek help!\r\n");
+        }
+        POS_INCAP => {
+            send_to_char(ch, "You are incapacitated, slowly fading away...\r\n");
+        }
+        POS_STUNNED => {
+            send_to_char(ch, "You are stunned!  You can't move!\r\n");
+        }
+        POS_SLEEPING => {
+            send_to_char(ch, "You are sleeping.\r\n");
+        }
+        POS_RESTING => {
+            send_to_char(ch, "You are resting.\r\n");
+        }
+        POS_SITTING => {
+            send_to_char(ch, "You are sitting.\r\n");
+        }
+        POS_FIGHTING => {
+            let v = game.db.pers(ch.fighting().as_ref().unwrap(), ch);
+            send_to_char(
+                ch,
+                format!(
+                    "You are fighting {}.\r\n",
+                    if ch.fighting().is_some() {
+                        v.as_ref()
+                    } else {
+                        "thin air"
+                    }
+                )
+                .as_str(),
+            );
+        }
+        POS_STANDING => {
+            send_to_char(ch, "You are standing.\r\n");
+        }
+        _ => {
+            send_to_char(ch, "You are floating.\r\n");
+        }
+    }
+
+    if ch.get_cond(DRUNK) > 10 {
+        send_to_char(ch, "You are intoxicated.\r\n");
+    }
+    if ch.get_cond(FULL) == 0 {
+        send_to_char(ch, "You are hungry.\r\n");
+    }
+    if ch.get_cond(THIRST) == 0 {
+        send_to_char(ch, "You are thirsty.\r\n");
+    }
+    if ch.aff_flagged(AFF_BLIND) {
+        send_to_char(ch, "You have been blinded!\r\n");
+    }
+    if ch.aff_flagged(AFF_INVISIBLE) {
+        send_to_char(ch, "You are invisible.\r\n");
+    }
+    if ch.aff_flagged(AFF_DETECT_INVIS) {
+        send_to_char(
+            ch,
+            "You are sensitive to the presence of invisible things.\r\n",
+        );
+    }
+    if ch.aff_flagged(AFF_SANCTUARY) {
+        send_to_char(ch, "You are protected by Sanctuary.\r\n");
+    }
+    if ch.aff_flagged(AFF_POISON) {
+        send_to_char(ch, "You are poisoned!\r\n");
+    }
+    if ch.aff_flagged(AFF_CHARM) {
+        send_to_char(ch, "You have been charmed!\r\n");
+    }
+    // TODO implement spell
+    // if (affected_by_spell(ch, SPELL_ARMOR))
+    // send_to_char(ch, "You feel protected.\r\n");
+
+    if ch.aff_flagged(AFF_INFRAVISION) {
+        send_to_char(ch, "Your eyes are glowing red.\r\n");
+    }
+    if ch.aff_flagged(PRF_SUMMONABLE) {
+        send_to_char(ch, "You are summonable by other players.\r\n");
+    }
+}
+
+pub fn do_inventory(
+    game: &MainGlobals,
+    ch: &Rc<CharData>,
+    argument: &str,
+    cmd: usize,
+    subcmd: i32,
+) {
+    send_to_char(ch, "You are carrying:\r\n");
+    game.db
+        .list_obj_to_char(ch.carrying.borrow().as_ref(), ch, SHOW_OBJ_SHORT, true);
+}
+
+pub fn do_equipment(
+    game: &MainGlobals,
+    ch: &Rc<CharData>,
+    argument: &str,
+    cmd: usize,
+    subcmd: i32,
+) {
+    let mut found = false;
+    send_to_char(ch, "You are using:\r\n");
+    for i in 0..NUM_WEARS {
+        if ch.get_eq(i).is_some() {
+            if game.db.can_see_obj(ch, ch.get_eq(i).as_ref().unwrap()) {
+                send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                show_obj_to_char(ch.get_eq(i).as_ref().unwrap(), ch, SHOW_OBJ_SHORT);
+                found = true;
+            } else {
+                send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                send_to_char(ch, "Something.\r\n");
+                found = true;
+            }
+        }
+    }
+    if !found {
+        send_to_char(ch, " Nothing.\r\n");
+    }
+}
+
 // ACMD(do_time)
 // {
 // const char *suf;
@@ -952,13 +1041,13 @@ impl DB {
 // {
 // int chk, bot, top, mid, minlen;
 //
-// if (!ch->desc)
+// if (!ch.desc)
 // return;
 //
 // skip_spaces(&argument);
 //
 // if (!*argument) {
-// page_string(ch->desc, help, 0);
+// page_string(ch.desc, help, 0);
 // return;
 // }
 // if (!help_table) {
@@ -981,7 +1070,7 @@ impl DB {
 // while ((mid > 0) &&
 // (!(chk = strn_cmp(argument, help_table[mid - 1].keyword, minlen))))
 // mid--;
-// page_string(ch->desc, help_table[mid].entry, 0);
+// page_string(ch.desc, help_table[mid].entry, 0);
 // return;
 // } else {
 // if (chk > 0)
@@ -1067,13 +1156,13 @@ impl DB {
 //
 // send_to_char(ch, "Players\r\n-------\r\n");
 //
-// for (d = descriptor_list; d; d = d->next) {
+// for (d = descriptor_list; d; d = d.next) {
 // if (STATE(d) != CON_PLAYING)
 // continue;
 //
-// if (d->original)
-// tch = d->original;
-// else if (!(tch = d->character))
+// if (d.original)
+// tch = d.original;
+// else if (!(tch = d.character))
 // continue;
 //
 // if (*name_search && str_cmp(GET_NAME(tch), name_search) &&
@@ -1214,18 +1303,18 @@ impl DB {
 //
 // one_argument(argument, arg);
 //
-// for (d = descriptor_list; d; d = d->next) {
+// for (d = descriptor_list; d; d = d.next) {
 // if (STATE(d) != CON_PLAYING && playing)
 // continue;
 // if (STATE(d) == CON_PLAYING && deadweight)
 // continue;
 // if (STATE(d) == CON_PLAYING) {
-// if (d->original)
-// tch = d->original;
-// else if (!(tch = d->character))
+// if (d.original)
+// tch = d.original;
+// else if (!(tch = d.character))
 // continue;
 //
-// if (*host_search && !strstr(d->host, host_search))
+// if (*host_search && !strstr(d.host, host_search))
 // continue;
 // if (*name_search && str_cmp(GET_NAME(tch), name_search))
 // continue;
@@ -1239,38 +1328,38 @@ impl DB {
 // if (GET_INVIS_LEV(ch) > GET_LEVEL(ch))
 // continue;
 //
-// if (d->original)
-// sprintf(classname, "[%2d %s]", GET_LEVEL(d->original),
-// CLASS_ABBR(d->original));
+// if (d.original)
+// sprintf(classname, "[%2d %s]", GET_LEVEL(d.original),
+// CLASS_ABBR(d.original));
 // else
-// sprintf(classname, "[%2d %s]", GET_LEVEL(d->character),
-// CLASS_ABBR(d->character));
+// sprintf(classname, "[%2d %s]", GET_LEVEL(d.character),
+// CLASS_ABBR(d.character));
 // } else
 // strcpy(classname, "   -   ");
 //
-// timeptr = asctime(localtime(&d->login_time));
+// timeptr = asctime(localtime(&d.login_time));
 // timeptr += 11;
 // *(timeptr + 8) = '\0';
 //
-// if (STATE(d) == CON_PLAYING && d->original)
+// if (STATE(d) == CON_PLAYING && d.original)
 // strcpy(state, "Switched");
 // else
 // strcpy(state, connected_types[STATE(d)]);
 //
-// if (d->character && STATE(d) == CON_PLAYING && GET_LEVEL(d->character) < LVL_GOD)
-// sprintf(idletime, "%3d", d->character->char_specials.timer *
+// if (d.character && STATE(d) == CON_PLAYING && GET_LEVEL(d.character) < LVL_GOD)
+// sprintf(idletime, "%3d", d.character.char_specials.timer *
 // SECS_PER_MUD_HOUR / SECS_PER_REAL_MIN);
 // else
 // strcpy(idletime, "");
 //
-// sprintf(line, "%3d %-7s %-12s %-14s %-3s %-8s ", d->desc_num, classname,
-// d->original && d->original->player.name ? d->original->player.name :
-// d->character && d->character->player.name ? d->character->player.name :
+// sprintf(line, "%3d %-7s %-12s %-14s %-3s %-8s ", d.desc_num, classname,
+// d.original && d.original.player.name ? d.original.player.name :
+// d.character && d.character.player.name ? d.character.player.name :
 // "UNDEFINED",
 // state, idletime, timeptr);
 //
-// if (d->host && *d->host)
-// sprintf(line + strlen(line), "[%s]\r\n", d->host);
+// if (d.host && *d.host)
+// sprintf(line + strlen(line), "[%s]\r\n", d.host);
 // else
 // strcat(line, "[Hostname unknown]\r\n");
 //
@@ -1279,7 +1368,7 @@ impl DB {
 // strcpy(line, line2);
 // }
 // if (STATE(d) != CON_PLAYING ||
-// (STATE(d) == CON_PLAYING && CAN_SEE(ch, d->character))) {
+// (STATE(d) == CON_PLAYING && CAN_SEE(ch, d.character))) {
 // send_to_char(ch, "%s", line);
 // num_can_see++;
 // }
@@ -1294,31 +1383,31 @@ impl DB {
 // {
 // switch (subcmd) {
 // case SCMD_CREDITS:
-// page_string(ch->desc, credits, 0);
+// page_string(ch.desc, credits, 0);
 // break;
 // case SCMD_NEWS:
-// page_string(ch->desc, news, 0);
+// page_string(ch.desc, news, 0);
 // break;
 // case SCMD_INFO:
-// page_string(ch->desc, info, 0);
+// page_string(ch.desc, info, 0);
 // break;
 // case SCMD_WIZLIST:
-// page_string(ch->desc, wizlist, 0);
+// page_string(ch.desc, wizlist, 0);
 // break;
 // case SCMD_IMMLIST:
-// page_string(ch->desc, immlist, 0);
+// page_string(ch.desc, immlist, 0);
 // break;
 // case SCMD_HANDBOOK:
-// page_string(ch->desc, handbook, 0);
+// page_string(ch.desc, handbook, 0);
 // break;
 // case SCMD_POLICIES:
-// page_string(ch->desc, policies, 0);
+// page_string(ch.desc, policies, 0);
 // break;
 // case SCMD_MOTD:
-// page_string(ch->desc, motd, 0);
+// page_string(ch.desc, motd, 0);
 // break;
 // case SCMD_IMOTD:
-// page_string(ch->desc, imotd, 0);
+// page_string(ch.desc, imotd, 0);
 // break;
 // case SCMD_CLEAR:
 // send_to_char(ch, "\033[H\033[J");
@@ -1343,10 +1432,10 @@ impl DB {
 //
 // if (!*arg) {
 // send_to_char(ch, "Players in your Zone\r\n--------------------\r\n");
-// for (d = descriptor_list; d; d = d->next) {
-// if (STATE(d) != CON_PLAYING || d->character == ch)
+// for (d = descriptor_list; d; d = d.next) {
+// if (STATE(d) != CON_PLAYING || d.character == ch)
 // continue;
-// if ((i = (d->original ? d->original : d->character)) == NULL)
+// if ((i = (d.original ? d.original : d.character)) == NULL)
 // continue;
 // if (IN_ROOM(i) == NOWHERE || !CAN_SEE(ch, i))
 // continue;
@@ -1355,12 +1444,12 @@ impl DB {
 // send_to_char(ch, "%-20s - %s\r\n", GET_NAME(i), world[IN_ROOM(i)].name);
 // }
 // } else {			/* print only FIRST char, not all. */
-// for (i = character_list; i; i = i->next) {
+// for (i = character_list; i; i = i.next) {
 // if (IN_ROOM(i) == NOWHERE || i == ch)
 // continue;
 // if (!CAN_SEE(ch, i) || world[IN_ROOM(i)].zone != world[IN_ROOM(ch)].zone)
 // continue;
-// if (!isname(arg, i->player.name))
+// if (!isname(arg, i.player.name))
 // continue;
 // send_to_char(ch, "%-25s - %s\r\n", GET_NAME(i), world[IN_ROOM(i)].name);
 // return;
@@ -1374,20 +1463,20 @@ impl DB {
 // int recur)
 // {
 // if (num > 0)
-// send_to_char(ch, "O%3d. %-25s - ", num, obj->short_description);
+// send_to_char(ch, "O%3d. %-25s - ", num, obj.short_description);
 // else
 // send_to_char(ch, "%33s", " - ");
 //
 // if (IN_ROOM(obj) != NOWHERE)
 // send_to_char(ch, "[%5d] %s\r\n", GET_ROOM_VNUM(IN_ROOM(obj)), world[IN_ROOM(obj)].name);
-// else if (obj->carried_by)
-// send_to_char(ch, "carried by %s\r\n", PERS(obj->carried_by, ch));
-// else if (obj->worn_by)
-// send_to_char(ch, "worn by %s\r\n", PERS(obj->worn_by, ch));
-// else if (obj->in_obj) {
-// send_to_char(ch, "inside %s%s\r\n", obj->in_obj->short_description, (recur ? ", which is" : " "));
+// else if (obj.carried_by)
+// send_to_char(ch, "carried by %s\r\n", PERS(obj.carried_by, ch));
+// else if (obj.worn_by)
+// send_to_char(ch, "worn by %s\r\n", PERS(obj.worn_by, ch));
+// else if (obj.in_obj) {
+// send_to_char(ch, "inside %s%s\r\n", obj.in_obj.short_description, (recur ? ", which is" : " "));
 // if (recur)
-// print_object_location(0, obj->in_obj, ch, recur);
+// print_object_location(0, obj.in_obj, ch, recur);
 // } else
 // send_to_char(ch, "in an unknown location\r\n");
 // }
@@ -1403,27 +1492,27 @@ impl DB {
 //
 // if (!*arg) {
 // send_to_char(ch, "Players\r\n-------\r\n");
-// for (d = descriptor_list; d; d = d->next)
+// for (d = descriptor_list; d; d = d.next)
 // if (STATE(d) == CON_PLAYING) {
-// i = (d->original ? d->original : d->character);
+// i = (d.original ? d.original : d.character);
 // if (i && CAN_SEE(ch, i) && (IN_ROOM(i) != NOWHERE)) {
-// if (d->original)
+// if (d.original)
 // send_to_char(ch, "%-20s - [%5d] %s (in %s)\r\n",
-// GET_NAME(i), GET_ROOM_VNUM(IN_ROOM(d->character)),
-// world[IN_ROOM(d->character)].name, GET_NAME(d->character));
+// GET_NAME(i), GET_ROOM_VNUM(IN_ROOM(d.character)),
+// world[IN_ROOM(d.character)].name, GET_NAME(d.character));
 // else
 // send_to_char(ch, "%-20s - [%5d] %s\r\n", GET_NAME(i), GET_ROOM_VNUM(IN_ROOM(i)), world[IN_ROOM(i)].name);
 // }
 // }
 // } else {
-// for (i = character_list; i; i = i->next)
-// if (CAN_SEE(ch, i) && IN_ROOM(i) != NOWHERE && isname(arg, i->player.name)) {
+// for (i = character_list; i; i = i.next)
+// if (CAN_SEE(ch, i) && IN_ROOM(i) != NOWHERE && isname(arg, i.player.name)) {
 // found = 1;
 // send_to_char(ch, "M%3d. %-25s - [%5d] %s\r\n", ++num, GET_NAME(i),
 // GET_ROOM_VNUM(IN_ROOM(i)), world[IN_ROOM(i)].name);
 // }
-// for (num = 0, k = object_list; k; k = k->next)
-// if (CAN_SEE_OBJ(ch, k) && isname(arg, k->name)) {
+// for (num = 0, k = object_list; k; k = k.next)
+// if (CAN_SEE_OBJ(ch, k) && isname(arg, k.name)) {
 // found = 1;
 // print_object_location(++num, k, ch, TRUE);
 // }
@@ -1486,7 +1575,7 @@ impl DB {
 // if (len < sizeof(buf))
 // snprintf(buf + len, sizeof(buf) - len, "[%2d] %8d          : Immortality\r\n",
 // LVL_IMMORT, level_exp(GET_CLASS(ch), LVL_IMMORT));
-// page_string(ch->desc, buf, TRUE);
+// page_string(ch.desc, buf, TRUE);
 // }
 //
 //

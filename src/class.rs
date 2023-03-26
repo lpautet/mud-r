@@ -25,10 +25,11 @@ use crate::spells::{
 use crate::structs::{
     CharData, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR,
     DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF, ITEM_ANTI_WARRIOR,
-    LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
+    LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, set_skill, MainGlobals};
+use log::{error, info};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 
@@ -1363,7 +1364,7 @@ fn roll_real_abils(ch: &CharData) {
     let mut table: [u8; 6] = [0; 6];
     let mut rolls: [u8; 4] = [0; 4];
 
-    for i in 0..6 {
+    for _ in 0..6 {
         for j in 0..4 {
             rolls[j] = rand_number(1, 6) as u8;
         }
@@ -1669,189 +1670,446 @@ pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
  * This is the exp given to implementors -- it must always be greater
  * than the exp required for immortality, plus at least 20,000 or so.
  */
-// #define EXP_MAX  10000000
+pub const EXP_MAX: i32 = 10000000;
 
 /* Function to return the exp required for each class/level */
-// int level_exp(int chclass, int level)
-// {
-// if (level > LVL_IMPL || level < 0) {
-// log("SYSERR: Requesting exp for invalid level %d!", level);
-// return 0;
-// }
+pub fn level_exp(chclass: i8, level: i16) -> i32 {
+    if level > LVL_IMPL || level < 0 {
+        info!("SYSERR: Requesting exp for invalid level {}!", level);
+        return 0;
+    }
 
-/*
- * Gods have exp close to EXP_MAX.  This statement should never have to
- * changed, regardless of how many mortal or immortal levels exist.
- */
-// if (level > LVL_IMMORT) {
-// return EXP_MAX - ((LVL_IMPL - level) * 1000);
-// }
+    /*
+     * Gods have exp close to EXP_MAX.  This statement should never have to
+     * changed, regardless of how many mortal or immortal levels exist.
+     */
+    if level > LVL_IMMORT {
+        return EXP_MAX - ((LVL_IMPL - level) * 1000) as i32;
+    }
 
-/* Exp required for normal mortals is below */
-//
-// switch (chclass) {
-//
-// case CLASS_MAGIC_USER:
-// switch (level) {
-// case  0: return 0;
-// case  1: return 1;
-// case  2: return 2500;
-// case  3: return 5000;
-// case  4: return 10000;
-// case  5: return 20000;
-// case  6: return 40000;
-// case  7: return 60000;
-// case  8: return 90000;
-// case  9: return 135000;
-// case 10: return 250000;
-// case 11: return 375000;
-// case 12: return 750000;
-// case 13: return 1125000;
-// case 14: return 1500000;
-// case 15: return 1875000;
-// case 16: return 2250000;
-// case 17: return 2625000;
-// case 18: return 3000000;
-// case 19: return 3375000;
-// case 20: return 3750000;
-// case 21: return 4000000;
-// case 22: return 4300000;
-// case 23: return 4600000;
-// case 24: return 4900000;
-// case 25: return 5200000;
-// case 26: return 5500000;
-// case 27: return 5950000;
-// case 28: return 6400000;
-// case 29: return 6850000;
-// case 30: return 7400000;
-// /* add new levels here */
-// case LVL_IMMORT: return 8000000;
-// }
-// break;
-//
-// case CLASS_CLERIC:
-// switch (level) {
-// case  0: return 0;
-// case  1: return 1;
-// case  2: return 1500;
-// case  3: return 3000;
-// case  4: return 6000;
-// case  5: return 13000;
-// case  6: return 27500;
-// case  7: return 55000;
-// case  8: return 110000;
-// case  9: return 225000;
-// case 10: return 450000;
-// case 11: return 675000;
-// case 12: return 900000;
-// case 13: return 1125000;
-// case 14: return 1350000;
-// case 15: return 1575000;
-// case 16: return 1800000;
-// case 17: return 2100000;
-// case 18: return 2400000;
-// case 19: return 2700000;
-// case 20: return 3000000;
-// case 21: return 3250000;
-// case 22: return 3500000;
-// case 23: return 3800000;
-// case 24: return 4100000;
-// case 25: return 4400000;
-// case 26: return 4800000;
-// case 27: return 5200000;
-// case 28: return 5600000;
-// case 29: return 6000000;
-// case 30: return 6400000;
-// /* add new levels here */
-// case LVL_IMMORT: return 7000000;
-// }
-// break;
-//
-// case CLASS_THIEF:
-// switch (level) {
-// case  0: return 0;
-// case  1: return 1;
-// case  2: return 1250;
-// case  3: return 2500;
-// case  4: return 5000;
-// case  5: return 10000;
-// case  6: return 20000;
-// case  7: return 40000;
-// case  8: return 70000;
-// case  9: return 110000;
-// case 10: return 160000;
-// case 11: return 220000;
-// case 12: return 440000;
-// case 13: return 660000;
-// case 14: return 880000;
-// case 15: return 1100000;
-// case 16: return 1500000;
-// case 17: return 2000000;
-// case 18: return 2500000;
-// case 19: return 3000000;
-// case 20: return 3500000;
-// case 21: return 3650000;
-// case 22: return 3800000;
-// case 23: return 4100000;
-// case 24: return 4400000;
-// case 25: return 4700000;
-// case 26: return 5100000;
-// case 27: return 5500000;
-// case 28: return 5900000;
-// case 29: return 6300000;
-// case 30: return 6650000;
-// /* add new levels here */
-// case LVL_IMMORT: return 7000000;
-// }
-// break;
-//
-// case CLASS_WARRIOR:
-// switch (level) {
-// case  0: return 0;
-// case  1: return 1;
-// case  2: return 2000;
-// case  3: return 4000;
-// case  4: return 8000;
-// case  5: return 16000;
-// case  6: return 32000;
-// case  7: return 64000;
-// case  8: return 125000;
-// case  9: return 250000;
-// case 10: return 500000;
-// case 11: return 750000;
-// case 12: return 1000000;
-// case 13: return 1250000;
-// case 14: return 1500000;
-// case 15: return 1850000;
-// case 16: return 2200000;
-// case 17: return 2550000;
-// case 18: return 2900000;
-// case 19: return 3250000;
-// case 20: return 3600000;
-// case 21: return 3900000;
-// case 22: return 4200000;
-// case 23: return 4500000;
-// case 24: return 4800000;
-// case 25: return 5150000;
-// case 26: return 5500000;
-// case 27: return 5950000;
-// case 28: return 6400000;
-// case 29: return 6850000;
-// case 30: return 7400000;
-// /* add new levels here */
-// case LVL_IMMORT: return 8000000;
-// }
-// break;
-// }
-//
-// /*
-//  * This statement should never be reached if the exp tables in this function
-//  * are set up properly.  If you see exp of 123456 then the tables above are
-//  * incomplete -- so, complete them!
-//  */
-// log("SYSERR: XP tables not set up correctly in class.c!");
-// return 123456;
-// }
+    /* Exp required for normal mortals is below */
+
+    match chclass {
+        CLASS_MAGIC_USER => {
+            match level {
+                0 => {
+                    return 0;
+                }
+                1 => {
+                    return 1;
+                }
+                2 => {
+                    return 2500;
+                }
+                3 => {
+                    return 5000;
+                }
+                4 => {
+                    return 10000;
+                }
+                5 => {
+                    return 20000;
+                }
+                6 => {
+                    return 40000;
+                }
+                7 => {
+                    return 60000;
+                }
+                8 => {
+                    return 90000;
+                }
+                9 => {
+                    return 135000;
+                }
+                10 => {
+                    return 250000;
+                }
+                11 => {
+                    return 375000;
+                }
+                12 => {
+                    return 750000;
+                }
+                13 => {
+                    return 1125000;
+                }
+                14 => {
+                    return 1500000;
+                }
+                15 => {
+                    return 1875000;
+                }
+                16 => {
+                    return 2250000;
+                }
+                17 => {
+                    return 2625000;
+                }
+                18 => {
+                    return 3000000;
+                }
+                19 => {
+                    return 3375000;
+                }
+                20 => {
+                    return 3750000;
+                }
+                21 => {
+                    return 4000000;
+                }
+                22 => {
+                    return 4300000;
+                }
+                23 => {
+                    return 4600000;
+                }
+                24 => {
+                    return 4900000;
+                }
+                25 => {
+                    return 5200000;
+                }
+                26 => {
+                    return 5500000;
+                }
+                27 => {
+                    return 5950000;
+                }
+                28 => {
+                    return 6400000;
+                }
+                29 => {
+                    return 6850000;
+                }
+                30 => {
+                    return 7400000;
+                }
+                /* add new levels here */
+                LVL_IMMORT => {
+                    return 800000;
+                }
+                _ => {}
+            }
+        }
+
+        CLASS_CLERIC => {
+            match level {
+                0 => {
+                    return 0;
+                }
+                1 => {
+                    return 1;
+                }
+                2 => {
+                    return 1500;
+                }
+                3 => {
+                    return 3000;
+                }
+                4 => {
+                    return 6000;
+                }
+                5 => {
+                    return 13000;
+                }
+                6 => {
+                    return 27500;
+                }
+                7 => {
+                    return 55000;
+                }
+                8 => {
+                    return 110000;
+                }
+                9 => {
+                    return 225000;
+                }
+                10 => {
+                    return 450000;
+                }
+                11 => {
+                    return 675000;
+                }
+                12 => {
+                    return 900000;
+                }
+                13 => {
+                    return 1125000;
+                }
+                14 => {
+                    return 1350000;
+                }
+                15 => {
+                    return 1575000;
+                }
+                16 => {
+                    return 1800000;
+                }
+                17 => {
+                    return 2100000;
+                }
+                18 => {
+                    return 2400000;
+                }
+                19 => {
+                    return 2700000;
+                }
+                20 => {
+                    return 3000000;
+                }
+                21 => {
+                    return 3250000;
+                }
+                22 => {
+                    return 3500000;
+                }
+                23 => {
+                    return 3800000;
+                }
+                24 => {
+                    return 4100000;
+                }
+                25 => {
+                    return 4400000;
+                }
+                26 => {
+                    return 4800000;
+                }
+                27 => {
+                    return 5200000;
+                }
+                28 => {
+                    return 5600000;
+                }
+                29 => {
+                    return 6000000;
+                }
+                30 => {
+                    return 6400000;
+                }
+                /* add new levels here */
+                LVL_IMMORT => {
+                    return 7000000;
+                }
+                _ => {}
+            }
+        }
+        CLASS_THIEF => {
+            match level {
+                0 => {
+                    return 0;
+                }
+                1 => {
+                    return 1;
+                }
+                2 => {
+                    return 1250;
+                }
+                3 => {
+                    return 2500;
+                }
+                4 => {
+                    return 5000;
+                }
+                5 => {
+                    return 10000;
+                }
+                6 => {
+                    return 20000;
+                }
+                7 => {
+                    return 40000;
+                }
+                8 => {
+                    return 70000;
+                }
+                9 => {
+                    return 110000;
+                }
+                10 => {
+                    return 160000;
+                }
+                11 => {
+                    return 220000;
+                }
+                12 => {
+                    return 440000;
+                }
+                13 => {
+                    return 660000;
+                }
+                14 => {
+                    return 880000;
+                }
+                15 => {
+                    return 1100000;
+                }
+                16 => {
+                    return 1500000;
+                }
+                17 => {
+                    return 2000000;
+                }
+                18 => {
+                    return 2500000;
+                }
+                19 => {
+                    return 3000000;
+                }
+                20 => {
+                    return 3500000;
+                }
+                21 => {
+                    return 3650000;
+                }
+                22 => {
+                    return 3800000;
+                }
+                23 => {
+                    return 4100000;
+                }
+                24 => {
+                    return 4400000;
+                }
+                25 => {
+                    return 4700000;
+                }
+                26 => {
+                    return 5100000;
+                }
+                27 => {
+                    return 5500000;
+                }
+                28 => {
+                    return 5900000;
+                }
+                29 => {
+                    return 6300000;
+                }
+                30 => {
+                    return 6650000;
+                }
+                /* add new levels here */
+                LVL_IMMORT => {
+                    return 7000000;
+                }
+                _ => {}
+            }
+        }
+        CLASS_WARRIOR => {
+            match level {
+                0 => {
+                    return 0;
+                }
+                1 => {
+                    return 1;
+                }
+                2 => {
+                    return 2000;
+                }
+                3 => {
+                    return 4000;
+                }
+                4 => {
+                    return 8000;
+                }
+                5 => {
+                    return 16000;
+                }
+                6 => {
+                    return 32000;
+                }
+                7 => {
+                    return 64000;
+                }
+                8 => {
+                    return 125000;
+                }
+                9 => {
+                    return 250000;
+                }
+                10 => {
+                    return 500000;
+                }
+                11 => {
+                    return 750000;
+                }
+                12 => {
+                    return 1000000;
+                }
+                13 => {
+                    return 1250000;
+                }
+                14 => {
+                    return 1500000;
+                }
+                15 => {
+                    return 1850000;
+                }
+                16 => {
+                    return 2200000;
+                }
+                17 => {
+                    return 2550000;
+                }
+                18 => {
+                    return 2900000;
+                }
+                19 => {
+                    return 3250000;
+                }
+                20 => {
+                    return 3600000;
+                }
+                21 => {
+                    return 3900000;
+                }
+                22 => {
+                    return 4200000;
+                }
+                23 => {
+                    return 4500000;
+                }
+                24 => {
+                    return 4800000;
+                }
+                25 => {
+                    return 5150000;
+                }
+                26 => {
+                    return 5500000;
+                }
+                27 => {
+                    return 5950000;
+                }
+                28 => {
+                    return 6400000;
+                }
+                29 => {
+                    return 6850000;
+                }
+                30 => {
+                    return 7400000;
+                }
+                /* add new levels here */
+                LVL_IMMORT => {
+                    return 8000000;
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+
+    /*
+     * This statement should never be reached if the exp tables in this function
+     * are set up properly.  If you see exp of 123456 then the tables above are
+     * incomplete -- so, complete them!
+     */
+    error!("SYSERR: XP tables not set up correctly in class.c!");
+    return 123456;
+}
 
 /*
  * Default titles of male characters.

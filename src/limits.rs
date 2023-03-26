@@ -17,7 +17,9 @@ use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
     CharData, AFF_POISON, FULL, LVL_GOD, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST,
 };
-use crate::structs::{DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_STUNNED, SEX_FEMALE};
+use crate::structs::{
+    DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
+};
 use crate::util::{age, CMP};
 use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
 
@@ -77,6 +79,7 @@ fn mana_gain(ch: &CharData) -> u8 {
             POS_SITTING => {
                 gain += gain / 4; /* Divide by 8 */
             }
+            _ => {}
         }
         if ch.is_magic_user() || ch.is_cleric() {
             gain *= 2;
@@ -116,6 +119,7 @@ fn hit_gain(ch: &CharData) -> u8 {
             POS_SITTING => {
                 gain += gain / 8; /* Divide by 8 */
             }
+            _ => {}
         }
         if ch.is_magic_user() || ch.is_cleric() {
             gain /= 2; /* Ouch. */
@@ -156,6 +160,7 @@ fn move_gain(ch: &CharData) -> u8 {
             POS_SITTING => {
                 gain += gain / 8; /* Divide by 8 */
             }
+            _ => {}
         }
 
         if ch.get_cond(FULL) == 0 || ch.get_cond(THIRST) == 0 {

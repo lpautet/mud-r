@@ -216,34 +216,32 @@ pub const AFFECTED_BITS: [&str; 23] = [
 // "Disconnecting",
 // "\n"
 // };
-//
-//
-// /*
-//  * WEAR_x - for eq list
-//  * Not use in sprinttype() so no \n.
-//  */
-// const char *wear_where[] = {
-// "<used as light>      ",
-// "<worn on finger>     ",
-// "<worn on finger>     ",
-// "<worn around neck>   ",
-// "<worn around neck>   ",
-// "<worn on body>       ",
-// "<worn on head>       ",
-// "<worn on legs>       ",
-// "<worn on feet>       ",
-// "<worn on hands>      ",
-// "<worn on arms>       ",
-// "<worn as shield>     ",
-// "<worn about body>    ",
-// "<worn about waist>   ",
-// "<worn around wrist>  ",
-// "<worn around wrist>  ",
-// "<wielded>            ",
-// "<held>               "
-// };
-//
-//
+
+/*
+ * WEAR_x - for eq list
+ * Not use in sprinttype() so no \n.
+ */
+pub const WEAR_WHERE: [&str; 18] = [
+    "<used as light>      ",
+    "<worn on finger>     ",
+    "<worn on finger>     ",
+    "<worn around neck>   ",
+    "<worn around neck>   ",
+    "<worn on body>       ",
+    "<worn on head>       ",
+    "<worn on legs>       ",
+    "<worn on feet>       ",
+    "<worn on hands>      ",
+    "<worn on arms>       ",
+    "<worn as shield>     ",
+    "<worn about body>    ",
+    "<worn about waist>   ",
+    "<worn around wrist>  ",
+    "<worn around wrist>  ",
+    "<wielded>            ",
+    "<held>               ",
+];
+
 // /* WEAR_x - for stat */
 // const char *equipment_types[] = {
 // "Used as light",

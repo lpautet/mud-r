@@ -11,17 +11,17 @@ use regex::Regex;
 
 use crate::modify::paginate_string;
 use crate::structs::{
-    obj_vnum, room_rnum, room_vnum, zone_rnum, zone_vnum, AffectedType, CharAbilityData, CharData,
-    CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved,
-    ExtraDescrData, IndexData, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData,
-    ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData,
-    RoomDirectionData, RoomRnum, TimeData, TimeInfoData, WeatherData, ZoneRnum, AFF_POISON,
-    APPLY_NONE, EX_CLOSED, EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON,
-    ITEM_FOUNTAIN, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT,
-    MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL,
-    MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE,
-    NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS,
-    SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
+    CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MobRnum, MobSpecialData,
+    MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData,
+    PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomRnum, TimeData, TimeInfoData,
+    WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR, EX_LOCKED,
+    EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, LVL_GOD, LVL_IMMORT, LVL_IMPL,
+    MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH,
+    MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC,
+    MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING,
+    PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK,
+    SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -63,7 +63,7 @@ struct PlayerIndexElement {
 
 pub struct DB {
     pub world: RefCell<Vec<Rc<RoomData>>>,
-    //pub top_of_world: RefCell<room_rnum>,
+    //pub top_of_world: RefCell<RoomRnum>,
     /* ref to top element of world	 */
     pub character_list: RefCell<Vec<Rc<CharData>>>,
     /* global linked list of * chars	 */
@@ -82,7 +82,7 @@ pub struct DB {
     // obj_rnum top_of_objt = 0;	/* top of object index table	 */
     zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
-    //top_of_zone_table: RefCell<zone_rnum>,
+    //top_of_zone_table: RefCell<ZoneRnum>,
     /* top element of zone tab	 */
     // struct message_list fight_messages[MAX_MESSAGES];	/* fighting messages	 */
     //
@@ -101,11 +101,11 @@ pub struct DB {
     pub boot_time: Cell<u128>,
     /* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
-    pub r_mortal_start_room: RefCell<room_rnum>,
+    pub r_mortal_start_room: RefCell<RoomRnum>,
     /* rnum of mortal start room	 */
-    pub r_immort_start_room: RefCell<room_rnum>,
+    pub r_immort_start_room: RefCell<RoomRnum>,
     /* rnum of immort start room	 */
-    pub r_frozen_start_room: RefCell<room_rnum>,
+    pub r_frozen_start_room: RefCell<RoomRnum>,
     /* rnum of frozen start room	 */
     //
     // char *credits = NULL;		/* game credits			 */
@@ -177,13 +177,13 @@ pub struct ZoneData {
     /* how long between resets (minutes)  */
     pub age: Cell<i32>,
     /* current age of this zone (minutes) */
-    pub bot: room_vnum,
+    pub bot: RoomRnum,
     /* starting room number for this zone */
-    pub top: room_vnum,
+    pub top: RoomRnum,
     /* upper limit for rooms in this zone */
     pub reset_mode: i32,
     /* conditions for reset (see below)   */
-    pub number: zone_vnum,
+    pub number: ZoneVnum,
     /* virtual number of this zone	  */
     pub cmd: Vec<ResetCom>,
     /* command table for reset	          */
@@ -289,7 +289,7 @@ pub struct ZoneData {
 // }
 
 impl DB {
-    fn boot_world(&mut self) {
+    pub(crate) fn boot_world(&mut self) {
         info!("Loading zone table.");
         self.index_boot(DB_BOOT_ZON);
 
@@ -567,22 +567,24 @@ impl DB {
 
     /* reset the time in the game from file */
     fn reset_time(&self) {
-        //time_t beginning_of_time = 0;
+        let mut beginning_of_time = 0;
         //FILE *bgtime;
 
-        let bgtime = OpenOptions::new()
-            .read(true)
-            .open(TIME_FILE)
-            .expect(format!("SYSERR: Can't open '{}'", TIME_FILE).as_str());
-        let mut reader = BufReader::new(bgtime);
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .expect(format!("SYSERR: Can't read from '{}'", TIME_FILE).as_str());
-        let mut beginning_of_time = line
-            .parse::<u128>()
-            .expect(format!("SYSERR: Invalid mud time: {}", line).as_str());
-
+        let bgtime = OpenOptions::new().read(true).open(TIME_FILE);
+        if bgtime.is_err() {
+            info!("SYSERR: Can't open '{}'", TIME_FILE);
+        } else {
+            let bgtime = bgtime.unwrap();
+            let mut reader = BufReader::new(bgtime);
+            let mut line = String::new();
+            reader
+                .read_line(&mut line)
+                .expect(format!("SYSERR: Can't read from '{}'", TIME_FILE).as_str());
+            line = line.trim().to_string();
+            beginning_of_time = line
+                .parse::<u128>()
+                .expect(format!("SYSERR: Invalid mud time: {}", line).as_str());
+        }
         if beginning_of_time == 0 {
             beginning_of_time = 650336715;
         }
@@ -602,7 +604,7 @@ impl DB {
         }
 
         info!(
-            "   Current Gametime: {}H {}D %{}M {}Y.",
+            "   Current Gametime: {}H {}D {}M {}Y.",
             self.time_info.borrow().hours,
             self.time_info.borrow().day,
             self.time_info.borrow().month,
@@ -632,8 +634,9 @@ impl DB {
 
 /* Write the time in 'when' to the MUD-time file. */
 pub fn save_mud_time(when: &TimeInfoData) {
-    let mut bgtime = OpenOptions::new()
+    let bgtime = OpenOptions::new()
         .write(true)
+        .create(true)
         .open(TIME_FILE)
         .expect(format!("SYSERR: Cannot open time file: {}", TIME_FILE).as_str());
     let mut writer = BufWriter::new(bgtime);
@@ -674,8 +677,6 @@ pub fn parse_c_string(cstr: &[u8]) -> String {
 impl DB {
     /* generate index table for the player file */
     fn build_player_index<'a>(&mut self) {
-        let mut nr = -1;
-        let size: usize;
         let recs: u64;
 
         let player_file: File;
@@ -701,7 +702,7 @@ impl DB {
         *self.player_fl.borrow_mut() = Some(player_file);
 
         let mut t = self.player_fl.borrow_mut();
-        let mut file_mut = t.as_mut().unwrap();
+        let file_mut = t.as_mut().unwrap();
         let size = file_mut
             .seek(SeekFrom::End(0))
             .expect("SYSERR: fatal error seeking playerfile");
@@ -836,8 +837,8 @@ const DB_BOOT_HLP: u8 = 5;
 
 impl DB {
     fn index_boot(&mut self, mode: u8) {
-        let mut index_filename: &str;
-        let mut prefix: &str; /* NULL or egcs 1.1 complains */
+        let index_filename: &str;
+        let prefix: &str; /* NULL or egcs 1.1 complains */
         let mut rec_count = 0;
         let mut size: [usize; 2] = [0; 2];
         //FILE *db_index, *db_file;
@@ -884,7 +885,7 @@ impl DB {
             );
             process::exit(1);
         }
-        let mut db_index = db_index.unwrap();
+        let db_index = db_index.unwrap();
 
         let mut reader = BufReader::new(db_index);
         /* first, count the number of records in the file so we can malloc */
@@ -1137,10 +1138,8 @@ impl DB {
     fn parse_room(&self, reader: &mut BufReader<File>, virtual_nr: i32) {
         //static int room_nr = 0, zone = 0;
         let mut t = [0; 10];
-        let mut i: i32;
         let mut line = String::new();
         let mut zone = 0;
-        let mut room_nr = self.world.borrow().len();
         //     char line[READ_SIZE], flags[128], buf2[MAX_STRING_LENGTH], buf[128];
         // struct extra_descr_data * new_descr;
 
@@ -1159,8 +1158,8 @@ impl DB {
             }
         }
         let mut rd = RoomData {
-            number: virtual_nr as room_vnum,
-            zone: zone as zone_rnum,
+            number: virtual_nr as RoomRnum,
+            zone: zone as ZoneRnum,
             sector_type: 0,
             name: fread_string(reader, buf2.as_str()),
             description: fread_string(reader, buf2.as_str()),
@@ -1192,7 +1191,7 @@ impl DB {
         }
         let f = f.unwrap();
         t[0] = f[1].parse::<i32>().unwrap();
-        let mut flags = &f[2];
+        let flags = &f[2];
         t[2] = f[3].parse::<i32>().unwrap();
 
         /* t[0] is the zone number; ignored with the zone-file system */
@@ -1240,8 +1239,8 @@ impl DB {
                 }
                 'S' => {
                     /* end of room */
-                    // *self.top_of_world.borrow_mut() = room_nr as room_rnum;
-                    room_nr += 1;
+                    // *self.top_of_world.borrow_mut() = room_nr as RoomRnum;
+                    //room_nr += 1;
                     break;
                 }
                 _ => {
@@ -1263,7 +1262,7 @@ impl DB {
         let buf2 = format!(
             "room #{}, direction D{}",
             room.number,
-            //get_room_vnum!(self, room as usize),
+            //get_RoomRnum!(self, room as usize),
             dir
         );
 
@@ -1298,8 +1297,8 @@ impl DB {
             rdr.exit_info.set(0);
         }
 
-        rdr.key = t[1] as obj_vnum;
-        rdr.to_room.set(t[2] as room_rnum);
+        rdr.key = t[1] as ObjVnum;
+        rdr.to_room.set(t[2] as RoomRnum);
 
         //let mut a = RefCell::borrow_mut(self.world.get(room as usize).unwrap());
         room.dir_option[dir as usize] = Some(Rc::new(rdr));
@@ -1338,9 +1337,9 @@ impl DB {
 impl DB {
     /* resolve all vnums into rnums in the world */
     fn renum_world(&mut self) {
-        for (i, room_data) in self.world.borrow().iter().enumerate() {
+        for (_, room_data) in self.world.borrow().iter().enumerate() {
             for door in 0..NUM_OF_DIRS {
-                let to_room: room_rnum;
+                let to_room: RoomRnum;
                 {
                     if room_data.dir_option[door].is_none() {
                         continue;
@@ -1366,13 +1365,13 @@ impl DB {
      * room, mobile, or object a little more difficult while the game is running.
      *
      * NOTE 1: Assumes NOWHERE == NOBODY == NOTHING.
-     * NOTE 2: Assumes sizeof(room_rnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
+     * NOTE 2: Assumes sizeof(RoomRnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
      */
 
     fn renum_zone_table(&mut self) {
         //int cmd_no;
-        //room_rnum a, b, c, olda, oldb, oldc;
-        //zone_rnum zone;
+        //RoomRnum a, b, c, olda, oldb, oldc;
+        //ZoneRnum zone;
         //char buf[128];
         let mut olda = 0;
         let mut oldb = 0;
@@ -1394,14 +1393,14 @@ impl DB {
                     'M' => {
                         zcmd.arg1 = self.real_mobile(zcmd.arg1 as MobVnum) as i32;
                         a = zcmd.arg1;
-                        zcmd.arg3 = self.real_room(zcmd.arg3 as room_vnum) as i32;
+                        zcmd.arg3 = self.real_room(zcmd.arg3 as RoomRnum) as i32;
                         c = zcmd.arg3;
                     }
                     'O' => {
                         zcmd.arg1 = self.real_object(zcmd.arg1 as ObjVnum) as i32;
                         a = zcmd.arg1;
                         if zcmd.arg3 != NOWHERE as i32 {
-                            zcmd.arg3 = self.real_room(zcmd.arg3 as room_vnum) as i32;
+                            zcmd.arg3 = self.real_room(zcmd.arg3 as RoomRnum) as i32;
                             c = zcmd.arg3;
                         }
                     }
@@ -1420,14 +1419,14 @@ impl DB {
                         c = zcmd.arg3;
                     }
                     'D' => {
-                        zcmd.arg1 = self.real_room(zcmd.arg1 as room_vnum) as i32;
+                        zcmd.arg1 = self.real_room(zcmd.arg1 as RoomRnum) as i32;
                         a = zcmd.arg1;
                     }
                     'R' => {
                         /* rem obj from room */
-                        zcmd.arg1 = self.real_room(zcmd.arg1 as room_vnum) as i32;
+                        zcmd.arg1 = self.real_room(zcmd.arg1 as RoomRnum) as i32;
                         a = zcmd.arg1;
-                        zcmd.arg2 = self.real_room(zcmd.arg2 as room_vnum) as i32;
+                        zcmd.arg2 = self.real_room(zcmd.arg2 as RoomRnum) as i32;
                         b = zcmd.arg2;
                     }
                     _ => {}
@@ -1691,7 +1690,6 @@ impl DB {
         // char f1[128], f2[128], buf2[128];
         let mut line = String::new();
 
-        let mut i = self.mob_index.len();
         self.mob_index.push(IndexData {
             vnum: nr as MobVnum,
             number: Cell::from(0),
@@ -2011,8 +2009,7 @@ impl DB {
 
     /* load the zone table and command tables */
     fn load_zones(&mut self, fl: File, zonename: &str) {
-        //static zone_rnum zone = 0;
-        let mut zone: zone_rnum = 0;
+        //static ZoneRnum zone = 0;
         let mut line_num = 0;
         let mut z = ZoneData {
             name: "".to_string(),
@@ -2036,7 +2033,7 @@ impl DB {
         let mut reader = BufReader::new(fl);
 
         /* Skip first 3 lines lest we mistake the zone name for a command. */
-        for tmp in 0..3 {
+        for _ in 0..3 {
             reader
                 .read_line(&mut buf)
                 .expect("Cannot read header for zon file");
@@ -2079,7 +2076,7 @@ impl DB {
             process::exit(1);
         }
         let f = f.unwrap();
-        z.number = f[1].parse::<zone_vnum>().unwrap();
+        z.number = f[1].parse::<ZoneVnum>().unwrap();
 
         line_num += get_line(&mut reader, &mut buf);
         let r = buf.find('~');
@@ -2099,8 +2096,8 @@ impl DB {
             process::exit(1);
         }
         let f = f.unwrap();
-        z.bot = f[1].parse::<room_vnum>().unwrap();
-        z.top = f[2].parse::<room_vnum>().unwrap();
+        z.bot = f[1].parse::<RoomRnum>().unwrap();
+        z.top = f[2].parse::<RoomRnum>().unwrap();
         z.lifespan = f[3].parse::<i32>().unwrap();
         z.reset_mode = f[4].parse::<i32>().unwrap();
 
@@ -2196,7 +2193,6 @@ impl DB {
         }
 
         self.zone_table.borrow_mut().push(z);
-        zone += 1;
         //*self.top_of_zone_table.borrow_mut() = zone;
     }
 }
@@ -2351,7 +2347,7 @@ impl DB {
 impl DB {
     /* create a new mobile from a prototype */
     fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */ {
-        let mut i;
+        let i;
         if _type == VIRTUAL {
             i = self.real_mobile(nr);
             if i == NOBODY {
@@ -2364,7 +2360,7 @@ impl DB {
 
         // let mut mob = CharData::new();
         // clear_char(&mut mob);
-        let mut mob = self.mob_protos[i as usize].make_copy();
+        let mob = self.mob_protos[i as usize].make_copy();
 
         if mob.points.borrow().max_hit == 0 {
             let max_hit = dice(
@@ -2432,7 +2428,7 @@ impl DB {
             return None;
         }
 
-        let mut obj = self.obj_proto[i as usize].make_copy();
+        let obj = self.obj_proto[i as usize].make_copy();
         let rc = Rc::from(obj);
         self.object_list.borrow_mut().push(rc.clone());
 
@@ -2570,7 +2566,7 @@ impl DB {
                     /* read a mobile */
                     if self.mob_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         mob = self.read_mobile(zcmd.arg1 as MobVnum, REAL);
-                        self.char_to_room(mob.clone(), zcmd.arg3 as room_rnum);
+                        self.char_to_room(mob.clone(), zcmd.arg3 as RoomRnum);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2802,10 +2798,11 @@ impl MainGlobals {
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        return self.player_table.borrow().iter().position(|pie| {
-            info!("{} {}", pie.name, name);
-            pie.name == name
-        });
+        return self
+            .player_table
+            .borrow()
+            .iter()
+            .position(|pie| pie.name == name);
     }
 }
 
@@ -2848,7 +2845,7 @@ impl DB {
         }
         let player_i = player_i.unwrap();
         let mut t = self.player_fl.borrow_mut();
-        let mut pfile = t.as_mut().unwrap();
+        let pfile = t.as_mut().unwrap();
 
         let record_size = mem::size_of::<CharFileU>();
         pfile
@@ -3521,8 +3518,6 @@ fn clear_object(obj: &mut ObjData) {
  */
 impl DB {
     pub(crate) fn init_char(&self, ch: &CharData) {
-        let i: i32;
-
         /* create a player_special structure */
         // if ch.player_specials
         // CREATE(ch->player_specials, struct player_special_data, 1);
@@ -3626,7 +3621,7 @@ impl DB {
 
 impl DB {
     // /* returns the real number of the room with given virtual number */
-    pub fn real_room(&self, vnum: room_vnum) -> RoomRnum {
+    pub fn real_room(&self, vnum: RoomRnum) -> RoomRnum {
         let r = self
             .world
             .borrow()
@@ -3657,9 +3652,9 @@ impl DB {
 }
 
 // /* returns the real number of the zone with given virtual number */
-// room_rnum real_zone(room_vnum vnum)
+// RoomRnum real_zone(RoomRnum vnum)
 // {
-// room_rnum bot, top, mid;
+// RoomRnum bot, top, mid;
 //
 // bot = 0;
 // top = top_of_zone_table;
@@ -3741,14 +3736,14 @@ impl DB {
         //         strlcpy(onealias, space? space + 1: obj->name, sizeof(onealias));
         //         if (search_block(onealias, drinknames, TRUE) < 0 && (error = TRUE))
         //         log("SYSERR: Object #%d (%s) doesn't have drink type as last alias. (%s)",
-        //             GET_OBJ_VNUM(obj), obj->short_description, obj->name);
+        //             GET_ObjVnum(obj), obj->short_description, obj->name);
         //     }
         //     /* Fall through. */
         //     case
         //     ITEM_FOUNTAIN:
         //     if (GET_OBJ_VAL(obj, 1) > GET_OBJ_VAL(obj, 0) && (error = TRUE))
         //     log("SYSERR: Object #%d (%s) contains (%d) more than maximum (%d).",
-        //         GET_OBJ_VNUM(obj), obj->short_description,
+        //         GET_ObjVnum(obj), obj->short_description,
         //         GET_OBJ_VAL(obj, 1), GET_OBJ_VAL(obj, 0));
         //     break;
         //     case
@@ -3768,7 +3763,7 @@ impl DB {
         //     error |= check_object_spell_number(obj, 3);
         //     if (GET_OBJ_VAL(obj, 2) > GET_OBJ_VAL(obj, 1) && (error = TRUE))
         //     log("SYSERR: Object #%d (%s) has more charges (%d) than maximum (%d).",
-        //         GET_OBJ_VNUM(obj), obj->short_description,
+        //         GET_ObjVnum(obj), obj->short_description,
         //         GET_OBJ_VAL(obj, 2), GET_OBJ_VAL(obj, 1));
         //     break;
         // }
@@ -3797,7 +3792,7 @@ impl DB {
 // error = TRUE;
 // if (error)
 // log("SYSERR: Object #%d (%s) has out of range spell #%d.",
-// GET_OBJ_VNUM(obj), obj->short_description, GET_OBJ_VAL(obj, val));
+// GET_ObjVnum(obj), obj->short_description, GET_OBJ_VAL(obj, val));
 //
 // /*
 //  * This bug has been fixed, but if you don't like the special behavior...
@@ -3806,7 +3801,7 @@ impl DB {
 // if (GET_OBJ_TYPE(obj) == ITEM_STAFF &&
 // HAS_SPELL_ROUTINE(GET_OBJ_VAL(obj, val), MAG_AREAS | MAG_MASSES))
 // log("... '%s' (#%d) uses %s spell '%s'.",
-// obj->short_description,	GET_OBJ_VNUM(obj),
+// obj->short_description,	GET_ObjVnum(obj),
 // HAS_SPELL_ROUTINE(GET_OBJ_VAL(obj, val), MAG_AREAS) ? "area" : "mass",
 // skill_name(GET_OBJ_VAL(obj, val)));
 // #endif
@@ -3819,7 +3814,7 @@ impl DB {
 //
 // if ((spellname == unused_spellname || !str_cmp("UNDEFINED", spellname)) && (error = TRUE))
 // log("SYSERR: Object #%d (%s) uses '%s' spell #%d.",
-// GET_OBJ_VNUM(obj), obj->short_description, spellname,
+// GET_ObjVnum(obj), obj->short_description, spellname,
 // GET_OBJ_VAL(obj, val));
 //
 // return (error);
@@ -3831,13 +3826,12 @@ impl DB {
 //
 // if ((GET_OBJ_VAL(obj, val) < 0 || GET_OBJ_VAL(obj, val) > LVL_IMPL) && (error = TRUE))
 // log("SYSERR: Object #%d (%s) has out of range level #%d.",
-// GET_OBJ_VNUM(obj), obj->short_description, GET_OBJ_VAL(obj, val));
+// GET_ObjVnum(obj), obj->short_description, GET_OBJ_VAL(obj, val));
 //
 // return (error);
 // }
 
 fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &str) -> bool {
-    let mut flagnum: u32;
     let mut error = false;
 
     /* See if any bits are set above the ones we know about. */

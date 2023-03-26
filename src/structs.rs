@@ -115,24 +115,24 @@ pub const ITEM_WEAR_HOLD: i32 = 1 << 14; /* Can be held		*/
 /* Character equipment positions: used as index for char_data.equipment[] */
 /* NOTE: Don't confuse these constants with the ITEM_ bitvectors
 which control the valid places you can wear a piece of equipment */
-pub const WEAR_LIGHT: i32 = 0;
-pub const WEAR_FINGER_R: i32 = 1;
-pub const WEAR_FINGER_L: i32 = 2;
-pub const WEAR_NECK_1: i32 = 3;
-pub const WEAR_NECK_2: i32 = 4;
-pub const WEAR_BODY: i32 = 5;
-pub const WEAR_HEAD: i32 = 6;
-pub const WEAR_LEGS: i32 = 7;
-pub const WEAR_FEET: i32 = 8;
-pub const WEAR_HANDS: i32 = 9;
-pub const WEAR_ARMS: i32 = 10;
-pub const WEAR_SHIELD: i32 = 11;
-pub const WEAR_ABOUT: i32 = 12;
-pub const WEAR_WAIST: i32 = 13;
-pub const WEAR_WRIST_R: i32 = 14;
-pub const WEAR_WRIST_L: i32 = 15;
-pub const WEAR_WIELD: i32 = 16;
-pub const WEAR_HOLD: i32 = 17;
+pub const WEAR_LIGHT: i16 = 0;
+pub const WEAR_FINGER_R: i16 = 1;
+pub const WEAR_FINGER_L: i16 = 2;
+pub const WEAR_NECK_1: i16 = 3;
+pub const WEAR_NECK_2: i16 = 4;
+pub const WEAR_BODY: i16 = 5;
+pub const WEAR_HEAD: i16 = 6;
+pub const WEAR_LEGS: i16 = 7;
+pub const WEAR_FEET: i16 = 8;
+pub const WEAR_HANDS: i16 = 9;
+pub const WEAR_ARMS: i16 = 10;
+pub const WEAR_SHIELD: i16 = 11;
+pub const WEAR_ABOUT: i16 = 12;
+pub const WEAR_WAIST: i16 = 13;
+pub const WEAR_WRIST_R: i16 = 14;
+pub const WEAR_WRIST_L: i16 = 15;
+pub const WEAR_WIELD: i16 = 16;
+pub const WEAR_HOLD: i16 = 17;
 
 pub const NUM_WEARS: i8 = 18;
 
@@ -620,7 +620,7 @@ pub struct ObjAffectedType {
 
 /* ================== Memory Structure for Objects ================== */
 pub struct ObjData {
-    pub item_number: obj_vnum,
+    pub item_number: ObjVnum,
     /* Where in data-base			*/
     pub in_room: Cell<RoomRnum>,
     /* In what room -1 when conta/carr	*/
@@ -816,20 +816,6 @@ pub const POS_SITTING: u8 = 6; /* sitting		*/
 pub const POS_FIGHTING: u8 = 7; /* fighting		*/
 pub const POS_STANDING: u8 = 8; /* standing		*/
 
-/* Various virtual (human-reference) number types. */
-pub type room_vnum = IDXTYPE;
-pub type obj_vnum = IDXTYPE;
-pub type mob_vnum = IDXTYPE;
-pub type zone_vnum = IDXTYPE;
-pub type shop_vnum = IDXTYPE;
-
-/* Various real (array-reference) number types. */
-pub type room_rnum = IDXTYPE;
-pub type obj_rnum = IDXTYPE;
-pub type mob_rnum = IDXTYPE;
-pub type zone_rnum = IDXTYPE;
-pub type shop_rnum = IDXTYPE;
-
 /* room-related structures ************************************************/
 
 pub struct RoomDirectionData {
@@ -839,17 +825,17 @@ pub struct RoomDirectionData {
     /* for open/close			*/
     pub exit_info: Cell<i16>,
     /* Exit info			*/
-    pub key: obj_vnum,
+    pub key: ObjVnum,
     /* Key's number (-1 for no key)		*/
-    pub to_room: Cell<room_rnum>,
+    pub to_room: Cell<RoomRnum>,
     /* Where direction leads (NOWHERE)	*/
 }
 
 /* ================== Memory Structure for room ======================= */
 pub struct RoomData {
-    pub number: room_vnum,
+    pub number: RoomVnum,
     /* Rooms number	(vnum)		      */
-    pub zone: zone_rnum,
+    pub zone: ZoneRnum,
     /* Room zone (for resetting)          */
     pub sector_type: i32,
     /* sector type (move/hide)            */
@@ -932,7 +918,7 @@ pub struct WeatherData {
 /*
  * Element in monster and object index-tables.
  *
- * NOTE: Assumes sizeof(mob_vnum) >= sizeof(obj_vnum)
+ * NOTE: Assumes sizeof(mob_vnum) >= sizeof(ObjVnum)
  */
 pub struct IndexData {
     pub vnum: MobVnum,

@@ -104,11 +104,11 @@ macro_rules! check_player_special {
     };
 }
 use crate::structs::{
-    obj_vnum, room_rnum, MobRnum, RoomRnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
+    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
     ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
 };
 pub use check_player_special;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 
 impl CharData {
@@ -142,10 +142,10 @@ impl CharData {
 }
 
 impl DB {
-    pub fn valid_room_rnum(&self, rnum: room_rnum) -> bool {
+    pub fn valid_room_rnum(&self, rnum: RoomRnum) -> bool {
         rnum != NOWHERE && rnum < self.world.borrow().len() as i16
     }
-    pub fn get_room_vnum(&self, rnum: room_vnum) -> i16 {
+    pub fn get_room_vnum(&self, rnum: RoomVnum) -> i16 {
         if self.valid_room_rnum(rnum) {
             self.world.borrow()[rnum as usize].number
         } else {
@@ -331,14 +331,17 @@ impl CharData {
     pub fn set_ac(&self, val: i16) {
         self.points.borrow_mut().armor = val;
     }
-    pub fn in_room(&self) -> room_rnum {
+    pub fn in_room(&self) -> RoomRnum {
         self.in_room.get()
     }
-    pub fn set_in_room(&self, val: room_rnum) {
+    pub fn set_in_room(&self, val: RoomRnum) {
         self.in_room.set(val);
     }
-    pub fn get_was_in(&self) -> room_rnum {
+    pub fn get_was_in(&self) -> RoomRnum {
         self.was_in_room.get()
+    }
+    pub fn get_age(&self) -> i16 {
+        age(self).year
     }
     pub fn set_was_in(&self, val: RoomRnum) {
         self.was_in_room.set(val)
@@ -394,10 +397,10 @@ impl CharData {
     pub fn incr_cond(&self, i: i32, val: i16) {
         self.player_specials.borrow_mut().saved.conditions[i as usize] += val;
     }
-    pub fn get_loadroom(&self) -> room_vnum {
+    pub fn get_loadroom(&self) -> RoomVnum {
         self.player_specials.borrow().saved.load_room
     }
-    pub fn set_loadroom(&self, val: room_vnum) {
+    pub fn set_loadroom(&self, val: RoomVnum) {
         self.player_specials.borrow_mut().saved.load_room = val;
     }
     pub fn get_practices(&self) -> i32 {
@@ -777,7 +780,7 @@ impl ObjData {
     pub fn set_obj_rent(&mut self, val: i32) {
         self.obj_flags.cost_per_day = val;
     }
-    pub fn get_obj_rnum(&self) -> obj_vnum {
+    pub fn get_obj_rnum(&self) -> ObjVnum {
         self.item_number
     }
     pub fn get_obj_affect(&self) -> i64 {
@@ -915,7 +918,7 @@ pub fn self_(sub: &CharData, obj: &CharData) -> bool {
 }
 
 impl ObjData {
-    pub fn in_room(&self) -> room_rnum {
+    pub fn in_room(&self) -> RoomRnum {
         self.in_room.get()
     }
 }
@@ -1017,17 +1020,17 @@ impl DB {
     pub fn exit(&self, ch: &CharData, door: usize) -> Option<Rc<RoomDirectionData>> {
         self.world.borrow()[ch.in_room() as usize].dir_option[door as usize].clone()
     }
-    pub fn room_flags(&self, loc: room_rnum) -> i32 {
+    pub fn room_flags(&self, loc: RoomRnum) -> i32 {
         self.world.borrow()[loc as usize].room_flags.get()
     }
-    pub fn room_flagged(&self, loc: room_rnum, flag: i64) -> bool {
+    pub fn room_flagged(&self, loc: RoomRnum, flag: i64) -> bool {
         is_set!(self.room_flags(loc), flag as i32)
     }
     pub fn set_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) | flags as i32;
         self.world.borrow()[loc as usize].room_flags.set(flags);
     }
-    pub fn sect(&self, loc: room_rnum) -> i32 {
+    pub fn sect(&self, loc: RoomRnum) -> i32 {
         if self.valid_room_rnum(loc) {
             self.world.borrow()[loc as usize].sector_type
         } else {
@@ -1134,7 +1137,7 @@ pub fn prune_crlf(s: &mut String) {
 /* log a death trap hit */
 // void log_death_trap(struct char_data *ch)
 // {
-// mudlog(BRF, LVL_IMMORT, TRUE, "%s hit death trap #%d (%s)", GET_NAME(ch), GET_ROOM_VNUM(IN_ROOM(ch)), world[IN_ROOM(ch)].name);
+// mudlog(BRF, LVL_IMMORT, TRUE, "%s hit death trap #%d (%s)", GET_NAME(ch), GET_RoomVnum(IN_ROOM(ch)), world[IN_ROOM(ch)].name);
 // }
 
 /*
@@ -1174,18 +1177,16 @@ use crate::handler::fname;
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    room_vnum, CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND,
-    AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC,
-    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING,
-    PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE,
-    SEX_MALE,
+    CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND, AFF_DETECT_INVIS,
+    AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC, CLASS_MAGIC_USER,
+    CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1,
+    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
 };
 use crate::{
     clr, send_to_char, DescriptorData, MainGlobals, _clrlevel, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT,
     TO_VICT,
 };
 use log::{error, info};
-use regex::internal::Char;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufRead, BufReader};
@@ -1284,7 +1285,7 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
     // int nlen;
     // long nr;
 
-    let mut nr = 0;
+    let nr = 0;
     let mut bitvector = bitvector;
     loop {
         if bitvector == 0 {
@@ -1319,24 +1320,25 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
 // }
 
 /* Calculate the REAL time passed over the last t2-t1 centuries (secs) */
-// struct time_info_data *real_time_passed(time_t t2, time_t t1)
-// {
-// long secs;
-// static struct time_info_data now;
-//
-// secs = t2 - t1;
-//
-// now.hours = (secs / SECS_PER_REAL_HOUR) % 24;	/* 0..23 hours */
-// secs -= SECS_PER_REAL_HOUR * now.hours;
-//
-// now.day = (secs / SECS_PER_REAL_DAY);	/* 0..34 days  */
-// /* secs -= SECS_PER_REAL_DAY * now.day; - Not used. */
-//
-// now.month = -1;
-// now.year = -1;
-//
-// return (&now);
-// }
+pub fn real_time_passed(t2: u64, t1: u64) -> TimeInfoData {
+    let mut secs = t2 - t1;
+    let mut now = TimeInfoData {
+        hours: ((secs / SECS_PER_REAL_HOUR) % 24) as i32,
+        /* 0..23 hours */
+        day: 0,
+        month: 0,
+        year: 0,
+    };
+    secs -= SECS_PER_REAL_HOUR * now.hours as u64;
+
+    now.day = (secs / SECS_PER_REAL_DAY) as i32; /* 0..34 days  */
+    /* secs -= SECS_PER_REAL_DAY * now.day; - Not used. */
+
+    now.month = -1;
+    now.year = -1;
+
+    now
+}
 
 /* Calculate the MUD time passed over the last t2-t1 centuries (secs) */
 pub fn mud_time_passed(t2: u64, t1: u64) -> TimeInfoData {
@@ -1663,10 +1665,10 @@ pub fn num_pc_in_room(room: &RoomData) -> i32 {
  * Outside rooms are dark at sunset and night.
  */
 impl DB {
-    pub fn is_light(&self, room: room_rnum) -> bool {
+    pub fn is_light(&self, room: RoomRnum) -> bool {
         !self.is_dark(room)
     }
-    pub fn is_dark(&self, room: room_rnum) -> bool {
+    pub fn is_dark(&self, room: RoomRnum) -> bool {
         if !self.valid_room_rnum(room) {
             error!(
                 "room_is_dark: Invalid room rnum {}. (0-{})",
