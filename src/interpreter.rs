@@ -8,20 +8,46 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-use crate::{
-    MainGlobals, _clrlevel, clr, send_to_char, DescriptorData, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
-};
+use std::cell::Cell;
+use std::cmp::max;
+use std::rc::Rc;
 
+use hmac::Hmac;
+use log::error;
+use sha2::Sha256;
+
+use crate::act_informative::{
+    do_color, do_commands, do_consider, do_equipment, do_exits, do_gold, do_inventory, do_levels,
+    do_look, do_score, do_time, do_weather,
+};
+use crate::act_movement::do_move;
+use crate::act_offensive::{do_flee, do_hit};
+use crate::act_other::do_quit;
+use crate::ban::valid_name;
+use crate::class::{parse_class, CLASS_MENU};
+use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
+use crate::db::{clear_char, reset_char, store_to_char};
+use crate::screen::{C_SPR, KNRM, KNUL, KRED};
+use crate::structs::ConState::{
+    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
+    ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
+};
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
     CharData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM,
     POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
     POS_STANDING, POS_STUNNED,
 };
-use hmac::Hmac;
-use sha2::Sha256;
-use std::cell::Cell;
-use std::rc::Rc;
+use crate::structs::{
+    CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
+    MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
+    SEX_MALE,
+};
+use crate::util::{BRF, NRM};
+use crate::{
+    _clrlevel, clr, send_to_char, DescriptorData, MainGlobals, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
+};
+use crate::{echo_off, echo_on, write_to_output};
 
 /*
  * SUBCOMMANDS
@@ -37,6 +63,23 @@ pub const SCMD_WEST: i32 = 4;
 pub const SCMD_UP: i32 = 5;
 pub const SCMD_DOWN: i32 = 6;
 
+/* do_quit */
+pub const SCMD_QUI: i32 = 0;
+pub const SCMD_QUIT: i32 = 1;
+
+/* do_commands */
+pub const SCMD_COMMANDS: i32 = 0;
+pub const SCMD_SOCIALS: i32 = 1;
+pub const SCMD_WIZHELP: i32 = 2;
+
+/* do_hit */
+pub const SCMD_HIT: i32 = 0;
+pub const SCMD_MURDER: i32 = 1;
+
+/* do_look */
+pub const SCMD_LOOK: i32 = 0;
+pub const SCMD_READ: i32 = 1;
+
 /* This is the Master Command List(tm).
 
 * You can put new commands in, take commands out, change the order
@@ -51,17 +94,17 @@ pub const SCMD_DOWN: i32 = 6;
 */
 type Command = fn(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
 
-struct CommandInfo {
-    command: &'static str,
+pub struct CommandInfo {
+    pub(crate) command: &'static str,
     minimum_position: u8,
-    command_pointer: Command,
-    minimum_level: i16,
+    pub(crate) command_pointer: Command,
+    pub(crate) minimum_level: i16,
     subcmd: i32,
 }
 
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-const CMD_INFO: [CommandInfo; 9] = [
+pub const CMD_INFO: [CommandInfo; 27] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -147,10 +190,31 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "close"    , POS_SITTING , do_gen_door , 0, SCMD_CLOSE },
     // { "cls"      , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
     // { "consider" , POS_RESTING , do_consider , 0, 0 },
+    CommandInfo {
+        command: "consider",
+        minimum_position: POS_RESTING,
+        command_pointer: do_consider,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "color"    , POS_DEAD    , do_color    , 0, 0 },
+    CommandInfo {
+        command: "color",
+        minimum_position: POS_DEAD,
+        command_pointer: do_color,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "comfort"  , POS_RESTING , do_action   , 0, 0 },
     // { "comb"     , POS_RESTING , do_action   , 0, 0 },
     // { "commands" , POS_DEAD    , do_commands , 0, SCMD_COMMANDS },
+    CommandInfo {
+        command: "commands",
+        minimum_position: POS_DEAD,
+        command_pointer: do_commands,
+        minimum_level: 0,
+        subcmd: SCMD_COMMANDS,
+    },
     // { "compact"  , POS_DEAD    , do_gen_tog  , 0, SCMD_COMPACT },
     // { "cough"    , POS_RESTING , do_action   , 0, 0 },
     // { "credits"  , POS_DEAD    , do_gen_ps   , 0, SCMD_CREDITS },
@@ -179,13 +243,34 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "embrace"  , POS_STANDING, do_action   , 0, 0 },
     // { "enter"    , POS_STANDING, do_enter    , 0, 0 },
     // { "equipment", POS_SLEEPING, do_equipment, 0, 0 },
+    CommandInfo {
+        command: "equipment",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_equipment,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "exits"    , POS_RESTING , do_exits    , 0, 0 },
+    CommandInfo {
+        command: "exits",
+        minimum_position: POS_RESTING,
+        command_pointer: do_exits,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "examine"  , POS_SITTING , do_examine  , 0, 0 },
     //
     // { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
     // { "fart"     , POS_RESTING , do_action   , 0, 0 },
     // { "FILL"     , POS_STANDING, do_pour     , 0, SCMD_FILL },
     // { "flee"     , POS_FIGHTING, do_flee     , 1, 0 },
+    CommandInfo {
+        command: "flee",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_flee,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "flip"     , POS_STANDING, do_action   , 0, 0 },
     // { "flirt"    , POS_RESTING , do_action   , 0, 0 },
     // { "follow"   , POS_RESTING , do_follow   , 0, 0 },
@@ -203,6 +288,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "glare"    , POS_RESTING , do_action   , 0, 0 },
     // { "goto"     , POS_SLEEPING, do_goto     , LVL_IMMORT, 0 },
     // { "gold"     , POS_RESTING , do_gold     , 0, 0 },
+    CommandInfo {
+        command: "gold",
+        minimum_position: POS_RESTING,
+        command_pointer: do_gold,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
     // { "group"    , POS_RESTING , do_group    , 1, 0 },
     // { "grab"     , POS_RESTING , do_grab     , 0, 0 },
@@ -222,6 +314,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
     // { "hide"     , POS_RESTING , do_hide     , 1, 0 },
     // { "hit"      , POS_FIGHTING, do_hit      , 0, SCMD_HIT },
+    CommandInfo {
+        command: "hit",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_hit,
+        minimum_level: 0,
+        subcmd: SCMD_HIT,
+    },
     // { "hold"     , POS_RESTING , do_grab     , 1, 0 },
     // { "holler"   , POS_RESTING , do_gen_comm , 1, SCMD_HOLLER },
     // { "holylight", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_HOLYLIGHT },
@@ -230,6 +329,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "hug"      , POS_RESTING , do_action   , 0, 0 },
     //
     // { "inventory", POS_DEAD    , do_inventory, 0, 0 },
+    CommandInfo {
+        command: "inventory",
+        minimum_position: POS_DEAD,
+        command_pointer: do_inventory,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "idea"     , POS_DEAD    , do_gen_write, 0, SCMD_IDEA },
     // { "imotd"    , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_IMOTD },
     // { "immlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_IMMLIST },
@@ -244,10 +350,24 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "kiss"     , POS_RESTING , do_action   , 0, 0 },
     //
     // { "look"     , POS_RESTING , do_look     , 0, SCMD_LOOK },
+    CommandInfo {
+        command: "look",
+        minimum_position: POS_RESTING,
+        command_pointer: do_look,
+        minimum_level: 0,
+        subcmd: SCMD_LOOK,
+    },
     // { "laugh"    , POS_RESTING , do_action   , 0, 0 },
     // { "last"     , POS_DEAD    , do_last     , LVL_GOD, 0 },
     // { "leave"    , POS_STANDING, do_leave    , 0, 0 },
     // { "levels"   , POS_DEAD    , do_levels   , 0, 0 },
+    CommandInfo {
+        command: "levels",
+        minimum_position: POS_DEAD,
+        command_pointer: do_levels,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "list"     , POS_STANDING, do_not_here , 0, 0 },
     // { "lick"     , POS_RESTING , do_action   , 0, 0 },
     // { "lock"     , POS_SITTING , do_gen_door , 0, SCMD_LOCK },
@@ -260,6 +380,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "massage"  , POS_RESTING , do_action   , 0, 0 },
     // { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
     // { "murder"   , POS_FIGHTING, do_hit      , 0, SCMD_MURDER },
+    CommandInfo {
+        command: "murder",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_hit,
+        minimum_level: 0,
+        subcmd: SCMD_MURDER,
+    },
     //
     // { "news"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_NEWS },
     // { "nibble"   , POS_RESTING , do_action   , 0, 0 },
@@ -309,11 +436,25 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "quest"    , POS_DEAD    , do_gen_tog  , 0, SCMD_QUEST },
     // { "qui"      , POS_DEAD    , do_quit     , 0, 0 },
     // { "quit"     , POS_DEAD    , do_quit     , 0, SCMD_QUIT },
+    CommandInfo {
+        command: "quit",
+        minimum_position: POS_DEAD,
+        command_pointer: do_quit,
+        minimum_level: 0,
+        subcmd: SCMD_QUIT,
+    },
     // { "qsay"     , POS_RESTING , do_qcomm    , 0, SCMD_QSAY },
     //
     // { "reply"    , POS_SLEEPING, do_reply    , 0, 0 },
     // { "rest"     , POS_RESTING , do_rest     , 0, 0 },
     // { "read"     , POS_RESTING , do_look     , 0, SCMD_READ },
+    CommandInfo {
+        command: "read",
+        minimum_position: POS_RESTING,
+        command_pointer: do_look,
+        minimum_level: 0,
+        subcmd: SCMD_READ,
+    },
     // { "reload"   , POS_DEAD    , do_reboot   , LVL_IMPL, 0 },
     // { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
     // { "receive"  , POS_STANDING, do_not_here , 1, 0 },
@@ -371,6 +512,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "snoop"    , POS_DEAD    , do_snoop    , LVL_GOD, 0 },
     // { "snuggle"  , POS_RESTING , do_action   , 0, 0 },
     // { "socials"  , POS_DEAD    , do_commands , 0, SCMD_SOCIALS },
+    CommandInfo {
+        command: "socials",
+        minimum_position: POS_DEAD,
+        command_pointer: do_commands,
+        minimum_level: 0,
+        subcmd: SCMD_SOCIALS,
+    },
     // { "split"    , POS_SITTING , do_split    , 1, 0 },
     // { "spank"    , POS_RESTING , do_action   , 0, 0 },
     // { "spit"     , POS_STANDING, do_action   , 0, 0 },
@@ -399,6 +547,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "title"    , POS_DEAD    , do_title    , 0, 0 },
     // { "tickle"   , POS_RESTING , do_action   , 0, 0 },
     // { "time"     , POS_DEAD    , do_time     , 0, 0 },
+    CommandInfo {
+        command: "time",
+        minimum_position: POS_DEAD,
+        command_pointer: do_time,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "toggle"   , POS_DEAD    , do_toggle   , 0, 0 },
     // { "track"    , POS_STANDING, do_track    , 0, 0 },
     // { "trackthru", POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_TRACK },
@@ -424,6 +579,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "wave"     , POS_RESTING , do_action   , 0, 0 },
     // { "wear"     , POS_RESTING , do_wear     , 0, 0 },
     // { "weather"  , POS_RESTING , do_weather  , 0, 0 },
+    CommandInfo {
+        command: "weather",
+        minimum_position: POS_RESTING,
+        command_pointer: do_weather,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "who"      , POS_DEAD    , do_who      , 0, 0 },
     // { "whoami"   , POS_DEAD    , do_gen_ps   , 0, SCMD_WHOAMI },
     // { "where"    , POS_RESTING , do_where    , 1, 0 },
@@ -438,6 +600,13 @@ const CMD_INFO: [CommandInfo; 9] = [
     // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
     // { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
     // { "wizhelp"  , POS_SLEEPING, do_commands , LVL_IMMORT, SCMD_WIZHELP },
+    CommandInfo {
+        command: "wizhelp",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_commands,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_WIZHELP,
+    },
     // { "wizlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_WIZLIST },
     // { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
     // { "worship"  , POS_RESTING , do_action   , 0, 0 },
@@ -748,7 +917,7 @@ pub fn command_interpreter(game: &MainGlobals, rch: &Rc<CharData>, argument: &st
  * it to be returned.  Returns -1 if not found; 0..n otherwise.  Array
  * must be terminated with a '\n' so it knows to stop searching.
  */
-fn search_block(arg: &str, list: &[&str], exact: bool) -> Option<usize> {
+pub fn search_block(arg: &str, list: &[&str], exact: bool) -> Option<usize> {
     /*  We used to have \r as the first character on certain array items to
      *  prevent the explicit choice of that point.  It seems a bit silly to
      *  dump control characters into arrays to prevent that, so we'll just
@@ -834,30 +1003,34 @@ fn reserved_word(argument: &str) -> bool {
  * copy the first non-FILL-word, space-delimited argument of 'argument'
  * to 'first_arg'; return a pointer to the remainder of the string.
  */
-// char *one_argument(char *argument, char *first_arg)
-// {
-// char *begin = first_arg;
-//
-// if (!argument) {
-// log("SYSERR: one_argument received a NULL pointer!");
-// *first_arg = '\0';
-// return (NULL);
-// }
-//
-// do {
-// skip_spaces(&argument);
-//
-// first_arg = begin;
-// while (*argument && !isspace(*argument)) {
-// *(first_arg++) = LOWER(*argument);
-// argument++;
-// }
-//
-// *first_arg = '\0';
-// } while (fill_word(begin));
-//
-// return (argument);
-// }
+pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
+    //char * begin = first_arg;
+    // if (!argument) {
+    // log("SYSERR: one_argument received a NULL pointer!");
+    // *first_arg = '\0';
+    // return (NULL);
+    // }
+    loop {
+        let mut argument = argument.trim_start();
+        first_arg.clear();
+
+        let mut i = 0;
+        for c in argument.chars() {
+            if c.is_whitespace() {
+                break;
+            }
+            first_arg.push(c.to_ascii_lowercase());
+            i += 1;
+        }
+
+        argument = &argument[0..i];
+        if !fill_word(first_arg.as_str()) {
+            break;
+        }
+    }
+
+    return argument;
+}
 
 /*
  * one_word is like one_argument, except that words in quotes ("") are
@@ -924,34 +1097,24 @@ pub fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a 
  *
  * returns 1 if arg1 is an abbreviation of arg2
  */
-// int is_abbrev(const char *arg1, const char *arg2)
-// {
-// if (!*arg1)
-// return (0);
-//
-// for (; *arg1 && *arg2; arg1++, arg2++)
-// if (LOWER(*arg1) != LOWER(*arg2))
-// return (0);
-//
-// if (!*arg1)
-// return (1);
-// else
-// return (0);
-// }
+pub fn is_abbrev(arg1: &str, arg2: &str) -> bool {
+    if arg1.is_empty() {
+        return false;
+    }
+
+    arg2.to_lowercase()
+        .starts_with(arg1.to_lowercase().as_str())
+}
 
 /*
  * Return first space-delimited token in arg1; remainder of string in arg2.
  *
  * NOTE: Requires sizeof(arg2) >= sizeof(string)
  */
-// void half_chop(char *string, char *arg1, char *arg2)
-// {
-// char *temp;
-//
-// temp = any_one_arg(string, arg1);
-// skip_spaces(&temp);
-// strcpy(arg2, temp);	/* strcpy: OK (documentation) */
-// }
+pub fn half_chop(string: &mut String, arg1: &mut String, arg2: &mut String) {
+    let temp = any_one_arg(string, arg1);
+    arg2.push_str(temp.trim_start());
+}
 
 /* Used in specprocs, mostly.  (Exactly) matches "command" to cmd number */
 // int find_command(const char *command)
@@ -1128,10 +1291,10 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
 
         /* we've found a duplicate - blow him away, dumping his eq in limbo. */
         if ch.in_room != Cell::from(NOWHERE) {
-            db.char_from_room(ch.clone());
+            db.char_from_room(ch);
         }
-        db.char_to_room(Some(ch.clone()), 1);
-        db.extract_char(ch.clone());
+        db.char_to_room(Some(ch), 1);
+        db.extract_char(ch);
     }
 
     /* no target for switching into was found - allow login to continue */
@@ -1161,7 +1324,7 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
             db.act(
                 "$n has reconnected.",
                 true,
-                d.character.borrow().clone(),
+                d.character.borrow().as_ref(),
                 None,
                 None,
                 TO_ROOM,
@@ -1186,7 +1349,7 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
                 d.as_ref(),
                 "You take over your own body, already in use!\r\n",
             );
-            db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().clone(), None, None, TO_ROOM);
+            db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().as_ref(), None, None, TO_ROOM);
             main_globals.mudlog(
                 NRM,
                 max(
@@ -1224,27 +1387,6 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
 }
 
 /* deal with newcomers and other non-playing sockets */
-use crate::act_informative::do_score;
-use crate::act_movement::do_move;
-use crate::ban::valid_name;
-use crate::class::{parse_class, CLASS_MENU};
-use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{clear_char, reset_char, store_to_char, DB};
-use crate::screen::{C_SPR, KNRM, KNUL, KRED};
-use crate::structs::ConState::{
-    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
-    ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
-};
-use crate::structs::{
-    CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
-    MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
-    SEX_MALE,
-};
-use crate::util::{BRF, NRM};
-use crate::{echo_off, echo_on, write_to_output};
-use log::error;
-use std::cmp::max;
-
 pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
     let db = &main_globals.db;
@@ -1665,7 +1807,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
                         db.character_list.borrow_mut().push(character.clone());
-                        db.char_to_room(Some(character.clone()), load_room);
+                        db.char_to_room(Some(character), load_room);
                         //load_result = Crash_load(d->character);
 
                         /* Clear their load room if it's not persistant. */
@@ -1677,7 +1819,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         db.act(
                             "$n has entered the game.",
                             true,
-                            Some(character.clone()),
+                            Some(character),
                             None,
                             None,
                             TO_ROOM as i32,

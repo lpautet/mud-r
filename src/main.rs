@@ -7,8 +7,39 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
+use std::any::Any;
+use std::borrow::Borrow;
+use std::cell::{Cell, RefCell};
+use std::cmp::max;
+use std::collections::LinkedList;
+use std::io::{ErrorKind, Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::path::Path;
+use std::process::ExitCode;
+use std::rc::Rc;
+use std::string::ToString;
+use std::time::{Duration, Instant};
+use std::{env, fs, process, thread};
+
+use env_logger::Env;
+use log::{debug, error, info, warn};
+
+use crate::config::*;
+use crate::constants::*;
+use crate::db::*;
+use crate::handler::fname;
+use crate::interpreter::{command_interpreter, nanny};
+use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
+use crate::structs::*;
+use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
+use crate::util::{hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
+
 mod act_informative;
+mod act_item;
 mod act_movement;
+mod act_offensive;
+mod act_other;
+mod act_social;
 mod ban;
 mod class;
 mod config;
@@ -26,31 +57,6 @@ mod structs;
 mod telnet;
 mod util;
 mod weather;
-
-use crate::config::*;
-use crate::constants::*;
-use crate::db::*;
-use crate::handler::fname;
-use crate::interpreter::{command_interpreter, nanny};
-use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
-use crate::structs::*;
-use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
-use env_logger::Env;
-use log::{debug, error, info, warn};
-use std::any::Any;
-use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use std::cmp::max;
-use std::collections::LinkedList;
-use std::io::{ErrorKind, Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
-use std::path::Path;
-use std::process::ExitCode;
-use std::rc::Rc;
-use std::string::ToString;
-use std::time::{Duration, Instant};
-use std::{env, fs, process, thread};
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
@@ -492,7 +498,7 @@ impl MainGlobals {
     fn game_loop(&self) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
-        let mut temp_time;
+        // let mut temp_time;
         let mut before_sleep;
         // let mut now;
         let mut timeout;
@@ -577,13 +583,14 @@ impl MainGlobals {
             }
 
             /* Calculate the time we should wake up */
-            temp_time = opt_time - process_time;
-            last_time = before_sleep + temp_time;
-
-            /* Now keep sleeping until that time has come */
-            timeout = last_time - Instant::now();
-
-            thread::sleep(timeout);
+            let now = Instant::now();
+            last_time = before_sleep + opt_time - process_time;
+            if last_time > now {
+                /* Now keep sleeping until that time has come */
+                timeout = last_time - Instant::now();
+                thread::sleep(timeout);
+            }
+            last_time = now;
 
             /* If there are new connections waiting, accept them. */
             let accept_result = self.mother_desc.as_ref().unwrap().borrow().accept();
@@ -639,15 +646,15 @@ impl MainGlobals {
                     character.char_specials.borrow().timer.set(0);
                     if d.state() == ConPlaying && character.get_was_in() != NOWHERE {
                         if character.in_room.get() != NOWHERE {
-                            self.db.char_from_room(character.clone());
+                            self.db.char_from_room(character);
                         }
                         self.db
-                            .char_to_room(Some(character.clone()), character.get_was_in());
+                            .char_to_room(Some(character), character.get_was_in());
                         character.set_was_in(NOWHERE);
                         self.db.act(
                             "$n has returned.",
                             true,
-                            d.character.borrow().clone(),
+                            d.character.borrow().as_ref(),
                             None,
                             None,
                             TO_ROOM,
@@ -775,15 +782,14 @@ impl MainGlobals {
         }
 
         if pulse % PULSE_MOBILE == 0 {
-            self.db.mobile_activity();
+            self.db.mobile_activity(self);
         }
 
-        // TODO implement fighting
-        // if (!(pulse % PULSE_VIOLENCE))
-        // perform_violence();
+        if pulse % PULSE_VIOLENCE == 0 {
+            self.db.perform_violence(self);
+        }
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
-            // TODO implement weather and time
             self.weather_and_time(1);
             // TODO implement spells
             // affect_update();
@@ -1267,9 +1273,7 @@ fn process_output(t: &DescriptorData) -> i32 {
 
     if result < 0 {
         /* Oops, fatal error. Bye! */
-        RefCell::borrow(&t.stream)
-            .shutdown(Shutdown::Both)
-            .expect("SYSERR: cannot close socket");
+        let _ = RefCell::borrow(&t.stream).shutdown(Shutdown::Both);
         return -1;
     } else if result == 0 {
         /* Socket buffer full. Try later. */
@@ -1818,7 +1822,7 @@ impl MainGlobals {
                 self.db.act(
                     "$n has lost $s link.",
                     true,
-                    Some(link_challenged.clone()),
+                    Some(link_challenged),
                     None,
                     None,
                     TO_ROOM,
@@ -2137,23 +2141,16 @@ impl MainGlobals {
     }
 }
 
-// void send_to_room(room_rnum room, const char * messg, ...)
-// {
-// struct char_data * i;
-// va_list args;
-//
-// if (messg == NULL)
-// return;
-//
-// for (i = world[room].people; i; i = i -> next_in_room) {
-// if ( ! i -> desc)
-// continue;
-//
-// va_start(args, messg);
-// vwrite_to_output(i ->desc, messg, args);
-// va_end(args);
-// }
-// }
+impl DB {
+    pub fn send_to_room(&self, room: RoomRnum, msg: &str) {
+        for i in self.world.borrow()[room as usize].peoples.borrow().iter() {
+            if i.desc.borrow().is_none() {
+                continue;
+            }
+            write_to_output(i.desc.borrow().as_ref().unwrap(), msg);
+        }
+    }
+}
 
 const ACTNULL: &str = "<NULL>";
 //
@@ -2165,10 +2162,10 @@ impl DB {
     fn perform_act(
         &self,
         orig: &str,
-        ch: Option<&CharData>,
-        obj: Option<&ObjData>,
+        ch: Option<&Rc<CharData>>,
+        obj: Option<&Rc<ObjData>>,
         vict_obj: Option<&dyn Any>,
-        to: &CharData,
+        to: &Rc<CharData>,
     ) {
         //const char * i = NULL;
         //char lbuf[MAX_STRING_LENGTH], * buf, * j;
@@ -2355,8 +2352,8 @@ impl DB {
         &self,
         str: &str,
         hide_invisible: bool,
-        ch: Option<Rc<CharData>>,
-        obj: Option<&ObjData>,
+        ch: Option<&Rc<CharData>>,
+        obj: Option<&Rc<ObjData>>,
         vict_obj: Option<&dyn Any>,
         _type: i32,
     ) {
@@ -2387,21 +2384,15 @@ impl DB {
 
         if _type == TO_CHAR {
             if ch.is_some() && sendok!(ch.as_ref().unwrap(), to_sleeping) {
-                self.perform_act(
-                    str,
-                    Some(ch.as_ref().unwrap().borrow()),
-                    obj,
-                    vict_obj,
-                    ch.as_ref().unwrap().borrow(),
-                );
+                self.perform_act(str, ch, obj, vict_obj, ch.unwrap());
             }
             return;
         }
 
         if _type == TO_VICT {
-            let to = vict_obj.unwrap().downcast_ref::<CharData>();
+            let to = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
             if to.is_some() && sendok!(to.unwrap(), to_sleeping) {
-                self.perform_act(str, Some(ch.unwrap().borrow()), obj, vict_obj, to.unwrap());
+                self.perform_act(str, ch, obj, vict_obj, to.unwrap());
             }
             return;
         }
@@ -2421,10 +2412,7 @@ impl DB {
             if !sendok!(to.as_ref(), to_sleeping) || Rc::ptr_eq(to, ch.as_ref().unwrap()) {
                 continue;
             }
-            if hide_invisible
-                && ch.is_some()
-                && !self.can_see(to.as_ref(), ch.as_ref().unwrap().borrow())
-            {
+            if hide_invisible && ch.is_some() && !self.can_see(to.as_ref(), ch.as_ref().unwrap()) {
                 continue;
             }
             if _type != TO_ROOM
@@ -2433,13 +2421,7 @@ impl DB {
             {
                 continue;
             }
-            self.perform_act(
-                str,
-                Some(ch.as_ref().unwrap().borrow()),
-                obj,
-                vict_obj,
-                to.as_ref(),
-            );
+            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), obj, vict_obj, to);
         }
     }
 }

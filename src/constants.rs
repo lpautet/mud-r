@@ -432,42 +432,33 @@ pub const EXTRA_BITS: [&str; 18] = [
 // {0, 1, -2},
 // {0, 0, 13}
 // };
-//
-//
-// /* color of the various drinks */
-// const char *color_liquid[] =
-// {
-// "clear",
-// "brown",
-// "clear",
-// "brown",
-// "dark",
-// "golden",
-// "red",
-// "green",
-// "clear",
-// "light green",
-// "white",
-// "brown",
-// "black",
-// "red",
-// "clear",
-// "crystal clear",
-// "\n"
-// };
-//
-//
-// /*
-//  * level of fullness for drink containers
-//  * Not used in sprinttype() so no \n.
-//  */
-// const char *fullness[] =
-// {
-// "less than half ",
-// "about half ",
-// "more than half ",
-// ""
-// };
+
+/* color of the various drinks */
+pub const COLOR_LIQUID: [&str; 17] = [
+    "clear",
+    "brown",
+    "clear",
+    "brown",
+    "dark",
+    "golden",
+    "red",
+    "green",
+    "clear",
+    "light green",
+    "white",
+    "brown",
+    "black",
+    "red",
+    "clear",
+    "crystal clear",
+    "\n",
+];
+
+/*
+ * level of FULLNESS for drink containers
+ * Not used in sprinttype() so no \n.
+ */
+pub const FULLNESS: [&str; 4] = ["less than half ", "about half ", "more than half ", ""];
 
 /* str, int, wis, dex, con applies **************************************/
 
@@ -1122,40 +1113,38 @@ pub const MOVEMENT_LOSS: [i32; 10] = [
     5, /* Underwater */
 ];
 
-// /* Not used in sprinttype(). */
-// const char *weekdays[] = {
-// "the Day of the Moon",
-// "the Day of the Bull",
-// "the Day of the Deception",
-// "the Day of Thunder",
-// "the Day of Freedom",
-// "the Day of the Great Gods",
-// "the Day of the Sun"
-// };
-//
-//
-// /* Not used in sprinttype(). */
-// const char *month_name[] = {
-// "Month of Winter",		/* 0 */
-// "Month of the Winter Wolf",
-// "Month of the Frost Giant",
-// "Month of the Old Forces",
-// "Month of the Grand Struggle",
-// "Month of the Spring",
-// "Month of Nature",
-// "Month of Futility",
-// "Month of the Dragon",
-// "Month of the Sun",
-// "Month of the Heat",
-// "Month of the Battle",
-// "Month of the Dark Shades",
-// "Month of the Shadows",
-// "Month of the Long Shadows",
-// "Month of the Ancient Darkness",
-// "Month of the Great Evil"
-// };
-//
-//
+/* Not used in sprinttype(). */
+pub const WEEKDAYS: [&str; 7] = [
+    "the Day of the Moon",
+    "the Day of the Bull",
+    "the Day of the Deception",
+    "the Day of Thunder",
+    "the Day of Freedom",
+    "the Day of the Great Gods",
+    "the Day of the Sun",
+];
+
+/* Not used in sprinttype(). */
+pub const MONTH_NAME: [&str; 17] = [
+    "Month of Winter", /* 0 */
+    "Month of the Winter Wolf",
+    "Month of the Frost Giant",
+    "Month of the Old Forces",
+    "Month of the Grand Struggle",
+    "Month of the Spring",
+    "Month of Nature",
+    "Month of Futility",
+    "Month of the Dragon",
+    "Month of the Sun",
+    "Month of the Heat",
+    "Month of the Battle",
+    "Month of the Dark Shades",
+    "Month of the Shadows",
+    "Month of the Long Shadows",
+    "Month of the Ancient Darkness",
+    "Month of the Great Evil",
+];
+
 /* --- End of constants arrays. --- */
 
 /*

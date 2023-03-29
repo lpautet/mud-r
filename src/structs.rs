@@ -1,6 +1,7 @@
-use crate::DescriptorData;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+use crate::DescriptorData;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
@@ -852,7 +853,8 @@ pub struct RoomData {
     pub light: Cell<u8>,
     /* Number of lightsources in room     */
     //SPECIAL(*func);
-    pub contents: RefCell<Vec<Rc<ObjData>>>, /* List of items in room              */
+    pub contents: RefCell<Vec<Rc<ObjData>>>,
+    /* List of items in room              */
     pub peoples: RefCell<Vec<Rc<CharData>>>,
     /* List of NPC / PC in room           */
 }
@@ -866,6 +868,32 @@ pub struct ExtraDescrData {
     /* What to see                      */
     //  pub next: Option<Box<ExtraDescrData>>,
     /* Next in list                     */
+}
+
+pub struct MsgType {
+    pub attacker_msg: Rc<str>,
+    /* message to attacker */
+    pub victim_msg: Rc<str>,
+    /* message to victim   */
+    pub room_msg: Rc<str>,
+    /* message to room     */
+}
+
+pub struct MessageType {
+    pub die_msg: MsgType,
+    /* messages when death			*/
+    pub miss_msg: MsgType,
+    /* messages when miss			*/
+    pub hit_msg: MsgType,
+    /* messages when hit			*/
+    pub god_msg: MsgType,
+    /* messages when hit on god		*/
+}
+
+pub struct MessageList {
+    pub a_type: i32, /* Attack type				*/
+    //number_of_attacks;	/* How many attack messages to chose from. */
+    pub messages: Vec<MessageType>, /* List of messages.			*/
 }
 
 pub struct DexSkillType {
@@ -909,10 +937,14 @@ pub struct ConAppType {
 }
 
 pub struct WeatherData {
-    pub pressure: i32, /* How is the pressure ( Mb ) */
-    pub change: i32,   /* How fast and what way does it change. */
-    pub sky: i32,      /* How is the sky. */
-    pub sunlight: i32, /* And how much sun. */
+    pub pressure: i32,
+    /* How is the pressure ( Mb ) */
+    pub change: i32,
+    /* How fast and what way does it change. */
+    pub sky: i32,
+    /* How is the sky. */
+    pub sunlight: i32,
+    /* And how much sun. */
 }
 
 /*
@@ -927,4 +959,13 @@ pub struct IndexData {
     /* number of existing units of this mob/obj	*/
     // TODO implement spec proc
     //SPECIAL(*func);
+}
+
+impl ExtraDescrData {
+    pub fn new() -> ExtraDescrData {
+        ExtraDescrData {
+            keyword: "".to_string(),
+            description: "".to_string(),
+        }
+    }
 }

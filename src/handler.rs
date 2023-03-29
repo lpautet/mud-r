@@ -8,28 +8,38 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-use crate::db::DB;
-use crate::structs::{
-    CharData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT,
-    APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD,
-    APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE,
-    APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD,
-    APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL,
-    ITEM_ARMOR, ITEM_LIGHT, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS,
-    PLR_CRASH, PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS,
-    WEAR_LIGHT,
-};
-use log::error;
+use std::cell::Ref;
 use std::cmp::{max, min};
 use std::process;
 use std::rc::Rc;
 
+use log::{error, info};
+
 use crate::class::invalid_class;
 use crate::config::MENU;
+use crate::db::DB;
+use crate::interpreter::one_argument;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
-use crate::util::SECS_PER_MUD_YEAR;
-use crate::{send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::structs::{
+    CharData, ExtraDescrData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE, APPLY_CHA,
+    APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX,
+    APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA,
+    APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI,
+    APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD,
+    ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, ITEM_WEAR_TAKE, LVL_GRGOD,
+    MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET,
+    ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
+};
+use crate::util::{rand_number, SECS_PER_MUD_YEAR};
+use crate::{is_set, send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
+
+pub const FIND_CHAR_ROOM: i32 = 1 << 0;
+pub const FIND_CHAR_WORLD: i32 = 1 << 1;
+pub const FIND_OBJ_INV: i32 = 1 << 2;
+pub const FIND_OBJ_ROOM: i32 = 1 << 3;
+pub const FIND_OBJ_WORLD: i32 = 1 << 4;
+pub const FIND_OBJ_EQUIP: i32 = 1 << 5;
 
 // /* local vars */
 // int extractions_pending = 0;
@@ -60,34 +70,42 @@ pub fn fname(namelist: &str) -> Rc<str> {
     return Rc::from(holder.as_str());
 }
 
-// int isname(const char *str, const char *namelist)
-// {
-// const char *curname, *curstr;
-//
-// curname = namelist;
-// for (;;) {
-// for (curstr = str;; curstr++, curname++) {
-// if (!*curstr && !isalpha(*curname))
-// return (1);
-//
-// if (!*curname)
-// return (0);
-//
-// if (!*curstr || *curname == ' ')
-// break;
-//
-// if (LOWER(*curstr) != LOWER(*curname))
-// break;
-// }
-//
-// /* skip to next name */
-//
-// for (; isalpha(*curname); curname++);
-// if (!*curname)
-// return (0);
-// curname++;			/* first char of new name */
-// }
-// }
+pub fn isname(txt: &str, namelist: &str) -> i32 {
+    info!("[DEBUG] {} {} ", txt, namelist);
+    let mut curname = namelist.to_string();
+    loop {
+        let mut skip = false;
+        let mut p = '\0';
+        for c in txt.chars() {
+            if curname.is_empty() {
+                return 0;
+            }
+
+            p = curname.remove(0);
+            if p == ' ' {
+                skip = true;
+                break;
+            }
+            if p.to_ascii_lowercase() != c.to_ascii_lowercase() {
+                skip = true;
+                break;
+            }
+        }
+        if !skip {
+            if curname.is_empty() {
+                return 1;
+            }
+            p = curname.remove(0);
+            if !p.is_alphanumeric() {
+                return 1;
+            }
+        }
+
+        while curname.len() > 0 && p.is_alphanumeric() {
+            p = curname.remove(0);
+        }
+    }
+}
 
 fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
     let mut _mod = _mod;
@@ -312,31 +330,24 @@ fn affect_total(ch: &CharData) {
 // affect_modify(ch, af->location, af->modifier, af->bitvector, TRUE);
 // affect_total(ch);
 // }
-//
-//
-//
-// /*
-//  * Remove an affected_type structure from a char (called when duration
-//  * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
-//  * affect_location_apply
-//  */
-// void affect_remove(struct char_data *ch, struct affected_type *af)
-// {
-// struct affected_type *temp;
-//
-// if (ch->affected == NULL) {
-// core_dump();
-// return;
-// }
-//
-// affect_modify(ch, af->location, af->modifier, af->bitvector, FALSE);
-// REMOVE_FROM_LIST(af, ch->affected, next);
-// free(af);
-// affect_total(ch);
-// }
-//
-//
-//
+
+/*
+ * Remove an affected_type structure from a char (called when duration
+ * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
+ * affect_location_apply
+ */
+pub fn affect_remove(ch: &Rc<CharData>, n: usize) {
+    let af = ch.affected.borrow_mut().remove(n);
+    affect_modify(
+        ch,
+        af.location as i8,
+        af.modifier as i16,
+        af.bitvector,
+        false,
+    );
+    affect_total(ch);
+}
+
 // /* Call affect_remove with every spell of spelltype "skill" */
 // void affect_from_char(struct char_data *ch, int type)
 // {
@@ -398,33 +409,33 @@ fn affect_total(ch: &CharData) {
 // }
 impl DB {
     /* move a player out of a room */
-    pub fn char_from_room(&self, rch: Rc<CharData>) {
-        //struct char_data *temp;
-        let ch = rch.as_ref();
-
+    pub fn char_from_room(&self, ch: &Rc<CharData>) {
         if ch.in_room() == NOWHERE {
             error!("SYSERR: NULL character or NOWHERE in char_from_room");
             process::exit(1);
         }
 
-        // TODO implement fighting
-        // if ch.fighting().is_some {
-        //     stop_fighting(ch);
-        // }
+        if ch.fighting().is_some() {
+            self.stop_fighting(ch);
+        }
 
-        // TODO implement objects
-        // if (GET_EQ(ch, WEAR_LIGHT) != NULL)
-        // if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
-        // if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2))	/* Light is ON */
-        // world[IN_ROOM(ch)].light--;
+        if ch.get_eq(WEAR_LIGHT as i8).is_some() {
+            if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
+                if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
+                    self.world.borrow()[ch.in_room() as usize]
+                        .light
+                        .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                }
+            }
+        }
 
         let w = self.world.borrow();
         let mut list = w[ch.in_room() as usize].peoples.borrow_mut();
-        list.retain(|c_rch| !Rc::ptr_eq(c_rch, &rch));
+        list.retain(|c_rch| !Rc::ptr_eq(c_rch, ch));
     }
 
     /* place a character in a room */
-    pub(crate) fn char_to_room(&self, ch: Option<Rc<CharData>>, room: RoomRnum) {
+    pub(crate) fn char_to_room(&self, ch: Option<&Rc<CharData>>, room: RoomRnum) {
         if ch.is_none() && room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
@@ -443,18 +454,27 @@ impl DB {
             // *self.world.borrow_mut()[room as usize].people.borrow_mut() = Some(ch.clone());
             ch.set_in_room(room);
 
-            // if (GET_EQ(ch, WEAR_LIGHT))
-            // if (GET_OBJ_TYPE(GET_EQ(ch, WEAR_LIGHT)) == ITEM_LIGHT)
-            // if (GET_OBJ_VAL(GET_EQ(ch, WEAR_LIGHT), 2))    /* Light ON */
+            if ch.get_eq(WEAR_LIGHT as i8).is_some() {
+                if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
+                    if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
+                        self.world.borrow()[ch.in_room() as usize]
+                            .light
+                            .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
+                        /* Light ON */
+                    }
+                }
+            }
+
             self.world.borrow()[room as usize]
                 .light
                 .replace(self.world.borrow()[room as usize].light.take() + 1);
 
             /* Stop fighting now, if we left. */
-            // if (FIGHTING(ch) && IN_ROOM(ch) != IN_ROOM(FIGHTING(ch))) {
-            //     stop_fighting(FIGHTING(ch));
-            //     stop_fighting(ch);
-            // }
+            if ch.fighting().is_some() && ch.in_room() != ch.fighting().as_ref().unwrap().in_room()
+            {
+                self.stop_fighting(ch.fighting().as_ref().unwrap());
+                self.stop_fighting(ch);
+            }
         }
     }
 
@@ -563,7 +583,7 @@ fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
 }
 
 impl DB {
-    pub(crate) fn equip_char(&self, ch: Option<Rc<CharData>>, obj: Option<Rc<ObjData>>, pos: i8) {
+    pub(crate) fn equip_char(&self, ch: Option<&Rc<CharData>>, obj: Option<&Rc<ObjData>>, pos: i8) {
         //int j;
 
         if pos < 0 || pos >= NUM_WEARS {
@@ -593,16 +613,16 @@ impl DB {
             self.act(
                 "You are zapped by $p and instantly let go of it.",
                 false,
-                Some(ch.clone()),
-                Some(obj.as_ref()),
+                Some(ch),
+                Some(obj),
                 None,
                 TO_CHAR,
             );
             self.act(
                 "$n is zapped by $p and instantly lets go of it.",
                 false,
-                Some(ch.clone()),
-                Some(obj.as_ref()),
+                Some(ch),
+                Some(obj),
                 None,
                 TO_ROOM,
             );
@@ -648,7 +668,7 @@ impl DB {
         affect_total(ch.as_ref());
     }
 
-    pub fn unequip_char(&self, ch: Rc<CharData>, pos: i8) -> Option<Rc<ObjData>> {
+    pub fn unequip_char(&self, ch: &Rc<CharData>, pos: i8) -> Option<Rc<ObjData>> {
         if pos < 0 || pos > NUM_WEARS || ch.get_eq(pos).is_none() {
             //core_dump();
             return None;
@@ -695,27 +715,19 @@ impl DB {
     }
 }
 
-// int get_number(char **name)
-// {
-// int i;
-// char *ppos;
-// char number[MAX_INPUT_LENGTH];
-//
-// *number = '\0';
-//
-// if ((ppos = strchr(*name, '.')) != NULL) {
-// *ppos++ = '\0';
-// strlcpy(number, *name, sizeof(number));
-// strcpy(*name, ppos);	/* strcpy: OK (always smaller) */
-//
-// for (i = 0; *(number + i); i++)
-// if (!isdigit(*(number + i)))
-// return (0);
-//
-// return (atoi(number));
-// }
-// return (1);
-// }
+pub fn get_number(name: &mut String) -> i32 {
+    let ppos = name.find('.');
+    if ppos.is_none() {
+        return 1;
+    }
+    let ppos = ppos.unwrap();
+    let number = name.split_off(ppos);
+    let r = number.parse::<i32>();
+    if r.is_err() {
+        return 0;
+    }
+    r.unwrap()
+}
 
 impl DB {
     /* Search a given list for an object number, and return a ptr to that obj */
@@ -777,7 +789,7 @@ impl DB {
 
 impl DB {
     /* put an object in a room */
-    pub fn obj_to_room(&self, object: Option<Rc<ObjData>>, room: RoomRnum) {
+    pub fn obj_to_room(&self, object: Option<&Rc<ObjData>>, room: RoomRnum) {
         if object.is_none() || room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{}, {})",
@@ -795,7 +807,7 @@ impl DB {
             self.world.borrow()[room as usize]
                 .contents
                 .borrow_mut()
-                .push(object);
+                .push(object.clone());
         }
     }
 
@@ -828,7 +840,7 @@ impl DB {
     }
 
     /* put an object in an object (quaint)  */
-    pub fn obj_to_obj(&self, obj: Option<Rc<ObjData>>, obj_to: Option<Rc<ObjData>>) {
+    pub fn obj_to_obj(&self, obj: Option<&Rc<ObjData>>, obj_to: Option<&Rc<ObjData>>) {
         if obj.is_none() || obj_to.is_none() {
             error!("SYSERR: None obj passed to obj_to_obj.");
             return;
@@ -867,53 +879,54 @@ impl DB {
     }
 
     /* remove an object from an object */
-    pub(crate) fn obj_from_obj(obj: Rc<ObjData>) {
+    pub(crate) fn obj_from_obj(obj: &Rc<ObjData>) {
         if obj.in_obj.borrow().is_none() {
             error!("SYSERR:  trying to illegally extract obj from obj.");
             return;
         }
-        let oio = obj.in_obj.borrow();
-        let obj_from = oio.as_ref().unwrap();
-        obj_from
-            .contains
-            .borrow_mut()
-            .retain(|o| !Rc::ptr_eq(o, &obj));
+        {
+            let oio = obj.in_obj.borrow();
+            let obj_from = oio.as_ref().unwrap();
+            obj_from
+                .contains
+                .borrow_mut()
+                .retain(|o| !Rc::ptr_eq(o, &obj));
 
-        /* Subtract weight from containers container */
-        let oio = obj.in_obj.borrow();
-        let mut temp = oio.as_ref().unwrap().clone();
-        loop {
-            if temp.in_obj.borrow().is_none() {
-                break;
+            /* Subtract weight from containers container */
+
+            let oio = obj.in_obj.borrow();
+            let mut temp = oio.as_ref().unwrap().clone();
+            loop {
+                if temp.in_obj.borrow().is_none() {
+                    break;
+                }
+                temp.incr_obj_weight(-obj.get_obj_weight());
+                let n = temp.in_obj.borrow().as_ref().unwrap().clone();
+                temp = n;
             }
+
+            /* Subtract weight from char that carries the object */
             temp.incr_obj_weight(-obj.get_obj_weight());
-            let n = temp.in_obj.borrow().as_ref().unwrap().clone();
-            temp = n;
-        }
 
-        /* Subtract weight from char that carries the object */
-        temp.incr_obj_weight(-obj.get_obj_weight());
-
-        if temp.carried_by.borrow().is_some() {
-            temp.carried_by
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .incr_is_carrying_w(-obj.get_obj_weight());
+            if temp.carried_by.borrow().is_some() {
+                temp.carried_by
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .incr_is_carrying_w(-obj.get_obj_weight());
+            }
         }
 
         *obj.in_obj.borrow_mut() = None;
     }
 }
-// /* Set all carried_by to point to new owner */
-// void object_list_new_owner(struct obj_data *list, struct char_data *ch)
-// {
-// if (list) {
-// object_list_new_owner(list->contains, ch);
-// object_list_new_owner(list->next_content, ch);
-// list->carried_by = ch;
-// }
-// }
+/* Set all carried_by to point to new owner */
+pub fn object_list_new_owner(obj: &Rc<ObjData>, ch: Option<Rc<CharData>>) {
+    for o in obj.contains.borrow().iter() {
+        object_list_new_owner(o, ch.clone());
+        *o.carried_by.borrow_mut() = ch.clone();
+    }
+}
 
 impl DB {
     /* Extract an object from the world */
@@ -921,7 +934,7 @@ impl DB {
         if obj.worn_by.borrow().is_some() {
             if Rc::ptr_eq(
                 self.unequip_char(
-                    obj.worn_by.borrow().as_ref().unwrap().clone(),
+                    obj.worn_by.borrow().as_ref().unwrap(),
                     obj.worn_on.get() as i8,
                 )
                 .as_ref()
@@ -937,10 +950,14 @@ impl DB {
         } else if obj.carried_by.borrow().is_some() {
             obj_from_char(Some(obj.clone()));
         } else if obj.in_obj.borrow().is_some() {
-            DB::obj_from_obj(obj.clone());
+            DB::obj_from_obj(&obj);
         }
         /* Get rid of the contents of the object, as well. */
+        let mut old_object_list = vec![];
         for o in obj.contains.borrow().iter() {
+            old_object_list.push(o.clone());
+        }
+        for o in old_object_list.iter() {
             self.extract_obj(o.clone());
         }
 
@@ -986,7 +1003,7 @@ impl DB {
                         self.act(
                             "$n's light begins to flicker and fade.",
                             false,
-                            Some(ch.clone()),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
@@ -996,7 +1013,7 @@ impl DB {
                         self.act(
                             "$n's light sputters out and dies.",
                             false,
-                            Some(ch.clone()),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
@@ -1097,32 +1114,36 @@ impl DB {
         /* transfer objects to room, if any */
         for obj in ch.carrying.borrow().iter() {
             obj_from_char(Some(obj.clone()));
-            self.obj_to_room(Some(obj.clone()), ch.in_room());
+            self.obj_to_room(Some(obj), ch.in_room());
         }
 
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                self.obj_to_room(self.unequip_char(ch.clone(), i), ch.in_room())
+                self.obj_to_room(self.unequip_char(ch, i).as_ref(), ch.in_room())
             }
         }
 
-        // TODO implement fighting
-        // if (FIGHTING(ch))
-        // stop_fighting(ch);
+        if ch.fighting().is_some() {
+            self.stop_fighting(ch);
+        }
 
-        // for (k = combat_list; k; k = temp) {
-        //     temp = k -> next_fighting;
-        //     if (FIGHTING(k) == ch)
-        //     stop_fighting(k);
-        // }
+        let mut old_combat_list = vec![];
+        for c in self.combat_list.borrow().iter() {
+            old_combat_list.push(c.clone());
+        }
+        for k in old_combat_list.iter() {
+            if Rc::ptr_eq(k.fighting().as_ref().unwrap(), ch) {
+                self.stop_fighting(k);
+            }
+        }
         /* we can't forget the hunters either... */
         // TODO implement hunting
         // for (temp = character_list; temp; temp = temp->next)
         // if (HUNTING(temp) == ch)
         // HUNTING(temp) = NULL;
 
-        self.char_from_room(ch.clone());
+        self.char_from_room(ch);
 
         if ch.is_npc() {
             if ch.get_mob_rnum() != NOTHING {
@@ -1155,7 +1176,7 @@ impl DB {
      * A: Because code doing 'vict = vict->next' would
      *    get really confused otherwise.
      */
-    pub fn extract_char(&self, ch: Rc<CharData>) {
+    pub fn extract_char(&self, ch: &Rc<CharData>) {
         if ch.is_npc() {
             ch.set_mob_flags_bit(MOB_NOTDEADYET);
         } else {
@@ -1214,167 +1235,242 @@ impl DB {
     }
 }
 
-// /* ***********************************************************************
-// * Here follows high-level versions of some earlier routines, ie functions*
-// * which incorporate the actual player-data                               *.
-// *********************************************************************** */
-//
-//
-// struct char_data *get_player_vis(struct char_data *ch, char *name, int *number, int inroom)
-// {
-// struct char_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// for (i = character_list; i; i = i->next) {
-// if (IS_NPC(i))
-// continue;
-// if (inroom == FIND_CHAR_ROOM && IN_ROOM(i) != IN_ROOM(ch))
-// continue;
-// if (str_cmp(i->player.name, name)) /* If not same, continue */
-// continue;
-// if (!CAN_SEE(ch, i))
-// continue;
-// if (--(*number) != 0)
-// continue;
-// return (i);
-// }
-//
-// return (NULL);
-// }
-//
-//
-// struct char_data *get_char_room_vis(struct char_data *ch, char *name, int *number)
-// {
-// struct char_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// /* JE 7/18/94 :-) :-) */
-// if (!str_cmp(name, "self") || !str_cmp(name, "me"))
-// return (ch);
-//
-// /* 0.<name> means PC with name */
-// if (*number == 0)
-// return (get_player_vis(ch, name, NULL, FIND_CHAR_ROOM));
-//
-// for (i = world[IN_ROOM(ch)].people; i && *number; i = i->next_in_room)
-// if (isname(name, i->player.name))
-// if (CAN_SEE(ch, i))
-// if (--(*number) == 0)
-// return (i);
-//
-// return (NULL);
-// }
-//
-//
-// struct char_data *get_char_world_vis(struct char_data *ch, char *name, int *number)
-// {
-// struct char_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// if ((i = get_char_room_vis(ch, name, number)) != NULL)
-// return (i);
-//
-// if (*number == 0)
-// return get_player_vis(ch, name, NULL, 0);
-//
-// for (i = character_list; i && *number; i = i->next) {
-// if (IN_ROOM(ch) == IN_ROOM(i))
-// continue;
-// if (!isname(name, i->player.name))
-// continue;
-// if (!CAN_SEE(ch, i))
-// continue;
-// if (--(*number) != 0)
-// continue;
-//
-// return (i);
-// }
-// return (NULL);
-// }
-//
-//
-// struct char_data *get_char_vis(struct char_data *ch, char *name, int *number, int where)
-// {
-// if (where == FIND_CHAR_ROOM)
-// return get_char_room_vis(ch, name, number);
-// else if (where == FIND_CHAR_WORLD)
-// return get_char_world_vis(ch, name, number);
-// else
-// return (NULL);
-// }
-//
-//
-// struct obj_data *get_obj_in_list_vis(struct char_data *ch, char *name, int *number, struct obj_data *list)
-// {
-// struct obj_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// if (*number == 0)
-// return (NULL);
-//
-// for (i = list; i && *number; i = i->next_content)
-// if (isname(name, i->name))
-// if (CAN_SEE_OBJ(ch, i))
-// if (--(*number) == 0)
-// return (i);
-//
-// return (NULL);
-// }
-//
-//
-// /* search the entire world for an object, and return a pointer  */
-// struct obj_data *get_obj_vis(struct char_data *ch, char *name, int *number)
-// {
-// struct obj_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// if (*number == 0)
-// return (NULL);
-//
-// /* scan items carried */
-// if ((i = get_obj_in_list_vis(ch, name, number, ch->carrying)) != NULL)
-// return (i);
-//
-// /* scan room */
-// if ((i = get_obj_in_list_vis(ch, name, number, world[IN_ROOM(ch)].contents)) != NULL)
-// return (i);
-//
-// /* ok.. no luck yet. scan the entire obj list   */
-// for (i = object_list; i && *number; i = i->next)
-// if (isname(name, i->name))
-// if (CAN_SEE_OBJ(ch, i))
-// if (--(*number) == 0)
-// return (i);
-//
-// return (NULL);
-// }
-//
-//
+/* ***********************************************************************
+* Here follows high-level versions of some earlier routines, ie functions*
+* which incorporate the actual player-data                               *.
+*********************************************************************** */
+impl DB {
+    pub fn get_player_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &mut String,
+        number: Option<&mut i32>,
+        inroom: i32,
+    ) -> Option<Rc<CharData>> {
+        let mut num = 0;
+        let mut t: &mut i32;
+        if number.is_none() {
+            num = get_number(name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number = t;
+
+        for i in self.character_list.borrow().iter() {
+            if i.is_npc() {
+                continue;
+            }
+            if inroom == FIND_CHAR_ROOM && ch.in_room() != i.in_room() {
+                continue;
+            }
+            if i.player.borrow().name != *name {
+                continue;
+            }
+            if !self.can_see(ch, i) {
+                continue;
+            }
+            *number -= 1;
+            if *number != 0 {
+                continue;
+            }
+            return Some(i.clone());
+        }
+        return None;
+    }
+
+    pub fn get_char_room_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &mut String,
+        number: Option<&mut i32>,
+    ) -> Option<Rc<CharData>> {
+        let mut num = 0;
+        let mut t: &mut i32;
+        if number.is_none() {
+            num = get_number(name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number = t;
+
+        /* JE 7/18/94 :-) :-) */
+        if name == "self" || name == "me" {
+            return Some(ch.clone());
+        }
+
+        /* 0.<name> means PC with name */
+        if *number == 0 {
+            return self.get_player_vis(ch, name, None, FIND_CHAR_ROOM);
+        }
+
+        for i in self.world.borrow()[ch.in_room() as usize]
+            .peoples
+            .borrow()
+            .iter()
+        {
+            if isname(name, i.player.borrow().name.as_str()) != 0 {
+                if self.can_see(ch, i) {
+                    *number -= 1;
+                    if *number == 0 {
+                        return Some(i.clone());
+                    }
+                }
+            }
+        }
+        return None;
+    }
+
+    pub fn get_char_world_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &mut String,
+        number: Option<&mut i32>,
+    ) -> Option<Rc<CharData>> {
+        let mut num = 0;
+        let mut t: &mut i32;
+        if number.is_none() {
+            num = get_number(name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number: &mut i32 = t;
+
+        let i = self.get_char_room_vis(ch, name, Some(number));
+        if i.is_some() {
+            return i;
+        }
+
+        /* 0.<name> means PC with name */
+        if *number == 0 {
+            return self.get_player_vis(ch, name, None, 0);
+        }
+
+        for i in self.character_list.borrow().iter() {
+            if ch.in_room() == i.in_room() {
+                continue;
+            }
+            if !isname(name, i.player.borrow().name.as_str()) != 0 {
+                continue;
+            }
+            if !self.can_see(ch, i) {
+                continue;
+            }
+            *number -= 1;
+            if *number != 0 {
+                continue;
+            }
+            return Some(i.clone());
+        }
+        return None;
+    }
+
+    pub fn get_char_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &mut String,
+        number: Option<&mut i32>,
+        _where: i32,
+    ) -> Option<Rc<CharData>> {
+        return if _where == FIND_CHAR_ROOM {
+            self.get_char_room_vis(ch, name, number)
+        } else if _where == FIND_CHAR_WORLD {
+            self.get_char_world_vis(ch, name, number)
+        } else {
+            None
+        };
+    }
+
+    pub fn get_obj_in_list_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &str,
+        number: Option<&mut i32>,
+        list: Ref<Vec<Rc<ObjData>>>,
+    ) -> Option<Rc<ObjData>> {
+        let mut i: Option<&Rc<ObjData>> = None;
+        let mut num = 0;
+        let mut t: &mut i32;
+        let mut name = name.to_string();
+        if number.is_none() {
+            num = get_number(&mut name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number: &mut i32 = t;
+        if *number == 0 {
+            return None;
+        }
+
+        for i in list.iter() {
+            if isname(&name, &i.name) != 0 {
+                if self.can_see_obj(ch, i) {
+                    *number -= 1;
+                    if *number == 0 {
+                        return Some(i.clone());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /* search the entire world for an object, and return a pointer  */
+    pub fn get_obj_vis(
+        &self,
+        ch: &Rc<CharData>,
+        name: &str,
+        number: Option<&mut i32>,
+    ) -> Option<Rc<ObjData>> {
+        let mut num = 0;
+        let mut t: &mut i32;
+        let mut name = name.to_string();
+        if number.is_none() {
+            num = get_number(&mut name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number: &mut i32 = t;
+        if *number == 0 {
+            return None;
+        }
+
+        /* scan items carried */
+        let i = self.get_obj_in_list_vis(ch, &name, Some(number), ch.carrying.borrow());
+        if i.is_some() {
+            return i.clone();
+        }
+
+        /* scan room */
+        let i = self.get_obj_in_list_vis(
+            ch,
+            &name,
+            Some(number),
+            self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+        );
+        if i.is_some() {
+            return i;
+        }
+
+        /* ok.. no luck yet. scan the entire obj list   */
+        for i in self.object_list.borrow().iter() {
+            if isname(&name, &i.name) != 0 {
+                if self.can_see_obj(ch, i) {
+                    *number -= 1;
+                    if *number == 0 {
+                        return Some(i.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+}
 // struct obj_data *get_obj_in_equip_vis(struct char_data *ch, char *arg, int *number, struct obj_data *equipment[])
 // {
 // int j, num;
@@ -1415,170 +1511,247 @@ impl DB {
 //
 // return (-1);
 // }
-//
-//
-// const char *money_desc(int amount)
-// {
-// int cnt;
-// struct {
-// int limit;
-// const char *description;
-// } money_table[] = {
-// {          1, "a gold coin"				},
-// {         10, "a tiny pile of gold coins"		},
-// {         20, "a handful of gold coins"		},
-// {         75, "a little pile of gold coins"		},
-// {        200, "a small pile of gold coins"		},
-// {       1000, "a pile of gold coins"		},
-// {       5000, "a big pile of gold coins"		},
-// {      10000, "a large heap of gold coins"		},
-// {      20000, "a huge mound of gold coins"		},
-// {      75000, "an enormous mound of gold coins"	},
-// {     150000, "a small mountain of gold coins"	},
-// {     250000, "a mountain of gold coins"		},
-// {     500000, "a huge mountain of gold coins"	},
-// {    1000000, "an enormous mountain of gold coins"	},
-// {          0, NULL					},
-// };
-//
-// if (amount <= 0) {
-// log("SYSERR: Try to create negative or 0 money (%d).", amount);
-// return (NULL);
-// }
-//
-// for (cnt = 0; money_table[cnt].limit; cnt++)
-// if (amount <= money_table[cnt].limit)
-// return (money_table[cnt].description);
-//
-// return ("an absolutely colossal mountain of gold coins");
-// }
-//
-//
-// struct obj_data *create_money(int amount)
-// {
-// struct obj_data *obj;
-// struct extra_descr_data *new_descr;
-// char buf[200];
-//
-// if (amount <= 0) {
-// log("SYSERR: Try to create negative or 0 money. (%d)", amount);
-// return (NULL);
-// }
-// obj = create_obj();
-// CREATE(new_descr, struct extra_descr_data, 1);
-//
-// if (amount == 1) {
-// obj->name = strdup("coin gold");
-// obj->short_description = strdup("a gold coin");
-// obj->description = strdup("One miserable gold coin is lying here.");
-// new_descr->keyword = strdup("coin gold");
-// new_descr->description = strdup("It's just one miserable little gold coin.");
-// } else {
-// obj->name = strdup("coins gold");
-// obj->short_description = strdup(money_desc(amount));
-// snprintf(buf, sizeof(buf), "%s is lying here.", money_desc(amount));
-// obj->description = strdup(CAP(buf));
-//
-// new_descr->keyword = strdup("coins gold");
-// if (amount < 10)
-// snprintf(buf, sizeof(buf), "There are %d coins.", amount);
-// else if (amount < 100)
-// snprintf(buf, sizeof(buf), "There are about %d coins.", 10 * (amount / 10));
-// else if (amount < 1000)
-// snprintf(buf, sizeof(buf), "It looks to be about %d coins.", 100 * (amount / 100));
-// else if (amount < 100000)
-// snprintf(buf, sizeof(buf), "You guess there are, maybe, %d coins.",
-// 1000 * ((amount / 1000) + rand_number(0, (amount / 1000))));
-// else
-// strcpy(buf, "There are a LOT of coins.");	/* strcpy: OK (is < 200) */
-// new_descr->description = strdup(buf);
-// }
-//
-// new_descr->next = NULL;
-// obj->ex_description = new_descr;
-//
-// GET_OBJ_TYPE(obj) = ITEM_MONEY;
-// GET_OBJ_WEAR(obj) = ITEM_WEAR_TAKE;
-// GET_OBJ_VAL(obj, 0) = amount;
-// GET_OBJ_COST(obj) = amount;
-// obj->item_number = NOTHING;
-//
-// return (obj);
-// }
-//
-//
-// /* Generic Find, designed to find any object/character
-//  *
-//  * Calling:
-//  *  *arg     is the pointer containing the string to be searched for.
-//  *           This string doesn't have to be a single word, the routine
-//  *           extracts the next word itself.
-//  *  bitv..   All those bits that you want to "search through".
-//  *           Bit found will be result of the function
-//  *  *ch      This is the person that is trying to "find"
-//  *  **tar_ch Will be NULL if no character was found, otherwise points
-//  * **tar_obj Will be NULL if no object was found, otherwise points
-//  *
-//  * The routine used to return a pointer to the next word in *arg (just
-//  * like the one_argument routine), but now it returns an integer that
-//  * describes what it filled in.
-//  */
-// int generic_find(char *arg, bitvector_t bitvector, struct char_data *ch,
-// struct char_data **tar_ch, struct obj_data **tar_obj)
-// {
-// int i, found, number;
-// char name_val[MAX_INPUT_LENGTH];
-// char *name = name_val;
-//
-// *tar_ch = NULL;
-// *tar_obj = NULL;
-//
-// one_argument(arg, name);
-//
-// if (!*name)
-// return (0);
-// if (!(number = get_number(&name)))
-// return (0);
-//
-// if (IS_SET(bitvector, FIND_CHAR_ROOM)) {	/* Find person in room */
-// if ((*tar_ch = get_char_room_vis(ch, name, &number)) != NULL)
-// return (FIND_CHAR_ROOM);
-// }
-//
-// if (IS_SET(bitvector, FIND_CHAR_WORLD)) {
-// if ((*tar_ch = get_char_world_vis(ch, name, &number)) != NULL)
-// return (FIND_CHAR_WORLD);
-// }
-//
-// if (IS_SET(bitvector, FIND_OBJ_EQUIP)) {
-// for (found = FALSE, i = 0; i < NUM_WEARS && !found; i++)
-// if (GET_EQ(ch, i) && isname(name, GET_EQ(ch, i)->name) && --number == 0) {
-// *tar_obj = GET_EQ(ch, i);
-// found = TRUE;
-// }
-// if (found)
-// return (FIND_OBJ_EQUIP);
-// }
-//
-// if (IS_SET(bitvector, FIND_OBJ_INV)) {
-// if ((*tar_obj = get_obj_in_list_vis(ch, name, &number, ch->carrying)) != NULL)
-// return (FIND_OBJ_INV);
-// }
-//
-// if (IS_SET(bitvector, FIND_OBJ_ROOM)) {
-// if ((*tar_obj = get_obj_in_list_vis(ch, name, &number, world[IN_ROOM(ch)].contents)) != NULL)
-// return (FIND_OBJ_ROOM);
-// }
-//
-// if (IS_SET(bitvector, FIND_OBJ_WORLD)) {
-// if ((*tar_obj = get_obj_vis(ch, name, &number)))
-// return (FIND_OBJ_WORLD);
-// }
-//
-// return (0);
-// }
-//
-//
+
+pub fn money_desc(amount: i32) -> &'static str {
+    struct MyItem {
+        limit: i32,
+        description: &'static str,
+    }
+
+    const MONEY_TABLE: [MyItem; 14] = [
+        MyItem {
+            limit: 1,
+            description: "a gold coin",
+        },
+        MyItem {
+            limit: 10,
+            description: "a tiny pile of gold coins",
+        },
+        MyItem {
+            limit: 20,
+            description: "a handful of gold coins",
+        },
+        MyItem {
+            limit: 75,
+            description: "a little pile of gold coins",
+        },
+        MyItem {
+            limit: 200,
+            description: "a small pile of gold coins",
+        },
+        MyItem {
+            limit: 1000,
+            description: "a pile of gold coins",
+        },
+        MyItem {
+            limit: 5000,
+            description: "a big pile of gold coins",
+        },
+        MyItem {
+            limit: 10000,
+            description: "a large heap of gold coins",
+        },
+        MyItem {
+            limit: 20000,
+            description: "a huge mound of gold coins",
+        },
+        MyItem {
+            limit: 75000,
+            description: "an enormous mound of gold coins",
+        },
+        MyItem {
+            limit: 150000,
+            description: "a small mountain of gold coins",
+        },
+        MyItem {
+            limit: 250000,
+            description: "a mountain of gold coins",
+        },
+        MyItem {
+            limit: 500000,
+            description: "a huge mountain of gold coins",
+        },
+        MyItem {
+            limit: 1000000,
+            description: "an enormous mountain of gold coins",
+        },
+    ];
+
+    if amount <= 0 {
+        error!("SYSERR: Try to create negative or 0 money ({}).", amount);
+        return "";
+    }
+
+    for item in MONEY_TABLE {
+        if amount < item.limit {
+            return item.description;
+        }
+    }
+
+    return "an absolutely colossal mountain of gold coins";
+}
+
+impl DB {
+    pub fn create_money(&self, amount: i32) -> Option<Rc<ObjData>> {
+        if amount <= 0 {
+            error!("SYSERR: Try to create negative or 0 money. ({})", amount);
+            return None;
+        }
+        let mut obj = ObjData::new();
+        let mut new_descr = ExtraDescrData::new();
+
+        if amount == 1 {
+            obj.name = "coin gold".to_string();
+            obj.short_description = "a gold coin".to_string();
+            obj.description = "One miserable gold coin is lying here.".to_string();
+            new_descr.keyword = "coin gold".to_string();
+            new_descr.description = "It's just one miserable little gold coin.".to_string();
+        } else {
+            obj.name = "coins gold".to_string();
+            obj.short_description = money_desc(amount).to_string();
+            obj.description = format!("{} is lying here.", money_desc(amount));
+
+            new_descr.keyword = "coins gold".to_string();
+            let buf;
+            if amount < 10 {
+                buf = format!("There are {} coins.", amount);
+            } else if amount < 100 {
+                buf = format!("There are about {} coins.", 10 * (amount / 10));
+            } else if amount < 1000 {
+                buf = format!("It looks to be about {} coins.", 100 * (amount / 100));
+            } else if amount < 100000 {
+                buf = format!(
+                    "You guess there are, maybe, {} coins.",
+                    1000 * ((amount / 1000) + rand_number(0, (amount / 1000) as u32) as i32)
+                );
+            } else {
+                buf = format!("There are a LOT of coins."); /* strcpy: OK (is < 200) */
+            }
+            new_descr.description = buf;
+        }
+
+        obj.set_obj_type(ITEM_MONEY);
+        obj.set_obj_wear(ITEM_WEAR_TAKE);
+        obj.set_obj_val(0, amount);
+        obj.set_obj_cost(amount);
+        obj.item_number = NOTHING;
+
+        obj.ex_descriptions.push(new_descr);
+        let ret = Rc::from(obj);
+        self.object_list.borrow_mut().push(ret.clone());
+
+        Some(ret)
+    }
+
+    /* Generic Find, designed to find any object/character
+     *
+     * Calling:
+     *  *arg     is the pointer containing the string to be searched for.
+     *           This string doesn't have to be a single word, the routine
+     *           extracts the next word itself.
+     *  bitv..   All those bits that you want to "search through".
+     *           Bit found will be result of the function
+     *  *ch      This is the person that is trying to "find"
+     *  **tar_ch Will be NULL if no character was found, otherwise points
+     * **tar_obj Will be NULL if no object was found, otherwise points
+     *
+     * The routine used to return a pointer to the next word in *arg (just
+     * like the one_argument routine), but now it returns an integer that
+     * describes what it filled in.
+     */
+    pub fn generic_find(
+        &self,
+        arg: &str,
+        bitvector: i64,
+        ch: &Rc<CharData>,
+        tar_ch: &mut Option<Rc<CharData>>,
+        tar_obj: &mut Option<Rc<ObjData>>,
+    ) -> i32 {
+        // int i, found, number;
+        // char name_val[MAX_INPUT_LENGTH];
+        // char * name = name_val;
+        //
+        // *tar_ch = NULL;
+        // * tar_obj = NULL;
+        let mut name = String::new();
+        let mut found = false;
+
+        one_argument(arg, &mut name);
+
+        if name.is_empty() {
+            return 0;
+        }
+        let mut number = get_number(&mut name);
+        if number == 0 {
+            return 0;
+        }
+
+        if is_set!(bitvector, FIND_CHAR_ROOM as i64) {
+            /* Find person in room */
+            *tar_ch = self.get_char_room_vis(ch, &mut name, Some(&mut number));
+
+            if tar_ch.is_some() {
+                return FIND_CHAR_ROOM;
+            }
+        }
+
+        if is_set!(bitvector, FIND_CHAR_WORLD as i64) {
+            *tar_ch = self.get_char_world_vis(ch, &mut name, Some(&mut number));
+            if tar_ch.is_some() {
+                return FIND_CHAR_WORLD;
+            }
+        }
+
+        if is_set!(bitvector, FIND_OBJ_EQUIP as i64) {
+            for i in 0..NUM_WEARS {
+                if found {
+                    break;
+                }
+
+                if ch.get_eq(i).is_some()
+                    && isname(name.as_str(), &ch.get_eq(i).as_ref().unwrap().name) != 0
+                {
+                    number -= 1;
+                    if number == 0 {
+                        *tar_obj = ch.get_eq(i);
+                        found = true;
+                    }
+                }
+            }
+            if found {
+                return FIND_OBJ_EQUIP;
+            }
+        }
+
+        if is_set!(bitvector, FIND_OBJ_INV as i64) {
+            *tar_obj = self.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
+            if tar_obj.is_some() {
+                return FIND_OBJ_INV;
+            }
+        }
+
+        if is_set!(bitvector, FIND_OBJ_ROOM as i64) {
+            *tar_obj = self.get_obj_in_list_vis(
+                ch,
+                &name,
+                Some(&mut number),
+                self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            );
+            if tar_obj.is_some() {
+                return FIND_OBJ_ROOM;
+            }
+        }
+
+        if is_set!(bitvector, FIND_OBJ_WORLD as i64) {
+            *tar_obj = self.get_obj_vis(ch, &name, Some(&mut number));
+            if tar_obj.is_some() {
+                return FIND_OBJ_WORLD;
+            }
+        }
+        0
+    }
+}
+
 // /* a function to scan for "all" or "all.x" */
 // int find_all_dots(char *arg)
 // {

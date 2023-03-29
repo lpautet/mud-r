@@ -37,7 +37,7 @@
 * However, if you decide you want to have an all-out knock-down drag-out
 * PK Mud, just set pk_allowed to YES - and anything goes.
 */
-// static mut PK_ALLOWED: bool = false;
+pub const PK_ALLOWED: bool = false;
 
 /* is playerthieving allowed? */
 // static mut PT_ALLOWED: bool = false;
@@ -54,11 +54,11 @@
 pub const TUNNEL_SIZE: i32 = 2;
 
 /* exp change limits */
-// int max_exp_gain = 100000;	/* max gainable per kill */
-// int max_exp_loss = 500000;	/* max losable per death */
+pub const MAX_EXP_GAIN: i32 = 100000; /* max gainable per kill */
+pub const MAX_EXP_LOSS: i32 = 500000; /* max losable per death */
 /* number of tics (usually 75 seconds) before PC/NPC corpses decompose */
-// int max_npc_corpse_time = 5;
-// int max_pc_corpse_time = 10;
+pub const MAX_NPC_CORPSE_TIME: i32 = 5;
+pub const MAX_PC_CORPSE_TIME: i32 = 10;
 
 /* How many ticks before a player is sent to the void or idle-rented. */
 pub const IDLE_VOID: i32 = 8;
@@ -80,9 +80,9 @@ pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 // int load_into_inventory = NO;
 
 /* "okay" etc. */
-// const char *OK = "Okay.\r\n";
-// const char *NOPERSON = "No-one by that name here.\r\n";
-// const char *NOEFFECT = "Nothing seems to happen.\r\n";
+pub const OK: &str = "Okay.\r\n";
+pub const NOPERSON: &str = "No-one by that name here.\r\n";
+pub const NOEFFECT: &str = "Nothing seems to happen.\r\n";
 
 /*
 * You can define or not define TRACK_THOUGH_DOORS, depending on whether
@@ -99,9 +99,9 @@ pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 * this from LVL_IMMORT gives the top level that people can advance to
 * in gain_exp() in limits.c
 * For example, to stop people from advancing to LVL_IMMORT, simply set
-* immort_level_ok to 1.
+* IMMORT_LEVEL_OK to 1.
 */
-// int immort_level_ok = 0;
+pub const IMMORT_LEVEL_OK: i16 = 0;
 
 /****************************************************************************/
 /****************************************************************************/

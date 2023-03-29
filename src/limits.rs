@@ -10,17 +10,21 @@
 use std::cmp::{max, min};
 use std::rc::Rc;
 
-use crate::class::{title_female, title_male};
-use crate::config::{IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID};
+use crate::class::{advance_level, level_exp, title_female, title_male};
+use crate::config::{
+    IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN, MAX_EXP_LOSS,
+};
 use crate::db::DB;
+use crate::fight::update_pos;
+use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    CharData, AFF_POISON, FULL, LVL_GOD, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST,
+    CharData, AFF_POISON, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST,
 };
 use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
-use crate::util::{age, CMP};
+use crate::util::{age, BRF, CMP};
 use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
@@ -174,17 +178,17 @@ fn move_gain(ch: &CharData) -> u8 {
     gain
 }
 
-pub fn set_title(ch: &mut CharData, title: &str) {
+pub fn set_title(ch: &Rc<CharData>, title: Option<String>) {
     let mut title = title;
-    if title.is_empty() {
+    if title.is_none() || title.clone().unwrap().is_empty() {
         if ch.get_sex() == SEX_FEMALE {
-            title = title_female(ch.get_class() as i32, ch.get_level() as i32);
+            title = Some(title_female(ch.get_class() as i32, ch.get_level() as i32).to_string());
         } else {
-            title = title_male(ch.get_class() as i32, ch.get_level() as i32);
+            title = Some(title_male(ch.get_class() as i32, ch.get_level() as i32).to_string());
         }
     }
 
-    ch.set_title(Some(title.parse().unwrap()));
+    ch.set_title(title.clone());
 }
 
 // void run_autowiz(void)
@@ -212,52 +216,67 @@ pub fn set_title(ch: &mut CharData, title: &str) {
 // }
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
-//
-//
-//
-// void gain_exp(struct char_data *ch, int gain)
-// {
-// int is_altered = FALSE;
-// int num_levels = 0;
-//
-// if (!IS_NPC(ch) && ((GET_LEVEL(ch) < 1 || GET_LEVEL(ch) >= LVL_IMMORT)))
-// return;
-//
-// if (IS_NPC(ch)) {
-// GET_EXP(ch) += gain;
-// return;
-// }
-// if (gain > 0) {
-// gain = MIN(max_exp_gain, gain);	/* put a cap on the max gain per kill */
-// GET_EXP(ch) += gain;
-// while (GET_LEVEL(ch) < LVL_IMMORT - immort_level_ok &&
-// GET_EXP(ch) >= level_exp(GET_CLASS(ch), GET_LEVEL(ch) + 1)) {
-// GET_LEVEL(ch) += 1;
-// num_levels++;
-// advance_level(ch);
-// is_altered = TRUE;
-// }
-//
-// if (is_altered) {
-// mudlog(BRF, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "%s advanced %d level%s to level %d.",
-// GET_NAME(ch), num_levels, num_levels == 1 ? "" : "s", GET_LEVEL(ch));
-// if (num_levels == 1)
-// send_to_char(ch, "You rise a level!\r\n");
-// else
-// send_to_char(ch, "You rise %d levels!\r\n", num_levels);
-// set_title(ch, NULL);
-// if (GET_LEVEL(ch) >= LVL_IMMORT)
-// run_autowiz();
-// }
-// } else if (gain < 0) {
-// gain = MAX(-max_exp_loss, gain);	/* Cap max exp lost per death */
-// GET_EXP(ch) += gain;
-// if (GET_EXP(ch) < 0)
-// GET_EXP(ch) = 0;
-// }
-// }
-//
-//
+
+pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &MainGlobals) {
+    let mut is_altered = false;
+    let mut num_levels = 0;
+
+    if !ch.is_npc() && (ch.get_level() < 1 || ch.get_level() > LVL_IMMORT as u8) {
+        return;
+    }
+
+    if ch.is_npc() {
+        ch.set_exp(ch.get_exp() + gain);
+    }
+
+    if gain > 0 {
+        let gain = min(MAX_EXP_GAIN, gain); /* put a cap on the max gain per kill */
+        ch.set_exp(ch.get_exp() + gain);
+        while ch.get_level() < (LVL_IMMORT - IMMORT_LEVEL_OK) as u8
+            && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
+        {
+            ch.set_level(ch.get_level() + 1);
+
+            num_levels += 1;
+            advance_level(ch, &game.db);
+            is_altered = true;
+        }
+
+        if is_altered {
+            game.mudlog(
+                BRF,
+                max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
+                true,
+                format!(
+                    "{} advanced {} level{} to level {}.",
+                    ch.get_name(),
+                    num_levels,
+                    if num_levels == 1 { "" } else { "s" },
+                    ch.get_level()
+                )
+                .as_str(),
+            );
+            if num_levels == 1 {
+                send_to_char(ch, "You rise a level!\r\n");
+            } else {
+                send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                set_title(ch, None);
+
+                if ch.get_level() >= LVL_IMMORT as u8 {
+                    // TODO implement autowiz
+                    //run_autowiz();
+                }
+            }
+        }
+    } else if gain < 0 {
+        let gain = max(-MAX_EXP_LOSS, gain); /* Cap max exp lost per death */
+        ch.set_exp(ch.get_exp() + gain);
+        if ch.get_exp() < 0 {
+            ch.set_exp(0);
+        }
+    }
+}
+
 // void gain_exp_regardless(struct char_data *ch, int gain)
 // {
 // int is_altered = FALSE;
@@ -327,6 +346,7 @@ impl DB {
         }
     }
 }
+
 impl DB {
     fn check_idling(&self, main_globals: &MainGlobals, ch: &Rc<CharData>) {
         ch.char_specials
@@ -336,15 +356,14 @@ impl DB {
         if ch.char_specials.borrow().timer.get() > IDLE_VOID {
             if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
                 ch.set_was_in(ch.in_room());
-                // TODO implement fighting
-                // if (FIGHTING(ch)) {
-                // stop_fighting(FIGHTING(ch));
-                // stop_fighting(ch);
-                // }
+                if ch.fighting().is_some() {
+                    self.stop_fighting(ch.fighting().as_ref().unwrap());
+                    self.stop_fighting(ch);
+                }
                 self.act(
                     "$n disappears into the void.",
                     true,
-                    Some(ch.clone()),
+                    Some(ch),
                     None,
                     None,
                     TO_ROOM,
@@ -353,13 +372,13 @@ impl DB {
                 self.save_char(ch);
                 // TODO implement crashsave
                 // Crash_crashsave(ch);
-                self.char_from_room(ch.clone());
-                self.char_to_room(Some(ch.clone()), 1);
+                self.char_from_room(ch);
+                self.char_to_room(Some(ch), 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
                 if ch.in_room() != NOWHERE {
-                    self.char_from_room(ch.clone());
+                    self.char_from_room(ch);
                 }
-                self.char_to_room(Some(ch.clone()), 3);
+                self.char_to_room(Some(ch), 3);
                 if ch.desc.borrow().is_some() {
                     ch.desc.borrow().as_ref().unwrap().set_state(ConDisconnect);
 
@@ -380,7 +399,7 @@ impl DB {
                     true,
                     format!("{} force-rented and extracted (idle).", ch.get_name()).as_str(),
                 );
-                self.extract_char(ch.clone());
+                self.extract_char(ch);
             }
         }
     }
@@ -401,23 +420,21 @@ impl DB {
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
                 if i.aff_flagged(AFF_POISON) {
-                    // TODO implement damage
-                    // if (damage(i, i, 2, SPELL_POISON) == -1) {
-                    //     continue; /* Oops, they died. -gg 6/24/98 */
-                    // }
+                    if self.damage(i, i, 2, SPELL_POISON, main_globals) == -1 {
+                        continue; /* Oops, they died. -gg 6/24/98 */
+                    }
                 }
                 if i.get_pos() <= POS_STUNNED {
-                    // TODO implement fighting
-                    // update_pos(i);
+                    update_pos(i);
                 }
             } else if i.get_pos() == POS_INCAP {
-                // TODO implement damage
-                // if (damage(i, i, 1, TYPE_SUFFERING) == -1)
-                // continue;
+                if self.damage(i, i, 1, TYPE_SUFFERING, main_globals) == -1 {
+                    continue;
+                }
             } else if i.get_pos() == POS_MORTALLYW {
-                // TODO implement damage
-                // if (damage(i, i, 2, TYPE_SUFFERING) == -1)
-                // continue;
+                if self.damage(i, i, 2, TYPE_SUFFERING, main_globals) == -1 {
+                    continue;
+                }
             }
             if !i.is_npc() {
                 self.update_char_objects(i);
@@ -428,7 +445,11 @@ impl DB {
         }
 
         /* objects */
-        for j in self.object_list.borrow().iter() {
+        let mut old_object_list = vec![];
+        for o in self.object_list.borrow().iter() {
+            old_object_list.push(o.clone());
+        }
+        for j in old_object_list.iter() {
             /* If this is a corpse */
             if j.is_corpse() {
                 /* timer count down */
@@ -441,8 +462,8 @@ impl DB {
                         self.act(
                             "$p decays in your hands.",
                             false,
-                            j.carried_by.borrow().clone(),
-                            Some(j.as_ref()),
+                            j.carried_by.borrow().as_ref(),
+                            Some(j),
                             None,
                             TO_CHAR,
                         );
@@ -456,38 +477,37 @@ impl DB {
                         self.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(
-                                self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]
-                                    .clone(),
-                            ),
-                            Some(j.as_ref()),
+                            Some(&self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]),
+                            Some(j),
                             None,
                             TO_ROOM,
                         );
                         self.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(
-                                self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]
-                                    .clone(),
-                            ),
-                            Some(j.as_ref()),
+                            Some(&self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]),
+                            Some(j),
                             None,
                             TO_CHAR,
                         );
                     }
-                    for jj in j.contains.borrow().iter() {
-                        DB::obj_from_obj(jj.clone());
+                    let mut old_contains = vec![];
+                    for c in j.contains.borrow().iter() {
+                        old_contains.push(c.clone());
+                    }
+
+                    for jj in old_contains.iter() {
+                        DB::obj_from_obj(jj);
 
                         if j.in_obj.borrow().is_some() {
-                            self.obj_to_obj(Some(jj.clone()), j.in_obj.borrow().clone());
+                            self.obj_to_obj(Some(jj), j.in_obj.borrow().as_ref());
                         } else if j.carried_by.borrow().is_some() {
                             self.obj_to_room(
-                                Some(jj.clone()),
+                                Some(jj),
                                 j.carried_by.borrow().as_ref().unwrap().in_room(),
                             );
                         } else if j.in_room() != NOWHERE {
-                            self.obj_to_room(Some(jj.clone()), j.in_room());
+                            self.obj_to_room(Some(jj), j.in_room());
                         } else {
                             //   core_dump();
                         }

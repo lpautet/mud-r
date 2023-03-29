@@ -9,6 +9,41 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::fs::{File, OpenOptions};
+use std::io;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use log::{error, info};
+// struct time_info_data *real_time_passed(time_t t2, time_t t1);
+// struct time_info_data *mud_time_passed(time_t t2, time_t t1);
+// void prune_crlf(char *txt);
+use rand::Rng;
+
+use crate::constants::STR_APP;
+use crate::db::DB;
+use crate::handler::fname;
+use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
+use crate::structs::ConState::ConPlaying;
+use crate::structs::{
+    CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND, AFF_DETECT_INVIS,
+    AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC, CLASS_MAGIC_USER,
+    CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1,
+    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
+};
+use crate::structs::{
+    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
+    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
+};
+use crate::{
+    _clrlevel, clr, send_to_char, DescriptorData, MainGlobals, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT,
+    TO_VICT,
+};
+
 pub const OFF: u8 = 0;
 pub const BRF: u8 = 1;
 pub const NRM: u8 = 2;
@@ -81,6 +116,9 @@ impl CharData {
     pub fn set_prf_flags_bits(&self, flag: i64) {
         self.player_specials.borrow_mut().saved.pref |= flag;
     }
+    pub fn remove_prf_flags_bits(&self, flag: i64) {
+        self.player_specials.borrow_mut().saved.pref &= !flag;
+    }
 }
 
 // #[macro_export]
@@ -103,17 +141,14 @@ macro_rules! check_player_special {
         ($var)
     };
 }
-use crate::structs::{
-    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
-    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
-};
 pub use check_player_special;
-use std::borrow::Borrow;
-use std::cell::RefCell;
 
 impl CharData {
     pub fn get_invis_lev(&self) -> i16 {
         check_player_special!(self, self.player_specials.borrow().saved.invis_level)
+    }
+    pub fn get_wimp_lev(&self) -> i32 {
+        self.player_specials.borrow().saved.wimp_level
     }
     pub fn set_invis_lev(&self, val: i16) {
         self.player_specials.borrow_mut().saved.invis_level = val;
@@ -138,6 +173,9 @@ impl CharData {
     }
     pub fn set_hit(&self, val: i16) {
         self.points.borrow_mut().hit = val;
+    }
+    pub fn decr_hit(&self, val: i16) {
+        self.points.borrow_mut().hit -= val;
     }
 }
 
@@ -203,6 +241,17 @@ impl CharData {
     pub fn set_title(&self, val: Option<String>) {
         self.player.borrow_mut().title = val;
     }
+}
+
+#[macro_export]
+macro_rules! an {
+    ($string:expr) => {
+        if "aeiouAEIOU".contains($string.chars().next().unwrap()) {
+            "an"
+        } else {
+            "a"
+        }
+    };
 }
 
 #[macro_export]
@@ -716,6 +765,9 @@ impl CharData {
     pub fn incr_is_carrying_w(&self, val: i32) {
         self.char_specials.borrow_mut().carry_weight += val;
     }
+    pub fn set_is_carrying_w(&self, val: i32) {
+        self.char_specials.borrow_mut().carry_weight = val;
+    }
     pub fn is_carrying_n(&self) -> u8 {
         self.char_specials.borrow().carry_items
     }
@@ -724,6 +776,9 @@ impl CharData {
     }
     pub fn decr_is_carrying_n(&self) {
         self.char_specials.borrow_mut().carry_weight -= 1;
+    }
+    pub fn set_is_carrying_n(&self, val: u8) {
+        self.char_specials.borrow_mut().carry_items = val;
     }
 }
 
@@ -758,6 +813,9 @@ impl ObjData {
     }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
+    }
+    pub fn objval_flagged(&self, flag: i32) -> bool {
+        is_set!(self.get_obj_val(1), flag)
     }
     pub fn get_obj_weight(&self) -> i32 {
         self.obj_flags.weight.get()
@@ -795,6 +853,9 @@ impl ObjData {
     pub fn get_obj_timer(&self) -> i32 {
         self.obj_flags.timer.get()
     }
+    pub fn set_obj_timer(&self, val: i32) {
+        self.obj_flags.timer.set(val);
+    }
     pub fn decr_obj_timer(&self, val: i32) {
         self.obj_flags.timer.set(self.obj_flags.timer.get() - val);
     }
@@ -820,8 +881,8 @@ impl CharData {
     pub fn can_carry_n(&self) -> i32 {
         (5 + self.get_dex() as i32 >> 1) + (self.get_level() as i32 >> 1)
     }
-    pub fn strength_apply_index(&self) -> i8 {
-        if self.get_add() == 0 || self.get_str() != 18 {
+    pub fn strength_apply_index(&self) -> usize {
+        (if self.get_add() == 0 || self.get_str() != 18 {
             self.get_str()
         } else if self.get_add() <= 50 {
             26
@@ -833,7 +894,7 @@ impl CharData {
             29
         } else {
             30
-        }
+        }) as usize
     }
 }
 
@@ -1062,10 +1123,6 @@ pub fn time_now() -> u64 {
 // extern struct time_data time_info;
 
 /* local functions */
-// struct time_info_data *real_time_passed(time_t t2, time_t t1);
-// struct time_info_data *mud_time_passed(time_t t2, time_t t1);
-// void prune_crlf(char *txt);
-use rand::Rng;
 /* creates a random number in interval [from;to] */
 pub fn rand_number(from: u32, to: u32) -> u32 {
     /* error checking in case people call this incorrectly */
@@ -1171,29 +1228,6 @@ pub fn prune_crlf(s: &mut String) {
  * New variable argument log() function.  Works the same as the old for
  * previously written code but is very nice for new code.
  */
-use crate::constants::STR_APP;
-use crate::db::DB;
-use crate::handler::fname;
-use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
-use crate::structs::ConState::ConPlaying;
-use crate::structs::{
-    CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND, AFF_DETECT_INVIS,
-    AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC, CLASS_MAGIC_USER,
-    CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1,
-    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
-};
-use crate::{
-    clr, send_to_char, DescriptorData, MainGlobals, _clrlevel, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT,
-    TO_VICT,
-};
-use log::{error, info};
-use std::fs::{File, OpenOptions};
-use std::io;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 /* So mudlog() can use the same function. */
 // pub fn basic_mud_log(msg: &str) {
 //     basic_mud_vlog(msg);
@@ -1307,17 +1341,25 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
     return result.len();
 }
 
-// size_t sprinttype(int type, const char *names[], char *result, size_t reslen)
-// {
-// int nr = 0;
-//
-// while (type && *names[nr] != '\n') {
-// type--;
-// nr++;
-// }
-//
-// return strlcpy(result, *names[nr] != '\n' ? names[nr] : "UNDEFINED", reslen);
-// }
+pub fn sprinttype(_type: i32, names: &[&str], result: &mut String) {
+    let mut nr = 0;
+    let mut _type = _type;
+    while _type != 0 && names[nr] != "\n" {
+        _type -= 1;
+        nr += 1;
+    }
+
+    while _type != 0 && names[nr] != "\n" {
+        _type -= 1;
+        nr += 1;
+    }
+
+    result.push_str(if names[nr] != "\n" {
+        names[nr]
+    } else {
+        "UNDEFINED"
+    });
+}
 
 /* Calculate the REAL time passed over the last t2-t1 centuries (secs) */
 pub fn real_time_passed(t2: u64, t1: u64) -> TimeInfoData {
@@ -1409,7 +1451,7 @@ impl DB {
             self.act(
                 "You realize that $N is a jerk!",
                 false,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_CHAR,
@@ -1417,7 +1459,7 @@ impl DB {
             self.act(
                 "$n realizes that $N is a jerk!",
                 false,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_NOTVICT,
@@ -1425,7 +1467,7 @@ impl DB {
             self.act(
                 "$n hates your guts!",
                 false,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_VICT,
@@ -1438,7 +1480,7 @@ impl DB {
             self.act(
                 "You stop following $N.",
                 false,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_CHAR,
@@ -1446,7 +1488,7 @@ impl DB {
             self.act(
                 "$n stops following $N.",
                 true,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_NOTVICT,
@@ -1454,7 +1496,7 @@ impl DB {
             self.act(
                 "$n stops following you.",
                 true,
-                Some(ch.clone()),
+                Some(ch),
                 None,
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_VICT,

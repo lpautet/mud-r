@@ -8,47 +8,142 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-// /* Weapon attack texts */
-// struct attack_hit_type attack_hit_text[] =
-// {
-// {"hit", "hits"},		/* 0 */
-// {"sting", "stings"},
-// {"whip", "whips"},
-// {"slash", "slashes"},
-// {"bite", "bites"},
-// {"bludgeon", "bludgeons"},	/* 5 */
-// {"crush", "crushes"},
-// {"pound", "pounds"},
-// {"claw", "claws"},
-// {"maul", "mauls"},
-// {"thrash", "thrashes"},	/* 10 */
-// {"pierce", "pierces"},
-// {"blast", "blasts"},
-// {"punch", "punches"},
-// {"stab", "stabs"}
-// };
-//
-// #define IS_WEAPON(type) (((type) >= TYPE_HIT) && ((type) < TYPE_SUFFERING))
-//
-// /* The Fight related routines */
-//
-// void appear(struct char_data *ch)
-// {
-// if (affected_by_spell(ch, SPELL_INVISIBLE))
-// affect_from_char(ch, SPELL_INVISIBLE);
-//
-// REMOVE_BIT(AFF_FLAGS(ch), AFF_INVISIBLE | AFF_HIDE);
-//
-// if (GET_LEVEL(ch) < LVL_IMMORT)
-// act("$n slowly fades into existence.", FALSE, ch, 0, 0, TO_ROOM);
-// else
-// act("You feel a strange presence as $n appears, seemingly from nowhere.",
-// FALSE, ch, 0, 0, TO_ROOM);
-// }
+use std::borrow::Borrow;
+use std::cell::RefMut;
+use std::cmp::{max, min};
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader};
+use std::rc::Rc;
 
-use crate::constants::DEX_APP;
-use crate::structs::CharData;
-use std::cmp::max;
+use log::{error, info};
+
+use crate::act_offensive::do_flee;
+use crate::act_social::fread_action;
+use crate::class::{backstab_mult, thaco};
+use crate::config::{
+    MAX_EXP_GAIN, MAX_EXP_LOSS, MAX_NPC_CORPSE_TIME, MAX_PC_CORPSE_TIME, PK_ALLOWED,
+};
+use crate::constants::{DEX_APP, STR_APP};
+use crate::db::{DB, MESS_FILE};
+use crate::handler::{affect_remove, object_list_new_owner};
+use crate::limits::gain_exp;
+use crate::mobact::{forget, remember};
+use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
+use crate::spells::{AttackHitType, SKILL_BACKSTAB, TYPE_HIT, TYPE_SUFFERING, TYPE_UNDEFINED};
+use crate::structs::{
+    CharData, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE,
+    AFF_SANCTUARY, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON, ITEM_WEAR_TAKE, LVL_IMMORT,
+    MOB_MEMORY, MOB_NOTDEADYET, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER,
+    PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING,
+    POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE, ROOM_PEACEFUL, WEAR_WIELD,
+};
+use crate::util::{dice, rand_number, BRF};
+use crate::{
+    _clrlevel, clr, send_to_char, MainGlobals, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    TO_SLEEP, TO_VICT,
+};
+
+/* Weapon attack texts */
+const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
+    AttackHitType {
+        singular: "hit",
+        plural: "hits",
+    }, /* 0 */
+    AttackHitType {
+        singular: "sting",
+        plural: "stings",
+    },
+    AttackHitType {
+        singular: "whip",
+        plural: "whips",
+    },
+    AttackHitType {
+        singular: "slash",
+        plural: "slashes",
+    },
+    AttackHitType {
+        singular: "bite",
+        plural: "bites",
+    },
+    AttackHitType {
+        singular: "bludgeon",
+        plural: "bludgeons",
+    }, /* 5 */
+    AttackHitType {
+        singular: "crush",
+        plural: "crushes",
+    },
+    AttackHitType {
+        singular: "pound",
+        plural: "pounds",
+    },
+    AttackHitType {
+        singular: "claw",
+        plural: "claws",
+    },
+    AttackHitType {
+        singular: "maul",
+        plural: "mauls",
+    },
+    AttackHitType {
+        singular: "thrash",
+        plural: "thrashes",
+    }, /* 10 */
+    AttackHitType {
+        singular: "pierce",
+        plural: "pierces",
+    },
+    AttackHitType {
+        singular: "blast",
+        plural: "blasts",
+    },
+    AttackHitType {
+        singular: "punch",
+        plural: "punches",
+    },
+    AttackHitType {
+        singular: "stab",
+        plural: "stabs",
+    },
+];
+
+macro_rules! is_weapon {
+    ($type:expr) => {
+        (($type) >= TYPE_HIT && ($type) < TYPE_SUFFERING)
+    };
+}
+
+/* The Fight related routines */
+impl DB {
+    pub fn appear(&self, ch: &Rc<CharData>) {
+        // TODO implement spell
+        // if affected_by_spell(ch, SPELL_INVISIBLE) {
+        //     affect_from_char(ch, SPELL_INVISIBLE);
+        // }
+
+        ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
+
+        if ch.get_level() < LVL_IMMORT as u8 {
+            self.act(
+                "$n slowly fades into existence.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        } else {
+            self.act(
+                "You feel a strange presence as $n appears, seemingly from nowhere.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+    }
+}
 
 pub fn compute_armor_class(ch: &CharData) -> i16 {
     let mut armorclass = ch.get_ac();
@@ -87,861 +182,1182 @@ pub fn compute_armor_class(ch: &CharData) -> i16 {
 // }
 //
 //
-// void load_messages(void)
-// {
-// FILE *fl;
-// int i, type;
-// struct message_type *messages;
-// char chk[128];
-//
-// if (!(fl = fopen(MESS_FILE, "r"))) {
-// log("SYSERR: Error reading combat message file %s: %s", MESS_FILE, strerror(errno));
-// exit(1);
-// }
-//
-// for (i = 0; i < MAX_MESSAGES; i++) {
-// fight_messages[i].a_type = 0;
-// fight_messages[i].number_of_attacks = 0;
-// fight_messages[i].msg = NULL;
-// }
-//
-// fgets(chk, 128, fl);
-// while (!feof(fl) && (*chk == '\n' || *chk == '*'))
-// fgets(chk, 128, fl);
-//
-// while (*chk == 'M') {
-// fgets(chk, 128, fl);
-// sscanf(chk, " %d\n", &type);
-// for (i = 0; (i < MAX_MESSAGES) && (fight_messages[i].a_type != type) &&
-// (fight_messages[i].a_type); i++);
-// if (i >= MAX_MESSAGES) {
-// log("SYSERR: Too many combat messages.  Increase MAX_MESSAGES and recompile.");
-// exit(1);
-// }
-// CREATE(messages, struct message_type, 1);
-// fight_messages[i].number_of_attacks++;
-// fight_messages[i].a_type = type;
-// messages->next = fight_messages[i].msg;
-// fight_messages[i].msg = messages;
-//
-// messages->die_msg.attacker_msg = fread_action(fl, i);
-// messages->die_msg.victim_msg = fread_action(fl, i);
-// messages->die_msg.room_msg = fread_action(fl, i);
-// messages->miss_msg.attacker_msg = fread_action(fl, i);
-// messages->miss_msg.victim_msg = fread_action(fl, i);
-// messages->miss_msg.room_msg = fread_action(fl, i);
-// messages->hit_msg.attacker_msg = fread_action(fl, i);
-// messages->hit_msg.victim_msg = fread_action(fl, i);
-// messages->hit_msg.room_msg = fread_action(fl, i);
-// messages->god_msg.attacker_msg = fread_action(fl, i);
-// messages->god_msg.victim_msg = fread_action(fl, i);
-// messages->god_msg.room_msg = fread_action(fl, i);
-// fgets(chk, 128, fl);
-// while (!feof(fl) && (*chk == '\n' || *chk == '*'))
-// fgets(chk, 128, fl);
-// }
-//
-// fclose(fl);
-// }
-//
-//
-// void update_pos(struct char_data *victim)
-// {
-// if ((GET_HIT(victim) > 0) && (GET_POS(victim) > POS_STUNNED))
-// return;
-// else if (GET_HIT(victim) > 0)
-// GET_POS(victim) = POS_STANDING;
-// else if (GET_HIT(victim) <= -11)
-// GET_POS(victim) = POS_DEAD;
-// else if (GET_HIT(victim) <= -6)
-// GET_POS(victim) = POS_MORTALLYW;
-// else if (GET_HIT(victim) <= -3)
-// GET_POS(victim) = POS_INCAP;
-// else
-// GET_POS(victim) = POS_STUNNED;
-// }
-//
-//
-// void check_killer(struct char_data *ch, struct char_data *vict)
-// {
-// if (PLR_FLAGGED(vict, PLR_KILLER) || PLR_FLAGGED(vict, PLR_THIEF))
-// return;
-// if (PLR_FLAGGED(ch, PLR_KILLER) || IS_NPC(ch) || IS_NPC(vict) || ch == vict)
-// return;
-//
-// SET_BIT(PLR_FLAGS(ch), PLR_KILLER);
-// send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
-// mudlog(BRF, LVL_IMMORT, TRUE, "PC Killer bit set on %s for initiating attack on %s at %s.",
-// GET_NAME(ch), GET_NAME(vict), world[IN_ROOM(vict)].name);
-// }
-//
-//
-// /* start one char fighting another (yes, it is horrible, I know... )  */
-// void set_fighting(struct char_data *ch, struct char_data *vict)
-// {
-// if (ch == vict)
-// return;
-//
-// if (FIGHTING(ch)) {
-// core_dump();
-// return;
-// }
-//
-// ch->next_fighting = combat_list;
-// combat_list = ch;
-//
-// if (AFF_FLAGGED(ch, AFF_SLEEP))
-// affect_from_char(ch, SPELL_SLEEP);
-//
-// FIGHTING(ch) = vict;
-// GET_POS(ch) = POS_FIGHTING;
-//
-// if (!pk_allowed)
-// check_killer(ch, vict);
-// }
-//
-//
-//
-// /* remove a char from the list of fighting chars */
-// void stop_fighting(struct char_data *ch)
-// {
-// struct char_data *temp;
-//
-// if (ch == next_combat_list)
-// next_combat_list = ch->next_fighting;
-//
-// REMOVE_FROM_LIST(ch, combat_list, next_fighting);
-// ch->next_fighting = NULL;
-// FIGHTING(ch) = NULL;
-// GET_POS(ch) = POS_STANDING;
-// update_pos(ch);
-// }
-//
-//
-//
-// void make_corpse(struct char_data *ch)
-// {
-// char buf2[MAX_NAME_LENGTH + 64];
-// struct obj_data *corpse, *o;
-// struct obj_data *money;
-// int i;
-//
-// corpse = create_obj();
-//
-// corpse->item_number = NOTHING;
-// IN_ROOM(corpse) = NOWHERE;
-// corpse->name = strdup("corpse");
-//
-// snprintf(buf2, sizeof(buf2), "The corpse of %s is lying here.", GET_NAME(ch));
-// corpse->description = strdup(buf2);
-//
-// snprintf(buf2, sizeof(buf2), "the corpse of %s", GET_NAME(ch));
-// corpse->short_description = strdup(buf2);
-//
-// GET_OBJ_TYPE(corpse) = ITEM_CONTAINER;
-// GET_OBJ_WEAR(corpse) = ITEM_WEAR_TAKE;
-// GET_OBJ_EXTRA(corpse) = ITEM_NODONATE;
-// GET_OBJ_VAL(corpse, 0) = 0;	/* You can't store stuff in a corpse */
-// GET_OBJ_VAL(corpse, 3) = 1;	/* corpse identifier */
-// GET_OBJ_WEIGHT(corpse) = GET_WEIGHT(ch) + IS_CARRYING_W(ch);
-// GET_OBJ_RENT(corpse) = 100000;
-// if (IS_NPC(ch))
-// GET_OBJ_TIMER(corpse) = max_npc_corpse_time;
-// else
-// GET_OBJ_TIMER(corpse) = max_pc_corpse_time;
-//
-// /* transfer character's inventory to the corpse */
-// corpse->contains = ch->carrying;
-// for (o = corpse->contains; o != NULL; o = o->next_content)
-// o->in_obj = corpse;
-// object_list_new_owner(corpse, NULL);
-//
-// /* transfer character's equipment to the corpse */
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i))
-// obj_to_obj(unequip_char(ch, i), corpse);
-//
-// /* transfer gold */
-// if (GET_GOLD(ch) > 0) {
-// /*
-//  * following 'if' clause added to fix gold duplication loophole
-//  * The above line apparently refers to the old "partially log in,
-//  * kill the game character, then finish login sequence" duping
-//  * bug. The duplication has been fixed (knock on wood) but the
-//  * test below shall live on, for a while. -gg 3/3/2002
-//  */
-// if (IS_NPC(ch) || ch->desc) {
-// money = create_money(GET_GOLD(ch));
-// obj_to_obj(money, corpse);
-// }
-// GET_GOLD(ch) = 0;
-// }
-// ch->carrying = NULL;
-// IS_CARRYING_N(ch) = 0;
-// IS_CARRYING_W(ch) = 0;
-//
-// obj_to_room(corpse, IN_ROOM(ch));
-// }
-//
-//
-// /* When ch kills victim */
-// void change_alignment(struct char_data *ch, struct char_data *victim)
-// {
-// /*
-//  * new alignment change algorithm: if you kill a monster with alignment A,
-//  * you move 1/16th of the way to having alignment -A.  Simple and fast.
-//  */
-// GET_ALIGNMENT(ch) += (-GET_ALIGNMENT(victim) - GET_ALIGNMENT(ch)) / 16;
-// }
-//
-//
-//
-// void death_cry(struct char_data *ch)
-// {
-// int door;
-//
-// act("Your blood freezes as you hear $n's death cry.", FALSE, ch, 0, 0, TO_ROOM);
-//
-// for (door = 0; door < NUM_OF_DIRS; door++)
-// if (CAN_GO(ch, door))
-// send_to_room(world[IN_ROOM(ch)].dir_option[door]->to_room, "Your blood freezes as you hear someone's death cry.\r\n");
-// }
-//
-//
-//
-// void raw_kill(struct char_data *ch)
-// {
-// if (FIGHTING(ch))
-// stop_fighting(ch);
-//
-// while (ch->affected)
-// affect_remove(ch, ch->affected);
-//
-// death_cry(ch);
-//
-// make_corpse(ch);
-// extract_char(ch);
-// }
-//
-//
-//
-// void die(struct char_data *ch)
-// {
-// gain_exp(ch, -(GET_EXP(ch) / 2));
-// if (!IS_NPC(ch))
-// REMOVE_BIT(PLR_FLAGS(ch), PLR_KILLER | PLR_THIEF);
-// raw_kill(ch);
-// }
-//
-//
-//
-// void perform_group_gain(struct char_data *ch, int base,
-// struct char_data *victim)
-// {
-// int share;
-//
-// share = MIN(max_exp_gain, MAX(1, base));
-//
-// if (share > 1)
-// send_to_char(ch, "You receive your share of experience -- %d points.\r\n", share);
-// else
-// send_to_char(ch, "You receive your share of experience -- one measly little point!\r\n");
-//
-// gain_exp(ch, share);
-// change_alignment(ch, victim);
-// }
-//
-//
-// void group_gain(struct char_data *ch, struct char_data *victim)
-// {
-// int tot_members, base, tot_gain;
-// struct char_data *k;
-// struct follow_type *f;
-//
-// if (!(k = ch->master))
-// k = ch;
-//
-// if (AFF_FLAGGED(k, AFF_GROUP) && (IN_ROOM(k) == IN_ROOM(ch)))
-// tot_members = 1;
-// else
-// tot_members = 0;
-//
-// for (f = k->followers; f; f = f->next)
-// if (AFF_FLAGGED(f->follower, AFF_GROUP) && IN_ROOM(f->follower) == IN_ROOM(ch))
-// tot_members++;
-//
-// /* round up to the next highest tot_members */
-// tot_gain = (GET_EXP(victim) / 3) + tot_members - 1;
-//
-// /* prevent illegal xp creation when killing players */
-// if (!IS_NPC(victim))
-// tot_gain = MIN(max_exp_loss * 2 / 3, tot_gain);
-//
-// if (tot_members >= 1)
-// base = MAX(1, tot_gain / tot_members);
-// else
-// base = 0;
-//
-// if (AFF_FLAGGED(k, AFF_GROUP) && IN_ROOM(k) == IN_ROOM(ch))
-// perform_group_gain(k, base, victim);
-//
-// for (f = k->followers; f; f = f->next)
-// if (AFF_FLAGGED(f->follower, AFF_GROUP) && IN_ROOM(f->follower) == IN_ROOM(ch))
-// perform_group_gain(f->follower, base, victim);
-// }
-//
-//
-// void solo_gain(struct char_data *ch, struct char_data *victim)
-// {
-// int exp;
-//
-// exp = MIN(max_exp_gain, GET_EXP(victim) / 3);
-//
-// /* Calculate level-difference bonus */
-// if (IS_NPC(ch))
-// exp += MAX(0, (exp * MIN(4, (GET_LEVEL(victim) - GET_LEVEL(ch)))) / 8);
-// else
-// exp += MAX(0, (exp * MIN(8, (GET_LEVEL(victim) - GET_LEVEL(ch)))) / 8);
-//
-// exp = MAX(exp, 1);
-//
-// if (exp > 1)
-// send_to_char(ch, "You receive %d experience points.\r\n", exp);
-// else
-// send_to_char(ch, "You receive one lousy experience point.\r\n");
-//
-// gain_exp(ch, exp);
-// change_alignment(ch, victim);
-// }
-//
-//
-// char *replace_string(const char *str, const char *weapon_singular, const char *weapon_plural)
-// {
-// static char buf[256];
-// char *cp = buf;
-//
-// for (; *str; str++) {
-// if (*str == '#') {
-// switch (*(++str)) {
-// case 'W':
-// for (; *weapon_plural; *(cp++) = *(weapon_plural++));
-// break;
-// case 'w':
-// for (; *weapon_singular; *(cp++) = *(weapon_singular++));
-// break;
-// default:
-// *(cp++) = '#';
-// break;
-// }
-// } else
-// *(cp++) = *str;
-//
-// *cp = 0;
-// }				/* For */
-//
-// return (buf);
-// }
-//
-//
-// /* message for doing damage with a weapon */
-// void dam_message(int dam, struct char_data *ch, struct char_data *victim,
-// int w_type)
-// {
-// char *buf;
-// int msgnum;
-//
-// static struct dam_weapon_type {
-// const char *to_room;
-// const char *to_char;
-// const char *to_victim;
-// } dam_weapons[] = {
-//
-// /* use #w for singular (i.e. "slash") and #W for plural (i.e. "slashes") */
-//
-// {
-// "$n tries to #w $N, but misses.",	/* 0: 0     */
-// "You try to #w $N, but miss.",
-// "$n tries to #w you, but misses."
-// },
-//
-// {
-// "$n tickles $N as $e #W $M.",	/* 1: 1..2  */
-// "You tickle $N as you #w $M.",
-// "$n tickles you as $e #W you."
-// },
-//
-// {
-// "$n barely #W $N.",		/* 2: 3..4  */
-// "You barely #w $N.",
-// "$n barely #W you."
-// },
-//
-// {
-// "$n #W $N.",			/* 3: 5..6  */
-// "You #w $N.",
-// "$n #W you."
-// },
-//
-// {
-// "$n #W $N hard.",			/* 4: 7..10  */
-// "You #w $N hard.",
-// "$n #W you hard."
-// },
-//
-// {
-// "$n #W $N very hard.",		/* 5: 11..14  */
-// "You #w $N very hard.",
-// "$n #W you very hard."
-// },
-//
-// {
-// "$n #W $N extremely hard.",	/* 6: 15..19  */
-// "You #w $N extremely hard.",
-// "$n #W you extremely hard."
-// },
-//
-// {
-// "$n massacres $N to small fragments with $s #w.",	/* 7: 19..23 */
-// "You massacre $N to small fragments with your #w.",
-// "$n massacres you to small fragments with $s #w."
-// },
-//
-// {
-// "$n OBLITERATES $N with $s deadly #w!!",	/* 8: > 23   */
-// "You OBLITERATE $N with your deadly #w!!",
-// "$n OBLITERATES you with $s deadly #w!!"
-// }
-// };
-//
-//
-// w_type -= TYPE_HIT;		/* Change to base of table with text */
-//
-// if (dam == 0)		msgnum = 0;
-// else if (dam <= 2)    msgnum = 1;
-// else if (dam <= 4)    msgnum = 2;
-// else if (dam <= 6)    msgnum = 3;
-// else if (dam <= 10)   msgnum = 4;
-// else if (dam <= 14)   msgnum = 5;
-// else if (dam <= 19)   msgnum = 6;
-// else if (dam <= 23)   msgnum = 7;
-// else			msgnum = 8;
-//
-// /* damage message to onlookers */
-// buf = replace_string(dam_weapons[msgnum].to_room,
-// attack_hit_text[w_type].singular, attack_hit_text[w_type].plural);
-// act(buf, FALSE, ch, NULL, victim, TO_NOTVICT);
-//
-// /* damage message to damager */
-// send_to_char(ch, CCYEL(ch, C_CMP));
-// buf = replace_string(dam_weapons[msgnum].to_char,
-// attack_hit_text[w_type].singular, attack_hit_text[w_type].plural);
-// act(buf, FALSE, ch, NULL, victim, TO_CHAR);
-// send_to_char(ch, CCNRM(ch, C_CMP));
-//
-// /* damage message to damagee */
-// send_to_char(victim, CCRED(victim, C_CMP));
-// buf = replace_string(dam_weapons[msgnum].to_victim,
-// attack_hit_text[w_type].singular, attack_hit_text[w_type].plural);
-// act(buf, FALSE, ch, NULL, victim, TO_VICT | TO_SLEEP);
-// send_to_char(victim, CCNRM(victim, C_CMP));
-// }
-//
-//
-// /*
-//  *  message for doing damage with a spell or skill
-//  *  C3.0: Also used for weapon damage on miss and death blows
-//  */
-// int skill_message(int dam, struct char_data *ch, struct char_data *vict,
-// int attacktype)
-// {
-// int i, j, nr;
-// struct message_type *msg;
-//
-// struct obj_data *weap = GET_EQ(ch, WEAR_WIELD);
-//
-// for (i = 0; i < MAX_MESSAGES; i++) {
-// if (fight_messages[i].a_type == attacktype) {
-// nr = dice(1, fight_messages[i].number_of_attacks);
-// for (j = 1, msg = fight_messages[i].msg; (j < nr) && msg; j++)
-// msg = msg->next;
-//
-// if (!IS_NPC(vict) && (GET_LEVEL(vict) >= LVL_IMMORT)) {
-// act(msg->god_msg.attacker_msg, FALSE, ch, weap, vict, TO_CHAR);
-// act(msg->god_msg.victim_msg, FALSE, ch, weap, vict, TO_VICT);
-// act(msg->god_msg.room_msg, FALSE, ch, weap, vict, TO_NOTVICT);
-// } else if (dam != 0) {
-// /*
-//  * Don't send redundant color codes for TYPE_SUFFERING & other types
-//  * of damage without attacker_msg.
-//  */
-// if (GET_POS(vict) == POS_DEAD) {
-// if (msg->die_msg.attacker_msg) {
-// send_to_char(ch, CCYEL(ch, C_CMP));
-// act(msg->die_msg.attacker_msg, FALSE, ch, weap, vict, TO_CHAR);
-// send_to_char(ch, CCNRM(ch, C_CMP));
-// }
-//
-// send_to_char(vict, CCRED(vict, C_CMP));
-// act(msg->die_msg.victim_msg, FALSE, ch, weap, vict, TO_VICT | TO_SLEEP);
-// send_to_char(vict, CCNRM(vict, C_CMP));
-//
-// act(msg->die_msg.room_msg, FALSE, ch, weap, vict, TO_NOTVICT);
-// } else {
-// if (msg->hit_msg.attacker_msg) {
-// send_to_char(ch, CCYEL(ch, C_CMP));
-// act(msg->hit_msg.attacker_msg, FALSE, ch, weap, vict, TO_CHAR);
-// send_to_char(ch, CCNRM(ch, C_CMP));
-// }
-//
-// send_to_char(vict, CCRED(vict, C_CMP));
-// act(msg->hit_msg.victim_msg, FALSE, ch, weap, vict, TO_VICT | TO_SLEEP);
-// send_to_char(vict, CCNRM(vict, C_CMP));
-//
-// act(msg->hit_msg.room_msg, FALSE, ch, weap, vict, TO_NOTVICT);
-// }
-// } else if (ch != vict) {	/* Dam == 0 */
-// if (msg->miss_msg.attacker_msg) {
-// send_to_char(ch, CCYEL(ch, C_CMP));
-// act(msg->miss_msg.attacker_msg, FALSE, ch, weap, vict, TO_CHAR);
-// send_to_char(ch, CCNRM(ch, C_CMP));
-// }
-//
-// send_to_char(vict, CCRED(vict, C_CMP));
-// act(msg->miss_msg.victim_msg, FALSE, ch, weap, vict, TO_VICT | TO_SLEEP);
-// send_to_char(vict, CCNRM(vict, C_CMP));
-//
-// act(msg->miss_msg.room_msg, FALSE, ch, weap, vict, TO_NOTVICT);
-// }
-// return (1);
-// }
-// }
-// return (0);
-// }
-//
-// /*
-//  * Alert: As of bpl14, this function returns the following codes:
-//  *	< 0	Victim died.
-//  *	= 0	No damage.
-//  *	> 0	How much damage done.
-//  */
-// int damage(struct char_data *ch, struct char_data *victim, int dam, int attacktype)
-// {
-// if (GET_POS(victim) <= POS_DEAD) {
-// /* This is "normal"-ish now with delayed extraction. -gg 3/15/2001 */
-// if (PLR_FLAGGED(victim, PLR_NOTDEADYET) || MOB_FLAGGED(victim, MOB_NOTDEADYET))
-// return (-1);
-//
-// log("SYSERR: Attempt to damage corpse '%s' in room #%d by '%s'.",
-// GET_NAME(victim), GET_ROOM_VNUM(IN_ROOM(victim)), GET_NAME(ch));
-// die(victim);
-// return (-1);			/* -je, 7/7/92 */
-// }
-//
-// /* peaceful rooms */
-// if (ch != victim && ROOM_FLAGGED(IN_ROOM(ch), ROOM_PEACEFUL)) {
-// send_to_char(ch, "This room just has such a peaceful, easy feeling...\r\n");
-// return (0);
-// }
-//
-// /* shopkeeper protection */
-// if (!ok_damage_shopkeeper(ch, victim))
-// return (0);
-//
-// /* You can't damage an immortal! */
-// if (!IS_NPC(victim) && (GET_LEVEL(victim) >= LVL_IMMORT))
-// dam = 0;
-//
-// if (victim != ch) {
-// /* Start the attacker fighting the victim */
-// if (GET_POS(ch) > POS_STUNNED && (FIGHTING(ch) == NULL))
-// set_fighting(ch, victim);
-//
-// /* Start the victim fighting the attacker */
-// if (GET_POS(victim) > POS_STUNNED && (FIGHTING(victim) == NULL)) {
-// set_fighting(victim, ch);
-// if (MOB_FLAGGED(victim, MOB_MEMORY) && !IS_NPC(ch))
-// remember(victim, ch);
-// }
-// }
-//
-// /* If you attack a pet, it hates your guts */
-// if (victim->master == ch)
-// stop_follower(victim);
-//
-// /* If the attacker is invisible, he becomes visible */
-// if (AFF_FLAGGED(ch, AFF_INVISIBLE | AFF_HIDE))
-// appear(ch);
-//
-// /* Cut damage in half if victim has sanct, to a minimum 1 */
-// if (AFF_FLAGGED(victim, AFF_SANCTUARY) && dam >= 2)
-// dam /= 2;
-//
-// /* Check for PK if this is not a PK MUD */
-// if (!pk_allowed) {
-// check_killer(ch, victim);
-// if (PLR_FLAGGED(ch, PLR_KILLER) && (ch != victim))
-// dam = 0;
-// }
-//
-// /* Set the maximum damage per round and subtract the hit points */
-// dam = MAX(MIN(dam, 100), 0);
-// GET_HIT(victim) -= dam;
-//
-// /* Gain exp for the hit */
-// if (ch != victim)
-// gain_exp(ch, GET_LEVEL(victim) * dam);
-//
-// update_pos(victim);
-//
-// /*
-//  * skill_message sends a message from the messages file in lib/misc.
-//  * dam_message just sends a generic "You hit $n extremely hard.".
-//  * skill_message is preferable to dam_message because it is more
-//  * descriptive.
-//  *
-//  * If we are _not_ attacking with a weapon (i.e. a spell), always use
-//  * skill_message. If we are attacking with a weapon: If this is a miss or a
-//  * death blow, send a skill_message if one exists; if not, default to a
-//  * dam_message. Otherwise, always send a dam_message.
-//  */
-// if (!IS_WEAPON(attacktype))
-// skill_message(dam, ch, victim, attacktype);
-// else {
-// if (GET_POS(victim) == POS_DEAD || dam == 0) {
-// if (!skill_message(dam, ch, victim, attacktype))
-// dam_message(dam, ch, victim, attacktype);
-// } else {
-// dam_message(dam, ch, victim, attacktype);
-// }
-// }
-//
-// /* Use send_to_char -- act() doesn't send message if you are DEAD. */
-// switch (GET_POS(victim)) {
-// case POS_MORTALLYW:
-// act("$n is mortally wounded, and will die soon, if not aided.", TRUE, victim, 0, 0, TO_ROOM);
-// send_to_char(victim, "You are mortally wounded, and will die soon, if not aided.\r\n");
-// break;
-// case POS_INCAP:
-// act("$n is incapacitated and will slowly die, if not aided.", TRUE, victim, 0, 0, TO_ROOM);
-// send_to_char(victim, "You are incapacitated an will slowly die, if not aided.\r\n");
-// break;
-// case POS_STUNNED:
-// act("$n is stunned, but will probably regain consciousness again.", TRUE, victim, 0, 0, TO_ROOM);
-// send_to_char(victim, "You're stunned, but will probably regain consciousness again.\r\n");
-// break;
-// case POS_DEAD:
-// act("$n is dead!  R.I.P.", FALSE, victim, 0, 0, TO_ROOM);
-// send_to_char(victim, "You are dead!  Sorry...\r\n");
-// break;
-//
-// default:			/* >= POSITION SLEEPING */
-// if (dam > (GET_MAX_HIT(victim) / 4))
-// send_to_char(victim, "That really did HURT!\r\n");
-//
-// if (GET_HIT(victim) < (GET_MAX_HIT(victim) / 4)) {
-// send_to_char(victim, "%sYou wish that your wounds would stop BLEEDING so much!%s\r\n",
-// CCRED(victim, C_SPR), CCNRM(victim, C_SPR));
-// if (ch != victim && MOB_FLAGGED(victim, MOB_WIMPY))
-// do_flee(victim, NULL, 0, 0);
-// }
-// if (!IS_NPC(victim) && GET_WIMP_LEV(victim) && (victim != ch) &&
-// GET_HIT(victim) < GET_WIMP_LEV(victim) && GET_HIT(victim) > 0) {
-// send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
-// do_flee(victim, NULL, 0, 0);
-// }
-// break;
-// }
-//
-// /* Help out poor linkless people who are attacked */
-// if (!IS_NPC(victim) && !(victim->desc) && GET_POS(victim) > POS_STUNNED) {
-// do_flee(victim, NULL, 0, 0);
-// if (!FIGHTING(victim)) {
-// act("$n is rescued by divine forces.", FALSE, victim, 0, 0, TO_ROOM);
-// GET_WAS_IN(victim) = IN_ROOM(victim);
-// char_from_room(victim);
-// char_to_room(victim, 0);
-// }
-// }
-//
-// /* stop someone from fighting if they're stunned or worse */
-// if (GET_POS(victim) <= POS_STUNNED && FIGHTING(victim) != NULL)
-// stop_fighting(victim);
-//
-// /* Uh oh.  Victim died. */
-// if (GET_POS(victim) == POS_DEAD) {
-// if (ch != victim && (IS_NPC(victim) || victim->desc)) {
-// if (AFF_FLAGGED(ch, AFF_GROUP))
-// group_gain(ch, victim);
-// else
-// solo_gain(ch, victim);
-// }
-//
-// if (!IS_NPC(victim)) {
-// mudlog(BRF, LVL_IMMORT, TRUE, "%s killed by %s at %s", GET_NAME(victim), GET_NAME(ch), world[IN_ROOM(victim)].name);
-// if (MOB_FLAGGED(ch, MOB_MEMORY))
-// forget(ch, victim);
-// }
-// die(victim);
-// return (-1);
-// }
-// return (dam);
-// }
-//
-//
-// /*
-//  * Calculate the THAC0 of the attacker.
-//  *
-//  * 'victim' currently isn't used but you could use it for special cases like
-//  * weapons that hit evil creatures easier or a weapon that always misses
-//  * attacking an animal.
-//  */
-// int compute_thaco(struct char_data *ch, struct char_data *victim)
-// {
-// int calc_thaco;
-//
-// if (!IS_NPC(ch))
-// calc_thaco = thaco(GET_CLASS(ch), GET_LEVEL(ch));
-// else		/* THAC0 for monsters is set in the HitRoll */
-// calc_thaco = 20;
-// calc_thaco -= str_app[STRENGTH_APPLY_INDEX(ch)].tohit;
-// calc_thaco -= GET_HITROLL(ch);
-// calc_thaco -= (int) ((GET_INT(ch) - 13) / 1.5);	/* Intelligence helps! */
-// calc_thaco -= (int) ((GET_WIS(ch) - 13) / 1.5);	/* So does wisdom */
-//
-// return calc_thaco;
-// }
-//
-//
-// void hit(struct char_data *ch, struct char_data *victim, int type)
-// {
-// struct obj_data *wielded = GET_EQ(ch, WEAR_WIELD);
-// int w_type, victim_ac, calc_thaco, dam, diceroll;
-//
-// /* Do some sanity checking, in case someone flees, etc. */
-// if (IN_ROOM(ch) != IN_ROOM(victim)) {
-// if (FIGHTING(ch) && FIGHTING(ch) == victim)
-// stop_fighting(ch);
-// return;
-// }
-//
-// /* Find the weapon type (for display purposes only) */
-// if (wielded && GET_OBJ_TYPE(wielded) == ITEM_WEAPON)
-// w_type = GET_OBJ_VAL(wielded, 3) + TYPE_HIT;
-// else {
-// if (IS_NPC(ch) && ch->mob_specials.attack_type != 0)
-// w_type = ch->mob_specials.attack_type + TYPE_HIT;
-// else
-// w_type = TYPE_HIT;
-// }
-//
-// /* Calculate chance of hit. Lower THAC0 is better for attacker. */
-// calc_thaco = compute_thaco(ch, victim);
-//
-// /* Calculate the raw armor including magic armor.  Lower AC is better for defender. */
-// victim_ac = compute_armor_class(victim) / 10;
-//
-// /* roll the die and take your chances... */
-// diceroll = rand_number(1, 20);
-//
-// /*
-//  * Decide whether this is a hit or a miss.
-//  *
-//  *  Victim asleep = hit, otherwise:
-//  *     1   = Automatic miss.
-//  *   2..19 = Checked vs. AC.
-//  *    20   = Automatic hit.
-//  */
-// if (diceroll == 20 || !AWAKE(victim))
-// dam = TRUE;
-// else if (diceroll == 1)
-// dam = FALSE;
-// else
-// dam = (calc_thaco - diceroll <= victim_ac);
-//
-// if (!dam)
-// /* the attacker missed the victim */
-// damage(ch, victim, 0, type == SKILL_BACKSTAB ? SKILL_BACKSTAB : w_type);
-// else {
-// /* okay, we know the guy has been hit.  now calculate damage. */
-//
-// /* Start with the damage bonuses: the damroll and strength apply */
-// dam = str_app[STRENGTH_APPLY_INDEX(ch)].todam;
-// dam += GET_DAMROLL(ch);
-//
-// /* Maybe holding arrow? */
-// if (wielded && GET_OBJ_TYPE(wielded) == ITEM_WEAPON) {
-// /* Add weapon-based damage if a weapon is being wielded */
-// dam += dice(GET_OBJ_VAL(wielded, 1), GET_OBJ_VAL(wielded, 2));
-// } else {
-// /* If no weapon, add bare hand damage instead */
-// if (IS_NPC(ch))
-// dam += dice(ch->mob_specials.damnodice, ch->mob_specials.damsizedice);
-// else
-// dam += rand_number(0, 2);	/* Max 2 bare hand damage for players */
-// }
-//
-// /*
-//  * Include a damage multiplier if victim isn't ready to fight:
-//  *
-//  * Position sitting  1.33 x normal
-//  * Position resting  1.66 x normal
-//  * Position sleeping 2.00 x normal
-//  * Position stunned  2.33 x normal
-//  * Position incap    2.66 x normal
-//  * Position mortally 3.00 x normal
-//  *
-//  * Note, this is a hack because it depends on the particular
-//  * values of the POSITION_XXX constants.
-//  */
-// if (GET_POS(victim) < POS_FIGHTING)
-// dam *= 1 + (POS_FIGHTING - GET_POS(victim)) / 3;
-//
-// /* at least 1 hp damage min per hit */
-// dam = MAX(1, dam);
-//
-// if (type == SKILL_BACKSTAB)
-// damage(ch, victim, dam * backstab_mult(GET_LEVEL(ch)), SKILL_BACKSTAB);
-// else
-// damage(ch, victim, dam, w_type);
-// }
-// }
-//
-//
-//
-// /* control the fights going on.  Called every 2 seconds from comm.c. */
-// void perform_violence(void)
-// {
-// struct char_data *ch;
-//
-// for (ch = combat_list; ch; ch = next_combat_list) {
-// next_combat_list = ch->next_fighting;
-//
-// if (FIGHTING(ch) == NULL || IN_ROOM(ch) != IN_ROOM(FIGHTING(ch))) {
-// stop_fighting(ch);
-// continue;
-// }
-//
-// if (IS_NPC(ch)) {
-// if (GET_MOB_WAIT(ch) > 0) {
-// GET_MOB_WAIT(ch) -= PULSE_VIOLENCE;
-// continue;
-// }
-// GET_MOB_WAIT(ch) = 0;
-// if (GET_POS(ch) < POS_FIGHTING) {
-// GET_POS(ch) = POS_FIGHTING;
-// act("$n scrambles to $s feet!", TRUE, ch, 0, 0, TO_ROOM);
-// }
-// }
-//
-// if (GET_POS(ch) < POS_FIGHTING) {
-// send_to_char(ch, "You can't fight while sitting!!\r\n");
-// continue;
-// }
-//
-// hit(ch, FIGHTING(ch), TYPE_UNDEFINED);
-// if (MOB_FLAGGED(ch, MOB_SPEC) && GET_MOB_SPEC(ch) && !MOB_FLAGGED(ch, MOB_NOTDEADYET)) {
-// char actbuf[MAX_INPUT_LENGTH] = "";
-// (GET_MOB_SPEC(ch)) (ch, ch, 0, actbuf);
-// }
-// }
-// }
+impl DB {
+    pub fn load_messages(&mut self) {
+        // FILE *fl;
+        // int i, type;
+        // struct message_type *messages;
+        // char chk[128];
+
+        let fl = OpenOptions::new()
+            .read(true)
+            .open(MESS_FILE)
+            .expect(format!("SYSERR: Error #1 reading combat message file{}", MESS_FILE).as_str());
+        let mut reader = BufReader::new(fl);
+        //     for i in 0..MAX_MESSAGES as usize{
+        //
+        // self.fight_messages[i].a_type = 0;
+        // self.fight_messages[i].number_of_attacks = 0;
+        // self.fight_messages[i].msg = NULL;
+        // }
+        let mut buf = String::new();
+        let mut r = reader
+            .read_line(&mut buf)
+            .expect(format!("SYSERR: Error #2 reading combat message file{}", MESS_FILE).as_str());
+
+        while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
+            r = reader.read_line(&mut buf).expect(
+                format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
+            );
+        }
+
+        let mut a_type;
+        while buf.starts_with('M') {
+            buf.clear();
+            reader.read_line(&mut buf).expect(
+                format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
+            );
+            a_type = buf.trim().parse::<i32>().expect(
+                format!("SYSERR: Error #4 reading combat message file{}", MESS_FILE).as_str(),
+            );
+
+            let fml = self
+                .fight_messages
+                .iter()
+                .position(|fm| fm.a_type == a_type);
+            let mut ml;
+            let i;
+            if fml.is_none() {
+                let nml = MessageList {
+                    a_type,
+                    messages: vec![],
+                };
+                i = self.fight_messages.len();
+                self.fight_messages.push(nml);
+            } else {
+                i = fml.unwrap();
+            }
+            ml = &mut self.fight_messages[i];
+            let i = i as i32;
+            let msg = MessageType {
+                die_msg: MsgType {
+                    attacker_msg: fread_action(&mut reader, i),
+                    victim_msg: fread_action(&mut reader, i),
+                    room_msg: fread_action(&mut reader, i),
+                },
+                miss_msg: MsgType {
+                    attacker_msg: fread_action(&mut reader, i),
+                    victim_msg: fread_action(&mut reader, i),
+                    room_msg: fread_action(&mut reader, i),
+                },
+                hit_msg: MsgType {
+                    attacker_msg: fread_action(&mut reader, i),
+                    victim_msg: fread_action(&mut reader, i),
+                    room_msg: fread_action(&mut reader, i),
+                },
+                god_msg: MsgType {
+                    attacker_msg: fread_action(&mut reader, i),
+                    victim_msg: fread_action(&mut reader, i),
+                    room_msg: fread_action(&mut reader, i),
+                },
+            };
+            ml.messages.push(msg);
+
+            let mut r = reader.read_line(&mut buf).expect(
+                format!("SYSERR: Error #2 reading combat message file{}", MESS_FILE).as_str(),
+            );
+
+            while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
+                r = reader.read_line(&mut buf).expect(
+                    format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
+                );
+            }
+        }
+    }
+}
+
+pub fn update_pos(victim: &Rc<CharData>) {
+    if victim.get_hit() > 0 && victim.get_pos() > POS_STUNNED {
+        return;
+    } else if victim.get_hit() > 0 {
+        victim.set_pos(POS_STANDING);
+    } else if victim.get_hit() <= -11 {
+        victim.set_pos(POS_DEAD);
+    } else if victim.get_hit() <= -6 {
+        victim.set_pos(POS_MORTALLYW);
+    } else if victim.get_hit() <= -3 {
+        victim.set_pos(POS_INCAP);
+    } else {
+        victim.set_pos(POS_STUNNED);
+    }
+}
+
+pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &MainGlobals) {
+    if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
+        return;
+    }
+    if ch.plr_flagged(PLR_KILLER) || ch.is_npc() || vict.is_npc() || Rc::ptr_eq(ch, vict) {
+        return;
+    }
+
+    ch.set_plr_flag_bit(PLR_KILLER);
+
+    send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
+    game.mudlog(
+        BRF,
+        LVL_IMMORT as i32,
+        true,
+        format!(
+            "PC Killer bit set on {} for initiating attack on {} at {}.",
+            ch.get_name(),
+            vict.get_name(),
+            game.db.world.borrow()[vict.in_room() as usize].name
+        )
+        .as_str(),
+    );
+}
+
+/* start one char fighting another (yes, it is horrible, I know... )  */
+impl DB {
+    fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &MainGlobals) {
+        if Rc::ptr_eq(ch, vict) {
+            return;
+        }
+
+        // if (FIGHTING(ch)) {
+        // core_dump();
+        // return;
+        // }
+
+        //ch->next_fighting = combat_list;
+        //combat_list = ch;
+        self.combat_list.borrow_mut().push(ch.clone());
+
+        // TODO implement spell
+        // if (AFF_FLAGGED(ch, AFF_SLEEP))
+        // affect_from_char(ch, SPELL_SLEEP);
+
+        ch.set_fighting(Some(vict.clone()));
+        ch.set_pos(POS_FIGHTING);
+
+        if !PK_ALLOWED {
+            check_killer(ch, vict, game);
+        }
+    }
+    /* remove a char from the list of fighting chars */
+    pub fn stop_fighting(&self, ch: &Rc<CharData>) {
+        self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
+        *ch.next_fighting.borrow_mut() = None;
+        ch.set_pos(POS_STANDING);
+
+        update_pos(ch);
+    }
+
+    pub fn make_corpse(&self, ch: &Rc<CharData>) {
+        // char buf2[MAX_NAME_LENGTH + 64];
+        // struct obj_data * corpse, * o;
+        // struct obj_data * money;
+        // int i;
+
+        let mut corpse = ObjData::new();
+
+        corpse.item_number = NOTHING;
+        corpse.set_in_room(NOWHERE);
+        corpse.name = "corpse".to_string();
+
+        let buf2 = format!("The corpse of {} is lying here.", ch.get_name());
+        corpse.description = buf2;
+
+        let buf2 = format!("the corpse of {}", ch.get_name());
+        corpse.short_description = buf2;
+
+        corpse.set_obj_type(ITEM_CONTAINER);
+        corpse.set_obj_wear(ITEM_WEAR_TAKE);
+        corpse.set_obj_extra(ITEM_NODONATE);
+        corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
+        corpse.set_obj_val(3, 1); /* corpse identifier */
+        corpse.set_obj_weight((ch.get_weight() as i32 + ch.is_carrying_w()) as i32);
+        corpse.set_obj_rent(100000);
+        if ch.is_npc() {
+            corpse.set_obj_timer(MAX_NPC_CORPSE_TIME);
+        } else {
+            corpse.set_obj_timer(MAX_PC_CORPSE_TIME);
+        }
+
+        let corpse = Rc::from(corpse);
+        self.object_list.borrow_mut().push(corpse.clone());
+
+        /* transfer character's inventory to the corpse */
+        for o in ch.carrying.borrow().iter() {
+            corpse.contains.borrow_mut().push(o.clone());
+        }
+        for o in corpse.contains.borrow().iter() {
+            *o.in_obj.borrow_mut() = Some(corpse.clone());
+            object_list_new_owner(&corpse, None);
+        }
+        /* transfer character's equipment to the corpse */
+        for i in 0..NUM_WEARS {
+            if ch.get_eq(i).is_some() {
+                self.obj_to_obj(self.unequip_char(ch, i).as_ref(), Some(&corpse));
+            }
+        }
+        /* transfer gold */
+
+        if ch.get_gold() > 0 {
+            /*
+             * following 'if' clause added to fix gold duplication loophole
+             * The above line apparently refers to the old "partially log in,
+             * kill the game character, then finish login sequence" duping
+             * bug. The duplication has been fixed (knock on wood) but the
+             * test below shall live on, for a while. -gg 3/3/2002
+             */
+            if ch.is_npc() || ch.desc.borrow().is_some() {
+                let money = self.create_money(ch.get_gold());
+                self.obj_to_obj(money.as_ref(), Some(&corpse));
+            }
+            ch.set_gold(0);
+        }
+        ch.carrying.borrow_mut().clear();
+        ch.set_is_carrying_w(0);
+        ch.set_is_carrying_n(0);
+
+        self.obj_to_room(Some(&corpse), ch.in_room());
+    }
+}
+
+/* When ch kills victim */
+pub fn change_alignment(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+    /*
+     * new alignment change algorithm: if you kill a monster with alignment A,
+     * you move 1/16th of the way to having alignment -A.  Simple and fast.
+     */
+    ch.set_alignment(ch.get_alignment() + (-victim.get_alignment() - ch.get_alignment()) / 16);
+}
+
+impl DB {
+    pub fn death_cry(&self, ch: &Rc<CharData>) {
+        self.act(
+            "Your blood freezes as you hear $n's death cry.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        for door in 0..NUM_OF_DIRS {
+            if self.can_go(ch, door) {
+                self.send_to_room(
+                    self.world.borrow()[ch.in_room() as usize].dir_option[door as usize]
+                        .as_ref()
+                        .unwrap()
+                        .to_room
+                        .get(),
+                    "Your blood freezes as you hear someone's death cry.\r\n",
+                );
+            }
+        }
+    }
+
+    pub fn raw_kill(&self, ch: &Rc<CharData>) {
+        if ch.fighting().is_some() {
+            self.stop_fighting(ch);
+        }
+
+        while !ch.affected.borrow().is_empty() {
+            affect_remove(ch, 0);
+        }
+
+        self.death_cry(ch);
+
+        self.make_corpse(ch);
+        self.extract_char(ch);
+    }
+}
+
+pub fn die(ch: &Rc<CharData>, game: &MainGlobals) {
+    gain_exp(ch, -(ch.get_exp() / 2), game);
+    if !ch.is_npc() {
+        ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
+    }
+    game.db.raw_kill(ch);
+}
+
+pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &MainGlobals) {
+    let share = min(MAX_EXP_GAIN, max(1, base));
+
+    if share > 1 {
+        send_to_char(
+            ch,
+            format!(
+                "You receive your share of experience -- {} points.\r\n",
+                share
+            )
+            .as_str(),
+        );
+    } else {
+        send_to_char(
+            ch,
+            "You receive your share of experience -- one measly little point!\r\n",
+        );
+    }
+    gain_exp(ch, share, game);
+    change_alignment(ch, victim);
+}
+
+pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &MainGlobals) {
+    // int tot_members, base, tot_gain;
+    // struct char_data *k;
+    // struct follow_type *f;
+
+    let k;
+    if ch.master.borrow().is_none() {
+        k = ch.clone();
+    } else {
+        k = ch.master.borrow().as_ref().unwrap().clone();
+    }
+    let mut tot_members;
+    if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
+        tot_members = 1;
+    } else {
+        tot_members = 0;
+    }
+
+    for f in k.followers.borrow().iter() {
+        if f.follower.aff_flagged(AFF_GROUP) && f.follower.in_room() == ch.in_room() {
+            tot_members += 1;
+        }
+    }
+
+    /* round up to the next highest tot_members */
+    let mut tot_gain = (victim.get_exp() / 3) + tot_members - 1;
+
+    /* prevent illegal xp creation when killing players */
+    if !victim.is_npc() {
+        tot_gain = min(MAX_EXP_LOSS * 2 / 3, tot_gain);
+    }
+
+    let base;
+    if tot_members >= 1 {
+        base = max(1, tot_gain / tot_members);
+    } else {
+        base = 0;
+    }
+
+    if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
+        perform_group_gain(&k, base, victim, game);
+    }
+
+    for f in k.followers.borrow().iter() {
+        if f.follower.aff_flagged(AFF_GROUP) && f.follower.in_room() == ch.in_room() {
+            perform_group_gain(&f.follower, base, victim, game);
+        }
+    }
+}
+
+pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &MainGlobals) {
+    let mut exp = min(MAX_EXP_GAIN, victim.get_exp() / 3);
+
+    /* Calculate level-difference bonus */
+    if ch.is_npc() {
+        exp += max(
+            0,
+            exp * min(4, victim.get_level() as i32 - ch.get_level() as i32) / 8,
+        );
+    } else {
+        exp += max(
+            0,
+            exp * min(8, victim.get_level() as i32 - ch.get_level() as i32) / 8,
+        );
+    }
+    exp = max(exp, 1);
+
+    if exp > 1 {
+        send_to_char(
+            ch,
+            format!("You receive {} experience points.\r\n", exp).as_str(),
+        );
+    } else {
+        send_to_char(ch, "You receive one lousy experience point.\r\n");
+    }
+    gain_exp(ch, exp, game);
+    change_alignment(ch, victim);
+}
+
+pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> String {
+    let mut buf = String::new();
+
+    let mut iter = str.chars();
+    loop {
+        let mut c = iter.next();
+        if c.is_none() {
+            break;
+        }
+        let mut c = c.unwrap();
+        if c == '#' {
+            c = iter.next().unwrap();
+            match c {
+                'W' => {
+                    buf.push_str(weapon_plural);
+                }
+                'w' => {
+                    buf.push_str(weapon_singular);
+                }
+                _ => {
+                    buf.push('#');
+                }
+            }
+        } else {
+            buf.push(c);
+        }
+    } /* For */
+    buf.clone()
+}
+
+impl DB {
+    /* message for doing damage with a weapon */
+    pub fn dam_message(&self, dam: i32, ch: &Rc<CharData>, victim: &Rc<CharData>, mut w_type: i32) {
+        struct DamWeaponType {
+            to_room: &'static str,
+            to_char: &'static str,
+            to_victim: &'static str,
+        }
+        const DAM_WEAPONS: [DamWeaponType; 9] = [
+            /* use #w for singular (i.e. "slash") and #W for plural (i.e. "slashes") */
+            DamWeaponType {
+                to_room: "$n tries to #w $N, but misses.",
+                to_char: "You try to #w $N, but miss.",
+                to_victim: "$n tries to #w you, but misses.",
+            }, /* 0: 0     */
+            DamWeaponType {
+                to_room: "$n tickles $N as $e #W $M.",
+                to_char: "You tickle $N as you #w $M.",
+                to_victim: "$n tickles you as $e #W you.",
+            }, /* 1: 1..2  */
+            DamWeaponType {
+                to_room: "$n barely #W $N.",
+                to_char: "You barely #w $N.",
+                to_victim: "$n barely #W you.",
+            }, /* 2: 3..4  */
+            DamWeaponType {
+                to_room: "$n #W $N.",
+                to_char: "You #w $N.",
+                to_victim: "$n #W you.",
+            }, /* 3: 5..6  */
+            DamWeaponType {
+                to_room: "$n #W $N hard.",
+                to_char: "You #w $N hard.",
+                to_victim: "$n #W you hard.",
+            }, /* 4: 7..10  */
+            DamWeaponType {
+                to_room: "$n #W $N very hard.",
+                to_char: "You #w $N very hard.",
+                to_victim: "$n #W you very hard.",
+            }, /* 5: 11..14  */
+            DamWeaponType {
+                to_room: "$n #W $N extremely hard.",
+                to_char: "You #w $N extremely hard.",
+                to_victim: "$n #W you extremely hard.",
+            }, /* 6: 15..19  */
+            DamWeaponType {
+                to_room: "$n massacres $N to small fragments with $s #w.",
+                to_char: "You massacre $N to small fragments with your #w.",
+                to_victim: "$n massacres you to small fragments with $s #w.",
+            }, /* 7: 19..23 */
+            DamWeaponType {
+                to_room: "$n OBLITERATES $N with $s deadly #w!!",
+                to_char: "You OBLITERATE $N with your deadly #w!!",
+                to_victim: "$n OBLITERATES you with $s deadly #w!!",
+            }, /* 8: > 23   */
+        ];
+
+        w_type -= TYPE_HIT; /* Change to base of table with text */
+        let w_type = w_type as usize;
+        let msgnum;
+        if dam == 0 {
+            msgnum = 0;
+        } else if dam <= 2 {
+            msgnum = 1;
+        } else if dam <= 4 {
+            msgnum = 2;
+        } else if dam <= 6 {
+            msgnum = 3;
+        } else if dam <= 10 {
+            msgnum = 4;
+        } else if dam <= 14 {
+            msgnum = 5;
+        } else if dam <= 19 {
+            msgnum = 6;
+        } else if dam <= 23 {
+            msgnum = 7;
+        } else {
+            msgnum = 8
+        };
+
+        /* damage message to onlookers */
+        let buf = replace_string(
+            DAM_WEAPONS[msgnum].to_room,
+            ATTACK_HIT_TEXT[w_type].singular,
+            ATTACK_HIT_TEXT[w_type].plural,
+        );
+        self.act(&buf, false, Some(ch), None, Some(victim), TO_NOTVICT);
+
+        /* damage message to damager */
+        send_to_char(ch, CCYEL!(ch, C_CMP));
+        let buf = replace_string(
+            DAM_WEAPONS[msgnum].to_char,
+            ATTACK_HIT_TEXT[w_type].singular,
+            ATTACK_HIT_TEXT[w_type].plural,
+        );
+        self.act(&buf, false, Some(ch), None, Some(victim), TO_CHAR);
+        send_to_char(ch, CCNRM!(ch, C_CMP));
+
+        /* damage message to damagee */
+        send_to_char(victim, CCRED!(victim, C_CMP));
+        let buf = replace_string(
+            DAM_WEAPONS[msgnum].to_victim,
+            ATTACK_HIT_TEXT[w_type].singular,
+            ATTACK_HIT_TEXT[w_type].plural,
+        );
+        self.act(
+            &buf,
+            false,
+            Some(ch),
+            None,
+            Some(victim),
+            TO_VICT | TO_SLEEP,
+        );
+        send_to_char(victim, CCNRM!(victim, C_CMP));
+    }
+
+    /*
+     *  message for doing damage with a spell or skill
+     *  C3.0: Also used for weapon damage on miss and death blows
+     */
+    pub fn skill_message(
+        &self,
+        dam: i32,
+        ch: &Rc<CharData>,
+        vict: &Rc<CharData>,
+        attacktype: i32,
+    ) -> i32 {
+        // int i, j, nr;
+        // struct message_type *msg;
+
+        let weap_b = ch.get_eq(WEAR_WIELD as i8).clone();
+        let weap = weap_b.as_ref();
+
+        for i in 0..self.fight_messages.len() {
+            if self.fight_messages[i].a_type == attacktype {
+                let nr = dice(1, self.fight_messages[i].messages.len() as i32) as usize;
+                let msg = &self.fight_messages[i].messages[nr];
+
+                if !vict.is_npc() && vict.get_level() >= LVL_IMMORT as u8 {
+                    self.act(
+                        &msg.god_msg.attacker_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(vict),
+                        TO_CHAR,
+                    );
+                    self.act(
+                        &msg.god_msg.victim_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(vict),
+                        TO_VICT,
+                    );
+                    self.act(
+                        &msg.god_msg.room_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(vict),
+                        TO_NOTVICT,
+                    );
+                } else if dam != 0 {
+                    /*
+                     * Don't send redundant color codes for TYPE_SUFFERING & other types
+                     * of damage without attacker_msg.
+                     */
+                    if vict.get_pos() == POS_DEAD {
+                        if !msg.die_msg.attacker_msg.is_empty() {
+                            send_to_char(ch, CCYEL!(ch, C_CMP));
+                            self.act(
+                                &msg.die_msg.attacker_msg,
+                                false,
+                                Some(ch),
+                                weap,
+                                Some(vict),
+                                TO_CHAR,
+                            );
+                            send_to_char(ch, CCNRM!(ch, C_CMP));
+                        }
+
+                        send_to_char(vict, CCRED!(vict, C_CMP));
+                        self.act(
+                            &msg.die_msg.victim_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(vict),
+                            TO_VICT | TO_SLEEP,
+                        );
+                        send_to_char(vict, CCNRM!(vict, C_CMP));
+
+                        self.act(
+                            &msg.die_msg.room_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(vict),
+                            TO_NOTVICT,
+                        );
+                    } else {
+                        if !msg.hit_msg.attacker_msg.is_empty() {
+                            send_to_char(ch, CCYEL!(ch, C_CMP));
+                            self.act(
+                                &msg.hit_msg.attacker_msg,
+                                false,
+                                Some(ch),
+                                weap,
+                                Some(vict),
+                                TO_CHAR,
+                            );
+                            send_to_char(ch, CCNRM!(ch, C_CMP));
+                        }
+
+                        send_to_char(vict, CCRED!(vict, C_CMP));
+                        self.act(
+                            &msg.hit_msg.victim_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(vict),
+                            TO_VICT | TO_SLEEP,
+                        );
+                        send_to_char(vict, CCNRM!(vict, C_CMP));
+
+                        self.act(
+                            &msg.hit_msg.room_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(vict),
+                            TO_NOTVICT,
+                        );
+                    }
+                } else if !Rc::ptr_eq(ch, vict) {
+                    /* Dam == 0 */
+                    if !msg.miss_msg.attacker_msg.is_empty() {
+                        send_to_char(ch, CCYEL!(ch, C_CMP));
+                        self.act(
+                            &msg.miss_msg.attacker_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(vict),
+                            TO_CHAR,
+                        );
+                        send_to_char(ch, CCNRM!(ch, C_CMP));
+                    }
+
+                    send_to_char(vict, CCRED!(vict, C_CMP));
+                    self.act(
+                        &msg.miss_msg.victim_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(vict),
+                        TO_VICT | TO_SLEEP,
+                    );
+                    send_to_char(vict, CCNRM!(vict, C_CMP));
+
+                    self.act(
+                        &msg.miss_msg.room_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(vict),
+                        TO_NOTVICT,
+                    );
+                }
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    /*
+     * Alert: As of bpl14, this function returns the following codes:
+     *	< 0	Victim died.
+     *	= 0	No damage.
+     *	> 0	How much damage done.
+     */
+    pub fn damage(
+        &self,
+        ch: &Rc<CharData>,
+        victim: &Rc<CharData>,
+        dam: i32,
+        attacktype: i32,
+        game: &MainGlobals,
+    ) -> i32 {
+        let mut dam = dam;
+
+        if victim.get_pos() <= POS_DEAD {
+            /* This is "normal"-ish now with delayed extraction. -gg 3/15/2001 */
+            if victim.plr_flagged(PLR_NOTDEADYET) || victim.mob_flagged(MOB_NOTDEADYET) {
+                return -1;
+            }
+
+            error!(
+                "SYSERR: Attempt to damage corpse '{}' in room #{} by '{}'.",
+                victim.get_name(),
+                self.get_room_vnum(victim.in_room()),
+                ch.get_name()
+            );
+            die(victim, game);
+            return -1; /* -je, 7/7/92 */
+        }
+
+        /* peaceful rooms */
+        if !Rc::ptr_eq(ch, victim) && self.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+            send_to_char(
+                ch,
+                "This room just has such a peaceful, easy feeling...\r\n",
+            );
+            return 0;
+        }
+
+        /* shopkeeper protection */
+        // TODO implements shop
+        // if (!ok_damage_shopkeeper(ch, victim))
+        // return (0);
+
+        /* You can't damage an immortal! */
+        if !victim.is_npc() && victim.get_level() >= LVL_IMMORT as u8 {
+            dam = 0;
+        }
+
+        if !Rc::ptr_eq(victim, ch) {
+            /* Start the attacker fighting the victim */
+            if ch.get_pos() > POS_STUNNED && ch.fighting().is_none() {
+                self.set_fighting(ch, victim, game);
+            }
+
+            /* Start the victim fighting the attacker */
+            if victim.get_pos() > POS_STUNNED && victim.fighting().is_none() {
+                self.set_fighting(victim, ch, game);
+                if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
+                    remember(victim, ch);
+                }
+            }
+        }
+
+        /* If you attack a pet, it hates your guts */
+        if victim.master.borrow().is_some()
+            && Rc::ptr_eq(victim.master.borrow().as_ref().unwrap(), ch)
+        {
+            self.stop_follower(victim);
+        }
+
+        /* If the attacker is invisible, he becomes visible */
+        if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
+            self.appear(ch);
+        }
+
+        /* Cut damage in half if victim has sanct, to a minimum 1 */
+        if victim.aff_flagged(AFF_SANCTUARY) && dam >= 2 {
+            dam /= 2;
+        }
+
+        /* Check for PK if this is not a PK MUD */
+        if PK_ALLOWED {
+            check_killer(ch, victim, game);
+            if ch.plr_flagged(PLR_KILLER) && !Rc::ptr_eq(ch, victim) {
+                dam = 0;
+            }
+        }
+
+        /* Set the maximum damage per round and subtract the hit points */
+        dam = max(min(dam, 100), 0);
+        victim.decr_hit(dam as i16);
+
+        /* Gain exp for the hit */
+        if !Rc::ptr_eq(ch, victim) {
+            gain_exp(ch, (victim.get_level() as i32 * dam) as i32, game);
+        }
+
+        update_pos(victim);
+
+        /*
+         * skill_message sends a message from the messages file in lib/misc.
+         * dam_message just sends a generic "You hit $n extremely hard.".
+         * skill_message is preferable to dam_message because it is more
+         * descriptive.
+         *
+         * If we are _not_ attacking with a weapon (i.e. a spell), always use
+         * skill_message. If we are attacking with a weapon: If this is a miss or a
+         * death blow, send a skill_message if one exists; if not, default to a
+         * dam_message. Otherwise, always send a dam_message.
+         */
+        if !is_weapon!(attacktype) {
+            self.skill_message(dam, ch, victim, attacktype);
+        } else {
+            if victim.get_pos() == POS_DEAD || dam == 0 {
+                if self.skill_message(dam, ch, victim, attacktype) == 0 {
+                    self.dam_message(dam, ch, victim, attacktype);
+                }
+            } else {
+                self.dam_message(dam, ch, victim, attacktype);
+            }
+        }
+
+        /* Use send_to_char -- act() doesn't send message if you are DEAD. */
+        match victim.get_pos() {
+            POS_MORTALLYW => {
+                self.act(
+                    "$n is mortally wounded, and will die soon, if not aided.",
+                    true,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                send_to_char(
+                    victim,
+                    "You are mortally wounded, and will die soon, if not aided.\r\n",
+                );
+            }
+
+            POS_INCAP => {
+                self.act(
+                    "$n is incapacitated and will slowly die, if not aided.",
+                    true,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                send_to_char(
+                    victim,
+                    "You are incapacitated an will slowly die, if not aided.\r\n",
+                );
+            }
+            POS_STUNNED => {
+                self.act(
+                    "$n is stunned, but will probably regain consciousness again.",
+                    true,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                send_to_char(
+                    victim,
+                    "You're stunned, but will probably regain consciousness again.\r\n",
+                );
+            }
+            POS_DEAD => {
+                self.act(
+                    "$n is dead!  R.I.P.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                send_to_char(victim, "You are dead!  Sorry...\r\n");
+            }
+
+            _ => {
+                /* >= POSITION SLEEPING */
+                if dam > (victim.get_max_hit() / 4) as i32 {
+                    send_to_char(victim, "That really did HURT!\r\n");
+                }
+
+                if victim.get_hit() < victim.get_max_hit() / 4 {
+                    send_to_char(
+                        victim,
+                        format!(
+                            "{}You wish that your wounds would stop BLEEDING so much!{}\r\n",
+                            CCRED!(victim, C_SPR),
+                            CCNRM!(victim, C_SPR)
+                        )
+                        .as_str(),
+                    );
+                    if !Rc::ptr_eq(ch, victim) && victim.mob_flagged(MOB_WIMPY) {
+                        do_flee(game, victim, "", 0, 0);
+                    }
+                }
+                if !victim.is_npc()
+                    && victim.get_wimp_lev() != 0
+                    && !Rc::ptr_eq(ch, victim)
+                    && victim.get_hit() < victim.get_wimp_lev() as i16
+                    && victim.get_hit() > 0
+                {
+                    send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
+                    do_flee(game, victim, "", 0, 0);
+                }
+            }
+        }
+
+        /* Help out poor linkless people who are attacked */
+        if !victim.is_npc() && victim.desc.borrow().is_none() && victim.get_pos() > POS_STUNNED {
+            do_flee(game, victim, "", 0, 0);
+            if victim.fighting().is_none() {
+                self.act(
+                    "$n is rescued by divine forces.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                victim.set_was_in(victim.in_room());
+                self.char_from_room(victim);
+                self.char_to_room(Some(victim), 0);
+            }
+        }
+
+        /* stop someone from fighting if they're stunned or worse */
+        if victim.get_pos() <= POS_STUNNED && victim.fighting().is_some() {
+            self.stop_fighting(victim);
+        }
+
+        /* Uh oh.  Victim died. */
+        if victim.get_pos() == POS_DEAD {
+            if !Rc::ptr_eq(ch, victim) && (victim.is_npc() || victim.desc.borrow().is_some()) {
+                if ch.aff_flagged(AFF_GROUP) {
+                    group_gain(ch, victim, game);
+                } else {
+                    solo_gain(ch, victim, game);
+                }
+
+                if !victim.is_npc() {
+                    game.mudlog(
+                        BRF,
+                        LVL_IMMORT as i32,
+                        true,
+                        format!(
+                            "{} killed by {} at {}",
+                            victim.get_name(),
+                            ch.get_name(),
+                            self.world.borrow()[victim.in_room() as usize].name
+                        )
+                        .as_str(),
+                    );
+                    if ch.mob_flagged(MOB_MEMORY) {
+                        forget(ch, victim);
+                    }
+                }
+                die(victim, game);
+                return -1;
+            }
+        }
+        return dam;
+    }
+}
+/*
+ * Calculate the THAC0 of the attacker.
+ *
+ * 'victim' currently isn't used but you could use it for special cases like
+ * weapons that hit evil creatures easier or a weapon that always misses
+ * attacking an animal.
+ */
+pub fn compute_thaco(ch: &Rc<CharData>, victim: &Rc<CharData>) -> i32 {
+    let mut calc_thaco;
+
+    if !ch.is_npc() {
+        calc_thaco = thaco(ch.get_class(), ch.get_level());
+    } else {
+        /* THAC0 for monsters is set in the HitRoll */
+        calc_thaco = 20;
+    }
+    calc_thaco -= STR_APP[ch.strength_apply_index()].tohit as i32;
+    calc_thaco -= ch.get_hitroll() as i32;
+    calc_thaco -= ((ch.get_int() as f32 - 13 as f32) / 1.5) as i32; /* Intelligence helps! */
+    calc_thaco -= ((ch.get_wis() as f32 - 13 as f32) / 1.5) as i32; /* So does wisdom */
+
+    return calc_thaco;
+}
+
+impl DB {
+    pub fn hit(&self, ch: &Rc<CharData>, victim: &Rc<CharData>, _type: i32, game: &MainGlobals) {
+        let wielded = ch.get_eq(WEAR_WIELD as i8);
+
+        /* Do some sanity checking, in case someone flees, etc. */
+        if ch.in_room() != victim.in_room() {
+            if ch.fighting().is_some() && Rc::ptr_eq(ch.fighting().as_ref().unwrap(), victim) {
+                self.stop_fighting(ch);
+                return;
+            }
+        }
+
+        let w_type;
+        /* Find the weapon type (for display purposes only) */
+        if wielded.is_some() && wielded.as_ref().unwrap().get_obj_type() == ITEM_WEAPON {
+            w_type = wielded.as_ref().unwrap().get_obj_val(3) + TYPE_HIT;
+        } else {
+            if ch.is_npc() && ch.mob_specials.borrow().attack_type != 0 {
+                w_type = (ch.mob_specials.borrow().attack_type as i32 + TYPE_HIT) as i32;
+            } else {
+                w_type = TYPE_HIT;
+            }
+        }
+
+        /* Calculate chance of hit. Lower THAC0 is better for attacker. */
+        let calc_thaco = compute_thaco(ch, victim);
+
+        /* Calculate the raw armor including magic armor.  Lower AC is better for defender. */
+        let victim_ac = compute_armor_class(victim) / 10;
+
+        /* roll the die and take your chances... */
+        let diceroll = rand_number(1, 20);
+
+        /*
+         * Decide whether this is a hit or a miss.
+         *
+         *  Victim asleep = hit, otherwise:
+         *     1   = Automatic miss.
+         *   2..19 = Checked vs. AC.
+         *    20   = Automatic hit.
+         */
+        let mut dam: i32;
+        if diceroll == 20 || !victim.awake() {
+            dam = 1;
+        } else if diceroll == 1 {
+            dam = 0;
+        } else {
+            dam = if calc_thaco - diceroll as i32 <= victim_ac as i32 {
+                1
+            } else {
+                0
+            };
+        }
+
+        if dam == 0 {
+            /* the attacker missed the victim */
+            self.damage(
+                ch,
+                victim,
+                0,
+                if _type == SKILL_BACKSTAB {
+                    SKILL_BACKSTAB
+                } else {
+                    w_type
+                },
+                game,
+            );
+        } else {
+            /* okay, we know the guy has been hit.  now calculate damage. */
+
+            /* Start with the damage bonuses: the damroll and strength apply */
+            dam = STR_APP[ch.strength_apply_index()].todam as i32;
+            dam += ch.get_damroll() as i32;
+
+            /* Maybe holding arrow? */
+            if wielded.is_some() && wielded.as_ref().unwrap().get_obj_type() == ITEM_WEAPON {
+                /* Add weapon-based damage if a weapon is being wielded */
+                dam += dice(
+                    wielded.as_ref().unwrap().get_obj_val(1),
+                    wielded.as_ref().unwrap().get_obj_val(2),
+                );
+            } else {
+                /* If no weapon, add bare hand damage instead */
+                if ch.is_npc() {
+                    dam += dice(
+                        ch.mob_specials.borrow().damnodice as i32,
+                        ch.mob_specials.borrow().damsizedice as i32,
+                    );
+                } else {
+                    dam += rand_number(0, 2) as i32; /* Max 2 bare hand damage for players */
+                }
+            }
+
+            /*
+             * Include a damage multiplier if victim isn't ready to fight:
+             *
+             * Position sitting  1.33 x normal
+             * Position resting  1.66 x normal
+             * Position sleeping 2.00 x normal
+             * Position stunned  2.33 x normal
+             * Position incap    2.66 x normal
+             * Position mortally 3.00 x normal
+             *
+             * Note, this is a hack because it depends on the particular
+             * values of the POSITION_XXX constants.
+             */
+            if victim.get_pos() < POS_FIGHTING {
+                dam *= 1 + (POS_FIGHTING as i32 - victim.get_pos() as i32) / 3;
+            }
+
+            /* at least 1 hp damage min per hit */
+            dam = max(1, dam);
+
+            if _type == SKILL_BACKSTAB {
+                self.damage(
+                    ch,
+                    victim,
+                    dam * backstab_mult(ch.get_level()),
+                    SKILL_BACKSTAB,
+                    game,
+                );
+            } else {
+                self.damage(ch, victim, dam, w_type, game);
+            }
+        }
+    }
+
+    /* control the fights going on.  Called every 2 seconds from comm.c. */
+    pub fn perform_violence(&self, game: &MainGlobals) {
+        let mut old_combat_list = vec![];
+        for c in self.combat_list.borrow().iter() {
+            old_combat_list.push(c.clone());
+        }
+
+        for ch in old_combat_list.iter() {
+            //next_combat_list = ch->next_fighting;
+
+            if ch.fighting().is_none() || ch.in_room() != ch.fighting().as_ref().unwrap().in_room()
+            {
+                self.stop_fighting(ch);
+                continue;
+            }
+
+            if ch.is_npc() {
+                if ch.get_wait_state() > 0 {
+                    ch.decr_wait_state(PULSE_VIOLENCE as i32);
+                    continue;
+                }
+                ch.set_wait_state(0);
+
+                if ch.get_pos() < POS_FIGHTING {
+                    ch.set_pos(POS_FIGHTING);
+                    self.act(
+                        "$n scrambles to $s feet!",
+                        true,
+                        Some(ch),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                }
+            }
+
+            if ch.get_pos() < POS_FIGHTING {
+                send_to_char(ch, "You can't fight while sitting!!\r\n");
+                continue;
+            }
+
+            self.hit(ch, ch.fighting().as_ref().unwrap(), TYPE_UNDEFINED, game);
+            // TODO implement spec proc
+            // if (MOB_FLAGGED(ch, MOB_SPEC) && GET_MOB_SPEC(ch) && !MOB_FLAGGED(ch, MOB_NOTDEADYET)) {
+            //     char
+            //     actbuf[MAX_INPUT_LENGTH] = "";
+            //     (GET_MOB_SPEC(ch))(ch, ch, 0, actbuf);
+            // }
+        }
+    }
+}

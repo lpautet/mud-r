@@ -108,7 +108,7 @@ pub fn perform_move(db: &DB, rch: &Rc<CharData>, dir: i32, need_specials_check: 
         }
     } else {
         if ch.followers.borrow().is_empty() {
-            return do_simple_move(db, rch.clone(), dir, need_specials_check);
+            return do_simple_move(db, rch, dir, need_specials_check);
         }
 
         // TODO implement follower
@@ -129,11 +129,10 @@ pub fn perform_move(db: &DB, rch: &Rc<CharData>, dir: i32, need_specials_check: 
     return 0;
 }
 
-pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check: i32) -> i32 {
+pub fn do_simple_move(db: &DB, ch: &Rc<CharData>, dir: i32, need_specials_check: i32) -> i32 {
     //char throwaway[MAX_INPUT_LENGTH] = ""; /* Functions assume writable. */
     let was_in;
     let need_movement;
-    let ch = rch.as_ref();
 
     /*
      * Check for special routines (North is 1 in command list, but 0 here) Note
@@ -152,7 +151,7 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
         db.act(
             "$n bursts into tears.",
             false,
-            Some(rch),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -228,12 +227,12 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
 
     if !ch.aff_flagged(AFF_SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
-        db.act(buf2.as_str(), true, Some(rch.clone()), None, None, TO_ROOM);
+        db.act(buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
     was_in = ch.in_room();
-    db.char_from_room(rch.clone());
+    db.char_from_room(ch);
     db.char_to_room(
-        Some(rch.clone()),
+        Some(ch),
         db.world.borrow()[was_in as usize].dir_option[dir as usize]
             .as_ref()
             .unwrap()
@@ -242,18 +241,11 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
     );
 
     if !ch.aff_flagged(AFF_SNEAK) {
-        db.act(
-            "$n has arrived.",
-            true,
-            Some(rch.clone()),
-            None,
-            None,
-            TO_ROOM,
-        );
+        db.act("$n has arrived.", true, Some(ch), None, None, TO_ROOM);
     }
 
     if ch.desc.borrow().is_some() {
-        db.look_at_room(&rch, false);
+        db.look_at_room(ch, false);
     }
 
     // if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_DEATH) && GET_LEVEL(ch) < LVL_IMMORT) {
@@ -264,7 +256,7 @@ pub fn do_simple_move(db: &DB, rch: Rc<CharData>, dir: i32, need_specials_check:
     // }
     return 1;
 }
-
+#[allow(unused_variables)]
 pub fn do_move(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.

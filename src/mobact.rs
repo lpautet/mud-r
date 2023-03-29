@@ -9,19 +9,21 @@
 ************************************************************************ */
 // #define MOB_AGGR_TO_ALIGN (MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD)
 
+use std::rc::Rc;
+
 use crate::act_movement::perform_move;
 use crate::db::DB;
+use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
     CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
     MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS,
     POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
 use crate::util::{num_followers_charmed, rand_number};
-use crate::TO_ROOM;
-use std::rc::Rc;
+use crate::{MainGlobals, TO_ROOM};
 
 impl DB {
-    pub fn mobile_activity(&self) {
+    pub fn mobile_activity(&self, game: &MainGlobals) {
         // struct char_data *ch, *next_ch, *vict;
         // struct obj_data *obj, *best_obj;
         // int door, found, max;
@@ -76,7 +78,7 @@ impl DB {
                         self.act(
                             "$n gets $p.",
                             false,
-                            Some(ch.clone()),
+                            Some(ch),
                             Some(best_obj.as_ref().unwrap()),
                             None,
                             TO_ROOM,
@@ -132,8 +134,7 @@ impl DB {
                         if self.aggressive_mob_on_a_leash(ch, ch.master.borrow().as_ref(), vict) {
                             continue;
                         }
-                        // TODO implement fight
-                        //hit(ch, vict, TYPE_UNDEFINED);
+                        self.hit(ch, vict, TYPE_UNDEFINED, game);
                         found = true;
                     }
                 }
@@ -167,13 +168,12 @@ impl DB {
                         self.act(
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
-                            Some(ch.clone()),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
                         );
-                        // TODO implement fighting
-                        //hit(ch, vict, TYPE_UNDEFINED);
+                        self.hit(ch, vict, TYPE_UNDEFINED, game);
                     }
                 }
             }
@@ -205,8 +205,12 @@ impl DB {
                             .unwrap()
                             .prf_flagged(PRF_NOHASSLE)
                     {
-                        // TODO implement fighting
-                        // hit(ch, ch->master, TYPE_UNDEFINED);
+                        self.hit(
+                            ch,
+                            ch.master.borrow().as_ref().unwrap(),
+                            TYPE_UNDEFINED,
+                            game,
+                        );
                         self.stop_follower(ch);
                     }
                 }
@@ -235,13 +239,12 @@ impl DB {
                     self.act(
                         "$n jumps to the aid of $N!",
                         false,
-                        Some(ch.clone()),
+                        Some(ch),
                         None,
-                        Some(vict.as_ref()),
+                        Some(vict),
                         TO_ROOM,
                     );
-                    // TODO implement fighting
-                    // hit(ch, FIGHTING(vict), TYPE_UNDEFINED);
+                    self.hit(ch, vict.fighting().as_ref().unwrap(), TYPE_UNDEFINED, game);
                     found = true;
                 }
             }
@@ -251,53 +254,25 @@ impl DB {
     }
 }
 
-// /* Mob Memory Routines */
-//
-// /* make ch remember victim */
-// void remember(struct char_data *ch, struct char_data *victim)
-// {
-// memory_rec *tmp;
-// bool present = FALSE;
-//
-// if (!IS_NPC(ch) || IS_NPC(victim) || PRF_FLAGGED(victim, PRF_NOHASSLE))
-// return;
-//
-// for (tmp = MEMORY(ch); tmp && !present; tmp = tmp->next)
-// if (tmp->id == GET_IDNUM(victim))
-// present = TRUE;
-//
-// if (!present) {
-// CREATE(tmp, memory_rec, 1);
-// tmp->next = MEMORY(ch);
-// tmp->id = GET_IDNUM(victim);
-// MEMORY(ch) = tmp;
-// }
-// }
-//
-//
-// /* make ch forget victim */
-// void forget(struct char_data *ch, struct char_data *victim)
-// {
-// memory_rec *curr, *prev = NULL;
-//
-// if (!(curr = MEMORY(ch)))
-// return;
-//
-// while (curr && curr->id != GET_IDNUM(victim)) {
-// prev = curr;
-// curr = curr->next;
-// }
-//
-// if (!curr)
-// return;			/* person wasn't there at all. */
-//
-// if (curr == MEMORY(ch))
-// MEMORY(ch) = curr->next;
-// else
-// prev->next = curr->next;
-//
-// free(curr);
-// }
+/* Mob Memory Routines */
+
+/* make ch remember victim */
+pub fn remember(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+    if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PRF_NOHASSLE) {
+        return;
+    }
+
+    if !ch.memory().borrow().contains(&victim.get_idnum()) {
+        ch.memory().borrow_mut().push(victim.get_idnum());
+    }
+}
+
+/* make ch forget victim */
+pub fn forget(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+    ch.memory()
+        .borrow_mut()
+        .retain(|id| id != &victim.get_idnum());
+}
 
 impl CharData {
     /* erase ch's memory */

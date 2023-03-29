@@ -17,6 +17,11 @@
 
 /* Names first */
 
+use std::cell::RefCell;
+use std::cmp::{max, min};
+
+use log::{error, info};
+
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
 use crate::spells::{
@@ -29,9 +34,6 @@ use crate::structs::{
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, set_skill, MainGlobals};
-use log::{error, info};
-use std::cell::RefCell;
-use std::cmp::{max, min};
 
 const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
@@ -156,239 +158,238 @@ pub fn parse_class(arg: char) -> i8 {
 // byte saving_throws(int class_num, int type, int level)
 // {
 // switch (class_num) {
-// case CLASS_MAGIC_USER:
-// switch (type) {
-// case SAVING_PARA:	/* Paralyzation */
+// CLASS_MAGIC_USER => { // switch (type) { }
+// SAVING_PARA => { /* Paralyzation */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 70;
-// case  2: return 69;
-// case  3: return 68;
-// case  4: return 67;
-// case  5: return 66;
-// case  6: return 65;
-// case  7: return 63;
-// case  8: return 61;
-// case  9: return 60;
-// case 10: return 59;
-// case 11: return 57;
-// case 12: return 55;
-// case 13: return 54;
-// case 14: return 53;
-// case 15: return 53;
-// case 16: return 52;
-// case 17: return 51;
-// case 18: return 50;
-// case 19: return 48;
-// case 20: return 46;
-// case 21: return 45;
-// case 22: return 44;
-// case 23: return 42;
-// case 24: return 40;
-// case 25: return 38;
-// case 26: return 36;
-// case 27: return 34;
-// case 28: return 32;
-// case 29: return 30;
-// case 30: return 28;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 70; }
+// 2 => { return 69; }
+// 3 => { return 68; }
+// 4 => { return 67; }
+// 5 => { return 66; }
+// 6 => { return 65; }
+// 7 => { return 63; }
+// 8 => { return 61; }
+// 9 => { return 60; }
+// 10 => { return 59; }
+// 11 => { return 57; }
+// 12 => { return 55; }
+// 13 => { return 54; }
+// 14 => { return 53; }
+// 15 => { return 53; }
+// 16 => { return 52; }
+// 17 => { return 51; }
+// 18 => { return 50; }
+// 19 => { return 48; }
+// 20 => { return 46; }
+// 21 => { return 45; }
+// 22 => { return 44; }
+// 23 => { return 42; }
+// 24 => { return 40; }
+// 25 => { return 38; }
+// 26 => { return 36; }
+// 27 => { return 34; }
+// 28 => { return 32; }
+// 29 => { return 30; }
+// 30 => { return 28; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for mage paralyzation saving throw.");
 // break;
 // }
-// case SAVING_ROD:	/* Rods */
+// SAVING_ROD => { /* Rods */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 55;
-// case  2: return 53;
-// case  3: return 51;
-// case  4: return 49;
-// case  5: return 47;
-// case  6: return 45;
-// case  7: return 43;
-// case  8: return 41;
-// case  9: return 40;
-// case 10: return 39;
-// case 11: return 37;
-// case 12: return 35;
-// case 13: return 33;
-// case 14: return 31;
-// case 15: return 30;
-// case 16: return 29;
-// case 17: return 27;
-// case 18: return 25;
-// case 19: return 23;
-// case 20: return 21;
-// case 21: return 20;
-// case 22: return 19;
-// case 23: return 17;
-// case 24: return 15;
-// case 25: return 14;
-// case 26: return 13;
-// case 27: return 12;
-// case 28: return 11;
-// case 29: return 10;
-// case 30: return  9;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 55; }
+// 2 => { return 53; }
+// 3 => { return 51; }
+// 4 => { return 49; }
+// 5 => { return 47; }
+// 6 => { return 45; }
+// 7 => { return 43; }
+// 8 => { return 41; }
+// 9 => { return 40; }
+// 10 => { return 39; }
+// 11 => { return 37; }
+// 12 => { return 35; }
+// 13 => { return 33; }
+// 14 => { return 31; }
+// 15 => { return 30; }
+// 16 => { return 29; }
+// 17 => { return 27; }
+// 18 => { return 25; }
+// 19 => { return 23; }
+// 20 => { return 21; }
+// 21 => { return 20; }
+// 22 => { return 19; }
+// 23 => { return 17; }
+// 24 => { return 15; }
+// 25 => { return 14; }
+// 26 => { return 13; }
+// 27 => { return 12; }
+// 28 => { return 11; }
+// 29 => { return 10; }
+// 30 => { return  9; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for mage rod saving throw.");
 // break;
 // }
-// case SAVING_PETRI:	/* Petrification */
+// SAVING_PETRI => { /* Petrification */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 65;
-// case  2: return 63;
-// case  3: return 61;
-// case  4: return 59;
-// case  5: return 57;
-// case  6: return 55;
-// case  7: return 53;
-// case  8: return 51;
-// case  9: return 50;
-// case 10: return 49;
-// case 11: return 47;
-// case 12: return 45;
-// case 13: return 43;
-// case 14: return 41;
-// case 15: return 40;
-// case 16: return 39;
-// case 17: return 37;
-// case 18: return 35;
-// case 19: return 33;
-// case 20: return 31;
-// case 21: return 30;
-// case 22: return 29;
-// case 23: return 27;
-// case 24: return 25;
-// case 25: return 23;
-// case 26: return 21;
-// case 27: return 19;
-// case 28: return 17;
-// case 29: return 15;
-// case 30: return 13;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 65; }
+// 2 => { return 63; }
+// 3 => { return 61; }
+// 4 => { return 59; }
+// 5 => { return 57; }
+// 6 => { return 55; }
+// 7 => { return 53; }
+// 8 => { return 51; }
+// 9 => { return 50; }
+// 10 => { return 49; }
+// 11 => { return 47; }
+// 12 => { return 45; }
+// 13 => { return 43; }
+// 14 => { return 41; }
+// 15 => { return 40; }
+// 16 => { return 39; }
+// 17 => { return 37; }
+// 18 => { return 35; }
+// 19 => { return 33; }
+// 20 => { return 31; }
+// 21 => { return 30; }
+// 22 => { return 29; }
+// 23 => { return 27; }
+// 24 => { return 25; }
+// 25 => { return 23; }
+// 26 => { return 21; }
+// 27 => { return 19; }
+// 28 => { return 17; }
+// 29 => { return 15; }
+// 30 => { return 13; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for mage petrification saving throw.");
 // break;
 // }
-// case SAVING_BREATH:	/* Breath weapons */
+// SAVING_BREATH => { /* Breath weapons */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 75;
-// case  2: return 73;
-// case  3: return 71;
-// case  4: return 69;
-// case  5: return 67;
-// case  6: return 65;
-// case  7: return 63;
-// case  8: return 61;
-// case  9: return 60;
-// case 10: return 59;
-// case 11: return 57;
-// case 12: return 55;
-// case 13: return 53;
-// case 14: return 51;
-// case 15: return 50;
-// case 16: return 49;
-// case 17: return 47;
-// case 18: return 45;
-// case 19: return 43;
-// case 20: return 41;
-// case 21: return 40;
-// case 22: return 39;
-// case 23: return 37;
-// case 24: return 35;
-// case 25: return 33;
-// case 26: return 31;
-// case 27: return 29;
-// case 28: return 27;
-// case 29: return 25;
-// case 30: return 23;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 75; }
+// 2 => { return 73; }
+// 3 => { return 71; }
+// 4 => { return 69; }
+// 5 => { return 67; }
+// 6 => { return 65; }
+// 7 => { return 63; }
+// 8 => { return 61; }
+// 9 => { return 60; }
+// 10 => { return 59; }
+// 11 => { return 57; }
+// 12 => { return 55; }
+// 13 => { return 53; }
+// 14 => { return 51; }
+// 15 => { return 50; }
+// 16 => { return 49; }
+// 17 => { return 47; }
+// 18 => { return 45; }
+// 19 => { return 43; }
+// 20 => { return 41; }
+// 21 => { return 40; }
+// 22 => { return 39; }
+// 23 => { return 37; }
+// 24 => { return 35; }
+// 25 => { return 33; }
+// 26 => { return 31; }
+// 27 => { return 29; }
+// 28 => { return 27; }
+// 29 => { return 25; }
+// 30 => { return 23; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for mage breath saving throw.");
 // break;
 // }
-// case SAVING_SPELL:	/* Generic spells */
+// SAVING_SPELL => { /* Generic spells */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 60;
-// case  2: return 58;
-// case  3: return 56;
-// case  4: return 54;
-// case  5: return 52;
-// case  6: return 50;
-// case  7: return 48;
-// case  8: return 46;
-// case  9: return 45;
-// case 10: return 44;
-// case 11: return 42;
-// case 12: return 40;
-// case 13: return 38;
-// case 14: return 36;
-// case 15: return 35;
-// case 16: return 34;
-// case 17: return 32;
-// case 18: return 30;
-// case 19: return 28;
-// case 20: return 26;
-// case 21: return 25;
-// case 22: return 24;
-// case 23: return 22;
-// case 24: return 20;
-// case 25: return 18;
-// case 26: return 16;
-// case 27: return 14;
-// case 28: return 12;
-// case 29: return 10;
-// case 30: return  8;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 60; }
+// 2 => { return 58; }
+// 3 => { return 56; }
+// 4 => { return 54; }
+// 5 => { return 52; }
+// 6 => { return 50; }
+// 7 => { return 48; }
+// 8 => { return 46; }
+// 9 => { return 45; }
+// 10 => { return 44; }
+// 11 => { return 42; }
+// 12 => { return 40; }
+// 13 => { return 38; }
+// 14 => { return 36; }
+// 15 => { return 35; }
+// 16 => { return 34; }
+// 17 => { return 32; }
+// 18 => { return 30; }
+// 19 => { return 28; }
+// 20 => { return 26; }
+// 21 => { return 25; }
+// 22 => { return 24; }
+// 23 => { return 22; }
+// 24 => { return 20; }
+// 25 => { return 18; }
+// 26 => { return 16; }
+// 27 => { return 14; }
+// 28 => { return 12; }
+// 29 => { return 10; }
+// 30 => { return  8; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for mage spell saving throw.");
 // break;
@@ -398,239 +399,238 @@ pub fn parse_class(arg: char) -> i8 {
 // break;
 // }
 // break;
-// case CLASS_CLERIC:
-// switch (type) {
-// case SAVING_PARA:	/* Paralyzation */
+// CLASS_CLERIC => { // switch (type) { }
+// SAVING_PARA => { /* Paralyzation */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 60;
-// case  2: return 59;
-// case  3: return 48;
-// case  4: return 46;
-// case  5: return 45;
-// case  6: return 43;
-// case  7: return 40;
-// case  8: return 37;
-// case  9: return 35;
-// case 10: return 34;
-// case 11: return 33;
-// case 12: return 31;
-// case 13: return 30;
-// case 14: return 29;
-// case 15: return 27;
-// case 16: return 26;
-// case 17: return 25;
-// case 18: return 24;
-// case 19: return 23;
-// case 20: return 22;
-// case 21: return 21;
-// case 22: return 20;
-// case 23: return 18;
-// case 24: return 15;
-// case 25: return 14;
-// case 26: return 12;
-// case 27: return 10;
-// case 28: return  9;
-// case 29: return  8;
-// case 30: return  7;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 60; }
+// 2 => { return 59; }
+// 3 => { return 48; }
+// 4 => { return 46; }
+// 5 => { return 45; }
+// 6 => { return 43; }
+// 7 => { return 40; }
+// 8 => { return 37; }
+// 9 => { return 35; }
+// 10 => { return 34; }
+// 11 => { return 33; }
+// 12 => { return 31; }
+// 13 => { return 30; }
+// 14 => { return 29; }
+// 15 => { return 27; }
+// 16 => { return 26; }
+// 17 => { return 25; }
+// 18 => { return 24; }
+// 19 => { return 23; }
+// 20 => { return 22; }
+// 21 => { return 21; }
+// 22 => { return 20; }
+// 23 => { return 18; }
+// 24 => { return 15; }
+// 25 => { return 14; }
+// 26 => { return 12; }
+// 27 => { return 10; }
+// 28 => { return  9; }
+// 29 => { return  8; }
+// 30 => { return  7; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for cleric paralyzation saving throw.");
 // break;
 // }
-// case SAVING_ROD:	/* Rods */
+// SAVING_ROD => { /* Rods */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 70;
-// case  2: return 69;
-// case  3: return 68;
-// case  4: return 66;
-// case  5: return 65;
-// case  6: return 63;
-// case  7: return 60;
-// case  8: return 57;
-// case  9: return 55;
-// case 10: return 54;
-// case 11: return 53;
-// case 12: return 51;
-// case 13: return 50;
-// case 14: return 49;
-// case 15: return 47;
-// case 16: return 46;
-// case 17: return 45;
-// case 18: return 44;
-// case 19: return 43;
-// case 20: return 42;
-// case 21: return 41;
-// case 22: return 40;
-// case 23: return 38;
-// case 24: return 35;
-// case 25: return 34;
-// case 26: return 32;
-// case 27: return 30;
-// case 28: return 29;
-// case 29: return 28;
-// case 30: return 27;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 70; }
+// 2 => { return 69; }
+// 3 => { return 68; }
+// 4 => { return 66; }
+// 5 => { return 65; }
+// 6 => { return 63; }
+// 7 => { return 60; }
+// 8 => { return 57; }
+// 9 => { return 55; }
+// 10 => { return 54; }
+// 11 => { return 53; }
+// 12 => { return 51; }
+// 13 => { return 50; }
+// 14 => { return 49; }
+// 15 => { return 47; }
+// 16 => { return 46; }
+// 17 => { return 45; }
+// 18 => { return 44; }
+// 19 => { return 43; }
+// 20 => { return 42; }
+// 21 => { return 41; }
+// 22 => { return 40; }
+// 23 => { return 38; }
+// 24 => { return 35; }
+// 25 => { return 34; }
+// 26 => { return 32; }
+// 27 => { return 30; }
+// 28 => { return 29; }
+// 29 => { return 28; }
+// 30 => { return 27; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for cleric rod saving throw.");
 // break;
 // }
-// case SAVING_PETRI:	/* Petrification */
+// SAVING_PETRI => { /* Petrification */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 65;
-// case  2: return 64;
-// case  3: return 63;
-// case  4: return 61;
-// case  5: return 60;
-// case  6: return 58;
-// case  7: return 55;
-// case  8: return 53;
-// case  9: return 50;
-// case 10: return 49;
-// case 11: return 48;
-// case 12: return 46;
-// case 13: return 45;
-// case 14: return 44;
-// case 15: return 43;
-// case 16: return 41;
-// case 17: return 40;
-// case 18: return 39;
-// case 19: return 38;
-// case 20: return 37;
-// case 21: return 36;
-// case 22: return 35;
-// case 23: return 33;
-// case 24: return 31;
-// case 25: return 29;
-// case 26: return 27;
-// case 27: return 25;
-// case 28: return 24;
-// case 29: return 23;
-// case 30: return 22;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 65; }
+// 2 => { return 64; }
+// 3 => { return 63; }
+// 4 => { return 61; }
+// 5 => { return 60; }
+// 6 => { return 58; }
+// 7 => { return 55; }
+// 8 => { return 53; }
+// 9 => { return 50; }
+// 10 => { return 49; }
+// 11 => { return 48; }
+// 12 => { return 46; }
+// 13 => { return 45; }
+// 14 => { return 44; }
+// 15 => { return 43; }
+// 16 => { return 41; }
+// 17 => { return 40; }
+// 18 => { return 39; }
+// 19 => { return 38; }
+// 20 => { return 37; }
+// 21 => { return 36; }
+// 22 => { return 35; }
+// 23 => { return 33; }
+// 24 => { return 31; }
+// 25 => { return 29; }
+// 26 => { return 27; }
+// 27 => { return 25; }
+// 28 => { return 24; }
+// 29 => { return 23; }
+// 30 => { return 22; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for cleric petrification saving throw.");
 // break;
 // }
-// case SAVING_BREATH:	/* Breath weapons */
+// SAVING_BREATH => { /* Breath weapons */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 80;
-// case  2: return 79;
-// case  3: return 78;
-// case  4: return 76;
-// case  5: return 75;
-// case  6: return 73;
-// case  7: return 70;
-// case  8: return 67;
-// case  9: return 65;
-// case 10: return 64;
-// case 11: return 63;
-// case 12: return 61;
-// case 13: return 60;
-// case 14: return 59;
-// case 15: return 57;
-// case 16: return 56;
-// case 17: return 55;
-// case 18: return 54;
-// case 19: return 53;
-// case 20: return 52;
-// case 21: return 51;
-// case 22: return 50;
-// case 23: return 48;
-// case 24: return 45;
-// case 25: return 44;
-// case 26: return 42;
-// case 27: return 40;
-// case 28: return 39;
-// case 29: return 38;
-// case 30: return 37;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 80; }
+// 2 => { return 79; }
+// 3 => { return 78; }
+// 4 => { return 76; }
+// 5 => { return 75; }
+// 6 => { return 73; }
+// 7 => { return 70; }
+// 8 => { return 67; }
+// 9 => { return 65; }
+// 10 => { return 64; }
+// 11 => { return 63; }
+// 12 => { return 61; }
+// 13 => { return 60; }
+// 14 => { return 59; }
+// 15 => { return 57; }
+// 16 => { return 56; }
+// 17 => { return 55; }
+// 18 => { return 54; }
+// 19 => { return 53; }
+// 20 => { return 52; }
+// 21 => { return 51; }
+// 22 => { return 50; }
+// 23 => { return 48; }
+// 24 => { return 45; }
+// 25 => { return 44; }
+// 26 => { return 42; }
+// 27 => { return 40; }
+// 28 => { return 39; }
+// 29 => { return 38; }
+// 30 => { return 37; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for cleric breath saving throw.");
 // break;
 // }
-// case SAVING_SPELL:	/* Generic spells */
+// SAVING_SPELL => { /* Generic spells */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 75;
-// case  2: return 74;
-// case  3: return 73;
-// case  4: return 71;
-// case  5: return 70;
-// case  6: return 68;
-// case  7: return 65;
-// case  8: return 63;
-// case  9: return 60;
-// case 10: return 59;
-// case 11: return 58;
-// case 12: return 56;
-// case 13: return 55;
-// case 14: return 54;
-// case 15: return 53;
-// case 16: return 51;
-// case 17: return 50;
-// case 18: return 49;
-// case 19: return 48;
-// case 20: return 47;
-// case 21: return 46;
-// case 22: return 45;
-// case 23: return 43;
-// case 24: return 41;
-// case 25: return 39;
-// case 26: return 37;
-// case 27: return 35;
-// case 28: return 34;
-// case 29: return 33;
-// case 30: return 32;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 75; }
+// 2 => { return 74; }
+// 3 => { return 73; }
+// 4 => { return 71; }
+// 5 => { return 70; }
+// 6 => { return 68; }
+// 7 => { return 65; }
+// 8 => { return 63; }
+// 9 => { return 60; }
+// 10 => { return 59; }
+// 11 => { return 58; }
+// 12 => { return 56; }
+// 13 => { return 55; }
+// 14 => { return 54; }
+// 15 => { return 53; }
+// 16 => { return 51; }
+// 17 => { return 50; }
+// 18 => { return 49; }
+// 19 => { return 48; }
+// 20 => { return 47; }
+// 21 => { return 46; }
+// 22 => { return 45; }
+// 23 => { return 43; }
+// 24 => { return 41; }
+// 25 => { return 39; }
+// 26 => { return 37; }
+// 27 => { return 35; }
+// 28 => { return 34; }
+// 29 => { return 33; }
+// 30 => { return 32; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for cleric spell saving throw.");
 // break;
@@ -640,239 +640,238 @@ pub fn parse_class(arg: char) -> i8 {
 // break;
 // }
 // break;
-// case CLASS_THIEF:
-// switch (type) {
-// case SAVING_PARA:	/* Paralyzation */
+// CLASS_THIEF => { // switch (type) { }
+// SAVING_PARA => { /* Paralyzation */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 65;
-// case  2: return 64;
-// case  3: return 63;
-// case  4: return 62;
-// case  5: return 61;
-// case  6: return 60;
-// case  7: return 59;
-// case  8: return 58;
-// case  9: return 57;
-// case 10: return 56;
-// case 11: return 55;
-// case 12: return 54;
-// case 13: return 53;
-// case 14: return 52;
-// case 15: return 51;
-// case 16: return 50;
-// case 17: return 49;
-// case 18: return 48;
-// case 19: return 47;
-// case 20: return 46;
-// case 21: return 45;
-// case 22: return 44;
-// case 23: return 43;
-// case 24: return 42;
-// case 25: return 41;
-// case 26: return 40;
-// case 27: return 39;
-// case 28: return 38;
-// case 29: return 37;
-// case 30: return 36;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 65; }
+// 2 => { return 64; }
+// 3 => { return 63; }
+// 4 => { return 62; }
+// 5 => { return 61; }
+// 6 => { return 60; }
+// 7 => { return 59; }
+// 8 => { return 58; }
+// 9 => { return 57; }
+// 10 => { return 56; }
+// 11 => { return 55; }
+// 12 => { return 54; }
+// 13 => { return 53; }
+// 14 => { return 52; }
+// 15 => { return 51; }
+// 16 => { return 50; }
+// 17 => { return 49; }
+// 18 => { return 48; }
+// 19 => { return 47; }
+// 20 => { return 46; }
+// 21 => { return 45; }
+// 22 => { return 44; }
+// 23 => { return 43; }
+// 24 => { return 42; }
+// 25 => { return 41; }
+// 26 => { return 40; }
+// 27 => { return 39; }
+// 28 => { return 38; }
+// 29 => { return 37; }
+// 30 => { return 36; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for thief paralyzation saving throw.");
 // break;
 // }
-// case SAVING_ROD:	/* Rods */
+// SAVING_ROD => { /* Rods */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 70;
-// case  2: return 68;
-// case  3: return 66;
-// case  4: return 64;
-// case  5: return 62;
-// case  6: return 60;
-// case  7: return 58;
-// case  8: return 56;
-// case  9: return 54;
-// case 10: return 52;
-// case 11: return 50;
-// case 12: return 48;
-// case 13: return 46;
-// case 14: return 44;
-// case 15: return 42;
-// case 16: return 40;
-// case 17: return 38;
-// case 18: return 36;
-// case 19: return 34;
-// case 20: return 32;
-// case 21: return 30;
-// case 22: return 28;
-// case 23: return 26;
-// case 24: return 24;
-// case 25: return 22;
-// case 26: return 20;
-// case 27: return 18;
-// case 28: return 16;
-// case 29: return 14;
-// case 30: return 13;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 70; }
+// 2 => { return 68; }
+// 3 => { return 66; }
+// 4 => { return 64; }
+// 5 => { return 62; }
+// 6 => { return 60; }
+// 7 => { return 58; }
+// 8 => { return 56; }
+// 9 => { return 54; }
+// 10 => { return 52; }
+// 11 => { return 50; }
+// 12 => { return 48; }
+// 13 => { return 46; }
+// 14 => { return 44; }
+// 15 => { return 42; }
+// 16 => { return 40; }
+// 17 => { return 38; }
+// 18 => { return 36; }
+// 19 => { return 34; }
+// 20 => { return 32; }
+// 21 => { return 30; }
+// 22 => { return 28; }
+// 23 => { return 26; }
+// 24 => { return 24; }
+// 25 => { return 22; }
+// 26 => { return 20; }
+// 27 => { return 18; }
+// 28 => { return 16; }
+// 29 => { return 14; }
+// 30 => { return 13; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for thief rod saving throw.");
 // break;
 // }
-// case SAVING_PETRI:	/* Petrification */
+// SAVING_PETRI => { /* Petrification */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 60;
-// case  2: return 59;
-// case  3: return 58;
-// case  4: return 58;
-// case  5: return 56;
-// case  6: return 55;
-// case  7: return 54;
-// case  8: return 53;
-// case  9: return 52;
-// case 10: return 51;
-// case 11: return 50;
-// case 12: return 49;
-// case 13: return 48;
-// case 14: return 47;
-// case 15: return 46;
-// case 16: return 45;
-// case 17: return 44;
-// case 18: return 43;
-// case 19: return 42;
-// case 20: return 41;
-// case 21: return 40;
-// case 22: return 39;
-// case 23: return 38;
-// case 24: return 37;
-// case 25: return 36;
-// case 26: return 35;
-// case 27: return 34;
-// case 28: return 33;
-// case 29: return 32;
-// case 30: return 31;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 60; }
+// 2 => { return 59; }
+// 3 => { return 58; }
+// 4 => { return 58; }
+// 5 => { return 56; }
+// 6 => { return 55; }
+// 7 => { return 54; }
+// 8 => { return 53; }
+// 9 => { return 52; }
+// 10 => { return 51; }
+// 11 => { return 50; }
+// 12 => { return 49; }
+// 13 => { return 48; }
+// 14 => { return 47; }
+// 15 => { return 46; }
+// 16 => { return 45; }
+// 17 => { return 44; }
+// 18 => { return 43; }
+// 19 => { return 42; }
+// 20 => { return 41; }
+// 21 => { return 40; }
+// 22 => { return 39; }
+// 23 => { return 38; }
+// 24 => { return 37; }
+// 25 => { return 36; }
+// 26 => { return 35; }
+// 27 => { return 34; }
+// 28 => { return 33; }
+// 29 => { return 32; }
+// 30 => { return 31; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for thief petrification saving throw.");
 // break;
 // }
-// case SAVING_BREATH:	/* Breath weapons */
+// SAVING_BREATH => { /* Breath weapons */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 80;
-// case  2: return 79;
-// case  3: return 78;
-// case  4: return 77;
-// case  5: return 76;
-// case  6: return 75;
-// case  7: return 74;
-// case  8: return 73;
-// case  9: return 72;
-// case 10: return 71;
-// case 11: return 70;
-// case 12: return 69;
-// case 13: return 68;
-// case 14: return 67;
-// case 15: return 66;
-// case 16: return 65;
-// case 17: return 64;
-// case 18: return 63;
-// case 19: return 62;
-// case 20: return 61;
-// case 21: return 60;
-// case 22: return 59;
-// case 23: return 58;
-// case 24: return 57;
-// case 25: return 56;
-// case 26: return 55;
-// case 27: return 54;
-// case 28: return 53;
-// case 29: return 52;
-// case 30: return 51;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 80; }
+// 2 => { return 79; }
+// 3 => { return 78; }
+// 4 => { return 77; }
+// 5 => { return 76; }
+// 6 => { return 75; }
+// 7 => { return 74; }
+// 8 => { return 73; }
+// 9 => { return 72; }
+// 10 => { return 71; }
+// 11 => { return 70; }
+// 12 => { return 69; }
+// 13 => { return 68; }
+// 14 => { return 67; }
+// 15 => { return 66; }
+// 16 => { return 65; }
+// 17 => { return 64; }
+// 18 => { return 63; }
+// 19 => { return 62; }
+// 20 => { return 61; }
+// 21 => { return 60; }
+// 22 => { return 59; }
+// 23 => { return 58; }
+// 24 => { return 57; }
+// 25 => { return 56; }
+// 26 => { return 55; }
+// 27 => { return 54; }
+// 28 => { return 53; }
+// 29 => { return 52; }
+// 30 => { return 51; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for thief breath saving throw.");
 // break;
 // }
-// case SAVING_SPELL:	/* Generic spells */
+// SAVING_SPELL => { /* Generic spells */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 75;
-// case  2: return 73;
-// case  3: return 71;
-// case  4: return 69;
-// case  5: return 67;
-// case  6: return 65;
-// case  7: return 63;
-// case  8: return 61;
-// case  9: return 59;
-// case 10: return 57;
-// case 11: return 55;
-// case 12: return 53;
-// case 13: return 51;
-// case 14: return 49;
-// case 15: return 47;
-// case 16: return 45;
-// case 17: return 43;
-// case 18: return 41;
-// case 19: return 39;
-// case 20: return 37;
-// case 21: return 35;
-// case 22: return 33;
-// case 23: return 31;
-// case 24: return 29;
-// case 25: return 27;
-// case 26: return 25;
-// case 27: return 23;
-// case 28: return 21;
-// case 29: return 19;
-// case 30: return 17;
-// case 31: return  0;
-// case 32: return  0;
-// case 33: return  0;
-// case 34: return  0;
-// case 35: return  0;
-// case 36: return  0;
-// case 37: return  0;
-// case 38: return  0;
-// case 39: return  0;
-// case 40: return  0;
+// 0 => { return 90; }
+// 1 => { return 75; }
+// 2 => { return 73; }
+// 3 => { return 71; }
+// 4 => { return 69; }
+// 5 => { return 67; }
+// 6 => { return 65; }
+// 7 => { return 63; }
+// 8 => { return 61; }
+// 9 => { return 59; }
+// 10 => { return 57; }
+// 11 => { return 55; }
+// 12 => { return 53; }
+// 13 => { return 51; }
+// 14 => { return 49; }
+// 15 => { return 47; }
+// 16 => { return 45; }
+// 17 => { return 43; }
+// 18 => { return 41; }
+// 19 => { return 39; }
+// 20 => { return 37; }
+// 21 => { return 35; }
+// 22 => { return 33; }
+// 23 => { return 31; }
+// 24 => { return 29; }
+// 25 => { return 27; }
+// 26 => { return 25; }
+// 27 => { return 23; }
+// 28 => { return 21; }
+// 29 => { return 19; }
+// 30 => { return 17; }
+// 31 => { return  0; }
+// 32 => { return  0; }
+// 33 => { return  0; }
+// 34 => { return  0; }
+// 35 => { return  0; }
+// 36 => { return  0; }
+// 37 => { return  0; }
+// 38 => { return  0; }
+// 39 => { return  0; }
+// 40 => { return  0; }
 // default:
 // log("SYSERR: Missing level for thief spell saving throw.");
 // break;
@@ -882,289 +881,288 @@ pub fn parse_class(arg: char) -> i8 {
 // break;
 // }
 // break;
-// case CLASS_WARRIOR:
-// switch (type) {
-// case SAVING_PARA:	/* Paralyzation */
+// CLASS_WARRIOR => { // switch (type) { }
+// SAVING_PARA => { /* Paralyzation */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 70;
-// case  2: return 68;
-// case  3: return 67;
-// case  4: return 65;
-// case  5: return 62;
-// case  6: return 58;
-// case  7: return 55;
-// case  8: return 53;
-// case  9: return 52;
-// case 10: return 50;
-// case 11: return 47;
-// case 12: return 43;
-// case 13: return 40;
-// case 14: return 38;
-// case 15: return 37;
-// case 16: return 35;
-// case 17: return 32;
-// case 18: return 28;
-// case 19: return 25;
-// case 20: return 24;
-// case 21: return 23;
-// case 22: return 22;
-// case 23: return 20;
-// case 24: return 19;
-// case 25: return 17;
-// case 26: return 16;
-// case 27: return 15;
-// case 28: return 14;
-// case 29: return 13;
-// case 30: return 12;
-// case 31: return 11;
-// case 32: return 10;
-// case 33: return  9;
-// case 34: return  8;
-// case 35: return  7;
-// case 36: return  6;
-// case 37: return  5;
-// case 38: return  4;
-// case 39: return  3;
-// case 40: return  2;
-// case 41: return  1;	/* Some mobiles. */
-// case 42: return  0;
-// case 43: return  0;
-// case 44: return  0;
-// case 45: return  0;
-// case 46: return  0;
-// case 47: return  0;
-// case 48: return  0;
-// case 49: return  0;
-// case 50: return  0;
+// 0 => { return 90; }
+// 1 => { return 70; }
+// 2 => { return 68; }
+// 3 => { return 67; }
+// 4 => { return 65; }
+// 5 => { return 62; }
+// 6 => { return 58; }
+// 7 => { return 55; }
+// 8 => { return 53; }
+// 9 => { return 52; }
+// 10 => { return 50; }
+// 11 => { return 47; }
+// 12 => { return 43; }
+// 13 => { return 40; }
+// 14 => { return 38; }
+// 15 => { return 37; }
+// 16 => { return 35; }
+// 17 => { return 32; }
+// 18 => { return 28; }
+// 19 => { return 25; }
+// 20 => { return 24; }
+// 21 => { return 23; }
+// 22 => { return 22; }
+// 23 => { return 20; }
+// 24 => { return 19; }
+// 25 => { return 17; }
+// 26 => { return 16; }
+// 27 => { return 15; }
+// 28 => { return 14; }
+// 29 => { return 13; }
+// 30 => { return 12; }
+// 31 => { return 11; }
+// 32 => { return 10; }
+// 33 => { return  9; }
+// 34 => { return  8; }
+// 35 => { return  7; }
+// 36 => { return  6; }
+// 37 => { return  5; }
+// 38 => { return  4; }
+// 39 => { return  3; }
+// 40 => { return  2; }
+// 41 => { return  1;	/* Some mobiles. */ }
+// 42 => { return  0; }
+// 43 => { return  0; }
+// 44 => { return  0; }
+// 45 => { return  0; }
+// 46 => { return  0; }
+// 47 => { return  0; }
+// 48 => { return  0; }
+// 49 => { return  0; }
+// 50 => { return  0; }
 // default:
 // log("SYSERR: Missing level for warrior paralyzation saving throw.");
 // break;
 // }
-// case SAVING_ROD:	/* Rods */
+// SAVING_ROD => { /* Rods */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 80;
-// case  2: return 78;
-// case  3: return 77;
-// case  4: return 75;
-// case  5: return 72;
-// case  6: return 68;
-// case  7: return 65;
-// case  8: return 63;
-// case  9: return 62;
-// case 10: return 60;
-// case 11: return 57;
-// case 12: return 53;
-// case 13: return 50;
-// case 14: return 48;
-// case 15: return 47;
-// case 16: return 45;
-// case 17: return 42;
-// case 18: return 38;
-// case 19: return 35;
-// case 20: return 34;
-// case 21: return 33;
-// case 22: return 32;
-// case 23: return 30;
-// case 24: return 29;
-// case 25: return 27;
-// case 26: return 26;
-// case 27: return 25;
-// case 28: return 24;
-// case 29: return 23;
-// case 30: return 22;
-// case 31: return 20;
-// case 32: return 18;
-// case 33: return 16;
-// case 34: return 14;
-// case 35: return 12;
-// case 36: return 10;
-// case 37: return  8;
-// case 38: return  6;
-// case 39: return  5;
-// case 40: return  4;
-// case 41: return  3;
-// case 42: return  2;
-// case 43: return  1;
-// case 44: return  0;
-// case 45: return  0;
-// case 46: return  0;
-// case 47: return  0;
-// case 48: return  0;
-// case 49: return  0;
-// case 50: return  0;
+// 0 => { return 90; }
+// 1 => { return 80; }
+// 2 => { return 78; }
+// 3 => { return 77; }
+// 4 => { return 75; }
+// 5 => { return 72; }
+// 6 => { return 68; }
+// 7 => { return 65; }
+// 8 => { return 63; }
+// 9 => { return 62; }
+// 10 => { return 60; }
+// 11 => { return 57; }
+// 12 => { return 53; }
+// 13 => { return 50; }
+// 14 => { return 48; }
+// 15 => { return 47; }
+// 16 => { return 45; }
+// 17 => { return 42; }
+// 18 => { return 38; }
+// 19 => { return 35; }
+// 20 => { return 34; }
+// 21 => { return 33; }
+// 22 => { return 32; }
+// 23 => { return 30; }
+// 24 => { return 29; }
+// 25 => { return 27; }
+// 26 => { return 26; }
+// 27 => { return 25; }
+// 28 => { return 24; }
+// 29 => { return 23; }
+// 30 => { return 22; }
+// 31 => { return 20; }
+// 32 => { return 18; }
+// 33 => { return 16; }
+// 34 => { return 14; }
+// 35 => { return 12; }
+// 36 => { return 10; }
+// 37 => { return  8; }
+// 38 => { return  6; }
+// 39 => { return  5; }
+// 40 => { return  4; }
+// 41 => { return  3; }
+// 42 => { return  2; }
+// 43 => { return  1; }
+// 44 => { return  0; }
+// 45 => { return  0; }
+// 46 => { return  0; }
+// 47 => { return  0; }
+// 48 => { return  0; }
+// 49 => { return  0; }
+// 50 => { return  0; }
 // default:
 // log("SYSERR: Missing level for warrior rod saving throw.");
 // break;
 // }
-// case SAVING_PETRI:	/* Petrification */
+// SAVING_PETRI => { /* Petrification */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 75;
-// case  2: return 73;
-// case  3: return 72;
-// case  4: return 70;
-// case  5: return 67;
-// case  6: return 63;
-// case  7: return 60;
-// case  8: return 58;
-// case  9: return 57;
-// case 10: return 55;
-// case 11: return 52;
-// case 12: return 48;
-// case 13: return 45;
-// case 14: return 43;
-// case 15: return 42;
-// case 16: return 40;
-// case 17: return 37;
-// case 18: return 33;
-// case 19: return 30;
-// case 20: return 29;
-// case 21: return 28;
-// case 22: return 26;
-// case 23: return 25;
-// case 24: return 24;
-// case 25: return 23;
-// case 26: return 21;
-// case 27: return 20;
-// case 28: return 19;
-// case 29: return 18;
-// case 30: return 17;
-// case 31: return 16;
-// case 32: return 15;
-// case 33: return 14;
-// case 34: return 13;
-// case 35: return 12;
-// case 36: return 11;
-// case 37: return 10;
-// case 38: return  9;
-// case 39: return  8;
-// case 40: return  7;
-// case 41: return  6;
-// case 42: return  5;
-// case 43: return  4;
-// case 44: return  3;
-// case 45: return  2;
-// case 46: return  1;
-// case 47: return  0;
-// case 48: return  0;
-// case 49: return  0;
-// case 50: return  0;
+// 0 => { return 90; }
+// 1 => { return 75; }
+// 2 => { return 73; }
+// 3 => { return 72; }
+// 4 => { return 70; }
+// 5 => { return 67; }
+// 6 => { return 63; }
+// 7 => { return 60; }
+// 8 => { return 58; }
+// 9 => { return 57; }
+// 10 => { return 55; }
+// 11 => { return 52; }
+// 12 => { return 48; }
+// 13 => { return 45; }
+// 14 => { return 43; }
+// 15 => { return 42; }
+// 16 => { return 40; }
+// 17 => { return 37; }
+// 18 => { return 33; }
+// 19 => { return 30; }
+// 20 => { return 29; }
+// 21 => { return 28; }
+// 22 => { return 26; }
+// 23 => { return 25; }
+// 24 => { return 24; }
+// 25 => { return 23; }
+// 26 => { return 21; }
+// 27 => { return 20; }
+// 28 => { return 19; }
+// 29 => { return 18; }
+// 30 => { return 17; }
+// 31 => { return 16; }
+// 32 => { return 15; }
+// 33 => { return 14; }
+// 34 => { return 13; }
+// 35 => { return 12; }
+// 36 => { return 11; }
+// 37 => { return 10; }
+// 38 => { return  9; }
+// 39 => { return  8; }
+// 40 => { return  7; }
+// 41 => { return  6; }
+// 42 => { return  5; }
+// 43 => { return  4; }
+// 44 => { return  3; }
+// 45 => { return  2; }
+// 46 => { return  1; }
+// 47 => { return  0; }
+// 48 => { return  0; }
+// 49 => { return  0; }
+// 50 => { return  0; }
 // default:
 // log("SYSERR: Missing level for warrior petrification saving throw.");
 // break;
 // }
-// case SAVING_BREATH:	/* Breath weapons */
+// SAVING_BREATH => { /* Breath weapons */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 85;
-// case  2: return 83;
-// case  3: return 82;
-// case  4: return 80;
-// case  5: return 75;
-// case  6: return 70;
-// case  7: return 65;
-// case  8: return 63;
-// case  9: return 62;
-// case 10: return 60;
-// case 11: return 55;
-// case 12: return 50;
-// case 13: return 45;
-// case 14: return 43;
-// case 15: return 42;
-// case 16: return 40;
-// case 17: return 37;
-// case 18: return 33;
-// case 19: return 30;
-// case 20: return 29;
-// case 21: return 28;
-// case 22: return 26;
-// case 23: return 25;
-// case 24: return 24;
-// case 25: return 23;
-// case 26: return 21;
-// case 27: return 20;
-// case 28: return 19;
-// case 29: return 18;
-// case 30: return 17;
-// case 31: return 16;
-// case 32: return 15;
-// case 33: return 14;
-// case 34: return 13;
-// case 35: return 12;
-// case 36: return 11;
-// case 37: return 10;
-// case 38: return  9;
-// case 39: return  8;
-// case 40: return  7;
-// case 41: return  6;
-// case 42: return  5;
-// case 43: return  4;
-// case 44: return  3;
-// case 45: return  2;
-// case 46: return  1;
-// case 47: return  0;
-// case 48: return  0;
-// case 49: return  0;
-// case 50: return  0;
+// 0 => { return 90; }
+// 1 => { return 85; }
+// 2 => { return 83; }
+// 3 => { return 82; }
+// 4 => { return 80; }
+// 5 => { return 75; }
+// 6 => { return 70; }
+// 7 => { return 65; }
+// 8 => { return 63; }
+// 9 => { return 62; }
+// 10 => { return 60; }
+// 11 => { return 55; }
+// 12 => { return 50; }
+// 13 => { return 45; }
+// 14 => { return 43; }
+// 15 => { return 42; }
+// 16 => { return 40; }
+// 17 => { return 37; }
+// 18 => { return 33; }
+// 19 => { return 30; }
+// 20 => { return 29; }
+// 21 => { return 28; }
+// 22 => { return 26; }
+// 23 => { return 25; }
+// 24 => { return 24; }
+// 25 => { return 23; }
+// 26 => { return 21; }
+// 27 => { return 20; }
+// 28 => { return 19; }
+// 29 => { return 18; }
+// 30 => { return 17; }
+// 31 => { return 16; }
+// 32 => { return 15; }
+// 33 => { return 14; }
+// 34 => { return 13; }
+// 35 => { return 12; }
+// 36 => { return 11; }
+// 37 => { return 10; }
+// 38 => { return  9; }
+// 39 => { return  8; }
+// 40 => { return  7; }
+// 41 => { return  6; }
+// 42 => { return  5; }
+// 43 => { return  4; }
+// 44 => { return  3; }
+// 45 => { return  2; }
+// 46 => { return  1; }
+// 47 => { return  0; }
+// 48 => { return  0; }
+// 49 => { return  0; }
+// 50 => { return  0; }
 // default:
 // log("SYSERR: Missing level for warrior breath saving throw.");
 // break;
 // }
-// case SAVING_SPELL:	/* Generic spells */
+// SAVING_SPELL => { /* Generic spells */ }
 // switch (level) {
-// case  0: return 90;
-// case  1: return 85;
-// case  2: return 83;
-// case  3: return 82;
-// case  4: return 80;
-// case  5: return 77;
-// case  6: return 73;
-// case  7: return 70;
-// case  8: return 68;
-// case  9: return 67;
-// case 10: return 65;
-// case 11: return 62;
-// case 12: return 58;
-// case 13: return 55;
-// case 14: return 53;
-// case 15: return 52;
-// case 16: return 50;
-// case 17: return 47;
-// case 18: return 43;
-// case 19: return 40;
-// case 20: return 39;
-// case 21: return 38;
-// case 22: return 36;
-// case 23: return 35;
-// case 24: return 34;
-// case 25: return 33;
-// case 26: return 31;
-// case 27: return 30;
-// case 28: return 29;
-// case 29: return 28;
-// case 30: return 27;
-// case 31: return 25;
-// case 32: return 23;
-// case 33: return 21;
-// case 34: return 19;
-// case 35: return 17;
-// case 36: return 15;
-// case 37: return 13;
-// case 38: return 11;
-// case 39: return  9;
-// case 40: return  7;
-// case 41: return  6;
-// case 42: return  5;
-// case 43: return  4;
-// case 44: return  3;
-// case 45: return  2;
-// case 46: return  1;
-// case 47: return  0;
-// case 48: return  0;
-// case 49: return  0;
-// case 50: return  0;
+// 0 => { return 90; }
+// 1 => { return 85; }
+// 2 => { return 83; }
+// 3 => { return 82; }
+// 4 => { return 80; }
+// 5 => { return 77; }
+// 6 => { return 73; }
+// 7 => { return 70; }
+// 8 => { return 68; }
+// 9 => { return 67; }
+// 10 => { return 65; }
+// 11 => { return 62; }
+// 12 => { return 58; }
+// 13 => { return 55; }
+// 14 => { return 53; }
+// 15 => { return 52; }
+// 16 => { return 50; }
+// 17 => { return 47; }
+// 18 => { return 43; }
+// 19 => { return 40; }
+// 20 => { return 39; }
+// 21 => { return 38; }
+// 22 => { return 36; }
+// 23 => { return 35; }
+// 24 => { return 34; }
+// 25 => { return 33; }
+// 26 => { return 31; }
+// 27 => { return 30; }
+// 28 => { return 29; }
+// 29 => { return 28; }
+// 30 => { return 27; }
+// 31 => { return 25; }
+// 32 => { return 23; }
+// 33 => { return 21; }
+// 34 => { return 19; }
+// 35 => { return 17; }
+// 36 => { return 15; }
+// 37 => { return 13; }
+// 38 => { return 11; }
+// 39 => { return  9; }
+// 40 => { return  7; }
+// 41 => { return  6; }
+// 42 => { return  5; }
+// 43 => { return  4; }
+// 44 => { return  3; }
+// 45 => { return  2; }
+// 46 => { return  1; }
+// 47 => { return  0; }
+// 48 => { return  0; }
+// 49 => { return  0; }
+// 50 => { return  0; }
 // default:
 // log("SYSERR: Missing level for warrior spell saving throw.");
 // break;
@@ -1183,176 +1181,455 @@ pub fn parse_class(arg: char) -> i8 {
 // }
 
 /* THAC0 for classes and levels.  (To Hit Armor Class 0) */
-// int thaco(int class_num, int level)
-// {
-// switch (class_num) {
-// case CLASS_MAGIC_USER:
-// switch (level) {
-// case  0: return 100;
-// case  1: return  20;
-// case  2: return  20;
-// case  3: return  20;
-// case  4: return  19;
-// case  5: return  19;
-// case  6: return  19;
-// case  7: return  18;
-// case  8: return  18;
-// case  9: return  18;
-// case 10: return  17;
-// case 11: return  17;
-// case 12: return  17;
-// case 13: return  16;
-// case 14: return  16;
-// case 15: return  16;
-// case 16: return  15;
-// case 17: return  15;
-// case 18: return  15;
-// case 19: return  14;
-// case 20: return  14;
-// case 21: return  14;
-// case 22: return  13;
-// case 23: return  13;
-// case 24: return  13;
-// case 25: return  12;
-// case 26: return  12;
-// case 27: return  12;
-// case 28: return  11;
-// case 29: return  11;
-// case 30: return  11;
-// case 31: return  10;
-// case 32: return  10;
-// case 33: return  10;
-// case 34: return   9;
-// default:
-// log("SYSERR: Missing level for mage thac0.");
-// }
-// case CLASS_CLERIC:
-// switch (level) {
-// case  0: return 100;
-// case  1: return  20;
-// case  2: return  20;
-// case  3: return  20;
-// case  4: return  18;
-// case  5: return  18;
-// case  6: return  18;
-// case  7: return  16;
-// case  8: return  16;
-// case  9: return  16;
-// case 10: return  14;
-// case 11: return  14;
-// case 12: return  14;
-// case 13: return  12;
-// case 14: return  12;
-// case 15: return  12;
-// case 16: return  10;
-// case 17: return  10;
-// case 18: return  10;
-// case 19: return   8;
-// case 20: return   8;
-// case 21: return   8;
-// case 22: return   6;
-// case 23: return   6;
-// case 24: return   6;
-// case 25: return   4;
-// case 26: return   4;
-// case 27: return   4;
-// case 28: return   2;
-// case 29: return   2;
-// case 30: return   2;
-// case 31: return   1;
-// case 32: return   1;
-// case 33: return   1;
-// case 34: return   1;
-// default:
-// log("SYSERR: Missing level for cleric thac0.");
-// }
-// case CLASS_THIEF:
-// switch (level) {
-// case  0: return 100;
-// case  1: return  20;
-// case  2: return  20;
-// case  3: return  19;
-// case  4: return  19;
-// case  5: return  18;
-// case  6: return  18;
-// case  7: return  17;
-// case  8: return  17;
-// case  9: return  16;
-// case 10: return  16;
-// case 11: return  15;
-// case 12: return  15;
-// case 13: return  14;
-// case 14: return  14;
-// case 15: return  13;
-// case 16: return  13;
-// case 17: return  12;
-// case 18: return  12;
-// case 19: return  11;
-// case 20: return  11;
-// case 21: return  10;
-// case 22: return  10;
-// case 23: return   9;
-// case 24: return   9;
-// case 25: return   8;
-// case 26: return   8;
-// case 27: return   7;
-// case 28: return   7;
-// case 29: return   6;
-// case 30: return   6;
-// case 31: return   5;
-// case 32: return   5;
-// case 33: return   4;
-// case 34: return   4;
-// default:
-// log("SYSERR: Missing level for thief thac0.");
-// }
-// case CLASS_WARRIOR:
-// switch (level) {
-// case  0: return 100;
-// case  1: return  20;
-// case  2: return  19;
-// case  3: return  18;
-// case  4: return  17;
-// case  5: return  16;
-// case  6: return  15;
-// case  7: return  14;
-// case  8: return  14;
-// case  9: return  13;
-// case 10: return  12;
-// case 11: return  11;
-// case 12: return  10;
-// case 13: return   9;
-// case 14: return   8;
-// case 15: return   7;
-// case 16: return   6;
-// case 17: return   5;
-// case 18: return   4;
-// case 19: return   3;
-// case 20: return   2;
-// case 21: return   1;
-// case 22: return   1;
-// case 23: return   1;
-// case 24: return   1;
-// case 25: return   1;
-// case 26: return   1;
-// case 27: return   1;
-// case 28: return   1;
-// case 29: return   1;
-// case 30: return   1;
-// case 31: return   1;
-// case 32: return   1;
-// case 33: return   1;
-// case 34: return   1;
-// default:
-// log("SYSERR: Missing level for warrior thac0.");
-// }
-// default:
-// log("SYSERR: Unknown class in thac0 chart.");
-// }
-//
-// /* Will not get there unless something is wrong. */
-// return 100;
-// }
+pub fn thaco(class_num: i8, level: u8) -> i32 {
+    match class_num {
+        CLASS_MAGIC_USER => match level {
+            0 => {
+                return 100;
+            }
+            1 => {
+                return 20;
+            }
+            2 => {
+                return 20;
+            }
+            3 => {
+                return 20;
+            }
+            4 => {
+                return 19;
+            }
+            5 => {
+                return 19;
+            }
+            6 => {
+                return 19;
+            }
+            7 => {
+                return 18;
+            }
+            8 => {
+                return 18;
+            }
+            9 => {
+                return 18;
+            }
+            10 => {
+                return 17;
+            }
+            11 => {
+                return 17;
+            }
+            12 => {
+                return 17;
+            }
+            13 => {
+                return 16;
+            }
+            14 => {
+                return 16;
+            }
+            15 => {
+                return 16;
+            }
+            16 => {
+                return 15;
+            }
+            17 => {
+                return 15;
+            }
+            18 => {
+                return 15;
+            }
+            19 => {
+                return 14;
+            }
+            20 => {
+                return 14;
+            }
+            21 => {
+                return 14;
+            }
+            22 => {
+                return 13;
+            }
+            23 => {
+                return 13;
+            }
+            24 => {
+                return 13;
+            }
+            25 => {
+                return 12;
+            }
+            26 => {
+                return 12;
+            }
+            27 => {
+                return 12;
+            }
+            28 => {
+                return 11;
+            }
+            29 => {
+                return 11;
+            }
+            30 => {
+                return 11;
+            }
+            31 => {
+                return 10;
+            }
+            32 => {
+                return 10;
+            }
+            33 => {
+                return 10;
+            }
+            34 => {
+                return 9;
+            }
+            _ => {
+                error!("SYSERR: Missing level for mage thac0.");
+            }
+        },
+        CLASS_CLERIC => match level {
+            0 => {
+                return 100;
+            }
+            1 => {
+                return 20;
+            }
+            2 => {
+                return 20;
+            }
+            3 => {
+                return 20;
+            }
+            4 => {
+                return 18;
+            }
+            5 => {
+                return 18;
+            }
+            6 => {
+                return 18;
+            }
+            7 => {
+                return 16;
+            }
+            8 => {
+                return 16;
+            }
+            9 => {
+                return 16;
+            }
+            10 => {
+                return 14;
+            }
+            11 => {
+                return 14;
+            }
+            12 => {
+                return 14;
+            }
+            13 => {
+                return 12;
+            }
+            14 => {
+                return 12;
+            }
+            15 => {
+                return 12;
+            }
+            16 => {
+                return 10;
+            }
+            17 => {
+                return 10;
+            }
+            18 => {
+                return 10;
+            }
+            19 => {
+                return 8;
+            }
+            20 => {
+                return 8;
+            }
+            21 => {
+                return 8;
+            }
+            22 => {
+                return 6;
+            }
+            23 => {
+                return 6;
+            }
+            24 => {
+                return 6;
+            }
+            25 => {
+                return 4;
+            }
+            26 => {
+                return 4;
+            }
+            27 => {
+                return 4;
+            }
+            28 => {
+                return 2;
+            }
+            29 => {
+                return 2;
+            }
+            30 => {
+                return 2;
+            }
+            31 => {
+                return 1;
+            }
+            32 => {
+                return 1;
+            }
+            33 => {
+                return 1;
+            }
+            34 => {
+                return 1;
+            }
+            _ => {
+                error!("SYSERR: Missing level for cleric thac0.");
+            }
+        },
+        CLASS_THIEF => match level {
+            0 => {
+                return 100;
+            }
+            1 => {
+                return 20;
+            }
+            2 => {
+                return 20;
+            }
+            3 => {
+                return 19;
+            }
+            4 => {
+                return 19;
+            }
+            5 => {
+                return 18;
+            }
+            6 => {
+                return 18;
+            }
+            7 => {
+                return 17;
+            }
+            8 => {
+                return 17;
+            }
+            9 => {
+                return 16;
+            }
+            10 => {
+                return 16;
+            }
+            11 => {
+                return 15;
+            }
+            12 => {
+                return 15;
+            }
+            13 => {
+                return 14;
+            }
+            14 => {
+                return 14;
+            }
+            15 => {
+                return 13;
+            }
+            16 => {
+                return 13;
+            }
+            17 => {
+                return 12;
+            }
+            18 => {
+                return 12;
+            }
+            19 => {
+                return 11;
+            }
+            20 => {
+                return 11;
+            }
+            21 => {
+                return 10;
+            }
+            22 => {
+                return 10;
+            }
+            23 => {
+                return 9;
+            }
+            24 => {
+                return 9;
+            }
+            25 => {
+                return 8;
+            }
+            26 => {
+                return 8;
+            }
+            27 => {
+                return 7;
+            }
+            28 => {
+                return 7;
+            }
+            29 => {
+                return 6;
+            }
+            30 => {
+                return 6;
+            }
+            31 => {
+                return 5;
+            }
+            32 => {
+                return 5;
+            }
+            33 => {
+                return 4;
+            }
+            34 => {
+                return 4;
+            }
+            _ => {
+                error!("SYSERR: Missing level for thief thac0.");
+            }
+        },
+        CLASS_WARRIOR => match level {
+            0 => {
+                return 100;
+            }
+            1 => {
+                return 20;
+            }
+            2 => {
+                return 19;
+            }
+            3 => {
+                return 18;
+            }
+            4 => {
+                return 17;
+            }
+            5 => {
+                return 16;
+            }
+            6 => {
+                return 15;
+            }
+            7 => {
+                return 14;
+            }
+            8 => {
+                return 14;
+            }
+            9 => {
+                return 13;
+            }
+            10 => {
+                return 12;
+            }
+            11 => {
+                return 11;
+            }
+            12 => {
+                return 10;
+            }
+            13 => {
+                return 9;
+            }
+            14 => {
+                return 8;
+            }
+            15 => {
+                return 7;
+            }
+            16 => {
+                return 6;
+            }
+            17 => {
+                return 5;
+            }
+            18 => {
+                return 4;
+            }
+            19 => {
+                return 3;
+            }
+            20 => {
+                return 2;
+            }
+            21 => {
+                return 1;
+            }
+            22 => {
+                return 1;
+            }
+            23 => {
+                return 1;
+            }
+            24 => {
+                return 1;
+            }
+            25 => {
+                return 1;
+            }
+            26 => {
+                return 1;
+            }
+            27 => {
+                return 1;
+            }
+            28 => {
+                return 1;
+            }
+            29 => {
+                return 1;
+            }
+            30 => {
+                return 1;
+            }
+            31 => {
+                return 1;
+            }
+            32 => {
+                return 1;
+            }
+            33 => {
+                return 1;
+            }
+            34 => {
+                return 1;
+            }
+            _ => {
+                error!("SYSERR: Missing level for warrior thac0.");
+            }
+        },
+        _ => {
+            error!("SYSERR: Unknown class in thac0 chart.");
+        }
+    }
+    /* Will not get there unless something is wrong. */
+    100
+}
 
 /*
  * Roll the 6 stats for a character... each stat is made of the sum of
@@ -1481,7 +1758,7 @@ impl MainGlobals {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-fn advance_level(ch: &CharData, db: &DB) {
+pub fn advance_level(ch: &CharData, db: &DB) {
     //int add_hp, add_mana = 0, add_move = 0, i;
 
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
@@ -1547,23 +1824,23 @@ fn advance_level(ch: &CharData, db: &DB) {
  * that it would be easier to add more levels to your MUD.  This doesn't
  * really create a big performance hit because it's not used very often.
  */
-// int backstab_mult(int level)
-// {
-// if (level <= 0)
-// return 1;	  /* level 0 */
-// else if (level <= 7)
-// return 2;	  /* level 1 - 7 */
-// else if (level <= 13)
-// return 3;	  /* level 8 - 13 */
-// else if (level <= 20)
-// return 4;	  /* level 14 - 20 */
-// else if (level <= 28)
-// return 5;	  /* level 21 - 28 */
-// else if (level < LVL_IMMORT)
-// return 6;	  /* all remaining mortal levels */
-// else
-// return 20;	  /* immortals */
-// }
+pub fn backstab_mult(level: u8) -> i32 {
+    if level <= 0 {
+        return 1; /* level 0 */
+    } else if level <= 7 {
+        return 2; /* level 1 - 7 */
+    } else if level <= 13 {
+        return 3; /* level 8 - 13 */
+    } else if level <= 20 {
+        return 4; /* level 14 - 20 */
+    } else if level <= 28 {
+        return 5; /* level 21 - 28 */
+    } else if level < LVL_IMMORT as u8 {
+        return 6; /* all remaining mortal levels */
+    } else {
+        return 20; /* immortals */
+    }
+}
 
 /*
  * invalid_class is used by handler.c to determine if a piece of equipment is

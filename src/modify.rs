@@ -325,12 +325,12 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(d: Option<Rc<DescriptorData>>, msg: &str, keep_internal: bool) {
+pub fn page_string(d: Option<&Rc<DescriptorData>>, msg: &str, keep_internal: bool) {
     if d.is_none() {
         return;
     }
 
-    let d = d.as_ref().unwrap();
+    let d = d.unwrap();
 
     if msg.is_empty() {
         return;
@@ -349,62 +349,64 @@ pub fn page_string(d: Option<Rc<DescriptorData>>, msg: &str, keep_internal: bool
     }
 
     let actbuf = "";
-    show_string(d.clone(), actbuf);
+    show_string(d, actbuf);
 }
 
 /* The call that displays the next page. */
-fn show_string(d: Rc<DescriptorData>, input: &str) {
+fn show_string(d: &Rc<DescriptorData>, input: &str) {
     // char buffer[MAX_STRING_LENGTH], buf[MAX_INPUT_LENGTH];
     // int diff;
 
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
-    /* Q is for quit. :) */
-    let cmd = buf.chars().next().unwrap().to_ascii_lowercase();
-    if cmd == 'q' {
-        // free(d->showstr_vector);
-        d.showstr_vector.borrow_mut().clear();
-        d.showstr_count.set(0);
-        //     if d.showstr_head
-        //
-        // if (d->showstr_head) {
-        // free(d->showstr_head);
-        // d->showstr_head = NULL;
-        //}
-        return;
-    }
-    /* R is for refresh, so back up one page internally so we can display
-     * it again.
-     */
-    else if cmd == 'r' {
-        d.showstr_page.set(max(0, d.showstr_page.get() - 1));
-    }
-    /* B is for back, so back up two pages internally so we can display the
-     * correct page here.
-     */
-    else if cmd == 'b' {
-        d.showstr_page.set(max(0, d.showstr_page.get() - 2));
-    }
-    /* Feature to 'goto' a page.  Just type the number of the page and you
-     * are there!
-     */
-    else if cmd.is_digit(10) {
-        let nr = buf.parse::<i32>();
-        if nr.is_err() {
+    if !buf.is_empty() {
+        /* Q is for quit. :) */
+        let cmd = buf.chars().next().unwrap().to_ascii_lowercase();
+        if cmd == 'q' {
+            // free(d->showstr_vector);
+            d.showstr_vector.borrow_mut().clear();
+            d.showstr_count.set(0);
+            //     if d.showstr_head
+            //
+            // if (d->showstr_head) {
+            // free(d->showstr_head);
+            // d->showstr_head = NULL;
+            //}
+            return;
+        }
+        /* R is for refresh, so back up one page internally so we can display
+         * it again.
+         */
+        else if cmd == 'r' {
+            d.showstr_page.set(max(0, d.showstr_page.get() - 1));
+        }
+        /* B is for back, so back up two pages internally so we can display the
+         * correct page here.
+         */
+        else if cmd == 'b' {
+            d.showstr_page.set(max(0, d.showstr_page.get() - 2));
+        }
+        /* Feature to 'goto' a page.  Just type the number of the page and you
+         * are there!
+         */
+        else if cmd.is_digit(10) {
+            let nr = buf.parse::<i32>();
+            if nr.is_err() {
+                send_to_char(
+                    d.character.borrow().as_ref().unwrap().as_ref(),
+                    "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
+                );
+            }
+            d.showstr_page
+                .set(max(0, min(nr.unwrap() - 1, d.showstr_count.get() - 1)));
+        } else if !buf.is_empty() {
             send_to_char(
                 d.character.borrow().as_ref().unwrap().as_ref(),
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );
+            return;
         }
-        d.showstr_page
-            .set(max(0, min(nr.unwrap() - 1, d.showstr_count.get() - 1)));
-    } else if !buf.is_empty() {
-        send_to_char(
-            d.character.borrow().as_ref().unwrap().as_ref(),
-            "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
-        );
-        return;
     }
     /* If we're displaying the last page, just send it to the character, and
      * then free up the space we used.

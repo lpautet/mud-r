@@ -31,63 +31,62 @@
 // #define MAG_MANUAL	(1 << 10)
 //
 //
-// #define TYPE_UNDEFINED               (-1)
+pub const TYPE_UNDEFINED: i32 = -1;
 // #define SPELL_RESERVED_DBC            0  /* SKILL NUMBER ZERO -- RESERVED */
-//
-// /* PLAYER SPELLS -- Numbered from 1 to MAX_SPELLS */
-//
-// #define SPELL_ARMOR                   1 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_TELEPORT                2 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_BLESS                   3 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_BLINDNESS               4 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_BURNING_HANDS           5 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CALL_LIGHTNING          6 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CHARM                   7 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CHILL_TOUCH             8 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CLONE                   9 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_COLOR_SPRAY            10 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CONTROL_WEATHER        11 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CREATE_FOOD            12 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CREATE_WATER           13 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CURE_BLIND             14 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CURE_CRITIC            15 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CURE_LIGHT             16 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_CURSE                  17 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DETECT_ALIGN           18 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DETECT_INVIS           19 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DETECT_MAGIC           20 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DETECT_POISON          21 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DISPEL_EVIL            22 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_EARTHQUAKE             23 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_ENCHANT_WEAPON         24 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_ENERGY_DRAIN           25 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_FIREBALL               26 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_HARM                   27 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_HEAL                   28 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_INVISIBLE              29 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_LIGHTNING_BOLT         30 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_LOCATE_OBJECT          31 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_MAGIC_MISSILE          32 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_POISON                 33 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_PROT_FROM_EVIL         34 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_REMOVE_CURSE           35 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_SANCTUARY              36 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_SHOCKING_GRASP         37 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_SLEEP                  38 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_STRENGTH               39 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_SUMMON                 40 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_VENTRILOQUATE          41 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_WORD_OF_RECALL         42 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_REMOVE_POISON          43 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_SENSE_LIFE             44 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_ANIMATE_DEAD	     45 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_DISPEL_GOOD	     46 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_GROUP_ARMOR	     47 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_GROUP_HEAL	     48 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_GROUP_RECALL	     49 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_INFRAVISION	     50 /* Reserved Skill[] DO NOT CHANGE */
-// #define SPELL_WATERWALK		     51 /* Reserved Skill[] DO NOT CHANGE */
-// /* Insert new spells here, up to MAX_SPELLS */
+/* PLAYER SPELLS -- Numbered from 1 to MAX_SPELLS */
+
+pub const SPELL_ARMOR: i32 = 1; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_TELEPORT: i32 = 2; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_BLESS: i32 = 3; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_BLINDNESS: i32 = 4; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_BURNING_HANDS: i32 = 5; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CALL_LIGHTNING: i32 = 6; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CHARM: i32 = 7; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CHILL_TOUCH: i32 = 8; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CLONE: i32 = 9; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_COLOR_SPRAY: i32 = 10; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CONTROL_WEATHER: i32 = 11; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CREATE_FOOD: i32 = 12; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CREATE_WATER: i32 = 13; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CURE_BLIND: i32 = 14; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CURE_CRITIC: i32 = 15; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CURE_LIGHT: i32 = 16; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_CURSE: i32 = 17; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DETECT_ALIGN: i32 = 18; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DETECT_INVIS: i32 = 19; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DETECT_MAGIC: i32 = 20; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DETECT_POISON: i32 = 21; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DISPEL_EVIL: i32 = 22; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_EARTHQUAKE: i32 = 23; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_ENCHANT_WEAPON: i32 = 24; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_ENERGY_DRAIN: i32 = 25; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_FIREBALL: i32 = 26; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_HARM: i32 = 27; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_HEAL: i32 = 28; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_INVISIBLE: i32 = 29; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_LIGHTNING_BOLT: i32 = 30; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_LOCATE_OBJECT: i32 = 31; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_MAGIC_MISSILE: i32 = 32; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_POISON: i32 = 33; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_PROT_FROM_EVIL: i32 = 34; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_REMOVE_CURSE: i32 = 35; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_SANCTUARY: i32 = 36; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_SHOCKING_GRASP: i32 = 37; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_SLEEP: i32 = 38; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_STRENGTH: i32 = 39; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_SUMMON: i32 = 40; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_VENTRILOQUATE: i32 = 41; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_WORD_OF_RECALL: i32 = 42; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_REMOVE_POISON: i32 = 43; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_SENSE_LIFE: i32 = 44; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_ANIMATE_DEAD: i32 = 45; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_DISPEL_GOOD: i32 = 46; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_GROUP_ARMOR: i32 = 47; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_GROUP_HEAL: i32 = 48; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_GROUP_RECALL: i32 = 49; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_INFRAVISION: i32 = 50; /* Reserved Skill[] DO NOT CHANGE */
+pub const SPELL_WATERWALK: i32 = 51; /* Reserved Skill[] DO NOT CHANGE */
+/* Insert new spells here, up to MAX_SPELLS */
 // #define MAX_SPELLS		    130
 //
 /* PLAYER SKILLS - Numbered from MAX_SPELLS+1 to MAX_SKILLS */
@@ -121,28 +120,26 @@ pub const SKILL_TRACK: i32 = 140; /* Reserved Skill[] DO NOT CHANGE */
 //
 // #define TOP_SPELL_DEFINE	     299
 // /* NEW NPC/OBJECT SPELLS can be inserted here up to 299 */
-//
-//
-// /* WEAPON ATTACK TYPES */
-//
-// #define TYPE_HIT                     300
-// #define TYPE_STING                   301
-// #define TYPE_WHIP                    302
-// #define TYPE_SLASH                   303
-// #define TYPE_BITE                    304
-// #define TYPE_BLUDGEON                305
-// #define TYPE_CRUSH                   306
-// #define TYPE_POUND                   307
-// #define TYPE_CLAW                    308
-// #define TYPE_MAUL                    309
-// #define TYPE_THRASH                  310
-// #define TYPE_PIERCE                  311
-// #define TYPE_BLAST		     312
-// #define TYPE_PUNCH		     313
-// #define TYPE_STAB		     314
-//
+/* WEAPON ATTACK TYPES */
+
+pub const TYPE_HIT: i32 = 300;
+pub const TYPE_STING: i32 = 301;
+pub const TYPE_WHIP: i32 = 302;
+pub const TYPE_SLASH: i32 = 303;
+pub const TYPE_BITE: i32 = 304;
+pub const TYPE_BLUDGEON: i32 = 305;
+pub const TYPE_CRUSH: i32 = 306;
+pub const TYPE_POUND: i32 = 307;
+pub const TYPE_CLAW: i32 = 308;
+pub const TYPE_MAUL: i32 = 309;
+pub const TYPE_THRASH: i32 = 310;
+pub const TYPE_PIERCE: i32 = 311;
+pub const TYPE_BLAST: i32 = 312;
+pub const TYPE_PUNCH: i32 = 313;
+pub const TYPE_STAB: i32 = 314;
+
 // /* new attack types can be added here - up to TYPE_SUFFERING */
-// #define TYPE_SUFFERING		     399
+pub const TYPE_SUFFERING: i32 = 399;
 
 pub const SAVING_PARA: i32 = 0;
 pub const SAVING_ROD: i32 = 1;
@@ -196,16 +193,14 @@ pub const SAVING_SPELL: i32 = 4;
 // #define SPELL_TYPE_WAND    2
 // #define SPELL_TYPE_STAFF   3
 // #define SPELL_TYPE_SCROLL  4
-//
-//
-// /* Attacktypes with grammar */
-//
-// struct attack_hit_type {
-//     const char	*singular;
-//     const char	*plural;
-// };
-//
-//
+
+/* Attacktypes with grammar */
+
+pub struct AttackHitType {
+    pub singular: &'static str,
+    pub plural: &'static str,
+}
+
 // #define ASPELL(spellname) \
 // void	spellname(int level, struct char_data *ch, \
 // struct char_data *victim, struct obj_data *obj)

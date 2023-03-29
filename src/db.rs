@@ -7,36 +7,66 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
-use regex::Regex;
-
-use crate::modify::paginate_string;
-use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
-    CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MobRnum, MobSpecialData,
-    MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData,
-    PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomRnum, TimeData, TimeInfoData,
-    WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR, EX_LOCKED,
-    EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, LVL_GOD, LVL_IMMORT, LVL_IMPL,
-    MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH,
-    MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC,
-    MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING,
-    PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK,
-    SUN_LIGHT, SUN_RISE, SUN_SET,
-};
-use crate::util::{
-    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
-    CMP, NRM, SECS_PER_REAL_HOUR,
-};
-use crate::{check_player_special, get_last_tell_mut, MainGlobals};
-use log::{error, info, warn};
 use std::cell::{Cell, RefCell};
 use std::cmp::{max, min};
 use std::fs::{File, OpenOptions};
+use std::io::Read;
 use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::rc::Rc;
 use std::{fs, io, mem, process, slice};
+
+use log::{error, info, warn};
+use regex::Regex;
+
+use crate::{check_player_special, get_last_tell_mut, MainGlobals};
+// long get_id_by_name(const char *name)
+// {
+// int i;
+//
+// for (i = 0; i <= top_of_p_table; i++)
+// if (!str_cmp(player_table[i].name, name))
+// return (player_table[i].id);
+//
+// return (-1);
+// }
+//
+//
+// char *get_name_by_id(long id)
+// {
+// int i;
+//
+// for (i = 0; i <= top_of_p_table; i++)
+// if (player_table[i].id == id)
+// return (player_table[i].name);
+//
+// return (NULL);
+// }
+use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
+use crate::constants::{
+    ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
+};
+use crate::handler::fname;
+use crate::modify::paginate_string;
+use crate::structs::ConState::ConPlaying;
+use crate::structs::{
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
+    CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MessageList, MobRnum,
+    MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum,
+    PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomRnum, TimeData,
+    TimeInfoData, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR,
+    EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, LVL_GOD, LVL_IMMORT,
+    LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS,
+    MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
+    MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC,
+    POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING,
+    SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
+};
+use crate::util::{
+    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
+    CMP, NRM, SECS_PER_REAL_HOUR,
+};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -50,6 +80,13 @@ const IMMLIST_FILE: &str = "./text/immlist";
 const BACKGROUND_FILE: &str = "text/background";
 const POLICIES_FILE: &str = "text/policies";
 const HANDBOOK: &str = "text/handbook";
+
+pub const IDEA_FILE: &str = "./misc/ideas"; /* for the 'idea'-command	*/
+pub const TYPO_FILE: &str = "./misc/typos"; /*         'typo'		*/
+pub const BUG_FILE: &str = "./misc/bugs"; /*         'bug'		*/
+pub const MESS_FILE: &str = "./misc/messages"; /* damage messages		*/
+pub const SOCMESS_FILE: &str = "./misc/socials"; /* messages for social acts	*/
+pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 
 pub const KILLSCRIPT: &str = "./.killscript";
 
@@ -84,8 +121,8 @@ pub struct DB {
     /* zone table			 */
     //top_of_zone_table: RefCell<ZoneRnum>,
     /* top element of zone tab	 */
-    // struct message_list fight_messages[MAX_MESSAGES];	/* fighting messages	 */
-    //
+    pub(crate) fight_messages: Vec<MessageList>, /* fighting messages	 */
+
     player_table: RefCell<Vec<PlayerIndexElement>>,
     /* index to plr file	 */
     player_fl: RefCell<Option<File>>,
@@ -137,6 +174,8 @@ pub struct DB {
     pub reset_q: RefCell<Vec<ZoneRnum>>,
     pub extractions_pending: Cell<i32>,
     pub timer: Cell<u128>,
+    pub cmd_sort_info: Vec<usize>,
+    pub combat_list: RefCell<Vec<Rc<CharData>>>,
 }
 
 const REAL: i32 = 0;
@@ -436,6 +475,7 @@ impl DB {
             obj_proto: vec![],
             zone_table: RefCell::new(vec![]),
             //top_of_zone_table: RefCell::new(0),
+            fight_messages: vec![],
             player_table: RefCell::new(vec![]),
             player_fl: RefCell::new(None),
             //      top_of_p_table: RefCell::new(0),
@@ -463,6 +503,8 @@ impl DB {
             reset_q: RefCell::new(vec![]),
             extractions_pending: Cell::new(0),
             timer: Cell::new(0),
+            cmd_sort_info: vec![],
+            combat_list: RefCell::new(vec![]),
         }
     }
 
@@ -502,9 +544,9 @@ impl DB {
         info!("Generating player index.");
         ret.build_player_index();
 
-        // log("Loading fight messages.");
-        // load_messages();
-        //
+        info!("Loading fight messages.");
+        ret.load_messages();
+
         // log("Loading social messages.");
         // boot_social_messages();
         //
@@ -524,8 +566,8 @@ impl DB {
         // log("Assigning spell and skill levels.");
         // init_spell_levels();
         //
-        // log("Sorting command list and spells.");
-        // sort_commands();
+        info!("Sorting command list and spells.");
+        ret.sort_commands();
         // sort_spells();
         //
         // log("Booting mail system.");
@@ -2395,22 +2437,17 @@ impl DB {
 
         Some(rc)
     }
-}
 
-// /* create an object, and add it to the object list */
-// struct obj_data *create_obj(void)
-// {
-// struct obj_data *obj;
-//
-// CREATE(obj, struct obj_data, 1);
-// clear_object(obj);
-// obj->next = object_list;
-// object_list = obj;
-//
-// return (obj);
-// }
+    /* create an object, and add it to the object list */
+    pub fn create_obj(&self) -> Rc<ObjData> {
+        let mut obj = ObjData::new();
 
-impl DB {
+        clear_object(&mut obj);
+        let ret = Rc::from(obj);
+        self.object_list.borrow_mut().push(ret.clone());
+        ret
+    }
+
     /* create a new object from a prototype */
     fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
         let i = if _type == VIRTUAL {
@@ -2539,7 +2576,7 @@ impl DB {
         //struct char_data *mob = NULL;
         //struct obj_data * obj, *obj_to;
         let mut last_cmd = 0;
-        let mut obj: Option<Rc<ObjData>>;
+        let mut obj;
         let mut mob = None;
         for cmd_no in 0..self.zone_table.borrow()[zone as usize].cmd.len() {
             let zcmd = &self.zone_table.borrow()[zone as usize].cmd[cmd_no as usize];
@@ -2566,7 +2603,7 @@ impl DB {
                     /* read a mobile */
                     if self.mob_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         mob = self.read_mobile(zcmd.arg1 as MobVnum, REAL);
-                        self.char_to_room(mob.clone(), zcmd.arg3 as RoomRnum);
+                        self.char_to_room(mob.as_ref(), zcmd.arg3 as RoomRnum);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2578,7 +2615,7 @@ impl DB {
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         if zcmd.arg3 != NOWHERE as i32 {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.obj_to_room(obj, zcmd.arg3 as RoomRnum);
+                            self.obj_to_room(obj.as_ref(), zcmd.arg3 as RoomRnum);
                             last_cmd = 1;
                         } else {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
@@ -2607,7 +2644,7 @@ impl DB {
                             zcmd.command.set('*');
                             break;
                         }
-                        self.obj_to_obj(obj, obj_to);
+                        self.obj_to_obj(obj.as_ref(), obj_to.as_ref());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2665,7 +2702,7 @@ impl DB {
                             );
                         } else {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.equip_char(mob.clone(), obj, zcmd.arg3 as i8);
+                            self.equip_char(mob.as_ref(), obj.as_ref(), zcmd.arg3 as i8);
                             last_cmd = 1;
                         }
                     } else {
@@ -2805,36 +2842,6 @@ impl DB {
             .position(|pie| pie.name == name);
     }
 }
-
-// long get_id_by_name(const char *name)
-// {
-// int i;
-//
-// for (i = 0; i <= top_of_p_table; i++)
-// if (!str_cmp(player_table[i].name, name))
-// return (player_table[i].id);
-//
-// return (-1);
-// }
-//
-//
-// char *get_name_by_id(long id)
-// {
-// int i;
-//
-// for (i = 0; i <= top_of_p_table; i++)
-// if (player_table[i].id == id)
-// return (player_table[i].name);
-//
-// return (NULL);
-// }
-use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
-use crate::constants::{
-    ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
-};
-use crate::handler::fname;
-use crate::structs::ConState::ConPlaying;
-use std::io::Read;
 
 impl DB {
     /* Load a char, TRUE if loaded, FALSE if not */
@@ -4078,6 +4085,39 @@ impl CharData {
 }
 
 impl ObjData {
+    pub(crate) fn new() -> ObjData {
+        ObjData {
+            item_number: 0,
+            in_room: Cell::new(0),
+            obj_flags: ObjFlagData {
+                value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
+                type_flag: 0,
+                wear_flags: 0,
+                extra_flags: 0,
+                weight: Cell::new(0),
+                cost: 0,
+                cost_per_day: 0,
+                timer: Cell::new(0),
+                bitvector: 0,
+            },
+            affected: [ObjAffectedType {
+                location: 0,
+                modifier: 0,
+            }; 6],
+            name: "".to_string(),
+            description: "".to_string(),
+            short_description: "".to_string(),
+            action_description: "".to_string(),
+            ex_descriptions: vec![],
+            carried_by: RefCell::new(None),
+            worn_by: RefCell::new(None),
+            worn_on: Cell::new(0),
+            in_obj: RefCell::new(None),
+            contains: RefCell::new(vec![]),
+            next_content: RefCell::new(None),
+            next: RefCell::new(None),
+        }
+    }
     fn make_copy(&self) -> ObjData {
         let mut ret = ObjData {
             item_number: self.item_number,
