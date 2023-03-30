@@ -114,239 +114,362 @@
 // }
 // }
 // }
-//
-//
-//
-// int can_take_obj(struct char_data *ch, struct obj_data *obj)
-// {
-// if (IS_CARRYING_N(ch) >= CAN_CARRY_N(ch)) {
-// act("$p: you can't carry that many items.", FALSE, ch, obj, 0, TO_CHAR);
-// return (0);
-// } else if ((IS_CARRYING_W(ch) + GET_OBJ_WEIGHT(obj)) > CAN_CARRY_W(ch)) {
-// act("$p: you can't carry that much weight.", FALSE, ch, obj, 0, TO_CHAR);
-// return (0);
-// } else if (!(CAN_WEAR(obj, ITEM_WEAR_TAKE))) {
-// act("$p: you can't take that!", FALSE, ch, obj, 0, TO_CHAR);
-// return (0);
-// }
-// return (1);
-// }
-//
-//
-// void get_check_money(struct char_data *ch, struct obj_data *obj)
-// {
-// int value = GET_OBJ_VAL(obj, 0);
-//
-// if (GET_OBJ_TYPE(obj) != ITEM_MONEY || value <= 0)
-// return;
-//
-// extract_obj(obj);
-//
-// GET_GOLD(ch) += value;
-//
-// if (value == 1)
-// send_to_char(ch, "There was 1 coin.\r\n");
-// else
-// send_to_char(ch, "There were %d coins.\r\n", value);
-// }
-//
-//
-// void perform_get_from_container(struct char_data *ch, struct obj_data *obj,
-// struct obj_data *cont, int mode)
-// {
-// if (mode == FIND_OBJ_INV || can_take_obj(ch, obj)) {
-// if (IS_CARRYING_N(ch) >= CAN_CARRY_N(ch))
-// act("$p: you can't hold any more items.", FALSE, ch, obj, 0, TO_CHAR);
-// else {
-// obj_from_obj(obj);
-// obj_to_char(obj, ch);
-// act("You get $p from $P.", FALSE, ch, obj, cont, TO_CHAR);
-// act("$n gets $p from $P.", TRUE, ch, obj, cont, TO_ROOM);
-// get_check_money(ch, obj);
-// }
-// }
-// }
-//
-//
-// void get_from_container(struct char_data *ch, struct obj_data *cont,
-// char *arg, int mode, int howmany)
-// {
-// struct obj_data *obj, *next_obj;
-// int obj_dotmode, found = 0;
-//
-// obj_dotmode = find_all_dots(arg);
-//
-// if (OBJVAL_FLAGGED(cont, CONT_CLOSED))
-// act("$p is closed.", FALSE, ch, cont, 0, TO_CHAR);
-// else if (obj_dotmode == FIND_INDIV) {
-// if (!(obj = get_obj_in_list_vis(ch, arg, NULL, cont->contains))) {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "There doesn't seem to be %s %s in $p.", AN(arg), arg);
-// act(buf, FALSE, ch, cont, 0, TO_CHAR);
-// } else {
-// struct obj_data *obj_next;
-// while (obj && howmany--) {
-// obj_next = obj->next_content;
-// perform_get_from_container(ch, obj, cont, mode);
-// obj = get_obj_in_list_vis(ch, arg, NULL, obj_next);
-// }
-// }
-// } else {
-// if (obj_dotmode == FIND_ALLDOT && !*arg) {
-// send_to_char(ch, "Get all of what?\r\n");
-// return;
-// }
-// for (obj = cont->contains; obj; obj = next_obj) {
-// next_obj = obj->next_content;
-// if (CAN_SEE_OBJ(ch, obj) &&
-// (obj_dotmode == FIND_ALL || isname(arg, obj->name))) {
-// found = 1;
-// perform_get_from_container(ch, obj, cont, mode);
-// }
-// }
-// if (!found) {
-// if (obj_dotmode == FIND_ALL)
-// act("$p seems to be empty.", FALSE, ch, cont, 0, TO_CHAR);
-// else {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "You can't seem to find any %ss in $p.", arg);
-// act(buf, FALSE, ch, cont, 0, TO_CHAR);
-// }
-// }
-// }
-// }
-//
-//
-// int perform_get_from_room(struct char_data *ch, struct obj_data *obj)
-// {
-// if (can_take_obj(ch, obj)) {
-// obj_from_room(obj);
-// obj_to_char(obj, ch);
-// act("You get $p.", FALSE, ch, obj, 0, TO_CHAR);
-// act("$n gets $p.", TRUE, ch, obj, 0, TO_ROOM);
-// get_check_money(ch, obj);
-// return (1);
-// }
-// return (0);
-// }
-//
-//
-// void get_from_room(struct char_data *ch, char *arg, int howmany)
-// {
-// struct obj_data *obj, *next_obj;
-// int dotmode, found = 0;
-//
-// dotmode = find_all_dots(arg);
-//
-// if (dotmode == FIND_INDIV) {
-// if (!(obj = get_obj_in_list_vis(ch, arg, NULL, world[IN_ROOM(ch)].contents)))
-// send_to_char(ch, "You don't see %s %s here.\r\n", AN(arg), arg);
-// else {
-// struct obj_data *obj_next;
-// while(obj && howmany--) {
-// obj_next = obj->next_content;
-// perform_get_from_room(ch, obj);
-// obj = get_obj_in_list_vis(ch, arg, NULL, obj_next);
-// }
-// }
-// } else {
-// if (dotmode == FIND_ALLDOT && !*arg) {
-// send_to_char(ch, "Get all of what?\r\n");
-// return;
-// }
-// for (obj = world[IN_ROOM(ch)].contents; obj; obj = next_obj) {
-// next_obj = obj->next_content;
-// if (CAN_SEE_OBJ(ch, obj) &&
-// (dotmode == FIND_ALL || isname(arg, obj->name))) {
-// found = 1;
-// perform_get_from_room(ch, obj);
-// }
-// }
-// if (!found) {
-// if (dotmode == FIND_ALL)
-// send_to_char(ch, "There doesn't seem to be anything here.\r\n");
-// else
-// send_to_char(ch, "You don't see any %ss here.\r\n", arg);
-// }
-// }
-// }
-//
-//
-//
-// ACMD(do_get)
-// {
-// char arg1[MAX_INPUT_LENGTH];
-// char arg2[MAX_INPUT_LENGTH];
-// char arg3[MAX_INPUT_LENGTH];
-//
-// int cont_dotmode, found = 0, mode;
-// struct obj_data *cont;
-// struct char_data *tmp_char;
-//
-// one_argument(two_arguments(argument, arg1, arg2), arg3);	/* three_arguments */
-//
-// if (!*arg1)
-// send_to_char(ch, "Get what?\r\n");
-// else if (!*arg2)
-// get_from_room(ch, arg1, 1);
-// else if (is_number(arg1) && !*arg3)
-// get_from_room(ch, arg2, atoi(arg1));
-// else {
-// int amount = 1;
-// if (is_number(arg1)) {
-// amount = atoi(arg1);
-// strcpy(arg1, arg2);	/* strcpy: OK (sizeof: arg1 == arg2) */
-// strcpy(arg2, arg3);	/* strcpy: OK (sizeof: arg2 == arg3) */
-// }
-// cont_dotmode = find_all_dots(arg2);
-// if (cont_dotmode == FIND_INDIV) {
-// mode = generic_find(arg2, FIND_OBJ_INV | FIND_OBJ_ROOM, ch, &tmp_char, &cont);
-// if (!cont)
-// send_to_char(ch, "You don't have %s %s.\r\n", AN(arg2), arg2);
-// else if (GET_OBJ_TYPE(cont) != ITEM_CONTAINER)
-// act("$p is not a container.", FALSE, ch, cont, 0, TO_CHAR);
-// else
-// get_from_container(ch, cont, arg1, mode, amount);
-// } else {
-// if (cont_dotmode == FIND_ALLDOT && !*arg2) {
-// send_to_char(ch, "Get from all of what?\r\n");
-// return;
-// }
-// for (cont = ch->carrying; cont; cont = cont->next_content)
-// if (CAN_SEE_OBJ(ch, cont) &&
-// (cont_dotmode == FIND_ALL || isname(arg2, cont->name))) {
-// if (GET_OBJ_TYPE(cont) == ITEM_CONTAINER) {
-// found = 1;
-// get_from_container(ch, cont, arg1, FIND_OBJ_INV, amount);
-// } else if (cont_dotmode == FIND_ALLDOT) {
-// found = 1;
-// act("$p is not a container.", FALSE, ch, cont, 0, TO_CHAR);
-// }
-// }
-// for (cont = world[IN_ROOM(ch)].contents; cont; cont = cont->next_content)
-// if (CAN_SEE_OBJ(ch, cont) &&
-// (cont_dotmode == FIND_ALL || isname(arg2, cont->name))) {
-// if (GET_OBJ_TYPE(cont) == ITEM_CONTAINER) {
-// get_from_container(ch, cont, arg1, FIND_OBJ_ROOM, amount);
-// found = 1;
-// } else if (cont_dotmode == FIND_ALLDOT) {
-// act("$p is not a container.", FALSE, ch, cont, 0, TO_CHAR);
-// found = 1;
-// }
-// }
-// if (!found) {
-// if (cont_dotmode == FIND_ALL)
-// send_to_char(ch, "You can't seem to find any containers.\r\n");
-// else
-// send_to_char(ch, "You can't seem to find any %ss here.\r\n", arg2);
-// }
-// }
-// }
-// }
-//
-//
+
+use std::rc::Rc;
+
+use crate::db::DB;
+use crate::handler::{
+    find_all_dots, isname, FIND_ALL, FIND_ALLDOT, FIND_INDIV, FIND_OBJ_INV, FIND_OBJ_ROOM,
+};
+use crate::interpreter::{is_number, one_argument, two_arguments};
+use crate::structs::{CharData, ObjData, CONT_CLOSED, ITEM_CONTAINER, ITEM_MONEY, ITEM_WEAR_TAKE};
+use crate::util::clone_vec;
+use crate::{an, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+
+impl DB {
+    pub fn can_take_obj(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>) -> bool {
+        if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
+            self.act(
+                "$p: you can't carry that many items.",
+                false,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
+            return false;
+        } else if (ch.is_carrying_w() + obj.get_obj_weight()) > ch.can_carry_w() as i32 {
+            self.act(
+                "$p: you can't carry that much weight.",
+                false,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
+            return false;
+        } else if !obj.can_wear(ITEM_WEAR_TAKE) {
+            self.act(
+                "$p: you can't take that!",
+                false,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
+            return false;
+        }
+        true
+    }
+
+    pub fn get_check_money(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>) {
+        let value = obj.get_obj_val(0);
+
+        if obj.get_obj_type() != ITEM_MONEY || value <= 0 {
+            return;
+        }
+
+        self.extract_obj(obj);
+
+        ch.set_gold(ch.get_gold() + value);
+
+        if value == 1 {
+            send_to_char(ch, "There was 1 coin.\r\n");
+        } else {
+            send_to_char(ch, format!("There were {} coins.\r\n", value).as_str());
+        }
+    }
+
+    pub fn perform_get_from_container(
+        &self,
+        ch: &Rc<CharData>,
+        obj: &Rc<ObjData>,
+        cont: &Rc<ObjData>,
+        mode: i32,
+    ) {
+        if mode == FIND_OBJ_INV || self.can_take_obj(ch, obj) {
+            if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
+                self.act(
+                    "$p: you can't hold any more items.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_CHAR,
+                );
+            } else {
+                DB::obj_from_obj(obj);
+                DB::obj_to_char(Some(obj), Some(ch));
+                self.act(
+                    "You get $p from $P.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    Some(cont),
+                    TO_CHAR,
+                );
+                self.act(
+                    "$n gets $p from $P.",
+                    true,
+                    Some(ch),
+                    Some(obj),
+                    Some(cont),
+                    TO_ROOM,
+                );
+                self.get_check_money(ch, obj);
+            }
+        }
+    }
+
+    pub fn get_from_container(
+        &self,
+        ch: &Rc<CharData>,
+        cont: &Rc<ObjData>,
+        arg: &str,
+        mode: i32,
+        howmany: i32,
+    ) {
+        let mut found = false;
+
+        let mut howmany = howmany;
+        let obj_dotmode = find_all_dots(arg);
+
+        if cont.obj_flagged(CONT_CLOSED) {
+            self.act("$p is closed.", false, Some(ch), Some(cont), None, TO_CHAR);
+        } else if obj_dotmode == FIND_INDIV {
+            let mut obj = self.get_obj_in_list_vis(ch, arg, None, cont.contains.borrow());
+            if obj.is_none() {
+                let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
+                self.act(&buf, false, Some(ch), Some(cont), None, TO_CHAR);
+            } else {
+                while obj.is_some() && (howmany - 1) != 0 {
+                    howmany -= 1;
+                    self.perform_get_from_container(ch, obj.as_ref().unwrap(), cont, mode);
+                    obj = self.get_obj_in_list_vis(ch, arg, None, cont.contains.borrow());
+                }
+            }
+        } else {
+            if obj_dotmode == FIND_ALLDOT && arg.is_empty() {
+                send_to_char(ch, "Get all of what?\r\n");
+                return;
+            }
+            let list = clone_vec(&cont.contains);
+            for obj in list {
+                if self.can_see_obj(ch, &obj)
+                    && (obj_dotmode == FIND_ALL || isname(arg, &obj.name) != 0)
+                {
+                    found = true;
+                    self.perform_get_from_container(ch, &obj, cont, mode);
+                }
+            }
+            if !found {
+                if obj_dotmode == FIND_ALL {
+                    self.act(
+                        "$p seems to be empty.",
+                        false,
+                        Some(ch),
+                        Some(cont),
+                        None,
+                        TO_CHAR,
+                    );
+                } else {
+                    let buf = format!("You can't seem to find any {}s in $p.", arg);
+                    self.act(&buf, false, Some(ch), Some(cont), None, TO_CHAR);
+                }
+            }
+        }
+    }
+
+    pub fn perform_get_from_room(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>) -> bool {
+        if self.can_take_obj(ch, obj) {
+            self.obj_from_room(Some(obj));
+            DB::obj_to_char(Some(obj), Some(ch));
+            self.act("You get $p.", false, Some(ch), Some(obj), None, TO_CHAR);
+            self.act("$n gets $p.", true, Some(ch), Some(obj), None, TO_ROOM);
+            self.get_check_money(ch, obj);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn get_from_room(&self, ch: &Rc<CharData>, arg: &str, howmany: i32) {
+        // struct obj_data *obj, *next_obj;
+        // int dotmode, found = 0;
+        let mut found = false;
+        let mut howmany = howmany;
+        let dotmode = find_all_dots(arg);
+
+        if dotmode == FIND_INDIV {
+            let mut obj = self.get_obj_in_list_vis(
+                ch,
+                arg,
+                None,
+                self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            );
+            if obj.is_none() {
+                send_to_char(
+                    ch,
+                    format!("You don't see {} {} here.\r\n", an!(arg), arg).as_str(),
+                );
+            } else {
+                while obj.is_some() {
+                    howmany -= 1;
+                    if howmany == 0 {
+                        break;
+                    }
+                    self.perform_get_from_room(ch, obj.as_ref().unwrap());
+                    obj = self.get_obj_in_list_vis(
+                        ch,
+                        arg,
+                        None,
+                        self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                    );
+                }
+            }
+        } else {
+            if dotmode == FIND_ALLDOT && arg.is_empty() {
+                send_to_char(ch, "Get all of what?\r\n");
+                return;
+            }
+            for obj in self.world.borrow()[ch.in_room() as usize]
+                .contents
+                .borrow()
+                .iter()
+            {
+                if self.can_see_obj(ch, obj) && (dotmode == FIND_ALL || isname(arg, &obj.name) != 0)
+                {
+                    found = true;
+                    self.perform_get_from_room(ch, obj);
+                }
+            }
+            if !found {
+                if dotmode == FIND_ALL {
+                    send_to_char(ch, "There doesn't seem to be anything here.\r\n");
+                } else {
+                    send_to_char(ch, format!("You don't see any {}s here.\r\n", arg).as_str());
+                }
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg1 = String::new();
+    let mut arg2 = String::new();
+    let mut arg3 = String::new();
+    let mut tmp_char: Option<Rc<CharData>> = None;
+    let mut cont: Option<Rc<ObjData>> = None;
+
+    // int cont_dotmode, found = 0, mode;
+    // struct obj_data *cont;
+    // struct char_data *tmp_char;
+    let db = &game.db;
+    let mut found = false;
+    one_argument(two_arguments(argument, &mut arg1, &mut arg2), &mut arg3); /* three_arguments */
+
+    if arg1.is_empty() {
+        send_to_char(ch, "Get what?\r\n");
+    } else if arg2.is_empty() {
+        db.get_from_room(ch, &arg1, 1);
+    } else if is_number(&arg1) && arg3.is_empty() {
+        db.get_from_room(ch, &arg2, arg1.parse::<i32>().unwrap());
+    } else {
+        let mut amount = 1;
+        if is_number(&arg1) {
+            amount = arg1.parse::<i32>().unwrap();
+            arg1 = arg2; /* strcpy: OK (sizeof: arg1 == arg2) */
+            arg2 = arg3; /* strcpy: OK (sizeof: arg2 == arg3) */
+        }
+        let cont_dotmode = find_all_dots(&arg2);
+        if cont_dotmode == FIND_INDIV {
+            let mode = db.generic_find(
+                &arg2,
+                (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
+                ch,
+                &mut tmp_char,
+                &mut cont,
+            );
+            if cont.is_none() {
+                send_to_char(
+                    ch,
+                    format!("You don't have {} {}.\r\n", an!(&arg2), &arg2).as_str(),
+                );
+            } else if cont.as_ref().unwrap().get_obj_type() != ITEM_CONTAINER {
+                db.act(
+                    "$p is not a container.",
+                    false,
+                    Some(ch),
+                    Some(cont.as_ref().unwrap()),
+                    None,
+                    TO_CHAR,
+                );
+            } else {
+                db.get_from_container(ch, cont.as_ref().unwrap(), &arg1, mode, amount);
+            }
+        } else {
+            if cont_dotmode == FIND_ALLDOT && arg2.is_empty() {
+                send_to_char(ch, "Get from all of what?\r\n");
+                return;
+            }
+            for cont in ch.carrying.borrow().iter() {
+                if db.can_see_obj(ch, cont)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name) != 0)
+                {
+                    if cont.get_obj_type() == ITEM_CONTAINER {
+                        found = true;
+                        db.get_from_container(ch, cont, &arg1, FIND_OBJ_INV, amount);
+                    } else if cont_dotmode == FIND_ALLDOT {
+                        found = true;
+                        db.act(
+                            "$p is not a container.",
+                            false,
+                            Some(ch),
+                            Some(cont),
+                            None,
+                            TO_CHAR,
+                        );
+                    }
+                }
+            }
+            for cont in db.world.borrow()[ch.in_room() as usize]
+                .contents
+                .borrow()
+                .iter()
+            {
+                if db.can_see_obj(ch, cont)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name) != 0)
+                {
+                    if cont.get_obj_type() == ITEM_CONTAINER {
+                        db.get_from_container(ch, cont, &arg1, FIND_OBJ_ROOM, amount);
+                        found = true;
+                    } else if cont_dotmode == FIND_ALLDOT {
+                        db.act(
+                            "$p is not a container.",
+                            false,
+                            Some(ch),
+                            Some(cont),
+                            None,
+                            TO_CHAR,
+                        );
+                        found = true;
+                    }
+                }
+            }
+            if !found {
+                if cont_dotmode == FIND_ALL {
+                    send_to_char(ch, "You can't seem to find any containers.\r\n");
+                } else {
+                    send_to_char(
+                        ch,
+                        format!("You can't seem to find any {}s here.\r\n", &arg2).as_str(),
+                    );
+                }
+            }
+        }
+    }
+}
+
 // void perform_drop_gold(struct char_data *ch, int amount,
 // byte mode, room_rnum RDR)
 // {

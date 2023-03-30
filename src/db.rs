@@ -20,7 +20,7 @@ use std::{fs, io, mem, process, slice};
 use log::{error, info, warn};
 use regex::Regex;
 
-use crate::{check_player_special, get_last_tell_mut, MainGlobals};
+use crate::{check_player_special, get_last_tell_mut, main, MainGlobals};
 // long get_id_by_name(const char *name)
 // {
 // int i;
@@ -75,11 +75,11 @@ const IMOTD_FILE: &str = "./text/imotd";
 const GREETINGS_FILE: &str = "./text/greetings";
 const HELP_PAGE_FILE: &str = "./text./help/screen";
 const INFO_FILE: &str = "./text/info";
-const WIZLIST_FILE: &str = "./text/wilist";
+const WIZLIST_FILE: &str = "./text/wizlist";
 const IMMLIST_FILE: &str = "./text/immlist";
 const BACKGROUND_FILE: &str = "text/background";
 const POLICIES_FILE: &str = "text/policies";
-const HANDBOOK: &str = "text/handbook";
+const HANDBOOK_FILE: &str = "text/handbook";
 
 pub const IDEA_FILE: &str = "./misc/ideas"; /* for the 'idea'-command	*/
 pub const TYPO_FILE: &str = "./misc/typos"; /*         'typo'		*/
@@ -100,41 +100,30 @@ struct PlayerIndexElement {
 
 pub struct DB {
     pub world: RefCell<Vec<Rc<RoomData>>>,
-    //pub top_of_world: RefCell<RoomRnum>,
-    /* ref to top element of world	 */
     pub character_list: RefCell<Vec<Rc<CharData>>>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
     pub mob_protos: Vec<Rc<CharData>>,
     /* prototypes for mobs		 */
-    // mob_rnum top_of_mobt = 0;	/* top of mobile index table	 */
-    //
     pub object_list: RefCell<Vec<Rc<ObjData>>>,
     /* global linked list of objs	 */
     pub obj_index: Vec<IndexData>,
     /* index table for object file	 */
     pub obj_proto: Vec<Rc<ObjData>>,
     /* prototypes for objs		 */
-    // obj_rnum top_of_objt = 0;	/* top of object index table	 */
     zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
-    //top_of_zone_table: RefCell<ZoneRnum>,
-    /* top element of zone tab	 */
     pub(crate) fight_messages: Vec<MessageList>, /* fighting messages	 */
-
     player_table: RefCell<Vec<PlayerIndexElement>>,
     /* index to plr file	 */
     player_fl: RefCell<Option<File>>,
     /* file desc of player file	 */
-    //top_of_p_table: RefCell<i32>,
-    /* ref to top of table		 */
     top_idnum: Cell<i32>,
     /* highest idnum in use		 */
-    //
-    // int no_mail = 0;		/* mail disabled?		 */
-    // int mini_mud = 0;		/* mini-mud mode?		 */
-    // int no_rent_check = 0;		/* skip rent check on boot?	 */
+    pub no_mail: bool,       /* mail disabled?		 */
+    pub mini_mud: bool,      /* mini-mud mode?		 */
+    pub no_rent_check: bool, /* skip rent check on boot?	 */
     pub boot_time: Cell<u128>,
     /* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
@@ -144,23 +133,22 @@ pub struct DB {
     /* rnum of immort start room	 */
     pub r_frozen_start_room: RefCell<RoomRnum>,
     /* rnum of frozen start room	 */
-    //
-    // char *credits = NULL;		/* game credits			 */
-    // char *news = NULL;		/* mud news			 */
-    pub motd: String,
+    pub credits: Rc<str>, /* game credits			 */
+    pub news: Rc<str>,    /* mud news			 */
+    pub motd: Rc<str>,
     /* message of the day - mortals */
-    pub imotd: String,
+    pub imotd: Rc<str>,
     /* message of the day - immorts */
-    pub greetings: RefCell<String>,
+    pub greetings: Rc<str>,
     /* opening credits screen	*/
     // char *help = NULL;		/* help screen			 */
-    // char *info = NULL;		/* info page			 */
-    // char *wizlist = NULL;		/* list of higher gods		 */
-    // char *immlist = NULL;		/* list of peon gods		 */
-    pub background: String,
+    pub info: Rc<str>,    /* info page			 */
+    pub wizlist: Rc<str>, /* list of higher gods		 */
+    pub immlist: Rc<str>, /* list of peon gods		 */
+    pub background: Rc<str>,
     /* background story		 */
-    // char *handbook = NULL;		/* handbook for new immortals	 */
-    // char *policies = NULL;		/* policies page		 */
+    pub handbook: Rc<str>, /* handbook for new immortals	 */
+    pub policies: Rc<str>, /* policies page		 */
     //
     // struct help_index_element *help_table = 0;	/* the help table	 */
     // int top_of_helpt = 0;		/* top of help index table	 */
@@ -170,7 +158,6 @@ pub struct DB {
     pub weather_info: RefCell<WeatherData>,
     /* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
-    // struct reset_q_type reset_q;	/* queue of zones to be reset	 */
     pub reset_q: RefCell<Vec<ZoneRnum>>,
     pub extractions_pending: Cell<i32>,
     pub timer: Cell<u128>,
@@ -480,15 +467,25 @@ impl DB {
             player_fl: RefCell::new(None),
             //      top_of_p_table: RefCell::new(0),
             top_idnum: Cell::new(0),
+            no_mail: false,
+            mini_mud: false,
+            no_rent_check: false,
             boot_time: Cell::new(0),
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),
-            motd: "MOTD placeholder".to_string(),
-            imotd: "IMOTD placeholder".to_string(),
-            greetings: RefCell::new("Greetings Placeholder".parse().unwrap()),
-            background: "BACKGROUND placeholder".to_string(),
-            time_info: RefCell::new(TimeInfoData {
+            credits: Rc::from("CREDITS placeholder"),
+            news: Rc::from("NEWS placeholder"),
+            motd: Rc::from("MOTD placeholder"),
+            imotd: Rc::from("IMOTD placeholder"),
+            greetings: Rc::from("Greetings Placeholder"),
+            info: Rc::from(("INFO placeholder")),
+            wizlist: Rc::from("WIZLIST placeholder"),
+            immlist: Rc::from("IMMLIST placeholder"),
+            background: Rc::from("BACKGROUND placeholder"),
+            handbook: Rc::from("HANDOOK placeholder"),
+            policies: Rc::from("POLICIES placeholder"),
+            time_info: RefCell::from(TimeInfoData {
                 hours: 0,
                 day: 0,
                 month: 0,
@@ -518,20 +515,20 @@ impl DB {
         ret.reset_time();
 
         info!("Reading news, credits, help, bground, info & motds.");
-        // file_to_string_alloc(NEWS_FILE, &news);
-        // file_to_string_alloc(CREDITS_FILE, &credits);
+        main_globals.file_to_string_alloc(NEWS_FILE, &mut ret.news);
+        main_globals.file_to_string_alloc(CREDITS_FILE, &mut ret.credits);
         main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
         main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
-        // file_to_string_alloc(HELP_PAGE_FILE, &help);
-        // file_to_string_alloc(INFO_FILE, &info);
-        // file_to_string_alloc(WIZLIST_FILE, &wizlist);
-        // file_to_string_alloc(IMMLIST_FILE, &immlist);
-        // file_to_string_alloc(POLICIES_FILE, &policies);
-        // file_to_string_alloc(HANDBOOK_FILE, &handbook);
+        //main_globals.file_to_string_alloc(HELP_PAGE_FILE, &help);
+        main_globals.file_to_string_alloc(INFO_FILE, &mut ret.info);
+        main_globals.file_to_string_alloc(WIZLIST_FILE, &mut ret.wizlist);
+        main_globals.file_to_string_alloc(IMMLIST_FILE, &mut ret.immlist);
+        main_globals.file_to_string_alloc(POLICIES_FILE, &mut ret.policies);
+        main_globals.file_to_string_alloc(HANDBOOK_FILE, &mut ret.handbook);
         main_globals.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
-        if main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings.borrow_mut()) == 0 {
-            prune_crlf(&mut ret.greetings.borrow_mut());
-        }
+        main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings);
+        prune_crlf(&mut ret.greetings);
+
         //
         // log("Loading spell definitions.");
         // mag_assign_spells();
@@ -2668,7 +2665,7 @@ impl DB {
                     }
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                        DB::obj_to_char(obj, mob.clone());
+                        DB::obj_to_char(obj.as_ref(), mob.as_ref());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2720,7 +2717,7 @@ impl DB {
                             .as_ref(),
                     );
                     if obj.is_some() {
-                        self.extract_obj(obj.unwrap());
+                        self.extract_obj(obj.as_ref().unwrap());
                     }
                     last_cmd = 1;
                 }
@@ -3386,13 +3383,13 @@ fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
  * as to avoid special cases.
  */
 impl MainGlobals {
-    fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut String) -> i32 {
+    fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
         //int temppage;
         //char temp[MAX_STRING_LENGTH];
         //struct descriptor_data *in_use;
 
         for in_use in &*self.descriptor_list.borrow() {
-            if &in_use.showstr_vector.borrow_mut()[0].as_ref() == buf {
+            if &in_use.showstr_vector.borrow_mut()[0].as_ref() == &buf.as_ref() {
                 return -1;
             }
         }
@@ -3407,7 +3404,8 @@ impl MainGlobals {
         for in_use in &*self.descriptor_list.borrow() {
             // if (!in_use->showstr_count || *in_use->showstr_vector != *buf)
             // continue;
-            if in_use.showstr_count.get() == 0 || in_use.showstr_vector.borrow()[0].as_ref() != buf
+            if in_use.showstr_count.get() == 0
+                || in_use.showstr_vector.borrow()[0].as_ref() != buf.as_ref()
             {
                 continue;
             }
@@ -3417,7 +3415,7 @@ impl MainGlobals {
             in_use.showstr_page.set(temppage);
             paginate_string(in_use.showstr_head.borrow().as_ref().unwrap(), in_use);
         }
-        *buf = temp;
+        *buf = Rc::from(temp);
         return 0;
     }
 }

@@ -181,14 +181,14 @@ impl DB {
 
         let percent;
         if i.get_max_hit() > 0 {
-            percent = (100 * i.get_hit()) / i.get_max_hit();
+            percent = (100 * i.get_hit() as i32) / i.get_max_hit() as i32;
         } else {
             percent = -1; /* How could MAX_HIT be < 1?? */
         }
         let mut ar_index: usize = 0;
         loop {
             if DIAGNOSIS[ar_index].percent < 0
-                || percent >= DIAGNOSIS[ar_index as usize].percent as i16
+                || percent >= DIAGNOSIS[ar_index as usize].percent as i32
             {
                 break;
             }

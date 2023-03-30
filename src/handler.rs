@@ -465,10 +465,6 @@ impl DB {
                 }
             }
 
-            self.world.borrow()[room as usize]
-                .light
-                .replace(self.world.borrow()[room as usize].light.take() + 1);
-
             /* Stop fighting now, if we left. */
             if ch.fighting().is_some() && ch.in_room() != ch.fighting().as_ref().unwrap().in_room()
             {
@@ -479,7 +475,7 @@ impl DB {
     }
 
     /* give an object to a char   */
-    pub fn obj_to_char(object: Option<Rc<ObjData>>, ch: Option<Rc<CharData>>) {
+    pub fn obj_to_char(object: Option<&Rc<ObjData>>, ch: Option<&Rc<CharData>>) {
         if object.is_some() && ch.is_some() {
             let object = object.unwrap();
             let ch = ch.unwrap();
@@ -627,7 +623,7 @@ impl DB {
                 TO_ROOM,
             );
             /* Changed to drop in inventory instead of the ground. */
-            DB::obj_to_char(Some(obj.clone()), Some(ch.clone()));
+            DB::obj_to_char(Some(obj), Some(ch));
             return;
         }
 
@@ -812,7 +808,7 @@ impl DB {
     }
 
     /* Take an object from a room */
-    pub fn obj_from_room(&self, object: Option<Rc<ObjData>>) {
+    pub fn obj_from_room(&self, object: Option<&Rc<ObjData>>) {
         // struct obj_data *temp;
 
         if object.is_none() {
@@ -930,7 +926,7 @@ pub fn object_list_new_owner(obj: &Rc<ObjData>, ch: Option<Rc<CharData>>) {
 
 impl DB {
     /* Extract an object from the world */
-    pub fn extract_obj(&self, obj: Rc<ObjData>) {
+    pub fn extract_obj(&self, obj: &Rc<ObjData>) {
         if obj.worn_by.borrow().is_some() {
             if Rc::ptr_eq(
                 self.unequip_char(
@@ -946,7 +942,7 @@ impl DB {
         }
 
         if obj.in_room() != NOWHERE {
-            self.obj_from_room(Some(obj.clone()));
+            self.obj_from_room(Some(obj));
         } else if obj.carried_by.borrow().is_some() {
             obj_from_char(Some(obj.clone()));
         } else if obj.in_obj.borrow().is_some() {
@@ -958,7 +954,7 @@ impl DB {
             old_object_list.push(o.clone());
         }
         for o in old_object_list.iter() {
-            self.extract_obj(o.clone());
+            self.extract_obj(o);
         }
 
         self.object_list
@@ -1752,14 +1748,17 @@ impl DB {
     }
 }
 
-// /* a function to scan for "all" or "all.x" */
-// int find_all_dots(char *arg)
-// {
-// if (!strcmp(arg, "all"))
-// return (FIND_ALL);
-// else if (!strncmp(arg, "all.", 4)) {
-// strcpy(arg, arg + 4);	/* strcpy: OK (always less) */
-// return (FIND_ALLDOT);
-// } else
-// return (FIND_INDIV);
-// }
+pub const FIND_INDIV: u8 = 0;
+pub const FIND_ALL: u8 = 1;
+pub const FIND_ALLDOT: u8 = 2;
+
+/* a function to scan for "all" or "all.x" */
+pub fn find_all_dots(arg: &str) -> u8 {
+    if arg == "all" {
+        return FIND_ALL;
+    } else if arg.starts_with("all.") {
+        return FIND_ALLDOT;
+    } else {
+        return FIND_INDIV;
+    }
+}

@@ -73,8 +73,8 @@ impl DB {
                         }
                     }
                     if best_obj.is_some() {
-                        self.obj_from_room(Some(best_obj.as_ref().unwrap().clone()));
-                        DB::obj_to_char(Some(best_obj.as_ref().unwrap().clone()), Some(ch.clone()));
+                        self.obj_from_room(Some(best_obj.as_ref().unwrap()));
+                        DB::obj_to_char(Some(best_obj.as_ref().unwrap()), Some(ch));
                         self.act(
                             "$n gets $p.",
                             false,

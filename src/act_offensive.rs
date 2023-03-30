@@ -72,7 +72,7 @@ use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
 #[allow(unused_variables)]
 pub fn do_hit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
-    let mut vict: Option<Rc<CharData>>;
+    let vict: Option<Rc<CharData>>;
 
     one_argument(argument, &mut arg);
     let db = &game.db;
@@ -270,7 +270,7 @@ pub fn do_hit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
 // }
 // }
 // }
-
+#[allow(unused_variables)]
 pub fn do_flee(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
         send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
@@ -278,7 +278,7 @@ pub fn do_flee(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
     let db = &game.db;
     let was_fighting;
-    for i in 0..6 {
+    for _ in 0..6 {
         let attempt = rand_number(0, (NUM_OF_DIRS - 1) as u32); /* Select a random direction */
         if db.can_go(ch, attempt as usize)
             && !db.room_flagged(

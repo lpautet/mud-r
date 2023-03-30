@@ -512,7 +512,7 @@ impl DB {
                             //   core_dump();
                         }
                     }
-                    self.extract_obj(j.clone());
+                    self.extract_obj(j);
                 }
             }
         }

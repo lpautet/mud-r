@@ -861,6 +861,14 @@ impl ObjData {
     }
 }
 
+pub fn clone_vec<A: Clone>(from: &RefCell<Vec<A>>) -> Vec<A> {
+    let mut ret = vec![];
+    for e in from.borrow().iter() {
+        ret.push(e.clone());
+    }
+    ret
+}
+
 impl ObjData {
     pub fn objwear_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_wear(), flag)
@@ -1185,10 +1193,12 @@ pub fn dice(num: i32, size: i32) -> i32 {
 /*
  * Strips \r\n from end of string.
  */
-pub fn prune_crlf(s: &mut String) {
+pub fn prune_crlf(text: &mut Rc<str>) {
+    let mut s = text.to_string();
     while s.ends_with('\n') || s.ends_with('\r') {
         s.pop();
     }
+    *text = Rc::from(s.as_str());
 }
 
 /* log a death trap hit */

@@ -9,7 +9,6 @@
 ************************************************************************ */
 
 use std::borrow::Borrow;
-use std::cell::RefMut;
 use std::cmp::{max, min};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
@@ -225,7 +224,7 @@ impl DB {
                 .fight_messages
                 .iter()
                 .position(|fm| fm.a_type == a_type);
-            let mut ml;
+            let ml;
             let i;
             if fml.is_none() {
                 let nml = MessageList {
@@ -588,7 +587,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 
     let mut iter = str.chars();
     loop {
-        let mut c = iter.next();
+        let c = iter.next();
         if c.is_none() {
             break;
         }

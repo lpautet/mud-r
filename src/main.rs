@@ -1211,10 +1211,7 @@ impl MainGlobals {
         let rc = Rc::new(newd);
         RefCell::borrow_mut(&self.descriptor_list).push(rc.clone());
 
-        write_to_output(
-            rc.as_ref(),
-            format!("{}", self.db.greetings.borrow()).as_str(),
-        );
+        write_to_output(rc.as_ref(), format!("{}", self.db.greetings).as_str());
     }
 }
 
@@ -2178,8 +2175,12 @@ impl DB {
 
         loop {
             if orig.starts_with('$') {
-                orig = String::from(orig.remove(0));
-                match orig.chars().into_iter().next().unwrap() {
+                orig.remove(0);
+                match if orig.len() != 0 {
+                    orig.chars().next().unwrap()
+                } else {
+                    '\0'
+                } {
                     'n' => {
                         i = self.pers(ch.unwrap(), to);
                     }
@@ -2187,7 +2188,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            self.pers(vict_obj.unwrap().downcast_ref::<CharData>().unwrap(), to)
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                            if p.is_some() {
+                                self.pers(p.unwrap(), to)
+                            } else {
+                                Rc::from("<INV_CHAR_REV>")
+                            }
                         };
                     }
                     'm' => {
@@ -2197,7 +2203,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(hmhr(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                            if p.is_some() {
+                                Rc::from(hmhr(p.unwrap()))
+                            } else {
+                                Rc::from("<INV_CHAR_DATA>")
+                            }
                         };
                     }
                     's' => {
@@ -2207,7 +2218,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(hshr(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                            if p.is_some() {
+                                Rc::from(hshr(p.unwrap()))
+                            } else {
+                                Rc::from("<INV_CHAR_DATA>")
+                            }
                         };
                     }
                     'e' => {
@@ -2217,7 +2233,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(hssh(vict_obj.unwrap().downcast_ref::<CharData>().unwrap()))
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                            if p.is_some() {
+                                Rc::from(hssh(p.unwrap()))
+                            } else {
+                                Rc::from("<INV_CHAR_DATA>")
+                            }
                         };
                     }
                     'o' => {
@@ -2231,7 +2252,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            self.objn(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap(), to)
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
+                            if p.is_some() {
+                                self.objn(p.unwrap(), to)
+                            } else {
+                                Rc::from("<INV_OBJ_DATA>")
+                            }
                         };
                     }
                     'p' => {
@@ -2245,9 +2271,12 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(
-                                self.objs(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap(), to),
-                            )
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
+                            if p.is_some() {
+                                Rc::from(self.objs(p.unwrap(), to))
+                            } else {
+                                Rc::from("<INV_OBJ_REF>")
+                            }
                         };
                     }
                     'a' => {
@@ -2261,21 +2290,36 @@ impl DB {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(sana(vict_obj.unwrap().downcast_ref::<ObjData>().unwrap()))
+                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
+                            if p.is_some() {
+                                Rc::from(sana(p.unwrap()))
+                            } else {
+                                Rc::from("<INV_OBJ_REF>")
+                            }
                         };
                     }
                     'T' => {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            vict_obj.unwrap().downcast_ref::<Rc<str>>().unwrap().clone()
+                            let p = vict_obj.unwrap().downcast_ref::<String>();
+                            if p.is_some() {
+                                Rc::from(p.unwrap().as_str())
+                            } else {
+                                Rc::from("<INV_STR_REF>")
+                            }
                         };
                     }
                     'F' => {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            fname(vict_obj.unwrap().downcast_ref::<&str>().unwrap())
+                            let p = vict_obj.unwrap().downcast_ref::<String>();
+                            if p.is_some() {
+                                fname(p.unwrap())
+                            } else {
+                                Rc::from("<INV_STR_REF>")
+                            }
                         };
                     }
                     /* uppercase previous word */
@@ -2313,7 +2357,7 @@ impl DB {
                         buf.push(c);
                     }
                 }
-                orig = String::from(orig.remove(0));
+                orig.remove(0);
             } else {
                 if orig.len() == 0 {
                     break;
@@ -2329,8 +2373,8 @@ impl DB {
             }
         }
 
-        orig.pop();
-        orig.push_str("\r\n");
+        //orig.pop();
+        buf.push_str("\r\n");
 
         write_to_output(
             to.desc.borrow().as_ref().unwrap().as_ref(),
@@ -2343,7 +2387,7 @@ macro_rules! sendok {
     ($ch:expr, $to_sleeping:expr) => {
         (($ch).desc.borrow().is_some()
             && ($to_sleeping != 0 || ($ch).awake())
-            && (($ch).is_npc() || ($ch).plr_flagged(PLR_WRITING)))
+            && (($ch).is_npc() || !($ch).plr_flagged(PLR_WRITING)))
     };
 }
 
@@ -2390,9 +2434,15 @@ impl DB {
         }
 
         if _type == TO_VICT {
-            let to = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-            if to.is_some() && sendok!(to.unwrap(), to_sleeping) {
-                self.perform_act(str, ch, obj, vict_obj, to.unwrap());
+            if vict_obj.is_some() {
+                let to = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                if to.is_some() {
+                    if sendok!(to.unwrap(), to_sleeping) {
+                        self.perform_act(str, ch, obj, vict_obj, to.unwrap());
+                    }
+                } else {
+                    error!("Invalid CharData ref for victim! in act");
+                }
             }
             return;
         }
@@ -2415,12 +2465,25 @@ impl DB {
             if hide_invisible && ch.is_some() && !self.can_see(to.as_ref(), ch.as_ref().unwrap()) {
                 continue;
             }
-            if _type != TO_ROOM
-                && to.as_ref() as *const _
-                    == vict_obj.unwrap().downcast_ref::<CharData>().unwrap() as *const _
-            {
+            if vict_obj.is_none() {
                 continue;
             }
+            let same_chr;
+            if vict_obj.is_some() {
+                let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
+                if p.is_some() {
+                    same_chr = Rc::ptr_eq(to, p.as_ref().unwrap());
+                } else {
+                    error!("Error in act: invalid CharData ref");
+                    continue;
+                }
+            } else {
+                same_chr = false;
+            }
+            if _type != TO_ROOM && same_chr {
+                continue;
+            }
+
             self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), obj, vict_obj, to);
         }
     }

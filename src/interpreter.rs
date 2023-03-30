@@ -17,9 +17,10 @@ use log::error;
 use sha2::Sha256;
 
 use crate::act_informative::{
-    do_color, do_commands, do_consider, do_equipment, do_exits, do_gold, do_inventory, do_levels,
-    do_look, do_score, do_time, do_weather,
+    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_inventory,
+    do_levels, do_look, do_score, do_time, do_weather,
 };
+use crate::act_item::do_get;
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
 use crate::act_other::do_quit;
@@ -102,9 +103,10 @@ pub struct CommandInfo {
     subcmd: i32,
 }
 
+#[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 27] = [
+pub const CMD_INFO: [CommandInfo; 30] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -230,6 +232,13 @@ pub const CMD_INFO: [CommandInfo; 27] = [
     // { "dc"       , POS_DEAD    , do_dc       , LVL_GOD, 0 },
     // { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
     // { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
+    CommandInfo {
+        command: "diagnose",
+        minimum_position: POS_RESTING,
+        command_pointer: do_diagnose,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "display"  , POS_DEAD    , do_display  , 0, 0 },
     // { "donate"   , POS_RESTING , do_drop     , 0, SCMD_DONATE },
     // { "drink"    , POS_RESTING , do_drink    , 0, SCMD_DRINK },
@@ -281,6 +290,13 @@ pub const CMD_INFO: [CommandInfo; 27] = [
     // { "fume"     , POS_RESTING , do_action   , 0, 0 },
     //
     // { "get"      , POS_RESTING , do_get      , 0, 0 },
+    CommandInfo {
+        command: "get",
+        minimum_position: POS_RESTING,
+        command_pointer: do_get,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "gasp"     , POS_RESTING , do_action   , 0, 0 },
     // { "gecho"    , POS_DEAD    , do_gecho    , LVL_GOD, 0 },
     // { "give"     , POS_RESTING , do_give     , 0, 0 },
@@ -537,6 +553,13 @@ pub const CMD_INFO: [CommandInfo; 27] = [
     // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
     // { "tackle"   , POS_RESTING , do_action   , 0, 0 },
     // { "take"     , POS_RESTING , do_get      , 0, 0 },
+    CommandInfo {
+        command: "take",
+        minimum_position: POS_RESTING,
+        command_pointer: do_get,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "tango"    , POS_STANDING, do_action   , 0, 0 },
     // { "taunt"    , POS_RESTING , do_action   , 0, 0 },
     // { "taste"    , POS_RESTING , do_eat      , 0, SCMD_TASTE },
@@ -941,14 +964,9 @@ pub fn search_block(arg: &str, list: &[&str], exact: bool) -> Option<usize> {
     };
 }
 
-// int is_number(const char *str)
-// {
-// while (*str)
-// if (!isdigit(*(str++)))
-// return (0);
-//
-// return (1);
-// }
+pub fn is_number(txt: &str) -> bool {
+    return txt.parse::<i32>().is_ok();
+}
 
 /*
  * Function to skip over the leading spaces of a string.
@@ -1084,10 +1102,13 @@ pub fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a 
  * Same as one_argument except that it takes two args and returns the rest;
  * ignores FILL words
  */
-// char *two_arguments(char *argument, char *first_arg, char *second_arg)
-// {
-// return (one_argument(one_argument(argument, first_arg), second_arg)); /* :-) */
-// }
+pub fn two_arguments<'a>(
+    argument: &'a str,
+    first_arg: &mut String,
+    second_arg: &mut String,
+) -> &'a str {
+    return one_argument(one_argument(argument, first_arg), second_arg); /* :-) */
+}
 
 /*
  * determine if a given string is an abbreviation of another
@@ -1601,9 +1622,9 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     level = character.get_level();
                 }
                 if level >= LVL_IMMORT as u8 {
-                    write_to_output(d.as_ref(), db.imotd.as_str());
+                    write_to_output(d.as_ref(), &db.imotd);
                 } else {
-                    write_to_output(d.as_ref(), db.motd.as_str());
+                    write_to_output(d.as_ref(), &db.motd);
                 }
 
                 {
@@ -1768,7 +1789,11 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             // load_room;
             let och = d.character.borrow();
             let character = och.as_ref().unwrap();
-            match arg.chars().last().unwrap() {
+            match if arg.chars().last().is_some() {
+                arg.chars().last().unwrap()
+            } else {
+                '\0'
+            } {
                 '0' => {
                     write_to_output(d.as_ref(), "Goodbye.\r\n");
                     d.set_state(ConClose);
