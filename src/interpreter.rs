@@ -20,7 +20,7 @@ use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_inventory,
     do_levels, do_look, do_score, do_time, do_weather,
 };
-use crate::act_item::do_get;
+use crate::act_item::{do_drop, do_get};
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
 use crate::act_other::do_quit;
@@ -73,6 +73,11 @@ pub const SCMD_COMMANDS: i32 = 0;
 pub const SCMD_SOCIALS: i32 = 1;
 pub const SCMD_WIZHELP: i32 = 2;
 
+/* do_drop */
+pub const SCMD_DROP: u8 = 0;
+pub const SCMD_JUNK: u8 = 1;
+pub const SCMD_DONATE: u8 = 2;
+
 /* do_hit */
 pub const SCMD_HIT: i32 = 0;
 pub const SCMD_MURDER: i32 = 1;
@@ -106,7 +111,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 30] = [
+pub const CMD_INFO: [CommandInfo; 33] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -241,8 +246,22 @@ pub const CMD_INFO: [CommandInfo; 30] = [
     },
     // { "display"  , POS_DEAD    , do_display  , 0, 0 },
     // { "donate"   , POS_RESTING , do_drop     , 0, SCMD_DONATE },
+    CommandInfo {
+        command: "donate",
+        minimum_position: POS_RESTING,
+        command_pointer: do_drop,
+        minimum_level: 0,
+        subcmd: SCMD_DONATE as i32,
+    },
     // { "drink"    , POS_RESTING , do_drink    , 0, SCMD_DRINK },
     // { "drop"     , POS_RESTING , do_drop     , 0, SCMD_DROP },
+    CommandInfo {
+        command: "drop",
+        minimum_position: POS_RESTING,
+        command_pointer: do_drop,
+        minimum_level: 0,
+        subcmd: SCMD_DROP as i32,
+    },
     // { "drool"    , POS_RESTING , do_action   , 0, 0 },
     //
     // { "eat"      , POS_RESTING , do_eat      , 0, SCMD_EAT },
@@ -360,7 +379,13 @@ pub const CMD_INFO: [CommandInfo; 30] = [
     // { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
     //
     // { "junk"     , POS_RESTING , do_drop     , 0, SCMD_JUNK },
-    //
+    CommandInfo {
+        command: "junk",
+        minimum_position: POS_RESTING,
+        command_pointer: do_drop,
+        minimum_level: 0,
+        subcmd: SCMD_JUNK as i32,
+    },
     // { "kill"     , POS_FIGHTING, do_kill     , 0, 0 },
     // { "kick"     , POS_FIGHTING, do_kick     , 1, 0 },
     // { "kiss"     , POS_RESTING , do_action   , 0, 0 },
@@ -1028,6 +1053,7 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
     // *first_arg = '\0';
     // return (NULL);
     // }
+    let mut ret;
     loop {
         let mut argument = argument.trim_start();
         first_arg.clear();
@@ -1041,13 +1067,13 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
             i += 1;
         }
 
-        argument = &argument[0..i];
+        ret = &argument[i..];
         if !fill_word(first_arg.as_str()) {
             break;
         }
     }
 
-    return argument;
+    ret
 }
 
 /*

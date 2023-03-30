@@ -336,7 +336,7 @@ pub struct CharData {
     /* For room->people - list         */
     pub next: RefCell<Option<Rc<CharData>>>,
     /* For either monster or ppl-list  */
-    pub next_fighting: RefCell<Option<Rc<CharData>>>,
+    // pub next_fighting: RefCell<Option<Rc<CharData>>>,
     /* For fighting list               */
     pub followers: RefCell<Vec<FollowType>>,
     /* List of chars followers       */

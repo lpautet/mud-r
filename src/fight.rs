@@ -346,7 +346,8 @@ impl DB {
     /* remove a char from the list of fighting chars */
     pub fn stop_fighting(&self, ch: &Rc<CharData>) {
         self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
-        *ch.next_fighting.borrow_mut() = None;
+        // *ch.next_fighting.borrow_mut() = None;
+        ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
 
         update_pos(ch);

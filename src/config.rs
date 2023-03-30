@@ -163,7 +163,7 @@ pub const FROZEN_START_ROOM: RoomRnum = 1202;
 * do_drop of act.item.c if you change the number of non-NOWHERE
 * donation rooms.
 */
-// RoomRnum donation_room_1 = 3063;
+pub const DONATION_ROOM_1: RoomRnum = 3063;
 // RoomRnum donation_room_2 = NOWHERE;	/* unused - room for expansion */
 // RoomRnum donation_room_3 = NOWHERE;	/* unused - room for expansion */
 /****************************************************************************/

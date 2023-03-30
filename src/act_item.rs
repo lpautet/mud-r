@@ -115,15 +115,25 @@
 // }
 // }
 
+use std::cmp::{max, min};
 use std::rc::Rc;
 
+use log::error;
+
+use crate::config::DONATION_ROOM_1;
 use crate::db::DB;
 use crate::handler::{
-    find_all_dots, isname, FIND_ALL, FIND_ALLDOT, FIND_INDIV, FIND_OBJ_INV, FIND_OBJ_ROOM,
+    find_all_dots, isname, money_desc, obj_from_char, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
+    FIND_OBJ_INV, FIND_OBJ_ROOM,
 };
-use crate::interpreter::{is_number, one_argument, two_arguments};
-use crate::structs::{CharData, ObjData, CONT_CLOSED, ITEM_CONTAINER, ITEM_MONEY, ITEM_WEAR_TAKE};
-use crate::util::clone_vec;
+use crate::interpreter::{
+    is_number, one_argument, two_arguments, SCMD_DONATE, SCMD_DROP, SCMD_JUNK,
+};
+use crate::structs::{
+    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_MONEY, ITEM_NODONATE,
+    ITEM_NODROP, ITEM_WEAR_TAKE, NOWHERE, PULSE_VIOLENCE,
+};
+use crate::util::{clone_vec, rand_number};
 use crate::{an, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
 
 impl DB {
@@ -242,7 +252,7 @@ impl DB {
                 let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
                 self.act(&buf, false, Some(ch), Some(cont), None, TO_CHAR);
             } else {
-                while obj.is_some() && (howmany - 1) != 0 {
+                while obj.is_some() && howmany != 0 {
                     howmany -= 1;
                     self.perform_get_from_container(ch, obj.as_ref().unwrap(), cont, mode);
                     obj = self.get_obj_in_list_vis(ch, arg, None, cont.contains.borrow());
@@ -313,10 +323,10 @@ impl DB {
                 );
             } else {
                 while obj.is_some() {
-                    howmany -= 1;
                     if howmany == 0 {
                         break;
                     }
+                    howmany -= 1;
                     self.perform_get_from_room(ch, obj.as_ref().unwrap());
                     obj = self.get_obj_in_list_vis(
                         ch,
@@ -470,205 +480,287 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-// void perform_drop_gold(struct char_data *ch, int amount,
-// byte mode, room_rnum RDR)
-// {
-// struct obj_data *obj;
-//
-// if (amount <= 0)
-// send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
-// else if (GET_GOLD(ch) < amount)
-// send_to_char(ch, "You don't have that many coins!\r\n");
-// else {
-// if (mode != SCMD_JUNK) {
-// WAIT_STATE(ch, PULSE_VIOLENCE);	/* to prevent coin-bombing */
-// obj = create_money(amount);
-// if (mode == SCMD_DONATE) {
-// send_to_char(ch, "You throw some gold into the air where it disappears in a puff of smoke!\r\n");
-// act("$n throws some gold into the air where it disappears in a puff of smoke!",
-// FALSE, ch, 0, 0, TO_ROOM);
-// obj_to_room(obj, RDR);
-// act("$p suddenly appears in a puff of orange smoke!", 0, 0, obj, 0, TO_ROOM);
-// } else {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "$n drops %s.", money_desc(amount));
-// act(buf, TRUE, ch, 0, 0, TO_ROOM);
-//
-// send_to_char(ch, "You drop some gold.\r\n");
-// obj_to_room(obj, IN_ROOM(ch));
-// }
-// } else {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "$n drops %s which disappears in a puff of smoke!", money_desc(amount));
-// act(buf, FALSE, ch, 0, 0, TO_ROOM);
-//
-// send_to_char(ch, "You drop some gold which disappears in a puff of smoke!\r\n");
-// }
-// GET_GOLD(ch) -= amount;
-// }
-// }
-//
-//
-// #define VANISH(mode) ((mode == SCMD_DONATE || mode == SCMD_JUNK) ? \
-// "  It vanishes in a puff of smoke!" : "")
-//
-// int perform_drop(struct char_data *ch, struct obj_data *obj,
-// byte mode, const char *sname, room_rnum RDR)
-// {
-// char buf[MAX_STRING_LENGTH];
-// int value;
-//
-// if (OBJ_FLAGGED(obj, ITEM_NODROP)) {
-// snprintf(buf, sizeof(buf), "You can't %s $p, it must be CURSED!", sname);
-// act(buf, FALSE, ch, obj, 0, TO_CHAR);
-// return (0);
-// }
-//
-// snprintf(buf, sizeof(buf), "You %s $p.%s", sname, VANISH(mode));
-// act(buf, FALSE, ch, obj, 0, TO_CHAR);
-//
-// snprintf(buf, sizeof(buf), "$n %ss $p.%s", sname, VANISH(mode));
-// act(buf, TRUE, ch, obj, 0, TO_ROOM);
-//
-// obj_from_char(obj);
-//
-// if ((mode == SCMD_DONATE) && OBJ_FLAGGED(obj, ITEM_NODONATE))
-// mode = SCMD_JUNK;
-//
-// switch (mode) {
-// case SCMD_DROP:
-// obj_to_room(obj, IN_ROOM(ch));
-// return (0);
-// case SCMD_DONATE:
-// obj_to_room(obj, RDR);
-// act("$p suddenly appears in a puff a smoke!", FALSE, 0, obj, 0, TO_ROOM);
-// return (0);
-// case SCMD_JUNK:
-// value = MAX(1, MIN(200, GET_OBJ_COST(obj) / 16));
-// extract_obj(obj);
-// return (value);
-// default:
-// log("SYSERR: Incorrect argument %d passed to perform_drop.", mode);
-// break;
-// }
-//
-// return (0);
-// }
-//
-//
-//
-// ACMD(do_drop)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct obj_data *obj, *next_obj;
-// room_rnum RDR = 0;
-// byte mode = SCMD_DROP;
-// int dotmode, amount = 0, multi;
-// const char *sname;
-//
-// switch (subcmd) {
-// case SCMD_JUNK:
-// sname = "junk";
-// mode = SCMD_JUNK;
-// break;
-// case SCMD_DONATE:
-// sname = "donate";
-// mode = SCMD_DONATE;
-// switch (rand_number(0, 2)) {
-// case 0:
-// mode = SCMD_JUNK;
-// break;
-// case 1:
-// case 2:
-// RDR = real_room(donation_room_1);
-// break;
-// /*    case 3: RDR = real_room(donation_room_2); break;
-//       case 4: RDR = real_room(donation_room_3); break;
-// */
-// }
-// if (RDR == NOWHERE) {
-// send_to_char(ch, "Sorry, you can't donate anything right now.\r\n");
-// return;
-// }
-// break;
-// default:
-// sname = "drop";
-// break;
-// }
-//
-// argument = one_argument(argument, arg);
-//
-// if (!*arg) {
-// send_to_char(ch, "What do you want to %s?\r\n", sname);
-// return;
-// } else if (is_number(arg)) {
-// multi = atoi(arg);
-// one_argument(argument, arg);
-// if (!str_cmp("coins", arg) || !str_cmp("coin", arg))
-// perform_drop_gold(ch, multi, mode, RDR);
-// else if (multi <= 0)
-// send_to_char(ch, "Yeah, that makes sense.\r\n");
-// else if (!*arg)
-// send_to_char(ch, "What do you want to %s %d of?\r\n", sname, multi);
-// else if (!(obj = get_obj_in_list_vis(ch, arg, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have any %ss.\r\n", arg);
-// else {
-// do {
-// next_obj = get_obj_in_list_vis(ch, arg, NULL, obj->next_content);
-// amount += perform_drop(ch, obj, mode, sname, RDR);
-// obj = next_obj;
-// } while (obj && --multi);
-// }
-// } else {
-// dotmode = find_all_dots(arg);
-//
-// /* Can't junk or donate all */
-// if ((dotmode == FIND_ALL) && (subcmd == SCMD_JUNK || subcmd == SCMD_DONATE)) {
-// if (subcmd == SCMD_JUNK)
-// send_to_char(ch, "Go to the dump if you want to junk EVERYTHING!\r\n");
-// else
-// send_to_char(ch, "Go do the donation room if you want to donate EVERYTHING!\r\n");
-// return;
-// }
-// if (dotmode == FIND_ALL) {
-// if (!ch->carrying)
-// send_to_char(ch, "You don't seem to be carrying anything.\r\n");
-// else
-// for (obj = ch->carrying; obj; obj = next_obj) {
-// next_obj = obj->next_content;
-// amount += perform_drop(ch, obj, mode, sname, RDR);
-// }
-// } else if (dotmode == FIND_ALLDOT) {
-// if (!*arg) {
-// send_to_char(ch, "What do you want to %s all of?\r\n", sname);
-// return;
-// }
-// if (!(obj = get_obj_in_list_vis(ch, arg, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have any %ss.\r\n", arg);
-//
-// while (obj) {
-// next_obj = get_obj_in_list_vis(ch, arg, NULL, obj->next_content);
-// amount += perform_drop(ch, obj, mode, sname, RDR);
-// obj = next_obj;
-// }
-// } else {
-// if (!(obj = get_obj_in_list_vis(ch, arg, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg), arg);
-// else
-// amount += perform_drop(ch, obj, mode, sname, RDR);
-// }
-// }
-//
-// if (amount && (subcmd == SCMD_JUNK)) {
-// send_to_char(ch, "You have been rewarded by the gods!\r\n");
-// act("$n has been rewarded by the gods!", TRUE, ch, 0, 0, TO_ROOM);
-// GET_GOLD(ch) += amount;
-// }
-// }
-//
-//
+impl DB {
+    pub fn perform_drop_gold(&self, ch: &Rc<CharData>, amount: i32, mode: u8, RDR: RoomRnum) {
+        if amount <= 0 {
+            send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
+        } else if ch.get_gold() < amount {
+            send_to_char(ch, "You don't have that many coins!\r\n");
+        } else {
+            if mode != SCMD_JUNK as u8 {
+                ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
+
+                let obj = self.create_money(amount);
+                if mode == SCMD_DONATE as u8 {
+                    send_to_char(ch, "You throw some gold into the air where it disappears in a puff of smoke!\r\n");
+                    self.act(
+                        "$n throws some gold into the air where it disappears in a puff of smoke!",
+                        false,
+                        Some(ch),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                    self.obj_to_room(obj.as_ref(), RDR);
+                    self.act(
+                        "$p suddenly appears in a puff of orange smoke!",
+                        false,
+                        None,
+                        obj.as_ref(),
+                        None,
+                        TO_ROOM,
+                    );
+                } else {
+                    let buf = format!("$n drops {}.", money_desc(amount));
+                    self.act(&buf, true, Some(ch), None, None, TO_ROOM);
+
+                    send_to_char(ch, "You drop some gold.\r\n");
+                    self.obj_to_room(obj.as_ref(), ch.in_room());
+                }
+            } else {
+                let buf = format!(
+                    "$n drops {} which disappears in a puff of smoke!",
+                    money_desc(amount)
+                );
+                self.act(&buf, false, Some(ch), None, None, TO_ROOM);
+
+                send_to_char(
+                    ch,
+                    "You drop some gold which disappears in a puff of smoke!\r\n",
+                );
+            }
+            ch.set_gold(ch.get_gold() - amount);
+        }
+    }
+}
+
+macro_rules! vanish {
+    ($mode:expr) => {
+        (if $mode == SCMD_DONATE as u8 || $mode == SCMD_JUNK as u8 {
+            "  It vanishes in a puff of smoke!"
+        } else {
+            ""
+        })
+    };
+}
+
+impl DB {
+    pub fn perform_drop(
+        &self,
+        ch: &Rc<CharData>,
+        obj: &Rc<ObjData>,
+        mut mode: u8,
+        sname: &str,
+        RDR: RoomRnum,
+    ) -> i32 {
+        if obj.obj_flagged(ITEM_NODROP) {
+            let buf = format!("You can't {} $p, it must be CURSED!", sname);
+            self.act(&buf, false, Some(ch), Some(obj), None, TO_CHAR);
+            return 0;
+        }
+
+        let buf = format!("You {} $p.{}", sname, vanish!(mode));
+        self.act(&buf, false, Some(ch), Some(obj), None, TO_CHAR);
+
+        let buf = format!("$n {}s $p.{}", sname, vanish!(mode));
+        self.act(&buf, true, Some(ch), Some(obj), None, TO_ROOM);
+
+        obj_from_char(Some(obj));
+
+        if (mode == SCMD_DONATE as u8) && obj.obj_flagged(ITEM_NODONATE) {
+            mode = SCMD_JUNK as u8;
+        }
+
+        match mode {
+            SCMD_DROP => {
+                self.obj_to_room(Some(obj), ch.in_room());
+            }
+
+            SCMD_DONATE => {
+                self.obj_to_room(Some(obj), RDR);
+                self.act(
+                    "$p suddenly appears in a puff a smoke!",
+                    false,
+                    None,
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+                return 0;
+            }
+            SCMD_JUNK => {
+                let value = max(1, min(200, obj.get_obj_cost() / 16));
+                self.extract_obj(obj);
+                return value;
+            }
+            _ => {
+                error!(
+                    "SYSERR: Incorrect argument {} passed to perform_drop.",
+                    mode
+                );
+            }
+        }
+        0
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // char arg[MAX_INPUT_LENGTH];
+    // struct obj_data *obj, *next_obj;
+    // room_rnum RDR = 0;
+    // byte mode = SCMD_DROP;
+    // int dotmode, amount = 0, multi;
+    // const char *sname;
+
+    let db = &game.db;
+    let sname;
+    let mut mode = SCMD_DROP;
+    let mut RDR = 0;
+    match subcmd as u8 {
+        SCMD_JUNK => {
+            sname = "junk";
+            mode = SCMD_JUNK;
+        }
+        SCMD_DONATE => {
+            sname = "donate";
+            mode = SCMD_DONATE;
+            match rand_number(0, 2) {
+                0 => {
+                    mode = SCMD_JUNK;
+                }
+                1 | 2 => {
+                    RDR = db.real_room(DONATION_ROOM_1);
+                }
+                /*    case 3: RDR = real_room(donation_room_2); break;
+                      case 4: RDR = real_room(donation_room_3); break;
+                */
+                _ => {}
+            }
+            if RDR == NOWHERE {
+                send_to_char(ch, "Sorry, you can't donate anything right now.\r\n");
+                return;
+            }
+        }
+        _ => {
+            sname = "drop";
+        }
+    }
+
+    let mut arg = String::new();
+    let argument = one_argument(argument, &mut arg);
+    let mut obj: Option<Rc<ObjData>> = None;
+    let db = &game.db;
+    let mut amount = 0;
+    let dotmode;
+
+    if arg.is_empty() {
+        send_to_char(ch, format!("What do you want to {}?\r\n", sname).as_str());
+        return;
+    } else if is_number(&arg) {
+        let mut multi = arg.parse::<i32>().unwrap();
+        one_argument(argument, &mut arg);
+        if arg == "coins" || arg == "coin" {
+            db.perform_drop_gold(ch, multi, mode, RDR);
+        } else if multi <= 0 {
+            send_to_char(ch, "Yeah, that makes sense.\r\n");
+        } else if arg.is_empty() {
+            send_to_char(
+                ch,
+                format!("What do you want to {} {} of?\r\n", sname, multi).as_str(),
+            );
+        } else if {
+            obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+            obj.is_none()
+        } {
+            send_to_char(
+                ch,
+                format!("You don't seem to have any {}s.\r\n", arg).as_str(),
+            );
+        } else {
+            loop {
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+                obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+                multi -= 1;
+                if multi == 0 {
+                    break;
+                }
+            }
+        }
+    } else {
+        dotmode = find_all_dots(&arg);
+
+        /* Can't junk or donate all */
+        if (dotmode == FIND_ALL) && (subcmd == SCMD_JUNK as i32 || subcmd == SCMD_DONATE as i32) {
+            if subcmd == SCMD_JUNK as i32 {
+                send_to_char(ch, "Go to the dump if you want to junk EVERYTHING!\r\n");
+            } else {
+                send_to_char(
+                    ch,
+                    "Go do the donation room if you want to donate EVERYTHING!\r\n",
+                );
+                return;
+            }
+        }
+        if dotmode == FIND_ALL {
+            if ch.carrying.borrow().is_empty() {
+                send_to_char(ch, "You don't seem to be carrying anything.\r\n");
+            } else {
+                for obj in clone_vec(&ch.carrying).iter() {
+                    amount += db.perform_drop(ch, obj, mode, sname, RDR);
+                }
+            }
+        } else if dotmode == FIND_ALLDOT {
+            if arg.is_empty() {
+                send_to_char(
+                    ch,
+                    format!("What do you want to {} all of?\r\n", sname).as_str(),
+                );
+                return;
+            }
+            if {
+                obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+                obj.is_none()
+            } {
+                send_to_char(
+                    ch,
+                    format!("You don't seem to have any {}s.\r\n", arg).as_str(),
+                );
+            }
+
+            while obj.is_some() {
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+                obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+            }
+        } else {
+            if {
+                obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+                obj.is_none()
+            } {
+                send_to_char(
+                    ch,
+                    format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
+                );
+            } else {
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+            }
+        }
+    }
+
+    if amount != 0 && subcmd == SCMD_JUNK as i32 {
+        send_to_char(ch, "You have been rewarded by the gods!\r\n");
+        db.act(
+            "$n has been rewarded by the gods!",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        ch.set_gold(ch.get_gold() + amount);
+    }
+}
+
 // void perform_give(struct char_data *ch, struct char_data *vict,
 // struct obj_data *obj)
 // {

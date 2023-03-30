@@ -31,7 +31,7 @@ use crate::structs::{
     MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET,
     ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
-use crate::util::{rand_number, SECS_PER_MUD_YEAR};
+use crate::util::{clone_vec, rand_number, SECS_PER_MUD_YEAR};
 use crate::{is_set, send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
@@ -496,7 +496,7 @@ impl DB {
     }
 }
 /* take an object from a char */
-pub fn obj_from_char(object: Option<Rc<ObjData>>) {
+pub fn obj_from_char(object: Option<&Rc<ObjData>>) {
     if object.is_none() {
         error!("SYSERR: NULL object passed to obj_from_char.");
         return;
@@ -944,7 +944,7 @@ impl DB {
         if obj.in_room() != NOWHERE {
             self.obj_from_room(Some(obj));
         } else if obj.carried_by.borrow().is_some() {
-            obj_from_char(Some(obj.clone()));
+            obj_from_char(Some(obj));
         } else if obj.in_obj.borrow().is_some() {
             DB::obj_from_obj(&obj);
         }
@@ -1108,9 +1108,9 @@ impl DB {
         }
 
         /* transfer objects to room, if any */
-        for obj in ch.carrying.borrow().iter() {
-            obj_from_char(Some(obj.clone()));
-            self.obj_to_room(Some(obj), ch.in_room());
+        for obj in clone_vec(&ch.carrying) {
+            obj_from_char(Some(&obj));
+            self.obj_to_room(Some(&obj), ch.in_room());
         }
 
         /* transfer equipment to room, if any */

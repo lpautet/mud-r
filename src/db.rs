@@ -20,7 +20,7 @@ use std::{fs, io, mem, process, slice};
 use log::{error, info, warn};
 use regex::Regex;
 
-use crate::{check_player_special, get_last_tell_mut, main, MainGlobals};
+use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 // long get_id_by_name(const char *name)
 // {
 // int i;
@@ -479,7 +479,7 @@ impl DB {
             motd: Rc::from("MOTD placeholder"),
             imotd: Rc::from("IMOTD placeholder"),
             greetings: Rc::from("Greetings Placeholder"),
-            info: Rc::from(("INFO placeholder")),
+            info: Rc::from("INFO placeholder"),
             wizlist: Rc::from("WIZLIST placeholder"),
             immlist: Rc::from("IMMLIST placeholder"),
             background: Rc::from("BACKGROUND placeholder"),
@@ -3472,7 +3472,7 @@ pub fn reset_char(ch: &CharData) {
     ch.set_in_room(NOWHERE);
     ch.carrying.borrow_mut().clear();
     *ch.next.borrow_mut() = None;
-    *ch.next_fighting.borrow_mut() = None;
+    // *ch.next_fighting.borrow_mut() = None;
     *ch.next_in_room.borrow_mut() = None;
     ch.set_fighting(None);
     ch.char_specials.borrow_mut().position = POS_STANDING;
@@ -3986,7 +3986,7 @@ impl CharData {
             desc: RefCell::new(None),
             next_in_room: RefCell::new(None),
             next: RefCell::new(None),
-            next_fighting: RefCell::new(None),
+            // next_fighting: RefCell::new(None),
             followers: RefCell::new(vec![]),
             master: RefCell::new(None),
         }
@@ -4075,7 +4075,7 @@ impl CharData {
             desc: RefCell::new(None),
             next_in_room: RefCell::new(None),
             next: RefCell::new(None),
-            next_fighting: RefCell::new(None),
+            // next_fighting: RefCell::new(None),
             followers: RefCell::new(vec![]),
             master: RefCell::new(None),
         }
