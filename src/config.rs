@@ -112,10 +112,10 @@ pub const IMMORT_LEVEL_OK: i16 = 0;
 * Should the MUD allow you to 'rent' for free?  (i.e. if you just quit,
 * your objects are saved at no cost, as in Merc-type MUDs.)
 */
-// int free_rent = YES;
+pub const FREE_RENT: bool = true;
 
 /* maximum number of items players are allowed to rent */
-// int max_obj_save = 30;
+pub const max_obj_save: i32 = 30;
 
 /* receptionist's surcharge on top of item costs */
 // int min_rent_cost = 100;
@@ -123,18 +123,18 @@ pub const IMMORT_LEVEL_OK: i16 = 0;
 /*
 * Should the game automatically save people?  (i.e., save player data
 * every 4 kills (on average), and Crash-save as defined below.  This
-* option has an added meaning past bpl13.  If auto_save is YES, then
+* option has an added meaning past bpl13.  If AUTO_SAVE is YES, then
 * the 'save' command will be disabled to prevent item duplication via
 * game crashes.
 */
-// int auto_save = YES;
+pub const AUTO_SAVE: bool = true;
 
 /*
-* if auto_save (above) is yes, how often (in minutes) should the MUD
+* if AUTO_SAVE (above) is yes, how often (in minutes) should the MUD
 * Crash-save people's objects?   Also, this number indicates how often
 * the MUD will Crash-save players' houses.
 */
-// int autosave_time = 5;
+pub const AUTOSAVE_TIME: i32 = 5;
 
 /* Lifetime of crashfiles and forced-rent (idlesave) files in days */
 // int crash_file_timeout = 10;

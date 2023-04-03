@@ -557,8 +557,8 @@ fn same_obj(obj1: &Rc<ObjData>, obj2: &Rc<ObjData>) -> bool {
     }
 
     for aindex in 0..MAX_OBJ_AFFECT as usize {
-        if obj1.affected[aindex].location != obj2.affected[aindex].location
-            || obj1.affected[aindex].modifier != obj2.affected[aindex].modifier
+        if obj1.affected[aindex].get().location != obj2.affected[aindex].get().location
+            || obj1.affected[aindex].get().modifier != obj2.affected[aindex].get().modifier
         {
             return false;
         }
@@ -571,6 +571,9 @@ fn shop_producing(db: &DB, item: &Rc<ObjData>, shop: &ShopData) -> bool {
         return false;
     }
     for counter in 0..shop.producing.len() as usize {
+        if shop.producing[counter] == NOTHING {
+            break;
+        }
         if same_obj(item, &db.obj_proto[shop.producing[counter] as usize]) {
             return true;
         }
@@ -1644,6 +1647,12 @@ impl DB {
                     LIST_PRODUCE,
                 ) as i32;
                 for count in 0..temp {
+                    info!(
+                        "{} {} {} ",
+                        shop.vnum,
+                        count,
+                        list[count as usize].buy_type()
+                    );
                     shop.producing
                         .push(list[count as usize].buy_type() as ObjVnum);
                 }

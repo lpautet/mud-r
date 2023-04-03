@@ -20,7 +20,7 @@ use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_inventory,
     do_levels, do_look, do_score, do_time, do_weather,
 };
-use crate::act_item::{do_drop, do_get, do_remove, do_wear, do_wield};
+use crate::act_item::{do_drop, do_get, do_grab, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
 use crate::act_other::{do_not_here, do_quit};
@@ -28,6 +28,7 @@ use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, reset_char, store_to_char};
+use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
@@ -115,7 +116,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 38] = [
+pub const CMD_INFO: [CommandInfo; 39] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -344,6 +345,13 @@ pub const CMD_INFO: [CommandInfo; 38] = [
     // { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
     // { "group"    , POS_RESTING , do_group    , 1, 0 },
     // { "grab"     , POS_RESTING , do_grab     , 0, 0 },
+    CommandInfo {
+        command: "grab",
+        minimum_position: POS_RESTING,
+        command_pointer: do_grab,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "grats"    , POS_SLEEPING, do_gen_comm , 0, SCMD_GRATZ },
     // { "greet"    , POS_RESTING , do_action   , 0, 0 },
     // { "grin"     , POS_RESTING , do_action   , 0, 0 },
@@ -1492,9 +1500,9 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
 }
 
 /* deal with newcomers and other non-playing sockets */
-pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
+pub fn nanny(game: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
-    let db = &main_globals.db;
+    let db = &game.db;
 
     match d.state() {
         ConGetName => {
@@ -1511,7 +1519,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             } else {
                 let tmp_name = _parse_name(arg);
 
-                let desc_list = main_globals.descriptor_list.borrow();
+                let desc_list = game.descriptor_list.borrow();
                 if tmp_name.is_none()
                     || tmp_name.unwrap().len() < 2
                     || tmp_name.unwrap().len() > MAX_NAME_LENGTH
@@ -1525,7 +1533,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                 let och = d.character.borrow();
                 let character = och.as_ref().unwrap();
                 let mut tmp_store = CharFileU::new();
-                let db = &main_globals.db;
+                let db = &game.db;
                 let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
                     store_to_char(&tmp_store, character.as_ref());
@@ -1562,10 +1570,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     /* player unknown -- make new character */
 
                     /* Check for multiple creations of a character. */
-                    if !valid_name(
-                        &main_globals.descriptor_list.borrow(),
-                        tmp_name.unwrap().clone(),
-                    ) {
+                    if !valid_name(&game.descriptor_list.borrow(), tmp_name.unwrap().clone()) {
                         write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                         return;
                     }
@@ -1652,7 +1657,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     matching_pwd = passwd == passwd2;
 
                     if !matching_pwd {
-                        main_globals.mudlog(
+                        game.mudlog(
                             BRF,
                             LVL_GOD as i32,
                             true,
@@ -1695,7 +1700,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     // }
                 }
                 /* check and make sure no other copies of this player are logged in */
-                if perform_dupe_check(&main_globals, d.clone()) {
+                if perform_dupe_check(&game, d.clone()) {
                     return;
                 }
                 let och = d.character.borrow();
@@ -1712,7 +1717,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                 }
 
                 {
-                    main_globals.mudlog(
+                    game.mudlog(
                         BRF,
                         max(LVL_IMMORT as i32, character.get_invis_lev() as i32),
                         true,
@@ -1849,7 +1854,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             d.set_state(ConRmotd);
 
             {
-                main_globals.mudlog(
+                game.mudlog(
                     NRM,
                     LVL_IMMORT as i32,
                     true,
@@ -1868,6 +1873,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
             d.set_state(ConMenu);
         }
         ConMenu => {
+            let load_result;
             /* get selection from main menu  */
             // room_vnum
             // load_room;
@@ -1917,7 +1923,7 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
                         db.character_list.borrow_mut().push(character.clone());
                         db.char_to_room(Some(character), load_room);
-                        //load_result = Crash_load(d->character);
+                        load_result = crash_load(game, d.character.borrow().as_ref().unwrap());
 
                         /* Clear their load room if it's not persistant. */
                         if !character.plr_flagged(PLR_LOADROOM) {
@@ -1936,18 +1942,17 @@ pub fn nanny(main_globals: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     }
                     d.set_state(ConPlaying);
                     if character.get_level() == 0 {
-                        main_globals.do_start(character.as_ref());
+                        game.do_start(character.as_ref());
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
-                        main_globals.db.look_at_room(och.as_ref().unwrap(), false);
+                        game.db.look_at_room(och.as_ref().unwrap(), false);
                     }
                     // if has_mail(GET_IDNUM(d->character)) {
                     //     send_to_char(d->character, "You have mail waiting.\r\n");
                     // }
-                    // if load_result == 2 {
-                    //     /* rented items lost */
-                    //     send_to_char(d->character, "\r\n\007You could not afford your rent!\r\n"
-                    //                  "Your possesions have been donated to the Salvation Army!\r\n");
-                    // }
+                    if load_result == 2 {
+                        /* rented items lost */
+                        send_to_char(d.character.borrow().as_ref().unwrap(), "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
+                    }
                     d.has_prompt.set(false);
                 }
 

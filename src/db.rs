@@ -89,10 +89,19 @@ pub const MESS_FILE: &str = "./misc/messages"; /* damage messages		*/
 pub const SOCMESS_FILE: &str = "./misc/socials"; /* messages for social acts	*/
 pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 
+pub const LIB_PLRTEXT: &str = "plrtext/";
+pub const LIB_PLROBJS: &str = "plrobjs/";
+
 pub const KILLSCRIPT: &str = "./.killscript";
 
-const PLAYER_FILE: &str = "etc/players";
-const TIME_FILE: &str = "etc/time";
+pub const PLAYER_FILE: &str = "etc/players";
+pub const LIB_PLRALIAS: &str = "plralias/";
+
+pub const TIME_FILE: &str = "etc/time";
+
+pub const SUF_OBJS: &str = "objs";
+pub const SUF_TEXT: &str = "text";
+pub const SUF_ALIAS: &str = "alias";
 
 struct PlayerIndexElement {
     name: String,
@@ -1877,17 +1886,39 @@ impl DB {
                 value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
                 type_flag: 0,
                 wear_flags: 0,
-                extra_flags: 0,
+                extra_flags: Cell::new(0),
                 weight: Cell::new(0),
                 cost: 0,
                 cost_per_day: 0,
                 timer: Cell::new(0),
-                bitvector: 0,
+                bitvector: Cell::new(0),
             },
-            affected: [ObjAffectedType {
-                location: 0,
-                modifier: 0,
-            }; 6],
+            affected: [
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+            ],
             name: "".to_string(),
             description: "".to_string(),
             short_description: "".to_string(),
@@ -2005,8 +2036,8 @@ impl DB {
 
         /* *** extra descriptions and affect fields *** */
         for j in 0..MAX_OBJ_AFFECT {
-            obj.affected[j as usize].location = APPLY_NONE as u8;
-            obj.affected[j as usize].modifier = 0;
+            obj.affected[j as usize].get().location = APPLY_NONE as u8;
+            obj.affected[j as usize].get().modifier = 0;
         }
 
         let buf2 = ", after numeric constants\n...expecting 'E', 'A', '$', or next object number";
@@ -2045,8 +2076,8 @@ impl DB {
                     }
                     let f = f.unwrap();
 
-                    obj.affected[j].location = f[1].parse::<i32>().unwrap() as u8;
-                    obj.affected[j].modifier = f[2].parse().unwrap();
+                    obj.affected[j].get().location = f[1].parse::<i32>().unwrap() as u8;
+                    obj.affected[j].get().modifier = f[2].parse().unwrap();
                     j += 1;
                 }
                 '$' | '#' => {
@@ -4107,17 +4138,39 @@ impl ObjData {
                 value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
                 type_flag: 0,
                 wear_flags: 0,
-                extra_flags: 0,
+                extra_flags: Cell::new(0),
                 weight: Cell::new(0),
                 cost: 0,
                 cost_per_day: 0,
                 timer: Cell::new(0),
-                bitvector: 0,
+                bitvector: Cell::new(0),
             },
-            affected: [ObjAffectedType {
-                location: 0,
-                modifier: 0,
-            }; 6],
+            affected: [
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+            ],
             name: "".to_string(),
             description: "".to_string(),
             short_description: "".to_string(),
@@ -4145,17 +4198,39 @@ impl ObjData {
                 ],
                 type_flag: self.obj_flags.type_flag,
                 wear_flags: self.obj_flags.wear_flags,
-                extra_flags: self.obj_flags.extra_flags,
+                extra_flags: Cell::from(self.obj_flags.extra_flags.get()),
                 weight: Cell::from(self.obj_flags.weight.get()),
                 cost: self.obj_flags.cost,
                 cost_per_day: self.obj_flags.cost_per_day,
                 timer: Cell::from(self.obj_flags.timer.get()),
-                bitvector: self.obj_flags.bitvector,
+                bitvector: Cell::from(self.obj_flags.bitvector.get()),
             },
-            affected: [ObjAffectedType {
-                location: 0,
-                modifier: 0,
-            }; 6],
+            affected: [
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+                Cell::from(ObjAffectedType {
+                    location: 0,
+                    modifier: 0,
+                }),
+            ],
             name: self.name.clone(),
             description: self.description.clone(),
             short_description: self.short_description.clone(),

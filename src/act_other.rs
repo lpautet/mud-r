@@ -8,8 +8,10 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use crate::config::FREE_RENT;
 use crate::fight::die;
 use crate::interpreter::SCMD_QUIT;
+use crate::objsave::crash_rentsave;
 use crate::structs::{CharData, LVL_IMMORT, POS_FIGHTING, POS_STUNNED};
 use crate::util::NRM;
 use crate::{send_to_char, MainGlobals, TO_ROOM};
@@ -46,9 +48,9 @@ pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
          *  situation.
          */
 
-        // TODO implement rentsave
-        // if (free_rent)
-        // Crash_rentsave(ch, 0);
+        if FREE_RENT {
+            crash_rentsave(&game.db, ch, 0);
+        }
 
         // TODO implement houses
         /* If someone is quitting in their house, let them load back here. */
@@ -73,7 +75,7 @@ pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 //  * that guest immortals aren't trustworthy. If you've disabled guest
 //  * immortal advances from mortality, you may want < instead of <=.
 //  */
-// if (auto_save && GET_LEVEL(ch) <= LVL_IMMORT) {
+// if (AUTO_SAVE && GET_LEVEL(ch) <= LVL_IMMORT) {
 // send_to_char(ch, "Saving aliases.\r\n");
 // write_aliases(ch);
 // return;

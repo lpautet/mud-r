@@ -243,8 +243,8 @@ fn affect_total(ch: &CharData) {
             for j in 0..MAX_OBJ_AFFECT {
                 affect_modify(
                     ch,
-                    eq.affected[j as usize].location as i8,
-                    eq.affected[j as usize].modifier as i16,
+                    eq.affected[j as usize].get().location as i8,
+                    eq.affected[j as usize].get().modifier as i16,
                     eq.get_obj_affect(),
                     false,
                 );
@@ -270,8 +270,8 @@ fn affect_total(ch: &CharData) {
             for j in 0..MAX_OBJ_AFFECT {
                 affect_modify(
                     ch,
-                    eq.affected[j as usize].location as i8,
-                    eq.affected[j as usize].modifier as i16,
+                    eq.affected[j as usize].get().location as i8,
+                    eq.affected[j as usize].get().modifier as i16,
                     eq.get_obj_affect(),
                     true,
                 )
@@ -565,7 +565,7 @@ fn apply_ac(ch: &CharData, eq_pos: i16) -> i32 {
     factor * ch.get_eq(eq_pos as i8).unwrap().get_obj_val(0)
 }
 
-fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
+pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
     if obj.obj_flagged(ITEM_ANTI_EVIL) && ch.is_evil() {
         return true;
     };
@@ -654,8 +654,8 @@ impl DB {
         for j in 0..MAX_OBJ_AFFECT {
             affect_modify(
                 ch.as_ref(),
-                obj.affected[j as usize].location as i8,
-                obj.affected[j as usize].modifier as i16,
+                obj.affected[j as usize].get().location as i8,
+                obj.affected[j as usize].get().modifier as i16,
                 obj.get_obj_affect(),
                 true,
             );
@@ -698,8 +698,8 @@ impl DB {
         for j in 0..MAX_OBJ_AFFECT {
             affect_modify(
                 ch.as_ref(),
-                obj.affected[j as usize].location as i8,
-                obj.affected[j as usize].modifier as i16,
+                obj.affected[j as usize].get().location as i8,
+                obj.affected[j as usize].get().modifier as i16,
                 obj.get_obj_affect(),
                 false,
             );

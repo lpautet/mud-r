@@ -29,6 +29,7 @@ use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny};
+use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
@@ -51,6 +52,7 @@ mod interpreter;
 mod limits;
 mod mobact;
 mod modify;
+mod objsave;
 mod screen;
 mod shops;
 mod spec_assign;
@@ -799,15 +801,17 @@ impl MainGlobals {
             //fflush(player_fl);
         }
 
-        // TODO implement autosave
-        // if (auto_save && !(pulse % PULSE_AUTOSAVE)) {
-        //     /* 1 minute */
-        //     if ( + + mins_since_crashsave > = autosave_time) {
-        //         mins_since_crashsave = 0;
-        //         Crash_save_all();
-        //         House_save_all();
-        //     }
-        // }
+        if AUTO_SAVE && (pulse % PULSE_AUTOSAVE) != 0 {
+            /* 1 minute */
+            self.mins_since_crashsave
+                .set(self.mins_since_crashsave.get() + 1);
+            if self.mins_since_crashsave.get() >= AUTOSAVE_TIME as u32 {
+                self.mins_since_crashsave.set(0);
+                crash_save_all(self);
+                // TODO implement houses
+                // House_save_all();
+            }
+        }
 
         if pulse % PULSE_USAGE == 0 {
             self.record_usage();

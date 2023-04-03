@@ -25,7 +25,7 @@ use log::{error, info};
 use rand::Rng;
 
 use crate::constants::STR_APP;
-use crate::db::DB;
+use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
 use crate::handler::fname;
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::structs::ConState::ConPlaying;
@@ -48,6 +48,11 @@ pub const OFF: u8 = 0;
 pub const BRF: u8 = 1;
 pub const NRM: u8 = 2;
 pub const CMP: u8 = 3;
+
+/* get_filename() */
+pub const CRASH_FILE: i32 = 0;
+pub const ETEXT_FILE: i32 = 1;
+pub const ALIAS_FILE: i32 = 2;
 
 #[macro_export]
 macro_rules! is_set {
@@ -332,6 +337,12 @@ impl CharData {
     }
     pub fn get_gold(&self) -> i32 {
         self.points.borrow().gold
+    }
+    pub fn set_bank_gold(&self, val: i32) {
+        self.points.borrow_mut().bank_gold = val
+    }
+    pub fn get_bank_gold(&self) -> i32 {
+        self.points.borrow().bank_gold
     }
     pub fn get_max_move(&self) -> i16 {
         self.points.borrow().max_move
@@ -795,10 +806,10 @@ impl ObjData {
     }
 
     pub fn get_obj_extra(&self) -> i32 {
-        self.obj_flags.extra_flags
+        self.obj_flags.extra_flags.get()
     }
-    pub fn set_obj_extra(&mut self, val: i32) {
-        self.obj_flags.extra_flags = val;
+    pub fn set_obj_extra(&self, val: i32) {
+        self.obj_flags.extra_flags.set(val);
     }
     pub fn get_obj_wear(&self) -> i32 {
         self.obj_flags.wear_flags
@@ -809,7 +820,7 @@ impl ObjData {
     pub fn get_obj_val(&self, val: usize) -> i32 {
         self.obj_flags.value[val].get()
     }
-    pub fn set_obj_val(&mut self, val: usize, v: i32) {
+    pub fn set_obj_val(&self, val: usize, v: i32) {
         self.obj_flags.value[val].set(v);
     }
     pub fn decr_obj_val(&self, val: usize) {
@@ -846,7 +857,10 @@ impl ObjData {
         self.item_number
     }
     pub fn get_obj_affect(&self) -> i64 {
-        self.obj_flags.bitvector
+        self.obj_flags.bitvector.get()
+    }
+    pub fn set_obj_affect(&self, val: i64) {
+        self.obj_flags.bitvector.set(val);
     }
     pub fn set_in_room(&self, val: RoomRnum) {
         self.in_room.set(val);
@@ -1625,62 +1639,67 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
     return lines;
 }
 
-// int get_filename(char *filename, size_t fbufsize, int mode, const char *orig_name)
-// {
-// const char *prefix, *middle, *suffix;
-// char name[PATH_MAX], *ptr;
-//
-// if (orig_name == NULL || *orig_name == '\0' || filename == NULL) {
-// log("SYSERR: NULL pointer or empty string passed to get_filename(), %p or %p.",
-// orig_name, filename);
-// return (0);
-// }
-//
-// switch (mode) {
-// case CRASH_FILE:
-// prefix = LIB_PLROBJS;
-// suffix = SUF_OBJS;
-// break;
-// case ALIAS_FILE:
-// prefix = LIB_PLRALIAS;
-// suffix = SUF_ALIAS;
-// break;
-// case ETEXT_FILE:
-// prefix = LIB_PLRTEXT;
-// suffix = SUF_TEXT;
-// break;
-// default:
-// return (0);
-// }
-//
-// strlcpy(name, orig_name, sizeof(name));
-// for (ptr = name; *ptr; ptr++)
-// *ptr = LOWER(*ptr);
-//
-// switch (LOWER(*name)) {
-// case 'a':  case 'b':  case 'c':  case 'd':  case 'e':
-// middle = "A-E";
-// break;
-// case 'f':  case 'g':  case 'h':  case 'i':  case 'j':
-// middle = "F-J";
-// break;
-// case 'k':  case 'l':  case 'm':  case 'n':  case 'o':
-// middle = "K-O";
-// break;
-// case 'p':  case 'q':  case 'r':  case 's':  case 't':
-// middle = "P-T";
-// break;
-// case 'u':  case 'v':  case 'w':  case 'X':  case 'y':  case 'z':
-// middle = "U-Z";
-// break;
-// default:
-// middle = "ZZZ";
-// break;
-// }
-//
-// snprintf(filename, fbufsize, "%s%s"SLASH"%s.%s", prefix, middle, name, suffix);
-// return (1);
-// }
+pub fn get_filename(filename: &mut String, mode: i32, orig_name: &str) -> bool {
+    // const char *prefix, *middle, *suffix;
+    // char name[PATH_MAX], *ptr;
+
+    if orig_name.is_empty() {
+        error!(
+            "SYSERR:  empty string passed to get_filename(), {} .",
+            orig_name
+        );
+        return false;
+    }
+    let prefix;
+    let suffix;
+
+    match mode {
+        CRASH_FILE => {
+            prefix = LIB_PLROBJS;
+            suffix = SUF_OBJS;
+        }
+        ALIAS_FILE => {
+            prefix = LIB_PLRALIAS;
+            suffix = SUF_ALIAS;
+        }
+        ETEXT_FILE => {
+            prefix = LIB_PLRTEXT;
+            suffix = SUF_TEXT;
+        }
+        _ => {
+            return false;
+        }
+    }
+
+    let name = orig_name.to_lowercase();
+    let middle;
+
+    match name.chars().next().unwrap() {
+        'a' | 'b' | 'c' | 'd' | 'e' => {
+            middle = "A-E";
+        }
+
+        'f' | 'g' | 'h' | 'i' | 'j' => {
+            middle = "F-J";
+        }
+
+        'k' | 'l' | 'm' | 'n' | 'o' => {
+            middle = "K-O";
+        }
+        'p' | 'q' | 'r' | 's' | 't' => {
+            middle = "P-T";
+        }
+        'u' | 'v' | 'w' | 'X' | 'y' | 'z' => {
+            middle = "U-Z";
+        }
+        _ => {
+            middle = "ZZZ";
+        }
+    }
+
+    *filename = format!("{}{}/{}.{}", prefix, middle, name, suffix);
+    true
+}
 
 pub fn num_pc_in_room(room: &RoomData) -> i32 {
     room.peoples.borrow().len() as i32

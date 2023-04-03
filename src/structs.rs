@@ -73,6 +73,14 @@ pub const SKY_CLOUDY: i32 = 1;
 pub const SKY_RAINING: i32 = 2;
 pub const SKY_LIGHTNING: i32 = 3;
 
+/* Rent codes */
+pub const RENT_UNDEF: i32 = 0;
+pub const RENT_CRASH: i32 = 1;
+pub const RENT_RENTED: i32 = 2;
+pub const RENT_CRYO: i32 = 3;
+pub const RENT_FORCED: i32 = 4;
+pub const RENT_TIMEDOUT: i32 = 5;
+
 /* object-related defines ********************************************/
 
 /* Item types: used by obj_data.obj_flags.type_flag */
@@ -299,7 +307,7 @@ pub const EXDSCR_LENGTH: usize = 240; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_TONGUE: usize = 3; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_SKILLS: usize = 200; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_AFFECT: usize = 32; /* Used in char_file_u *DO*NOT*CHANGE* */
-pub const MAX_OBJ_AFFECT: i32 = 6; /* Used in obj_file_elem *DO*NOT*CHANGE* */
+pub const MAX_OBJ_AFFECT: i32 = 6; /* Used in ObjFileElem *DO*NOT*CHANGE* */
 pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
@@ -599,7 +607,7 @@ pub struct ObjFlagData {
     /* Type of item			    */
     pub wear_flags: i32,
     /* Where you can wear it	    */
-    pub(crate) extra_flags: i32,
+    pub(crate) extra_flags: Cell<i32>,
     /* If it hums, glows, etc.	    */
     pub weight: Cell<i32>,
     /* Weigt what else                  */
@@ -609,11 +617,11 @@ pub struct ObjFlagData {
     /* Cost to keep pr. real day        */
     pub timer: Cell<i32>,
     /* Timer for object                 */
-    pub bitvector: i64,
+    pub bitvector: Cell<i64>,
     /* To set chars bits                */
 }
 
-/* Used in obj_file_elem *DO*NOT*CHANGE* */
+/* Used in ObjFileElem *DO*NOT*CHANGE* */
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct ObjAffectedType {
@@ -631,7 +639,7 @@ pub struct ObjData {
     /* In what room -1 when conta/carr	*/
     pub obj_flags: ObjFlagData,
     /* Object information               */
-    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize],
+    pub affected: [Cell<ObjAffectedType>; MAX_OBJ_AFFECT as usize],
     /* affects */
     pub(crate) name: String,
     /* Title of object :get etc.        */
@@ -723,6 +731,41 @@ pub struct AffectedType {
     /* Tells which ability to change(APPLY_XXX)*/
     pub bitvector: i64,
     /* Tells which bits to set (AFF_XXX) */
+}
+
+/* ====================== File Element for Objects ======================= */
+/*                 BEWARE: Changing it will ruin rent files		   */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+pub struct ObjFileElem {
+    pub item_number: ObjVnum,
+    pub location: i16,
+    pub value: [i32; 4],
+    pub extra_flags: i32,
+    pub weight: i32,
+    pub timer: i32,
+    pub bitvector: i64,
+    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize],
+}
+
+/* header block for rent files.  BEWARE: Changing it will ruin rent files  */
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct RentInfo {
+    pub time: i32,
+    pub rentcode: i32,
+    pub net_cost_per_diem: i32,
+    pub gold: i32,
+    pub account: i32,
+    pub nitems: i32,
+    pub spare0: i32,
+    pub spare1: i32,
+    pub spare2: i32,
+    pub spare3: i32,
+    pub spare4: i32,
+    pub spare5: i32,
+    pub spare6: i32,
+    pub spare7: i32,
 }
 
 pub type IDXTYPE = i16;
@@ -895,9 +938,11 @@ pub struct MessageType {
 }
 
 pub struct MessageList {
-    pub a_type: i32, /* Attack type				*/
+    pub a_type: i32,
+    /* Attack type				*/
     //number_of_attacks;	/* How many attack messages to chose from. */
-    pub messages: Vec<MessageType>, /* List of messages.			*/
+    pub messages: Vec<MessageType>,
+    /* List of messages.			*/
 }
 
 pub struct DexSkillType {
