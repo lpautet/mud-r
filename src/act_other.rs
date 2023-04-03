@@ -87,17 +87,14 @@ pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_HOUSE_CRASH))
 // House_crashsave(GET_ROOM_VNUM(IN_ROOM(ch)));
 // }
-//
-//
-// /* generic function for commands which are normally overridden by
-//    special procedures - i.e., shop commands, mail commands, etc. */
-// ACMD(do_not_here)
-// {
-// send_to_char(ch, "Sorry, but you cannot do that here!\r\n");
-// }
-//
-//
-//
+
+/* generic function for commands which are normally overridden by
+special procedures - i.e., shop commands, mail commands, etc. */
+#[allow(unused_variables)]
+pub fn do_not_here(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    send_to_char(ch, "Sorry, but you cannot do that here!\r\n");
+}
+
 // ACMD(do_sneak)
 // {
 // struct affected_type af;

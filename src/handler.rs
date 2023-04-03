@@ -8,7 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-use std::cell::Ref;
+use std::cell::{Ref, RefCell};
 use std::cmp::{max, min};
 use std::process;
 use std::rc::Rc;
@@ -1486,27 +1486,47 @@ impl DB {
 //
 // return (NULL);
 // }
-//
-//
-// int get_obj_pos_in_equip_vis(struct char_data *ch, char *arg, int *number, struct obj_data *equipment[])
-// {
-// int j, num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&arg);
-// }
-//
-// if (*number == 0)
-// return (-1);
-//
-// for (j = 0; j < NUM_WEARS; j++)
-// if (equipment[j] && CAN_SEE_OBJ(ch, equipment[j]) && isname(arg, equipment[j]->name))
-// if (--(*number) == 0)
-// return (j);
-//
-// return (-1);
-// }
+
+impl DB {
+    pub fn get_obj_pos_in_equip_vis(
+        &self,
+        ch: &Rc<CharData>,
+        arg: &str,
+        number: Option<&mut i32>,
+        equipment: &RefCell<[Option<Rc<ObjData>>]>,
+    ) -> Option<i8> {
+        let equipment = equipment.borrow();
+        let mut num = 0;
+        let mut t: &mut i32;
+        let mut name = arg.to_string();
+        if number.is_none() {
+            num = get_number(&mut name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number: &mut i32 = t;
+        if *number == 0 {
+            return None;
+        }
+
+        for j in 0..NUM_WEARS as usize {
+            if equipment[j].is_some()
+                && self.can_see_obj(ch, equipment[j].as_ref().unwrap())
+                && isname(arg, &equipment[j].as_ref().unwrap().name) != 0
+            {
+                if {
+                    *number -= 1;
+                    *number == 0
+                } {
+                    return Some(j as i8);
+                }
+            }
+        }
+
+        return None;
+    }
+}
 
 pub fn money_desc(amount: i32) -> &'static str {
     struct MyItem {

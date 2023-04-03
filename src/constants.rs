@@ -264,36 +264,35 @@ pub const WEAR_WHERE: [&str; 18] = [
 // "Held",
 // "\n"
 // };
-//
-//
-// /* ITEM_x (ordinal object types) */
-// const char *item_types[] = {
-// "UNDEFINED",
-// "LIGHT",
-// "SCROLL",
-// "WAND",
-// "STAFF",
-// "WEAPON",
-// "FIRE WEAPON",
-// "MISSILE",
-// "TREASURE",
-// "ARMOR",
-// "POTION",
-// "WORN",
-// "OTHER",
-// "TRASH",
-// "TRAP",
-// "CONTAINER",
-// "NOTE",
-// "LIQ CONTAINER",
-// "KEY",
-// "FOOD",
-// "MONEY",
-// "PEN",
-// "BOAT",
-// "FOUNTAIN",
-// "\n"
-// };
+
+/* ITEM_x (ordinal object types) */
+pub const ITEM_TYPES: [&str; 25] = [
+    "UNDEFINED",
+    "LIGHT",
+    "SCROLL",
+    "WAND",
+    "STAFF",
+    "WEAPON",
+    "FIRE WEAPON",
+    "MISSILE",
+    "TREASURE",
+    "ARMOR",
+    "POTION",
+    "WORN",
+    "OTHER",
+    "TRASH",
+    "TRAP",
+    "CONTAINER",
+    "NOTE",
+    "LIQ CONTAINER",
+    "KEY",
+    "FOOD",
+    "MONEY",
+    "PEN",
+    "BOAT",
+    "FOUNTAIN",
+    "\n",
+];
 
 /* ITEM_WEAR_ (wear bitvector) */
 pub const WEAR_BITS: [&str; 16] = [
@@ -362,31 +361,28 @@ pub const EXTRA_BITS: [&str; 18] = [
 // "LOCKED",
 // "\n",
 // };
-//
-//
-// /* LIQ_x */
-// const char *drinks[] =
-// {
-// "water",
-// "beer",
-// "wine",
-// "ale",
-// "dark ale",
-// "whisky",
-// "lemonade",
-// "firebreather",
-// "local speciality",
-// "slime mold juice",
-// "milk",
-// "tea",
-// "coffee",
-// "blood",
-// "salt water",
-// "clear water",
-// "\n"
-// };
-//
-//
+
+/* LIQ_x */
+pub const DRINKS: [&str; 17] = [
+    "water",
+    "beer",
+    "wine",
+    "ale",
+    "dark ale",
+    "whisky",
+    "lemonade",
+    "firebreather",
+    "local speciality",
+    "slime mold juice",
+    "milk",
+    "tea",
+    "coffee",
+    "blood",
+    "salt water",
+    "clear water",
+    "\n",
+];
+
 // /* other constants for liquids ******************************************/
 //
 //
@@ -413,7 +409,7 @@ pub const EXTRA_BITS: [&str; 18] = [
 // };
 //
 //
-// /* effect of drinks on hunger, thirst, and drunkenness -- see values.doc */
+// /* effect of DRINKS on hunger, thirst, and drunkenness -- see values.doc */
 // int drink_aff[][3] = {
 // {0, 1, 10},
 // {3, 2, 5},
@@ -433,7 +429,7 @@ pub const EXTRA_BITS: [&str; 18] = [
 // {0, 0, 13}
 // };
 
-/* color of the various drinks */
+/* color of the various DRINKS */
 pub const COLOR_LIQUID: [&str; 17] = [
     "clear",
     "brown",

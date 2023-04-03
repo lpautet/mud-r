@@ -30,7 +30,7 @@ use crate::handler::fname;
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ConState, ObjData, RoomData, RoomDirectionData, AFF_BLIND, AFF_DETECT_INVIS,
+    CharData, ConState, ObjData, RoomData, RoomDirectionData, Special, AFF_BLIND, AFF_DETECT_INVIS,
     AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC, CLASS_MAGIC_USER,
     CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1,
     PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
@@ -97,6 +97,13 @@ impl DB {
         ch.is_npc()
             && ch.get_mob_rnum() != NOBODY
             && ch.get_mob_rnum() < self.mob_protos.len() as i16
+    }
+    pub fn get_mob_spec(&self, ch: &CharData) -> Option<Special> {
+        if self.is_mob(ch) {
+            self.mob_index[ch.nr as usize].func
+        } else {
+            None
+        }
     }
 }
 
@@ -180,9 +187,6 @@ impl CharData {
 }
 
 impl DB {
-    pub fn valid_room_rnum(&self, rnum: RoomRnum) -> bool {
-        rnum != NOWHERE && rnum < self.world.borrow().len() as i16
-    }
     pub fn get_room_vnum(&self, rnum: RoomVnum) -> i16 {
         if self.valid_room_rnum(rnum) {
             self.world.borrow()[rnum as usize].number
@@ -907,6 +911,16 @@ impl CharData {
 }
 
 impl DB {
+    pub fn valid_room_rnum(&self, rnum: RoomRnum) -> bool {
+        rnum != NOWHERE && rnum <= self.world.borrow().len() as i16
+    }
+    pub fn get_room_spec(&self, rnum: RoomRnum) -> Option<Special> {
+        if self.valid_room_rnum(rnum) {
+            self.world.borrow()[rnum as usize].func
+        } else {
+            None
+        }
+    }
     pub fn outside(&self, ch: &CharData) -> bool {
         !self.room_flagged(ch.in_room(), ROOM_INDOORS)
     }

@@ -20,10 +20,10 @@ use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_inventory,
     do_levels, do_look, do_score, do_time, do_weather,
 };
-use crate::act_item::{do_drop, do_get};
+use crate::act_item::{do_drop, do_get, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
-use crate::act_other::do_quit;
+use crate::act_other::{do_not_here, do_quit};
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
@@ -35,9 +35,9 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, AFF_HIDE, LVL_GOD, LVL_IMPL, NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM,
-    POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STANDING, POS_STUNNED,
+    CharData, AFF_HIDE, LVL_GOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, PLR_FROZEN, PLR_INVSTART,
+    PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING,
+    POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
     CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -86,6 +86,10 @@ pub const SCMD_MURDER: i32 = 1;
 pub const SCMD_LOOK: i32 = 0;
 pub const SCMD_READ: i32 = 1;
 
+pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
+    CMD_INFO[cmd as usize].command == cmd_name
+}
+
 /* This is the Master Command List(tm).
 
 * You can put new commands in, take commands out, change the order
@@ -111,7 +115,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 33] = [
+pub const CMD_INFO: [CommandInfo; 38] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -186,6 +190,13 @@ pub const CMD_INFO: [CommandInfo; 33] = [
     // { "brief"    , POS_DEAD    , do_gen_tog  , 0, SCMD_BRIEF },
     // { "burp"     , POS_RESTING , do_action   , 0, 0 },
     // { "buy"      , POS_STANDING, do_not_here , 0, 0 },
+    CommandInfo {
+        command: "buy",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "bug"      , POS_DEAD    , do_gen_write, 0, SCMD_BUG },
     //
     // { "cast"     , POS_SITTING , do_cast     , 1, 0 },
@@ -410,6 +421,13 @@ pub const CMD_INFO: [CommandInfo; 33] = [
         subcmd: 0,
     },
     // { "list"     , POS_STANDING, do_not_here , 0, 0 },
+    CommandInfo {
+        command: "list",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "lick"     , POS_RESTING , do_action   , 0, 0 },
     // { "lock"     , POS_SITTING , do_gen_door , 0, SCMD_LOCK },
     // { "load"     , POS_DEAD    , do_load     , LVL_GOD, 0 },
@@ -500,6 +518,13 @@ pub const CMD_INFO: [CommandInfo; 33] = [
     // { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
     // { "receive"  , POS_STANDING, do_not_here , 1, 0 },
     // { "remove"   , POS_RESTING , do_remove   , 0, 0 },
+    CommandInfo {
+        command: "remove",
+        minimum_position: POS_RESTING,
+        command_pointer: do_remove,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "rent"     , POS_STANDING, do_not_here , 1, 0 },
     // { "report"   , POS_RESTING , do_report   , 0, 0 },
     // { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
@@ -626,6 +651,13 @@ pub const CMD_INFO: [CommandInfo; 33] = [
     // { "wake"     , POS_SLEEPING, do_wake     , 0, 0 },
     // { "wave"     , POS_RESTING , do_action   , 0, 0 },
     // { "wear"     , POS_RESTING , do_wear     , 0, 0 },
+    CommandInfo {
+        command: "wear",
+        minimum_position: POS_RESTING,
+        command_pointer: do_wear,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "weather"  , POS_RESTING , do_weather  , 0, 0 },
     CommandInfo {
         command: "weather",
@@ -641,6 +673,13 @@ pub const CMD_INFO: [CommandInfo; 33] = [
     // { "whine"    , POS_RESTING , do_action   , 0, 0 },
     // { "whistle"  , POS_RESTING , do_action   , 0, 0 },
     // { "wield"    , POS_RESTING , do_wield    , 0, 0 },
+    CommandInfo {
+        command: "wield",
+        minimum_position: POS_RESTING,
+        command_pointer: do_wield,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "wiggle"   , POS_STANDING, do_action   , 0, 0 },
     // { "wimpy"    , POS_DEAD    , do_wimpy    , 0, 0 },
     // { "wink"     , POS_RESTING , do_action   , 0, 0 },
@@ -693,10 +732,9 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(game: &MainGlobals, rch: &Rc<CharData>, argument: &str) {
+pub fn command_interpreter(game: &MainGlobals, ch: &Rc<CharData>, argument: &str) {
     let line: &str;
     let mut arg = String::new();
-    let ch = rch.as_ref();
 
     ch.remove_aff_flags(AFF_HIDE);
 
@@ -767,9 +805,9 @@ pub fn command_interpreter(game: &MainGlobals, rch: &Rc<CharData>, argument: &st
             }
             _ => {}
         }
-    } //else if no_specials || !special(ch, cmd, line) {
-    (cmd.command_pointer)(game, rch, line, cmd_idx, cmd.subcmd);
-    //}
+    } else if game.db.no_specials || !special(game, ch, cmd_idx as i32, line) {
+        (cmd.command_pointer)(game, ch, line, cmd_idx, cmd.subcmd);
+    }
 }
 
 /**************************************************************************
@@ -1175,43 +1213,63 @@ pub fn half_chop(string: &mut String, arg1: &mut String, arg2: &mut String) {
 // return (-1);
 // }
 
-// int special(struct char_data *ch, int cmd, char *arg)
-// {
-// struct obj_data *i;
-// struct char_data *k;
-// int j;
-//
-// /* special in room? */
-// if (GET_ROOM_SPEC(IN_ROOM(ch)) != NULL)
-// if (GET_ROOM_SPEC(IN_ROOM(ch)) (ch, world + IN_ROOM(ch), cmd, arg))
-// return (1);
-//
-// /* special in equipment list? */
-// for (j = 0; j < NUM_WEARS; j++)
-// if (GET_EQ(ch, j) && GET_OBJ_SPEC(GET_EQ(ch, j)) != NULL)
-// if (GET_OBJ_SPEC(GET_EQ(ch, j)) (ch, GET_EQ(ch, j), cmd, arg))
-// return (1);
-//
-// /* special in inventory? */
-// for (i = ch->carrying; i; i = i->next_content)
-// if (GET_OBJ_SPEC(i) != NULL)
-// if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
-// return (1);
-//
-// /* special in mobile present? */
-// for (k = world[IN_ROOM(ch)].people; k; k = k->next_in_room)
-// if (!MOB_FLAGGED(k, MOB_NOTDEADYET))
-// if (GET_MOB_SPEC(k) && GET_MOB_SPEC(k) (ch, k, cmd, arg))
-// return (1);
-//
-// /* special in object present? */
-// for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content)
-// if (GET_OBJ_SPEC(i) != NULL)
-// if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
-// return (1);
-//
-// return (0);
-// }
+fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
+    // struct obj_data *i;
+    // struct char_data *k;
+    // int j;
+    let db = &game.db;
+
+    /* special in room? */
+    if db.get_room_spec(ch.in_room()).is_some() {
+        if db.get_room_spec(ch.in_room()).unwrap()(
+            game,
+            ch,
+            &game.db.world.borrow()[ch.in_room() as usize],
+            cmd,
+            arg,
+        ) {
+            return true;
+        }
+    }
+
+    // TODO implement special in objects
+    // /* special in equipment list? */
+    // for (j = 0; j < NUM_WEARS; j++)
+    // if (GET_EQ(ch, j) && GET_OBJ_SPEC(GET_EQ(ch, j)) != NULL)
+    // if (GET_OBJ_SPEC(GET_EQ(ch, j)) (ch, GET_EQ(ch, j), cmd, arg))
+    // return (1);
+
+    //     // TODO implement special in inventory
+    // /* special in inventory? */
+    // for (i = ch->carrying; i; i = i->next_content)
+    // if (GET_OBJ_SPEC(i) != NULL)
+    // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
+    // return (1);
+
+    // TODO implement special on mobile
+    /* special in mobile present? */
+    for k in db.world.borrow()[ch.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if !k.mob_flagged(MOB_NOTDEADYET) {
+            if db.get_mob_spec(k).is_some()
+                && db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
+            {
+                return true;
+            }
+        }
+    }
+
+    // /* special in object present? */
+    // for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content)
+    // if (GET_OBJ_SPEC(i) != NULL)
+    // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
+    // return (1);
+
+    false
+}
 
 /* *************************************************************************
 *  Stuff for controlling the non-playing sockets (get name, pwd etc)       *

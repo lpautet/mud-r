@@ -1,7 +1,11 @@
+use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::DescriptorData;
+use crate::{DescriptorData, MainGlobals};
+
+pub type Special =
+    fn(game: &MainGlobals, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
@@ -852,7 +856,7 @@ pub struct RoomData {
     /* DEATH,DARK ... etc */
     pub light: Cell<u8>,
     /* Number of lightsources in room     */
-    //SPECIAL(*func);
+    pub func: Option<Special>,
     pub contents: RefCell<Vec<Rc<ObjData>>>,
     /* List of items in room              */
     pub peoples: RefCell<Vec<Rc<CharData>>>,
@@ -957,8 +961,7 @@ pub struct IndexData {
     /* virtual number of this mob/obj		*/
     pub number: Cell<i32>,
     /* number of existing units of this mob/obj	*/
-    // TODO implement spec proc
-    //SPECIAL(*func);
+    pub func: Option<Special>,
 }
 
 impl ExtraDescrData {

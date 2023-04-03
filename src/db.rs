@@ -49,6 +49,7 @@ use crate::constants::{
 };
 use crate::handler::fname;
 use crate::modify::paginate_string;
+use crate::shops::{assign_the_shopkeepers, ShopData};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
@@ -114,17 +115,22 @@ pub struct DB {
     /* prototypes for objs		 */
     zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
-    pub(crate) fight_messages: Vec<MessageList>, /* fighting messages	 */
+    pub(crate) fight_messages: Vec<MessageList>,
+    /* fighting messages	 */
     player_table: RefCell<Vec<PlayerIndexElement>>,
     /* index to plr file	 */
     player_fl: RefCell<Option<File>>,
     /* file desc of player file	 */
     top_idnum: Cell<i32>,
     /* highest idnum in use		 */
-    pub no_mail: bool,       /* mail disabled?		 */
-    pub mini_mud: bool,      /* mini-mud mode?		 */
-    pub no_rent_check: bool, /* skip rent check on boot?	 */
+    pub no_mail: bool,
+    /* mail disabled?		 */
+    pub mini_mud: bool,
+    /* mini-mud mode?		 */
+    pub no_rent_check: bool,
+    /* skip rent check on boot?	 */
     pub boot_time: Cell<u128>,
+    pub no_specials: bool,
     /* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
     pub r_mortal_start_room: RefCell<RoomRnum>,
@@ -133,8 +139,10 @@ pub struct DB {
     /* rnum of immort start room	 */
     pub r_frozen_start_room: RefCell<RoomRnum>,
     /* rnum of frozen start room	 */
-    pub credits: Rc<str>, /* game credits			 */
-    pub news: Rc<str>,    /* mud news			 */
+    pub credits: Rc<str>,
+    /* game credits			 */
+    pub news: Rc<str>,
+    /* mud news			 */
     pub motd: Rc<str>,
     /* message of the day - mortals */
     pub imotd: Rc<str>,
@@ -142,13 +150,18 @@ pub struct DB {
     pub greetings: Rc<str>,
     /* opening credits screen	*/
     // char *help = NULL;		/* help screen			 */
-    pub info: Rc<str>,    /* info page			 */
-    pub wizlist: Rc<str>, /* list of higher gods		 */
-    pub immlist: Rc<str>, /* list of peon gods		 */
+    pub info: Rc<str>,
+    /* info page			 */
+    pub wizlist: Rc<str>,
+    /* list of higher gods		 */
+    pub immlist: Rc<str>,
+    /* list of peon gods		 */
     pub background: Rc<str>,
     /* background story		 */
-    pub handbook: Rc<str>, /* handbook for new immortals	 */
-    pub policies: Rc<str>, /* policies page		 */
+    pub handbook: Rc<str>,
+    /* handbook for new immortals	 */
+    pub policies: Rc<str>,
+    /* policies page		 */
     //
     // struct help_index_element *help_table = 0;	/* the help table	 */
     // int top_of_helpt = 0;		/* top of help index table	 */
@@ -163,10 +176,11 @@ pub struct DB {
     pub timer: Cell<u128>,
     pub cmd_sort_info: Vec<usize>,
     pub combat_list: RefCell<Vec<Rc<CharData>>>,
+    pub shop_index: RefCell<Vec<ShopData>>,
 }
 
-const REAL: i32 = 0;
-const VIRTUAL: i32 = 1;
+pub const REAL: i32 = 0;
+pub const VIRTUAL: i32 = 1;
 
 /* structure for the reset commands */
 pub struct ResetCom {
@@ -337,10 +351,10 @@ impl DB {
         info!("Renumbering zone table.");
         self.renum_zone_table();
 
-        // if (!no_specials) {
-        //     log("Loading shops.");
-        //     index_boot(DB_BOOT_SHP);
-        // }
+        if !self.no_specials {
+            info!("Loading shops.");
+            self.index_boot(DB_BOOT_SHP);
+        }
     }
 }
 
@@ -471,6 +485,7 @@ impl DB {
             mini_mud: false,
             no_rent_check: false,
             boot_time: Cell::new(0),
+            no_specials: false,
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),
@@ -502,6 +517,7 @@ impl DB {
             timer: Cell::new(0),
             cmd_sort_info: vec![],
             combat_list: RefCell::new(vec![]),
+            shop_index: RefCell::new(vec![]),
         }
     }
 
@@ -547,19 +563,19 @@ impl DB {
         // log("Loading social messages.");
         // boot_social_messages();
         //
-        // log("Assigning function pointers:");
-        //
-        // if (!no_specials) {
-        // log("   Mobiles.");
-        // assign_mobiles();
-        // log("   Shopkeepers.");
-        // assign_the_shopkeepers();
-        // log("   Objects.");
-        // assign_objects();
-        // log("   Rooms.");
-        // assign_rooms();
-        // }
-        //
+        info!("Assigning function pointers:");
+
+        if !ret.no_specials {
+            // info!("   Mobiles.");
+            // assign_mobiles();
+            info!("   Shopkeepers.");
+            assign_the_shopkeepers(&mut ret);
+            // info!("   Objects.");
+            // assign_objects();
+            // info!("   Rooms.");
+            // assign_rooms();
+        }
+
         // log("Assigning spell and skill levels.");
         // init_spell_levels();
         //
@@ -909,10 +925,11 @@ impl DB {
             }
         }
 
-        // if (mini_mud)
-        // index_filename = MINDEX_FILE;
-        // else
-        index_filename = INDEX_FILE;
+        if self.mini_mud {
+            index_filename = MINDEX_FILE;
+        } else {
+            index_filename = INDEX_FILE;
+        }
 
         let mut buf2 = format!("{}{}", prefix, index_filename);
         let db_index = File::open(buf2.as_str());
@@ -1050,21 +1067,18 @@ impl DB {
                 // */
                 //             load_help(db_file);
                 //        }
-                // DB_BOOT_SHP => {
-                //     boot_the_shops(db_file, buf2, rec_count);
-                // }
+                DB_BOOT_SHP => {
+                    self.boot_the_shops(db_file.unwrap(), &buf2, rec_count);
+                }
                 _ => {}
             }
 
-            //fclose(db_file);
-            //fscanf(db_index, "%s\n", buf1);
             buf1.clear();
             reader
                 .read_line(&mut buf1)
                 .expect("Error while reading index file #5");
             buf1 = buf1.trim_end().to_string();
         }
-        //fclose(db_index);
 
         /* sort the help index */
         // if (mode == DB_BOOT_HLP) {
@@ -1207,6 +1221,7 @@ impl DB {
             dir_option: [None, None, None, None, None, None],
             room_flags: Cell::new(0),
             light: Cell::new(0),
+            func: None,
             contents: RefCell::new(vec![]),
             peoples: RefCell::new(vec![]),
         };
@@ -1732,6 +1747,7 @@ impl DB {
         self.mob_index.push(IndexData {
             vnum: nr as MobVnum,
             number: Cell::from(0),
+            func: None,
         });
 
         let mut mobch = CharData::new();
@@ -1851,7 +1867,7 @@ impl DB {
         self.obj_index.push(IndexData {
             vnum: nr,
             number: Cell::from(0),
-            // func
+            func: None,
         });
 
         let mut obj = ObjData {
@@ -2446,7 +2462,7 @@ impl DB {
     }
 
     /* create a new object from a prototype */
-    fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
+    pub fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
         let i = if _type == VIRTUAL {
             self.real_object(nr)
         } else {
@@ -3223,7 +3239,7 @@ impl DB {
  ************************************************************************/
 
 /* read and allocate space for a '~'-terminated string from a given file */
-fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
+pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
     let mut buf = String::new();
     let mut tmp = String::new();
     // char buf[MAX_STRING_LENGTH], tmp[513];

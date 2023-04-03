@@ -121,17 +121,24 @@ use std::rc::Rc;
 use log::error;
 
 use crate::config::DONATION_ROOM_1;
+use crate::constants::STR_APP;
 use crate::db::DB;
 use crate::handler::{
     find_all_dots, isname, money_desc, obj_from_char, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
     FIND_OBJ_INV, FIND_OBJ_ROOM,
 };
 use crate::interpreter::{
-    is_number, one_argument, two_arguments, SCMD_DONATE, SCMD_DROP, SCMD_JUNK,
+    is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DROP, SCMD_JUNK,
 };
 use crate::structs::{
-    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_MONEY, ITEM_NODONATE,
-    ITEM_NODROP, ITEM_WEAR_TAKE, NOWHERE, PULSE_VIOLENCE,
+    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_LIGHT, ITEM_MONEY,
+    ITEM_NODONATE, ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT,
+    ITEM_WEAR_ARMS, ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER, ITEM_WEAR_HANDS,
+    ITEM_WEAR_HEAD, ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK, ITEM_WEAR_SHIELD,
+    ITEM_WEAR_TAKE, ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, NOWHERE, NUM_WEARS,
+    PULSE_VIOLENCE, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
+    WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
+    WEAR_WRIST_R,
 };
 use crate::util::{clone_vec, rand_number};
 use crate::{an, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
@@ -1025,10 +1032,10 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // if (subcmd == SCMD_DRINK) {
 // char buf[MAX_STRING_LENGTH];
 //
-// snprintf(buf, sizeof(buf), "$n drinks %s from $p.", drinks[GET_OBJ_VAL(temp, 2)]);
+// snprintf(buf, sizeof(buf), "$n DRINKS %s from $p.", DRINKS[GET_OBJ_VAL(temp, 2)]);
 // act(buf, TRUE, ch, temp, 0, TO_ROOM);
 //
-// send_to_char(ch, "You drink the %s.\r\n", drinks[GET_OBJ_VAL(temp, 2)]);
+// send_to_char(ch, "You drink the %s.\r\n", DRINKS[GET_OBJ_VAL(temp, 2)]);
 //
 // if (drink_aff[GET_OBJ_VAL(temp, 2)][DRUNK] > 0)
 // amount = (25 - GET_COND(ch, THIRST)) / drink_aff[GET_OBJ_VAL(temp, 2)][DRUNK];
@@ -1037,7 +1044,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 //
 // } else {
 // act("$n sips from $p.", TRUE, ch, temp, 0, TO_ROOM);
-// send_to_char(ch, "It tastes like %s.\r\n", drinks[GET_OBJ_VAL(temp, 2)]);
+// send_to_char(ch, "It tastes like %s.\r\n", DRINKS[GET_OBJ_VAL(temp, 2)]);
 // amount = 1;
 // }
 //
@@ -1249,7 +1256,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // return;
 // }
 // if (subcmd == SCMD_POUR)
-// send_to_char(ch, "You pour the %s into the %s.", drinks[GET_OBJ_VAL(from_obj, 2)], arg2);
+// send_to_char(ch, "You pour the %s into the %s.", DRINKS[GET_OBJ_VAL(from_obj, 2)], arg2);
 //
 // if (subcmd == SCMD_FILL) {
 // act("You gently fill $p from $P.", FALSE, ch, to_obj, from_obj, TO_CHAR);
@@ -1284,346 +1291,502 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // weight_change_object(from_obj, -amount);
 // weight_change_object(to_obj, amount);	/* Add weight */
 // }
-//
-//
-//
-// void wear_message(struct char_data *ch, struct obj_data *obj, int where)
-// {
-// const char *wear_messages[][2] = {
-// {"$n lights $p and holds it.",
-// "You light $p and hold it."},
-//
-// {"$n slides $p on to $s right ring finger.",
-// "You slide $p on to your right ring finger."},
-//
-// {"$n slides $p on to $s left ring finger.",
-// "You slide $p on to your left ring finger."},
-//
-// {"$n wears $p around $s neck.",
-// "You wear $p around your neck."},
-//
-// {"$n wears $p around $s neck.",
-// "You wear $p around your neck."},
-//
-// {"$n wears $p on $s body.",
-// "You wear $p on your body."},
-//
-// {"$n wears $p on $s head.",
-// "You wear $p on your head."},
-//
-// {"$n puts $p on $s legs.",
-// "You put $p on your legs."},
-//
-// {"$n wears $p on $s feet.",
-// "You wear $p on your feet."},
-//
-// {"$n puts $p on $s hands.",
-// "You put $p on your hands."},
-//
-// {"$n wears $p on $s arms.",
-// "You wear $p on your arms."},
-//
-// {"$n straps $p around $s arm as a shield.",
-// "You start to use $p as a shield."},
-//
-// {"$n wears $p about $s body.",
-// "You wear $p around your body."},
-//
-// {"$n wears $p around $s waist.",
-// "You wear $p around your waist."},
-//
-// {"$n puts $p on around $s right wrist.",
-// "You put $p on around your right wrist."},
-//
-// {"$n puts $p on around $s left wrist.",
-// "You put $p on around your left wrist."},
-//
-// {"$n wields $p.",
-// "You wield $p."},
-//
-// {"$n grabs $p.",
-// "You grab $p."}
-// };
-//
-// act(wear_messages[where][0], TRUE, ch, obj, 0, TO_ROOM);
-// act(wear_messages[where][1], FALSE, ch, obj, 0, TO_CHAR);
-// }
-//
-//
-//
-// void perform_wear(struct char_data *ch, struct obj_data *obj, int where)
-// {
-// /*
-//  * ITEM_WEAR_TAKE is used for objects that do not require special bits
-//  * to be put into that position (e.g. you can hold any object, not just
-//  * an object with a HOLD bit.)
-//  */
-//
-// int wear_bitvectors[] = {
-// ITEM_WEAR_TAKE, ITEM_WEAR_FINGER, ITEM_WEAR_FINGER, ITEM_WEAR_NECK,
-// ITEM_WEAR_NECK, ITEM_WEAR_BODY, ITEM_WEAR_HEAD, ITEM_WEAR_LEGS,
-// ITEM_WEAR_FEET, ITEM_WEAR_HANDS, ITEM_WEAR_ARMS, ITEM_WEAR_SHIELD,
-// ITEM_WEAR_ABOUT, ITEM_WEAR_WAIST, ITEM_WEAR_WRIST, ITEM_WEAR_WRIST,
-// ITEM_WEAR_WIELD, ITEM_WEAR_TAKE
-// };
-//
-// const char *already_wearing[] = {
-// "You're already using a light.\r\n",
-// "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
-// "You're already wearing something on both of your ring fingers.\r\n",
-// "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
-// "You can't wear anything else around your neck.\r\n",
-// "You're already wearing something on your body.\r\n",
-// "You're already wearing something on your head.\r\n",
-// "You're already wearing something on your legs.\r\n",
-// "You're already wearing something on your feet.\r\n",
-// "You're already wearing something on your hands.\r\n",
-// "You're already wearing something on your arms.\r\n",
-// "You're already using a shield.\r\n",
-// "You're already wearing something about your body.\r\n",
-// "You already have something around your waist.\r\n",
-// "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
-// "You're already wearing something around both of your wrists.\r\n",
-// "You're already wielding a weapon.\r\n",
-// "You're already holding something.\r\n"
-// };
-//
-// /* first, make sure that the wear position is valid. */
-// if (!CAN_WEAR(obj, wear_bitvectors[where])) {
-// act("You can't wear $p there.", FALSE, ch, obj, 0, TO_CHAR);
-// return;
-// }
-// /* for neck, finger, and wrist, try pos 2 if pos 1 is already full */
-// if ((where == WEAR_FINGER_R) || (where == WEAR_NECK_1) || (where == WEAR_WRIST_R))
-// if (GET_EQ(ch, where))
-// where++;
-//
-// if (GET_EQ(ch, where)) {
-// send_to_char(ch, "%s", already_wearing[where]);
-// return;
-// }
-// wear_message(ch, obj, where);
-// obj_from_char(obj);
-// equip_char(ch, obj, where);
-// }
-//
-//
-//
-// int find_eq_pos(struct char_data *ch, struct obj_data *obj, char *arg)
-// {
-// int where = -1;
-//
-// const char *keywords[] = {
-// "!RESERVED!",
-// "finger",
-// "!RESERVED!",
-// "neck",
-// "!RESERVED!",
-// "body",
-// "head",
-// "legs",
-// "feet",
-// "hands",
-// "arms",
-// "shield",
-// "about",
-// "waist",
-// "wrist",
-// "!RESERVED!",
-// "!RESERVED!",
-// "!RESERVED!",
-// "\n"
-// };
-//
-// if (!arg || !*arg) {
-// if (CAN_WEAR(obj, ITEM_WEAR_FINGER))      where = WEAR_FINGER_R;
-// if (CAN_WEAR(obj, ITEM_WEAR_NECK))        where = WEAR_NECK_1;
-// if (CAN_WEAR(obj, ITEM_WEAR_BODY))        where = WEAR_BODY;
-// if (CAN_WEAR(obj, ITEM_WEAR_HEAD))        where = WEAR_HEAD;
-// if (CAN_WEAR(obj, ITEM_WEAR_LEGS))        where = WEAR_LEGS;
-// if (CAN_WEAR(obj, ITEM_WEAR_FEET))        where = WEAR_FEET;
-// if (CAN_WEAR(obj, ITEM_WEAR_HANDS))       where = WEAR_HANDS;
-// if (CAN_WEAR(obj, ITEM_WEAR_ARMS))        where = WEAR_ARMS;
-// if (CAN_WEAR(obj, ITEM_WEAR_SHIELD))      where = WEAR_SHIELD;
-// if (CAN_WEAR(obj, ITEM_WEAR_ABOUT))       where = WEAR_ABOUT;
-// if (CAN_WEAR(obj, ITEM_WEAR_WAIST))       where = WEAR_WAIST;
-// if (CAN_WEAR(obj, ITEM_WEAR_WRIST))       where = WEAR_WRIST_R;
-// } else if ((where = search_block(arg, keywords, FALSE)) < 0)
-// send_to_char(ch, "'%s'?  What part of your body is THAT?\r\n", arg);
-//
-// return (where);
-// }
-//
-//
-//
-// ACMD(do_wear)
-// {
-// char arg1[MAX_INPUT_LENGTH];
-// char arg2[MAX_INPUT_LENGTH];
-// struct obj_data *obj, *next_obj;
-// int where, dotmode, items_worn = 0;
-//
-// two_arguments(argument, arg1, arg2);
-//
-// if (!*arg1) {
-// send_to_char(ch, "Wear what?\r\n");
-// return;
-// }
-// dotmode = find_all_dots(arg1);
-//
-// if (*arg2 && (dotmode != FIND_INDIV)) {
-// send_to_char(ch, "You can't specify the same body location for more than one item!\r\n");
-// return;
-// }
-// if (dotmode == FIND_ALL) {
-// for (obj = ch->carrying; obj; obj = next_obj) {
-// next_obj = obj->next_content;
-// if (CAN_SEE_OBJ(ch, obj) && (where = find_eq_pos(ch, obj, 0)) >= 0) {
-// items_worn++;
-// perform_wear(ch, obj, where);
-// }
-// }
-// if (!items_worn)
-// send_to_char(ch, "You don't seem to have anything wearable.\r\n");
-// } else if (dotmode == FIND_ALLDOT) {
-// if (!*arg1) {
-// send_to_char(ch, "Wear all of what?\r\n");
-// return;
-// }
-// if (!(obj = get_obj_in_list_vis(ch, arg1, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have any %ss.\r\n", arg1);
-// else
-// while (obj) {
-// next_obj = get_obj_in_list_vis(ch, arg1, NULL, obj->next_content);
-// if ((where = find_eq_pos(ch, obj, 0)) >= 0)
-// perform_wear(ch, obj, where);
-// else
-// act("You can't wear $p.", FALSE, ch, obj, 0, TO_CHAR);
-// obj = next_obj;
-// }
-// } else {
-// if (!(obj = get_obj_in_list_vis(ch, arg1, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg1), arg1);
-// else {
-// if ((where = find_eq_pos(ch, obj, arg2)) >= 0)
-// perform_wear(ch, obj, where);
-// else if (!*arg2)
-// act("You can't wear $p.", FALSE, ch, obj, 0, TO_CHAR);
-// }
-// }
-// }
-//
-//
-//
-// ACMD(do_wield)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct obj_data *obj;
-//
-// one_argument(argument, arg);
-//
-// if (!*arg)
-// send_to_char(ch, "Wield what?\r\n");
-// else if (!(obj = get_obj_in_list_vis(ch, arg, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg), arg);
-// else {
-// if (!CAN_WEAR(obj, ITEM_WEAR_WIELD))
-// send_to_char(ch, "You can't wield that.\r\n");
-// else if (GET_OBJ_WEIGHT(obj) > str_app[STRENGTH_APPLY_INDEX(ch)].wield_w)
-// send_to_char(ch, "It's too heavy for you to use.\r\n");
-// else
-// perform_wear(ch, obj, WEAR_WIELD);
-// }
-// }
-//
-//
-//
-// ACMD(do_grab)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct obj_data *obj;
-//
-// one_argument(argument, arg);
-//
-// if (!*arg)
-// send_to_char(ch, "Hold what?\r\n");
-// else if (!(obj = get_obj_in_list_vis(ch, arg, NULL, ch->carrying)))
-// send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg), arg);
-// else {
-// if (GET_OBJ_TYPE(obj) == ITEM_LIGHT)
-// perform_wear(ch, obj, WEAR_LIGHT);
-// else {
-// if (!CAN_WEAR(obj, ITEM_WEAR_HOLD) && GET_OBJ_TYPE(obj) != ITEM_WAND &&
-// GET_OBJ_TYPE(obj) != ITEM_STAFF && GET_OBJ_TYPE(obj) != ITEM_SCROLL &&
-// GET_OBJ_TYPE(obj) != ITEM_POTION)
-// send_to_char(ch, "You can't hold that.\r\n");
-// else
-// perform_wear(ch, obj, WEAR_HOLD);
-// }
-// }
-// }
-//
-//
-//
-// void perform_remove(struct char_data *ch, int pos)
-// {
-// struct obj_data *obj;
-//
-// if (!(obj = GET_EQ(ch, pos)))
-// log("SYSERR: perform_remove: bad pos %d passed.", pos);
-// else if (OBJ_FLAGGED(obj, ITEM_NODROP))
-// act("You can't remove $p, it must be CURSED!", FALSE, ch, obj, 0, TO_CHAR);
-// else if (IS_CARRYING_N(ch) >= CAN_CARRY_N(ch))
-// act("$p: you can't carry that many items!", FALSE, ch, obj, 0, TO_CHAR);
-// else {
-// obj_to_char(unequip_char(ch, pos), ch);
-// act("You stop using $p.", FALSE, ch, obj, 0, TO_CHAR);
-// act("$n stops using $p.", TRUE, ch, obj, 0, TO_ROOM);
-// }
-// }
-//
-//
-//
-// ACMD(do_remove)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// int i, dotmode, found;
-//
-// one_argument(argument, arg);
-//
-// if (!*arg) {
-// send_to_char(ch, "Remove what?\r\n");
-// return;
-// }
-// dotmode = find_all_dots(arg);
-//
-// if (dotmode == FIND_ALL) {
-// found = 0;
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i)) {
-// perform_remove(ch, i);
-// found = 1;
-// }
-// if (!found)
-// send_to_char(ch, "You're not using anything.\r\n");
-// } else if (dotmode == FIND_ALLDOT) {
-// if (!*arg)
-// send_to_char(ch, "Remove all of what?\r\n");
-// else {
-// found = 0;
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i) && CAN_SEE_OBJ(ch, GET_EQ(ch, i)) &&
-// isname(arg, GET_EQ(ch, i)->name)) {
-// perform_remove(ch, i);
-// found = 1;
-// }
-// if (!found)
-// send_to_char(ch, "You don't seem to be using any %ss.\r\n", arg);
-// }
-// } else {
-// if ((i = get_obj_pos_in_equip_vis(ch, arg, NULL, ch->equipment)) < 0)
-// send_to_char(ch, "You don't seem to be using %s %s.\r\n", AN(arg), arg);
-// else
-// perform_remove(ch, i);
-// }
-// }
+
+fn wear_message(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, _where: i32) {
+    const WEAR_MESSAGES: [[&str; 2]; 18] = [
+        ["$n lights $p and holds it.", "You light $p and hold it."],
+        [
+            "$n slides $p on to $s right ring finger.",
+            "You slide $p on to your right ring finger.",
+        ],
+        [
+            "$n slides $p on to $s left ring finger.",
+            "You slide $p on to your left ring finger.",
+        ],
+        [
+            "$n wears $p around $s neck.",
+            "You wear $p around your neck.",
+        ],
+        [
+            "$n wears $p around $s neck.",
+            "You wear $p around your neck.",
+        ],
+        ["$n wears $p on $s body.", "You wear $p on your body."],
+        ["$n wears $p on $s head.", "You wear $p on your head."],
+        ["$n puts $p on $s legs.", "You put $p on your legs."],
+        ["$n wears $p on $s feet.", "You wear $p on your feet."],
+        ["$n puts $p on $s hands.", "You put $p on your hands."],
+        ["$n wears $p on $s arms.", "You wear $p on your arms."],
+        [
+            "$n straps $p around $s arm as a shield.",
+            "You start to use $p as a shield.",
+        ],
+        [
+            "$n wears $p about $s body.",
+            "You wear $p around your body.",
+        ],
+        [
+            "$n wears $p around $s waist.",
+            "You wear $p around your waist.",
+        ],
+        [
+            "$n puts $p on around $s right wrist.",
+            "You put $p on around your right wrist.",
+        ],
+        [
+            "$n puts $p on around $s left wrist.",
+            "You put $p on around your left wrist.",
+        ],
+        ["$n wields $p.", "You wield $p."],
+        ["$n grabs $p.", "You grab $p."],
+    ];
+
+    db.act(
+        WEAR_MESSAGES[_where as usize][0],
+        true,
+        Some(ch),
+        Some(obj),
+        None,
+        TO_ROOM,
+    );
+    db.act(
+        WEAR_MESSAGES[_where as usize][1],
+        false,
+        Some(ch),
+        Some(obj),
+        None,
+        TO_CHAR,
+    );
+}
+
+fn perform_wear(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, _where: i32) {
+    /*
+     * ITEM_WEAR_TAKE is used for objects that do not require special bits
+     * to be put into that position (e.g. you can hold any object, not just
+     * an object with a HOLD bit.)
+     */
+    let mut _where = _where;
+    const WEAR_BITVECTORS: [i32; 18] = [
+        ITEM_WEAR_TAKE,
+        ITEM_WEAR_FINGER,
+        ITEM_WEAR_FINGER,
+        ITEM_WEAR_NECK,
+        ITEM_WEAR_NECK,
+        ITEM_WEAR_BODY,
+        ITEM_WEAR_HEAD,
+        ITEM_WEAR_LEGS,
+        ITEM_WEAR_FEET,
+        ITEM_WEAR_HANDS,
+        ITEM_WEAR_ARMS,
+        ITEM_WEAR_SHIELD,
+        ITEM_WEAR_ABOUT,
+        ITEM_WEAR_WAIST,
+        ITEM_WEAR_WRIST,
+        ITEM_WEAR_WRIST,
+        ITEM_WEAR_WIELD,
+        ITEM_WEAR_TAKE,
+    ];
+
+    const ALREADY_WEARING: [&str; 18] = [
+        "You're already using a light.\r\n",
+        "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
+        "You're already wearing something on both of your ring fingers.\r\n",
+        "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
+        "You can't wear anything else around your neck.\r\n",
+        "You're already wearing something on your body.\r\n",
+        "You're already wearing something on your head.\r\n",
+        "You're already wearing something on your legs.\r\n",
+        "You're already wearing something on your feet.\r\n",
+        "You're already wearing something on your hands.\r\n",
+        "You're already wearing something on your arms.\r\n",
+        "You're already using a shield.\r\n",
+        "You're already wearing something about your body.\r\n",
+        "You already have something around your waist.\r\n",
+        "YOU SHOULD NEVER SEE THIS MESSAGE.  PLEASE REPORT.\r\n",
+        "You're already wearing something around both of your wrists.\r\n",
+        "You're already wielding a weapon.\r\n",
+        "You're already holding something.\r\n",
+    ];
+
+    /* first, make sure that the wear position is valid. */
+    if !obj.can_wear(WEAR_BITVECTORS[_where as usize]) {
+        db.act(
+            "You can't wear $p there.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
+        return;
+    }
+    /* for neck, finger, and wrist, try pos 2 if pos 1 is already full */
+    if (_where == WEAR_FINGER_R as i32)
+        || (_where == WEAR_NECK_1 as i32)
+        || (_where == WEAR_WRIST_R as i32)
+    {
+        if ch.get_eq(_where as i8).is_some() {
+            _where += 1;
+        }
+    }
+
+    if ch.get_eq(_where as i8).is_some() {
+        send_to_char(ch, ALREADY_WEARING[_where as usize]);
+        return;
+    }
+    wear_message(db, ch, obj, _where);
+    obj_from_char(Some(obj));
+    db.equip_char(Some(ch), Some(obj), _where as i8);
+}
+
+pub fn find_eq_pos(ch: &Rc<CharData>, obj: &Rc<ObjData>, arg: &str) -> i16 {
+    let mut _where = -1;
+
+    const KEYWORDS: [&str; 19] = [
+        "!RESERVED!",
+        "finger",
+        "!RESERVED!",
+        "neck",
+        "!RESERVED!",
+        "body",
+        "head",
+        "legs",
+        "feet",
+        "hands",
+        "arms",
+        "shield",
+        "about",
+        "waist",
+        "wrist",
+        "!RESERVED!",
+        "!RESERVED!",
+        "!RESERVED!",
+        "\n",
+    ];
+    let _where_o;
+    if arg.is_empty() {
+        if obj.can_wear(ITEM_WEAR_FINGER) {
+            _where = WEAR_FINGER_R;
+        }
+        if obj.can_wear(ITEM_WEAR_NECK) {
+            _where = WEAR_NECK_1;
+        }
+        if obj.can_wear(ITEM_WEAR_BODY) {
+            _where = WEAR_BODY;
+        }
+        if obj.can_wear(ITEM_WEAR_HEAD) {
+            _where = WEAR_HEAD;
+        }
+        if obj.can_wear(ITEM_WEAR_LEGS) {
+            _where = WEAR_LEGS;
+        }
+        if obj.can_wear(ITEM_WEAR_FEET) {
+            _where = WEAR_FEET;
+        }
+        if obj.can_wear(ITEM_WEAR_HANDS) {
+            _where = WEAR_HANDS;
+        }
+        if obj.can_wear(ITEM_WEAR_ARMS) {
+            _where = WEAR_ARMS;
+        }
+        if obj.can_wear(ITEM_WEAR_SHIELD) {
+            _where = WEAR_SHIELD;
+        }
+        if obj.can_wear(ITEM_WEAR_ABOUT) {
+            _where = WEAR_ABOUT;
+        }
+        if obj.can_wear(ITEM_WEAR_WAIST) {
+            _where = WEAR_WAIST;
+        }
+        if obj.can_wear(ITEM_WEAR_WRIST) {
+            _where = WEAR_WRIST_R;
+        }
+    } else if {
+        _where_o = search_block(arg, &KEYWORDS, false);
+        _where_o.is_none()
+    } {
+        send_to_char(
+            ch,
+            format!("'{}'?  What part of your body is THAT?\r\n", arg).as_str(),
+        );
+    } else {
+        _where = _where_o.unwrap() as i16;
+    }
+
+    _where
+}
+
+#[allow(unused_variables)]
+pub fn do_wear(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg1 = String::new();
+    let mut arg2 = String::new();
+
+    two_arguments(argument, &mut arg1, &mut arg2);
+
+    if arg1.is_empty() {
+        send_to_char(ch, "Wear what?\r\n");
+        return;
+    }
+    let dotmode = find_all_dots(&arg1);
+
+    if !arg2.is_empty() && dotmode != FIND_INDIV {
+        send_to_char(
+            ch,
+            "You can't specify the same body location for more than one item!\r\n",
+        );
+        return;
+    }
+    let db = &game.db;
+    let mut _where = -1;
+    let mut items_worn = 0;
+    if dotmode == FIND_ALL {
+        for obj in clone_vec(&ch.carrying) {
+            if db.can_see_obj(ch, &obj) && {
+                _where = find_eq_pos(ch, &obj, "");
+                _where >= 0
+            } {
+                items_worn += 1;
+                perform_wear(db, ch, &obj, _where as i32);
+            }
+        }
+        if items_worn == 0 {
+            send_to_char(ch, "You don't seem to have anything wearable.\r\n");
+        }
+    } else if dotmode == FIND_ALLDOT {
+        if arg1.is_empty() {
+            send_to_char(ch, "Wear all of what?\r\n");
+            return;
+        }
+        let mut obj;
+        if {
+            obj = db.get_obj_in_list_vis(ch, &arg1, None, ch.carrying.borrow());
+            obj.is_none()
+        } {
+            send_to_char(
+                ch,
+                format!("You don't seem to have any {}s.\r\n", arg1).as_str(),
+            );
+        } else {
+            while obj.is_some() {
+                if {
+                    _where = find_eq_pos(ch, obj.as_ref().unwrap(), "");
+                    _where >= 0
+                } {
+                    perform_wear(db, ch, obj.as_ref().unwrap(), _where as i32);
+                } else {
+                    db.act(
+                        "You can't wear $p.",
+                        false,
+                        Some(ch),
+                        Some(obj.as_ref().unwrap()),
+                        None,
+                        TO_CHAR,
+                    );
+                }
+                obj = db.get_obj_in_list_vis(ch, &arg1, None, ch.carrying.borrow());
+            }
+        }
+    } else {
+        let obj;
+        if {
+            obj = db.get_obj_in_list_vis(ch, &arg1, None, ch.carrying.borrow());
+            obj.is_none()
+        } {
+            send_to_char(
+                ch,
+                format!("You don't seem to have {} {}.\r\n", an!(arg1), arg1).as_str(),
+            );
+        } else {
+            if {
+                _where = find_eq_pos(ch, obj.as_ref().unwrap(), &arg2);
+                _where >= 0
+            } {
+                perform_wear(db, ch, obj.as_ref().unwrap(), _where as i32);
+            } else if arg2.is_empty() {
+                db.act(
+                    "You can't wear $p.",
+                    false,
+                    Some(ch),
+                    Some(obj.as_ref().unwrap()),
+                    None,
+                    TO_CHAR,
+                );
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_wield(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+
+    let mut obj;
+    let db = &game.db;
+    one_argument(argument, &mut arg);
+
+    if arg.is_empty() {
+        send_to_char(ch, "Wield what?\r\n");
+    } else if {
+        obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+        obj.is_none()
+    } {
+        send_to_char(
+            ch,
+            format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
+        );
+    } else {
+        let obj = obj.as_ref().unwrap();
+        if !obj.can_wear(ITEM_WEAR_WIELD) {
+            send_to_char(ch, "You can't wield that.\r\n");
+        } else if obj.get_obj_weight() > STR_APP[ch.strength_apply_index()].wield_w as i32 {
+            send_to_char(ch, "It's too heavy for you to use.\r\n");
+        } else {
+            perform_wear(db, ch, obj, WEAR_WIELD as i32);
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_grab(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let obj;
+    let db = &game.db;
+    one_argument(argument, &mut arg);
+
+    if arg.is_empty() {
+        send_to_char(ch, "Hold what?\r\n");
+    } else if {
+        obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+        obj.is_none()
+    } {
+        send_to_char(
+            ch,
+            format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
+        );
+    } else {
+        let obj = obj.as_ref().unwrap();
+
+        if obj.get_obj_type() == ITEM_LIGHT {
+            perform_wear(db, ch, obj, WEAR_LIGHT as i32);
+        } else {
+            if !obj.can_wear(ITEM_WEAR_HOLD)
+                && obj.get_obj_type() != ITEM_WAND
+                && obj.get_obj_type() != ITEM_STAFF
+                && obj.get_obj_type() != ITEM_SCROLL
+                && obj.get_obj_type() != ITEM_POTION
+            {
+                send_to_char(ch, "You can't hold that.\r\n");
+            } else {
+                perform_wear(db, ch, obj, WEAR_HOLD as i32);
+            }
+        }
+    }
+}
+
+fn perform_remove(db: &DB, ch: &Rc<CharData>, pos: i8) {
+    let obj;
+
+    if {
+        obj = ch.get_eq(pos as i8);
+        obj.is_none()
+    } {
+        error!("SYSERR: perform_remove: bad pos {} passed.", pos);
+    } else if obj.as_ref().unwrap().obj_flagged(ITEM_NODROP) {
+        db.act(
+            "You can't remove $p, it must be CURSED!",
+            false,
+            Some(ch),
+            Some(obj.as_ref().unwrap()),
+            None,
+            TO_CHAR,
+        );
+    } else if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
+        db.act(
+            "$p: you can't carry that many items!",
+            false,
+            Some(ch),
+            Some(obj.as_ref().unwrap()),
+            None,
+            TO_CHAR,
+        );
+    } else {
+        let obj = obj.as_ref().unwrap();
+        DB::obj_to_char(db.unequip_char(ch, pos).as_ref(), Some(ch));
+        db.act(
+            "You stop using $p.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
+        db.act(
+            "$n stops using $p.",
+            true,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_ROOM,
+        );
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_remove(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+    one_argument(argument, &mut arg);
+
+    if arg.is_empty() {
+        send_to_char(ch, "Remove what?\r\n");
+        return;
+    }
+    let dotmode = find_all_dots(&arg);
+
+    let mut found = false;
+    let mut i;
+    if dotmode == FIND_ALL {
+        for mut i in 0..NUM_WEARS {
+            if ch.get_eq(i).is_some() {
+                perform_remove(db, ch, i);
+                found = true;
+            }
+        }
+        if !found {
+            send_to_char(ch, "You're not using anything.\r\n");
+        }
+    } else if dotmode == FIND_ALLDOT {
+        if arg.is_empty() {
+            send_to_char(ch, "Remove all of what?\r\n");
+        } else {
+            found = false;
+            for i in 0..NUM_WEARS {
+                if ch.get_eq(i).is_some()
+                    && db.can_see_obj(ch, ch.get_eq(i).as_ref().unwrap())
+                    && isname(&arg, &ch.get_eq(i).as_ref().unwrap().name) != 0
+                {
+                    perform_remove(db, ch, i);
+                    found = true;
+                }
+            }
+            if !found {
+                send_to_char(
+                    ch,
+                    format!("You don't seem to be using any {}s.\r\n", arg).as_str(),
+                );
+            }
+        }
+    } else {
+        if {
+            i = db.get_obj_pos_in_equip_vis(ch, &arg, None, &ch.equipment);
+            i.is_none()
+        } {
+            send_to_char(
+                ch,
+                format!("You don't seem to be using {} {}.\r\n", an!(arg), arg).as_str(),
+            );
+        } else {
+            perform_remove(db, ch, i.unwrap());
+        }
+    }
+}

@@ -52,6 +52,8 @@ mod limits;
 mod mobact;
 mod modify;
 mod screen;
+mod shops;
+mod spec_assign;
 mod spells;
 mod structs;
 mod telnet;
