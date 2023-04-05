@@ -8,15 +8,17 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::cmp::max;
+use std::rc::Rc;
+
 use crate::config::FREE_RENT;
 use crate::fight::die;
-use crate::interpreter::SCMD_QUIT;
+use crate::interpreter::{one_argument, SCMD_QUIT};
 use crate::objsave::crash_rentsave;
+use crate::spec_procs::list_skills;
 use crate::structs::{CharData, LVL_IMMORT, POS_FIGHTING, POS_STUNNED};
 use crate::util::NRM;
 use crate::{send_to_char, MainGlobals, TO_ROOM};
-use std::cmp::max;
-use std::rc::Rc;
 
 #[allow(unused_variables)]
 pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
@@ -263,26 +265,22 @@ pub fn do_not_here(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // if (ohoh && IS_NPC(vict) && AWAKE(vict))
 // hit(vict, ch, TYPE_UNDEFINED);
 // }
-//
-//
-//
-// ACMD(do_practice)
-// {
-// char arg[MAX_INPUT_LENGTH];
-//
-// if (IS_NPC(ch))
-// return;
-//
-// one_argument(argument, arg);
-//
-// if (*arg)
-// send_to_char(ch, "You can only practice skills in your guild.\r\n");
-// else
-// list_skills(ch);
-// }
-//
-//
-//
+
+#[allow(unused_variables)]
+pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    if ch.is_npc() {
+        return;
+    }
+    let mut arg = String::new();
+    one_argument(argument, &mut arg);
+
+    if !arg.is_empty() {
+        send_to_char(ch, "You can only practice skills in your guild.\r\n");
+    } else {
+        list_skills(&game.db, ch);
+    }
+}
+
 // ACMD(do_visible)
 // {
 // if (GET_LEVEL(ch) >= LVL_IMMORT) {

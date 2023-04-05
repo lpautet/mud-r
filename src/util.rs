@@ -512,7 +512,10 @@ macro_rules! set_skill {
 }
 
 impl CharData {
-    pub fn set_skill(&self, i: usize, pct: i8) {
+    pub fn get_skill(&self, i: i32) -> i8 {
+        self.player_specials.borrow().saved.skills[i as usize]
+    }
+    pub fn set_skill(&self, i: i32, pct: i8) {
         self.player_specials.borrow_mut().saved.skills[i as usize] = pct;
     }
     pub fn get_sex(&self) -> u8 {

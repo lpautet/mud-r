@@ -56,6 +56,8 @@ mod objsave;
 mod screen;
 mod shops;
 mod spec_assign;
+mod spec_procs;
+mod spell_parser;
 mod spells;
 mod structs;
 mod telnet;

@@ -13,7 +13,7 @@ use std::cmp::max;
 use std::rc::Rc;
 
 use hmac::Hmac;
-use log::error;
+use log::{error, info};
 use sha2::Sha256;
 
 use crate::act_informative::{
@@ -23,7 +23,7 @@ use crate::act_informative::{
 use crate::act_item::{do_drop, do_get, do_grab, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
-use crate::act_other::{do_not_here, do_quit};
+use crate::act_other::{do_not_here, do_practice, do_quit};
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
@@ -116,7 +116,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 39] = [
+pub const CMD_INFO: [CommandInfo; 40] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -492,6 +492,13 @@ pub const CMD_INFO: [CommandInfo; 39] = [
     // { "pout"     , POS_RESTING , do_action   , 0, 0 },
     // { "prompt"   , POS_DEAD    , do_display  , 0, 0 },
     // { "practice" , POS_RESTING , do_practice , 1, 0 },
+    CommandInfo {
+        command: "practice",
+        minimum_position: POS_RESTING,
+        command_pointer: do_practice,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "pray"     , POS_SITTING , do_action   , 0, 0 },
     // { "puke"     , POS_RESTING , do_action   , 0, 0 },
     // { "punch"    , POS_RESTING , do_action   , 0, 0 },
@@ -1221,6 +1228,10 @@ pub fn half_chop(string: &mut String, arg1: &mut String, arg2: &mut String) {
 // return (-1);
 // }
 
+pub fn is_move(cmdnum: i32) -> bool {
+    CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
+}
+
 fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     // struct obj_data *i;
     // struct char_data *k;
@@ -1262,6 +1273,7 @@ fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
         .iter()
     {
         if !k.mob_flagged(MOB_NOTDEADYET) {
+            let x = db.get_mob_spec(k);
             if db.get_mob_spec(k).is_some()
                 && db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
             {

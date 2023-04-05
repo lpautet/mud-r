@@ -1017,3 +1017,9 @@ impl ExtraDescrData {
         }
     }
 }
+
+pub struct GuildInfoType {
+    pub pc_class: i8,
+    pub guild_room: RoomVnum,
+    pub direction: i32,
+}

@@ -7,6 +7,11 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
+use crate::spell_parser::UNUSED_SPELLNAME;
+use std::rc::Rc;
+
+use crate::structs::{LVL_IMPL, NUM_CLASSES};
+
 //
 // #define DEFAULT_STAFF_LVL	12
 // #define DEFAULT_WAND_LVL	12
@@ -18,17 +23,18 @@
 // #define CAST_STAFF	3
 // #define CAST_SCROLL	4
 //
-// #define MAG_DAMAGE	(1 << 0)
-// #define MAG_AFFECTS	(1 << 1)
-// #define MAG_UNAFFECTS	(1 << 2)
-// #define MAG_POINTS	(1 << 3)
-// #define MAG_ALTER_OBJS	(1 << 4)
-// #define MAG_GROUPS	(1 << 5)
-// #define MAG_MASSES	(1 << 6)
-// #define MAG_AREAS	(1 << 7)
-// #define MAG_SUMMONS	(1 << 8)
-// #define MAG_CREATIONS	(1 << 9)
-// #define MAG_MANUAL	(1 << 10)
+pub const MAG_NONE: i32 = 0;
+pub const MAG_DAMAGE: i32 = 1 << 0;
+pub const MAG_AFFECTS: i32 = 1 << 1;
+pub const MAG_UNAFFECTS: i32 = 1 << 2;
+pub const MAG_POINTS: i32 = 1 << 3;
+pub const MAG_ALTER_OBJS: i32 = 1 << 4;
+pub const MAG_GROUPS: i32 = 1 << 5;
+pub const MAG_MASSES: i32 = 1 << 6;
+pub const MAG_AREAS: i32 = 1 << 7;
+pub const MAG_SUMMONS: i32 = 1 << 8;
+pub const MAG_CREATIONS: i32 = 1 << 9;
+pub const MAG_MANUAL: i32 = 1 << 10;
 //
 //
 pub const TYPE_UNDEFINED: i32 = -1;
@@ -101,24 +107,23 @@ pub const SKILL_SNEAK: i32 = 138; /* Reserved Skill[] DO NOT CHANGE */
 pub const SKILL_STEAL: i32 = 139; /* Reserved Skill[] DO NOT CHANGE */
 pub const SKILL_TRACK: i32 = 140; /* Reserved Skill[] DO NOT CHANGE */
 /* New skills may be added here up to MAX_SKILLS (200) */
-//
-//
-// /*
-//  *  NON-PLAYER AND OBJECT SPELLS AND SKILLS
-//  *  The practice levels for the spells and skills below are _not_ recorded
-//  *  in the playerfile; therefore, the intended use is for spells and skills
-//  *  associated with objects (such as SPELL_IDENTIFY used with scrolls of
-//  *  identify) or non-players (such as NPC-only spells).
-//  */
-//
-// #define SPELL_IDENTIFY               201
-// #define SPELL_FIRE_BREATH            202
-// #define SPELL_GAS_BREATH             203
-// #define SPELL_FROST_BREATH           204
-// #define SPELL_ACID_BREATH            205
-// #define SPELL_LIGHTNING_BREATH       206
-//
-// #define TOP_SPELL_DEFINE	     299
+
+/*
+ *  NON-PLAYER AND OBJECT SPELLS AND SKILLS
+ *  The practice levels for the spells and skills below are _not_ recorded
+ *  in the playerfile; therefore, the intended use is for spells and skills
+ *  associated with objects (such as SPELL_IDENTIFY used with scrolls of
+ *  identify) or non-players (such as NPC-only spells).
+ */
+
+pub const SPELL_IDENTIFY: i32 = 201;
+pub const SPELL_FIRE_BREATH: i32 = 202;
+pub const SPELL_GAS_BREATH: i32 = 203;
+pub const SPELL_FROST_BREATH: i32 = 204;
+pub const SPELL_ACID_BREATH: i32 = 205;
+pub const SPELL_LIGHTNING_BREATH: i32 = 206;
+
+pub const TOP_SPELL_DEFINE: usize = 299;
 // /* NEW NPC/OBJECT SPELLS can be inserted here up to 299 */
 /* WEAPON ATTACK TYPES */
 
@@ -147,32 +152,75 @@ pub const SAVING_PETRI: i32 = 2;
 pub const SAVING_BREATH: i32 = 3;
 pub const SAVING_SPELL: i32 = 4;
 
-// #define TAR_IGNORE      (1 << 0)
-// #define TAR_CHAR_ROOM   (1 << 1)
-// #define TAR_CHAR_WORLD  (1 << 2)
-// #define TAR_FIGHT_SELF  (1 << 3)
-// #define TAR_FIGHT_VICT  (1 << 4)
-// #define TAR_SELF_ONLY   (1 << 5) /* Only a check, use with i.e. TAR_CHAR_ROOM */
-// #define TAR_NOT_SELF   	(1 << 6) /* Only a check, use with i.e. TAR_CHAR_ROOM */
-// #define TAR_OBJ_INV     (1 << 7)
-// #define TAR_OBJ_ROOM    (1 << 8)
-// #define TAR_OBJ_WORLD   (1 << 9)
-// #define TAR_OBJ_EQUIP	(1 << 10)
-//
-// struct spell_info_type {
-//     byte min_position;	/* Position for caster	 */
-//     int mana_min;	/* Min amount of mana used by a spell (highest lev) */
-//     int mana_max;	/* Max amount of mana used by a spell (lowest lev) */
-//     int mana_change;	/* Change in mana used by spell from lev to lev */
-//
-//     int min_level[NUM_CLASSES];
-//     int routines;
-//     byte violent;
-//     int targets;         /* See below for use with TAR_XXX  */
-//     const char *name;	/* Input size not limited. Originates from string constants. */
-//     const char *wear_off_msg;	/* Input size not limited. Originates from string constants. */
-// };
-//
+pub const TAR_NONE: i32 = 0;
+pub const TAR_IGNORE: i32 = 1 << 0;
+pub const TAR_CHAR_ROOM: i32 = 1 << 1;
+pub const TAR_CHAR_WORLD: i32 = 1 << 2;
+pub const TAR_FIGHT_SELF: i32 = 1 << 3;
+pub const TAR_FIGHT_VICT: i32 = 1 << 4;
+pub const TAR_SELF_ONLY: i32 = 1 << 5; /* Only a check, use with i.e. TAR_CHAR_ROOM */
+pub const TAR_NOT_SELF: i32 = 1 << 6; /* Only a check, use with i.e. TAR_CHAR_ROOM */
+pub const TAR_OBJ_INV: i32 = 1 << 7;
+pub const TAR_OBJ_ROOM: i32 = 1 << 8;
+pub const TAR_OBJ_WORLD: i32 = 1 << 9;
+pub const TAR_OBJ_EQUIP: i32 = 1 << 10;
+
+pub struct SpellInfoType {
+    pub min_position: u8,
+    /* Position for caster	 */
+    pub mana_min: i32,
+    /* Min amount of mana used by a spell (highest lev) */
+    pub mana_max: i32,
+    /* Max amount of mana used by a spell (lowest lev) */
+    pub mana_change: i32,
+    /* Change in mana used by spell from lev to lev */
+    pub min_level: [i32; NUM_CLASSES as usize],
+    pub routines: i32,
+    pub violent: bool,
+    pub targets: i32,
+    /* See below for use with TAR_XXX  */
+    pub name: &'static str,
+    /* Input size not limited. Originates from string constants. */
+    pub wear_off_msg: Option<&'static str>,
+    /* Input size not limited. Originates from string constants. */
+}
+
+impl Default for SpellInfoType {
+    fn default() -> Self {
+        SpellInfoType {
+            min_position: 0,
+            mana_min: 0,
+            mana_max: 0,
+            mana_change: 0,
+            min_level: [(LVL_IMPL + 1) as i32; NUM_CLASSES as usize],
+            routines: 0,
+            violent: false,
+            targets: 0,
+            name: UNUSED_SPELLNAME,
+            wear_off_msg: None,
+        }
+    }
+}
+
+impl Copy for SpellInfoType {}
+
+impl Clone for SpellInfoType {
+    fn clone(&self) -> Self {
+        SpellInfoType {
+            min_position: self.min_position,
+            mana_min: self.mana_min,
+            mana_max: self.mana_max,
+            mana_change: self.mana_change,
+            min_level: self.min_level,
+            routines: self.routines,
+            violent: self.violent,
+            targets: self.targets,
+            name: self.name.clone(),
+            wear_off_msg: self.wear_off_msg.clone(),
+        }
+    }
+}
+
 // /* Possible Targets:
 //
 //    bit 0 : IGNORE TARGET

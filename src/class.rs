@@ -24,13 +24,32 @@ use log::{error, info};
 
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
+use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
+use crate::spell_parser::spell_level;
 use crate::spells::{
-    SKILL_BACKSTAB, SKILL_HIDE, SKILL_PICK_LOCK, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
+    MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS, MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL,
+    MAG_POINTS, MAG_SUMMONS, MAG_UNAFFECTS, SKILL_BACKSTAB, SKILL_BASH, SKILL_HIDE, SKILL_KICK,
+    SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK, SPELL_ACID_BREATH,
+    SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS, SPELL_BURNING_HANDS,
+    SPELL_CALL_LIGHTNING, SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY,
+    SPELL_CONTROL_WEATHER, SPELL_CREATE_FOOD, SPELL_CREATE_WATER, SPELL_CURE_BLIND,
+    SPELL_CURE_CRITIC, SPELL_CURE_LIGHT, SPELL_CURSE, SPELL_DETECT_ALIGN, SPELL_DETECT_INVIS,
+    SPELL_DETECT_MAGIC, SPELL_DETECT_POISON, SPELL_DISPEL_EVIL, SPELL_DISPEL_GOOD,
+    SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON, SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_FIRE_BREATH,
+    SPELL_FROST_BREATH, SPELL_GAS_BREATH, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL, SPELL_HARM,
+    SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION, SPELL_INVISIBLE, SPELL_LIGHTNING_BOLT,
+    SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT, SPELL_MAGIC_MISSILE, SPELL_POISON,
+    SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE, SPELL_REMOVE_POISON, SPELL_SANCTUARY,
+    SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_SUMMON,
+    SPELL_TELEPORT, SPELL_WATERWALK, SPELL_WORD_OF_RECALL, TAR_CHAR_ROOM, TAR_CHAR_WORLD,
+    TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF, TAR_OBJ_EQUIP, TAR_OBJ_INV, TAR_OBJ_ROOM,
+    TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE,
 };
 use crate::structs::{
-    CharData, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR,
-    DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF, ITEM_ANTI_WARRIOR,
-    LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, THIRST,
+    CharData, GuildInfoType, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED,
+    CLASS_WARRIOR, DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF,
+    ITEM_ANTI_WARRIOR, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES,
+    PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, set_skill, MainGlobals};
@@ -104,21 +123,21 @@ pub fn parse_class(arg: char) -> i8 {
  * following spells" vs. "You know of the following skills"
  */
 
-// #define SPELL	0
-// #define SKILL	1
+const SPELL: i32 = 0;
+const SKILL: i32 = 1;
 
 /* #define LEARNED_LEVEL	0  % known which is considered "learned" */
 /* #define MAX_PER_PRAC		1  max percent gain in skill per practice */
 /* #define min_PER_PRAC		2  min percent gain in skill per practice */
 /* #define PRAC_TYPE		3  should it say 'spell' or 'skill'?	*/
 
-// int prac_params[4][NUM_CLASSES] = {
-// /* MAG	CLE	THE	WAR */
-// { 95,		95,	85,	80	},	/* learned level */
-// { 100,	100,	12,	12	},	/* max per practice */
-// { 25,		25,	0,	0	},	/* min per practice */
-// { SPELL,	SPELL,	SKILL,	SKILL	},	/* prac name */
-// };
+pub const PRAC_PARAMS: [[i32; 4]; NUM_CLASSES as usize] = [
+    /* MAG	CLE	THE	WAR */
+    [95, 95, 85, 80],             /* learned level */
+    [100, 100, 12, 12],           /* max per practice */
+    [25, 25, 0, 0],               /* min per practice */
+    [SPELL, SPELL, SKILL, SKILL], /* prac name */
+];
 
 /*
  * ...And the appropriate rooms for each guildmaster/guildguard; controls
@@ -131,20 +150,41 @@ pub fn parse_class(arg: char) -> i8 {
  * "recycle" the existing mobs that are used in other guilds for your new
  * guild, then you don't have to change that file, only here.
  */
-// struct guild_info_type guild_info[] = {
-//
-// /* Midgaard */
-// { CLASS_MAGIC_USER,	3017,	SCMD_SOUTH	},
-// { CLASS_CLERIC,	3004,	SCMD_NORTH	},
-// { CLASS_THIEF,	3027,	SCMD_EAST	},
-// { CLASS_WARRIOR,	3021,	SCMD_EAST	},
-//
-// /* Brass Dragon */
-// { -999 /* all */ ,	5065,	SCMD_WEST	},
-//
-// /* this must go last -- add new guards above! */
-// { -1, NOWHERE, -1}
-// };
+pub const GUILD_INFO: [GuildInfoType; 6] = [
+    /* Midgaard */
+    GuildInfoType {
+        pc_class: CLASS_MAGIC_USER,
+        guild_room: 3017,
+        direction: SCMD_SOUTH,
+    },
+    GuildInfoType {
+        pc_class: CLASS_CLERIC,
+        guild_room: 3004,
+        direction: SCMD_NORTH,
+    },
+    GuildInfoType {
+        pc_class: CLASS_THIEF,
+        guild_room: 3027,
+        direction: SCMD_EAST,
+    },
+    GuildInfoType {
+        pc_class: CLASS_WARRIOR,
+        guild_room: 3021,
+        direction: SCMD_EAST,
+    },
+    /* Brass Dragon */
+    GuildInfoType {
+        pc_class: -127, /* all */
+        guild_room: 5065,
+        direction: SCMD_WEST,
+    },
+    /* this must go last -- add new guards above! */
+    GuildInfoType {
+        pc_class: -1,
+        guild_room: NOWHERE,
+        direction: -1,
+    },
+];
 
 /*
  * Saving throws for:
@@ -1870,78 +1910,77 @@ pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
  * which classes, and the minimum level the character must be to use
  * the spell or skill.
  */
-// void init_spell_levels(void)
-// {
-// /* MAGES */
-// spell_level(SPELL_MAGIC_MISSILE, CLASS_MAGIC_USER, 1);
-// spell_level(SPELL_DETECT_INVIS, CLASS_MAGIC_USER, 2);
-// spell_level(SPELL_DETECT_MAGIC, CLASS_MAGIC_USER, 2);
-// spell_level(SPELL_CHILL_TOUCH, CLASS_MAGIC_USER, 3);
-// spell_level(SPELL_INFRAVISION, CLASS_MAGIC_USER, 3);
-// spell_level(SPELL_INVISIBLE, CLASS_MAGIC_USER, 4);
-// spell_level(SPELL_ARMOR, CLASS_MAGIC_USER, 4);
-// spell_level(SPELL_BURNING_HANDS, CLASS_MAGIC_USER, 5);
-// spell_level(SPELL_LOCATE_OBJECT, CLASS_MAGIC_USER, 6);
-// spell_level(SPELL_STRENGTH, CLASS_MAGIC_USER, 6);
-// spell_level(SPELL_SHOCKING_GRASP, CLASS_MAGIC_USER, 7);
-// spell_level(SPELL_SLEEP, CLASS_MAGIC_USER, 8);
-// spell_level(SPELL_LIGHTNING_BOLT, CLASS_MAGIC_USER, 9);
-// spell_level(SPELL_BLINDNESS, CLASS_MAGIC_USER, 9);
-// spell_level(SPELL_DETECT_POISON, CLASS_MAGIC_USER, 10);
-// spell_level(SPELL_COLOR_SPRAY, CLASS_MAGIC_USER, 11);
-// spell_level(SPELL_ENERGY_DRAIN, CLASS_MAGIC_USER, 13);
-// spell_level(SPELL_CURSE, CLASS_MAGIC_USER, 14);
-// spell_level(SPELL_POISON, CLASS_MAGIC_USER, 14);
-// spell_level(SPELL_FIREBALL, CLASS_MAGIC_USER, 15);
-// spell_level(SPELL_CHARM, CLASS_MAGIC_USER, 16);
-// spell_level(SPELL_ENCHANT_WEAPON, CLASS_MAGIC_USER, 26);
-// spell_level(SPELL_CLONE, CLASS_MAGIC_USER, 30);
-//
-// /* CLERICS */
-// spell_level(SPELL_CURE_LIGHT, CLASS_CLERIC, 1);
-// spell_level(SPELL_ARMOR, CLASS_CLERIC, 1);
-// spell_level(SPELL_CREATE_FOOD, CLASS_CLERIC, 2);
-// spell_level(SPELL_CREATE_WATER, CLASS_CLERIC, 2);
-// spell_level(SPELL_DETECT_POISON, CLASS_CLERIC, 3);
-// spell_level(SPELL_DETECT_ALIGN, CLASS_CLERIC, 4);
-// spell_level(SPELL_CURE_BLIND, CLASS_CLERIC, 4);
-// spell_level(SPELL_BLESS, CLASS_CLERIC, 5);
-// spell_level(SPELL_DETECT_INVIS, CLASS_CLERIC, 6);
-// spell_level(SPELL_BLINDNESS, CLASS_CLERIC, 6);
-// spell_level(SPELL_INFRAVISION, CLASS_CLERIC, 7);
-// spell_level(SPELL_PROT_FROM_EVIL, CLASS_CLERIC, 8);
-// spell_level(SPELL_POISON, CLASS_CLERIC, 8);
-// spell_level(SPELL_GROUP_ARMOR, CLASS_CLERIC, 9);
-// spell_level(SPELL_CURE_CRITIC, CLASS_CLERIC, 9);
-// spell_level(SPELL_SUMMON, CLASS_CLERIC, 10);
-// spell_level(SPELL_REMOVE_POISON, CLASS_CLERIC, 10);
-// spell_level(SPELL_WORD_OF_RECALL, CLASS_CLERIC, 12);
-// spell_level(SPELL_EARTHQUAKE, CLASS_CLERIC, 12);
-// spell_level(SPELL_DISPEL_EVIL, CLASS_CLERIC, 14);
-// spell_level(SPELL_DISPEL_GOOD, CLASS_CLERIC, 14);
-// spell_level(SPELL_SANCTUARY, CLASS_CLERIC, 15);
-// spell_level(SPELL_CALL_LIGHTNING, CLASS_CLERIC, 15);
-// spell_level(SPELL_HEAL, CLASS_CLERIC, 16);
-// spell_level(SPELL_CONTROL_WEATHER, CLASS_CLERIC, 17);
-// spell_level(SPELL_SENSE_LIFE, CLASS_CLERIC, 18);
-// spell_level(SPELL_HARM, CLASS_CLERIC, 19);
-// spell_level(SPELL_GROUP_HEAL, CLASS_CLERIC, 22);
-// spell_level(SPELL_REMOVE_CURSE, CLASS_CLERIC, 26);
-//
-// /* THIEVES */
-// spell_level(SKILL_SNEAK, CLASS_THIEF, 1);
-// spell_level(SKILL_PICK_LOCK, CLASS_THIEF, 2);
-// spell_level(SKILL_BACKSTAB, CLASS_THIEF, 3);
-// spell_level(SKILL_STEAL, CLASS_THIEF, 4);
-// spell_level(SKILL_HIDE, CLASS_THIEF, 5);
-// spell_level(SKILL_TRACK, CLASS_THIEF, 6);
-//
-// /* WARRIORS */
-// spell_level(SKILL_KICK, CLASS_WARRIOR, 1);
-// spell_level(SKILL_RESCUE, CLASS_WARRIOR, 3);
-// spell_level(SKILL_TRACK, CLASS_WARRIOR, 9);
-// spell_level(SKILL_BASH, CLASS_WARRIOR, 12);
-// }
+pub fn init_spell_levels(db: &mut DB) {
+    /* MAGES */
+    spell_level(db, SPELL_MAGIC_MISSILE, CLASS_MAGIC_USER, 1);
+    spell_level(db, SPELL_DETECT_INVIS, CLASS_MAGIC_USER, 2);
+    spell_level(db, SPELL_DETECT_MAGIC, CLASS_MAGIC_USER, 2);
+    spell_level(db, SPELL_CHILL_TOUCH, CLASS_MAGIC_USER, 3);
+    spell_level(db, SPELL_INFRAVISION, CLASS_MAGIC_USER, 3);
+    spell_level(db, SPELL_INVISIBLE, CLASS_MAGIC_USER, 4);
+    spell_level(db, SPELL_ARMOR, CLASS_MAGIC_USER, 4);
+    spell_level(db, SPELL_BURNING_HANDS, CLASS_MAGIC_USER, 5);
+    spell_level(db, SPELL_LOCATE_OBJECT, CLASS_MAGIC_USER, 6);
+    spell_level(db, SPELL_STRENGTH, CLASS_MAGIC_USER, 6);
+    spell_level(db, SPELL_SHOCKING_GRASP, CLASS_MAGIC_USER, 7);
+    spell_level(db, SPELL_SLEEP, CLASS_MAGIC_USER, 8);
+    spell_level(db, SPELL_LIGHTNING_BOLT, CLASS_MAGIC_USER, 9);
+    spell_level(db, SPELL_BLINDNESS, CLASS_MAGIC_USER, 9);
+    spell_level(db, SPELL_DETECT_POISON, CLASS_MAGIC_USER, 10);
+    spell_level(db, SPELL_COLOR_SPRAY, CLASS_MAGIC_USER, 11);
+    spell_level(db, SPELL_ENERGY_DRAIN, CLASS_MAGIC_USER, 13);
+    spell_level(db, SPELL_CURSE, CLASS_MAGIC_USER, 14);
+    spell_level(db, SPELL_POISON, CLASS_MAGIC_USER, 14);
+    spell_level(db, SPELL_FIREBALL, CLASS_MAGIC_USER, 15);
+    spell_level(db, SPELL_CHARM, CLASS_MAGIC_USER, 16);
+    spell_level(db, SPELL_ENCHANT_WEAPON, CLASS_MAGIC_USER, 26);
+    spell_level(db, SPELL_CLONE, CLASS_MAGIC_USER, 30);
+
+    /* CLERICS */
+    spell_level(db, SPELL_CURE_LIGHT, CLASS_CLERIC, 1);
+    spell_level(db, SPELL_ARMOR, CLASS_CLERIC, 1);
+    spell_level(db, SPELL_CREATE_FOOD, CLASS_CLERIC, 2);
+    spell_level(db, SPELL_CREATE_WATER, CLASS_CLERIC, 2);
+    spell_level(db, SPELL_DETECT_POISON, CLASS_CLERIC, 3);
+    spell_level(db, SPELL_DETECT_ALIGN, CLASS_CLERIC, 4);
+    spell_level(db, SPELL_CURE_BLIND, CLASS_CLERIC, 4);
+    spell_level(db, SPELL_BLESS, CLASS_CLERIC, 5);
+    spell_level(db, SPELL_DETECT_INVIS, CLASS_CLERIC, 6);
+    spell_level(db, SPELL_BLINDNESS, CLASS_CLERIC, 6);
+    spell_level(db, SPELL_INFRAVISION, CLASS_CLERIC, 7);
+    spell_level(db, SPELL_PROT_FROM_EVIL, CLASS_CLERIC, 8);
+    spell_level(db, SPELL_POISON, CLASS_CLERIC, 8);
+    spell_level(db, SPELL_GROUP_ARMOR, CLASS_CLERIC, 9);
+    spell_level(db, SPELL_CURE_CRITIC, CLASS_CLERIC, 9);
+    spell_level(db, SPELL_SUMMON, CLASS_CLERIC, 10);
+    spell_level(db, SPELL_REMOVE_POISON, CLASS_CLERIC, 10);
+    spell_level(db, SPELL_WORD_OF_RECALL, CLASS_CLERIC, 12);
+    spell_level(db, SPELL_EARTHQUAKE, CLASS_CLERIC, 12);
+    spell_level(db, SPELL_DISPEL_EVIL, CLASS_CLERIC, 14);
+    spell_level(db, SPELL_DISPEL_GOOD, CLASS_CLERIC, 14);
+    spell_level(db, SPELL_SANCTUARY, CLASS_CLERIC, 15);
+    spell_level(db, SPELL_CALL_LIGHTNING, CLASS_CLERIC, 15);
+    spell_level(db, SPELL_HEAL, CLASS_CLERIC, 16);
+    spell_level(db, SPELL_CONTROL_WEATHER, CLASS_CLERIC, 17);
+    spell_level(db, SPELL_SENSE_LIFE, CLASS_CLERIC, 18);
+    spell_level(db, SPELL_HARM, CLASS_CLERIC, 19);
+    spell_level(db, SPELL_GROUP_HEAL, CLASS_CLERIC, 22);
+    spell_level(db, SPELL_REMOVE_CURSE, CLASS_CLERIC, 26);
+
+    /* THIEVES */
+    spell_level(db, SKILL_SNEAK, CLASS_THIEF, 1);
+    spell_level(db, SKILL_PICK_LOCK, CLASS_THIEF, 2);
+    spell_level(db, SKILL_BACKSTAB, CLASS_THIEF, 3);
+    spell_level(db, SKILL_STEAL, CLASS_THIEF, 4);
+    spell_level(db, SKILL_HIDE, CLASS_THIEF, 5);
+    spell_level(db, SKILL_TRACK, CLASS_THIEF, 6);
+
+    /* WARRIORS */
+    spell_level(db, SKILL_KICK, CLASS_WARRIOR, 1);
+    spell_level(db, SKILL_RESCUE, CLASS_WARRIOR, 3);
+    spell_level(db, SKILL_TRACK, CLASS_WARRIOR, 9);
+    spell_level(db, SKILL_BASH, CLASS_WARRIOR, 12);
+}
 
 /*
  * This is the exp given to implementors -- it must always be greater

@@ -240,7 +240,7 @@ pub fn valid_name<'a>(descriptor_list: &Vec<Rc<DescriptorData>>, newname: &str) 
 
         let character = character.as_ref().unwrap();
 
-        if character.get_name().as_ref() != "" && character.get_name().as_ref() != newname {
+        if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
             return dt.state() == ConPlaying;
         }
     }

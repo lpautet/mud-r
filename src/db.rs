@@ -20,6 +20,7 @@ use std::{fs, io, mem, process, slice};
 use log::{error, info, warn};
 use regex::Regex;
 
+use crate::class::init_spell_levels;
 use crate::{check_player_special, get_last_tell_mut, MainGlobals};
 // long get_id_by_name(const char *name)
 // {
@@ -50,6 +51,10 @@ use crate::constants::{
 use crate::handler::fname;
 use crate::modify::paginate_string;
 use crate::shops::{assign_the_shopkeepers, ShopData};
+use crate::spec_assign::assign_mobiles;
+use crate::spec_procs::sort_spells;
+use crate::spell_parser::mag_assign_spells;
+use crate::spells::{SpellInfoType, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
@@ -186,6 +191,8 @@ pub struct DB {
     pub cmd_sort_info: Vec<usize>,
     pub combat_list: RefCell<Vec<Rc<CharData>>>,
     pub shop_index: RefCell<Vec<ShopData>>,
+    pub spell_sort_info: [i32; MAX_SKILLS as usize + 1],
+    pub spell_info: [SpellInfoType; (TOP_SPELL_DEFINE + 1) as usize],
 }
 
 pub const REAL: i32 = 0;
@@ -527,6 +534,8 @@ impl DB {
             cmd_sort_info: vec![],
             combat_list: RefCell::new(vec![]),
             shop_index: RefCell::new(vec![]),
+            spell_sort_info: [0; MAX_SKILLS + 1],
+            spell_info: [SpellInfoType::default(); TOP_SPELL_DEFINE + 1],
         }
     }
 
@@ -554,10 +563,9 @@ impl DB {
         main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings);
         prune_crlf(&mut ret.greetings);
 
-        //
-        // log("Loading spell definitions.");
-        // mag_assign_spells();
-        //
+        info!("Loading spell definitions.");
+        mag_assign_spells(&mut ret);
+
         ret.boot_world();
         //
         // log("Loading help entries.");
@@ -575,8 +583,8 @@ impl DB {
         info!("Assigning function pointers:");
 
         if !ret.no_specials {
-            // info!("   Mobiles.");
-            // assign_mobiles();
+            info!("   Mobiles.");
+            assign_mobiles(&mut ret);
             info!("   Shopkeepers.");
             assign_the_shopkeepers(&mut ret);
             // info!("   Objects.");
@@ -585,12 +593,12 @@ impl DB {
             // assign_rooms();
         }
 
-        // log("Assigning spell and skill levels.");
-        // init_spell_levels();
+        info!("Assigning spell and skill levels.");
+        init_spell_levels(&mut ret);
         //
         info!("Sorting command list and spells.");
         ret.sort_commands();
-        // sort_spells();
+        sort_spells(&mut ret);
         //
         // log("Booting mail system.");
         // if (!scan_file()) {
