@@ -8,168 +8,419 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
 
+use crate::config::OK;
 use crate::db::DB;
-use crate::interpreter::{any_one_arg, is_abbrev};
+use crate::handler::{isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::interpreter::{any_one_arg, is_abbrev, one_argument};
+use crate::magic::{
+    mag_affects, mag_alter_objs, mag_areas, mag_creations, mag_damage, mag_groups, mag_masses,
+    mag_points, mag_summons, mag_unaffects,
+};
 use crate::spells::{
-    MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS, MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL,
-    MAG_POINTS, MAG_SUMMONS, MAG_UNAFFECTS, SKILL_BACKSTAB, SKILL_BASH, SKILL_HIDE, SKILL_KICK,
-    SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK, SPELL_ACID_BREATH,
-    SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS, SPELL_BURNING_HANDS,
-    SPELL_CALL_LIGHTNING, SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY,
-    SPELL_CONTROL_WEATHER, SPELL_CREATE_FOOD, SPELL_CREATE_WATER, SPELL_CURE_BLIND,
-    SPELL_CURE_CRITIC, SPELL_CURE_LIGHT, SPELL_CURSE, SPELL_DETECT_ALIGN, SPELL_DETECT_INVIS,
-    SPELL_DETECT_MAGIC, SPELL_DETECT_POISON, SPELL_DISPEL_EVIL, SPELL_DISPEL_GOOD,
-    SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON, SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_FIRE_BREATH,
-    SPELL_FROST_BREATH, SPELL_GAS_BREATH, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL, SPELL_HARM,
-    SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION, SPELL_INVISIBLE, SPELL_LIGHTNING_BOLT,
-    SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT, SPELL_MAGIC_MISSILE, SPELL_POISON,
-    SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE, SPELL_REMOVE_POISON, SPELL_SANCTUARY,
+    spell_charm, spell_create_water, spell_detect_poison, spell_enchant_weapon, spell_identify,
+    spell_locate_object, spell_recall, spell_summon, spell_teleport, SpellInfoType, CAST_POTION,
+    CAST_SCROLL, CAST_SPELL, CAST_STAFF, CAST_WAND, MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS,
+    MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL, MAG_MASSES, MAG_POINTS, MAG_SUMMONS,
+    MAG_UNAFFECTS, MAX_SPELLS, SAVING_BREATH, SAVING_ROD, SAVING_SPELL, SKILL_BACKSTAB, SKILL_BASH,
+    SKILL_HIDE, SKILL_KICK, SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
+    SPELL_ACID_BREATH, SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS,
+    SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING, SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE,
+    SPELL_COLOR_SPRAY, SPELL_CONTROL_WEATHER, SPELL_CREATE_FOOD, SPELL_CREATE_WATER,
+    SPELL_CURE_BLIND, SPELL_CURE_CRITIC, SPELL_CURE_LIGHT, SPELL_CURSE, SPELL_DETECT_ALIGN,
+    SPELL_DETECT_INVIS, SPELL_DETECT_MAGIC, SPELL_DETECT_POISON, SPELL_DISPEL_EVIL,
+    SPELL_DISPEL_GOOD, SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON, SPELL_ENERGY_DRAIN, SPELL_FIREBALL,
+    SPELL_FIRE_BREATH, SPELL_FROST_BREATH, SPELL_GAS_BREATH, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL,
+    SPELL_HARM, SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION, SPELL_INVISIBLE,
+    SPELL_LIGHTNING_BOLT, SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT, SPELL_MAGIC_MISSILE,
+    SPELL_POISON, SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE, SPELL_REMOVE_POISON, SPELL_SANCTUARY,
     SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_SUMMON,
     SPELL_TELEPORT, SPELL_WATERWALK, SPELL_WORD_OF_RECALL, TAR_CHAR_ROOM, TAR_CHAR_WORLD,
-    TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF, TAR_OBJ_EQUIP, TAR_OBJ_INV, TAR_OBJ_ROOM,
-    TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE,
+    TAR_FIGHT_SELF, TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF, TAR_OBJ_EQUIP, TAR_OBJ_INV,
+    TAR_OBJ_ROOM, TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE, TYPE_UNDEFINED,
 };
-use crate::structs::{LVL_IMMORT, LVL_IMPL, POS_FIGHTING, POS_SITTING};
+use crate::structs::{
+    CharData, ObjData, AFF_CHARM, AFF_GROUP, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING,
+    POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
+};
 use crate::structs::{NUM_CLASSES, POS_STANDING};
+use crate::util::rand_number;
+use crate::{is_set, send_to_char, MainGlobals, TO_ROOM, TO_VICT};
 
-// #define SINFO spell_info[spellnum]
-//
-// /* local globals */
-// struct spell_info_type spell_info[TOP_SPELL_DEFINE + 1];
-//
-// /* local functions */
-// void say_spell(struct char_data *ch, int spellnum, struct char_data *tch, struct obj_data *tobj);
-// void spello(int spl, const char *name, int max_mana, int min_mana, int mana_change, int minpos, int targets, int violent, int routines, const char *wearoff);
-// int mag_manacost(struct char_data *ch, int spellnum);
-// ACMD(do_cast);
-// void unused_spell(int spl);
-// void mag_assign_spells(void);
-//
-// /*
-//  * This arrangement is pretty stupid, but the number of skills is limited by
-//  * the playerfile.  We can arbitrarily increase the number of skills by
-//  * increasing the space in the playerfile. Meanwhile, 200 should provide
-//  * ample slots for skills.
-//  */
-//
-// struct syllable {
-//     const char *org;
-//     const char *news;
-// };
-//
-//
-// struct syllable syls[] = {
-// {" ", " "},
-// {"ar", "abra"},
-// {"ate", "i"},
-// {"cau", "kada"},
-// {"blind", "nose"},
-// {"bur", "mosa"},
-// {"cu", "judi"},
-// {"de", "oculo"},
-// {"dis", "mar"},
-// {"ect", "kamina"},
-// {"en", "uns"},
-// {"gro", "cra"},
-// {"light", "dies"},
-// {"lo", "hi"},
-// {"magi", "kari"},
-// {"mon", "bar"},
-// {"mor", "zak"},
-// {"move", "sido"},
-// {"ness", "lacri"},
-// {"ning", "illa"},
-// {"per", "duda"},
-// {"ra", "gru"},
-// {"re", "candus"},
-// {"son", "sabru"},
-// {"tect", "infra"},
-// {"tri", "cula"},
-// {"ven", "nofo"},
-// {"word of", "inset"},
-// {"a", "i"}, {"b", "v"}, {"c", "q"}, {"d", "m"}, {"e", "o"}, {"f", "y"}, {"g", "t"},
-// {"h", "p"}, {"i", "u"}, {"j", "y"}, {"k", "t"}, {"l", "r"}, {"m", "w"}, {"n", "b"},
-// {"o", "a"}, {"p", "s"}, {"q", "d"}, {"r", "f"}, {"s", "g"}, {"t", "h"}, {"u", "e"},
-// {"v", "z"}, {"w", "x"}, {"x", "n"}, {"y", "l"}, {"z", "k"}, {"", ""}
-// };
-//
+/*
+ * This arrangement is pretty stupid, but the number of skills is limited by
+ * the playerfile.  We can arbitrarily increase the number of skills by
+ * increasing the space in the playerfile. Meanwhile, 200 should provide
+ * ample slots for skills.
+ */
+
+struct Syllable {
+    org: &'static str,
+    news: &'static str,
+}
+
+const SYLS: [Syllable; 55] = [
+    Syllable {
+        org: " ",
+        news: " ",
+    },
+    Syllable {
+        org: "ar",
+        news: "abra",
+    },
+    Syllable {
+        org: "ate",
+        news: "i",
+    },
+    Syllable {
+        org: "cau",
+        news: "kada",
+    },
+    Syllable {
+        org: "blind",
+        news: "nose",
+    },
+    Syllable {
+        org: "bur",
+        news: "mosa",
+    },
+    Syllable {
+        org: "cu",
+        news: "judi",
+    },
+    Syllable {
+        org: "de",
+        news: "oculo",
+    },
+    Syllable {
+        org: "dis",
+        news: "mar",
+    },
+    Syllable {
+        org: "ect",
+        news: "kamina",
+    },
+    Syllable {
+        org: "en",
+        news: "uns",
+    },
+    Syllable {
+        org: "gro",
+        news: "cra",
+    },
+    Syllable {
+        org: "light",
+        news: "dies",
+    },
+    Syllable {
+        org: "lo",
+        news: "hi",
+    },
+    Syllable {
+        org: "magi",
+        news: "kari",
+    },
+    Syllable {
+        org: "mon",
+        news: "bar",
+    },
+    Syllable {
+        org: "mor",
+        news: "zak",
+    },
+    Syllable {
+        org: "move",
+        news: "sido",
+    },
+    Syllable {
+        org: "ness",
+        news: "lacri",
+    },
+    Syllable {
+        org: "ning",
+        news: "illa",
+    },
+    Syllable {
+        org: "per",
+        news: "duda",
+    },
+    Syllable {
+        org: "ra",
+        news: "gru",
+    },
+    Syllable {
+        org: "re",
+        news: "candus",
+    },
+    Syllable {
+        org: "son",
+        news: "sabru",
+    },
+    Syllable {
+        org: "tect",
+        news: "infra",
+    },
+    Syllable {
+        org: "tri",
+        news: "cula",
+    },
+    Syllable {
+        org: "ven",
+        news: "nofo",
+    },
+    Syllable {
+        org: "word of",
+        news: "inset",
+    },
+    Syllable {
+        org: "a",
+        news: "i",
+    },
+    Syllable {
+        org: "b",
+        news: "v",
+    },
+    Syllable {
+        org: "c",
+        news: "q",
+    },
+    Syllable {
+        org: "d",
+        news: "m",
+    },
+    Syllable {
+        org: "e",
+        news: "o",
+    },
+    Syllable {
+        org: "f",
+        news: "y",
+    },
+    Syllable {
+        org: "g",
+        news: "t",
+    },
+    Syllable {
+        org: "h",
+        news: "p",
+    },
+    Syllable {
+        org: "i",
+        news: "u",
+    },
+    Syllable {
+        org: "j",
+        news: "y",
+    },
+    Syllable {
+        org: "k",
+        news: "t",
+    },
+    Syllable {
+        org: "l",
+        news: "r",
+    },
+    Syllable {
+        org: "m",
+        news: "w",
+    },
+    Syllable {
+        org: "n",
+        news: "b",
+    },
+    Syllable {
+        org: "o",
+        news: "a",
+    },
+    Syllable {
+        org: "p",
+        news: "s",
+    },
+    Syllable {
+        org: "q",
+        news: "d",
+    },
+    Syllable {
+        org: "r",
+        news: "f",
+    },
+    Syllable {
+        org: "s",
+        news: "g",
+    },
+    Syllable {
+        org: "t",
+        news: "h",
+    },
+    Syllable {
+        org: "u",
+        news: "e",
+    },
+    Syllable {
+        org: "v",
+        news: "z",
+    },
+    Syllable {
+        org: "w",
+        news: "x",
+    },
+    Syllable {
+        org: "x",
+        news: "n",
+    },
+    Syllable {
+        org: "y",
+        news: "l",
+    },
+    Syllable {
+        org: "z",
+        news: "k",
+    },
+    Syllable { org: "", news: "" },
+];
+
 pub const UNUSED_SPELLNAME: &str = "!UNUSED!"; /* So we can get &UNUSED_SPELLNAME */
-//
-// int mag_manacost(struct char_data *ch, int spellnum)
-// {
-// return MAX(SINFO.mana_max - (SINFO.mana_change *
-// (GET_LEVEL(ch) - SINFO.min_level[(int) GET_CLASS(ch)])),
-// SINFO.mana_min);
-// }
-//
-//
-// void say_spell(struct char_data *ch, int spellnum, struct char_data *tch,
-// struct obj_data *tobj)
-// {
-// char lbuf[256], buf[256], buf1[256], buf2[256];	/* FIXME */
-// const char *format;
-//
-// struct char_data *i;
-// int j, ofs = 0;
-//
-// *buf = '\0';
-// strlcpy(lbuf, skill_name(spellnum), sizeof(lbuf));
-//
-// while (lbuf[ofs]) {
-// for (j = 0; *(syls[j].org); j++) {
-// if (!strncmp(syls[j].org, lbuf + ofs, strlen(syls[j].org))) {
-// strcat(buf, syls[j].news);	/* strcat: BAD */
-// ofs += strlen(syls[j].org);
-// break;
-// }
-// }
-// /* i.e., we didn't find a match in syls[] */
-// if (!*syls[j].org) {
-// log("No entry in syllable table for substring of '%s'", lbuf);
-// ofs++;
-// }
-// }
-//
-// if (tch != NULL && IN_ROOM(tch) == IN_ROOM(ch)) {
-// if (tch == ch)
-// format = "$n closes $s eyes and utters the words, '%s'.";
-// else
-// format = "$n stares at $N and utters the words, '%s'.";
-// } else if (tobj != NULL &&
-// ((IN_ROOM(tobj) == IN_ROOM(ch)) || (tobj->carried_by == ch)))
-// format = "$n stares at $p and utters the words, '%s'.";
-// else
-// format = "$n utters the words, '%s'.";
-//
-// snprintf(buf1, sizeof(buf1), format, skill_name(spellnum));
-// snprintf(buf2, sizeof(buf2), format, buf);
-//
-// for (i = world[IN_ROOM(ch)].people; i; i = i->next_in_room) {
-// if (i == ch || i == tch || !i->desc || !AWAKE(i))
-// continue;
-// if (GET_CLASS(ch) == GET_CLASS(i))
-// perform_act(buf1, ch, tobj, tch, i);
-// else
-// perform_act(buf2, ch, tobj, tch, i);
-// }
-//
-// if (tch != NULL && tch != ch && IN_ROOM(tch) == IN_ROOM(ch)) {
-// snprintf(buf1, sizeof(buf1), "$n stares at you and utters the words, '%s'.",
-// GET_CLASS(ch) == GET_CLASS(tch) ? skill_name(spellnum) : buf);
-// act(buf1, false, ch, NULL, tch, TO_VICT);
-// }
-// }
+
+fn mag_manacost(ch: &Rc<CharData>, sinfo: &SpellInfoType) -> i16 {
+    return max(
+        (sinfo.mana_max
+            - (sinfo.mana_change
+                * (ch.get_level() as i32 - sinfo.min_level[ch.get_class() as usize])))
+            as i16,
+        sinfo.mana_min as i16,
+    );
+}
+
+fn say_spell(
+    db: &DB,
+    ch: &Rc<CharData>,
+    spellnum: i32,
+    tch: Option<&Rc<CharData>>,
+    tobj: Option<&Rc<ObjData>>,
+) {
+    // char lbuf[256], buf[256], buf1[256], buf2[256];	/* FIXME */
+    // const char *format;
+    //
+    // struct char_data *i;
+    // int j, ofs = 0;
+
+    let mut lbuf = String::new();
+    let mut buf = String::new();
+    lbuf.push_str(skill_name(db, spellnum));
+    let mut ofs = 0;
+    while ofs < lbuf.len() {
+        let mut found = false;
+        for j in 0..(SYLS.len() - 1) {
+            if SYLS[j].org == &lbuf[ofs..] {
+                buf.push_str(SYLS[j].news); /* strcat: BAD */
+                ofs += SYLS[j].org.len();
+                found = true;
+                break;
+            }
+        }
+        /* i.e., we didn't find a match in SYLS[] */
+        if !found {
+            error!("No entry in Syllable table for substring of '{}'", lbuf);
+            ofs += 1;
+        }
+    }
+    let format;
+    let mut buf1 = String::new();
+    let mut buf2 = String::new();
+    if tch.is_some() && tch.as_ref().unwrap().in_room() == ch.in_room() {
+        if Rc::ptr_eq(tch.as_ref().unwrap(), ch) {
+            buf1.push_str(
+                format!(
+                    "$n closes $s eyes and utters the words, '{}'.",
+                    skill_name(db, spellnum)
+                )
+                .as_str(),
+            );
+            buf2.push_str(format!("$n closes $s eyes and utters the words, '{}'.", buf).as_str());
+        } else {
+            format = "$n stares at $N and utters the words, '%s'.";
+            buf1.push_str(
+                format!(
+                    "$n stares at $N and utters the words, '{}'.",
+                    skill_name(db, spellnum)
+                )
+                .as_str(),
+            );
+            buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
+        }
+    } else if tobj.is_some() && tobj.as_ref().unwrap().in_room() == ch.in_room()
+        || Rc::ptr_eq(
+            tobj.as_ref().unwrap().carried_by.borrow().as_ref().unwrap(),
+            ch,
+        )
+    {
+        buf1.push_str(
+            format!(
+                "$n stares at $p and utters the words, '{}'.",
+                skill_name(db, spellnum)
+            )
+            .as_str(),
+        );
+        buf2.push_str(format!("$n stares at $p and utters the words, '{}'.", buf).as_str());
+    } else {
+        buf1.push_str(format!("$n utters the words, '{}'.", skill_name(db, spellnum)).as_str());
+        buf2.push_str(format!("$n utters the words, '{}'.", buf).as_str());
+    }
+
+    for i in db.world.borrow()[ch.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if Rc::ptr_eq(i, ch)
+            || (tch.is_some() && Rc::ptr_eq(i, tch.as_ref().unwrap()))
+            || i.desc.borrow().is_none()
+            || !i.awake()
+        {
+            continue;
+        }
+        let tch2 = if tch.is_some() {
+            Some(tch.unwrap().clone())
+        } else {
+            None
+        };
+        if ch.get_class() == i.get_class() {
+            db.perform_act(&buf1, Some(ch), tobj, Some(&tch2), i);
+        } else {
+            db.perform_act(&buf2, Some(ch), tobj, Some(&tch2), i);
+        }
+    }
+
+    if tch.is_some()
+        && !Rc::ptr_eq(tch.as_ref().unwrap(), ch)
+        && tch.as_ref().unwrap().in_room() == ch.in_room()
+    {
+        buf1.push_str(
+            format!(
+                "$n stares at you and utters the words, '{}'.",
+                if ch.get_class() == tch.as_ref().unwrap().get_class() {
+                    skill_name(db, spellnum)
+                } else {
+                    &buf
+                }
+            )
+            .as_str(),
+        );
+        let tch2 = tch.unwrap().clone();
+        db.act(&buf1, false, Some(ch), None, Some(&tch2), TO_VICT);
+    }
+}
 
 /*
  * This function should be used anytime you are not 100% sure that you have
  * a valid spell/skill number.  A typical for() loop would not need to use
  * this because you can guarantee > 0 and <= TOP_SPELL_DEFINE.
  */
-fn skill_name(db: &DB, num: i32) -> &'static str {
+pub fn skill_name(db: &DB, num: i32) -> &'static str {
     return if num > 0 && num <= TOP_SPELL_DEFINE as i32 {
         db.spell_info[num as usize].name
     } else if num == -1 {
@@ -209,96 +460,147 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
     None
 }
 
-// /*
-//  * This function is the very heart of the entire magic system.  All
-//  * invocations of all types of magic -- objects, spoken and unspoken PC
-//  * and NPC spells, the works -- all come through this function eventually.
-//  * This is also the entry point for non-spoken or unrestricted spells.
-//  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
-//  */
-// int call_magic(struct char_data *caster, struct char_data *cvict,
-// struct obj_data *ovict, int spellnum, int level, int casttype)
-// {
-// int savetype;
-//
-// if (spellnum < 1 || spellnum > TOP_SPELL_DEFINE)
-// return (0);
-//
-// if (ROOM_FLAGGED(IN_ROOM(caster), ROOM_NOMAGIC)) {
-// send_to_char(caster, "Your magic fizzles out and dies.\r\n");
-// act("$n's magic fizzles out and dies.", false, caster, 0, 0, TO_ROOM);
-// return (0);
-// }
-// if (ROOM_FLAGGED(IN_ROOM(caster), ROOM_PEACEFUL) &&
-// (SINFO.violent || IS_SET(SINFO.routines, MAG_DAMAGE))) {
-// send_to_char(caster, "A flash of white light fills the room, dispelling your violent magic!\r\n");
-// act("White light from no particular source suddenly fills the room, then vanishes.", false, caster, 0, 0, TO_ROOM);
-// return (0);
-// }
-// /* determine the type of saving throw */
-// switch (casttype) {
-// case CAST_STAFF:
-// case CAST_SCROLL:
-// case CAST_POTION:
-// case CAST_WAND:
-// savetype = SAVING_ROD;
-// break;
-// case CAST_SPELL:
-// savetype = SAVING_SPELL;
-// break;
-// default:
-// savetype = SAVING_BREATH;
-// break;
-// }
-//
-//
-// if (IS_SET(SINFO.routines, MAG_DAMAGE))
-// if (mag_damage(level, caster, cvict, spellnum, savetype) == -1)
-// return (-1);	/* Successful and target died, don't cast again. */
-//
-// if (IS_SET(SINFO.routines, MAG_AFFECTS))
-// mag_affects(level, caster, cvict, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_UNAFFECTS))
-// mag_unaffects(level, caster, cvict, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_POINTS))
-// mag_points(level, caster, cvict, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_ALTER_OBJS))
-// mag_alter_objs(level, caster, ovict, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_GROUPS))
-// mag_groups(level, caster, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_MASSES))
-// mag_masses(level, caster, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_AREAS))
-// mag_areas(level, caster, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_SUMMONS))
-// mag_summons(level, caster, ovict, spellnum, savetype);
-//
-// if (IS_SET(SINFO.routines, MAG_CREATIONS))
-// mag_creations(level, caster, spellnum);
-//
-// if (IS_SET(SINFO.routines, MAG_MANUAL))
-// switch (spellnum) {
-// case SPELL_CHARM:		MANUAL_SPELL(spell_charm); break;
-// case SPELL_CREATE_WATER:	MANUAL_SPELL(spell_create_water); break;
-// case SPELL_DETECT_POISON:	MANUAL_SPELL(spell_detect_poison); break;
-// case SPELL_ENCHANT_WEAPON:  MANUAL_SPELL(spell_enchant_weapon); break;
-// case SPELL_IDENTIFY:	MANUAL_SPELL(spell_identify); break;
-// case SPELL_LOCATE_OBJECT:   MANUAL_SPELL(spell_locate_object); break;
-// case SPELL_SUMMON:		MANUAL_SPELL(spell_summon); break;
-// case SPELL_WORD_OF_RECALL:  MANUAL_SPELL(spell_recall); break;
-// case SPELL_TELEPORT:	MANUAL_SPELL(spell_teleport); break;
-// }
-//
-// return (1);
-// }
-//
+/*
+ * This function is the very heart of the entire magic system.  All
+ * invocations of all types of magic -- objects, spoken and unspoken PC
+ * and NPC spells, the works -- all come through this function eventually.
+ * This is also the entry point for non-spoken or unrestricted spells.
+ * Spellnum 0 is legal but silently ignored here, to make callers simpler.
+ */
+fn call_magic(
+    game: &MainGlobals,
+    caster: &Rc<CharData>,
+    cvict: Option<&Rc<CharData>>,
+    ovict: Option<&Rc<ObjData>>,
+    spellnum: i32,
+    level: i32,
+    casttype: i32,
+) -> i32 {
+    let db = &game.db;
+    if spellnum < 1 || spellnum > TOP_SPELL_DEFINE as i32 {
+        return 0;
+    }
+    let sinfo = &db.spell_info[spellnum as usize];
+    if db.room_flagged(caster.in_room(), ROOM_NOMAGIC) {
+        send_to_char(caster, "Your magic fizzles out and dies.\r\n");
+        db.act(
+            "$n's magic fizzles out and dies.",
+            false,
+            Some(caster),
+            None,
+            None,
+            TO_ROOM,
+        );
+        return 0;
+    }
+    if db.room_flagged(caster.in_room(), ROOM_PEACEFUL)
+        && (sinfo.violent || is_set!(sinfo.routines, MAG_DAMAGE))
+    {
+        send_to_char(
+            caster,
+            "A flash of white light fills the room, dispelling your violent magic!\r\n",
+        );
+        db.act(
+            "White light from no particular source suddenly fills the room, then vanishes.",
+            false,
+            Some(caster),
+            None,
+            None,
+            TO_ROOM,
+        );
+        return 0;
+    }
+    let mut savetype = 0;
+    /* determine the type of saving throw */
+    match casttype {
+        CAST_STAFF | CAST_SCROLL | CAST_POTION | CAST_WAND => {
+            savetype = SAVING_ROD;
+        }
+        CAST_SPELL => {
+            savetype = SAVING_SPELL;
+        }
+        _ => {
+            savetype = SAVING_BREATH;
+        }
+    }
+
+    if is_set!(sinfo.routines, MAG_DAMAGE) {
+        if mag_damage(
+            game,
+            level,
+            caster,
+            cvict.as_ref().unwrap(),
+            spellnum,
+            savetype,
+        ) == -1
+        {
+            return -1; /* Successful and target died, don't cast again. */
+        }
+    }
+    if is_set!(sinfo.routines, MAG_AFFECTS) {
+        mag_affects(db, level, caster, cvict, spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_UNAFFECTS) {
+        mag_unaffects(
+            db,
+            level,
+            caster,
+            cvict.as_ref().unwrap(),
+            spellnum,
+            savetype,
+        );
+    }
+
+    if is_set!(sinfo.routines, MAG_POINTS) {
+        mag_points(level, caster, cvict, spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_ALTER_OBJS) {
+        mag_alter_objs(db, level, caster, ovict, spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_GROUPS) {
+        mag_groups(db, level, Some(caster), spellnum, savetype);
+    }
+    if is_set!(sinfo.routines, MAG_MASSES) {
+        mag_masses(db, level, caster, spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_AREAS) {
+        mag_areas(game, level, Some(caster), spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_SUMMONS) {
+        mag_summons(db, level, Some(caster), ovict, spellnum, savetype);
+    }
+
+    if is_set!(sinfo.routines, MAG_CREATIONS) {
+        mag_creations(db, level, Some(caster), spellnum);
+    }
+
+    if is_set!(sinfo.routines, MAG_MANUAL) {
+        match spellnum {
+            SPELL_CHARM => spell_charm(db, level, Some(caster), cvict, ovict),
+            SPELL_CREATE_WATER => spell_create_water(db, level, Some(caster), cvict, ovict),
+            SPELL_DETECT_POISON => spell_detect_poison(db, level, Some(caster), cvict, ovict),
+            SPELL_ENCHANT_WEAPON => spell_enchant_weapon(db, level, Some(caster), cvict, ovict),
+            SPELL_IDENTIFY => spell_identify(db, level, Some(caster), cvict, ovict),
+            SPELL_LOCATE_OBJECT => spell_locate_object(db, level, Some(caster), cvict, ovict),
+            SPELL_SUMMON => spell_summon(game, level, Some(caster), cvict, ovict),
+            SPELL_WORD_OF_RECALL => {
+                spell_recall(db, level, Some(caster), cvict, ovict);
+            }
+            SPELL_TELEPORT => {
+                spell_teleport(db, level, Some(caster), cvict, ovict);
+            }
+            _ => {}
+        }
+    }
+
+    return 1;
+}
+
 // /*
 //  * mag_objectmagic: This is the entry-point for all magic items.  This should
 //  * only be called by the 'quaff', 'use', 'recite', etc. routines.
@@ -452,207 +754,303 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
 // break;
 // }
 // }
-//
-//
-// /*
-//  * cast_spell is used generically to cast any spoken spell, assuming we
-//  * already have the target char/obj and spell number.  It checks all
-//  * restrictions, etc., prints the words, etc.
-//  *
-//  * Entry point for NPC casts.  Recommended entry point for spells cast
-//  * by NPCs via specprocs.
-//  */
-// int cast_spell(struct char_data *ch, struct char_data *tch,
-// struct obj_data *tobj, int spellnum)
-// {
-// if (spellnum < 0 || spellnum > TOP_SPELL_DEFINE) {
-// log("SYSERR: cast_spell trying to call spellnum %d/%d.", spellnum,
-// TOP_SPELL_DEFINE);
-// return (0);
-// }
-//
-// if (GET_POS(ch) < SINFO.min_position) {
-// switch (GET_POS(ch)) {
-// case POS_SLEEPING:
-// send_to_char(ch, "You dream about great magical powers.\r\n");
-// break;
-// case POS_RESTING:
-// send_to_char(ch, "You cannot concentrate while resting.\r\n");
-// break;
-// case POS_SITTING:
-// send_to_char(ch, "You can't do this sitting!\r\n");
-// break;
-// case POS_FIGHTING:
-// send_to_char(ch, "Impossible!  You can't concentrate enough!\r\n");
-// break;
-// default:
-// send_to_char(ch, "You can't do much of anything like this!\r\n");
-// break;
-// }
-// return (0);
-// }
-// if (AFF_FLAGGED(ch, AFF_CHARM) && (ch->master == tch)) {
-// send_to_char(ch, "You are afraid you might hurt your master!\r\n");
-// return (0);
-// }
-// if ((tch != ch) && IS_SET(SINFO.targets, TAR_SELF_ONLY)) {
-// send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
-// return (0);
-// }
-// if ((tch == ch) && IS_SET(SINFO.targets, TAR_NOT_SELF)) {
-// send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
-// return (0);
-// }
-// if (IS_SET(SINFO.routines, MAG_GROUPS) && !AFF_FLAGGED(ch, AFF_GROUP)) {
-// send_to_char(ch, "You can't cast this spell if you're not in a group!\r\n");
-// return (0);
-// }
-// send_to_char(ch, "%s", OK);
-// say_spell(ch, spellnum, tch, tobj);
-//
-// return (call_magic(ch, tch, tobj, spellnum, GET_LEVEL(ch), CAST_SPELL));
-// }
-//
-//
-// /*
-//  * do_cast is the entry point for PC-casted spells.  It parses the arguments,
-//  * determines the spell number and finds a target, throws the die to see if
-//  * the spell can be cast, checks for sufficient mana and subtracts it, and
-//  * passes control to cast_spell().
-//  */
-// ACMD(do_cast)
-// {
-// struct char_data *tch = NULL;
-// struct obj_data *tobj = NULL;
-// char *s, *t;
-// int mana, spellnum, i, target = 0;
-//
-// if (IS_NPC(ch))
-// return;
-//
-// /* get: blank, spell name, target name */
-// s = strtok(argument, "'");
-//
-// if (s == NULL) {
-// send_to_char(ch, "Cast what where?\r\n");
-// return;
-// }
-// s = strtok(NULL, "'");
-// if (s == NULL) {
-// send_to_char(ch, "Spell names must be enclosed in the Holy Magic Symbols: '\r\n");
-// return;
-// }
-// t = strtok(NULL, "\0");
-//
-// /* spellnum = search_block(s, spells, 0); */
-// spellnum = find_skill_num(s);
-//
-// if ((spellnum < 1) || (spellnum > MAX_SPELLS)) {
-// send_to_char(ch, "Cast what?!?\r\n");
-// return;
-// }
-// if (GET_LEVEL(ch) < SINFO.min_level[(int) GET_CLASS(ch)]) {
-// send_to_char(ch, "You do not know that spell!\r\n");
-// return;
-// }
-// if (GET_SKILL(ch, spellnum) == 0) {
-// send_to_char(ch, "You are unfamiliar with that spell.\r\n");
-// return;
-// }
-// /* Find the target */
-// if (t != NULL) {
-// char arg[MAX_INPUT_LENGTH];
-//
-// strlcpy(arg, t, sizeof(arg));
-// one_argument(arg, t);
-// skip_spaces(&t);
-// }
-// if (IS_SET(SINFO.targets, TAR_IGNORE)) {
-// target = TRUE;
-// } else if (t != NULL && *t) {
-// if (!target && (IS_SET(SINFO.targets, TAR_CHAR_ROOM))) {
-// if ((tch = get_char_vis(ch, t, NULL, FIND_CHAR_ROOM)) != NULL)
-// target = TRUE;
-// }
-// if (!target && IS_SET(SINFO.targets, TAR_CHAR_WORLD))
-// if ((tch = get_char_vis(ch, t, NULL, FIND_CHAR_WORLD)) != NULL)
-// target = TRUE;
-//
-// if (!target && IS_SET(SINFO.targets, TAR_OBJ_INV))
-// if ((tobj = get_obj_in_list_vis(ch, t, NULL, ch->carrying)) != NULL)
-// target = TRUE;
-//
-// if (!target && IS_SET(SINFO.targets, TAR_OBJ_EQUIP)) {
-// for (i = 0; !target && i < NUM_WEARS; i++)
-// if (GET_EQ(ch, i) && isname(t, GET_EQ(ch, i)->name)) {
-// tobj = GET_EQ(ch, i);
-// target = TRUE;
-// }
-// }
-// if (!target && IS_SET(SINFO.targets, TAR_OBJ_ROOM))
-// if ((tobj = get_obj_in_list_vis(ch, t, NULL, world[IN_ROOM(ch)].contents)) != NULL)
-// target = TRUE;
-//
-// if (!target && IS_SET(SINFO.targets, TAR_OBJ_WORLD))
-// if ((tobj = get_obj_vis(ch, t, NULL)) != NULL)
-// target = TRUE;
-//
-// } else {			/* if target string is empty */
-// if (!target && IS_SET(SINFO.targets, TAR_FIGHT_SELF))
-// if (FIGHTING(ch) != NULL) {
-// tch = ch;
-// target = TRUE;
-// }
-// if (!target && IS_SET(SINFO.targets, TAR_FIGHT_VICT))
-// if (FIGHTING(ch) != NULL) {
-// tch = FIGHTING(ch);
-// target = TRUE;
-// }
-// /* if no target specified, and the spell isn't violent, default to self */
-// if (!target && IS_SET(SINFO.targets, TAR_CHAR_ROOM) &&
-// !SINFO.violent) {
-// tch = ch;
-// target = TRUE;
-// }
-// if (!target) {
-// send_to_char(ch, "Upon %s should the spell be cast?\r\n",
-// IS_SET(SINFO.targets, TAR_OBJ_ROOM | TAR_OBJ_INV | TAR_OBJ_WORLD | TAR_OBJ_EQUIP) ? "what" : "who");
-// return;
-// }
-// }
-//
-// if (target && (tch == ch) && SINFO.violent) {
-// send_to_char(ch, "You shouldn't cast that on yourself -- could be bad for your health!\r\n");
-// return;
-// }
-// if (!target) {
-// send_to_char(ch, "Cannot find the target of your spell!\r\n");
-// return;
-// }
-// mana = mag_manacost(ch, spellnum);
-// if ((mana > 0) && (GET_MANA(ch) < mana) && (GET_LEVEL(ch) < LVL_IMMORT)) {
-// send_to_char(ch, "You haven't the energy to cast that spell!\r\n");
-// return;
-// }
-//
-// /* You throws the dice and you takes your chances.. 101% is total failure */
-// if (rand_number(0, 101) > GET_SKILL(ch, spellnum)) {
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// if (!tch || !skill_message(0, ch, tch, spellnum))
-// send_to_char(ch, "You lost your concentration!\r\n");
-// if (mana > 0)
-// GET_MANA(ch) = MAX(0, MIN(GET_MAX_MANA(ch), GET_MANA(ch) - (mana / 2)));
-// if (SINFO.violent && tch && IS_NPC(tch))
-// hit(tch, ch, TYPE_UNDEFINED);
-// } else { /* cast spell returns 1 on success; subtract mana & set waitstate */
-// if (cast_spell(ch, tch, tobj, spellnum)) {
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// if (mana > 0)
-// GET_MANA(ch) = MAX(0, MIN(GET_MAX_MANA(ch), GET_MANA(ch) - mana));
-// }
-// }
-// }
-//
+
+/*
+ * cast_spell is used generically to cast any spoken spell, assuming we
+ * already have the target char/obj and spell number.  It checks all
+ * restrictions, etc., prints the words, etc.
+ *
+ * Entry point for NPC casts.  Recommended entry point for spells cast
+ * by NPCs via specprocs.
+ */
+pub fn cast_spell(
+    game: &MainGlobals,
+    ch: &Rc<CharData>,
+    tch: &Rc<CharData>,
+    tobj: &Rc<ObjData>,
+    spellnum: i32,
+) -> i32 {
+    let db = &game.db;
+    if spellnum < 0 || spellnum > TOP_SPELL_DEFINE as i32 {
+        error!(
+            "SYSERR: cast_spell trying to call spellnum {}/{}.",
+            spellnum, TOP_SPELL_DEFINE
+        );
+        return 0;
+    }
+    let sinfo = db.spell_info[spellnum as usize];
+    if ch.get_pos() < sinfo.min_position {
+        match ch.get_pos() {
+            POS_SLEEPING => {
+                send_to_char(ch, "You dream about great magical powers.\r\n");
+            }
+            POS_RESTING => {
+                send_to_char(ch, "You cannot concentrate while resting.\r\n");
+            }
+            POS_SITTING => {
+                send_to_char(ch, "You can't do this sitting!\r\n");
+            }
+            POS_FIGHTING => {
+                send_to_char(ch, "Impossible!  You can't concentrate enough!\r\n");
+            }
+            _ => {
+                send_to_char(ch, "You can't do much of anything like this!\r\n");
+            }
+        }
+        return 0;
+    }
+    if ch.aff_flagged(AFF_CHARM) && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch) {
+        send_to_char(ch, "You are afraid you might hurt your master!\r\n");
+        return 0;
+    }
+    if !Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch)
+        && is_set!(sinfo.targets, TAR_SELF_ONLY)
+    {
+        send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
+        return 0;
+    }
+    if Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch) && is_set!(sinfo.targets, TAR_NOT_SELF)
+    {
+        send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
+        return 0;
+    }
+    if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
+        send_to_char(
+            ch,
+            "You can't cast this spell if you're not in a group!\r\n",
+        );
+        return 0;
+    }
+    send_to_char(ch, OK);
+    say_spell(db, ch, spellnum, Some(tch), Some(tobj));
+
+    return call_magic(
+        game,
+        ch,
+        Some(tch),
+        Some(tobj),
+        spellnum,
+        ch.get_level() as i32,
+        CAST_SPELL,
+    );
+}
+
+/*
+ * do_cast is the entry point for PC-casted spells.  It parses the arguments,
+ * determines the spell number and finds a target, throws the die to see if
+ * the spell can be cast, checks for sufficient mana and subtracts it, and
+ * passes control to cast_spell().
+ */
+#[allow(unused_variables)]
+pub fn do_cast(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // struct char_data *tch = NULL;
+    // struct obj_data *tobj = NULL;
+    // char *s, *t;
+    // int mana, spellnum, i, target = 0;
+
+    if ch.is_npc() {
+        return;
+    }
+
+    /* get: blank, spell name, target name */
+    let mut i = argument.splitn(3, '\'');
+
+    if i.next().is_none() {
+        send_to_char(ch, "Cast what where?\r\n");
+        return;
+    }
+    let s = i.next();
+    if s.is_none() {
+        send_to_char(
+            ch,
+            "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
+        );
+        return;
+    }
+    let s = s.unwrap();
+    let mut t = i.next();
+    let db = &game.db;
+    /* spellnum = search_block(s, spells, 0); */
+    let spellnum = find_skill_num(db, s);
+
+    if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
+        send_to_char(ch, "Cast what?!?\r\n");
+        return;
+    }
+    let spellnum = spellnum.unwrap();
+    let sinfo = db.spell_info[spellnum as usize];
+    if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
+        send_to_char(ch, "You do not know that spell!\r\n");
+        return;
+    }
+    if ch.get_skill(spellnum) == 0 {
+        send_to_char(ch, "You are unfamiliar with that spell.\r\n");
+        return;
+    }
+    let arg;
+    /* Find the target */
+    let mut nt;
+    if t.is_some() {
+        arg = t.unwrap();
+
+        // char
+        // arg[MAX_INPUT_LENGTH];
+        //
+        // strlcpy(arg, t, sizeof(arg));
+        nt = String::new();
+        one_argument(arg, &mut nt);
+        t = Some(&nt);
+    }
+    let mut t = t.unwrap().to_string();
+    let mut target = false;
+    let mut tch: Option<Rc<CharData>> = None;
+    let mut tobj: Option<Rc<ObjData>> = None;
+    if is_set!(sinfo.targets, TAR_IGNORE) {
+        target = true;
+    } else if !t.is_empty() {
+        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
+            if {
+                let mut nt = String::new();
+                tch = db.get_char_vis(ch, &mut t, None, FIND_CHAR_ROOM);
+                tch.is_some()
+            } {
+                target = true;
+            }
+        }
+        if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
+            if {
+                tch = db.get_char_vis(ch, &mut t, None, FIND_CHAR_WORLD);
+                tch.is_some()
+            } {
+                target = true;
+            }
+        }
+
+        if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
+            if {
+                tobj = db.get_obj_in_list_vis(ch, &t, None, ch.carrying.borrow());
+                tobj.is_some()
+            } {
+                target = true;
+            }
+        }
+
+        if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
+            for i in 0..NUM_WEARS {
+                if ch.get_eq(i).is_some() && isname(&t, &ch.get_eq(i).unwrap().name.borrow()) != 0 {
+                    tobj = Some(ch.get_eq(i).unwrap());
+                    target = true;
+                }
+            }
+        }
+        if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
+            if {
+                tobj = db.get_obj_in_list_vis(
+                    ch,
+                    &t,
+                    None,
+                    db.world.borrow()[ch.in_room.get() as usize]
+                        .contents
+                        .borrow(),
+                );
+                tobj.is_some()
+            } {
+                target = true;
+            }
+        }
+        if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) {
+            if {
+                tobj = db.get_obj_vis(ch, &t, None);
+                tobj.is_some()
+            } {
+                target = true;
+            }
+        }
+    } else {
+        /* if target string is empty */
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) {
+            if ch.fighting().is_some() {
+                tch = Some(ch.clone());
+                target = true;
+            }
+        }
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) {
+            if ch.fighting().is_some() {
+                tch = ch.fighting();
+                target = true;
+            }
+        }
+        /* if no target specified, and the spell isn't violent, default to self */
+        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && !sinfo.violent {
+            tch = Some(ch.clone());
+            target = true;
+        }
+        if !target {
+            send_to_char(
+                ch,
+                format!(
+                    "Upon {} should the spell be cast?\r\n",
+                    if is_set!(
+                        sinfo.targets,
+                        TAR_OBJ_ROOM | TAR_OBJ_INV | TAR_OBJ_WORLD | TAR_OBJ_EQUIP
+                    ) {
+                        "what"
+                    } else {
+                        "who"
+                    }
+                )
+                .as_str(),
+            );
+            return;
+        }
+    }
+
+    if target && Rc::ptr_eq(tch.as_ref().unwrap(), ch) && sinfo.violent {
+        send_to_char(
+            ch,
+            "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
+        );
+        return;
+    }
+    if !target {
+        send_to_char(ch, "Cannot find the target of your spell!\r\n");
+        return;
+    }
+    let mana = mag_manacost(ch, &sinfo);
+    if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
+        send_to_char(ch, "You haven't the energy to cast that spell!\r\n");
+        return;
+    }
+
+    /* You throws the dice and you takes your chances.. 101% is total failure */
+    if rand_number(0, 101) > ch.get_skill(spellnum) as u32 {
+        ch.set_wait_state(PULSE_VIOLENCE as i32);
+        if tch.is_none() || db.skill_message(0, ch, tch.as_ref().unwrap(), spellnum) == 0 {
+            send_to_char(ch, "You lost your concentration!\r\n");
+        }
+        if mana > 0 {
+            ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));
+        }
+        if sinfo.violent && tch.is_some() && tch.as_ref().unwrap().is_npc() {
+            db.hit(tch.as_ref().unwrap(), ch, TYPE_UNDEFINED, game);
+        }
+    } else {
+        /* cast spell returns 1 on success; subtract mana & set waitstate */
+        if cast_spell(
+            game,
+            ch,
+            tch.as_ref().unwrap(),
+            tobj.as_ref().unwrap(),
+            spellnum,
+        ) != 0
+        {
+            ch.set_wait_state(PULSE_VIOLENCE as i32);
+            if mana > 0 {
+                ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - mana)));
+            }
+        }
+    }
+}
 
 pub fn spell_level(db: &mut DB, spell: i32, chclass: i8, level: i32) {
     let mut bad = false;

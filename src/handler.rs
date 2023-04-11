@@ -22,9 +22,9 @@ use crate::interpreter::one_argument;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    CharData, ExtraDescrData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE, APPLY_CHA,
-    APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX,
-    APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA,
+    AffectedType, CharData, ExtraDescrData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE,
+    APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL,
+    APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA,
     APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI,
     APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD,
     ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, ITEM_WEAR_TAKE, LVL_GRGOD,
@@ -190,36 +190,27 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
         }
 
         APPLY_SAVING_PARA => {
-            ch.set_save(
-                SAVING_PARA as usize,
-                ch.get_save(SAVING_PARA as usize) + _mod as i16,
-            );
+            ch.set_save(SAVING_PARA as usize, ch.get_save(SAVING_PARA) + _mod as i16);
         }
         APPLY_SAVING_ROD => {
-            ch.set_save(
-                SAVING_ROD as usize,
-                ch.get_save(SAVING_ROD as usize) + _mod as i16,
-            );
+            ch.set_save(SAVING_ROD as usize, ch.get_save(SAVING_ROD) + _mod as i16);
         }
         APPLY_SAVING_PETRI => {
             ch.set_save(
                 SAVING_PETRI as usize,
-                ch.get_save(SAVING_PETRI as usize) + _mod as i16,
+                ch.get_save(SAVING_PETRI) + _mod as i16,
             );
         }
 
         APPLY_SAVING_BREATH => {
             ch.set_save(
                 SAVING_BREATH as usize,
-                ch.get_save(SAVING_BREATH as usize) + _mod as i16,
+                ch.get_save(SAVING_BREATH) + _mod as i16,
             );
         }
 
         APPLY_SAVING_SPELL => {
-            ch.set_save(
-                SAVING_SPELL as usize,
-                ch.get_save(SAVING_SPELL as usize) + _mod,
-            );
+            ch.set_save(SAVING_SPELL as usize, ch.get_save(SAVING_SPELL) + _mod);
         }
 
         _ => {
@@ -315,29 +306,27 @@ fn affect_total(ch: &CharData) {
     }
 }
 
-// /* Insert an affect_type in a char_data structure
-//    Automatically sets apropriate bits and apply's */
-// void affect_to_char(struct char_data *ch, struct affected_type *af)
-// {
-// struct affected_type *affected_alloc;
-//
-// CREATE(affected_alloc, struct affected_type, 1);
-//
-// *affected_alloc = *af;
-// affected_alloc->next = ch->affected;
-// ch->affected = affected_alloc;
-//
-// affect_modify(ch, af->location, af->modifier, af->bitvector, TRUE);
-// affect_total(ch);
-// }
+/* Insert an affect_type in a char_data structure
+Automatically sets apropriate bits and apply's */
+pub fn affect_to_char(ch: &Rc<CharData>, af: &AffectedType) {
+    ch.affected.borrow_mut().push(af.clone());
+
+    affect_modify(
+        ch,
+        af.location as i8,
+        af.modifier as i16,
+        af.bitvector,
+        true,
+    );
+    affect_total(ch);
+}
 
 /*
  * Remove an affected_type structure from a char (called when duration
  * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
  * affect_location_apply
  */
-pub fn affect_remove(ch: &Rc<CharData>, n: usize) {
-    let af = ch.affected.borrow_mut().remove(n);
+pub fn affect_remove(ch: &Rc<CharData>, af: &AffectedType) {
     affect_modify(
         ch,
         af.location as i8,
@@ -348,65 +337,67 @@ pub fn affect_remove(ch: &Rc<CharData>, n: usize) {
     affect_total(ch);
 }
 
-// /* Call affect_remove with every spell of spelltype "skill" */
-// void affect_from_char(struct char_data *ch, int type)
-// {
-// struct affected_type *hjp, *next;
-//
-// for (hjp = ch->affected; hjp; hjp = next) {
-// next = hjp->next;
-// if (hjp->type == type)
-// affect_remove(ch, hjp);
-// }
-// }
-//
-//
-//
-// /*
-//  * Return TRUE if a char is affected by a spell (SPELL_XXX),
-//  * FALSE indicates not affected.
-//  */
-// bool affected_by_spell(struct char_data *ch, int type)
-// {
-// struct affected_type *hjp;
-//
-// for (hjp = ch->affected; hjp; hjp = hjp->next)
-// if (hjp->type == type)
-// return (TRUE);
-//
-// return (FALSE);
-// }
-//
-//
-//
-// void affect_join(struct char_data *ch, struct affected_type *af,
-// bool add_dur, bool avg_dur, bool add_mod, bool avg_mod)
-// {
-// struct affected_type *hjp, *next;
-// bool found = FALSE;
-//
-// for (hjp = ch->affected; !found && hjp; hjp = next) {
-// next = hjp->next;
-//
-// if ((hjp->type == af->type) && (hjp->location == af->location)) {
-// if (add_dur)
-// af->duration += hjp->duration;
-// if (avg_dur)
-// af->duration /= 2;
-//
-// if (add_mod)
-// af->modifier += hjp->modifier;
-// if (avg_mod)
-// af->modifier /= 2;
-//
-// affect_remove(ch, hjp);
-// affect_to_char(ch, af);
-// found = TRUE;
-// }
-// }
-// if (!found)
-// affect_to_char(ch, af);
-// }
+/* Call affect_remove with every spell of spelltype "skill" */
+pub fn affect_from_char(ch: &Rc<CharData>, type_: i16) {
+    ch.affected.borrow_mut().retain(|hjp| {
+        if hjp._type == type_ {
+            affect_remove(ch, hjp);
+            false
+        } else {
+            true
+        }
+    });
+}
+
+/*
+ * Return TRUE if a char is affected by a spell (SPELL_XXX),
+ * FALSE indicates not affected.
+ */
+pub fn affected_by_spell(ch: &Rc<CharData>, type_: i16) -> bool {
+    for hjp in ch.affected.borrow().iter() {
+        if hjp._type == type_ {
+            return true;
+        }
+    }
+
+    false
+}
+
+pub fn affect_join(
+    ch: &Rc<CharData>,
+    af: &mut AffectedType,
+    add_dur: bool,
+    avg_dur: bool,
+    add_mod: bool,
+    avg_mod: bool,
+) {
+    let mut found = false;
+
+    ch.affected.borrow_mut().retain_mut(|hjp| {
+        if (hjp._type == af._type) && (hjp.location == af.location) {
+            if add_dur {
+                af.duration += hjp.duration;
+            }
+            if avg_dur {
+                af.duration /= 2;
+            }
+
+            if add_mod {
+                af.modifier += hjp.modifier;
+            }
+            if avg_mod {
+                af.modifier /= 2;
+            }
+
+            affect_remove(ch, hjp);
+            false
+        } else {
+            true
+        }
+    });
+    affect_to_char(ch, af);
+}
+
 impl DB {
     /* move a player out of a room */
     pub fn char_from_room(&self, ch: &Rc<CharData>) {
@@ -761,8 +752,8 @@ impl DB {
 // if (*number == 0)
 // return (NULL);
 //
-// for (i = world[room].people; i && *number; i = i->next_in_room)
-// if (isname(name, i->player.name))
+// for (i = world[room].people; i && *number; i = i.next_in_room)
+// if (isname(name, i.player.name))
 // if (--(*number) == 0)
 // return (i);
 //
@@ -776,7 +767,7 @@ impl DB {
 // {
 // struct char_data *i;
 //
-// for (i = character_list; i; i = i->next)
+// for (i = character_list; i; i = i.next)
 // if (GET_MOB_RNUM(i) == nr)
 // return (i);
 //
@@ -1044,14 +1035,14 @@ impl DB {
 
         /*
          * We're booting the character of someone who has switched so first we
-         * need to stuff them back into their own body.  This will set ch->desc
+         * need to stuff them back into their own body.  This will set ch.desc
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.borrow().is_none() {
             // TODO implement do_return
-            // for (d = descriptor_list; d; d = d->next)
-            // if (d -> original == ch) {
-            //     do_return(d->character, NULL, 0, 0);
+            // for (d = descriptor_list; d; d = d.next)
+            // if (d . original == ch) {
+            //     do_return(d.character, NULL, 0, 0);
             //     break;
             // }
         }
@@ -1080,7 +1071,7 @@ impl DB {
                 /*
                  * Now we boot anybody trying to log in with the same character, to
                  * help guard against duping.  CON_DISCONNECT is used to close a
-                 * descriptor without extracting the d->character associated with it,
+                 * descriptor without extracting the d.character associated with it,
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
@@ -1135,7 +1126,7 @@ impl DB {
         }
         /* we can't forget the hunters either... */
         // TODO implement hunting
-        // for (temp = character_list; temp; temp = temp->next)
+        // for (temp = character_list; temp; temp = temp.next)
         // if (HUNTING(temp) == ch)
         // HUNTING(temp) = NULL;
 
@@ -1155,21 +1146,21 @@ impl DB {
         }
 
         /* If there's a descriptor, they're in the menu now. */
-        // if (IS_NPC(ch) || !ch -> desc)
+        // if (IS_NPC(ch) || !ch . desc)
         // free_char(ch);
     }
 
     /*
      * Q: Why do we do this?
      * A: Because trying to iterate over the character
-     *    list with 'ch = ch->next' does bad things if
+     *    list with 'ch = ch.next' does bad things if
      *    the current character happens to die. The
      *    trivial workaround of 'vict = next_vict'
      *    doesn't work if the _next_ person in the list
      *    gets killed, for example, by an area spell.
      *
      * Q: Why do we leave them on the character_list?
-     * A: Because code doing 'vict = vict->next' would
+     * A: Because code doing 'vict = vict.next' would
      *    get really confused otherwise.
      */
     pub fn extract_char(&self, ch: &Rc<CharData>) {
@@ -1189,7 +1180,7 @@ impl DB {
  * hoops that have to be jumped through but it
  * hardly calls for a completely new variable.
  * Ideally it would be its own list, but that
- * would change the '->next' pointer, potentially
+ * would change the '.next' pointer, potentially
  * confusing some code. Ugh. -gg 3/15/2001
  *
  * NOTE: This doesn't handle recursive extractions.
@@ -1402,7 +1393,7 @@ impl DB {
         }
 
         for i in list.iter() {
-            if isname(&name, &i.name) != 0 {
+            if isname(&name, &i.name.borrow()) != 0 {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1455,7 +1446,7 @@ impl DB {
 
         /* ok.. no luck yet. scan the entire obj list   */
         for i in self.object_list.borrow().iter() {
-            if isname(&name, &i.name) != 0 {
+            if isname(&name, &i.name.borrow()) != 0 {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1480,7 +1471,7 @@ impl DB {
 // return (NULL);
 //
 // for (j = 0; j < NUM_WEARS; j++)
-// if (equipment[j] && CAN_SEE_OBJ(ch, equipment[j]) && isname(arg, equipment[j]->name))
+// if (equipment[j] && CAN_SEE_OBJ(ch, equipment[j]) && isname(arg, equipment[j].name))
 // if (--(*number) == 0)
 // return (equipment[j]);
 //
@@ -1513,7 +1504,7 @@ impl DB {
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
                 && self.can_see_obj(ch, equipment[j].as_ref().unwrap())
-                && isname(arg, &equipment[j].as_ref().unwrap().name) != 0
+                && isname(arg, &equipment[j].as_ref().unwrap().name.borrow()) != 0
             {
                 if {
                     *number -= 1;
@@ -1617,13 +1608,13 @@ impl DB {
         let mut new_descr = ExtraDescrData::new();
 
         if amount == 1 {
-            obj.name = "coin gold".to_string();
+            obj.name = RefCell::from("coin gold".to_string());
             obj.short_description = "a gold coin".to_string();
             obj.description = "One miserable gold coin is lying here.".to_string();
             new_descr.keyword = "coin gold".to_string();
             new_descr.description = "It's just one miserable little gold coin.".to_string();
         } else {
-            obj.name = "coins gold".to_string();
+            obj.name = RefCell::from("coins gold".to_string());
             obj.short_description = money_desc(amount).to_string();
             obj.description = format!("{} is lying here.", money_desc(amount));
 
@@ -1725,7 +1716,7 @@ impl DB {
                 }
 
                 if ch.get_eq(i).is_some()
-                    && isname(name.as_str(), &ch.get_eq(i).as_ref().unwrap().name) != 0
+                    && isname(name.as_str(), &ch.get_eq(i).as_ref().unwrap().name.borrow()) != 0
                 {
                     number -= 1;
                     if number == 0 {

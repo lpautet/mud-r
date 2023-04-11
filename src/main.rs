@@ -29,6 +29,7 @@ use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny};
+use crate::magic::affect_update;
 use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
@@ -50,6 +51,7 @@ mod fight;
 mod handler;
 mod interpreter;
 mod limits;
+mod magic;
 mod mobact;
 mod modify;
 mod objsave;
@@ -797,8 +799,7 @@ impl MainGlobals {
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(1);
-            // TODO implement spells
-            // affect_update();
+            affect_update(&self.db);
             self.db.point_update(self);
             //fflush(player_fl);
         }

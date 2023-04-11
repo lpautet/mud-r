@@ -27,23 +27,18 @@ use crate::db::DB;
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
 use crate::spell_parser::spell_level;
 use crate::spells::{
-    MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS, MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL,
-    MAG_POINTS, MAG_SUMMONS, MAG_UNAFFECTS, SKILL_BACKSTAB, SKILL_BASH, SKILL_HIDE, SKILL_KICK,
-    SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK, SPELL_ACID_BREATH,
-    SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS, SPELL_BURNING_HANDS,
-    SPELL_CALL_LIGHTNING, SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY,
-    SPELL_CONTROL_WEATHER, SPELL_CREATE_FOOD, SPELL_CREATE_WATER, SPELL_CURE_BLIND,
-    SPELL_CURE_CRITIC, SPELL_CURE_LIGHT, SPELL_CURSE, SPELL_DETECT_ALIGN, SPELL_DETECT_INVIS,
-    SPELL_DETECT_MAGIC, SPELL_DETECT_POISON, SPELL_DISPEL_EVIL, SPELL_DISPEL_GOOD,
-    SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON, SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_FIRE_BREATH,
-    SPELL_FROST_BREATH, SPELL_GAS_BREATH, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL, SPELL_HARM,
-    SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION, SPELL_INVISIBLE, SPELL_LIGHTNING_BOLT,
-    SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT, SPELL_MAGIC_MISSILE, SPELL_POISON,
-    SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE, SPELL_REMOVE_POISON, SPELL_SANCTUARY,
-    SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_SUMMON,
-    SPELL_TELEPORT, SPELL_WATERWALK, SPELL_WORD_OF_RECALL, TAR_CHAR_ROOM, TAR_CHAR_WORLD,
-    TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF, TAR_OBJ_EQUIP, TAR_OBJ_INV, TAR_OBJ_ROOM,
-    TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE,
+    SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL, SKILL_BACKSTAB, SKILL_BASH,
+    SKILL_HIDE, SKILL_KICK, SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
+    SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS, SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING,
+    SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY, SPELL_CONTROL_WEATHER,
+    SPELL_CREATE_FOOD, SPELL_CREATE_WATER, SPELL_CURE_BLIND, SPELL_CURE_CRITIC, SPELL_CURE_LIGHT,
+    SPELL_CURSE, SPELL_DETECT_ALIGN, SPELL_DETECT_INVIS, SPELL_DETECT_MAGIC, SPELL_DETECT_POISON,
+    SPELL_DISPEL_EVIL, SPELL_DISPEL_GOOD, SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON,
+    SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL, SPELL_HARM,
+    SPELL_HEAL, SPELL_INFRAVISION, SPELL_INVISIBLE, SPELL_LIGHTNING_BOLT, SPELL_LOCATE_OBJECT,
+    SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE,
+    SPELL_REMOVE_POISON, SPELL_SANCTUARY, SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP,
+    SPELL_STRENGTH, SPELL_SUMMON, SPELL_WORD_OF_RECALL,
 };
 use crate::structs::{
     CharData, GuildInfoType, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED,
@@ -174,7 +169,8 @@ pub const GUILD_INFO: [GuildInfoType; 6] = [
     },
     /* Brass Dragon */
     GuildInfoType {
-        pc_class: -127, /* all */
+        pc_class: -127,
+        /* all */
         guild_room: 5065,
         direction: SCMD_WEST,
     },
@@ -195,1030 +191,2814 @@ pub const GUILD_INFO: [GuildInfoType; 6] = [
  * Do not forget to change extern declaration in magic.c if you add to this.
  */
 
-// byte saving_throws(int class_num, int type, int level)
-// {
-// switch (class_num) {
-// CLASS_MAGIC_USER => { // switch (type) { }
-// SAVING_PARA => { /* Paralyzation */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 70; }
-// 2 => { return 69; }
-// 3 => { return 68; }
-// 4 => { return 67; }
-// 5 => { return 66; }
-// 6 => { return 65; }
-// 7 => { return 63; }
-// 8 => { return 61; }
-// 9 => { return 60; }
-// 10 => { return 59; }
-// 11 => { return 57; }
-// 12 => { return 55; }
-// 13 => { return 54; }
-// 14 => { return 53; }
-// 15 => { return 53; }
-// 16 => { return 52; }
-// 17 => { return 51; }
-// 18 => { return 50; }
-// 19 => { return 48; }
-// 20 => { return 46; }
-// 21 => { return 45; }
-// 22 => { return 44; }
-// 23 => { return 42; }
-// 24 => { return 40; }
-// 25 => { return 38; }
-// 26 => { return 36; }
-// 27 => { return 34; }
-// 28 => { return 32; }
-// 29 => { return 30; }
-// 30 => { return 28; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for mage paralyzation saving throw.");
-// break;
-// }
-// SAVING_ROD => { /* Rods */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 55; }
-// 2 => { return 53; }
-// 3 => { return 51; }
-// 4 => { return 49; }
-// 5 => { return 47; }
-// 6 => { return 45; }
-// 7 => { return 43; }
-// 8 => { return 41; }
-// 9 => { return 40; }
-// 10 => { return 39; }
-// 11 => { return 37; }
-// 12 => { return 35; }
-// 13 => { return 33; }
-// 14 => { return 31; }
-// 15 => { return 30; }
-// 16 => { return 29; }
-// 17 => { return 27; }
-// 18 => { return 25; }
-// 19 => { return 23; }
-// 20 => { return 21; }
-// 21 => { return 20; }
-// 22 => { return 19; }
-// 23 => { return 17; }
-// 24 => { return 15; }
-// 25 => { return 14; }
-// 26 => { return 13; }
-// 27 => { return 12; }
-// 28 => { return 11; }
-// 29 => { return 10; }
-// 30 => { return  9; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for mage rod saving throw.");
-// break;
-// }
-// SAVING_PETRI => { /* Petrification */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 65; }
-// 2 => { return 63; }
-// 3 => { return 61; }
-// 4 => { return 59; }
-// 5 => { return 57; }
-// 6 => { return 55; }
-// 7 => { return 53; }
-// 8 => { return 51; }
-// 9 => { return 50; }
-// 10 => { return 49; }
-// 11 => { return 47; }
-// 12 => { return 45; }
-// 13 => { return 43; }
-// 14 => { return 41; }
-// 15 => { return 40; }
-// 16 => { return 39; }
-// 17 => { return 37; }
-// 18 => { return 35; }
-// 19 => { return 33; }
-// 20 => { return 31; }
-// 21 => { return 30; }
-// 22 => { return 29; }
-// 23 => { return 27; }
-// 24 => { return 25; }
-// 25 => { return 23; }
-// 26 => { return 21; }
-// 27 => { return 19; }
-// 28 => { return 17; }
-// 29 => { return 15; }
-// 30 => { return 13; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for mage petrification saving throw.");
-// break;
-// }
-// SAVING_BREATH => { /* Breath weapons */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 75; }
-// 2 => { return 73; }
-// 3 => { return 71; }
-// 4 => { return 69; }
-// 5 => { return 67; }
-// 6 => { return 65; }
-// 7 => { return 63; }
-// 8 => { return 61; }
-// 9 => { return 60; }
-// 10 => { return 59; }
-// 11 => { return 57; }
-// 12 => { return 55; }
-// 13 => { return 53; }
-// 14 => { return 51; }
-// 15 => { return 50; }
-// 16 => { return 49; }
-// 17 => { return 47; }
-// 18 => { return 45; }
-// 19 => { return 43; }
-// 20 => { return 41; }
-// 21 => { return 40; }
-// 22 => { return 39; }
-// 23 => { return 37; }
-// 24 => { return 35; }
-// 25 => { return 33; }
-// 26 => { return 31; }
-// 27 => { return 29; }
-// 28 => { return 27; }
-// 29 => { return 25; }
-// 30 => { return 23; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for mage breath saving throw.");
-// break;
-// }
-// SAVING_SPELL => { /* Generic spells */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 60; }
-// 2 => { return 58; }
-// 3 => { return 56; }
-// 4 => { return 54; }
-// 5 => { return 52; }
-// 6 => { return 50; }
-// 7 => { return 48; }
-// 8 => { return 46; }
-// 9 => { return 45; }
-// 10 => { return 44; }
-// 11 => { return 42; }
-// 12 => { return 40; }
-// 13 => { return 38; }
-// 14 => { return 36; }
-// 15 => { return 35; }
-// 16 => { return 34; }
-// 17 => { return 32; }
-// 18 => { return 30; }
-// 19 => { return 28; }
-// 20 => { return 26; }
-// 21 => { return 25; }
-// 22 => { return 24; }
-// 23 => { return 22; }
-// 24 => { return 20; }
-// 25 => { return 18; }
-// 26 => { return 16; }
-// 27 => { return 14; }
-// 28 => { return 12; }
-// 29 => { return 10; }
-// 30 => { return  8; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for mage spell saving throw.");
-// break;
-// }
-// default:
-// log("SYSERR: Invalid saving throw type.");
-// break;
-// }
-// break;
-// CLASS_CLERIC => { // switch (type) { }
-// SAVING_PARA => { /* Paralyzation */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 60; }
-// 2 => { return 59; }
-// 3 => { return 48; }
-// 4 => { return 46; }
-// 5 => { return 45; }
-// 6 => { return 43; }
-// 7 => { return 40; }
-// 8 => { return 37; }
-// 9 => { return 35; }
-// 10 => { return 34; }
-// 11 => { return 33; }
-// 12 => { return 31; }
-// 13 => { return 30; }
-// 14 => { return 29; }
-// 15 => { return 27; }
-// 16 => { return 26; }
-// 17 => { return 25; }
-// 18 => { return 24; }
-// 19 => { return 23; }
-// 20 => { return 22; }
-// 21 => { return 21; }
-// 22 => { return 20; }
-// 23 => { return 18; }
-// 24 => { return 15; }
-// 25 => { return 14; }
-// 26 => { return 12; }
-// 27 => { return 10; }
-// 28 => { return  9; }
-// 29 => { return  8; }
-// 30 => { return  7; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for cleric paralyzation saving throw.");
-// break;
-// }
-// SAVING_ROD => { /* Rods */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 70; }
-// 2 => { return 69; }
-// 3 => { return 68; }
-// 4 => { return 66; }
-// 5 => { return 65; }
-// 6 => { return 63; }
-// 7 => { return 60; }
-// 8 => { return 57; }
-// 9 => { return 55; }
-// 10 => { return 54; }
-// 11 => { return 53; }
-// 12 => { return 51; }
-// 13 => { return 50; }
-// 14 => { return 49; }
-// 15 => { return 47; }
-// 16 => { return 46; }
-// 17 => { return 45; }
-// 18 => { return 44; }
-// 19 => { return 43; }
-// 20 => { return 42; }
-// 21 => { return 41; }
-// 22 => { return 40; }
-// 23 => { return 38; }
-// 24 => { return 35; }
-// 25 => { return 34; }
-// 26 => { return 32; }
-// 27 => { return 30; }
-// 28 => { return 29; }
-// 29 => { return 28; }
-// 30 => { return 27; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for cleric rod saving throw.");
-// break;
-// }
-// SAVING_PETRI => { /* Petrification */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 65; }
-// 2 => { return 64; }
-// 3 => { return 63; }
-// 4 => { return 61; }
-// 5 => { return 60; }
-// 6 => { return 58; }
-// 7 => { return 55; }
-// 8 => { return 53; }
-// 9 => { return 50; }
-// 10 => { return 49; }
-// 11 => { return 48; }
-// 12 => { return 46; }
-// 13 => { return 45; }
-// 14 => { return 44; }
-// 15 => { return 43; }
-// 16 => { return 41; }
-// 17 => { return 40; }
-// 18 => { return 39; }
-// 19 => { return 38; }
-// 20 => { return 37; }
-// 21 => { return 36; }
-// 22 => { return 35; }
-// 23 => { return 33; }
-// 24 => { return 31; }
-// 25 => { return 29; }
-// 26 => { return 27; }
-// 27 => { return 25; }
-// 28 => { return 24; }
-// 29 => { return 23; }
-// 30 => { return 22; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for cleric petrification saving throw.");
-// break;
-// }
-// SAVING_BREATH => { /* Breath weapons */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 80; }
-// 2 => { return 79; }
-// 3 => { return 78; }
-// 4 => { return 76; }
-// 5 => { return 75; }
-// 6 => { return 73; }
-// 7 => { return 70; }
-// 8 => { return 67; }
-// 9 => { return 65; }
-// 10 => { return 64; }
-// 11 => { return 63; }
-// 12 => { return 61; }
-// 13 => { return 60; }
-// 14 => { return 59; }
-// 15 => { return 57; }
-// 16 => { return 56; }
-// 17 => { return 55; }
-// 18 => { return 54; }
-// 19 => { return 53; }
-// 20 => { return 52; }
-// 21 => { return 51; }
-// 22 => { return 50; }
-// 23 => { return 48; }
-// 24 => { return 45; }
-// 25 => { return 44; }
-// 26 => { return 42; }
-// 27 => { return 40; }
-// 28 => { return 39; }
-// 29 => { return 38; }
-// 30 => { return 37; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for cleric breath saving throw.");
-// break;
-// }
-// SAVING_SPELL => { /* Generic spells */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 75; }
-// 2 => { return 74; }
-// 3 => { return 73; }
-// 4 => { return 71; }
-// 5 => { return 70; }
-// 6 => { return 68; }
-// 7 => { return 65; }
-// 8 => { return 63; }
-// 9 => { return 60; }
-// 10 => { return 59; }
-// 11 => { return 58; }
-// 12 => { return 56; }
-// 13 => { return 55; }
-// 14 => { return 54; }
-// 15 => { return 53; }
-// 16 => { return 51; }
-// 17 => { return 50; }
-// 18 => { return 49; }
-// 19 => { return 48; }
-// 20 => { return 47; }
-// 21 => { return 46; }
-// 22 => { return 45; }
-// 23 => { return 43; }
-// 24 => { return 41; }
-// 25 => { return 39; }
-// 26 => { return 37; }
-// 27 => { return 35; }
-// 28 => { return 34; }
-// 29 => { return 33; }
-// 30 => { return 32; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for cleric spell saving throw.");
-// break;
-// }
-// default:
-// log("SYSERR: Invalid saving throw type.");
-// break;
-// }
-// break;
-// CLASS_THIEF => { // switch (type) { }
-// SAVING_PARA => { /* Paralyzation */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 65; }
-// 2 => { return 64; }
-// 3 => { return 63; }
-// 4 => { return 62; }
-// 5 => { return 61; }
-// 6 => { return 60; }
-// 7 => { return 59; }
-// 8 => { return 58; }
-// 9 => { return 57; }
-// 10 => { return 56; }
-// 11 => { return 55; }
-// 12 => { return 54; }
-// 13 => { return 53; }
-// 14 => { return 52; }
-// 15 => { return 51; }
-// 16 => { return 50; }
-// 17 => { return 49; }
-// 18 => { return 48; }
-// 19 => { return 47; }
-// 20 => { return 46; }
-// 21 => { return 45; }
-// 22 => { return 44; }
-// 23 => { return 43; }
-// 24 => { return 42; }
-// 25 => { return 41; }
-// 26 => { return 40; }
-// 27 => { return 39; }
-// 28 => { return 38; }
-// 29 => { return 37; }
-// 30 => { return 36; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for thief paralyzation saving throw.");
-// break;
-// }
-// SAVING_ROD => { /* Rods */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 70; }
-// 2 => { return 68; }
-// 3 => { return 66; }
-// 4 => { return 64; }
-// 5 => { return 62; }
-// 6 => { return 60; }
-// 7 => { return 58; }
-// 8 => { return 56; }
-// 9 => { return 54; }
-// 10 => { return 52; }
-// 11 => { return 50; }
-// 12 => { return 48; }
-// 13 => { return 46; }
-// 14 => { return 44; }
-// 15 => { return 42; }
-// 16 => { return 40; }
-// 17 => { return 38; }
-// 18 => { return 36; }
-// 19 => { return 34; }
-// 20 => { return 32; }
-// 21 => { return 30; }
-// 22 => { return 28; }
-// 23 => { return 26; }
-// 24 => { return 24; }
-// 25 => { return 22; }
-// 26 => { return 20; }
-// 27 => { return 18; }
-// 28 => { return 16; }
-// 29 => { return 14; }
-// 30 => { return 13; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for thief rod saving throw.");
-// break;
-// }
-// SAVING_PETRI => { /* Petrification */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 60; }
-// 2 => { return 59; }
-// 3 => { return 58; }
-// 4 => { return 58; }
-// 5 => { return 56; }
-// 6 => { return 55; }
-// 7 => { return 54; }
-// 8 => { return 53; }
-// 9 => { return 52; }
-// 10 => { return 51; }
-// 11 => { return 50; }
-// 12 => { return 49; }
-// 13 => { return 48; }
-// 14 => { return 47; }
-// 15 => { return 46; }
-// 16 => { return 45; }
-// 17 => { return 44; }
-// 18 => { return 43; }
-// 19 => { return 42; }
-// 20 => { return 41; }
-// 21 => { return 40; }
-// 22 => { return 39; }
-// 23 => { return 38; }
-// 24 => { return 37; }
-// 25 => { return 36; }
-// 26 => { return 35; }
-// 27 => { return 34; }
-// 28 => { return 33; }
-// 29 => { return 32; }
-// 30 => { return 31; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for thief petrification saving throw.");
-// break;
-// }
-// SAVING_BREATH => { /* Breath weapons */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 80; }
-// 2 => { return 79; }
-// 3 => { return 78; }
-// 4 => { return 77; }
-// 5 => { return 76; }
-// 6 => { return 75; }
-// 7 => { return 74; }
-// 8 => { return 73; }
-// 9 => { return 72; }
-// 10 => { return 71; }
-// 11 => { return 70; }
-// 12 => { return 69; }
-// 13 => { return 68; }
-// 14 => { return 67; }
-// 15 => { return 66; }
-// 16 => { return 65; }
-// 17 => { return 64; }
-// 18 => { return 63; }
-// 19 => { return 62; }
-// 20 => { return 61; }
-// 21 => { return 60; }
-// 22 => { return 59; }
-// 23 => { return 58; }
-// 24 => { return 57; }
-// 25 => { return 56; }
-// 26 => { return 55; }
-// 27 => { return 54; }
-// 28 => { return 53; }
-// 29 => { return 52; }
-// 30 => { return 51; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for thief breath saving throw.");
-// break;
-// }
-// SAVING_SPELL => { /* Generic spells */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 75; }
-// 2 => { return 73; }
-// 3 => { return 71; }
-// 4 => { return 69; }
-// 5 => { return 67; }
-// 6 => { return 65; }
-// 7 => { return 63; }
-// 8 => { return 61; }
-// 9 => { return 59; }
-// 10 => { return 57; }
-// 11 => { return 55; }
-// 12 => { return 53; }
-// 13 => { return 51; }
-// 14 => { return 49; }
-// 15 => { return 47; }
-// 16 => { return 45; }
-// 17 => { return 43; }
-// 18 => { return 41; }
-// 19 => { return 39; }
-// 20 => { return 37; }
-// 21 => { return 35; }
-// 22 => { return 33; }
-// 23 => { return 31; }
-// 24 => { return 29; }
-// 25 => { return 27; }
-// 26 => { return 25; }
-// 27 => { return 23; }
-// 28 => { return 21; }
-// 29 => { return 19; }
-// 30 => { return 17; }
-// 31 => { return  0; }
-// 32 => { return  0; }
-// 33 => { return  0; }
-// 34 => { return  0; }
-// 35 => { return  0; }
-// 36 => { return  0; }
-// 37 => { return  0; }
-// 38 => { return  0; }
-// 39 => { return  0; }
-// 40 => { return  0; }
-// default:
-// log("SYSERR: Missing level for thief spell saving throw.");
-// break;
-// }
-// default:
-// log("SYSERR: Invalid saving throw type.");
-// break;
-// }
-// break;
-// CLASS_WARRIOR => { // switch (type) { }
-// SAVING_PARA => { /* Paralyzation */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 70; }
-// 2 => { return 68; }
-// 3 => { return 67; }
-// 4 => { return 65; }
-// 5 => { return 62; }
-// 6 => { return 58; }
-// 7 => { return 55; }
-// 8 => { return 53; }
-// 9 => { return 52; }
-// 10 => { return 50; }
-// 11 => { return 47; }
-// 12 => { return 43; }
-// 13 => { return 40; }
-// 14 => { return 38; }
-// 15 => { return 37; }
-// 16 => { return 35; }
-// 17 => { return 32; }
-// 18 => { return 28; }
-// 19 => { return 25; }
-// 20 => { return 24; }
-// 21 => { return 23; }
-// 22 => { return 22; }
-// 23 => { return 20; }
-// 24 => { return 19; }
-// 25 => { return 17; }
-// 26 => { return 16; }
-// 27 => { return 15; }
-// 28 => { return 14; }
-// 29 => { return 13; }
-// 30 => { return 12; }
-// 31 => { return 11; }
-// 32 => { return 10; }
-// 33 => { return  9; }
-// 34 => { return  8; }
-// 35 => { return  7; }
-// 36 => { return  6; }
-// 37 => { return  5; }
-// 38 => { return  4; }
-// 39 => { return  3; }
-// 40 => { return  2; }
-// 41 => { return  1;	/* Some mobiles. */ }
-// 42 => { return  0; }
-// 43 => { return  0; }
-// 44 => { return  0; }
-// 45 => { return  0; }
-// 46 => { return  0; }
-// 47 => { return  0; }
-// 48 => { return  0; }
-// 49 => { return  0; }
-// 50 => { return  0; }
-// default:
-// log("SYSERR: Missing level for warrior paralyzation saving throw.");
-// break;
-// }
-// SAVING_ROD => { /* Rods */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 80; }
-// 2 => { return 78; }
-// 3 => { return 77; }
-// 4 => { return 75; }
-// 5 => { return 72; }
-// 6 => { return 68; }
-// 7 => { return 65; }
-// 8 => { return 63; }
-// 9 => { return 62; }
-// 10 => { return 60; }
-// 11 => { return 57; }
-// 12 => { return 53; }
-// 13 => { return 50; }
-// 14 => { return 48; }
-// 15 => { return 47; }
-// 16 => { return 45; }
-// 17 => { return 42; }
-// 18 => { return 38; }
-// 19 => { return 35; }
-// 20 => { return 34; }
-// 21 => { return 33; }
-// 22 => { return 32; }
-// 23 => { return 30; }
-// 24 => { return 29; }
-// 25 => { return 27; }
-// 26 => { return 26; }
-// 27 => { return 25; }
-// 28 => { return 24; }
-// 29 => { return 23; }
-// 30 => { return 22; }
-// 31 => { return 20; }
-// 32 => { return 18; }
-// 33 => { return 16; }
-// 34 => { return 14; }
-// 35 => { return 12; }
-// 36 => { return 10; }
-// 37 => { return  8; }
-// 38 => { return  6; }
-// 39 => { return  5; }
-// 40 => { return  4; }
-// 41 => { return  3; }
-// 42 => { return  2; }
-// 43 => { return  1; }
-// 44 => { return  0; }
-// 45 => { return  0; }
-// 46 => { return  0; }
-// 47 => { return  0; }
-// 48 => { return  0; }
-// 49 => { return  0; }
-// 50 => { return  0; }
-// default:
-// log("SYSERR: Missing level for warrior rod saving throw.");
-// break;
-// }
-// SAVING_PETRI => { /* Petrification */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 75; }
-// 2 => { return 73; }
-// 3 => { return 72; }
-// 4 => { return 70; }
-// 5 => { return 67; }
-// 6 => { return 63; }
-// 7 => { return 60; }
-// 8 => { return 58; }
-// 9 => { return 57; }
-// 10 => { return 55; }
-// 11 => { return 52; }
-// 12 => { return 48; }
-// 13 => { return 45; }
-// 14 => { return 43; }
-// 15 => { return 42; }
-// 16 => { return 40; }
-// 17 => { return 37; }
-// 18 => { return 33; }
-// 19 => { return 30; }
-// 20 => { return 29; }
-// 21 => { return 28; }
-// 22 => { return 26; }
-// 23 => { return 25; }
-// 24 => { return 24; }
-// 25 => { return 23; }
-// 26 => { return 21; }
-// 27 => { return 20; }
-// 28 => { return 19; }
-// 29 => { return 18; }
-// 30 => { return 17; }
-// 31 => { return 16; }
-// 32 => { return 15; }
-// 33 => { return 14; }
-// 34 => { return 13; }
-// 35 => { return 12; }
-// 36 => { return 11; }
-// 37 => { return 10; }
-// 38 => { return  9; }
-// 39 => { return  8; }
-// 40 => { return  7; }
-// 41 => { return  6; }
-// 42 => { return  5; }
-// 43 => { return  4; }
-// 44 => { return  3; }
-// 45 => { return  2; }
-// 46 => { return  1; }
-// 47 => { return  0; }
-// 48 => { return  0; }
-// 49 => { return  0; }
-// 50 => { return  0; }
-// default:
-// log("SYSERR: Missing level for warrior petrification saving throw.");
-// break;
-// }
-// SAVING_BREATH => { /* Breath weapons */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 85; }
-// 2 => { return 83; }
-// 3 => { return 82; }
-// 4 => { return 80; }
-// 5 => { return 75; }
-// 6 => { return 70; }
-// 7 => { return 65; }
-// 8 => { return 63; }
-// 9 => { return 62; }
-// 10 => { return 60; }
-// 11 => { return 55; }
-// 12 => { return 50; }
-// 13 => { return 45; }
-// 14 => { return 43; }
-// 15 => { return 42; }
-// 16 => { return 40; }
-// 17 => { return 37; }
-// 18 => { return 33; }
-// 19 => { return 30; }
-// 20 => { return 29; }
-// 21 => { return 28; }
-// 22 => { return 26; }
-// 23 => { return 25; }
-// 24 => { return 24; }
-// 25 => { return 23; }
-// 26 => { return 21; }
-// 27 => { return 20; }
-// 28 => { return 19; }
-// 29 => { return 18; }
-// 30 => { return 17; }
-// 31 => { return 16; }
-// 32 => { return 15; }
-// 33 => { return 14; }
-// 34 => { return 13; }
-// 35 => { return 12; }
-// 36 => { return 11; }
-// 37 => { return 10; }
-// 38 => { return  9; }
-// 39 => { return  8; }
-// 40 => { return  7; }
-// 41 => { return  6; }
-// 42 => { return  5; }
-// 43 => { return  4; }
-// 44 => { return  3; }
-// 45 => { return  2; }
-// 46 => { return  1; }
-// 47 => { return  0; }
-// 48 => { return  0; }
-// 49 => { return  0; }
-// 50 => { return  0; }
-// default:
-// log("SYSERR: Missing level for warrior breath saving throw.");
-// break;
-// }
-// SAVING_SPELL => { /* Generic spells */ }
-// switch (level) {
-// 0 => { return 90; }
-// 1 => { return 85; }
-// 2 => { return 83; }
-// 3 => { return 82; }
-// 4 => { return 80; }
-// 5 => { return 77; }
-// 6 => { return 73; }
-// 7 => { return 70; }
-// 8 => { return 68; }
-// 9 => { return 67; }
-// 10 => { return 65; }
-// 11 => { return 62; }
-// 12 => { return 58; }
-// 13 => { return 55; }
-// 14 => { return 53; }
-// 15 => { return 52; }
-// 16 => { return 50; }
-// 17 => { return 47; }
-// 18 => { return 43; }
-// 19 => { return 40; }
-// 20 => { return 39; }
-// 21 => { return 38; }
-// 22 => { return 36; }
-// 23 => { return 35; }
-// 24 => { return 34; }
-// 25 => { return 33; }
-// 26 => { return 31; }
-// 27 => { return 30; }
-// 28 => { return 29; }
-// 29 => { return 28; }
-// 30 => { return 27; }
-// 31 => { return 25; }
-// 32 => { return 23; }
-// 33 => { return 21; }
-// 34 => { return 19; }
-// 35 => { return 17; }
-// 36 => { return 15; }
-// 37 => { return 13; }
-// 38 => { return 11; }
-// 39 => { return  9; }
-// 40 => { return  7; }
-// 41 => { return  6; }
-// 42 => { return  5; }
-// 43 => { return  4; }
-// 44 => { return  3; }
-// 45 => { return  2; }
-// 46 => { return  1; }
-// 47 => { return  0; }
-// 48 => { return  0; }
-// 49 => { return  0; }
-// 50 => { return  0; }
-// default:
-// log("SYSERR: Missing level for warrior spell saving throw.");
-// break;
-// }
-// default:
-// log("SYSERR: Invalid saving throw type.");
-// break;
-// }
-// default:
-// log("SYSERR: Invalid class saving throw.");
-// break;
-// }
-//
-// /* Should not get here unless something is wrong. */
-// return 100;
-// }
+pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
+    match class_num {
+        CLASS_MAGIC_USER => {
+            match type_ {
+                SAVING_PARA => {
+                    /* Paralyzation */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 70;
+                        }
+                        2 => {
+                            return 69;
+                        }
+                        3 => {
+                            return 68;
+                        }
+                        4 => {
+                            return 67;
+                        }
+                        5 => {
+                            return 66;
+                        }
+                        6 => {
+                            return 65;
+                        }
+                        7 => {
+                            return 63;
+                        }
+                        8 => {
+                            return 61;
+                        }
+                        9 => {
+                            return 60;
+                        }
+                        10 => {
+                            return 59;
+                        }
+                        11 => {
+                            return 57;
+                        }
+                        12 => {
+                            return 55;
+                        }
+                        13 => {
+                            return 54;
+                        }
+                        14 => {
+                            return 53;
+                        }
+                        15 => {
+                            return 53;
+                        }
+                        16 => {
+                            return 52;
+                        }
+                        17 => {
+                            return 51;
+                        }
+                        18 => {
+                            return 50;
+                        }
+                        19 => {
+                            return 48;
+                        }
+                        20 => {
+                            return 46;
+                        }
+                        21 => {
+                            return 45;
+                        }
+                        22 => {
+                            return 44;
+                        }
+                        23 => {
+                            return 42;
+                        }
+                        24 => {
+                            return 40;
+                        }
+                        25 => {
+                            return 38;
+                        }
+                        26 => {
+                            return 36;
+                        }
+                        27 => {
+                            return 34;
+                        }
+                        28 => {
+                            return 32;
+                        }
+                        29 => {
+                            return 30;
+                        }
+                        30 => {
+                            return 28;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for mage paralyzation saving throw.");
+                        }
+                    }
+                }
+                SAVING_ROD => {
+                    /* Rods */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 55;
+                        }
+                        2 => {
+                            return 53;
+                        }
+                        3 => {
+                            return 51;
+                        }
+                        4 => {
+                            return 49;
+                        }
+                        5 => {
+                            return 47;
+                        }
+                        6 => {
+                            return 45;
+                        }
+                        7 => {
+                            return 43;
+                        }
+                        8 => {
+                            return 41;
+                        }
+                        9 => {
+                            return 40;
+                        }
+                        10 => {
+                            return 39;
+                        }
+                        11 => {
+                            return 37;
+                        }
+                        12 => {
+                            return 35;
+                        }
+                        13 => {
+                            return 33;
+                        }
+                        14 => {
+                            return 31;
+                        }
+                        15 => {
+                            return 30;
+                        }
+                        16 => {
+                            return 29;
+                        }
+                        17 => {
+                            return 27;
+                        }
+                        18 => {
+                            return 25;
+                        }
+                        19 => {
+                            return 23;
+                        }
+                        20 => {
+                            return 21;
+                        }
+                        21 => {
+                            return 20;
+                        }
+                        22 => {
+                            return 19;
+                        }
+                        23 => {
+                            return 17;
+                        }
+                        24 => {
+                            return 15;
+                        }
+                        25 => {
+                            return 14;
+                        }
+                        26 => {
+                            return 13;
+                        }
+                        27 => {
+                            return 12;
+                        }
+                        28 => {
+                            return 11;
+                        }
+                        29 => {
+                            return 10;
+                        }
+                        30 => {
+                            return 9;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for mage rod saving throw.");
+                        }
+                    }
+                }
+                SAVING_PETRI => {
+                    /* Petrification */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 65;
+                        }
+                        2 => {
+                            return 63;
+                        }
+                        3 => {
+                            return 61;
+                        }
+                        4 => {
+                            return 59;
+                        }
+                        5 => {
+                            return 57;
+                        }
+                        6 => {
+                            return 55;
+                        }
+                        7 => {
+                            return 53;
+                        }
+                        8 => {
+                            return 51;
+                        }
+                        9 => {
+                            return 50;
+                        }
+                        10 => {
+                            return 49;
+                        }
+                        11 => {
+                            return 47;
+                        }
+                        12 => {
+                            return 45;
+                        }
+                        13 => {
+                            return 43;
+                        }
+                        14 => {
+                            return 41;
+                        }
+                        15 => {
+                            return 40;
+                        }
+                        16 => {
+                            return 39;
+                        }
+                        17 => {
+                            return 37;
+                        }
+                        18 => {
+                            return 35;
+                        }
+                        19 => {
+                            return 33;
+                        }
+                        20 => {
+                            return 31;
+                        }
+                        21 => {
+                            return 30;
+                        }
+                        22 => {
+                            return 29;
+                        }
+                        23 => {
+                            return 27;
+                        }
+                        24 => {
+                            return 25;
+                        }
+                        25 => {
+                            return 23;
+                        }
+                        26 => {
+                            return 21;
+                        }
+                        27 => {
+                            return 19;
+                        }
+                        28 => {
+                            return 17;
+                        }
+                        29 => {
+                            return 15;
+                        }
+                        30 => {
+                            return 13;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for mage petrification saving throw.");
+                        }
+                    }
+                }
+                SAVING_BREATH => {
+                    /* Breath weapons */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 75;
+                        }
+                        2 => {
+                            return 73;
+                        }
+                        3 => {
+                            return 71;
+                        }
+                        4 => {
+                            return 69;
+                        }
+                        5 => {
+                            return 67;
+                        }
+                        6 => {
+                            return 65;
+                        }
+                        7 => {
+                            return 63;
+                        }
+                        8 => {
+                            return 61;
+                        }
+                        9 => {
+                            return 60;
+                        }
+                        10 => {
+                            return 59;
+                        }
+                        11 => {
+                            return 57;
+                        }
+                        12 => {
+                            return 55;
+                        }
+                        13 => {
+                            return 53;
+                        }
+                        14 => {
+                            return 51;
+                        }
+                        15 => {
+                            return 50;
+                        }
+                        16 => {
+                            return 49;
+                        }
+                        17 => {
+                            return 47;
+                        }
+                        18 => {
+                            return 45;
+                        }
+                        19 => {
+                            return 43;
+                        }
+                        20 => {
+                            return 41;
+                        }
+                        21 => {
+                            return 40;
+                        }
+                        22 => {
+                            return 39;
+                        }
+                        23 => {
+                            return 37;
+                        }
+                        24 => {
+                            return 35;
+                        }
+                        25 => {
+                            return 33;
+                        }
+                        26 => {
+                            return 31;
+                        }
+                        27 => {
+                            return 29;
+                        }
+                        28 => {
+                            return 27;
+                        }
+                        29 => {
+                            return 25;
+                        }
+                        30 => {
+                            return 23;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for mage breath saving throw.");
+                        }
+                    }
+                }
+                SAVING_SPELL => {
+                    /* Generic spells */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 60;
+                        }
+                        2 => {
+                            return 58;
+                        }
+                        3 => {
+                            return 56;
+                        }
+                        4 => {
+                            return 54;
+                        }
+                        5 => {
+                            return 52;
+                        }
+                        6 => {
+                            return 50;
+                        }
+                        7 => {
+                            return 48;
+                        }
+                        8 => {
+                            return 46;
+                        }
+                        9 => {
+                            return 45;
+                        }
+                        10 => {
+                            return 44;
+                        }
+                        11 => {
+                            return 42;
+                        }
+                        12 => {
+                            return 40;
+                        }
+                        13 => {
+                            return 38;
+                        }
+                        14 => {
+                            return 36;
+                        }
+                        15 => {
+                            return 35;
+                        }
+                        16 => {
+                            return 34;
+                        }
+                        17 => {
+                            return 32;
+                        }
+                        18 => {
+                            return 30;
+                        }
+                        19 => {
+                            return 28;
+                        }
+                        20 => {
+                            return 26;
+                        }
+                        21 => {
+                            return 25;
+                        }
+                        22 => {
+                            return 24;
+                        }
+                        23 => {
+                            return 22;
+                        }
+                        24 => {
+                            return 20;
+                        }
+                        25 => {
+                            return 18;
+                        }
+                        26 => {
+                            return 16;
+                        }
+                        27 => {
+                            return 14;
+                        }
+                        28 => {
+                            return 12;
+                        }
+                        29 => {
+                            return 10;
+                        }
+                        30 => {
+                            return 8;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for mage spell saving throw.");
+                        }
+                    }
+                }
+                _ => {
+                    error!("SYSERR: Invalid saving throw type.");
+                }
+            }
+        }
+        CLASS_CLERIC => {
+            match type_ {
+                SAVING_PARA => {
+                    /* Paralyzation */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 60;
+                        }
+                        2 => {
+                            return 59;
+                        }
+                        3 => {
+                            return 48;
+                        }
+                        4 => {
+                            return 46;
+                        }
+                        5 => {
+                            return 45;
+                        }
+                        6 => {
+                            return 43;
+                        }
+                        7 => {
+                            return 40;
+                        }
+                        8 => {
+                            return 37;
+                        }
+                        9 => {
+                            return 35;
+                        }
+                        10 => {
+                            return 34;
+                        }
+                        11 => {
+                            return 33;
+                        }
+                        12 => {
+                            return 31;
+                        }
+                        13 => {
+                            return 30;
+                        }
+                        14 => {
+                            return 29;
+                        }
+                        15 => {
+                            return 27;
+                        }
+                        16 => {
+                            return 26;
+                        }
+                        17 => {
+                            return 25;
+                        }
+                        18 => {
+                            return 24;
+                        }
+                        19 => {
+                            return 23;
+                        }
+                        20 => {
+                            return 22;
+                        }
+                        21 => {
+                            return 21;
+                        }
+                        22 => {
+                            return 20;
+                        }
+                        23 => {
+                            return 18;
+                        }
+                        24 => {
+                            return 15;
+                        }
+                        25 => {
+                            return 14;
+                        }
+                        26 => {
+                            return 12;
+                        }
+                        27 => {
+                            return 10;
+                        }
+                        28 => {
+                            return 9;
+                        }
+                        29 => {
+                            return 8;
+                        }
+                        30 => {
+                            return 7;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for cleric paralyzation saving throw.");
+                        }
+                    }
+                }
+                SAVING_ROD => {
+                    /* Rods */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 70;
+                        }
+                        2 => {
+                            return 69;
+                        }
+                        3 => {
+                            return 68;
+                        }
+                        4 => {
+                            return 66;
+                        }
+                        5 => {
+                            return 65;
+                        }
+                        6 => {
+                            return 63;
+                        }
+                        7 => {
+                            return 60;
+                        }
+                        8 => {
+                            return 57;
+                        }
+                        9 => {
+                            return 55;
+                        }
+                        10 => {
+                            return 54;
+                        }
+                        11 => {
+                            return 53;
+                        }
+                        12 => {
+                            return 51;
+                        }
+                        13 => {
+                            return 50;
+                        }
+                        14 => {
+                            return 49;
+                        }
+                        15 => {
+                            return 47;
+                        }
+                        16 => {
+                            return 46;
+                        }
+                        17 => {
+                            return 45;
+                        }
+                        18 => {
+                            return 44;
+                        }
+                        19 => {
+                            return 43;
+                        }
+                        20 => {
+                            return 42;
+                        }
+                        21 => {
+                            return 41;
+                        }
+                        22 => {
+                            return 40;
+                        }
+                        23 => {
+                            return 38;
+                        }
+                        24 => {
+                            return 35;
+                        }
+                        25 => {
+                            return 34;
+                        }
+                        26 => {
+                            return 32;
+                        }
+                        27 => {
+                            return 30;
+                        }
+                        28 => {
+                            return 29;
+                        }
+                        29 => {
+                            return 28;
+                        }
+                        30 => {
+                            return 27;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for cleric rod saving throw.");
+                        }
+                    }
+                }
+                SAVING_PETRI => {
+                    /* Petrification */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 65;
+                        }
+                        2 => {
+                            return 64;
+                        }
+                        3 => {
+                            return 63;
+                        }
+                        4 => {
+                            return 61;
+                        }
+                        5 => {
+                            return 60;
+                        }
+                        6 => {
+                            return 58;
+                        }
+                        7 => {
+                            return 55;
+                        }
+                        8 => {
+                            return 53;
+                        }
+                        9 => {
+                            return 50;
+                        }
+                        10 => {
+                            return 49;
+                        }
+                        11 => {
+                            return 48;
+                        }
+                        12 => {
+                            return 46;
+                        }
+                        13 => {
+                            return 45;
+                        }
+                        14 => {
+                            return 44;
+                        }
+                        15 => {
+                            return 43;
+                        }
+                        16 => {
+                            return 41;
+                        }
+                        17 => {
+                            return 40;
+                        }
+                        18 => {
+                            return 39;
+                        }
+                        19 => {
+                            return 38;
+                        }
+                        20 => {
+                            return 37;
+                        }
+                        21 => {
+                            return 36;
+                        }
+                        22 => {
+                            return 35;
+                        }
+                        23 => {
+                            return 33;
+                        }
+                        24 => {
+                            return 31;
+                        }
+                        25 => {
+                            return 29;
+                        }
+                        26 => {
+                            return 27;
+                        }
+                        27 => {
+                            return 25;
+                        }
+                        28 => {
+                            return 24;
+                        }
+                        29 => {
+                            return 23;
+                        }
+                        30 => {
+                            return 22;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for cleric petrification saving throw.");
+                        }
+                    }
+                }
+                SAVING_BREATH => {
+                    /* Breath weapons */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 80;
+                        }
+                        2 => {
+                            return 79;
+                        }
+                        3 => {
+                            return 78;
+                        }
+                        4 => {
+                            return 76;
+                        }
+                        5 => {
+                            return 75;
+                        }
+                        6 => {
+                            return 73;
+                        }
+                        7 => {
+                            return 70;
+                        }
+                        8 => {
+                            return 67;
+                        }
+                        9 => {
+                            return 65;
+                        }
+                        10 => {
+                            return 64;
+                        }
+                        11 => {
+                            return 63;
+                        }
+                        12 => {
+                            return 61;
+                        }
+                        13 => {
+                            return 60;
+                        }
+                        14 => {
+                            return 59;
+                        }
+                        15 => {
+                            return 57;
+                        }
+                        16 => {
+                            return 56;
+                        }
+                        17 => {
+                            return 55;
+                        }
+                        18 => {
+                            return 54;
+                        }
+                        19 => {
+                            return 53;
+                        }
+                        20 => {
+                            return 52;
+                        }
+                        21 => {
+                            return 51;
+                        }
+                        22 => {
+                            return 50;
+                        }
+                        23 => {
+                            return 48;
+                        }
+                        24 => {
+                            return 45;
+                        }
+                        25 => {
+                            return 44;
+                        }
+                        26 => {
+                            return 42;
+                        }
+                        27 => {
+                            return 40;
+                        }
+                        28 => {
+                            return 39;
+                        }
+                        29 => {
+                            return 38;
+                        }
+                        30 => {
+                            return 37;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for cleric breath saving throw.");
+                        }
+                    }
+                }
+                SAVING_SPELL => {
+                    /* Generic spells */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 75;
+                        }
+                        2 => {
+                            return 74;
+                        }
+                        3 => {
+                            return 73;
+                        }
+                        4 => {
+                            return 71;
+                        }
+                        5 => {
+                            return 70;
+                        }
+                        6 => {
+                            return 68;
+                        }
+                        7 => {
+                            return 65;
+                        }
+                        8 => {
+                            return 63;
+                        }
+                        9 => {
+                            return 60;
+                        }
+                        10 => {
+                            return 59;
+                        }
+                        11 => {
+                            return 58;
+                        }
+                        12 => {
+                            return 56;
+                        }
+                        13 => {
+                            return 55;
+                        }
+                        14 => {
+                            return 54;
+                        }
+                        15 => {
+                            return 53;
+                        }
+                        16 => {
+                            return 51;
+                        }
+                        17 => {
+                            return 50;
+                        }
+                        18 => {
+                            return 49;
+                        }
+                        19 => {
+                            return 48;
+                        }
+                        20 => {
+                            return 47;
+                        }
+                        21 => {
+                            return 46;
+                        }
+                        22 => {
+                            return 45;
+                        }
+                        23 => {
+                            return 43;
+                        }
+                        24 => {
+                            return 41;
+                        }
+                        25 => {
+                            return 39;
+                        }
+                        26 => {
+                            return 37;
+                        }
+                        27 => {
+                            return 35;
+                        }
+                        28 => {
+                            return 34;
+                        }
+                        29 => {
+                            return 33;
+                        }
+                        30 => {
+                            return 32;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for cleric spell saving throw.");
+                        }
+                    }
+                }
+                _ => {
+                    error!("SYSERR: Invalid saving throw type.");
+                }
+            }
+        }
+        CLASS_THIEF => {
+            match type_ {
+                SAVING_PARA => {
+                    /* Paralyzation */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 65;
+                        }
+                        2 => {
+                            return 64;
+                        }
+                        3 => {
+                            return 63;
+                        }
+                        4 => {
+                            return 62;
+                        }
+                        5 => {
+                            return 61;
+                        }
+                        6 => {
+                            return 60;
+                        }
+                        7 => {
+                            return 59;
+                        }
+                        8 => {
+                            return 58;
+                        }
+                        9 => {
+                            return 57;
+                        }
+                        10 => {
+                            return 56;
+                        }
+                        11 => {
+                            return 55;
+                        }
+                        12 => {
+                            return 54;
+                        }
+                        13 => {
+                            return 53;
+                        }
+                        14 => {
+                            return 52;
+                        }
+                        15 => {
+                            return 51;
+                        }
+                        16 => {
+                            return 50;
+                        }
+                        17 => {
+                            return 49;
+                        }
+                        18 => {
+                            return 48;
+                        }
+                        19 => {
+                            return 47;
+                        }
+                        20 => {
+                            return 46;
+                        }
+                        21 => {
+                            return 45;
+                        }
+                        22 => {
+                            return 44;
+                        }
+                        23 => {
+                            return 43;
+                        }
+                        24 => {
+                            return 42;
+                        }
+                        25 => {
+                            return 41;
+                        }
+                        26 => {
+                            return 40;
+                        }
+                        27 => {
+                            return 39;
+                        }
+                        28 => {
+                            return 38;
+                        }
+                        29 => {
+                            return 37;
+                        }
+                        30 => {
+                            return 36;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for thief paralyzation saving throw.");
+                        }
+                    }
+                }
+                SAVING_ROD => {
+                    /* Rods */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 70;
+                        }
+                        2 => {
+                            return 68;
+                        }
+                        3 => {
+                            return 66;
+                        }
+                        4 => {
+                            return 64;
+                        }
+                        5 => {
+                            return 62;
+                        }
+                        6 => {
+                            return 60;
+                        }
+                        7 => {
+                            return 58;
+                        }
+                        8 => {
+                            return 56;
+                        }
+                        9 => {
+                            return 54;
+                        }
+                        10 => {
+                            return 52;
+                        }
+                        11 => {
+                            return 50;
+                        }
+                        12 => {
+                            return 48;
+                        }
+                        13 => {
+                            return 46;
+                        }
+                        14 => {
+                            return 44;
+                        }
+                        15 => {
+                            return 42;
+                        }
+                        16 => {
+                            return 40;
+                        }
+                        17 => {
+                            return 38;
+                        }
+                        18 => {
+                            return 36;
+                        }
+                        19 => {
+                            return 34;
+                        }
+                        20 => {
+                            return 32;
+                        }
+                        21 => {
+                            return 30;
+                        }
+                        22 => {
+                            return 28;
+                        }
+                        23 => {
+                            return 26;
+                        }
+                        24 => {
+                            return 24;
+                        }
+                        25 => {
+                            return 22;
+                        }
+                        26 => {
+                            return 20;
+                        }
+                        27 => {
+                            return 18;
+                        }
+                        28 => {
+                            return 16;
+                        }
+                        29 => {
+                            return 14;
+                        }
+                        30 => {
+                            return 13;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for thief rod saving throw.");
+                        }
+                    }
+                }
+                SAVING_PETRI => {
+                    /* Petrification */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 60;
+                        }
+                        2 => {
+                            return 59;
+                        }
+                        3 => {
+                            return 58;
+                        }
+                        4 => {
+                            return 58;
+                        }
+                        5 => {
+                            return 56;
+                        }
+                        6 => {
+                            return 55;
+                        }
+                        7 => {
+                            return 54;
+                        }
+                        8 => {
+                            return 53;
+                        }
+                        9 => {
+                            return 52;
+                        }
+                        10 => {
+                            return 51;
+                        }
+                        11 => {
+                            return 50;
+                        }
+                        12 => {
+                            return 49;
+                        }
+                        13 => {
+                            return 48;
+                        }
+                        14 => {
+                            return 47;
+                        }
+                        15 => {
+                            return 46;
+                        }
+                        16 => {
+                            return 45;
+                        }
+                        17 => {
+                            return 44;
+                        }
+                        18 => {
+                            return 43;
+                        }
+                        19 => {
+                            return 42;
+                        }
+                        20 => {
+                            return 41;
+                        }
+                        21 => {
+                            return 40;
+                        }
+                        22 => {
+                            return 39;
+                        }
+                        23 => {
+                            return 38;
+                        }
+                        24 => {
+                            return 37;
+                        }
+                        25 => {
+                            return 36;
+                        }
+                        26 => {
+                            return 35;
+                        }
+                        27 => {
+                            return 34;
+                        }
+                        28 => {
+                            return 33;
+                        }
+                        29 => {
+                            return 32;
+                        }
+                        30 => {
+                            return 31;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for thief petrification saving throw.");
+                        }
+                    }
+                }
+                SAVING_BREATH => {
+                    /* Breath weapons */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 80;
+                        }
+                        2 => {
+                            return 79;
+                        }
+                        3 => {
+                            return 78;
+                        }
+                        4 => {
+                            return 77;
+                        }
+                        5 => {
+                            return 76;
+                        }
+                        6 => {
+                            return 75;
+                        }
+                        7 => {
+                            return 74;
+                        }
+                        8 => {
+                            return 73;
+                        }
+                        9 => {
+                            return 72;
+                        }
+                        10 => {
+                            return 71;
+                        }
+                        11 => {
+                            return 70;
+                        }
+                        12 => {
+                            return 69;
+                        }
+                        13 => {
+                            return 68;
+                        }
+                        14 => {
+                            return 67;
+                        }
+                        15 => {
+                            return 66;
+                        }
+                        16 => {
+                            return 65;
+                        }
+                        17 => {
+                            return 64;
+                        }
+                        18 => {
+                            return 63;
+                        }
+                        19 => {
+                            return 62;
+                        }
+                        20 => {
+                            return 61;
+                        }
+                        21 => {
+                            return 60;
+                        }
+                        22 => {
+                            return 59;
+                        }
+                        23 => {
+                            return 58;
+                        }
+                        24 => {
+                            return 57;
+                        }
+                        25 => {
+                            return 56;
+                        }
+                        26 => {
+                            return 55;
+                        }
+                        27 => {
+                            return 54;
+                        }
+                        28 => {
+                            return 53;
+                        }
+                        29 => {
+                            return 52;
+                        }
+                        30 => {
+                            return 51;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for thief breath saving throw.");
+                        }
+                    }
+                }
+                SAVING_SPELL => {
+                    /* Generic spells */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 75;
+                        }
+                        2 => {
+                            return 73;
+                        }
+                        3 => {
+                            return 71;
+                        }
+                        4 => {
+                            return 69;
+                        }
+                        5 => {
+                            return 67;
+                        }
+                        6 => {
+                            return 65;
+                        }
+                        7 => {
+                            return 63;
+                        }
+                        8 => {
+                            return 61;
+                        }
+                        9 => {
+                            return 59;
+                        }
+                        10 => {
+                            return 57;
+                        }
+                        11 => {
+                            return 55;
+                        }
+                        12 => {
+                            return 53;
+                        }
+                        13 => {
+                            return 51;
+                        }
+                        14 => {
+                            return 49;
+                        }
+                        15 => {
+                            return 47;
+                        }
+                        16 => {
+                            return 45;
+                        }
+                        17 => {
+                            return 43;
+                        }
+                        18 => {
+                            return 41;
+                        }
+                        19 => {
+                            return 39;
+                        }
+                        20 => {
+                            return 37;
+                        }
+                        21 => {
+                            return 35;
+                        }
+                        22 => {
+                            return 33;
+                        }
+                        23 => {
+                            return 31;
+                        }
+                        24 => {
+                            return 29;
+                        }
+                        25 => {
+                            return 27;
+                        }
+                        26 => {
+                            return 25;
+                        }
+                        27 => {
+                            return 23;
+                        }
+                        28 => {
+                            return 21;
+                        }
+                        29 => {
+                            return 19;
+                        }
+                        30 => {
+                            return 17;
+                        }
+                        31 => {
+                            return 0;
+                        }
+                        32 => {
+                            return 0;
+                        }
+                        33 => {
+                            return 0;
+                        }
+                        34 => {
+                            return 0;
+                        }
+                        35 => {
+                            return 0;
+                        }
+                        36 => {
+                            return 0;
+                        }
+                        37 => {
+                            return 0;
+                        }
+                        38 => {
+                            return 0;
+                        }
+                        39 => {
+                            return 0;
+                        }
+                        40 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for thief spell saving throw.");
+                        }
+                    }
+                }
+                _ => {
+                    error!("SYSERR: Invalid saving throw type.");
+                }
+            }
+        }
+        CLASS_WARRIOR => {
+            match type_ {
+                SAVING_PARA => {
+                    /* Paralyzation */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 70;
+                        }
+                        2 => {
+                            return 68;
+                        }
+                        3 => {
+                            return 67;
+                        }
+                        4 => {
+                            return 65;
+                        }
+                        5 => {
+                            return 62;
+                        }
+                        6 => {
+                            return 58;
+                        }
+                        7 => {
+                            return 55;
+                        }
+                        8 => {
+                            return 53;
+                        }
+                        9 => {
+                            return 52;
+                        }
+                        10 => {
+                            return 50;
+                        }
+                        11 => {
+                            return 47;
+                        }
+                        12 => {
+                            return 43;
+                        }
+                        13 => {
+                            return 40;
+                        }
+                        14 => {
+                            return 38;
+                        }
+                        15 => {
+                            return 37;
+                        }
+                        16 => {
+                            return 35;
+                        }
+                        17 => {
+                            return 32;
+                        }
+                        18 => {
+                            return 28;
+                        }
+                        19 => {
+                            return 25;
+                        }
+                        20 => {
+                            return 24;
+                        }
+                        21 => {
+                            return 23;
+                        }
+                        22 => {
+                            return 22;
+                        }
+                        23 => {
+                            return 20;
+                        }
+                        24 => {
+                            return 19;
+                        }
+                        25 => {
+                            return 17;
+                        }
+                        26 => {
+                            return 16;
+                        }
+                        27 => {
+                            return 15;
+                        }
+                        28 => {
+                            return 14;
+                        }
+                        29 => {
+                            return 13;
+                        }
+                        30 => {
+                            return 12;
+                        }
+                        31 => {
+                            return 11;
+                        }
+                        32 => {
+                            return 10;
+                        }
+                        33 => {
+                            return 9;
+                        }
+                        34 => {
+                            return 8;
+                        }
+                        35 => {
+                            return 7;
+                        }
+                        36 => {
+                            return 6;
+                        }
+                        37 => {
+                            return 5;
+                        }
+                        38 => {
+                            return 4;
+                        }
+                        39 => {
+                            return 3;
+                        }
+                        40 => {
+                            return 2;
+                        }
+                        41 => {
+                            return 1; /* Some mobiles. */
+                        }
+                        42 => {
+                            return 0;
+                        }
+                        43 => {
+                            return 0;
+                        }
+                        44 => {
+                            return 0;
+                        }
+                        45 => {
+                            return 0;
+                        }
+                        46 => {
+                            return 0;
+                        }
+                        47 => {
+                            return 0;
+                        }
+                        48 => {
+                            return 0;
+                        }
+                        49 => {
+                            return 0;
+                        }
+                        50 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for warrior paralyzation saving throw.");
+                        }
+                    }
+                }
+                SAVING_ROD => {
+                    /* Rods */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 80;
+                        }
+                        2 => {
+                            return 78;
+                        }
+                        3 => {
+                            return 77;
+                        }
+                        4 => {
+                            return 75;
+                        }
+                        5 => {
+                            return 72;
+                        }
+                        6 => {
+                            return 68;
+                        }
+                        7 => {
+                            return 65;
+                        }
+                        8 => {
+                            return 63;
+                        }
+                        9 => {
+                            return 62;
+                        }
+                        10 => {
+                            return 60;
+                        }
+                        11 => {
+                            return 57;
+                        }
+                        12 => {
+                            return 53;
+                        }
+                        13 => {
+                            return 50;
+                        }
+                        14 => {
+                            return 48;
+                        }
+                        15 => {
+                            return 47;
+                        }
+                        16 => {
+                            return 45;
+                        }
+                        17 => {
+                            return 42;
+                        }
+                        18 => {
+                            return 38;
+                        }
+                        19 => {
+                            return 35;
+                        }
+                        20 => {
+                            return 34;
+                        }
+                        21 => {
+                            return 33;
+                        }
+                        22 => {
+                            return 32;
+                        }
+                        23 => {
+                            return 30;
+                        }
+                        24 => {
+                            return 29;
+                        }
+                        25 => {
+                            return 27;
+                        }
+                        26 => {
+                            return 26;
+                        }
+                        27 => {
+                            return 25;
+                        }
+                        28 => {
+                            return 24;
+                        }
+                        29 => {
+                            return 23;
+                        }
+                        30 => {
+                            return 22;
+                        }
+                        31 => {
+                            return 20;
+                        }
+                        32 => {
+                            return 18;
+                        }
+                        33 => {
+                            return 16;
+                        }
+                        34 => {
+                            return 14;
+                        }
+                        35 => {
+                            return 12;
+                        }
+                        36 => {
+                            return 10;
+                        }
+                        37 => {
+                            return 8;
+                        }
+                        38 => {
+                            return 6;
+                        }
+                        39 => {
+                            return 5;
+                        }
+                        40 => {
+                            return 4;
+                        }
+                        41 => {
+                            return 3;
+                        }
+                        42 => {
+                            return 2;
+                        }
+                        43 => {
+                            return 1;
+                        }
+                        44 => {
+                            return 0;
+                        }
+                        45 => {
+                            return 0;
+                        }
+                        46 => {
+                            return 0;
+                        }
+                        47 => {
+                            return 0;
+                        }
+                        48 => {
+                            return 0;
+                        }
+                        49 => {
+                            return 0;
+                        }
+                        50 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for warrior rod saving throw.");
+                        }
+                    }
+                }
+                SAVING_PETRI => {
+                    /* Petrification */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 75;
+                        }
+                        2 => {
+                            return 73;
+                        }
+                        3 => {
+                            return 72;
+                        }
+                        4 => {
+                            return 70;
+                        }
+                        5 => {
+                            return 67;
+                        }
+                        6 => {
+                            return 63;
+                        }
+                        7 => {
+                            return 60;
+                        }
+                        8 => {
+                            return 58;
+                        }
+                        9 => {
+                            return 57;
+                        }
+                        10 => {
+                            return 55;
+                        }
+                        11 => {
+                            return 52;
+                        }
+                        12 => {
+                            return 48;
+                        }
+                        13 => {
+                            return 45;
+                        }
+                        14 => {
+                            return 43;
+                        }
+                        15 => {
+                            return 42;
+                        }
+                        16 => {
+                            return 40;
+                        }
+                        17 => {
+                            return 37;
+                        }
+                        18 => {
+                            return 33;
+                        }
+                        19 => {
+                            return 30;
+                        }
+                        20 => {
+                            return 29;
+                        }
+                        21 => {
+                            return 28;
+                        }
+                        22 => {
+                            return 26;
+                        }
+                        23 => {
+                            return 25;
+                        }
+                        24 => {
+                            return 24;
+                        }
+                        25 => {
+                            return 23;
+                        }
+                        26 => {
+                            return 21;
+                        }
+                        27 => {
+                            return 20;
+                        }
+                        28 => {
+                            return 19;
+                        }
+                        29 => {
+                            return 18;
+                        }
+                        30 => {
+                            return 17;
+                        }
+                        31 => {
+                            return 16;
+                        }
+                        32 => {
+                            return 15;
+                        }
+                        33 => {
+                            return 14;
+                        }
+                        34 => {
+                            return 13;
+                        }
+                        35 => {
+                            return 12;
+                        }
+                        36 => {
+                            return 11;
+                        }
+                        37 => {
+                            return 10;
+                        }
+                        38 => {
+                            return 9;
+                        }
+                        39 => {
+                            return 8;
+                        }
+                        40 => {
+                            return 7;
+                        }
+                        41 => {
+                            return 6;
+                        }
+                        42 => {
+                            return 5;
+                        }
+                        43 => {
+                            return 4;
+                        }
+                        44 => {
+                            return 3;
+                        }
+                        45 => {
+                            return 2;
+                        }
+                        46 => {
+                            return 1;
+                        }
+                        47 => {
+                            return 0;
+                        }
+                        48 => {
+                            return 0;
+                        }
+                        49 => {
+                            return 0;
+                        }
+                        50 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for warrior petrification saving throw.");
+                        }
+                    }
+                }
+                SAVING_BREATH => {
+                    /* Breath weapons */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 85;
+                        }
+                        2 => {
+                            return 83;
+                        }
+                        3 => {
+                            return 82;
+                        }
+                        4 => {
+                            return 80;
+                        }
+                        5 => {
+                            return 75;
+                        }
+                        6 => {
+                            return 70;
+                        }
+                        7 => {
+                            return 65;
+                        }
+                        8 => {
+                            return 63;
+                        }
+                        9 => {
+                            return 62;
+                        }
+                        10 => {
+                            return 60;
+                        }
+                        11 => {
+                            return 55;
+                        }
+                        12 => {
+                            return 50;
+                        }
+                        13 => {
+                            return 45;
+                        }
+                        14 => {
+                            return 43;
+                        }
+                        15 => {
+                            return 42;
+                        }
+                        16 => {
+                            return 40;
+                        }
+                        17 => {
+                            return 37;
+                        }
+                        18 => {
+                            return 33;
+                        }
+                        19 => {
+                            return 30;
+                        }
+                        20 => {
+                            return 29;
+                        }
+                        21 => {
+                            return 28;
+                        }
+                        22 => {
+                            return 26;
+                        }
+                        23 => {
+                            return 25;
+                        }
+                        24 => {
+                            return 24;
+                        }
+                        25 => {
+                            return 23;
+                        }
+                        26 => {
+                            return 21;
+                        }
+                        27 => {
+                            return 20;
+                        }
+                        28 => {
+                            return 19;
+                        }
+                        29 => {
+                            return 18;
+                        }
+                        30 => {
+                            return 17;
+                        }
+                        31 => {
+                            return 16;
+                        }
+                        32 => {
+                            return 15;
+                        }
+                        33 => {
+                            return 14;
+                        }
+                        34 => {
+                            return 13;
+                        }
+                        35 => {
+                            return 12;
+                        }
+                        36 => {
+                            return 11;
+                        }
+                        37 => {
+                            return 10;
+                        }
+                        38 => {
+                            return 9;
+                        }
+                        39 => {
+                            return 8;
+                        }
+                        40 => {
+                            return 7;
+                        }
+                        41 => {
+                            return 6;
+                        }
+                        42 => {
+                            return 5;
+                        }
+                        43 => {
+                            return 4;
+                        }
+                        44 => {
+                            return 3;
+                        }
+                        45 => {
+                            return 2;
+                        }
+                        46 => {
+                            return 1;
+                        }
+                        47 => {
+                            return 0;
+                        }
+                        48 => {
+                            return 0;
+                        }
+                        49 => {
+                            return 0;
+                        }
+                        50 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for warrior breath saving throw.");
+                        }
+                    }
+                }
+                SAVING_SPELL => {
+                    /* Generic spells */
+                    match level {
+                        0 => {
+                            return 90;
+                        }
+                        1 => {
+                            return 85;
+                        }
+                        2 => {
+                            return 83;
+                        }
+                        3 => {
+                            return 82;
+                        }
+                        4 => {
+                            return 80;
+                        }
+                        5 => {
+                            return 77;
+                        }
+                        6 => {
+                            return 73;
+                        }
+                        7 => {
+                            return 70;
+                        }
+                        8 => {
+                            return 68;
+                        }
+                        9 => {
+                            return 67;
+                        }
+                        10 => {
+                            return 65;
+                        }
+                        11 => {
+                            return 62;
+                        }
+                        12 => {
+                            return 58;
+                        }
+                        13 => {
+                            return 55;
+                        }
+                        14 => {
+                            return 53;
+                        }
+                        15 => {
+                            return 52;
+                        }
+                        16 => {
+                            return 50;
+                        }
+                        17 => {
+                            return 47;
+                        }
+                        18 => {
+                            return 43;
+                        }
+                        19 => {
+                            return 40;
+                        }
+                        20 => {
+                            return 39;
+                        }
+                        21 => {
+                            return 38;
+                        }
+                        22 => {
+                            return 36;
+                        }
+                        23 => {
+                            return 35;
+                        }
+                        24 => {
+                            return 34;
+                        }
+                        25 => {
+                            return 33;
+                        }
+                        26 => {
+                            return 31;
+                        }
+                        27 => {
+                            return 30;
+                        }
+                        28 => {
+                            return 29;
+                        }
+                        29 => {
+                            return 28;
+                        }
+                        30 => {
+                            return 27;
+                        }
+                        31 => {
+                            return 25;
+                        }
+                        32 => {
+                            return 23;
+                        }
+                        33 => {
+                            return 21;
+                        }
+                        34 => {
+                            return 19;
+                        }
+                        35 => {
+                            return 17;
+                        }
+                        36 => {
+                            return 15;
+                        }
+                        37 => {
+                            return 13;
+                        }
+                        38 => {
+                            return 11;
+                        }
+                        39 => {
+                            return 9;
+                        }
+                        40 => {
+                            return 7;
+                        }
+                        41 => {
+                            return 6;
+                        }
+                        42 => {
+                            return 5;
+                        }
+                        43 => {
+                            return 4;
+                        }
+                        44 => {
+                            return 3;
+                        }
+                        45 => {
+                            return 2;
+                        }
+                        46 => {
+                            return 1;
+                        }
+                        47 => {
+                            return 0;
+                        }
+                        48 => {
+                            return 0;
+                        }
+                        49 => {
+                            return 0;
+                        }
+                        50 => {
+                            return 0;
+                        }
+                        _ => {
+                            error!("SYSERR: Missing level for warrior spell saving throw.");
+                        }
+                    }
+                }
+                _ => {
+                    error!("SYSERR: Invalid saving throw type.");
+                }
+            }
+        }
+        _ => {
+            error!("SYSERR: Invalid class saving throw.");
+        }
+    }
+
+    /* Should not get here unless something is wrong. */
+    return 100;
+}
 
 /* THAC0 for classes and levels.  (To Hit Armor Class 0) */
 pub fn thaco(class_num: i8, level: u8) -> i32 {

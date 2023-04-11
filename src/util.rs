@@ -26,14 +26,15 @@ use rand::Rng;
 
 use crate::constants::STR_APP;
 use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
-use crate::handler::fname;
+use crate::handler::{affect_from_char, affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ConState, ObjData, RoomData, RoomDirectionData, Special, AFF_BLIND, AFF_DETECT_INVIS,
-    AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC, CLASS_MAGIC_USER,
-    CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1,
-    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
+    CharData, ConState, FollowType, ObjData, RoomData, RoomDirectionData, Special, AFF_BLIND,
+    AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC,
+    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING,
+    PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE,
+    SEX_MALE,
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
@@ -153,6 +154,7 @@ macro_rules! check_player_special {
         ($var)
     };
 }
+use crate::spells::SPELL_CHARM;
 pub use check_player_special;
 
 impl CharData {
@@ -634,8 +636,8 @@ impl CharData {
     pub fn set_height(&self, val: u8) {
         self.player.borrow_mut().height = val;
     }
-    pub fn get_save(&self, i: usize) -> i16 {
-        self.char_specials.borrow().saved.apply_saving_throw[i]
+    pub fn get_save(&self, i: i32) -> i16 {
+        self.char_specials.borrow().saved.apply_saving_throw[i as usize]
     }
     pub fn set_save(&self, i: usize, val: i16) {
         self.char_specials.borrow_mut().saved.apply_saving_throw[i] = val;
@@ -690,6 +692,10 @@ impl CharData {
     pub fn set_aff_flags(&self, val: i64) {
         self.char_specials.borrow_mut().saved.affected_by = val;
     }
+    pub fn set_aff_flags_bits(&self, val: i64) {
+        self.char_specials.borrow_mut().saved.affected_by |= val;
+    }
+
     pub fn remove_aff_flags(&self, val: i64) {
         self.char_specials.borrow_mut().saved.affected_by &= !val;
     }
@@ -814,6 +820,16 @@ impl ObjData {
     pub fn set_obj_extra(&self, val: i32) {
         self.obj_flags.extra_flags.set(val);
     }
+    pub fn set_obj_extra_bit(&self, val: i32) {
+        self.obj_flags
+            .extra_flags
+            .set(self.obj_flags.extra_flags.get() | val);
+    }
+    pub fn remove_obj_extra_bit(&self, val: i32) {
+        self.obj_flags
+            .extra_flags
+            .set(self.obj_flags.extra_flags.get() & !val);
+    }
     pub fn get_obj_wear(&self) -> i32 {
         self.obj_flags.wear_flags
     }
@@ -828,6 +844,9 @@ impl ObjData {
     }
     pub fn decr_obj_val(&self, val: usize) {
         self.obj_flags.value[val].set(self.obj_flags.value[val].get() - 1);
+    }
+    pub fn incr_obj_val(&self, val: usize) {
+        self.obj_flags.value[val].set(self.obj_flags.value[val].get() + 1);
     }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
@@ -1045,7 +1064,7 @@ impl DB {
 
     pub fn objn(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
         if self.can_see_obj(vict, obj) {
-            fname(obj.name.as_str())
+            fname(obj.name.borrow().as_str())
         } else {
             Rc::from("something")
         }
@@ -1089,7 +1108,7 @@ pub fn hssh(ch: &CharData) -> &str {
 }
 
 pub fn ana(obj: &ObjData) -> &str {
-    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
+    if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
         "An"
     } else {
         "A"
@@ -1097,7 +1116,7 @@ pub fn ana(obj: &ObjData) -> &str {
 }
 
 pub fn sana(obj: &ObjData) -> &str {
-    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
+    if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
         "an"
     } else {
         "a"
@@ -1468,17 +1487,28 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
-// bool circle_follow(struct char_data *ch, struct char_data *victim)
-// {
-// struct char_data *k;
-//
-// for (k = victim; k; k = k->master) {
-// if (k == ch)
-// return (TRUE);
-// }
-//
-// return (FALSE);
-// }
+pub fn circle_follow(ch: &Rc<CharData>, victim: Option<&Rc<CharData>>) -> bool {
+    if victim.is_none() {
+        return false;
+    }
+    let mut k = victim.unwrap().clone();
+    loop {
+        if Rc::ptr_eq(&k, ch) {
+            return true;
+        }
+
+        let t;
+        {
+            if k.master.borrow().is_none() {
+                break;
+            } else {
+                t = k.master.borrow().as_ref().unwrap().clone();
+            }
+        }
+        k = t;
+    }
+    false
+}
 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
@@ -1513,10 +1543,9 @@ impl DB {
                 Some(ch.master.borrow().as_ref().unwrap()),
                 TO_VICT,
             );
-            // TODO implement spell
-            // if (affected_by_spell(ch, SPELL_CHARM)) {
-            //     affect_from_char(ch, SPELL_CHARM);
-            // }
+            if affected_by_spell(ch, SPELL_CHARM as i16) {
+                affect_from_char(ch, SPELL_CHARM as i16);
+            }
         } else {
             self.act(
                 "You stop following $N.",
@@ -1585,28 +1614,46 @@ impl DB {
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
-// void add_follower(struct char_data *ch, struct char_data *leader)
-// {
-// struct follow_type *k;
-//
-// if (ch->master) {
-// core_dump();
-// return;
-// }
-//
-// ch->master = leader;
-//
-// CREATE(k, struct follow_type, 1);
-//
-// k->follower = ch;
-// k->next = leader->followers;
-// leader->followers = k;
-//
-// act("You now follow $N.", FALSE, ch, 0, leader, TO_CHAR);
-// if (CAN_SEE(leader, ch))
-// act("$n starts following you.", TRUE, ch, 0, leader, TO_VICT);
-// act("$n starts to follow $N.", TRUE, ch, 0, leader, TO_NOTVICT);
-// }
+pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
+    if ch.master.borrow().is_some() {
+        // core_dump();
+        return;
+    }
+
+    *ch.master.borrow_mut() = Some(leader.clone());
+
+    let k = FollowType {
+        follower: ch.clone(),
+    };
+    leader.followers.borrow_mut().push(k);
+
+    db.act(
+        "You now follow $N.",
+        false,
+        Some(ch),
+        None,
+        Some(leader),
+        TO_CHAR,
+    );
+    if db.can_see(leader, ch) {
+        db.act(
+            "$n starts following you.",
+            true,
+            Some(ch),
+            None,
+            Some(leader),
+            TO_VICT,
+        );
+    }
+    db.act(
+        "$n starts to follow $N.",
+        true,
+        Some(ch),
+        None,
+        Some(leader),
+        TO_NOTVICT,
+    );
+}
 
 /*
  * get_line reads the next non-blank line off of the input stream.

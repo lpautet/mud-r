@@ -7,22 +7,38 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
-use crate::spell_parser::UNUSED_SPELLNAME;
+use std::cmp::{max, min};
 use std::rc::Rc;
 
-use crate::structs::{LVL_IMPL, NUM_CLASSES};
+use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
+use crate::config::PK_ALLOWED;
+use crate::constants::{AFFECTED_BITS, APPLY_TYPES, EXTRA_BITS, ITEM_TYPES};
+use crate::db::DB;
+use crate::fight::compute_armor_class;
+use crate::handler::{affect_to_char, isname};
+use crate::magic::mag_savingthrow;
+use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
+use crate::structs::{
+    AffectedType, CharData, ObjData, RoomRnum, AFF_CHARM, AFF_POISON, AFF_SANCTUARY, APPLY_DAMROLL,
+    APPLY_HITROLL, APPLY_NONE, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ARMOR, ITEM_DRINKCON,
+    ITEM_FOOD, ITEM_FOUNTAIN, ITEM_MAGIC, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
+    ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE,
+    MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
+    ROOM_DEATH, ROOM_GODROOM, ROOM_PRIVATE, SEX_MALE,
+};
+use crate::util::{add_follower, age, circle_follow, rand_number, sprintbit, sprinttype, BRF};
+use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM, TO_VICT};
 
-//
-// #define DEFAULT_STAFF_LVL	12
-// #define DEFAULT_WAND_LVL	12
-//
-// #define CAST_UNDEFINED	(-1)
-// #define CAST_SPELL	0
-// #define CAST_POTION	1
-// #define CAST_WAND	2
-// #define CAST_STAFF	3
-// #define CAST_SCROLL	4
-//
+pub const DEFAULT_STAFF_LVL: i32 = 12;
+pub const DEFAULT_WAND_LVL: i32 = 12;
+
+pub const CAST_UNDEFINED: i32 = -1;
+pub const CAST_SPELL: i32 = 0;
+pub const CAST_POTION: i32 = 1;
+pub const CAST_WAND: i32 = 2;
+pub const CAST_STAFF: i32 = 3;
+pub const CAST_SCROLL: i32 = 4;
+
 pub const MAG_NONE: i32 = 0;
 pub const MAG_DAMAGE: i32 = 1 << 0;
 pub const MAG_AFFECTS: i32 = 1 << 1;
@@ -93,8 +109,8 @@ pub const SPELL_GROUP_RECALL: i32 = 49; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_INFRAVISION: i32 = 50; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_WATERWALK: i32 = 51; /* Reserved Skill[] DO NOT CHANGE */
 /* Insert new spells here, up to MAX_SPELLS */
-// #define MAX_SPELLS		    130
-//
+pub const MAX_SPELLS: i32 = 130;
+
 /* PLAYER SKILLS - Numbered from MAX_SPELLS+1 to MAX_SKILLS */
 pub const SKILL_BACKSTAB: i32 = 131; /* Reserved Skill[] DO NOT CHANGE */
 pub const SKILL_BASH: i32 = 132; /* Reserved Skill[] DO NOT CHANGE */
@@ -310,3 +326,724 @@ pub struct AttackHitType {
 // void spell_level(int spell, int chclass, int level);
 // void init_spell_levels(void);
 // const char *skill_name(int num);
+//
+// /* ************************************************************************
+// *   File: spells.c                                      Part of CircleMUD *
+// *  Usage: Implementation of "manual spells".  Circle 2.2 spell compat.    *
+// *                                                                         *
+// *  All rights reserved.  See license.doc for complete information.        *
+// *                                                                         *
+// *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
+// *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+// ************************************************************************ */
+//
+//
+// #include "conf.h"
+// #include "sysdep.h"
+//
+// #include "structs.h"
+// #include "utils.h"
+// #include "comm.h"
+// #include "spells.h"
+// #include "handler.h"
+// #include "db.h"
+// #include "constants.h"
+// #include "interpreter.h"
+//
+//
+// /* external variables */
+// extern room_rnum r_mortal_start_room;
+// extern int mini_mud;
+// extern int pk_allowed;
+//
+// /* external functions */
+// void clearMemory(struct char_data *ch);
+// void weight_change_object(struct obj_data *obj, int weight);
+// int mag_savingthrow(struct char_data *ch, int type, int modifier);
+// void name_to_drinkcon(struct obj_data *obj, int type);
+// void name_from_drinkcon(struct obj_data *obj);
+// int compute_armor_class(struct char_data *ch);
+
+/*
+ * Special spells appear below.
+ */
+pub fn spell_create_water(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    if ch.is_none() || obj.is_none() {
+        return;
+    }
+    let ch = ch.unwrap();
+    let obj = obj.unwrap();
+    /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
+
+    if obj.get_obj_type() == ITEM_DRINKCON {
+        if obj.get_obj_val(2) != LIQ_WATER && obj.get_obj_val(1) != 0 {
+            name_from_drinkcon(db, Some(obj));
+            obj.set_obj_val(2, LIQ_SLIME);
+            name_to_drinkcon(Some(obj), LIQ_SLIME);
+        } else {
+            let water = max(obj.get_obj_val(0) - obj.get_obj_val(1), 0);
+            if water > 0 {
+                if obj.get_obj_val(1) >= 0 {
+                    name_from_drinkcon(db, Some(obj));
+                }
+                obj.set_obj_val(2, LIQ_WATER);
+                obj.set_obj_val(1, obj.get_obj_val(1) + water);
+                name_to_drinkcon(Some(obj), LIQ_WATER);
+                weight_change_object(db, obj, water);
+                db.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+            }
+        }
+    }
+}
+
+pub fn spell_recall(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    if victim.is_none() || victim.unwrap().is_npc() {
+        return;
+    }
+
+    let victim = victim.unwrap();
+
+    db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    db.char_from_room(victim);
+    db.char_to_room(Some(victim), *db.r_mortal_start_room.borrow());
+    db.act(
+        "$n appears in the middle of the room.",
+        true,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
+    db.look_at_room(victim, false);
+}
+
+pub fn spell_teleport(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    let mut to_room;
+
+    if victim.is_none() || victim.unwrap().is_npc() {
+        return;
+    }
+    let victim = victim.unwrap();
+
+    loop {
+        to_room = rand_number(0, db.world.borrow().len() as u32);
+        if !db.room_flagged(
+            to_room as RoomRnum,
+            ROOM_PRIVATE | ROOM_DEATH | ROOM_GODROOM,
+        ) {
+            break;
+        }
+    }
+
+    db.act(
+        "$n slowly fades out of existence and is gone.",
+        false,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
+    db.char_from_room(victim);
+    db.char_to_room(Some(victim), to_room as RoomRnum);
+    db.act(
+        "$n slowly fades into existence.",
+        false,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
+    db.look_at_room(victim, false);
+}
+
+const SUMMON_FAIL: &str = "You failed.\r\n";
+
+pub fn spell_summon(
+    game: &MainGlobals,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    let db = &game.db;
+    if ch.is_none() || victim.is_none() {
+        return;
+    }
+    let victim = victim.unwrap();
+    let ch = ch.unwrap();
+    if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
+        send_to_char(ch, SUMMON_FAIL);
+        return;
+    }
+
+    if !PK_ALLOWED {
+        if victim.mob_flagged(MOB_AGGRESSIVE) {
+            db.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
+                   false, Some(ch), None, Some(victim), TO_CHAR);
+            return;
+        }
+        if !victim.is_npc()
+            && !victim.prf_flagged(PRF_SUMMONABLE)
+            && !victim.plr_flagged(PLR_KILLER)
+        {
+            send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
+                                         ch.get_name(), db.world.borrow()[ch.in_room() as usize].name,
+                                         if ch.player.borrow().sex == SEX_MALE { "He" } else { "She" }).as_str());
+
+            send_to_char(
+                ch,
+                format!(
+                    "You failed because {} has summon protection on.\r\n",
+                    victim.get_name()
+                )
+                .as_str(),
+            );
+            game.mudlog(
+                BRF,
+                LVL_IMMORT as i32,
+                true,
+                format!(
+                    "{} failed summoning {} to {}.",
+                    ch.get_name(),
+                    victim.get_name(),
+                    db.world.borrow()[ch.in_room() as usize].name
+                )
+                .as_str(),
+            );
+            return;
+        }
+    }
+
+    if victim.mob_flagged(MOB_NOSUMMON)
+        || victim.is_npc() && mag_savingthrow(victim, SAVING_SPELL, 0)
+    {
+        send_to_char(ch, SUMMON_FAIL);
+        return;
+    }
+
+    db.act(
+        "$n disappears suddenly.",
+        true,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
+
+    db.char_from_room(victim);
+    db.char_to_room(Some(victim), ch.in_room());
+
+    db.act(
+        "$n arrives suddenly.",
+        true,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
+    db.act(
+        "$n has summoned you!",
+        false,
+        Some(ch),
+        None,
+        Some(victim),
+        TO_VICT,
+    );
+    db.look_at_room(victim, false);
+}
+
+pub fn spell_locate_object(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    // struct obj_data *i;
+    // char name[MAX_INPUT_LENGTH];
+    // int j;
+
+    /*
+     * FIXME: This is broken.  The spell parser routines took the argument
+     * the player gave to the spell and located an object with that keyword.
+     * Since we're passed the object and not the keyword we can only guess
+     * at what the player originally meant to search for. -gg
+     */
+    let obj = obj.unwrap();
+    let mut name = String::new();
+    name.push_str(&obj.name.borrow());
+    let mut j = level / 2;
+
+    for i in db.object_list.borrow().iter() {
+        if isname(&name, &i.name.borrow()) != 0 {
+            continue;
+        }
+
+        send_to_char(
+            ch.unwrap(),
+            format!(
+                "{}{}",
+                &i.short_description[0..0].to_uppercase(),
+                &i.short_description[1..]
+            )
+            .as_str(),
+        );
+
+        if i.carried_by.borrow().is_some() {
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    " is being carried by {}.\r\n",
+                    db.pers(i.carried_by.borrow().as_ref().unwrap(), ch.unwrap())
+                )
+                .as_str(),
+            );
+        } else if i.in_room() != NOWHERE {
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    " is in {}.\r\n",
+                    db.world.borrow()[i.in_room() as usize].name
+                )
+                .as_str(),
+            );
+        } else if i.in_obj.borrow().is_some() {
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    " is in {}.\r\n",
+                    i.in_obj.borrow().as_ref().unwrap().short_description
+                )
+                .as_str(),
+            );
+        } else if i.worn_by.borrow().is_some() {
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    " is being worn by {}.\r\n",
+                    db.pers(i.worn_by.borrow().as_ref().unwrap(), ch.unwrap())
+                )
+                .as_str(),
+            );
+        } else {
+            send_to_char(ch.unwrap(), "'s location is uncertain.\r\n");
+        }
+
+        j -= 1;
+    }
+
+    if j == level / 2 {
+        send_to_char(ch.unwrap(), "You sense nothing.\r\n");
+    }
+}
+
+pub fn spell_charm(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    if victim.is_none() || ch.is_none() {
+        return;
+    }
+    let victim = victim.unwrap();
+    let ch = ch.unwrap();
+
+    if Rc::ptr_eq(victim, ch) {
+        send_to_char(ch, "You like yourself even better!\r\n");
+    } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
+        send_to_char(ch, "You fail because SUMMON protection is on!\r\n");
+    } else if victim.aff_flagged(AFF_SANCTUARY) {
+        send_to_char(ch, "Your victim is protected by sanctuary!\r\n");
+    } else if victim.mob_flagged(MOB_NOCHARM) {
+        send_to_char(ch, "Your victim resists!\r\n");
+    } else if ch.aff_flagged(AFF_CHARM) {
+        send_to_char(ch, "You can't have any followers of your own!\r\n");
+    } else if victim.aff_flagged(AFF_CHARM) || level < victim.get_level() as i32 {
+        send_to_char(ch, "You fail.\r\n");
+        /* player charming another player - no legal reason for this */
+    } else if !PK_ALLOWED && !victim.is_npc() {
+        send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
+    } else if circle_follow(victim, Some(ch)) {
+        send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
+    } else if mag_savingthrow(victim, SAVING_PARA, 0) {
+        send_to_char(ch, "Your victim resists!\r\n");
+    } else {
+        if victim.master.borrow().is_some() {
+            db.stop_follower(victim);
+        }
+
+        add_follower(db, victim, ch);
+        let mut af = AffectedType {
+            _type: SPELL_CHARM as i16,
+            duration: 24 * 2,
+            modifier: 0,
+            location: 0,
+            bitvector: AFF_CHARM,
+        };
+        if ch.get_cha() != 0 {
+            af.duration *= ch.get_cha() as i16;
+        }
+        if victim.get_int() != 0 {
+            af.duration /= victim.get_int() as i16;
+        }
+        affect_to_char(victim, &af);
+
+        db.act(
+            "Isn't $n just such a nice fellow?",
+            false,
+            Some(ch),
+            None,
+            Some(victim),
+            TO_VICT,
+        );
+        if victim.is_npc() {
+            victim.remove_mob_flags_bit(MOB_SPEC);
+        }
+    }
+}
+
+pub fn spell_identify(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    // int i, found;
+    // size_t len;
+
+    if obj.is_some() {
+        let obj = obj.unwrap();
+        let mut bitbuf = String::new();
+
+        sprinttype(obj.get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
+        send_to_char(
+            ch.unwrap(),
+            format!(
+                "You feel informed:\r\nObject '{}', Item type: {}\r\n",
+                obj.short_description, bitbuf
+            )
+            .as_str(),
+        );
+
+        if obj.get_obj_affect() != 0 {
+            sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
+            send_to_char(
+                ch.unwrap(),
+                format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
+            );
+        }
+
+        sprintbit(obj.get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
+        send_to_char(ch.unwrap(), format!("Item is: {}\r\n", bitbuf).as_str());
+
+        send_to_char(
+            ch.unwrap(),
+            format!(
+                "Weight: {}, Value: {}, Rent: {}\r\n",
+                obj.get_obj_weight(),
+                obj.get_obj_cost(),
+                obj.get_obj_rent()
+            )
+            .as_str(),
+        );
+
+        match obj.get_obj_type() {
+            ITEM_SCROLL | ITEM_POTION => {
+                if obj.get_obj_val(1) >= 1 {
+                    bitbuf.push_str(skill_name(db, obj.get_obj_val(1)));
+                }
+
+                if obj.get_obj_val(2) >= 1 {
+                    bitbuf.push_str(skill_name(db, obj.get_obj_val(2)));
+                }
+
+                if obj.get_obj_val(3) >= 1 {
+                    bitbuf.push_str(skill_name(db, obj.get_obj_val(3)));
+                }
+
+                send_to_char(
+                    ch.unwrap(),
+                    format!(
+                        "This {} casts: {}\r\n",
+                        ITEM_TYPES[obj.get_obj_type() as usize],
+                        bitbuf
+                    )
+                    .as_str(),
+                );
+            }
+            ITEM_WAND | ITEM_STAFF => {
+                send_to_char(
+                    ch.unwrap(),
+                    format!(
+                        "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
+                        ITEM_TYPES[obj.get_obj_type() as usize],
+                        skill_name(db, obj.get_obj_val(3)),
+                        obj.get_obj_val(1),
+                        if obj.get_obj_val(1) == 1 { "" } else { "s" },
+                        obj.get_obj_val(2)
+                    )
+                    .as_str(),
+                );
+            }
+            ITEM_WEAPON => {
+                send_to_char(
+                    ch.unwrap(),
+                    format!(
+                        "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
+                        obj.get_obj_val(1),
+                        obj.get_obj_val(2),
+                        (obj.get_obj_val(2) + 1) * obj.get_obj_val(1) / 2
+                    )
+                    .as_str(),
+                );
+            }
+            ITEM_ARMOR => {
+                send_to_char(
+                    ch.unwrap(),
+                    format!("AC-apply is {}\r\n", obj.get_obj_val(0)).as_str(),
+                );
+            }
+            _ => {}
+        }
+        let mut found = false;
+        for i in 0..MAX_OBJ_AFFECT as usize {
+            if obj.affected[i].get().location != APPLY_NONE as u8
+                && obj.affected[i].get().modifier != 0
+            {
+                if !found {
+                    send_to_char(ch.unwrap(), "Can affect you as :\r\n");
+                    found = true;
+                }
+                sprinttype(
+                    obj.affected[i].get().location as i32,
+                    &APPLY_TYPES,
+                    &mut bitbuf,
+                );
+                send_to_char(
+                    ch.unwrap(),
+                    format!(
+                        "   Affects: {} By {}\r\n",
+                        bitbuf,
+                        obj.affected[i].get().modifier
+                    )
+                    .as_str(),
+                );
+            }
+        }
+    } else if victim.is_some() {
+        /* victim */
+        let victim = victim.unwrap();
+        send_to_char(
+            ch.unwrap(),
+            format!("Name: {}\r\n", victim.get_name()).as_str(),
+        );
+        if !victim.is_npc() {
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    "{} is {} years, {} months, {} days and {} hours old.\r\n",
+                    victim.get_name(),
+                    age(victim).year,
+                    age(victim).month,
+                    age(victim).day,
+                    age(victim).hours
+                )
+                .as_str(),
+            );
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    "Height {} cm, Weight {} pounds\r\n",
+                    victim.get_height(),
+                    victim.get_weight()
+                )
+                .as_str(),
+            );
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    "Level: {}, Hits: {}, Mana: {}\r\n",
+                    victim.get_level(),
+                    victim.get_hit(),
+                    victim.get_mana()
+                )
+                .as_str(),
+            );
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    "AC: {}, Hitroll: {}, Damroll: {}\r\n",
+                    compute_armor_class(victim),
+                    victim.get_hitroll(),
+                    victim.get_damroll()
+                )
+                .as_str(),
+            );
+            send_to_char(
+                ch.unwrap(),
+                format!(
+                    "Str: {}/{}, Int: {}, Wis: {}, Dex: {}, Con: {}, Cha: {}\r\n",
+                    victim.get_str(),
+                    victim.get_add(),
+                    victim.get_int(),
+                    victim.get_wis(),
+                    victim.get_dex(),
+                    victim.get_con(),
+                    victim.get_cha()
+                )
+                .as_str(),
+            );
+        }
+    }
+}
+
+/*
+ * Cannot use this spell on an equipped object or it will mess up the
+ * wielding character's hit/dam totals.
+ */
+pub fn spell_enchant_weapon(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    if ch.is_none() || obj.is_none() {
+        return;
+    }
+    let ch = ch.unwrap();
+    let obj = obj.unwrap();
+
+    /* Either already enchanted or not a weapon. */
+    if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ITEM_MAGIC) {
+        return;
+    }
+
+    /* Make sure no other affections. */
+    for i in 0..MAX_OBJ_AFFECT as usize {
+        if obj.affected[i].get().location != APPLY_NONE as u8 {
+            return;
+        }
+    }
+
+    obj.set_obj_extra_bit(ITEM_MAGIC);
+
+    let mut af0 = obj.affected[0].get();
+    af0.location = APPLY_HITROLL as u8;
+    af0.modifier = 1 + if level >= 18 { 1 } else { 0 };
+    obj.affected[0].set(af0);
+
+    let mut af1 = obj.affected[1].get();
+    af1.location = APPLY_DAMROLL as u8;
+    af1.modifier = 1 + if level >= 20 { 1 } else { 0 };
+    obj.affected[1].set(af1);
+
+    if ch.is_good() {
+        obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
+        db.act("$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
+    } else if ch.is_evil() {
+        obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
+        db.act("$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
+    } else {
+        db.act(
+            "$p glows yellow.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
+    }
+}
+
+pub fn spell_detect_poison(
+    db: &DB,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    victim: Option<&Rc<CharData>>,
+    obj: Option<&Rc<ObjData>>,
+) {
+    if victim.is_some() {
+        let victim = victim.unwrap();
+        let ch = ch.unwrap();
+        if Rc::ptr_eq(ch, victim) {
+            if victim.aff_flagged(AFF_POISON) {
+                send_to_char(ch, "You can sense poison in your blood.\r\n");
+            } else {
+                send_to_char(ch, "You feel healthy.\r\n");
+            }
+        } else {
+            if victim.aff_flagged(AFF_POISON) {
+                db.act(
+                    "You sense that $E is poisoned.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(victim),
+                    TO_CHAR,
+                );
+            } else {
+                db.act(
+                    "You sense that $E is healthy.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(victim),
+                    TO_CHAR,
+                );
+            }
+        }
+
+        if obj.is_some() {
+            let obj = obj.unwrap();
+
+            match obj.get_obj_type() {
+                ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
+                    if obj.get_obj_val(3) != 0 {
+                        db.act(
+                            "You sense that $p has been contaminated.",
+                            false,
+                            Some(ch),
+                            Some(obj),
+                            None,
+                            TO_CHAR,
+                        );
+                    } else {
+                        db.act(
+                            "You sense that $p is safe for consumption.",
+                            false,
+                            Some(ch),
+                            Some(obj),
+                            None,
+                            TO_CHAR,
+                        );
+                    }
+                }
+                _ => {
+                    send_to_char(ch, "You sense that it should not be consumed.\r\n");
+                }
+            }
+        }
+    }
+}
