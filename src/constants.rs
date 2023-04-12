@@ -322,37 +322,36 @@ pub const EXTRA_BITS: [&str; 18] = [
     "\n",
 ];
 
-// /* APPLY_x */
-// const char *apply_types[] = {
-// "NONE",
-// "STR",
-// "DEX",
-// "INT",
-// "WIS",
-// "CON",
-// "CHA",
-// "CLASS",
-// "LEVEL",
-// "AGE",
-// "CHAR_WEIGHT",
-// "CHAR_HEIGHT",
-// "MAXMANA",
-// "MAXHIT",
-// "MAXMOVE",
-// "GOLD",
-// "EXP",
-// "ARMOR",
-// "HITROLL",
-// "DAMROLL",
-// "SAVING_PARA",
-// "SAVING_ROD",
-// "SAVING_PETRI",
-// "SAVING_BREATH",
-// "SAVING_SPELL",
-// "\n"
-// };
-//
-//
+/* APPLY_x */
+pub const APPLY_TYPES: [&str; 26] = [
+    "NONE",
+    "STR",
+    "DEX",
+    "INT",
+    "WIS",
+    "CON",
+    "CHA",
+    "CLASS",
+    "LEVEL",
+    "AGE",
+    "CHAR_WEIGHT",
+    "CHAR_HEIGHT",
+    "MAXMANA",
+    "MAXHIT",
+    "MAXMOVE",
+    "GOLD",
+    "EXP",
+    "ARMOR",
+    "HITROLL",
+    "DAMROLL",
+    "SAVING_PARA",
+    "SAVING_ROD",
+    "SAVING_PETRI",
+    "SAVING_BREATH",
+    "SAVING_SPELL",
+    "\n",
+];
+
 // /* CONT_x */
 // const char *container_bits[] = {
 // "CLOSEABLE",
@@ -383,32 +382,29 @@ pub const DRINKS: [&str; 17] = [
     "\n",
 ];
 
-// /* other constants for liquids ******************************************/
-//
-//
-// /* one-word alias for each drink */
-// const char *drinknames[] =
-// {
-// "water",
-// "beer",
-// "wine",
-// "ale",
-// "ale",
-// "whisky",
-// "lemonade",
-// "firebreather",
-// "local",
-// "juice",
-// "milk",
-// "tea",
-// "coffee",
-// "blood",
-// "salt",
-// "water",
-// "\n"
-// };
-//
-//
+/* other constants for liquids ******************************************/
+
+/* one-word alias for each drink */
+pub const DRINKNAMES: [&str; 17] = [
+    "water",
+    "beer",
+    "wine",
+    "ale",
+    "ale",
+    "whisky",
+    "lemonade",
+    "firebreather",
+    "local",
+    "juice",
+    "milk",
+    "tea",
+    "coffee",
+    "blood",
+    "salt",
+    "water",
+    "\n",
+];
+
 // /* effect of DRINKS on hunger, thirst, and drunkenness -- see values.doc */
 // int drink_aff[][3] = {
 // {0, 1, 10},

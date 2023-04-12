@@ -13,12 +13,12 @@ use std::cmp::max;
 use std::rc::Rc;
 
 use hmac::Hmac;
-use log::{error, info};
+use log::error;
 use sha2::Sha256;
 
 use crate::act_informative::{
-    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_inventory,
-    do_levels, do_look, do_score, do_time, do_weather,
+    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_help,
+    do_inventory, do_levels, do_look, do_score, do_time, do_weather,
 };
 use crate::act_item::{do_drop, do_get, do_grab, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
@@ -30,6 +30,7 @@ use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, reset_char, store_to_char};
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
+use crate::spell_parser::do_cast;
 use crate::structs::ConState::{
     ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
     ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
@@ -116,7 +117,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 40] = [
+pub const CMD_INFO: [CommandInfo; 42] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -201,6 +202,13 @@ pub const CMD_INFO: [CommandInfo; 40] = [
     // { "bug"      , POS_DEAD    , do_gen_write, 0, SCMD_BUG },
     //
     // { "cast"     , POS_SITTING , do_cast     , 1, 0 },
+    CommandInfo {
+        command: "cast",
+        minimum_position: POS_SITTING,
+        command_pointer: do_cast,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "cackle"   , POS_RESTING , do_action   , 0, 0 },
     // { "check"    , POS_STANDING, do_not_here , 1, 0 },
     // { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
@@ -363,6 +371,13 @@ pub const CMD_INFO: [CommandInfo; 40] = [
     // { "gtell"    , POS_SLEEPING, do_gsay     , 0, 0 },
     //
     // { "help"     , POS_DEAD    , do_help     , 0, 0 },
+    CommandInfo {
+        command: "help",
+        minimum_position: POS_DEAD,
+        command_pointer: do_help,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "handbook" , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_HANDBOOK },
     // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
@@ -1133,34 +1148,33 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
  * one_word is like one_argument, except that words in quotes ("") are
  * considered one word.
  */
-// char *one_word(char *argument, char *first_arg)
-// {
-// char *begin = first_arg;
-//
-// do {
-// skip_spaces(&argument);
-//
-// first_arg = begin;
-//
-// if (*argument == '\"') {
-// argument++;
-// while (*argument && *argument != '\"') {
-// *(first_arg++) = LOWER(*argument);
-// argument++;
-// }
-// argument++;
-// } else {
-// while (*argument && !isspace(*argument)) {
-// *(first_arg++) = LOWER(*argument);
-// argument++;
-// }
-// }
-//
-// *first_arg = '\0';
-// } while (fill_word(begin));
-//
-// return (argument);
-// }
+pub fn one_word<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
+    let mut ret;
+    loop {
+        let mut argument = argument.trim_start();
+        first_arg.clear();
+
+        if argument.starts_with('\"') {
+            argument = &argument[1..];
+
+            while argument.len() != 0 && !argument.starts_with('\"') {
+                first_arg.push(argument.chars().next().unwrap().to_ascii_lowercase());
+                argument = &argument[1..];
+            }
+            argument = &argument[1..];
+        } else {
+            while argument.len() > 0 && !argument.chars().next().unwrap().is_whitespace() {
+                first_arg.push(argument.chars().next().unwrap().to_ascii_lowercase());
+                argument = &argument[1..];
+            }
+        }
+        ret = argument;
+        if !fill_word(first_arg.as_str()) {
+            break;
+        }
+    }
+    ret
+}
 
 /* same as one_argument except that it doesn't ignore FILL words */
 pub fn any_one_arg<'a, 'b>(argument: &'a str, first_arg: &'b mut String) -> &'a str {
@@ -1265,7 +1279,6 @@ fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
     // return (1);
 
-    // TODO implement special on mobile
     /* special in mobile present? */
     for k in db.world.borrow()[ch.in_room() as usize]
         .peoples
@@ -1282,7 +1295,7 @@ fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
         }
     }
 
-    // /* special in object present? */
+    // TODO /* special in object present? */
     // for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content)
     // if (GET_OBJ_SPEC(i) != NULL)
     // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))

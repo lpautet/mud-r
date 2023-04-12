@@ -42,7 +42,7 @@ use crate::db::DB;
 use crate::spec_procs::guild;
 use crate::spec_procs::guild_guard;
 use crate::structs::{MobVnum, Special, NOBODY};
-use log::{error, info};
+use log::error;
 
 fn assignmob(db: &mut DB, mob: MobVnum, fname: Special) {
     let rnum = db.real_mobile(mob);

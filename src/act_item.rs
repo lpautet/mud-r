@@ -121,7 +121,7 @@ use std::rc::Rc;
 use log::error;
 
 use crate::config::DONATION_ROOM_1;
-use crate::constants::STR_APP;
+use crate::constants::{DRINKNAMES, STR_APP};
 use crate::db::DB;
 use crate::handler::{
     find_all_dots, isname, money_desc, obj_from_char, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
@@ -131,14 +131,14 @@ use crate::interpreter::{
     is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DROP, SCMD_JUNK,
 };
 use crate::structs::{
-    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_LIGHT, ITEM_MONEY,
-    ITEM_NODONATE, ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT,
-    ITEM_WEAR_ARMS, ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER, ITEM_WEAR_HANDS,
-    ITEM_WEAR_HEAD, ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK, ITEM_WEAR_SHIELD,
-    ITEM_WEAR_TAKE, ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, NOWHERE, NUM_WEARS,
-    PULSE_VIOLENCE, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
-    WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
-    WEAR_WRIST_R,
+    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
+    ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE, ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF,
+    ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS, ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER,
+    ITEM_WEAR_HANDS, ITEM_WEAR_HEAD, ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK,
+    ITEM_WEAR_SHIELD, ITEM_WEAR_TAKE, ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, NOWHERE,
+    NUM_WEARS, PULSE_VIOLENCE, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R,
+    WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST,
+    WEAR_WIELD, WEAR_WRIST_R,
 };
 use crate::util::{clone_vec, rand_number};
 use crate::{an, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
@@ -273,7 +273,7 @@ impl DB {
             let list = clone_vec(&cont.contains);
             for obj in list {
                 if self.can_see_obj(ch, &obj)
-                    && (obj_dotmode == FIND_ALL || isname(arg, &obj.name) != 0)
+                    && (obj_dotmode == FIND_ALL || isname(arg, &obj.name.borrow()) != 0)
                 {
                     found = true;
                     self.perform_get_from_container(ch, &obj, cont, mode);
@@ -353,7 +353,8 @@ impl DB {
                 .borrow()
                 .iter()
             {
-                if self.can_see_obj(ch, obj) && (dotmode == FIND_ALL || isname(arg, &obj.name) != 0)
+                if self.can_see_obj(ch, obj)
+                    && (dotmode == FIND_ALL || isname(arg, &obj.name.borrow()) != 0)
                 {
                     found = true;
                     self.perform_get_from_room(ch, obj);
@@ -431,7 +432,7 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
             }
             for cont in ch.carrying.borrow().iter() {
                 if db.can_see_obj(ch, cont)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name) != 0)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()) != 0)
                 {
                     if cont.get_obj_type() == ITEM_CONTAINER {
                         found = true;
@@ -455,7 +456,7 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 .iter()
             {
                 if db.can_see_obj(ch, cont)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name) != 0)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()) != 0)
                 {
                     if cont.get_obj_type() == ITEM_CONTAINER {
                         db.get_from_container(ch, cont, &arg1, FIND_OBJ_ROOM, amount);
@@ -656,7 +657,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 
     let mut arg = String::new();
     let argument = one_argument(argument, &mut arg);
-    let mut obj: Option<Rc<ObjData>> = None;
+    let mut obj: Option<Rc<ObjData>>;
     let db = &game.db;
     let mut amount = 0;
     let dotmode;
@@ -897,91 +898,107 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // }
 // }
 // }
-//
-//
-//
-// void weight_change_object(struct obj_data *obj, int weight)
-// {
-// struct obj_data *tmp_obj;
-// struct char_data *tmp_ch;
-//
-// if (IN_ROOM(obj) != NOWHERE) {
-// GET_OBJ_WEIGHT(obj) += weight;
-// } else if ((tmp_ch = obj->carried_by)) {
-// obj_from_char(obj);
-// GET_OBJ_WEIGHT(obj) += weight;
-// obj_to_char(obj, tmp_ch);
-// } else if ((tmp_obj = obj->in_obj)) {
-// obj_from_obj(obj);
-// GET_OBJ_WEIGHT(obj) += weight;
-// obj_to_obj(obj, tmp_obj);
-// } else {
-// log("SYSERR: Unknown attempt to subtract weight from an object.");
-// }
-// }
-//
-//
-//
-// void name_from_drinkcon(struct obj_data *obj)
-// {
-// char *new_name, *cur_name, *next;
-// const char *liqname;
-// int liqlen, cpylen;
-//
-// if (!obj || (GET_OBJ_TYPE(obj) != ITEM_DRINKCON && GET_OBJ_TYPE(obj) != ITEM_FOUNTAIN))
-// return;
-//
-// liqname = drinknames[GET_OBJ_VAL(obj, 2)];
-// if (!isname(liqname, obj->name)) {
-// log("SYSERR: Can't remove liquid '%s' from '%s' (%d) item.", liqname, obj->name, obj->item_number);
-// return;
-// }
-//
-// liqlen = strlen(liqname);
-// CREATE(new_name, char, strlen(obj->name) - strlen(liqname)); /* +1 for NUL, -1 for space */
-//
-// for (cur_name = obj->name; cur_name; cur_name = next) {
-// if (*cur_name == ' ')
-// cur_name++;
-//
-// if ((next = strchr(cur_name, ' ')))
-// cpylen = next - cur_name;
-// else
-// cpylen = strlen(cur_name);
-//
-// if (!strn_cmp(cur_name, liqname, liqlen))
-// continue;
-//
-// if (*new_name)
-// strcat(new_name, " ");	/* strcat: OK (size precalculated) */
-// strncat(new_name, cur_name, cpylen);	/* strncat: OK (size precalculated) */
-// }
-//
-// if (GET_OBJ_RNUM(obj) == NOTHING || obj->name != obj_proto[GET_OBJ_RNUM(obj)].name)
-// free(obj->name);
-// obj->name = new_name;
-// }
-//
-//
-//
-// void name_to_drinkcon(struct obj_data *obj, int type)
-// {
-// char *new_name;
-//
-// if (!obj || (GET_OBJ_TYPE(obj) != ITEM_DRINKCON && GET_OBJ_TYPE(obj) != ITEM_FOUNTAIN))
-// return;
-//
-// CREATE(new_name, char, strlen(obj->name) + strlen(drinknames[type]) + 2);
-// sprintf(new_name, "%s %s", obj->name, drinknames[type]);	/* sprintf: OK */
-//
-// if (GET_OBJ_RNUM(obj) == NOTHING || obj->name != obj_proto[GET_OBJ_RNUM(obj)].name)
-// free(obj->name);
-//
-// obj->name = new_name;
-// }
-//
-//
-//
+
+pub fn weight_change_object(db: &DB, obj: &Rc<ObjData>, weight: i32) {
+    let tmp_ch;
+    let tmp_obj;
+    if obj.in_room() != NOWHERE {
+        obj.incr_obj_weight(weight);
+    } else if {
+        tmp_ch = obj.carried_by.borrow();
+        tmp_ch.is_some()
+    } {
+        obj_from_char(Some(obj));
+        obj.incr_obj_weight(weight);
+        DB::obj_to_char(Some(obj), tmp_ch.as_ref());
+    } else if {
+        tmp_obj = obj.in_obj.borrow();
+        tmp_obj.is_some()
+    } {
+        DB::obj_from_obj(obj);
+        obj.incr_obj_weight(weight);
+        db.obj_to_obj(Some(obj), tmp_obj.as_ref());
+    } else {
+        error!("SYSERR: Unknown attempt to subtract weight from an object.");
+    }
+}
+
+pub fn name_from_drinkcon(db: &DB, obj: Option<&Rc<ObjData>>) {
+    // char *new_name, *cur_name, *next;
+    // const char *liqname;
+    // int liqlen, cpylen;
+
+    if obj.is_none()
+        || obj.unwrap().get_obj_type() != ITEM_DRINKCON
+            && obj.unwrap().get_obj_type() != ITEM_FOUNTAIN
+    {
+        return;
+    }
+    let obj = obj.unwrap();
+
+    let liqname = DRINKNAMES[obj.get_obj_val(2) as usize];
+    if isname(liqname, &obj.name.borrow()) == 0 {
+        error!(
+            "SYSERR: Can't remove liquid '{}' from '{}' ({}) item.",
+            liqname,
+            obj.name.borrow(),
+            obj.item_number
+        );
+        return;
+    }
+
+    let mut new_name = String::new();
+    let next = "";
+    let bname = obj.name.borrow();
+    let mut cur_name = bname.as_str();
+    while cur_name.len() != 0 {
+        if cur_name.starts_with(' ') {
+            cur_name = &cur_name[1..];
+        }
+        let i = cur_name.find(' ');
+        let cpylen;
+        if i.is_some() {
+            cpylen = i.unwrap();
+        } else {
+            cpylen = cur_name.len();
+        }
+
+        if cur_name.starts_with(liqname) {
+            cur_name = next;
+            continue;
+        }
+
+        if new_name.len() != 0 {
+            new_name.push(' ');
+        } else {
+            new_name.push_str(&cur_name[0..cpylen])
+        }
+        cur_name = next;
+    }
+
+    *obj.name.borrow_mut() = new_name;
+}
+
+pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
+    let mut new_name = String::new();
+    if obj.is_none()
+        || obj.unwrap().get_obj_type() != ITEM_DRINKCON
+            && obj.unwrap().get_obj_type() != ITEM_FOUNTAIN
+    {
+        return;
+    }
+    new_name.push_str(
+        format!(
+            "{} {}",
+            obj.unwrap().name.borrow(),
+            DRINKNAMES[type_ as usize]
+        )
+        .as_str(),
+    );
+
+    *obj.unwrap().name.borrow_mut() = new_name;
+}
+
 // ACMD(do_drink)
 // {
 // char arg[MAX_INPUT_LENGTH];
@@ -1620,7 +1637,7 @@ pub fn do_wear(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 pub fn do_wield(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
-    let mut obj;
+    let obj;
     let db = &game.db;
     one_argument(argument, &mut arg);
 
@@ -1744,9 +1761,9 @@ pub fn do_remove(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usi
     let dotmode = find_all_dots(&arg);
 
     let mut found = false;
-    let mut i;
+    let i;
     if dotmode == FIND_ALL {
-        for mut i in 0..NUM_WEARS {
+        for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
                 perform_remove(db, ch, i);
                 found = true;
@@ -1763,7 +1780,7 @@ pub fn do_remove(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usi
             for i in 0..NUM_WEARS {
                 if ch.get_eq(i).is_some()
                     && db.can_see_obj(ch, ch.get_eq(i).as_ref().unwrap())
-                    && isname(&arg, &ch.get_eq(i).as_ref().unwrap().name) != 0
+                    && isname(&arg, &ch.get_eq(i).as_ref().unwrap().name.borrow()) != 0
                 {
                     perform_remove(db, ch, i);
                     found = true;

@@ -283,13 +283,14 @@ fn next_page(str: &str) -> Option<&str> {
 
 /* Function that returns the number of pages in the string. */
 fn count_pages(msg: &str) -> i32 {
-    let msg = msg;
+    let mut msg = msg;
     let mut pages = 1;
     loop {
         let r = next_page(msg);
         if r.is_none() {
             break;
         }
+        msg = r.unwrap();
         pages += 1;
     }
     pages
@@ -353,7 +354,7 @@ pub fn page_string(d: Option<&Rc<DescriptorData>>, msg: &str, keep_internal: boo
 }
 
 /* The call that displays the next page. */
-fn show_string(d: &Rc<DescriptorData>, input: &str) {
+pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
     // char buffer[MAX_STRING_LENGTH], buf[MAX_INPUT_LENGTH];
     // int diff;
 

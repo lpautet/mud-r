@@ -18,8 +18,8 @@ use crate::constants::{COLOR_LIQUID, DIRS, FULLNESS, MONTH_NAME, ROOM_BITS, WEAR
 use crate::db::DB;
 use crate::fight::compute_armor_class;
 use crate::handler::{
-    fname, get_number, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV,
-    FIND_OBJ_ROOM,
+    affected_by_spell, fname, get_number, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP,
+    FIND_OBJ_INV, FIND_OBJ_ROOM,
 };
 use crate::interpreter::{
     half_chop, is_abbrev, one_argument, search_block, CMD_INFO, SCMD_READ, SCMD_SOCIALS,
@@ -27,6 +27,7 @@ use crate::interpreter::{
 };
 use crate::modify::page_string;
 use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
+use crate::spells::SPELL_ARMOR;
 use crate::structs::{
     CharData, ExtraDescrData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON,
@@ -698,7 +699,10 @@ impl DB {
                 if obj.as_ref().unwrap().objval_flagged(CONT_CLOSED) {
                     send_to_char(ch, "It is closed.\r\n");
                 } else {
-                    send_to_char(ch, fname(obj.as_ref().unwrap().name.as_str()).as_ref());
+                    send_to_char(
+                        ch,
+                        fname(obj.as_ref().unwrap().name.borrow().as_str()).as_ref(),
+                    );
                     match bits {
                         FIND_OBJ_INV => {
                             send_to_char(ch, " (carried): \r\n");
@@ -1170,9 +1174,10 @@ pub fn do_score(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usiz
     if ch.aff_flagged(AFF_CHARM) {
         send_to_char(ch, "You have been charmed!\r\n");
     }
-    // TODO implement spell
-    // if (affected_by_spell(ch, SPELL_ARMOR))
-    // send_to_char(ch, "You feel protected.\r\n");
+
+    if affected_by_spell(ch, SPELL_ARMOR as i16) {
+        send_to_char(ch, "You feel protected.\r\n");
+    }
 
     if ch.aff_flagged(AFF_INFRAVISION) {
         send_to_char(ch, "Your eyes are glowing red.\r\n");
@@ -1329,52 +1334,55 @@ pub fn do_weather(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: us
     }
 }
 
-// ACMD(do_help)
-// {
-// int chk, bot, top, mid, minlen;
-//
-// if (!ch.desc)
-// return;
-//
-// skip_spaces(&argument);
-//
-// if (!*argument) {
-// page_string(ch.desc, help, 0);
-// return;
-// }
-// if (!help_table) {
-// send_to_char(ch, "No help available.\r\n");
-// return;
-// }
-//
-// bot = 0;
-// top = top_of_helpt;
-// minlen = strlen(argument);
-//
-// for (;;) {
-// mid = (bot + top) / 2;
-//
-// if (bot > top) {
-// send_to_char(ch, "There is no help on that word.\r\n");
-// return;
-// } else if (!(chk = strn_cmp(argument, help_table[mid].keyword, minlen))) {
-// /* trace backwards to find first matching entry. Thanks Jeff Fink! */
-// while ((mid > 0) &&
-// (!(chk = strn_cmp(argument, help_table[mid - 1].keyword, minlen))))
-// mid--;
-// page_string(ch.desc, help_table[mid].entry, 0);
-// return;
-// } else {
-// if (chk > 0)
-// bot = mid + 1;
-// else
-// top = mid - 1;
-// }
-// }
-// }
-//
-//
-//
+#[allow(unused_variables)]
+pub fn do_help(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // int chk, bot, top, mid, minlen;
+
+    if ch.desc.borrow().is_none() {
+        return;
+    }
+
+    let argument = argument.trim_start();
+
+    if argument.len() == 0 {
+        page_string(ch.desc.borrow().as_ref(), &game.db.help, false);
+        return;
+    }
+    if game.db.help_table.len() == 0 {
+        send_to_char(ch, "No help available.\r\n");
+        return;
+    }
+
+    let mut bot = 0;
+    let mut top = game.db.help_table.len() - 1;
+    let minlen = argument.len();
+
+    loop {
+        let mut mid = (bot + top) / 2;
+        if bot > top {
+            send_to_char(ch, "There is no help on that word.\r\n");
+            return;
+        } else if game.db.help_table[mid].keyword.starts_with(argument) {
+            /* trace backwards to find first matching entry. Thanks Jeff Fink! */
+            while mid > 0 && game.db.help_table[mid - 1].keyword.starts_with(argument) {
+                mid -= 1;
+            }
+            page_string(
+                ch.desc.borrow().as_ref(),
+                &game.db.help_table[mid].entry,
+                false,
+            );
+            return;
+        } else {
+            if game.db.help_table[mid].keyword.as_ref() < argument {
+                bot = mid + 1;
+            } else {
+                top = mid - 1;
+            }
+        }
+    }
+}
+
 // #define WHO_FORMAT \
 // "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n"
 //

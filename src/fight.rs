@@ -8,13 +8,13 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use log::error;
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::rc::Rc;
-
-use log::{error, info};
 
 use crate::act_offensive::do_flee;
 use crate::act_social::fread_action;
@@ -363,7 +363,7 @@ impl DB {
 
         corpse.item_number = NOTHING;
         corpse.set_in_room(NOWHERE);
-        corpse.name = "corpse".to_string();
+        corpse.name = RefCell::from("corpse".to_string());
 
         let buf2 = format!("The corpse of {} is lying here.", ch.get_name());
         corpse.description = buf2;
@@ -463,9 +463,10 @@ impl DB {
             self.stop_fighting(ch);
         }
 
-        while !ch.affected.borrow().is_empty() {
-            affect_remove(ch, 0);
-        }
+        ch.affected.borrow_mut().retain(|af| {
+            affect_remove(ch, af);
+            false
+        });
 
         self.death_cry(ch);
 

@@ -49,6 +49,7 @@ use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
 use crate::handler::fname;
+use crate::interpreter::one_word;
 use crate::modify::paginate_string;
 use crate::shops::{assign_the_shopkeepers, ShopData};
 use crate::spec_assign::assign_mobiles;
@@ -79,7 +80,7 @@ const NEWS_FILE: &str = "./text/news";
 const MOTD_FILE: &str = "./text/motd";
 const IMOTD_FILE: &str = "./text/imotd";
 const GREETINGS_FILE: &str = "./text/greetings";
-const HELP_PAGE_FILE: &str = "./text./help/screen";
+const HELP_PAGE_FILE: &str = "./text/help/screen";
 const INFO_FILE: &str = "./text/info";
 const WIZLIST_FILE: &str = "./text/wizlist";
 const IMMLIST_FILE: &str = "./text/immlist";
@@ -111,6 +112,13 @@ pub const SUF_ALIAS: &str = "alias";
 struct PlayerIndexElement {
     name: String,
     id: i64,
+}
+
+#[derive(Clone)]
+pub struct HelpIndexElement {
+    pub keyword: Rc<str>,
+    pub entry: Rc<str>,
+    pub duplicate: i32,
 }
 
 pub struct DB {
@@ -147,38 +155,22 @@ pub struct DB {
     pub no_specials: bool,
     /* time of mud boot		 */
     // int circle_restrict = 0;	/* level of game restriction	 */
-    pub r_mortal_start_room: RefCell<RoomRnum>,
-    /* rnum of mortal start room	 */
-    pub r_immort_start_room: RefCell<RoomRnum>,
-    /* rnum of immort start room	 */
-    pub r_frozen_start_room: RefCell<RoomRnum>,
-    /* rnum of frozen start room	 */
-    pub credits: Rc<str>,
-    /* game credits			 */
-    pub news: Rc<str>,
-    /* mud news			 */
-    pub motd: Rc<str>,
-    /* message of the day - mortals */
-    pub imotd: Rc<str>,
-    /* message of the day - immorts */
-    pub greetings: Rc<str>,
-    /* opening credits screen	*/
-    // char *help = NULL;		/* help screen			 */
-    pub info: Rc<str>,
-    /* info page			 */
-    pub wizlist: Rc<str>,
-    /* list of higher gods		 */
-    pub immlist: Rc<str>,
-    /* list of peon gods		 */
-    pub background: Rc<str>,
-    /* background story		 */
-    pub handbook: Rc<str>,
-    /* handbook for new immortals	 */
-    pub policies: Rc<str>,
-    /* policies page		 */
-    //
-    // struct help_index_element *help_table = 0;	/* the help table	 */
-    // int top_of_helpt = 0;		/* top of help index table	 */
+    pub r_mortal_start_room: RefCell<RoomRnum>, /* rnum of mortal start room	 */
+    pub r_immort_start_room: RefCell<RoomRnum>, /* rnum of immort start room	 */
+    pub r_frozen_start_room: RefCell<RoomRnum>, /* rnum of frozen start room	 */
+    pub credits: Rc<str>,                       /* game credits			 */
+    pub news: Rc<str>,                          /* mud news			 */
+    pub motd: Rc<str>,                          /* message of the day - mortals */
+    pub imotd: Rc<str>,                         /* message of the day - immorts */
+    pub greetings: Rc<str>,                     /* opening credits screen	*/
+    pub help: Rc<str>,                          /* help screen			 */
+    pub info: Rc<str>,                          /* info page	 */
+    pub wizlist: Rc<str>,                       /* list of higher gods		 */
+    pub immlist: Rc<str>,                       /* list of peon gods		 */
+    pub background: Rc<str>,                    /* background story		 */
+    pub handbook: Rc<str>,                      /* handbook for new immortals	 */
+    pub policies: Rc<str>,                      /* policies page		 */
+    pub help_table: Vec<HelpIndexElement>,      /* the help table	 */
     //
     pub time_info: RefCell<TimeInfoData>,
     /* the infomation about the time    */
@@ -510,12 +502,14 @@ impl DB {
             motd: Rc::from("MOTD placeholder"),
             imotd: Rc::from("IMOTD placeholder"),
             greetings: Rc::from("Greetings Placeholder"),
+            help: Rc::from("HELP placeholder"),
             info: Rc::from("INFO placeholder"),
             wizlist: Rc::from("WIZLIST placeholder"),
             immlist: Rc::from("IMMLIST placeholder"),
             background: Rc::from("BACKGROUND placeholder"),
             handbook: Rc::from("HANDOOK placeholder"),
             policies: Rc::from("POLICIES placeholder"),
+            help_table: vec![],
             time_info: RefCell::from(TimeInfoData {
                 hours: 0,
                 day: 0,
@@ -553,7 +547,7 @@ impl DB {
         main_globals.file_to_string_alloc(CREDITS_FILE, &mut ret.credits);
         main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
         main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
-        //main_globals.file_to_string_alloc(HELP_PAGE_FILE, &help);
+        main_globals.file_to_string_alloc(HELP_PAGE_FILE, &mut ret.help);
         main_globals.file_to_string_alloc(INFO_FILE, &mut ret.info);
         main_globals.file_to_string_alloc(WIZLIST_FILE, &mut ret.wizlist);
         main_globals.file_to_string_alloc(IMMLIST_FILE, &mut ret.immlist);
@@ -567,9 +561,9 @@ impl DB {
         mag_assign_spells(&mut ret);
 
         ret.boot_world();
-        //
-        // log("Loading help entries.");
-        // index_boot(DB_BOOT_HLP);
+
+        info!("Loading help entries.");
+        ret.index_boot(DB_BOOT_HLP);
 
         info!("Generating player index.");
         ret.build_player_index();
@@ -898,7 +892,7 @@ const MOB_PREFIX: &str = "world/mob/"; /* monster prototypes	*/
 const OBJ_PREFIX: &str = "world/obj/"; /* object prototypes	*/
 const ZON_PREFIX: &str = "world/zon/"; /* zon defs & command tables */
 const SHP_PREFIX: &str = "world/shp/"; /* shop definitions	*/
-//#define HLP_PREFIX	LIB_TEXT"help"SLASH	/* for HELP <keyword>	*/
+const HLP_PREFIX: &str = "text/help/"; /* for HELP <keyword>	*/
 /* arbitrary constants used by index_boot() (must be unique) */
 const DB_BOOT_WLD: u8 = 0;
 const DB_BOOT_MOB: u8 = 1;
@@ -933,9 +927,9 @@ impl DB {
             DB_BOOT_SHP => {
                 prefix = SHP_PREFIX;
             }
-            // DB_BOOT_HLP => {
-            //     prefix = HLP_PREFIX;
-            // }
+            DB_BOOT_HLP => {
+                prefix = HLP_PREFIX;
+            }
             _ => {
                 error!("SYSERR: Unknown subcommand {} to index_boot!", mode);
                 process::exit(1);
@@ -1048,11 +1042,11 @@ impl DB {
                 size[0] = mem::size_of::<ZoneData>() * rec_count as usize;
                 info!("   {} zones, {} bytes.", rec_count, size[0]);
             }
-            // DB_BOOT_HLP => {
-            //     CREATE(help_table, struct help_index_element, rec_count);
-            //     size[0] = sizeof(struct help_index_element) *rec_count;
-            //     log("   %d entries, %d bytes.", rec_count, size[0]);
-            // }
+            DB_BOOT_HLP => {
+                self.help_table.reserve_exact(rec_count as usize);
+                size[0] = mem::size_of::<HelpIndexElement>() & rec_count as usize;
+                info!("   {} entries, {} bytes.", rec_count, size[0]);
+            }
             _ => {}
         }
 
@@ -1077,13 +1071,13 @@ impl DB {
                 DB_BOOT_ZON => {
                     self.load_zones(db_file.unwrap(), buf2.as_str());
                 }
-                //        DB_BOOT_HLP => {
-                //            /*
-                // * If you think about it, we have a race here.  Although, this is the
-                // * "point-the-gun-at-your-own-foot" type of race.
-                // */
-                //             load_help(db_file);
-                //        }
+                DB_BOOT_HLP => {
+                    /*
+                     * If you think about it, we have a race here.  Although, this is the
+                     * "point-the-gun-at-your-own-foot" type of race.
+                     */
+                    self.load_help(db_file.unwrap());
+                }
                 DB_BOOT_SHP => {
                     self.boot_the_shops(db_file.unwrap(), &buf2, rec_count);
                 }
@@ -1098,10 +1092,10 @@ impl DB {
         }
 
         /* sort the help index */
-        // if (mode == DB_BOOT_HLP) {
-        //     qsort(help_table, top_of_helpt, sizeof(struct help_index_element), hsort);
-        //     top_of_helpt - -;
-        // }
+        if mode == DB_BOOT_HLP {
+            self.help_table
+                .sort_by_key(|e| String::from(e.keyword.as_ref()));
+        }
     }
 
     fn discrete_load(&mut self, file: File, mode: u8, filename: &str) {
@@ -1927,7 +1921,7 @@ impl DB {
                     modifier: 0,
                 }),
             ],
-            name: "".to_string(),
+            name: RefCell::from("".to_string()),
             description: "".to_string(),
             short_description: "".to_string(),
             action_description: "".to_string(),
@@ -1947,8 +1941,8 @@ impl DB {
         let buf2 = format!("object #{}", nr); /* sprintf: OK (for 'buf2 >= 19') */
 
         /* *** string data *** */
-        obj.name = fread_string(reader, &buf2);
-        if obj.name.is_empty() {
+        *obj.name.borrow_mut() = fread_string(reader, &buf2);
+        if obj.name.borrow().is_empty() {
             error!("SYSERR: Null obj name or format error at or near {}", buf2);
             process::exit(1);
         }
@@ -2291,19 +2285,17 @@ impl DB {
     }
 }
 // #undef Z
-//
-//
-// void get_one_line(FILE *fl, char *buf)
-// {
-// if (fgets(buf, READ_SIZE, fl) == NULL) {
-// log("SYSERR: error reading help file: not terminated with $?");
-// exit(1);
-// }
-//
-// buf[strlen(buf) - 1] = '\0'; /* take off the trailing \n */
-// }
-//
-//
+
+fn get_one_line(reader: &mut BufReader<File>, buf: &mut String) {
+    let r = reader.read_line(buf);
+    if r.is_err() {
+        error!("SYSERR: error reading help file: not terminated with $?");
+        process::exit(1);
+    }
+
+    *buf = buf.trim_end().to_string();
+}
+
 // void free_help(void)
 // {
 // int hp;
@@ -2322,68 +2314,72 @@ impl DB {
 // help_table = NULL;
 // top_of_helpt = 0;
 // }
-//
-//
-// void load_help(FILE *fl)
-// {
-// #if defined(CIRCLE_MACINTOSH)
-// static char key[READ_SIZE + 1], next_key[READ_SIZE + 1], entry[32384]; /* too big for stack? */
-// #else
-// char key[READ_SIZE + 1], next_key[READ_SIZE + 1], entry[32384];
-// #endif
-// size_t entrylen;
-// char line[READ_SIZE + 1], *scan;
-// struct help_index_element el;
-//
-// /* get the first keyword line */
-// get_one_line(fl, key);
-// while (*key != '$') {
-// strcat(key, "\r\n");	/* strcat: OK (READ_SIZE - "\n" + "\r\n" == READ_SIZE + 1) */
-// entrylen = strlcpy(entry, key, sizeof(entry));
-//
-// /* read in the corresponding help entry */
-// get_one_line(fl, line);
-// while (*line != '#' && entrylen < sizeof(entry) - 1) {
-// entrylen += strlcpy(entry + entrylen, line, sizeof(entry) - entrylen);
-//
-// if (entrylen + 2 < sizeof(entry) - 1) {
-// strcpy(entry + entrylen, "\r\n");	/* strcpy: OK (size checked above) */
-// entrylen += 2;
-// }
-// get_one_line(fl, line);
-// }
-//
-// if (entrylen >= sizeof(entry) - 1) {
-// int keysize;
-// const char *truncmsg = "\r\n*TRUNCATED*\r\n";
-//
-// strcpy(entry + sizeof(entry) - strlen(truncmsg) - 1, truncmsg);	/* strcpy: OK (assuming sane 'entry' size) */
-//
-// keysize = strlen(key) - 2;
-// log("SYSERR: Help entry exceeded buffer space: %.*s", keysize, key);
-//
-// /* If we ran out of buffer space, eat the rest of the entry. */
-// while (*line != '#')
-// get_one_line(fl, line);
-// }
-//
-// /* now, add the entry to the index with each keyword on the keyword line */
-// el.duplicate = 0;
-// el.entry = strdup(entry);
-// scan = one_word(key, next_key);
-// while (*next_key) {
-// el.keyword = strdup(next_key);
-// help_table[top_of_helpt++] = el;
-// el.duplicate++;
-// scan = one_word(scan, next_key);
-// }
-//
-// /* get next keyword line (or $) */
-// get_one_line(fl, key);
-// }
-// }
-//
-//
+
+impl DB {
+    pub fn load_help(&mut self, fl: File) {
+        let mut entry = String::new();
+        let mut key = String::new();
+        let mut reader = BufReader::new(fl);
+        /* get the first keyword line */
+        get_one_line(&mut reader, &mut key);
+        while !key.starts_with('$') {
+            // strcat(key, "\r\n"); /* strcat: OK (READ_SIZE - "\n" + "\r\n" == READ_SIZE + 1) */
+            // entrylen = strlcpy(entry, key, sizeof(entry));
+            key.push_str("\r\n");
+            entry.push_str(&key);
+
+            /* read in the corresponding help entry */
+            let mut line = String::new();
+            get_one_line(&mut reader, &mut line);
+            while !line.starts_with('#') {
+                line.push_str("\r\n");
+                entry.push_str(&line);
+
+                // if (entrylen + 2 < sizeof(entry) - 1) {
+                // strcpy(entry + entrylen, "\r\n"); /* strcpy: OK (size checked above) */
+                // entrylen += 2;
+                // }
+                line.clear();
+                get_one_line(&mut reader, &mut line);
+            }
+
+            // if (entrylen > = sizeof(entry) - 1) {
+            // int keysize;
+            // const char * truncmsg = "\r\n*TRUNCATED*\r\n";
+
+            // strcpy(entry + sizeof(entry) - strlen(truncmsg) - 1, truncmsg); /* strcpy: OK (assuming sane 'entry' size) */
+            // keysize = strlen(key) - 2;
+            // log("SYSERR: Help entry exceeded buffer space: %.*s", keysize, key);
+
+            /* If we ran out of buffer space, eat the rest of the entry. */
+            // while ( *line != '#')
+            // get_one_line(fl, line);
+            // }
+
+            let mut el = HelpIndexElement {
+                keyword: Rc::from(""),
+                entry: Rc::from(entry.clone()),
+                duplicate: 0,
+            };
+
+            let mut next_key = String::new();
+            /* now, add the entry to the index with each keyword on the keyword line */
+            let mut scan = one_word(&key, &mut next_key);
+            while next_key.len() != 0 {
+                el.keyword = Rc::from(next_key.clone());
+                el.duplicate += 1;
+                self.help_table.push(el.clone());
+                scan = one_word(&scan, &mut next_key);
+            }
+
+            /* get next keyword line (or $) */
+            key.clear();
+            entry.clear();
+            get_one_line(&mut reader, &mut key);
+        }
+    }
+}
+
 // int hsort(const void *a, const void *b)
 // {
 // const struct help_index_element *a1, *b1;
@@ -2440,7 +2436,8 @@ impl DB {
 
 impl DB {
     /* create a new mobile from a prototype */
-    fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */ {
+    pub(crate) fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */
+    {
         let i;
         if _type == VIRTUAL {
             i = self.real_mobile(nr);
@@ -3794,7 +3791,7 @@ impl DB {
         //         onealias[MAX_INPUT_LENGTH], *space = strrchr(obj->name, ' ');
         //
         //         strlcpy(onealias, space? space + 1: obj->name, sizeof(onealias));
-        //         if (search_block(onealias, drinknames, TRUE) < 0 && (error = TRUE))
+        //         if (search_block(onealias, DRINKNAMES, TRUE) < 0 && (error = TRUE))
         //         log("SYSERR: Object #%d (%s) doesn't have drink type as last alias. (%s)",
         //             GET_ObjVnum(obj), obj->short_description, obj->name);
         //     }
@@ -4179,7 +4176,7 @@ impl ObjData {
                     modifier: 0,
                 }),
             ],
-            name: "".to_string(),
+            name: RefCell::from("".to_string()),
             description: "".to_string(),
             short_description: "".to_string(),
             action_description: "".to_string(),

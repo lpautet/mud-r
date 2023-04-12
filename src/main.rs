@@ -30,6 +30,7 @@ use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny};
 use crate::magic::affect_update;
+use crate::modify::show_string;
 use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
@@ -672,18 +673,17 @@ impl MainGlobals {
                 }
                 d.has_prompt.set(false);
 
-                // if RefCell::borrow(d).str.is_some() {
+                // TODO implement writing
+                // if d.str.borrow().is_some() {
                 //     /* Writing boards, mail, etc. */
-                //     string_add(d, comm);
-                // }
-                // else
-                // if  RefCell::borrow(d).showstr_count {
-                //     /* Reading something w/ pager */
-                //     show_string(d, comm);
+                //     string_add(d, &comm);
                 // } else
-                if d.state() != ConPlaying {
+                if d.showstr_count.get() != 0 {
+                    /* Reading something w/ pager */
+                    show_string(d, &comm);
+                } else if d.state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, d.clone(), comm.as_str());
+                    nanny(self, d.clone(), &comm);
                 } else {
                     /* else: we're playing normally. */
                     // if (aliased)        /* To prevent recursive aliases. */

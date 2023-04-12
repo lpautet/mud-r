@@ -637,7 +637,7 @@ fn get_slide_obj_vis(
         if j > number {
             break;
         }
-        if isname(&tmpname, &i.name) != 0 {
+        if isname(&tmpname, &i.name.borrow()) != 0 {
             if db.can_see_obj(ch, i)
                 && (last_match.is_none() || !same_obj(last_match.as_ref().unwrap(), i))
             {
@@ -837,7 +837,7 @@ fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, sh
             ch,
             format!(
                 "{}: You can't carry any more items.\r\n",
-                fname(&obj.as_ref().unwrap().name)
+                fname(&obj.as_ref().unwrap().name.borrow())
             )
             .as_str(),
         );
@@ -848,7 +848,7 @@ fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, sh
             ch,
             format!(
                 "{}: You can't carry that much weight.\r\n",
-                fname(&obj.as_ref().unwrap().name)
+                fname(&obj.as_ref().unwrap().name.borrow())
             )
             .as_str(),
         );
@@ -1238,7 +1238,9 @@ pub fn shopping_list(
                     cnt += 1;
                 } else {
                     lindex += 1;
-                    if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name) != 0 {
+                    if name.is_empty()
+                        || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) != 0
+                    {
                         buf.push_str(&list_object(
                             db,
                             last_obj.as_ref().unwrap(),
@@ -1264,7 +1266,7 @@ pub fn shopping_list(
         /* nothing the char was looking for was found */
         send_to_char(ch, "Presently, none of those are for sale.\r\n");
     } else {
-        if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name) != 0 {
+        if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) != 0 {
             /* show last obj */
             buf.push_str(&list_object(
                 db,

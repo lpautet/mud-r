@@ -641,7 +641,7 @@ pub struct ObjData {
     /* Object information               */
     pub affected: [Cell<ObjAffectedType>; MAX_OBJ_AFFECT as usize],
     /* affects */
-    pub(crate) name: String,
+    pub(crate) name: RefCell<String>,
     /* Title of object :get etc.        */
     pub description: String,
     /* When in room                     */
@@ -1023,3 +1023,21 @@ pub struct GuildInfoType {
     pub guild_room: RoomVnum,
     pub direction: i32,
 }
+
+/* Some different kind of liquids for use in values of drink containers */
+pub const LIQ_WATER: i32 = 0;
+pub const LIQ_BEER: i32 = 1;
+pub const LIQ_WINE: i32 = 2;
+pub const LIQ_ALE: i32 = 3;
+pub const LIQ_DARKALE: i32 = 4;
+pub const LIQ_WHISKY: i32 = 5;
+pub const LIQ_LEMONADE: i32 = 6;
+pub const LIQ_FIREBRT: i32 = 7;
+pub const LIQ_LOCALSPC: i32 = 8;
+pub const LIQ_SLIME: i32 = 9;
+pub const LIQ_MILK: i32 = 10;
+pub const LIQ_TEA: i32 = 11;
+pub const LIQ_COFFE: i32 = 12;
+pub const LIQ_BLOOD: i32 = 13;
+pub const LIQ_SALTWATER: i32 = 14;
+pub const LIQ_CLEARWATER: i32 = 15;
