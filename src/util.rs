@@ -132,6 +132,10 @@ impl CharData {
     pub fn remove_prf_flags_bits(&self, flag: i64) {
         self.player_specials.borrow_mut().saved.pref &= !flag;
     }
+    pub fn toggle_prf_flag_bits(&self, flag: i64) -> i64 {
+        self.player_specials.borrow_mut().saved.pref ^= flag;
+        self.player_specials.borrow().saved.pref
+    }
 }
 
 // #[macro_export]

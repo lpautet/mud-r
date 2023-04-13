@@ -311,7 +311,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a DescriptorData) -> &'a str {
     }
 
     let mut s = msg;
-    for _i in 1..d.showstr_count.get() {
+    for _ in 1..d.showstr_count.get() {
         let r = next_page(s);
         if r.is_some() {
             d.showstr_vector.borrow_mut().push(Rc::from(r.unwrap()));
@@ -426,7 +426,9 @@ pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
     /* Or if we have more to show.... */
     else {
         let sv = d.showstr_vector.borrow();
-        let buffer = sv[d.showstr_page.get() as usize].as_ref();
+        let diff =
+            sv[d.showstr_page.get() as usize].len() - sv[(d.showstr_page.get() + 1) as usize].len();
+        let buffer = &sv[d.showstr_page.get() as usize].as_ref()[..diff];
         /*
          * Fix for prompt overwriting last line in compact mode submitted by
          * Peter Ajamian <peter@pajamian.dhs.org> on 04/21/2001

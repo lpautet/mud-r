@@ -32,8 +32,9 @@ use crate::structs::{
     CharData, ExtraDescrData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON,
     ITEM_FOUNTAIN, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, NOWHERE,
-    NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE, SEX_MALE,
-    SEX_NEUTRAL,
+    NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF,
+    PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
+    PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL,
 };
 use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
 use crate::structs::{
@@ -1652,7 +1653,7 @@ pub fn do_help(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // else
 // strcpy(idletime, "");
 //
-// sprintf(line, "%3d %-7s %-12s %-14s %-3s %-8s ", d.desc_num, classname,
+// sprintf(line, "%3d %-7s %-12s %-14s {:3} %-8s ", d.desc_num, classname,
 // d.original && d.original.player.name ? d.original.player.name :
 // d.character && d.character.player.name ? d.character.player.name :
 // "UNDEFINED",
@@ -1999,74 +2000,82 @@ pub fn do_color(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usiz
     );
 }
 
-// ACMD(do_toggle)
-// {
-// char buf2[4];
-//
-// if (IS_NPC(ch))
-// return;
-//
-// if (GET_WIMP_LEV(ch) == 0)
-// strcpy(buf2, "OFF");	/* strcpy: OK */
-// else
-// sprintf(buf2, "%-3.3d", GET_WIMP_LEV(ch));	/* sprintf: OK */
-//
-// if (GET_LEVEL(ch) >= LVL_IMMORT) {
-// send_to_char(ch,
-// "      No Hassle: %-3s    "
-// "      Holylight: %-3s    "
-// "     Room Flags: %-3s\r\n",
-// ONOFF(PRF_FLAGGED(ch, PRF_NOHASSLE)),
-// ONOFF(PRF_FLAGGED(ch, PRF_HOLYLIGHT)),
-// ONOFF(PRF_FLAGGED(ch, PRF_ROOMFLAGS))
-// );
-// }
-//
-// send_to_char(ch,
-// "Hit Pnt Display: %-3s    "
-// "     Brief Mode: %-3s    "
-// " Summon Protect: %-3s\r\n"
-//
-// "   Move Display: %-3s    "
-// "   Compact Mode: %-3s    "
-// "       On Quest: %-3s\r\n"
-//
-// "   Mana Display: %-3s    "
-// "         NoTell: %-3s    "
-// "   Repeat Comm.: %-3s\r\n"
-//
-// " Auto Show Exit: %-3s    "
-// "           Deaf: %-3s    "
-// "     Wimp Level: %-3s\r\n"
-//
-// " Gossip Channel: %-3s    "
-// "Auction Channel: %-3s    "
-// "  Grats Channel: %-3s\r\n"
-//
-// "    Color Level: %s\r\n",
-//
-// ONOFF(PRF_FLAGGED(ch, PRF_DISPHP)),
-// ONOFF(PRF_FLAGGED(ch, PRF_BRIEF)),
-// ONOFF(!PRF_FLAGGED(ch, PRF_SUMMONABLE)),
-//
-// ONOFF(PRF_FLAGGED(ch, PRF_DISPMOVE)),
-// ONOFF(PRF_FLAGGED(ch, PRF_COMPACT)),
-// YESNO(PRF_FLAGGED(ch, PRF_QUEST)),
-//
-// ONOFF(PRF_FLAGGED(ch, PRF_DISPMANA)),
-// ONOFF(PRF_FLAGGED(ch, PRF_NOTELL)),
-// YESNO(!PRF_FLAGGED(ch, PRF_NOREPEAT)),
-//
-// ONOFF(PRF_FLAGGED(ch, PRF_AUTOEXIT)),
-// YESNO(PRF_FLAGGED(ch, PRF_DEAF)),
-// buf2,
-//
-// ONOFF(!PRF_FLAGGED(ch, PRF_NOGOSS)),
-// ONOFF(!PRF_FLAGGED(ch, PRF_NOAUCT)),
-// ONOFF(!PRF_FLAGGED(ch, PRF_NOGRATZ)),
-//
-// ctypes[COLOR_LEV(ch)]);
-// }
+macro_rules! onoff {
+    ($a:expr) => {
+        if ($a) {
+            "ON"
+        } else {
+            "OFF"
+        }
+    };
+}
+
+macro_rules! yesno {
+    ($a:expr) => {
+        if ($a) {
+            "YES"
+        } else {
+            "NO"
+        }
+    };
+}
+
+#[allow(unused_variables)]
+pub fn do_toggle(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // char buf2[4];
+    let mut buf2 = String::new();
+    if ch.is_npc() {
+        return;
+    }
+
+    if ch.get_wimp_lev() == 0 {
+        buf2.push_str("OFF");
+    } else {
+        buf2.push_str(format!("{:3}", ch.get_wimp_lev()).as_str());
+    }
+
+    if ch.get_level() >= LVL_IMMORT as u8 {
+        send_to_char(
+            ch,
+            format!(
+                "      No Hassle: {:3}    Holylight: {:3}    Room Flags:{:3}\r\n",
+                onoff!(ch.prf_flagged(PRF_NOHASSLE)),
+                onoff!(ch.prf_flagged(PRF_HOLYLIGHT)),
+                onoff!(ch.prf_flagged(PRF_ROOMFLAGS))
+            )
+            .as_str(),
+        );
+    }
+
+    send_to_char(
+        ch,
+        format!(
+            "Hit Pnt Display: {:3}    Brief Mode: {:3}    Summon Protect: {:3}\r\n\
+ Move Display: {:3}    Compact Mode: {:3}    On Quest: {:3}\r\n\
+ Mana Display: {:3}    NoTell: {:3}    Repeat Comm.: {:3}\r\n\
+ Auto Show Exit: {:3}    Deaf: {:3}    Wimp Level: {:3}\r\n\
+ Gossip Channel: {:3}    Auction Channel: {:3}    Grats Channel: {:3}\r\n\
+ Color Level: {}\r\n",
+            onoff!(ch.prf_flagged(PRF_DISPHP)),
+            onoff!(ch.prf_flagged(PRF_BRIEF)),
+            onoff!(!ch.prf_flagged(PRF_SUMMONABLE)),
+            onoff!(ch.prf_flagged(PRF_DISPMOVE)),
+            onoff!(ch.prf_flagged(PRF_COMPACT)),
+            yesno!(ch.prf_flagged(PRF_QUEST)),
+            onoff!(ch.prf_flagged(PRF_DISPMANA)),
+            onoff!(ch.prf_flagged(PRF_NOTELL)),
+            yesno!(!ch.prf_flagged(PRF_NOREPEAT)),
+            onoff!(ch.prf_flagged(PRF_AUTOEXIT)),
+            yesno!(ch.prf_flagged(PRF_DEAF)),
+            buf2,
+            onoff!(!ch.prf_flagged(PRF_NOGOSS)),
+            onoff!(!ch.prf_flagged(PRF_NOAUCT)),
+            onoff!(!ch.prf_flagged(PRF_NOGRATZ)),
+            CTYPES[COLOR_LEV!(ch) as usize]
+        )
+        .as_str(),
+    );
+}
 
 impl DB {
     pub fn sort_commands(&mut self) {

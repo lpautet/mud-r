@@ -152,6 +152,7 @@ pub struct MainGlobals {
     /* Where to send the log messages. */
     // const char *text_overflow = "**OVERFLOW**\r\n";
     mins_since_crashsave: Cell<u32>,
+    config: Config,
 }
 
 /***********************************************************************
@@ -174,6 +175,10 @@ fn main() -> ExitCode {
         mother_desc: None,
         tics: 0,
         mins_since_crashsave: Cell::new(0),
+        config: Config {
+            nameserver_is_slow: Cell::new(false),
+            track_through_doors: Cell::new(true),
+        },
     };
     let mut scheck: bool = false; /* for syntax checking mode */
     // ush_int port;
@@ -1171,7 +1176,7 @@ impl MainGlobals {
         };
 
         /* find the sitename */
-        if !NAMESERVER_IS_SLOW {
+        if !self.config.nameserver_is_slow.get() {
             let r = dns_lookup::lookup_addr(&addr.ip());
             if r.is_err() {
                 error!("Error resolving address: {}", r.err().unwrap());

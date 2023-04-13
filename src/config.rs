@@ -37,6 +37,10 @@
 * However, if you decide you want to have an all-out knock-down drag-out
 * PK Mud, just set pk_allowed to YES - and anything goes.
 */
+use std::cell::Cell;
+
+use crate::structs::{RoomRnum, LVL_GOD};
+
 pub const PK_ALLOWED: bool = false;
 
 /* is playerthieving allowed? */
@@ -83,14 +87,6 @@ pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 pub const OK: &str = "Okay.\r\n";
 pub const NOPERSON: &str = "No-one by that name here.\r\n";
 pub const NOEFFECT: &str = "Nothing seems to happen.\r\n";
-
-/*
-* You can define or not define TRACK_THOUGH_DOORS, depending on whether
-* or not you want track to find paths which lead through closed or
-* hidden doors. A setting of 'NO' means to not go through the doors
-* while 'YES' will pass through doors to find the target.
-*/
-// int track_through_doors = YES;
 
 /*
 * If you want mortals to level up to immortal once they have enough
@@ -148,8 +144,6 @@ pub const AUTOSAVE_TIME: i32 = 5;
 /* ROOM NUMBERS */
 
 /* virtual number of room that mortals should enter at */
-use crate::structs::{RoomRnum, LVL_GOD};
-
 pub const MORTAL_START_ROOM: RoomRnum = 3001;
 
 /* virtual number of room that immorts should enter at by default */
@@ -227,23 +221,32 @@ pub const MAX_BAD_PWS: u8 = 3;
 */
 // int siteok_everyone = TRUE;
 
-/*
-* Some nameservers are very slow and cause the game to lag terribly every
-* time someone logs in.  The lag is caused by the gethostbyaddr() function
-* which is responsible for resolving numeric IP addresses to alphabetic names.
-* Sometimes, nameservers can be so slow that the incredible lag caused by
-* gethostbyaddr() isn't worth the luxury of having names instead of numbers
-* for players' sitenames.
-*
-* If your nameserver is fast, set the variable below to NO.  If your
-* nameserver is slow, of it you would simply prefer to have numbers
-* instead of names for some other reason, set the variable to YES.
-*
-* You can experiment with the setting of NAMESERVER_IS_SLOW on-line using
-* the SLOWNS command from within the MUD.
-*/
+pub struct Config {
+    /*
+     * Some nameservers are very slow and cause the game to lag terribly every
+     * time someone logs in.  The lag is caused by the gethostbyaddr() function
+     * which is responsible for resolving numeric IP addresses to alphabetic names.
+     * Sometimes, nameservers can be so slow that the incredible lag caused by
+     * gethostbyaddr() isn't worth the luxury of having names instead of numbers
+     * for players' sitenames.
+     *
+     * If your nameserver is fast, set the variable below to NO.  If your
+     * nameserver is slow, of it you would simply prefer to have numbers
+     * instead of names for some other reason, set the variable to YES.
+     *
+     * You can experiment with the setting of NAMESERVER_IS_SLOW on-line using
+     * the SLOWNS command from within the MUD.
+     */
+    pub nameserver_is_slow: Cell<bool>,
 
-pub const NAMESERVER_IS_SLOW: bool = false;
+    /*
+    * You can define or not define TRACK_THOUGH_DOORS, depending on whether
+    * or not you want track to find paths which lead through closed or
+    * hidden doors. A setting of 'NO' means to not go through the doors
+    * while 'YES' will pass through doors to find the target.
+    */
+    pub track_through_doors: Cell<bool>,
+}
 
 pub const MENU: &str = "
 Welcome to CircleMUD!

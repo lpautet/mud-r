@@ -11,12 +11,23 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-use crate::config::FREE_RENT;
+use log::error;
+
+use crate::config::{FREE_RENT, OK};
 use crate::fight::die;
-use crate::interpreter::{one_argument, SCMD_QUIT};
+use crate::interpreter::{
+    one_argument, SCMD_AUTOEXIT, SCMD_BRIEF, SCMD_COMPACT, SCMD_DEAF, SCMD_HOLYLIGHT,
+    SCMD_NOAUCTION, SCMD_NOGOSSIP, SCMD_NOGRATZ, SCMD_NOHASSLE, SCMD_NOREPEAT, SCMD_NOSUMMON,
+    SCMD_NOTELL, SCMD_NOWIZ, SCMD_QUEST, SCMD_QUIT, SCMD_ROOMFLAGS, SCMD_SLOWNS, SCMD_TRACK,
+};
 use crate::objsave::crash_rentsave;
 use crate::spec_procs::list_skills;
-use crate::structs::{CharData, LVL_IMMORT, POS_FIGHTING, POS_STUNNED};
+use crate::structs::{
+    CharData, LVL_IMMORT, POS_FIGHTING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT,
+    PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT,
+    PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST,
+    PRF_ROOMFLAGS, PRF_SUMMONABLE,
+};
 use crate::util::NRM;
 use crate::{send_to_char, MainGlobals, TO_ROOM};
 
@@ -204,7 +215,7 @@ pub fn do_not_here(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // (isname(obj_name, GET_EQ(vict, eq_pos)->name)) &&
 // CAN_SEE_OBJ(ch, GET_EQ(vict, eq_pos))) {
 // obj = GET_EQ(vict, eq_pos);
-// break;
+// }
 // }
 // if (!obj) {
 // act("$E hasn't got that item.", FALSE, ch, 0, vict, TO_CHAR);
@@ -598,14 +609,14 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 //
 // if (!mag_item || !isname(arg, mag_item->name)) {
 // switch (subcmd) {
-// case SCMD_RECITE:
-// case SCMD_QUAFF:
+// SCMD_RECITE => {
+// SCMD_QUAFF => {
 // if (!(mag_item = get_obj_in_list_vis(ch, arg, NULL, ch->carrying))) {
 // send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg), arg);
 // return;
 // }
-// break;
-// case SCMD_USE:
+// }
+// SCMD_USE => {
 // send_to_char(ch, "You don't seem to be holding %s %s.\r\n", AN(arg), arg);
 // return;
 // default:
@@ -614,25 +625,25 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // }
 // }
 // switch (subcmd) {
-// case SCMD_QUAFF:
+// SCMD_QUAFF => {
 // if (GET_OBJ_TYPE(mag_item) != ITEM_POTION) {
 // send_to_char(ch, "You can only quaff potions.\r\n");
 // return;
 // }
-// break;
-// case SCMD_RECITE:
+// }
+// SCMD_RECITE => {
 // if (GET_OBJ_TYPE(mag_item) != ITEM_SCROLL) {
 // send_to_char(ch, "You can only recite scrolls.\r\n");
 // return;
 // }
-// break;
-// case SCMD_USE:
+// }
+// SCMD_USE => {
 // if ((GET_OBJ_TYPE(mag_item) != ITEM_WAND) &&
 // (GET_OBJ_TYPE(mag_item) != ITEM_STAFF)) {
 // send_to_char(ch, "You can't seem to figure out how to use it.\r\n");
 // return;
 // }
-// break;
+// }
 // }
 //
 // mag_objectmagic(ch, mag_item, buf);
@@ -679,59 +690,72 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // } else
 // send_to_char(ch, "Specify at how many hit points you want to wimp out at.  (0 to disable)\r\n");
 // }
-//
-//
-// ACMD(do_display)
-// {
-// size_t i;
-//
-// if (IS_NPC(ch)) {
-// send_to_char(ch, "Mosters don't need displays.  Go away.\r\n");
-// return;
-// }
-// skip_spaces(&argument);
-//
-// if (!*argument) {
-// send_to_char(ch, "Usage: prompt { { H | M | V } | all | auto | none }\r\n");
-// return;
-// }
-//
-// if (!str_cmp(argument, "auto")) {
-// TOGGLE_BIT(PRF_FLAGS(ch), PRF_DISPAUTO);
-// send_to_char(ch, "Auto prompt %sabled.\r\n", PRF_FLAGGED(ch, PRF_DISPAUTO) ? "en" : "dis");
-// return;
-// }
-//
-// if (!str_cmp(argument, "on") || !str_cmp(argument, "all"))
-// SET_BIT(PRF_FLAGS(ch), PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
-// else if (!str_cmp(argument, "off") || !str_cmp(argument, "none"))
-// REMOVE_BIT(PRF_FLAGS(ch), PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
-// else {
-// REMOVE_BIT(PRF_FLAGS(ch), PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
-//
-// for (i = 0; i < strlen(argument); i++) {
-// switch (LOWER(argument[i])) {
-// case 'h':
-// SET_BIT(PRF_FLAGS(ch), PRF_DISPHP);
-// break;
-// case 'm':
-// SET_BIT(PRF_FLAGS(ch), PRF_DISPMANA);
-// break;
-// case 'v':
-// SET_BIT(PRF_FLAGS(ch), PRF_DISPMOVE);
-// break;
-// default:
-// send_to_char(ch, "Usage: prompt { { H | M | V } | all | auto | none }\r\n");
-// return;
-// }
-// }
-// }
-//
-// send_to_char(ch, "%s", OK);
-// }
-//
-//
-//
+
+#[allow(unused_variables)]
+pub fn do_display(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    if ch.is_npc() {
+        send_to_char(ch, "Monsters don't need displays.  Go away.\r\n");
+        return;
+    }
+    let argument = argument.trim_start();
+
+    if argument.len() == 0 {
+        send_to_char(
+            ch,
+            "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
+        );
+        return;
+    }
+
+    if argument == "auto" {
+        ch.toggle_prf_flag_bits(PRF_DISPAUTO);
+        send_to_char(
+            ch,
+            format!(
+                "Auto prompt {}abled.\r\n",
+                if ch.prf_flagged(PRF_DISPAUTO) {
+                    "en"
+                } else {
+                    "dis"
+                }
+            )
+            .as_str(),
+        );
+        return;
+    }
+
+    if argument == "on" || argument == "all" {
+        ch.set_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+    } else if argument == "off" || argument == "none" {
+        ch.remove_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+    } else {
+        ch.remove_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+
+        for c in argument.chars() {
+            match c.to_ascii_lowercase() {
+                'h' => {
+                    ch.set_prf_flags_bits(PRF_DISPHP);
+                }
+                'm' => {
+                    ch.set_prf_flags_bits(PRF_DISPMANA);
+                }
+                'v' => {
+                    ch.set_prf_flags_bits(PRF_DISPMOVE);
+                }
+                _ => {
+                    send_to_char(
+                        ch,
+                        "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
+                    );
+                    return;
+                }
+            }
+        }
+    }
+
+    send_to_char(ch, OK);
+}
+
 // ACMD(do_gen_write)
 // {
 // FILE *fl;
@@ -741,15 +765,15 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // time_t ct;
 //
 // switch (subcmd) {
-// case SCMD_BUG:
+// SCMD_BUG => {
 // filename = BUG_FILE;
-// break;
-// case SCMD_TYPO:
+// }
+// SCMD_TYPO => {
 // filename = TYPO_FILE;
-// break;
-// case SCMD_IDEA:
+// }
+// SCMD_IDEA => {
 // filename = IDEA_FILE;
-// break;
+// }
 // default:
 // return;
 // }
@@ -789,120 +813,151 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // fclose(fl);
 // send_to_char(ch, "Okay.  Thanks!\r\n");
 // }
-//
-//
-//
-// #define TOG_OFF 0
-// #define TOG_ON  1
-//
-// #define PRF_TOG_CHK(ch,flag) ((TOGGLE_BIT(PRF_FLAGS(ch), (flag))) & (flag))
-//
-// ACMD(do_gen_tog)
-// {
-// long /* bitvector_t */ result;
-//
-// const char *tog_messages[][2] = {
-// {"You are now safe from summoning by other players.\r\n",
-// "You may now be summoned by other players.\r\n"},
-// {"Nohassle disabled.\r\n",
-// "Nohassle enabled.\r\n"},
-// {"Brief mode off.\r\n",
-// "Brief mode on.\r\n"},
-// {"Compact mode off.\r\n",
-// "Compact mode on.\r\n"},
-// {"You can now hear tells.\r\n",
-// "You are now deaf to tells.\r\n"},
-// {"You can now hear auctions.\r\n",
-// "You are now deaf to auctions.\r\n"},
-// {"You can now hear shouts.\r\n",
-// "You are now deaf to shouts.\r\n"},
-// {"You can now hear gossip.\r\n",
-// "You are now deaf to gossip.\r\n"},
-// {"You can now hear the congratulation messages.\r\n",
-// "You are now deaf to the congratulation messages.\r\n"},
-// {"You can now hear the Wiz-channel.\r\n",
-// "You are now deaf to the Wiz-channel.\r\n"},
-// {"You are no longer part of the Quest.\r\n",
-// "Okay, you are part of the Quest!\r\n"},
-// {"You will no longer see the room flags.\r\n",
-// "You will now see the room flags.\r\n"},
-// {"You will now have your communication repeated.\r\n",
-// "You will no longer have your communication repeated.\r\n"},
-// {"HolyLight mode off.\r\n",
-// "HolyLight mode on.\r\n"},
-// {"Nameserver_is_slow changed to NO; IP addresses will now be resolved.\r\n",
-// "Nameserver_is_slow changed to YES; sitenames will no longer be resolved.\r\n"},
-// {"Autoexits disabled.\r\n",
-// "Autoexits enabled.\r\n"},
-// {"Will no longer track through doors.\r\n",
-// "Will now track through doors.\r\n"}
-// };
-//
-//
-// if (IS_NPC(ch))
-// return;
-//
-// switch (subcmd) {
-// case SCMD_NOSUMMON:
-// result = PRF_TOG_CHK(ch, PRF_SUMMONABLE);
-// break;
-// case SCMD_NOHASSLE:
-// result = PRF_TOG_CHK(ch, PRF_NOHASSLE);
-// break;
-// case SCMD_BRIEF:
-// result = PRF_TOG_CHK(ch, PRF_BRIEF);
-// break;
-// case SCMD_COMPACT:
-// result = PRF_TOG_CHK(ch, PRF_COMPACT);
-// break;
-// case SCMD_NOTELL:
-// result = PRF_TOG_CHK(ch, PRF_NOTELL);
-// break;
-// case SCMD_NOAUCTION:
-// result = PRF_TOG_CHK(ch, PRF_NOAUCT);
-// break;
-// case SCMD_DEAF:
-// result = PRF_TOG_CHK(ch, PRF_DEAF);
-// break;
-// case SCMD_NOGOSSIP:
-// result = PRF_TOG_CHK(ch, PRF_NOGOSS);
-// break;
-// case SCMD_NOGRATZ:
-// result = PRF_TOG_CHK(ch, PRF_NOGRATZ);
-// break;
-// case SCMD_NOWIZ:
-// result = PRF_TOG_CHK(ch, PRF_NOWIZ);
-// break;
-// case SCMD_QUEST:
-// result = PRF_TOG_CHK(ch, PRF_QUEST);
-// break;
-// case SCMD_ROOMFLAGS:
-// result = PRF_TOG_CHK(ch, PRF_ROOMFLAGS);
-// break;
-// case SCMD_NOREPEAT:
-// result = PRF_TOG_CHK(ch, PRF_NOREPEAT);
-// break;
-// case SCMD_HOLYLIGHT:
-// result = PRF_TOG_CHK(ch, PRF_HOLYLIGHT);
-// break;
-// case SCMD_SLOWNS:
-// result = (nameserver_is_slow = !nameserver_is_slow);
-// break;
-// case SCMD_AUTOEXIT:
-// result = PRF_TOG_CHK(ch, PRF_AUTOEXIT);
-// break;
-// case SCMD_TRACK:
-// result = (track_through_doors = !track_through_doors);
-// break;
-// default:
-// log("SYSERR: Unknown subcmd %d in do_gen_toggle.", subcmd);
-// return;
-// }
-//
-// if (result)
-// send_to_char(ch, "%s", tog_messages[subcmd][TOG_ON]);
-// else
-// send_to_char(ch, "%s", tog_messages[subcmd][TOG_OFF]);
-//
-// return;
-// }
+
+const TOG_ON: usize = 1;
+const TOG_OFF: usize = 0;
+
+macro_rules! prf_tog_chk {
+    ($ch:expr, $flag:expr) => {
+        ($ch.toggle_prf_flag_bits($flag) & $flag) != 0
+    };
+}
+
+#[allow(unused_variables)]
+pub fn do_gen_tog(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    const TOG_MESSAGES: [[&str; 2]; 17] = [
+        [
+            "You are now safe from summoning by other players.\r\n",
+            "You may now be summoned by other players.\r\n",
+        ],
+        ["Nohassle disabled.\r\n", "Nohassle enabled.\r\n"],
+        ["Brief mode off.\r\n", "Brief mode on.\r\n"],
+        ["Compact mode off.\r\n", "Compact mode on.\r\n"],
+        [
+            "You can now hear tells.\r\n",
+            "You are now deaf to tells.\r\n",
+        ],
+        [
+            "You can now hear auctions.\r\n",
+            "You are now deaf to auctions.\r\n",
+        ],
+        [
+            "You can now hear shouts.\r\n",
+            "You are now deaf to shouts.\r\n",
+        ],
+        [
+            "You can now hear gossip.\r\n",
+            "You are now deaf to gossip.\r\n",
+        ],
+        [
+            "You can now hear the congratulation messages.\r\n",
+            "You are now deaf to the congratulation messages.\r\n",
+        ],
+        [
+            "You can now hear the Wiz-channel.\r\n",
+            "You are now deaf to the Wiz-channel.\r\n",
+        ],
+        [
+            "You are no longer part of the Quest.\r\n",
+            "Okay, you are part of the Quest!\r\n",
+        ],
+        [
+            "You will no longer see the room flags.\r\n",
+            "You will now see the room flags.\r\n",
+        ],
+        [
+            "You will now have your communication repeated.\r\n",
+            "You will no longer have your communication repeated.\r\n",
+        ],
+        ["HolyLight mode off.\r\n", "HolyLight mode on.\r\n"],
+        [
+            "Nameserver_is_slow changed to NO; IP addresses will now be resolved.\r\n",
+            "Nameserver_is_slow changed to YES; sitenames will no longer be resolved.\r\n",
+        ],
+        ["Autoexits disabled.\r\n", "Autoexits enabled.\r\n"],
+        [
+            "Will no longer track through doors.\r\n",
+            "Will now track through doors.\r\n",
+        ],
+    ];
+
+    if ch.is_npc() {
+        return;
+    }
+    let result;
+    match subcmd {
+        SCMD_NOSUMMON => {
+            result = prf_tog_chk!(ch, PRF_SUMMONABLE);
+        }
+        SCMD_NOHASSLE => {
+            result = prf_tog_chk!(ch, PRF_NOHASSLE);
+        }
+        SCMD_BRIEF => {
+            result = prf_tog_chk!(ch, PRF_BRIEF);
+        }
+        SCMD_COMPACT => {
+            result = prf_tog_chk!(ch, PRF_COMPACT);
+        }
+        SCMD_NOTELL => {
+            result = prf_tog_chk!(ch, PRF_NOTELL);
+        }
+        SCMD_NOAUCTION => {
+            result = prf_tog_chk!(ch, PRF_NOAUCT);
+        }
+        SCMD_DEAF => {
+            result = prf_tog_chk!(ch, PRF_DEAF);
+        }
+        SCMD_NOGOSSIP => {
+            result = prf_tog_chk!(ch, PRF_NOGOSS);
+        }
+        SCMD_NOGRATZ => {
+            result = prf_tog_chk!(ch, PRF_NOGRATZ);
+        }
+        SCMD_NOWIZ => {
+            result = prf_tog_chk!(ch, PRF_NOWIZ);
+        }
+        SCMD_QUEST => {
+            result = prf_tog_chk!(ch, PRF_QUEST);
+        }
+        SCMD_ROOMFLAGS => {
+            result = prf_tog_chk!(ch, PRF_ROOMFLAGS);
+        }
+        SCMD_NOREPEAT => {
+            result = prf_tog_chk!(ch, PRF_NOREPEAT);
+        }
+        SCMD_HOLYLIGHT => {
+            result = prf_tog_chk!(ch, PRF_HOLYLIGHT);
+        }
+        SCMD_SLOWNS => {
+            result = {
+                game.config
+                    .nameserver_is_slow
+                    .set(game.config.nameserver_is_slow.get());
+                game.config.nameserver_is_slow.get()
+            }
+        }
+        SCMD_AUTOEXIT => {
+            result = prf_tog_chk!(ch, PRF_AUTOEXIT);
+        }
+        SCMD_TRACK => {
+            result = {
+                game.config
+                    .track_through_doors
+                    .set(!game.config.track_through_doors.get());
+                game.config.track_through_doors.get()
+            }
+        }
+        _ => {
+            error!("SYSERR: Unknown subcmd {} in do_gen_toggle.", subcmd);
+            return;
+        }
+    }
+
+    if result {
+        send_to_char(ch, TOG_MESSAGES[subcmd as usize][TOG_ON]);
+    } else {
+        send_to_char(ch, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
+    }
+
+    return;
+}
