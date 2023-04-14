@@ -17,17 +17,19 @@ use log::error;
 use sha2::Sha256;
 
 use crate::act_informative::{
-    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_exits, do_gold, do_help,
-    do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_weather,
+    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gold,
+    do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_weather, do_who,
 };
-use crate::act_item::{do_drop, do_get, do_grab, do_remove, do_wear, do_wield};
+use crate::act_item::{do_drink, do_drop, do_eat, do_get, do_grab, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
 use crate::act_offensive::{do_flee, do_hit};
 use crate::act_other::{do_display, do_gen_tog, do_not_here, do_practice, do_quit};
+use crate::act_wizard::do_advance;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, reset_char, store_to_char};
+use crate::modify::page_string;
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::spell_parser::do_cast;
@@ -48,7 +50,7 @@ use crate::structs::{
 };
 use crate::util::{BRF, NRM};
 use crate::{
-    _clrlevel, clr, send_to_char, DescriptorData, MainGlobals, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
+    _clrlevel, clr, send_to_char, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
 };
 use crate::{echo_off, echo_on, write_to_output};
 
@@ -103,6 +105,12 @@ pub const SCMD_DONATE: u8 = 2;
 pub const SCMD_HIT: i32 = 0;
 pub const SCMD_MURDER: i32 = 1;
 
+/* do_eat */
+pub const SCMD_EAT: i32 = 0;
+pub const SCMD_TASTE: i32 = 1;
+pub const SCMD_DRINK: i32 = 2;
+pub const SCMD_SIP: i32 = 3;
+
 /* do_look */
 pub const SCMD_LOOK: i32 = 0;
 pub const SCMD_READ: i32 = 1;
@@ -123,7 +131,7 @@ pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-type Command = fn(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
+type Command = fn(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
 
 pub struct CommandInfo {
     pub(crate) command: &'static str,
@@ -134,9 +142,9 @@ pub struct CommandInfo {
 }
 
 #[allow(unused_variables)]
-pub fn do_nothing(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
+pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 61] = [
+pub const CMD_INFO: [CommandInfo; 69] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -190,6 +198,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
     /* now, the main list */
     // { "at"       , POS_DEAD    , do_at       , LVL_IMMORT, 0 },
     // { "advance"  , POS_DEAD    , do_advance  , LVL_IMPL, 0 },
+    CommandInfo {
+        command: "advance",
+        minimum_position: POS_DEAD,
+        command_pointer: do_advance,
+        minimum_level: LVL_IMPL,
+        subcmd: 0,
+    },
     // { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
     // { "accuse"   , POS_SITTING , do_action   , 0, 0 },
     // { "applaud"  , POS_RESTING , do_action   , 0, 0 },
@@ -321,6 +336,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
         subcmd: SCMD_DONATE as i32,
     },
     // { "drink"    , POS_RESTING , do_drink    , 0, SCMD_DRINK },
+    CommandInfo {
+        command: "drink",
+        minimum_position: POS_RESTING,
+        command_pointer: do_drink,
+        minimum_level: 0,
+        subcmd: SCMD_DRINK,
+    },
     // { "drop"     , POS_RESTING , do_drop     , 0, SCMD_DROP },
     CommandInfo {
         command: "drop",
@@ -332,6 +354,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
     // { "drool"    , POS_RESTING , do_action   , 0, 0 },
     //
     // { "eat"      , POS_RESTING , do_eat      , 0, SCMD_EAT },
+    CommandInfo {
+        command: "eat",
+        minimum_position: POS_RESTING,
+        command_pointer: do_eat,
+        minimum_level: 0,
+        subcmd: SCMD_EAT,
+    },
     // { "echo"     , POS_SLEEPING, do_echo     , LVL_IMMORT, SCMD_ECHO },
     // { "emote"    , POS_RESTING , do_echo     , 1, SCMD_EMOTE },
     // { ":"        , POS_RESTING, do_echo      , 1, SCMD_EMOTE },
@@ -354,6 +383,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
         subcmd: 0,
     },
     // { "examine"  , POS_SITTING , do_examine  , 0, 0 },
+    CommandInfo {
+        command: "examine",
+        minimum_position: POS_SITTING,
+        command_pointer: do_examine,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
     // { "fart"     , POS_RESTING , do_action   , 0, 0 },
@@ -623,6 +659,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
     // { "pour"     , POS_STANDING, do_pour     , 0, SCMD_POUR },
     // { "pout"     , POS_RESTING , do_action   , 0, 0 },
     // { "prompt"   , POS_DEAD    , do_display  , 0, 0 },
+    CommandInfo {
+        command: "prompt",
+        minimum_position: POS_DEAD,
+        command_pointer: do_display,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "practice" , POS_RESTING , do_practice , 1, 0 },
     CommandInfo {
         command: "practice",
@@ -721,6 +764,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
     // { "sigh"     , POS_RESTING , do_action   , 0, 0 },
     // { "sing"     , POS_RESTING , do_action   , 0, 0 },
     // { "sip"      , POS_RESTING , do_drink    , 0, SCMD_SIP },
+    CommandInfo {
+        command: "sip",
+        minimum_position: POS_RESTING,
+        command_pointer: do_drink,
+        minimum_level: 0,
+        subcmd: SCMD_SIP,
+    },
     // { "sit"      , POS_RESTING , do_sit      , 0, 0 },
     // { "skillset" , POS_SLEEPING, do_skillset , LVL_GRGOD, 0 },
     // { "sleep"    , POS_SLEEPING, do_sleep    , 0, 0 },
@@ -781,6 +831,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
     // { "tango"    , POS_STANDING, do_action   , 0, 0 },
     // { "taunt"    , POS_RESTING , do_action   , 0, 0 },
     // { "taste"    , POS_RESTING , do_eat      , 0, SCMD_TASTE },
+    CommandInfo {
+        command: "taste",
+        minimum_position: POS_RESTING,
+        command_pointer: do_eat,
+        minimum_level: 0,
+        subcmd: SCMD_TASTE,
+    },
     // { "teleport" , POS_DEAD    , do_teleport , LVL_GOD, 0 },
     // { "thank"    , POS_RESTING , do_action   , 0, 0 },
     // { "think"    , POS_RESTING , do_action   , 0, 0 },
@@ -849,6 +906,13 @@ pub const CMD_INFO: [CommandInfo; 61] = [
         subcmd: 0,
     },
     // { "who"      , POS_DEAD    , do_who      , 0, 0 },
+    CommandInfo {
+        command: "who",
+        minimum_position: POS_DEAD,
+        command_pointer: do_who,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "whoami"   , POS_DEAD    , do_gen_ps   , 0, SCMD_WHOAMI },
     // { "where"    , POS_RESTING , do_where    , 1, 0 },
     // { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
@@ -914,7 +978,7 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(game: &MainGlobals, ch: &Rc<CharData>, argument: &str) {
+pub fn command_interpreter(game: &Game, ch: &Rc<CharData>, argument: &str) {
     let line: &str;
     let mut arg = String::new();
 
@@ -1398,7 +1462,7 @@ pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
 }
 
-fn special(game: &MainGlobals, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
+fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     // struct obj_data *i;
     // struct char_data *k;
     // int j;
@@ -1482,7 +1546,7 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool {
+fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
@@ -1677,7 +1741,7 @@ fn perform_dupe_check(main_globals: &MainGlobals, d: Rc<DescriptorData>) -> bool
 }
 
 /* deal with newcomers and other non-playing sockets */
-pub fn nanny(game: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
+pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
     let db = &game.db;
 
@@ -2123,6 +2187,7 @@ pub fn nanny(game: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
                         game.db.look_at_room(och.as_ref().unwrap(), false);
                     }
+                    // TODO implement mail
                     // if has_mail(GET_IDNUM(d->character)) {
                     //     send_to_char(d->character, "You have mail waiting.\r\n");
                     // }
@@ -2148,24 +2213,20 @@ pub fn nanny(game: &MainGlobals, d: Rc<DescriptorData>, arg: &str) {
                     d.max_str.set(EXDSCR_LENGTH);
                     d.set_state(ConExdesc);
                 }
-
-                // '3' => {
-                //     let db = RefCell::borrow(main_globals.db.as_ref().unwrap());
-                //     page_string(mut_d, db.background, 0);
-                //     mut_d.state() = ConRmotd;
-                // }
+                '3' => {
+                    page_string(Some(&d), &game.db.background, false);
+                    d.set_state(ConRmotd);
+                }
                 '4' => {
                     write_to_output(d.as_ref(), "\r\nEnter your old password: ");
                     echo_off(d.as_ref());
                     d.set_state(ConChpwdGetold);
                 }
-
                 '5' => {
                     write_to_output(d.as_ref(), "\r\nEnter your password for verification: ");
                     echo_off(d.as_ref());
                     d.set_state(ConDelcnf1);
                 }
-
                 _ => {
                     write_to_output(
                         d.as_ref(),

@@ -19,13 +19,14 @@ use crate::fight::update_pos;
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    CharData, AFF_POISON, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST,
+    CharData, AFF_POISON, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW,
+    THIRST,
 };
 use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
 use crate::util::{age, BRF, CMP};
-use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -217,7 +218,7 @@ pub fn set_title(ch: &Rc<CharData>, title: Option<String>) {
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
 
-pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &MainGlobals) {
+pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &Game) {
     let mut is_altered = false;
     let mut num_levels = 0;
 
@@ -277,40 +278,55 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &MainGlobals) {
     }
 }
 
-// void gain_exp_regardless(struct char_data *ch, int gain)
-// {
-// int is_altered = FALSE;
-// int num_levels = 0;
-//
-// GET_EXP(ch) += gain;
-// if (GET_EXP(ch) < 0)
-// GET_EXP(ch) = 0;
-//
-// if (!IS_NPC(ch)) {
-// while (GET_LEVEL(ch) < LVL_IMPL &&
-// GET_EXP(ch) >= level_exp(GET_CLASS(ch), GET_LEVEL(ch) + 1)) {
-// GET_LEVEL(ch) += 1;
-// num_levels++;
-// advance_level(ch);
-// is_altered = TRUE;
-// }
-//
-// if (is_altered) {
-// mudlog(BRF, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "%s advanced %d level%s to level %d.",
-// GET_NAME(ch), num_levels, num_levels == 1 ? "" : "s", GET_LEVEL(ch));
-// if (num_levels == 1)
-// send_to_char(ch, "You rise a level!\r\n");
-// else
-// send_to_char(ch, "You rise %d levels!\r\n", num_levels);
-// set_title(ch, NULL);
-// if (GET_LEVEL(ch) >= LVL_IMMORT)
-// run_autowiz();
-// }
-// }
-// }
+pub fn gain_exp_regardless(game: &Game, ch: &Rc<CharData>, gain: i32) {
+    let mut is_altered = false;
+    let mut num_levels = 0;
+    let db = &game.db;
+
+    ch.set_exp(ch.get_exp() + gain);
+    if ch.get_exp() < 0 {
+        ch.set_exp(0);
+    }
+
+    if !ch.is_npc() {
+        while ch.get_level() < LVL_IMPL as u8
+            && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
+        {
+            ch.set_level(ch.get_level() + 1);
+            num_levels += 1;
+            advance_level(ch, db);
+            is_altered = true;
+        }
+
+        if is_altered {
+            game.mudlog(
+                BRF,
+                max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
+                true,
+                format!(
+                    "{} advanced {} level{} to level {}.",
+                    ch.get_name(),
+                    num_levels,
+                    if num_levels == 1 { "" } else { "s" },
+                    ch.get_level()
+                )
+                .as_str(),
+            );
+            if num_levels == 1 {
+                send_to_char(ch, "You rise a level!\r\n");
+            } else {
+                send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+            }
+            set_title(ch, None);
+            if ch.get_level() >= LVL_IMMORT as u8 {
+                // TODO run_autowiz();
+            }
+        }
+    }
+}
 
 impl DB {
-    fn gain_condition(&self, ch: &CharData, condition: i32, value: i32) {
+    pub(crate) fn gain_condition(&self, ch: &CharData, condition: i32, value: i32) {
         //bool intoxicated;
 
         if ch.is_npc() || ch.get_cond(condition) == -1 {
@@ -348,7 +364,7 @@ impl DB {
 }
 
 impl DB {
-    fn check_idling(&self, main_globals: &MainGlobals, ch: &Rc<CharData>) {
+    fn check_idling(&self, main_globals: &Game, ch: &Rc<CharData>) {
         ch.char_specials
             .borrow()
             .timer
@@ -405,7 +421,7 @@ impl DB {
     }
 
     /* Update PCs, NPCs, and objects */
-    pub fn point_update(&self, main_globals: &MainGlobals) {
+    pub fn point_update(&self, main_globals: &Game) {
         // struct char_data * i, * next_char;
         // struct obj_data * j, * next_thing, * jj, *next_thing2;
 

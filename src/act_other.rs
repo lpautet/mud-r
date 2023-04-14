@@ -29,10 +29,10 @@ use crate::structs::{
     PRF_ROOMFLAGS, PRF_SUMMONABLE,
 };
 use crate::util::NRM;
-use crate::{send_to_char, MainGlobals, TO_ROOM};
+use crate::{send_to_char, Game, TO_ROOM};
 
 #[allow(unused_variables)]
-pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_quit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() || ch.desc.borrow().is_none() {
         return;
     }
@@ -106,7 +106,7 @@ pub fn do_quit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 /* generic function for commands which are normally overridden by
 special procedures - i.e., shop commands, mail commands, etc. */
 #[allow(unused_variables)]
-pub fn do_not_here(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_not_here(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     send_to_char(ch, "Sorry, but you cannot do that here!\r\n");
 }
 
@@ -278,7 +278,7 @@ pub fn do_not_here(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // }
 
 #[allow(unused_variables)]
-pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_practice(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -692,7 +692,7 @@ pub fn do_practice(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 // }
 
 #[allow(unused_variables)]
-pub fn do_display(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_display(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         send_to_char(ch, "Monsters don't need displays.  Go away.\r\n");
         return;
@@ -824,7 +824,7 @@ macro_rules! prf_tog_chk {
 }
 
 #[allow(unused_variables)]
-pub fn do_gen_tog(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_tog(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     const TOG_MESSAGES: [[&str; 2]; 17] = [
         [
             "You are now safe from summoning by other players.\r\n",

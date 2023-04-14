@@ -27,7 +27,7 @@ use crate::structs::{
     ROOM_DEATH, ROOM_GODROOM, ROOM_PRIVATE, SEX_MALE,
 };
 use crate::util::{add_follower, age, circle_follow, rand_number, sprintbit, sprinttype, BRF};
-use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM, TO_VICT};
+use crate::{send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 pub const DEFAULT_STAFF_LVL: i32 = 12;
 pub const DEFAULT_WAND_LVL: i32 = 12;
@@ -383,14 +383,14 @@ pub fn spell_create_water(
 
     if obj.get_obj_type() == ITEM_DRINKCON {
         if obj.get_obj_val(2) != LIQ_WATER && obj.get_obj_val(1) != 0 {
-            name_from_drinkcon(db, Some(obj));
+            name_from_drinkcon(Some(obj));
             obj.set_obj_val(2, LIQ_SLIME);
             name_to_drinkcon(Some(obj), LIQ_SLIME);
         } else {
             let water = max(obj.get_obj_val(0) - obj.get_obj_val(1), 0);
             if water > 0 {
                 if obj.get_obj_val(1) >= 0 {
-                    name_from_drinkcon(db, Some(obj));
+                    name_from_drinkcon(Some(obj));
                 }
                 obj.set_obj_val(2, LIQ_WATER);
                 obj.set_obj_val(1, obj.get_obj_val(1) + water);
@@ -477,7 +477,7 @@ pub fn spell_teleport(
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 pub fn spell_summon(
-    game: &MainGlobals,
+    game: &Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -593,7 +593,7 @@ pub fn spell_locate_object(
     let mut j = level / 2;
 
     for i in db.object_list.borrow().iter() {
-        if isname(&name, &i.name.borrow()) != 0 {
+        if !isname(&name, &i.name.borrow()) {
             continue;
         }
 

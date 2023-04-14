@@ -32,7 +32,7 @@ use crate::structs::{
     WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R,
 };
 use crate::util::{clone_vec, get_filename, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY};
-use crate::{send_to_char, MainGlobals};
+use crate::{send_to_char, Game};
 
 // /* these factors should be unique integers */
 // #define RENT_FACTOR 	1
@@ -104,7 +104,7 @@ fn obj_to_store(db: &DB, obj: &Rc<ObjData>, fl: &mut File, location: i32) -> boo
 /*
  * AutoEQ by Burkhard Knopf <burkhard.knopf@informatik.tu-clausthal.de>
  */
-fn auto_equip(game: &MainGlobals, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) {
+fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) {
     let mut location = location;
     let db = &game.db;
     /* Lots of checks... */
@@ -437,7 +437,7 @@ fn crash_write_rentcode(ch: &Rc<CharData>, fl: &mut File, rent: &mut RentInfo) -
  *  1 - load failure or load of crash items -- put char in temple.
  *  2 - rented equipment lost (no $)
  */
-pub fn crash_load(game: &MainGlobals, ch: &Rc<CharData>) -> i32 {
+pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
     let db = &game.db;
     //int cost, orig_rent_code, num_objs = 0, j;
     //float num_of_days;
@@ -1331,7 +1331,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // return (gen_receptionist(ch, (struct char_data *)me, cmd, argument, CRYO_FACTOR));
 // }
 
-pub fn crash_save_all(game: &MainGlobals) {
+pub fn crash_save_all(game: &Game) {
     for d in game.descriptor_list.borrow().iter() {
         if d.state() == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
             if d.character

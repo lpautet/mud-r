@@ -21,7 +21,7 @@ use crate::structs::{
     CharData, AFF_CHARM, NUM_OF_DIRS, POS_FIGHTING, POS_STANDING, PULSE_VIOLENCE, ROOM_DEATH,
 };
 use crate::util::rand_number;
-use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 // ACMD(do_assist)
 // {
@@ -70,7 +70,7 @@ use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
 //
 //
 #[allow(unused_variables)]
-pub fn do_hit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let vict: Option<Rc<CharData>>;
 
@@ -271,7 +271,7 @@ pub fn do_hit(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
 // }
 // }
 #[allow(unused_variables)]
-pub fn do_flee(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
         send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;

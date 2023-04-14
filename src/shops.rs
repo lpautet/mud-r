@@ -29,7 +29,7 @@ use crate::structs::{
     ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
 };
 use crate::util::get_line;
-use crate::{an, is_set, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{an, is_set, send_to_char, Game, TO_CHAR, TO_ROOM};
 
 pub struct ShopBuyData {
     pub type_: i32,
@@ -637,7 +637,7 @@ fn get_slide_obj_vis(
         if j > number {
             break;
         }
-        if isname(&tmpname, &i.name.borrow()) != 0 {
+        if isname(&tmpname, &i.name.borrow()) {
             if db.can_see_obj(ch, i)
                 && (last_match.is_none() || !same_obj(last_match.as_ref().unwrap(), i))
             {
@@ -1238,9 +1238,7 @@ pub fn shopping_list(
                     cnt += 1;
                 } else {
                     lindex += 1;
-                    if name.is_empty()
-                        || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) != 0
-                    {
+                    if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) {
                         buf.push_str(&list_object(
                             db,
                             last_obj.as_ref().unwrap(),
@@ -1266,7 +1264,7 @@ pub fn shopping_list(
         /* nothing the char was looking for was found */
         send_to_char(ch, "Presently, none of those are for sale.\r\n");
     } else {
-        if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) != 0 {
+        if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) {
             /* show last obj */
             buf.push_str(&list_object(
                 db,
@@ -1291,13 +1289,7 @@ fn ok_shop_room(db: &DB, shop: &ShopData, room: RoomVnum) -> bool {
     false
 }
 
-pub fn shop_keeper(
-    game: &MainGlobals,
-    ch: &Rc<CharData>,
-    me: &dyn Any,
-    cmd: i32,
-    argument: &str,
-) -> bool {
+pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     let mut b = db.shop_index.borrow_mut();
     let keeper = me

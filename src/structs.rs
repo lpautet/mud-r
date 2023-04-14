@@ -2,10 +2,10 @@ use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::{DescriptorData, MainGlobals};
+use crate::{DescriptorData, Game};
 
 pub type Special =
-    fn(game: &MainGlobals, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
+    fn(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;

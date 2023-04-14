@@ -17,7 +17,7 @@ use crate::structs::{
     ROOM_GODROOM, ROOM_TUNNEL, SECT_WATER_NOSWIM,
 };
 use crate::util::num_pc_in_room;
-use crate::{send_to_char, MainGlobals, TO_ROOM};
+use crate::{send_to_char, Game, TO_ROOM};
 use std::borrow::Borrow;
 use std::rc::Rc;
 
@@ -257,7 +257,7 @@ pub fn do_simple_move(db: &DB, ch: &Rc<CharData>, dir: i32, need_specials_check:
     return 1;
 }
 #[allow(unused_variables)]
-pub fn do_move(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_move(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.
      * It cannot be done in perform_move because perform_move is called

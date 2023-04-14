@@ -200,7 +200,7 @@ pub const DFLT_DIR: &str = "lib";
 /* const char *LOGNAME = "log/syslog";  -- useful for Windows users */
 
 /* maximum number of players allowed before game starts to turn people away */
-// int max_playing = 300;
+pub const MAX_PLAYING: i32 = 300;
 
 /* maximum size of bug, typo and idea files in bytes (to prevent bombing) */
 // int max_filesize = 50000;
@@ -240,11 +240,11 @@ pub struct Config {
     pub nameserver_is_slow: Cell<bool>,
 
     /*
-    * You can define or not define TRACK_THOUGH_DOORS, depending on whether
-    * or not you want track to find paths which lead through closed or
-    * hidden doors. A setting of 'NO' means to not go through the doors
-    * while 'YES' will pass through doors to find the target.
-    */
+     * You can define or not define TRACK_THOUGH_DOORS, depending on whether
+     * or not you want track to find paths which lead through closed or
+     * hidden doors. A setting of 'NO' means to not go through the doors
+     * while 'YES' will pass through doors to find the target.
+     */
     pub track_through_doors: Cell<bool>,
 }
 

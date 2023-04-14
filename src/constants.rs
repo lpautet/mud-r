@@ -405,25 +405,25 @@ pub const DRINKNAMES: [&str; 17] = [
     "\n",
 ];
 
-// /* effect of DRINKS on hunger, thirst, and drunkenness -- see values.doc */
-// int drink_aff[][3] = {
-// {0, 1, 10},
-// {3, 2, 5},
-// {5, 2, 5},
-// {2, 2, 5},
-// {1, 2, 5},
-// {6, 1, 4},
-// {0, 1, 8},
-// {10, 0, 0},
-// {3, 3, 3},
-// {0, 4, -8},
-// {0, 3, 6},
-// {0, 1, 6},
-// {0, 1, 6},
-// {0, 2, -1},
-// {0, 1, -2},
-// {0, 0, 13}
-// };
+/* effect of DRINKS on hunger, thirst, and drunkenness -- see values.doc */
+pub const DRINK_AFF: [[i32; 3]; 16] = [
+    [0, 1, 10],
+    [3, 2, 5],
+    [5, 2, 5],
+    [2, 2, 5],
+    [1, 2, 5],
+    [6, 1, 4],
+    [0, 1, 8],
+    [10, 0, 0],
+    [3, 3, 3],
+    [0, 4, -8],
+    [0, 3, 6],
+    [0, 1, 6],
+    [0, 1, 6],
+    [0, 2, -1],
+    [0, 1, -2],
+    [0, 0, 13],
+];
 
 /* color of the various DRINKS */
 pub const COLOR_LIQUID: [&str; 17] = [

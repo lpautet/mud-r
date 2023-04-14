@@ -41,8 +41,7 @@ use crate::structs::{
     ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
 };
 use crate::{
-    _clrlevel, clr, send_to_char, DescriptorData, MainGlobals, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT,
-    TO_VICT,
+    _clrlevel, clr, send_to_char, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT,
 };
 
 pub const OFF: u8 = 0;
@@ -158,6 +157,7 @@ macro_rules! check_player_special {
         ($var)
     };
 }
+use crate::class::CLASS_ABBREVS;
 use crate::spells::SPELL_CHARM;
 pub use check_player_special;
 
@@ -724,18 +724,14 @@ macro_rules! spell_routines {
     };
 }
 
-#[macro_export]
-macro_rules! class_abbr {
-    ($ch:expr) => {
-        (if is_npc!($ch) {
+impl CharData {
+    pub fn class_abbr(&self) -> &'static str {
+        if self.is_npc() {
             "--"
         } else {
-            class_abbrevs[get_class($ch) as usize]
-        })
-    };
-}
-
-impl CharData {
+            CLASS_ABBREVS[self.get_class() as usize]
+        }
+    }
     pub fn is_magic_user(&self) -> bool {
         self.is_npc() && self.get_class() == CLASS_MAGIC_USER
     }
@@ -1309,7 +1305,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * mudlog -- log mud messages to a file & to online imm's syslogs
  * based on syslog by Fen Jul 3, 1992
  */
-impl MainGlobals {
+impl Game {
     pub(crate) fn mudlog(&self, _type: u8, level: i32, file: bool, msg: &str) {
         if msg == "" {
             return;

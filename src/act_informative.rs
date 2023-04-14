@@ -11,8 +11,9 @@
 use std::rc::Rc;
 
 use log::{error, info};
+use regex::Regex;
 
-use crate::class::{level_exp, title_female, title_male};
+use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
 use crate::config::NOPERSON;
 use crate::constants::{COLOR_LIQUID, DIRS, FULLNESS, MONTH_NAME, ROOM_BITS, WEAR_WHERE, WEEKDAYS};
 use crate::db::DB;
@@ -28,13 +29,15 @@ use crate::interpreter::{
 use crate::modify::page_string;
 use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
+use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     CharData, ExtraDescrData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON,
-    ITEM_FOUNTAIN, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, NOWHERE,
-    NUM_OF_DIRS, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF,
-    PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
-    PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL,
+    ITEM_FOUNTAIN, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, LVL_IMPL,
+    NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING,
+    PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE,
+    PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL,
+    PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL,
 };
 use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
 use crate::structs::{
@@ -44,8 +47,7 @@ use crate::structs::{
 };
 use crate::util::{age, rand_number, real_time_passed, sprintbit, sprinttype, time_now};
 use crate::{
-    _clrlevel, an, clr, send_to_char, MainGlobals, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV,
-    TO_NOTVICT,
+    _clrlevel, an, clr, send_to_char, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT,
 };
 use crate::{CCNRM, TO_VICT};
 
@@ -454,7 +456,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_exits(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_exits(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.aff_flagged(AFF_BLIND) {
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
         return;
@@ -761,22 +763,21 @@ impl DB {
 
 pub fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<String> {
     for i in list {
-        if isname(word, i.keyword.as_str()) != 0 {
+        if isname(word, i.keyword.as_str()) {
             return Some(i.description.clone());
         }
     }
     None
 }
 
-//
-// /*
-//  * Given the argument "look at <target>", figure out what object or char
-//  * matches the target.  First, see if there is another char in the room
-//  * with the name.  Then check local objs for exdescs.
-//  *
-//  * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
-//  * suggested fix to this problem.
-//  */
+/*
+ * Given the argument "look at <target>", figure out what object or char
+ * matches the target.  First, see if there is another char in the room
+ * with the name.  Then check local objs for exdescs.
+ *
+ * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
+ * suggested fix to this problem.
+ */
 impl DB {
     pub fn look_at_target(&self, ch: &Rc<CharData>, arg: &str) {
         // int bits, found = FALSE, j, fnum, i = 0;
@@ -916,7 +917,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_look(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_look(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.desc.borrow().is_none() {
         return;
     }
@@ -968,37 +969,46 @@ pub fn do_look(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-// ACMD(do_examine)
-// {
-// struct char_data *tmp_char;
-// struct obj_data *tmp_object;
-// char tempsave[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
-//
-// one_argument(argument, arg);
-//
-// if (!*arg) {
-// send_to_char(ch, "Examine what?\r\n");
-// return;
-// }
-//
-// /* look_at_target() eats the number. */
-// look_at_target(ch, strcpy(tempsave, arg));	/* strcpy: OK */
-//
-// generic_find(arg, FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM |
-// FIND_OBJ_EQUIP, ch, &tmp_char, &tmp_object);
-//
-// if (tmp_object) {
-// if ((GET_OBJ_TYPE(tmp_object) == ITEM_DRINKCON) ||
-// (GET_OBJ_TYPE(tmp_object) == ITEM_FOUNTAIN) ||
-// (GET_OBJ_TYPE(tmp_object) == ITEM_CONTAINER)) {
-// send_to_char(ch, "When you look inside, you see:\r\n");
-// look_in_obj(ch, arg);
-// }
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_examine(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // struct char_data *tmp_char;
+    // struct obj_data *tmp_object;
+    // char tempsave[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
+
+    let mut arg = String::new();
+    one_argument(argument, &mut arg);
+
+    if arg.is_empty() {
+        send_to_char(ch, "Examine what?\r\n");
+        return;
+    }
+
+    /* look_at_target() eats the number. */
+    game.db.look_at_target(ch, &arg);
+    let mut tmp_char = None;
+    let mut tmp_object = None;
+    game.db.generic_find(
+        &arg,
+        (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM | FIND_OBJ_EQUIP) as i64,
+        ch,
+        &mut tmp_char,
+        &mut tmp_object,
+    );
+
+    if tmp_object.is_some() {
+        let tmp_object = tmp_object.unwrap();
+        if tmp_object.get_obj_type() == ITEM_DRINKCON
+            || tmp_object.get_obj_type() == ITEM_FOUNTAIN
+            || tmp_object.get_obj_type() == ITEM_CONTAINER
+        {
+            send_to_char(ch, "When you look inside, you see:\r\n");
+            game.db.look_in_obj(ch, &arg);
+        }
+    }
+}
 
 #[allow(unused_variables)]
-pub fn do_gold(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gold(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_gold() == 0 {
         send_to_char(ch, "You're broke!\r\n");
     } else if ch.get_gold() == 1 {
@@ -1012,7 +1022,7 @@ pub fn do_gold(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 }
 
 #[allow(unused_variables)]
-pub fn do_score(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_score(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -1189,26 +1199,14 @@ pub fn do_score(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usiz
 }
 
 #[allow(unused_variables)]
-pub fn do_inventory(
-    game: &MainGlobals,
-    ch: &Rc<CharData>,
-    argument: &str,
-    cmd: usize,
-    subcmd: i32,
-) {
+pub fn do_inventory(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     send_to_char(ch, "You are carrying:\r\n");
     game.db
         .list_obj_to_char(ch.carrying.borrow().as_ref(), ch, SHOW_OBJ_SHORT, true);
 }
 
 #[allow(unused_variables)]
-pub fn do_equipment(
-    game: &MainGlobals,
-    ch: &Rc<CharData>,
-    argument: &str,
-    cmd: usize,
-    subcmd: i32,
-) {
+pub fn do_equipment(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut found = false;
     send_to_char(ch, "You are using:\r\n");
     for i in 0..NUM_WEARS {
@@ -1230,7 +1228,7 @@ pub fn do_equipment(
 }
 
 #[allow(unused_variables)]
-pub fn do_time(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_time(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /* day in [1..35] */
     let day = game.db.time_info.borrow().day + 1;
 
@@ -1295,7 +1293,7 @@ pub fn do_time(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 }
 
 #[allow(unused_variables)]
-pub fn do_weather(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_weather(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     const SKY_LOOK: [&str; 4] = [
         "cloudless",
         "cloudy",
@@ -1336,7 +1334,7 @@ pub fn do_weather(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: us
 }
 
 #[allow(unused_variables)]
-pub fn do_help(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_help(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // int chk, bot, top, mid, minlen;
 
     if ch.desc.borrow().is_none() {
@@ -1384,153 +1382,237 @@ pub fn do_help(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-// #define WHO_FORMAT \
-// "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n"
-//
-// /* FIXME: This whole thing just needs rewritten. */
-// ACMD(do_who)
-// {
-// struct descriptor_data *d;
-// struct char_data *tch;
-// char name_search[MAX_INPUT_LENGTH], buf[MAX_INPUT_LENGTH];
-// char mode;
-// int low = 0, high = LVL_IMPL, localwho = 0, questwho = 0;
-// int showclass = 0, short_list = 0, outlaws = 0, num_can_see = 0;
-// int who_room = 0;
-//
-// skip_spaces(&argument);
-// strcpy(buf, argument);	/* strcpy: OK (sizeof: argument == buf) */
-// name_search[0] = '\0';
-//
-// while (*buf) {
-// char arg[MAX_INPUT_LENGTH], buf1[MAX_INPUT_LENGTH];
-//
-// half_chop(buf, arg, buf1);
-// if (isdigit(*arg)) {
-// sscanf(arg, "%d-%d", &low, &high);
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// } else if (*arg == '-') {
-// mode = *(arg + 1);       /* just in case; we destroy arg in the switch */
-// switch (mode) {
-// case 'o':
-// case 'k':
-// outlaws = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'z':
-// localwho = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 's':
-// short_list = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'q':
-// questwho = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'l':
-// half_chop(buf1, arg, buf);
-// sscanf(arg, "%d-%d", &low, &high);
-// break;
-// case 'n':
-// half_chop(buf1, name_search, buf);
-// break;
-// case 'r':
-// who_room = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'c':
-// half_chop(buf1, arg, buf);
-// showclass = find_class_bitvector(arg);
-// break;
-// default:
-// send_to_char(ch, "%s", WHO_FORMAT);
-// return;
-// }				/* end of switch */
-//
-// } else {			/* endif */
-// send_to_char(ch, "%s", WHO_FORMAT);
-// return;
-// }
-// }				/* end while (parser) */
-//
-// send_to_char(ch, "Players\r\n-------\r\n");
-//
-// for (d = descriptor_list; d; d = d.next) {
-// if (STATE(d) != CON_PLAYING)
-// continue;
-//
-// if (d.original)
-// tch = d.original;
-// else if (!(tch = d.character))
-// continue;
-//
-// if (*name_search && str_cmp(GET_NAME(tch), name_search) &&
-// !strstr(GET_TITLE(tch), name_search))
-// continue;
-// if (!CAN_SEE(ch, tch) || GET_LEVEL(tch) < low || GET_LEVEL(tch) > high)
-// continue;
-// if (outlaws && !PLR_FLAGGED(tch, PLR_KILLER) &&
-// !PLR_FLAGGED(tch, PLR_THIEF))
-// continue;
-// if (questwho && !PRF_FLAGGED(tch, PRF_QUEST))
-// continue;
-// if (localwho && world[IN_ROOM(ch)].zone != world[IN_ROOM(tch)].zone)
-// continue;
-// if (who_room && (IN_ROOM(tch) != IN_ROOM(ch)))
-// continue;
-// if (showclass && !(showclass & (1 << GET_CLASS(tch))))
-// continue;
-// if (short_list) {
-// send_to_char(ch, "%s[%2d %s] %-12.12s%s%s",
-// (GET_LEVEL(tch) >= LVL_IMMORT ? CCYEL(ch, C_SPR) : ""),
-// GET_LEVEL(tch), CLASS_ABBR(tch), GET_NAME(tch),
-// (GET_LEVEL(tch) >= LVL_IMMORT ? CCNRM(ch, C_SPR) : ""),
-// ((!(++num_can_see % 4)) ? "\r\n" : ""));
-// } else {
-// num_can_see++;
-// send_to_char(ch, "%s[%2d %s] %s %s",
-// (GET_LEVEL(tch) >= LVL_IMMORT ? CCYEL(ch, C_SPR) : ""),
-// GET_LEVEL(tch), CLASS_ABBR(tch), GET_NAME(tch),
-// GET_TITLE(tch));
-//
-// if (GET_INVIS_LEV(tch))
-// send_to_char(ch, " (i%d)", GET_INVIS_LEV(tch));
-// else if (AFF_FLAGGED(tch, AFF_INVISIBLE))
-// send_to_char(ch, " (invis)");
-//
-// if (PLR_FLAGGED(tch, PLR_MAILING))
-// send_to_char(ch, " (mailing)");
-// else if (PLR_FLAGGED(tch, PLR_WRITING))
-// send_to_char(ch, " (writing)");
-//
-// if (PRF_FLAGGED(tch, PRF_DEAF))
-// send_to_char(ch, " (deaf)");
-// if (PRF_FLAGGED(tch, PRF_NOTELL))
-// send_to_char(ch, " (notell)");
-// if (PRF_FLAGGED(tch, PRF_QUEST))
-// send_to_char(ch, " (quest)");
-// if (PLR_FLAGGED(tch, PLR_THIEF))
-// send_to_char(ch, " (THIEF)");
-// if (PLR_FLAGGED(tch, PLR_KILLER))
-// send_to_char(ch, " (KILLER)");
-// if (GET_LEVEL(tch) >= LVL_IMMORT)
-// send_to_char(ch, CCNRM(ch, C_SPR));
-// send_to_char(ch, "\r\n");
-// }				/* endif shortlist */
-// }				/* end of for */
-// if (short_list && (num_can_see % 4))
-// send_to_char(ch, "\r\n");
-// if (num_can_see == 0)
-// send_to_char(ch, "\r\nNobody at all!\r\n");
-// else if (num_can_see == 1)
-// send_to_char(ch, "\r\nOne lonely character displayed.\r\n");
-// else
-// send_to_char(ch, "\r\n%d characters displayed.\r\n", num_can_see);
-// }
-//
-//
+const WHO_FORMAT: &str =
+    "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n";
+
+/* FIXME: This whole thing just needs rewritten. */
+#[allow(unused_variables)]
+pub fn do_who(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let argument = argument.trim_start();
+    let mut buf = argument.to_string();
+    let name_search = String::new();
+    let mut low = 0 as i16;
+    let mut high = LVL_IMPL;
+    let mut outlaws = false;
+    let mut localwho = false;
+    let mut short_list = false;
+    let mut questwho = false;
+    let mut name_search = String::new();
+    let mut who_room = false;
+    let mut showclass = 0;
+
+    while !buf.is_empty() {
+        let mut arg = String::new();
+        let mut buf1 = String::new();
+
+        half_chop(&mut buf, &mut arg, &mut buf1);
+        if arg.chars().next().unwrap().is_digit(10) {
+            let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
+            let f = regex.captures(&arg);
+            if f.is_some() {
+                let f = f.unwrap();
+                low = f[1].parse::<i16>().unwrap();
+                high = f[2].parse::<i16>().unwrap();
+            }
+        } else if arg.starts_with('-') {
+            arg.remove(0);
+            let mode = arg.chars().next().unwrap(); /* just in case; we destroy arg in the switch */
+            match mode {
+                'o' | 'k' => {
+                    outlaws = true;
+                    buf.push_str(&buf1);
+                }
+                'z' => {
+                    localwho = true;
+                    buf.push_str(&buf1);
+                }
+                's' => {
+                    short_list = true;
+                    buf.push_str(&buf1);
+                }
+                'q' => {
+                    questwho = true;
+                    buf.push_str(&buf1);
+                }
+                'l' => {
+                    half_chop(&mut buf1, &mut arg, &mut buf);
+                    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
+                    let f = regex.captures(&arg);
+                    if f.is_some() {
+                        let f = f.unwrap();
+                        low = f[1].parse::<i16>().unwrap();
+                        high = f[2].parse::<i16>().unwrap();
+                    }
+                }
+                'n' => {
+                    half_chop(&mut buf1, &mut name_search, &mut buf);
+                }
+                'r' => {
+                    who_room = true;
+                    buf.push_str(&buf1);
+                }
+                'c' => {
+                    half_chop(&mut buf1, &mut arg, &mut buf);
+                    showclass = find_class_bitvector(&arg);
+                }
+                _ => {
+                    send_to_char(ch, WHO_FORMAT);
+                    return;
+                }
+            }
+        } else {
+            /* endif */
+            send_to_char(ch, WHO_FORMAT);
+            return;
+        }
+    } /* end while (parser) */
+
+    send_to_char(ch, "Players\r\n-------\r\n");
+    let db = &game.db;
+    let mut num_can_see = 0;
+
+    for d in game.descriptor_list.borrow().iter() {
+        if d.state() != ConPlaying {
+            continue;
+        }
+
+        let tch;
+        let character;
+        if d.original.borrow().is_some() {
+            character = d.original.borrow();
+            tch = character.as_ref();
+        } else if {
+            character = d.character.borrow();
+            tch = character.as_ref();
+            tch.is_none()
+        } {
+            continue;
+        }
+        let tch = tch.unwrap();
+
+        if !name_search.is_empty()
+            && tch.get_name().as_ref() != &name_search
+            && !tch.get_title().contains(&name_search)
+        {
+            continue;
+        }
+        if !db.can_see(ch, tch) || tch.get_level() < low as u8 || tch.get_level() > high as u8 {
+            continue;
+        }
+        if outlaws && !tch.plr_flagged(PLR_KILLER) && !tch.plr_flagged(PLR_THIEF) {
+            continue;
+        }
+        if questwho && !tch.prf_flagged(PRF_QUEST) {
+            continue;
+        }
+        if localwho
+            && db.world.borrow()[ch.in_room() as usize].zone
+                != db.world.borrow()[tch.in_room() as usize].zone
+        {
+            continue;
+        }
+        if who_room && tch.in_room() != ch.in_room() {
+            continue;
+        }
+        if showclass != 0 && (showclass & (1 << tch.get_class())) == 0 {
+            continue;
+        }
+        if short_list {
+            send_to_char(
+                ch,
+                format!(
+                    "{}[{:2} {}] {:12}{}{}",
+                    if tch.get_level() >= LVL_IMMORT as u8 {
+                        CCYEL!(ch, C_SPR)
+                    } else {
+                        ""
+                    },
+                    tch.get_level(),
+                    tch.class_abbr(),
+                    tch.get_name(),
+                    if tch.get_level() >= LVL_IMMORT as u8 {
+                        CCNRM!(ch, C_SPR)
+                    } else {
+                        ""
+                    },
+                    if {
+                        num_can_see += 1;
+                        num_can_see % 4 == 0
+                    } {
+                        "\r\n"
+                    } else {
+                        ""
+                    }
+                )
+                .as_str(),
+            );
+        } else {
+            num_can_see += 1;
+            send_to_char(
+                ch,
+                format!(
+                    "{}[{:2} {}] {} {}",
+                    if tch.get_level() >= LVL_IMMORT as u8 {
+                        CCYEL!(ch, C_SPR)
+                    } else {
+                        ""
+                    },
+                    tch.get_level(),
+                    tch.class_abbr(),
+                    tch.get_name(),
+                    tch.get_title()
+                )
+                .as_str(),
+            );
+
+            if tch.get_invis_lev() != 0 {
+                send_to_char(ch, format!(" (i{})", tch.get_invis_lev()).as_str());
+            } else if tch.aff_flagged(AFF_INVISIBLE) {
+                send_to_char(ch, " (invis)");
+            }
+
+            if tch.plr_flagged(PLR_MAILING) {
+                send_to_char(ch, " (mailing)");
+            } else if tch.plr_flagged(PLR_WRITING) {
+                send_to_char(ch, " (writing)");
+            }
+
+            if tch.plr_flagged(PRF_DEAF) {
+                send_to_char(ch, " (deaf)");
+            }
+            if tch.prf_flagged(PRF_NOTELL) {
+                send_to_char(ch, " (notell)");
+            }
+            if tch.prf_flagged(PRF_QUEST) {
+                send_to_char(ch, " (quest)");
+            }
+            if tch.plr_flagged(PLR_THIEF) {
+                send_to_char(ch, " (THIEF)");
+            }
+            if tch.plr_flagged(PLR_KILLER) {
+                send_to_char(ch, " (KILLER)");
+            }
+            if tch.get_level() >= LVL_IMMORT as u8 {
+                send_to_char(ch, CCNRM!(ch, C_SPR));
+            }
+            send_to_char(ch, "\r\n");
+        } /* endif shortlist */
+    } /* end of for */
+    if short_list && (num_can_see % 4) != 0 {
+        send_to_char(ch, "\r\n");
+    }
+    if num_can_see == 0 {
+        send_to_char(ch, "\r\nNobody at all!\r\n");
+    } else if num_can_see == 1 {
+        send_to_char(ch, "\r\nOne lonely character displayed.\r\n");
+    } else {
+        send_to_char(
+            ch,
+            format!("\r\n{} characters displayed.\r\n", num_can_see).as_str(),
+        );
+    }
+}
+
 // #define USERS_FORMAT \
 // "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n"
 //
@@ -1837,7 +1919,7 @@ pub fn do_help(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // }
 
 #[allow(unused_variables)]
-pub fn do_levels(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_levels(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         send_to_char(ch, "You ain't nothin' but a hound-dog.\r\n");
         return;
@@ -1879,7 +1961,7 @@ pub fn do_levels(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usi
 }
 
 #[allow(unused_variables)]
-pub fn do_consider(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_consider(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
@@ -1925,7 +2007,7 @@ pub fn do_consider(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 }
 
 #[allow(unused_variables)]
-pub fn do_diagnose(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_diagnose(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
@@ -1952,7 +2034,7 @@ pub fn do_diagnose(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: u
 const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
 #[allow(unused_variables)]
-pub fn do_color(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_color(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     if ch.is_npc() {
         return;
@@ -2021,7 +2103,7 @@ macro_rules! yesno {
 }
 
 #[allow(unused_variables)]
-pub fn do_toggle(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_toggle(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // char buf2[4];
     let mut buf2 = String::new();
     if ch.is_npc() {
@@ -2091,7 +2173,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_commands(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_commands(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // int no, i, cmd_num;
     // int wizhelp = 0, socials = 0;
     // struct char_data *vict;

@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: comm.c                                        Part of CircleMUD *
+*   File: main.rs                                        Part of CircleMUD *
 *  Usage: Communication, socket handling, main(), central game loop       *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 use std::any::Any;
 use std::borrow::Borrow;
@@ -35,7 +36,7 @@ use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
+use crate::util::{clone_vec, hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
 
 mod act_informative;
 mod act_item;
@@ -43,6 +44,7 @@ mod act_movement;
 mod act_offensive;
 mod act_other;
 mod act_social;
+mod act_wizard;
 mod ban;
 mod class;
 mod config;
@@ -109,7 +111,6 @@ pub struct DescriptorData {
     inbuf: RefCell<String>,
     /* buffer for raw input		*/
     // char	last_input[MAX_INPUT_LENGTH]; /* the last input			*/
-    // char small_outbuf[SMALL_BUFSIZE];  /* standard output buffer		*/
     history: RefCell<Vec<String>>,
     /* History of commands, for ! mostly.	*/
     // int	history_pos;		/* Circular array position.		*/
@@ -124,26 +125,21 @@ pub struct DescriptorData {
     /* original char if switched		*/
     // struct descriptor_data *snooping; /* Who is this char snooping	*/
     // struct descriptor_data *snoop_by; /* And who is snooping this char	*/
-    // struct descriptor_data *next; /* link to next descriptor		*/
 }
 
-/* local globals */
-pub struct MainGlobals {
+pub struct Game {
     db: DB,
     mother_desc: Option<RefCell<TcpListener>>,
     descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
     last_desc: Cell<usize>,
-    // struct txt_block *bufpool = 0;	/* pool of large output buffers */
-    // int buf_largecount = 0;		/* # of large buffers which exist */
-    // int buf_overflows = 0;		/* # of overflows of output */
-    // int buf_switches = 0;		/* # of switches from small to large buf */
     circle_shutdown: Cell<bool>,
     /* clean shutdown */
     circle_reboot: bool,
     /* reboot the game after a shutdown */
     no_specials: bool,
     /* Suppress ass. of special routines */
-    // int max_players = 0;		/* max descriptors available */
+    max_players: i32,
+    /* max descriptors available */
     tics: i32,
     /* for extern checkpointing */
     // struct timeval null_time;	/* zero-valued time structure */
@@ -162,10 +158,10 @@ pub struct MainGlobals {
 fn main() -> ExitCode {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let dir = DFLT_DIR;
-    let port = DFLT_PORT;
+    let mut dir = DFLT_DIR.to_string();
+    let mut port = DFLT_PORT;
 
-    let mut game = MainGlobals {
+    let mut game = Game {
         descriptor_list: RefCell::new(Vec::new()),
         last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
@@ -179,86 +175,115 @@ fn main() -> ExitCode {
             nameserver_is_slow: Cell::new(false),
             track_through_doors: Cell::new(true),
         },
+        max_players: 0,
     };
+    let mut logname: Option<&str> = None;
     let mut scheck: bool = false; /* for syntax checking mode */
-    // ush_int port;
-    // int pos = 1;
 
-    // dir = DFLT_DIR;
-    //
-    // while ((pos < argc) && (*(argv[pos]) == '-')) {
-    // switch (*(argv[pos] + 1)) {
-    // case 'o':
-    // if (*(argv[pos] + 2))
-    // LOGNAME = argv[pos] + 2;
-    // else if (++pos < argc)
-    // LOGNAME = argv[pos];
-    // else {
-    // puts("SYSERR: File name to log to expected after option -o.");
-    // exit(1);
-    // }
-    // break;
-    // case 'd':
-    // if (*(argv[pos] + 2))
-    // dir = argv[pos] + 2;
-    // else if (++pos < argc)
-    // dir = argv[pos];
-    // else {
-    // puts("SYSERR: Directory arg expected after option -d.");
-    // exit(1);
-    // }
-    // break;
-    // case 'm':
-    // mini_mud = 1;
-    // no_rent_check = 1;
-    // puts("Running in minimized mode & with no rent check.");
-    // break;
-    // case 'c':
-    // scheck = 1;
-    // puts("Syntax check mode enabled.");
-    // break;
-    // case 'q':
-    // no_rent_check = 1;
-    // puts("Quick boot mode -- rent check supressed.");
-    // break;
-    // case 'r':
-    // circle_restrict = 1;
-    // puts("Restricting game -- no new players allowed.");
-    // break;
-    // case 's':
-    // no_specials = 1;
-    // puts("Suppressing assignment of special routines.");
-    // break;
-    // case 'h':
-    // /* From: Anil Mahajan <amahajan@proxicom.com> */
-    // printf("Usage: %s [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n"
-    // "  -c             Enable syntax check mode.\n"
-    // "  -d <directory> Specify library directory (defaults to 'lib').\n"
-    // "  -h             Print this command line argument help.\n"
-    // "  -m             Start in mini-MUD mode.\n"
-    // "  -o <file>      Write log to <file> instead of stderr.\n"
-    // "  -q             Quick boot (doesn't scan rent for object limits)\n"
-    // "  -r             Restrict MUD -- no new players allowed.\n"
-    // "  -s             Suppress special procedure assignments.\n",
-    // argv[0]
-    // );
-    // exit(0);
-    // default:
-    // printf("SYSERR: Unknown option -%c in argument string.\n", *(argv[pos] + 1));
-    // break;
-    // }
-    // pos++;
-    // }
-    //
-    // if (pos < argc) {
-    // if (!isdigit(*argv[pos])) {
-    // printf("Usage: %s [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n", argv[0]);
-    // exit(1);
-    // } else if ((port = atoi(argv[pos])) <= 1024) {
-    // printf("SYSERR: Illegal port number %d.\n", port);
-    // exit(1);
-    // }
-    // }
+    let mut pos = 1;
+    let args: Vec<String> = env::args().collect();
+    let mut arg;
+    loop {
+        if pos >= args.len() {
+            break;
+        }
+        arg = args[pos].clone();
+        if !arg.starts_with('-') {
+            break;
+        }
+
+        arg.remove(0);
+        match arg.chars().next().unwrap() {
+            'o' => {
+                arg.remove(0);
+                if arg.len() != 0 {
+                    logname = Some(&arg.clone());
+                } else if {
+                    pos += 1;
+                    pos < args.len()
+                } {
+                    logname = Some(&args[pos]);
+                } else {
+                    error!("SYSERR: File name to log to expected after option -o.");
+                    process::exit(1);
+                }
+            }
+            'd' => {
+                arg.remove(0);
+                if arg.len() != 0 {
+                    dir = arg.clone();
+                } else if {
+                    pos += 1;
+                    pos < args.len()
+                } {
+                    dir = args[pos].clone();
+                } else {
+                    error!("SYSERR: Directory arg expected after option -d.");
+                    process::exit(1);
+                }
+            }
+            'm' => {
+                game.db.mini_mud = true;
+                game.db.no_rent_check = true;
+                info!("Running in minimized mode & with no rent check.");
+            }
+            'c' => {
+                scheck = true;
+                info!("Syntax check mode enabled.");
+            }
+            'q' => {
+                game.db.no_rent_check = true;
+                info!("Quick boot mode -- rent check supressed.");
+            }
+            'r' => {
+                game.db.circle_restrict = 1;
+                info!("Restricting game -- no new players allowed.");
+            }
+            's' => {
+                game.db.no_specials = true;
+                info!("Suppressing assignment of special routines.");
+            }
+            'h' => {
+                /* From: Anil Mahajan <amahajan@proxicom.com> */
+                println!(
+                    "Usage: {} [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n\
+                  -c             Enable syntax check mode.\n\
+                  -d <directory> Specify library directory (defaults to 'lib').\n\
+                  -h             Print this command line argument help.\n\
+                  -m             Start in mini-MUD mode.\n\
+                  -o <file>      Write log to <file> instead of stderr.\n\
+                  -q             Quick boot (doesn't scan rent for object limits)\n\
+                  -r             Restrict MUD -- no new players allowed.\n\
+                  -s             Suppress special procedure assignments.\n",
+                    args[0]
+                );
+                process::exit(0);
+            }
+            _ => {
+                eprint!("SYSERR: Unknown option -{} in argument string.\n", arg);
+                break;
+            }
+        }
+        pos += 1;
+    }
+
+    if pos < args.len() {
+        if !args[pos].chars().next().unwrap().is_digit(10) {
+            println!(
+                "Usage: {} [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n",
+                args[0]
+            );
+            process::exit(1);
+        }
+        let r = args[pos].parse::<u16>();
+        if r.is_err() || {
+            port = r.unwrap();
+            port <= 1024
+        } {
+            println!("SYSERR: Illegal port number {}.\n", port);
+            process::exit(1);
+        }
+    }
 
     /* All arguments have been parsed, try to open log file. */
     // setup_log(LOGNAME);
@@ -269,7 +294,7 @@ fn main() -> ExitCode {
      */
     info!("{}", CIRCLEMUD_VERSION);
 
-    env::set_current_dir(Path::new(dir)).unwrap_or_else(|error| {
+    env::set_current_dir(Path::new(&dir)).unwrap_or_else(|error| {
         eprint!(
             "SYSERR: Fatal error changing to data directory {}/{}: {}",
             env::current_dir().unwrap().display(),
@@ -310,17 +335,16 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-impl MainGlobals {
+impl Game {
     /* Init sockets, run game, and cleanup sockets */
     fn init_game(&mut self, _port: u16) {
         /* We don't want to restart if we crash before we get up. */
         util::touch(Path::new(KILLSCRIPT)).expect("Cannot create KILLSCRIPT path");
 
-        // log("Finding player limit.");
-        // max_players = get_max_players();
+        info!("Finding player limit.");
+        self.max_players = get_max_players();
 
         info!("Opening mother connection.");
-
         self.db = DB::boot_db(self);
 
         // info!("Signal trapping.");
@@ -336,8 +360,7 @@ impl MainGlobals {
         //Crash_save_all();
 
         info!("Closing all sockets.");
-        self.descriptor_list
-            .borrow()
+        clone_vec(&self.descriptor_list)
             .iter()
             .for_each(|d| self.close_socket(d));
         //
@@ -418,88 +441,85 @@ fn init_socket(port: u16) -> TcpListener {
     // return (s);
 }
 
-// int get_max_players(void)
-// {
-// # ifndef CIRCLE_UNIX
-// return (max_playing);
-// # else
-//
-// int max_descs = 0;
-// const char * method;
-//
-// /*
-//  * First, we'll try using getrlimit/setrlimit.  This will probably work
-//  * on most systems.  HAS_RLIMIT is defined in sysdep.h.
-//  */
-// # ifdef HAS_RLIMIT
-// {
-// struct rlimit limit;
-//
-// /* find the limit of file descs */
-// method = "rlimit";
-// if (getrlimit(RLIMIT_NOFILE, & limit) < 0) {
-// perror("SYSERR: calling getrlimit");
-// exit(1);
-// }
-//
-// /* set the current to the maximum */
-// limit.rlim_cur = limit.rlim_max;
-// if (setrlimit(RLIMIT_NOFILE, & limit) < 0) {
-// perror("SYSERR: calling setrlimit");
-// exit(1);
-// }
-// # ifdef RLIM_INFINITY
-// if (limit.rlim_max == RLIM_INFINITY)
-// max_descs = max_playing + NUM_RESERVED_DESCS;
-// else
-// max_descs = MIN(max_playing + NUM_RESERVED_DESCS, limit.rlim_max);
-// # else
-// max_descs = MIN(max_playing + NUM_RESERVED_DESCS, limit.rlim_max);
-// # endif
-// }
-//
-// # elif defined (OPEN_MAX) | | defined(FOPEN_MAX)
-// # if ! defined(OPEN_MAX)
-// #define OPEN_MAX FOPEN_MAX
-// # endif
-// method = "OPEN_MAX";
-// max_descs = OPEN_MAX; /* Uh oh.. rlimit didn't work, but we have
-// 				 * OPEN_MAX */
-// # elif defined (_SC_OPEN_MAX)
-// /*
-//  * Okay, you don't have getrlimit() and you don't have OPEN_MAX.  Time to
-//  * try the POSIX sysconf() function.  (See Stevens' _Advanced Programming
-//  * in the UNIX Environment_).
-//  */
-// method = "POSIX sysconf";
-// errno = 0;
-// if ((max_descs = sysconf(_SC_OPEN_MAX)) < 0) {
-// if (errno == 0)
-// max_descs = max_playing + NUM_RESERVED_DESCS;
-// else {
-// perror("SYSERR: Error calling sysconf");
-// exit(1);
-// }
-// }
-// # else
-// /* if everything has failed, we'll just take a guess */
-// method = "random guess";
-// max_descs = max_playing + NUM_RESERVED_DESCS;
-// # endif
-//
-// /* now calculate max _players_ based on max descs */
-// max_descs = MIN(max_playing, max_descs - NUM_RESERVED_DESCS);
-//
-// if (max_descs < = 0) {
-// log("SYSERR: Non-positive max player limit!  (Set at %d using %s).",
-// max_descs, method);
-// exit(1);
-// }
-// log("   Setting player limit to %d using %s.", max_descs, method);
-// return (max_descs);
-// # endif /* CIRCLE_UNIX */
-// }
-//
+fn get_max_players() -> i32 {
+    return MAX_PLAYING;
+
+    //
+    // int max_descs = 0;
+    // const char * method;
+    //
+    // /*
+    //  * First, we'll try using getrlimit/setrlimit.  This will probably work
+    //  * on most systems.  HAS_RLIMIT is defined in sysdep.h.
+    //  */
+    // # ifdef HAS_RLIMIT
+    // {
+    // struct rlimit limit;
+    //
+    // /* find the limit of file descs */
+    // method = "rlimit";
+    // if (getrlimit(RLIMIT_NOFILE, & limit) < 0) {
+    // perror("SYSERR: calling getrlimit");
+    // exit(1);
+    // }
+    //
+    // /* set the current to the maximum */
+    // limit.rlim_cur = limit.rlim_max;
+    // if (setrlimit(RLIMIT_NOFILE, & limit) < 0) {
+    // perror("SYSERR: calling setrlimit");
+    // exit(1);
+    // }
+    // # ifdef RLIM_INFINITY
+    // if (limit.rlim_max == RLIM_INFINITY)
+    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
+    // else
+    // max_descs = MIN(MAX_PLAYING + NUM_RESERVED_DESCS, limit.rlim_max);
+    // # else
+    // max_descs = MIN(MAX_PLAYING + NUM_RESERVED_DESCS, limit.rlim_max);
+    // # endif
+    // }
+    //
+    // # elif defined (OPEN_MAX) | | defined(FOPEN_MAX)
+    // # if ! defined(OPEN_MAX)
+    // #define OPEN_MAX FOPEN_MAX
+    // # endif
+    // method = "OPEN_MAX";
+    // max_descs = OPEN_MAX; /* Uh oh.. rlimit didn't work, but we have
+    // 				 * OPEN_MAX */
+    // # elif defined (_SC_OPEN_MAX)
+    // /*
+    //  * Okay, you don't have getrlimit() and you don't have OPEN_MAX.  Time to
+    //  * try the POSIX sysconf() function.  (See Stevens' _Advanced Programming
+    //  * in the UNIX Environment_).
+    //  */
+    // method = "POSIX sysconf";
+    // errno = 0;
+    // if ((max_descs = sysconf(_SC_OPEN_MAX)) < 0) {
+    // if (errno == 0)
+    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
+    // else {
+    // perror("SYSERR: Error calling sysconf");
+    // exit(1);
+    // }
+    // }
+    // # else
+    // /* if everything has failed, we'll just take a guess */
+    // method = "random guess";
+    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
+    // # endif
+    //
+    // /* now calculate max _players_ based on max descs */
+    // max_descs = MIN(MAX_PLAYING, max_descs - NUM_RESERVED_DESCS);
+    //
+    // if (max_descs < = 0) {
+    // log("SYSERR: Non-positive max player limit!  (Set at %d using %s).",
+    // max_descs, method);
+    // exit(1);
+    // }
+    // log("   Setting player limit to %d using %s.", max_descs, method);
+    // return (max_descs);
+    // # endif /* CIRCLE_UNIX */
+}
 
 /*
  * game_loop contains the main loop which drives the entire MUD.  It
@@ -508,7 +528,7 @@ fn init_socket(port: u16) -> TcpListener {
  * output and sending it out to players, and calling "heartbeat" functions
  * such as mobile_activity().
  */
-impl MainGlobals {
+impl Game {
     fn game_loop(&self) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
@@ -555,23 +575,6 @@ impl MainGlobals {
                 // gettimeofday(&last_time, ( struct timezone
                 // * ) 0);
             }
-            /* Set up the input, output, and exception sets for select(). */
-            // FD_ZERO(&input_set);
-            // FD_ZERO(&output_set);
-            // FD_ZERO(&exc_set);
-            // FD_SET(mother_desc, &input_set);
-            //
-            // maxdesc = mother_desc;
-            // for (d = descriptor_list; d; d = d -> next) {
-            //     # ifndef
-            //     CIRCLE_WINDOWS
-            //     if (d -> descriptor > maxdesc)
-            //     maxdesc = d -> descriptor;
-            //     # endif
-            //     FD_SET(d -> descriptor, &input_set);
-            //     FD_SET(d -> descriptor, &output_set);
-            //     FD_SET(d -> descriptor, &exc_set);
-            // }
 
             /*
              * At this point, we have completed all input, output and heartbeat
@@ -609,9 +612,9 @@ impl MainGlobals {
             /* If there are new connections waiting, accept them. */
             let accept_result = self.mother_desc.as_ref().unwrap().borrow().accept();
             match accept_result {
-                Ok((socket, addr)) => {
+                Ok((stream, addr)) => {
                     info!("New connection {}.  Waking up.", addr);
-                    self.new_descriptor(socket, addr);
+                    self.new_descriptor(stream, addr);
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::WouldBlock => (),
@@ -620,8 +623,8 @@ impl MainGlobals {
             }
 
             /* Process descriptors with input pending */
+            let mut buf = [0 as u8];
             for d in self.descriptor_list.borrow().iter() {
-                let mut buf = [0 as u8];
                 let res = RefCell::borrow(&d.stream).peek(&mut buf);
                 if res.is_ok() && res.unwrap() != 0 {
                     process_input(d.as_ref());
@@ -649,7 +652,7 @@ impl MainGlobals {
                     }
                 }
 
-                if !get_from_q(&mut RefCell::borrow_mut(&d.input), &mut comm, &mut aliased) {
+                if !get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased) {
                     continue;
                 }
 
@@ -695,27 +698,23 @@ impl MainGlobals {
                     // d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
                     // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
                     get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
-                    command_interpreter(
-                        self,
-                        d.character.borrow().as_ref().unwrap(),
-                        comm.as_str(),
-                    );
                     /* Send it to interpreter */
+                    command_interpreter(self, d.character.borrow().as_ref().unwrap(), &comm);
                 }
             }
 
             /* Send queued output out to the operating system (ultimately to user). */
-            for d in &*self.descriptor_list.borrow() {
-                if !RefCell::borrow(&d.output).is_empty() {
+            for d in self.descriptor_list.borrow().iter() {
+                if !d.output.borrow().is_empty() {
                     process_output(d);
-                    if !RefCell::borrow(&d.output).is_empty() {
+                    if !d.output.borrow().is_empty() {
                         d.has_prompt.set(true);
                     }
                 }
             }
 
             /* Print prompts for other descriptors who had no other output */
-            for d in &*self.descriptor_list.borrow() {
+            for d in self.descriptor_list.borrow().iter() {
                 if !d.has_prompt.get() && !d.output.borrow().is_empty() {
                     let text = &make_prompt(d);
                     write_to_descriptor(&mut d.stream.borrow_mut(), text);
@@ -724,11 +723,11 @@ impl MainGlobals {
             }
 
             /* Kick out folks in the ConClose or ConDisconnect state */
-            // for (d = descriptor_list; d; d = next_d) {
-            //     next_d = d -> next;
-            //     if (STATE(d) == ConClose | | STATE(d) == ConDisconnect)
-            //     close_socket(d);
-            // }
+            for d in clone_vec(&self.descriptor_list).iter() {
+                if d.state() == ConClose || d.state() == ConDisconnect {
+                    self.close_socket(d);
+                }
+            }
 
             /*
              * Now, we execute as many pulses as necessary--just one if we haven't
@@ -783,7 +782,7 @@ impl MainGlobals {
     }
 }
 
-impl MainGlobals {
+impl Game {
     fn heartbeat(&self, pulse: u128) {
         if pulse % PULSE_ZONE == 0 {
             self.db.zone_update(self);
@@ -843,7 +842,7 @@ impl MainGlobals {
  *  for which tv_usec is unsigned (and thus comparisons for something
  *  being < 0 fail).  Based on code submitted by ss@sirocco.cup.hp.com.
  */
-impl MainGlobals {
+impl Game {
     fn record_usage(&self) {
         let mut sockets_connected = 0;
         let mut sockets_playing = 0;
@@ -879,26 +878,24 @@ impl MainGlobals {
  * Turn off echoing (specific to telnet client)
  */
 fn echo_off(d: &DescriptorData) {
-    let mut off_string = "".to_string();
+    let mut off_string = String::new();
     off_string.push(char::from(IAC));
     off_string.push(char::from(WILL));
     off_string.push(char::from(TELOPT_ECHO));
-    off_string.push(char::from(0));
 
-    write_to_output(d, off_string.as_str());
+    write_to_output(d, &off_string);
 }
 
 /*
  * Turn on echoing (specific to telnet client)
  */
 fn echo_on(d: &DescriptorData) {
-    let mut off_string = "".to_string();
+    let mut off_string = String::new();
     off_string.push(char::from(IAC));
     off_string.push(char::from(WONT));
     off_string.push(char::from(TELOPT_ECHO));
-    off_string.push(char::from(0));
 
-    write_to_output(d, off_string.as_str());
+    write_to_output(d, &off_string);
 }
 
 fn make_prompt(d: &DescriptorData) -> String {
@@ -908,49 +905,51 @@ fn make_prompt(d: &DescriptorData) -> String {
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
 
     if mut_d.str.borrow().is_some() {
-        prompt.push_str("] "); /* strcpy: OK (for 'MAX_PROMPT_LENGTH >= 3') */
+        prompt.push_str("] ");
     } else if mut_d.showstr_count.get() != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
             mut_d.showstr_page.get(),
             mut_d.showstr_count.get()
         ));
-    } else if mut_d.connected.get() == ConPlaying {
+    } else if mut_d.connected.get() == ConPlaying
+        && !mut_d.character.borrow().as_ref().unwrap().is_npc()
+    {
         let ohc = d.character.borrow();
         let character = ohc.as_ref().unwrap();
-        if character.is_npc() {
-            if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let il = character.get_invis_lev();
-                prompt.push_str(&*format!("i{} ", il));
-            }
-
-            if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let hit = character.get_hit();
-                prompt.push_str(&*format!("{}H ", hit));
-            }
-
-            if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let mana = character.get_mana();
-                prompt.push_str(&*format!("{}M ", mana));
-            }
-
-            if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
-                let _move = character.get_move();
-                prompt.push_str(&*format!("{}V ", _move));
-            }
-
-            prompt.push_str("> ");
-        } else if character.is_npc() {
-            prompt.push_str(&*format!("{}s>", character.get_name()));
+        if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
+            let il = character.get_invis_lev();
+            prompt.push_str(&*format!("i{} ", il));
         }
+
+        if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+            let hit = character.get_hit();
+            prompt.push_str(&*format!("{}H ", hit));
+        }
+
+        if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+            let mana = character.get_mana();
+            prompt.push_str(&*format!("{}M ", mana));
+        }
+
+        if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+            let _move = character.get_move();
+            prompt.push_str(&*format!("{}V ", _move));
+        }
+
+        prompt.push_str("> ");
+    } else if mut_d.connected.get() == ConPlaying
+        && mut_d.character.borrow().as_ref().unwrap().is_npc()
+    {
+        prompt.push_str(&*format!(
+            "{}s>",
+            mut_d.character.borrow().as_ref().unwrap().get_name()
+        ));
     }
 
     prompt
 }
 
-/*
- * NOTE: 'txt' must be at most MAX_INPUT_LENGTH big.
- */
 fn write_to_q(txt: &str, queue: &mut LinkedList<TxtBlock>, aliased: bool) {
     let newt = TxtBlock {
         text: String::from(txt),
@@ -960,9 +959,6 @@ fn write_to_q(txt: &str, queue: &mut LinkedList<TxtBlock>, aliased: bool) {
     queue.push_back(newt);
 }
 
-/*
- * NOTE: 'dest' must be at least MAX_INPUT_LENGTH big.
- */
 fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut bool) -> bool {
     let elt = queue.pop_front();
     if elt.is_none() {
@@ -1114,8 +1110,8 @@ fn write_to_output(t: &DescriptorData, txt: &str) {
 //
 // return (0);
 // }
-impl MainGlobals {
-    fn new_descriptor(&self, socket: TcpStream, addr: SocketAddr) {
+impl Game {
+    fn new_descriptor(&self, mut stream: TcpStream, addr: SocketAddr) {
         // socket_t
         // desc;
         // sockets_connected = 0;
@@ -1133,7 +1129,7 @@ impl MainGlobals {
         // return ( - 1);
         // }
         /* keep it from blocking */
-        socket
+        stream
             .set_nonblocking(true)
             .expect("Error with setting nonblocking");
         /* set the send buffer size */
@@ -1143,17 +1139,17 @@ impl MainGlobals {
         // }
 
         /* make sure we have room for it */
-        // for (newd = descriptor_list; newd; newd = newd -> next)
-        // sockets_connected + +;
-
-        // if (sockets_connected > = max_players) {
-        // write_to_descriptor(desc, "Sorry, CircleMUD is full right now... please try again later!\r\n");
-        // CLOSE_SOCKET(desc);
-        // return (0);
-        // }
+        if self.descriptor_list.borrow().len() >= self.max_players as usize {
+            write_to_descriptor(
+                &mut stream,
+                "Sorry, CircleMUD is full right now... please try again later!\r\n",
+            );
+            stream.shutdown(Shutdown::Both).ok();
+            return;
+        }
         /* create a new descriptor */
         let mut newd = DescriptorData {
-            stream: RefCell::new(socket),
+            stream: RefCell::new(stream),
             host: RefCell::new(String::new()),
             bad_pws: Cell::new(0),
             idle_tics: Cell::new(0),
@@ -1219,13 +1215,11 @@ impl MainGlobals {
         }
         newd.desc_num.set(self.last_desc.get());
 
-        /* prepend to list */
-        // newd -> next = descriptor_list;
-        // descriptor_list = newd;
+        /* append to list */
         let rc = Rc::new(newd);
-        RefCell::borrow_mut(&self.descriptor_list).push(rc.clone());
+        self.descriptor_list.borrow_mut().push(rc.clone());
 
-        write_to_output(rc.as_ref(), format!("{}", self.db.greetings).as_str());
+        write_to_output(rc.as_ref(), &self.db.greetings);
     }
 }
 
@@ -1477,7 +1471,7 @@ fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
  */
 fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
     let mut stream = d.stream.borrow_mut();
-    let mut input = &mut d.inbuf.borrow_mut();
+    let mut input = d.inbuf.borrow_mut();
 
     let mut buf = [0 as u8; 4096];
 
@@ -1785,7 +1779,7 @@ fn process_input(t: &DescriptorData) -> i32 {
 // return (0);
 // }
 
-impl MainGlobals {
+impl Game {
     pub fn close_socket(&self, d: &Rc<DescriptorData>) {
         self.descriptor_list
             .borrow_mut()
@@ -2131,7 +2125,7 @@ pub fn send_to_char(ch: &CharData, messg: &str) {
 // }
 // }
 
-impl MainGlobals {
+impl Game {
     fn send_to_outdoor(&self, messg: &str) {
         if messg.is_empty() {
             return;
@@ -2184,7 +2178,7 @@ impl DB {
         let mut orig = orig.to_string();
         //buf = lbuf;
         let mut i: Rc<str>;
-        let lbuf = String::new();
+        // let lbuf = String::new();
         let mut buf = String::new();
 
         loop {

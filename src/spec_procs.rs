@@ -51,7 +51,7 @@ use crate::interpreter::{cmd_is, is_move};
 use crate::modify::page_string;
 use crate::spell_parser::find_skill_num;
 use crate::structs::{CharData, AFF_BLIND, LVL_IMMORT, MAX_SKILLS, NOWHERE};
-use crate::{send_to_char, MainGlobals, TO_ROOM};
+use crate::{send_to_char, Game, TO_ROOM};
 
 pub fn sort_spells(db: &mut DB) {
     /* initialize array, avoiding reserved. */
@@ -148,13 +148,7 @@ pub fn list_skills(db: &DB, ch: &Rc<CharData>) {
     page_string(ch.desc.borrow().as_ref(), &buf, true);
 }
 
-pub fn guild(
-    game: &MainGlobals,
-    ch: &Rc<CharData>,
-    me: &dyn Any,
-    cmd: i32,
-    argument: &str,
-) -> bool {
+pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     if ch.is_npc() || !cmd_is(cmd, "practice") {
         return false;
@@ -474,13 +468,7 @@ pub fn guild(
 *  Special procedures for mobiles                                      *
 ******************************************************************** */
 
-pub fn guild_guard(
-    game: &MainGlobals,
-    ch: &Rc<CharData>,
-    me: &dyn Any,
-    cmd: i32,
-    argument: &str,
-) -> bool {
+pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let guard = me.downcast_ref::<Rc<CharData>>().unwrap();
     let buf = "The guard humiliates you, and blocks your way.\r\n";
     let buf2 = "The guard humiliates $n, and blocks $s way.";

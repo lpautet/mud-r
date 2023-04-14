@@ -38,7 +38,7 @@ use crate::structs::{
     ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING,
 };
 use crate::util::{add_follower, clone_vec, dice, rand_number};
-use crate::{send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 /*
  * Negative apply_saving_throw[] values make saving throws better!
@@ -170,7 +170,7 @@ pub fn affect_update(db: &DB) {
  * -1 = dead, otherwise the amount of damage done.
  */
 pub fn mag_damage(
-    game: &MainGlobals,
+    game: &Game,
     level: i32,
     ch: &Rc<CharData>,
     victim: &Rc<CharData>,
@@ -678,13 +678,7 @@ pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetyp
  *
  *  area spells have limited targets within the room.
  */
-pub fn mag_areas(
-    game: &MainGlobals,
-    level: i32,
-    ch: Option<&Rc<CharData>>,
-    spellnum: i32,
-    savetype: i32,
-) {
+pub fn mag_areas(game: &Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
     let db = &game.db;
     let mut to_char = "";
     let mut to_room = "";

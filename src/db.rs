@@ -21,7 +21,7 @@ use log::{error, info, warn};
 use regex::Regex;
 
 use crate::class::init_spell_levels;
-use crate::{check_player_special, get_last_tell_mut, MainGlobals};
+use crate::{check_player_special, get_last_tell_mut, Game};
 // long get_id_by_name(const char *name)
 // {
 // int i;
@@ -154,23 +154,39 @@ pub struct DB {
     pub boot_time: Cell<u128>,
     pub no_specials: bool,
     /* time of mud boot		 */
-    // int circle_restrict = 0;	/* level of game restriction	 */
-    pub r_mortal_start_room: RefCell<RoomRnum>, /* rnum of mortal start room	 */
-    pub r_immort_start_room: RefCell<RoomRnum>, /* rnum of immort start room	 */
-    pub r_frozen_start_room: RefCell<RoomRnum>, /* rnum of frozen start room	 */
-    pub credits: Rc<str>,                       /* game credits			 */
-    pub news: Rc<str>,                          /* mud news			 */
-    pub motd: Rc<str>,                          /* message of the day - mortals */
-    pub imotd: Rc<str>,                         /* message of the day - immorts */
-    pub greetings: Rc<str>,                     /* opening credits screen	*/
-    pub help: Rc<str>,                          /* help screen			 */
-    pub info: Rc<str>,                          /* info page	 */
-    pub wizlist: Rc<str>,                       /* list of higher gods		 */
-    pub immlist: Rc<str>,                       /* list of peon gods		 */
-    pub background: Rc<str>,                    /* background story		 */
-    pub handbook: Rc<str>,                      /* handbook for new immortals	 */
-    pub policies: Rc<str>,                      /* policies page		 */
-    pub help_table: Vec<HelpIndexElement>,      /* the help table	 */
+    pub circle_restrict: u8, /* level of game restriction	 */
+    pub r_mortal_start_room: RefCell<RoomRnum>,
+    /* rnum of mortal start room	 */
+    pub r_immort_start_room: RefCell<RoomRnum>,
+    /* rnum of immort start room	 */
+    pub r_frozen_start_room: RefCell<RoomRnum>,
+    /* rnum of frozen start room	 */
+    pub credits: Rc<str>,
+    /* game credits			 */
+    pub news: Rc<str>,
+    /* mud news			 */
+    pub motd: Rc<str>,
+    /* message of the day - mortals */
+    pub imotd: Rc<str>,
+    /* message of the day - immorts */
+    pub greetings: Rc<str>,
+    /* opening credits screen	*/
+    pub help: Rc<str>,
+    /* help screen			 */
+    pub info: Rc<str>,
+    /* info page	 */
+    pub wizlist: Rc<str>,
+    /* list of higher gods		 */
+    pub immlist: Rc<str>,
+    /* list of peon gods		 */
+    pub background: Rc<str>,
+    /* background story		 */
+    pub handbook: Rc<str>,
+    /* handbook for new immortals	 */
+    pub policies: Rc<str>,
+    /* policies page		 */
+    pub help_table: Vec<HelpIndexElement>,
+    /* the help table	 */
     //
     pub time_info: RefCell<TimeInfoData>,
     /* the infomation about the time    */
@@ -494,6 +510,7 @@ impl DB {
             no_rent_check: false,
             boot_time: Cell::new(0),
             no_specials: false,
+            circle_restrict: 0,
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),
@@ -534,7 +551,7 @@ impl DB {
     }
 
     /* body of the booting system */
-    pub fn boot_db(main_globals: &MainGlobals) -> DB {
+    pub fn boot_db(main_globals: &Game) -> DB {
         let mut ret = DB::new();
 
         info!("Boot db -- BEGIN.");
@@ -1434,13 +1451,9 @@ impl DB {
      */
 
     fn renum_zone_table(&mut self) {
-        //int cmd_no;
-        //RoomRnum a, b, c, olda, oldb, oldc;
-        //ZoneRnum zone;
-        //char buf[128];
-        let mut olda = 0;
-        let mut oldb = 0;
-        let mut oldc = 0;
+        let mut olda;
+        let mut oldb;
+        let mut oldc;
 
         for zone in self.zone_table.borrow_mut().iter_mut() {
             for cmd_no in 0..zone.cmd.len() {
@@ -1498,19 +1511,19 @@ impl DB {
                 }
 
                 if a == NOWHERE as i32 || b == NOWHERE as i32 || c == NOWHERE as i32 {
-                    // TODO // if ( ! mini_mud) {
-                    format!(
-                        "Invalid vnum {}, cmd disabled",
-                        if a == NOWHERE as i32 {
-                            olda
-                        } else if b == NOWHERE as i32 {
-                            oldb
-                        } else {
-                            oldc
-                        }
-                    );
-                    // TODO log_zone_error(zone, cmd_no, buf);
-                    // }
+                    if !self.mini_mud {
+                        format!(
+                            "Invalid vnum {}, cmd disabled",
+                            if a == NOWHERE as i32 {
+                                olda
+                            } else if b == NOWHERE as i32 {
+                                oldb
+                            } else {
+                                oldc
+                            }
+                        );
+                        // TODO log_zone_error(zone, cmd_no, buf);
+                    }
                     zcmd.command.set('*');
                 }
             }
@@ -2488,14 +2501,14 @@ impl DB {
     }
 
     /* create an object, and add it to the object list */
-    pub fn create_obj(&self) -> Rc<ObjData> {
-        let mut obj = ObjData::new();
-
-        clear_object(&mut obj);
-        let ret = Rc::from(obj);
-        self.object_list.borrow_mut().push(ret.clone());
-        ret
-    }
+    // pub fn create_obj(&self) -> Rc<ObjData> {
+    //     let mut obj = ObjData::new();
+    //
+    //     clear_object(&mut obj);
+    //     let ret = Rc::from(obj);
+    //     self.object_list.borrow_mut().push(ret.clone());
+    //     ret
+    // }
 
     /* create a new object from a prototype */
     pub fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
@@ -2530,7 +2543,7 @@ const ZO_DEAD: i32 = 999;
 
 impl DB {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
-    pub(crate) fn zone_update(&self, main_globals: &MainGlobals) {
+    pub(crate) fn zone_update(&self, main_globals: &Game) {
         // int i;
         // struct ResetQElement * update_u, * temp;
         // static int timer = 0;
@@ -2592,7 +2605,7 @@ impl DB {
     /* execute the reset command table of a given zone */
     fn log_zone_error(
         &self,
-        main_globals: &MainGlobals,
+        main_globals: &Game,
         zone: usize,
         cmd_no: i32,
         zcmd: &ResetCom,
@@ -2620,7 +2633,7 @@ impl DB {
         *last_cmd = 0;
     }
 
-    fn reset_zone(&self, main_globals: &MainGlobals, zone: usize) {
+    fn reset_zone(&self, main_globals: &Game, zone: usize) {
         //int cmd_no, last_cmd = 0;
         //struct char_data *mob = NULL;
         //struct obj_data * obj, *obj_to;
@@ -2855,7 +2868,7 @@ impl DB {
 }
 
 // /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
-impl MainGlobals {
+impl Game {
     fn is_empty(&self, zone_nr: ZoneRnum) -> bool {
         for i in self.descriptor_list.borrow().iter() {
             if i.state() != ConPlaying {
@@ -3434,7 +3447,7 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
  * replace, give everybody using it a different copy so
  * as to avoid special cases.
  */
-impl MainGlobals {
+impl Game {
     fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
         //int temppage;
         //char temp[MAX_STRING_LENGTH];

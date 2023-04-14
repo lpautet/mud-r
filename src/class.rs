@@ -47,9 +47,9 @@ use crate::structs::{
     PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
-use crate::{check_player_special, set_skill, MainGlobals};
+use crate::{check_player_special, set_skill, Game};
 
-const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
+pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
 const PC_CLASS_TYPES: [&str; 4] = ["Magic User", "Cleric", "Thief", "Warrior"];
 
@@ -84,15 +84,13 @@ pub fn parse_class(arg: char) -> i8 {
  * use sequential powers of two (1 << 0, 1 << 1, 1 << 2, 1 << 3, 1 << 4,
  * 1 << 5, etc.) up to the limit of your bitvector_t, typically 0-31.
  */
-// bitvector_t find_class_bitvector(const char *arg)
-// {
-// size_t rpos, ret = 0;
-//
-// for (rpos = 0; rpos < strlen(arg); rpos++)
-// ret |= (1 << parse_class(arg[rpos]));
-//
-// return (ret);
-// }
+pub fn find_class_bitvector(arg: &str) -> i32 {
+    let mut ret = 0;
+    for a in arg.chars() {
+        ret |= 1 << parse_class(a);
+    }
+    ret
+}
 
 /*
  * These are definitions which control the guildmasters for each class.
@@ -3522,7 +3520,7 @@ fn roll_real_abils(ch: &CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-impl MainGlobals {
+impl Game {
     pub fn do_start(&self, ch: &CharData) {
         ch.set_level(1);
         ch.set_exp(1);

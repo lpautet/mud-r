@@ -11,23 +11,23 @@
 // void perform_put(struct char_data *ch, struct obj_data *obj,
 // struct obj_data *cont)
 // {
-// if (GET_OBJ_WEIGHT(cont) + GET_OBJ_WEIGHT(obj) > GET_OBJ_VAL(cont, 0))
-// act("$p won't fit in $P.", FALSE, ch, obj, cont, TO_CHAR);
+// if (GET_OBJ_WEIGHT(cont) + GET_OBJ_WEIGHT(obj) > cont.get_obj_val( 0))
+// act("$p won't fit in $P.", false, ch, obj, cont, TO_CHAR);
 // else if (OBJ_FLAGGED(obj, ITEM_NODROP) && IN_ROOM(cont) != NOWHERE)
-// act("You can't get $p out of your hand.", FALSE, ch, obj, NULL, TO_CHAR);
+// act("You can't get $p out of your hand.", false, ch, obj, NULL, TO_CHAR);
 // else {
 // obj_from_char(obj);
 // obj_to_obj(obj, cont);
 //
-// act("$n puts $p in $P.", TRUE, ch, obj, cont, TO_ROOM);
+// act("$n puts $p in $P.", true, ch, obj, cont, TO_ROOM);
 //
 // /* Yes, I realize this is strange until we have auto-equip on rent. -gg */
 // if (OBJ_FLAGGED(obj, ITEM_NODROP) && !OBJ_FLAGGED(cont, ITEM_NODROP)) {
 // SET_BIT(GET_OBJ_EXTRA(cont), ITEM_NODROP);
-// act("You get a strange feeling as you put $p in $P.", FALSE,
+// act("You get a strange feeling as you put $p in $P.", false,
 // ch, obj, cont, TO_CHAR);
 // } else
-// act("You put $p in $P.", FALSE, ch, obj, cont, TO_CHAR);
+// act("You put $p in $P.", false, ch, obj, cont, TO_CHAR);
 // }
 // }
 //
@@ -75,8 +75,8 @@
 // generic_find(thecont, FIND_OBJ_INV | FIND_OBJ_ROOM, ch, &tmp_char, &cont);
 // if (!cont)
 // send_to_char(ch, "You don't see %s %s here.\r\n", AN(thecont), thecont);
-// else if (GET_OBJ_TYPE(cont) != ITEM_CONTAINER)
-// act("$p is not a container.", FALSE, ch, cont, 0, TO_CHAR);
+// else if (cont.get_obj_type() != ITEM_CONTAINER)
+// act("$p is not a container.", false, ch, cont, 0, TO_CHAR);
 // else if (OBJVAL_FLAGGED(cont, CONT_CLOSED))
 // send_to_char(ch, "You'd better open it first!\r\n");
 // else {
@@ -121,27 +121,30 @@ use std::rc::Rc;
 use log::error;
 
 use crate::config::DONATION_ROOM_1;
-use crate::constants::{DRINKNAMES, STR_APP};
+use crate::constants::{DRINKNAMES, DRINKS, DRINK_AFF, STR_APP};
 use crate::db::DB;
 use crate::handler::{
-    find_all_dots, isname, money_desc, obj_from_char, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
-    FIND_OBJ_INV, FIND_OBJ_ROOM,
+    affect_join, find_all_dots, isname, money_desc, obj_from_char, FIND_ALL, FIND_ALLDOT,
+    FIND_INDIV, FIND_OBJ_INV, FIND_OBJ_ROOM,
 };
 use crate::interpreter::{
-    is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DROP, SCMD_JUNK,
+    is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DRINK, SCMD_DROP,
+    SCMD_EAT, SCMD_JUNK, SCMD_SIP, SCMD_TASTE,
 };
+use crate::spells::SPELL_POISON;
 use crate::structs::{
-    CharData, ObjData, RoomRnum, CONT_CLOSED, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
-    ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE, ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF,
-    ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS, ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER,
-    ITEM_WEAR_HANDS, ITEM_WEAR_HEAD, ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK,
-    ITEM_WEAR_SHIELD, ITEM_WEAR_TAKE, ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, NOWHERE,
-    NUM_WEARS, PULSE_VIOLENCE, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R,
-    WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST,
-    WEAR_WIELD, WEAR_WRIST_R,
+    AffectedType, CharData, ObjData, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL,
+    ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE,
+    ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS,
+    ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER, ITEM_WEAR_HANDS, ITEM_WEAR_HEAD,
+    ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK, ITEM_WEAR_SHIELD, ITEM_WEAR_TAKE,
+    ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
+    PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
+    WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
+    WEAR_WRIST_R,
 };
 use crate::util::{clone_vec, rand_number};
-use crate::{an, send_to_char, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{an, send_to_char, Game, TO_CHAR, TO_ROOM};
 
 impl DB {
     pub fn can_take_obj(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>) -> bool {
@@ -273,7 +276,7 @@ impl DB {
             let list = clone_vec(&cont.contains);
             for obj in list {
                 if self.can_see_obj(ch, &obj)
-                    && (obj_dotmode == FIND_ALL || isname(arg, &obj.name.borrow()) != 0)
+                    && (obj_dotmode == FIND_ALL || isname(arg, &obj.name.borrow()))
                 {
                     found = true;
                     self.perform_get_from_container(ch, &obj, cont, mode);
@@ -354,7 +357,7 @@ impl DB {
                 .iter()
             {
                 if self.can_see_obj(ch, obj)
-                    && (dotmode == FIND_ALL || isname(arg, &obj.name.borrow()) != 0)
+                    && (dotmode == FIND_ALL || isname(arg, &obj.name.borrow()))
                 {
                     found = true;
                     self.perform_get_from_room(ch, obj);
@@ -372,7 +375,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_get(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut arg3 = String::new();
@@ -432,7 +435,7 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
             }
             for cont in ch.carrying.borrow().iter() {
                 if db.can_see_obj(ch, cont)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()) != 0)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()))
                 {
                     if cont.get_obj_type() == ITEM_CONTAINER {
                         found = true;
@@ -456,7 +459,7 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 .iter()
             {
                 if db.can_see_obj(ch, cont)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()) != 0)
+                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont.name.borrow()))
                 {
                     if cont.get_obj_type() == ITEM_CONTAINER {
                         db.get_from_container(ch, cont, &arg1, FIND_OBJ_ROOM, amount);
@@ -489,7 +492,7 @@ pub fn do_get(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize,
 }
 
 impl DB {
-    pub fn perform_drop_gold(&self, ch: &Rc<CharData>, amount: i32, mode: u8, RDR: RoomRnum) {
+    pub fn perform_drop_gold(&self, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: RoomRnum) {
         if amount <= 0 {
             send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
         } else if ch.get_gold() < amount {
@@ -509,7 +512,7 @@ impl DB {
                         None,
                         TO_ROOM,
                     );
-                    self.obj_to_room(obj.as_ref(), RDR);
+                    self.obj_to_room(obj.as_ref(), rdr);
                     self.act(
                         "$p suddenly appears in a puff of orange smoke!",
                         false,
@@ -559,7 +562,7 @@ impl DB {
         obj: &Rc<ObjData>,
         mut mode: u8,
         sname: &str,
-        RDR: RoomRnum,
+        rdr: RoomRnum,
     ) -> i32 {
         if obj.obj_flagged(ITEM_NODROP) {
             let buf = format!("You can't {} $p, it must be CURSED!", sname);
@@ -585,7 +588,7 @@ impl DB {
             }
 
             SCMD_DONATE => {
-                self.obj_to_room(Some(obj), RDR);
+                self.obj_to_room(Some(obj), rdr);
                 self.act(
                     "$p suddenly appears in a puff a smoke!",
                     false,
@@ -613,7 +616,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_drop(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // char arg[MAX_INPUT_LENGTH];
     // struct obj_data *obj, *next_obj;
     // room_rnum RDR = 0;
@@ -624,7 +627,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
     let db = &game.db;
     let sname;
     let mut mode = SCMD_DROP;
-    let mut RDR = 0;
+    let mut rdr = 0;
     match subcmd as u8 {
         SCMD_JUNK => {
             sname = "junk";
@@ -638,14 +641,14 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
                     mode = SCMD_JUNK;
                 }
                 1 | 2 => {
-                    RDR = db.real_room(DONATION_ROOM_1);
+                    rdr = db.real_room(DONATION_ROOM_1);
                 }
                 /*    case 3: RDR = real_room(donation_room_2); break;
                       case 4: RDR = real_room(donation_room_3); break;
                 */
                 _ => {}
             }
-            if RDR == NOWHERE {
+            if rdr == NOWHERE {
                 send_to_char(ch, "Sorry, you can't donate anything right now.\r\n");
                 return;
             }
@@ -669,7 +672,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
         let mut multi = arg.parse::<i32>().unwrap();
         one_argument(argument, &mut arg);
         if arg == "coins" || arg == "coin" {
-            db.perform_drop_gold(ch, multi, mode, RDR);
+            db.perform_drop_gold(ch, multi, mode, rdr);
         } else if multi <= 0 {
             send_to_char(ch, "Yeah, that makes sense.\r\n");
         } else if arg.is_empty() {
@@ -687,7 +690,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
             );
         } else {
             loop {
-                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, rdr);
                 obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
                 multi -= 1;
                 if multi == 0 {
@@ -715,7 +718,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
                 send_to_char(ch, "You don't seem to be carrying anything.\r\n");
             } else {
                 for obj in clone_vec(&ch.carrying).iter() {
-                    amount += db.perform_drop(ch, obj, mode, sname, RDR);
+                    amount += db.perform_drop(ch, obj, mode, sname, rdr);
                 }
             }
         } else if dotmode == FIND_ALLDOT {
@@ -737,7 +740,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
             }
 
             while obj.is_some() {
-                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, rdr);
                 obj = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
             }
         } else {
@@ -750,7 +753,7 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
                     format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                 );
             } else {
-                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, RDR);
+                amount += db.perform_drop(ch, obj.as_ref().unwrap(), mode, sname, rdr);
             }
         }
     }
@@ -773,22 +776,22 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // struct obj_data *obj)
 // {
 // if (OBJ_FLAGGED(obj, ITEM_NODROP)) {
-// act("You can't let go of $p!!  Yeech!", FALSE, ch, obj, 0, TO_CHAR);
+// act("You can't let go of $p!!  Yeech!", false, ch, obj, 0, TO_CHAR);
 // return;
 // }
 // if (IS_CARRYING_N(vict) >= CAN_CARRY_N(vict)) {
-// act("$N seems to have $S hands full.", FALSE, ch, 0, vict, TO_CHAR);
+// act("$N seems to have $S hands full.", false, ch, 0, vict, TO_CHAR);
 // return;
 // }
 // if (GET_OBJ_WEIGHT(obj) + IS_CARRYING_W(vict) > CAN_CARRY_W(vict)) {
-// act("$E can't carry that much weight.", FALSE, ch, 0, vict, TO_CHAR);
+// act("$E can't carry that much weight.", false, ch, 0, vict, TO_CHAR);
 // return;
 // }
 // obj_from_char(obj);
 // obj_to_char(obj, vict);
-// act("You give $p to $N.", FALSE, ch, obj, vict, TO_CHAR);
-// act("$n gives you $p.", FALSE, ch, obj, vict, TO_VICT);
-// act("$n gives $p to $N.", TRUE, ch, obj, vict, TO_NOTVICT);
+// act("You give $p to $N.", false, ch, obj, vict, TO_CHAR);
+// act("$n gives you $p.", false, ch, obj, vict, TO_VICT);
+// act("$n gives $p to $N.", true, ch, obj, vict, TO_NOTVICT);
 // }
 //
 // /* utility function for give */
@@ -819,19 +822,19 @@ pub fn do_drop(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 // send_to_char(ch, "Heh heh heh ... we are jolly funny today, eh?\r\n");
 // return;
 // }
-// if ((GET_GOLD(ch) < amount) && (IS_NPC(ch) || (GET_LEVEL(ch) < LVL_GOD))) {
+// if ((GET_GOLD(ch) < amount) && (ch.is_npc() || (ch.get_level() < LVL_GOD))) {
 // send_to_char(ch, "You don't have that many coins!\r\n");
 // return;
 // }
 // send_to_char(ch, "%s", OK);
 //
 // snprintf(buf, sizeof(buf), "$n gives you %d gold coin%s.", amount, amount == 1 ? "" : "s");
-// act(buf, FALSE, ch, 0, vict, TO_VICT);
+// act(buf, false, ch, 0, vict, TO_VICT);
 //
 // snprintf(buf, sizeof(buf), "$n gives %s to $N.", money_desc(amount));
-// act(buf, TRUE, ch, 0, vict, TO_NOTVICT);
+// act(buf, true, ch, 0, vict, TO_NOTVICT);
 //
-// if (IS_NPC(ch) || (GET_LEVEL(ch) < LVL_GOD))
+// if (ch.is_npc() || (ch.get_level() < LVL_GOD))
 // GET_GOLD(ch) -= amount;
 // GET_GOLD(vict) += amount;
 // }
@@ -923,7 +926,7 @@ pub fn weight_change_object(db: &DB, obj: &Rc<ObjData>, weight: i32) {
     }
 }
 
-pub fn name_from_drinkcon(db: &DB, obj: Option<&Rc<ObjData>>) {
+pub fn name_from_drinkcon(obj: Option<&Rc<ObjData>>) {
     // char *new_name, *cur_name, *next;
     // const char *liqname;
     // int liqlen, cpylen;
@@ -937,7 +940,7 @@ pub fn name_from_drinkcon(db: &DB, obj: Option<&Rc<ObjData>>) {
     let obj = obj.unwrap();
 
     let liqname = DRINKNAMES[obj.get_obj_val(2) as usize];
-    if isname(liqname, &obj.name.borrow()) == 0 {
+    if !isname(liqname, &obj.name.borrow()) {
         error!(
             "SYSERR: Can't remove liquid '{}' from '{}' ({}) item.",
             liqname,
@@ -999,186 +1002,299 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
     *obj.unwrap().name.borrow_mut() = new_name;
 }
 
-// ACMD(do_drink)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct obj_data *temp;
-// struct affected_type af;
-// int amount, weight;
-// int on_ground = 0;
-//
-// one_argument(argument, arg);
-//
-// if (IS_NPC(ch))	/* Cannot use GET_COND() on mobs. */
-// return;
-//
-// if (!*arg) {
-// send_to_char(ch, "Drink from what?\r\n");
-// return;
-// }
-// if (!(temp = get_obj_in_list_vis(ch, arg, NULL, ch->carrying))) {
-// if (!(temp = get_obj_in_list_vis(ch, arg, NULL, world[IN_ROOM(ch)].contents))) {
-// send_to_char(ch, "You can't find it!\r\n");
-// return;
-// } else
-// on_ground = 1;
-// }
-// if ((GET_OBJ_TYPE(temp) != ITEM_DRINKCON) &&
-// (GET_OBJ_TYPE(temp) != ITEM_FOUNTAIN)) {
-// send_to_char(ch, "You can't drink from that!\r\n");
-// return;
-// }
-// if (on_ground && (GET_OBJ_TYPE(temp) == ITEM_DRINKCON)) {
-// send_to_char(ch, "You have to be holding that to drink from it.\r\n");
-// return;
-// }
-// if ((GET_COND(ch, DRUNK) > 10) && (GET_COND(ch, THIRST) > 0)) {
-// /* The pig is drunk */
-// send_to_char(ch, "You can't seem to get close enough to your mouth.\r\n");
-// act("$n tries to drink but misses $s mouth!", TRUE, ch, 0, 0, TO_ROOM);
-// return;
-// }
-// if ((GET_COND(ch, FULL) > 20) && (GET_COND(ch, THIRST) > 0)) {
-// send_to_char(ch, "Your stomach can't contain anymore!\r\n");
-// return;
-// }
-// if (!GET_OBJ_VAL(temp, 1)) {
-// send_to_char(ch, "It's empty.\r\n");
-// return;
-// }
-// if (subcmd == SCMD_DRINK) {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "$n DRINKS %s from $p.", DRINKS[GET_OBJ_VAL(temp, 2)]);
-// act(buf, TRUE, ch, temp, 0, TO_ROOM);
-//
-// send_to_char(ch, "You drink the %s.\r\n", DRINKS[GET_OBJ_VAL(temp, 2)]);
-//
-// if (drink_aff[GET_OBJ_VAL(temp, 2)][DRUNK] > 0)
-// amount = (25 - GET_COND(ch, THIRST)) / drink_aff[GET_OBJ_VAL(temp, 2)][DRUNK];
-// else
-// amount = rand_number(3, 10);
-//
-// } else {
-// act("$n sips from $p.", TRUE, ch, temp, 0, TO_ROOM);
-// send_to_char(ch, "It tastes like %s.\r\n", DRINKS[GET_OBJ_VAL(temp, 2)]);
-// amount = 1;
-// }
-//
-// amount = MIN(amount, GET_OBJ_VAL(temp, 1));
-//
-// /* You can't subtract more than the object weighs */
-// weight = MIN(amount, GET_OBJ_WEIGHT(temp));
-//
-// weight_change_object(temp, -weight);	/* Subtract amount */
-//
-// gain_condition(ch, DRUNK,  drink_aff[GET_OBJ_VAL(temp, 2)][DRUNK]  * amount / 4);
-// gain_condition(ch, FULL,   drink_aff[GET_OBJ_VAL(temp, 2)][FULL]   * amount / 4);
-// gain_condition(ch, THIRST, drink_aff[GET_OBJ_VAL(temp, 2)][THIRST] * amount / 4);
-//
-// if (GET_COND(ch, DRUNK) > 10)
-// send_to_char(ch, "You feel drunk.\r\n");
-//
-// if (GET_COND(ch, THIRST) > 20)
-// send_to_char(ch, "You don't feel thirsty any more.\r\n");
-//
-// if (GET_COND(ch, FULL) > 20)
-// send_to_char(ch, "You are full.\r\n");
-//
-// if (GET_OBJ_VAL(temp, 3)) {	/* The crap was poisoned ! */
-// send_to_char(ch, "Oops, it tasted rather strange!\r\n");
-// act("$n chokes and utters some strange sounds.", TRUE, ch, 0, 0, TO_ROOM);
-//
-// af.type = SPELL_POISON;
-// af.duration = amount * 3;
-// af.modifier = 0;
-// af.location = APPLY_NONE;
-// af.bitvector = AFF_POISON;
-// affect_join(ch, &af, FALSE, FALSE, FALSE, FALSE);
-// }
-// /* empty the container, and no longer poison. */
-// GET_OBJ_VAL(temp, 1) -= amount;
-// if (!GET_OBJ_VAL(temp, 1)) {	/* The last bit */
-// name_from_drinkcon(temp);
-// GET_OBJ_VAL(temp, 2) = 0;
-// GET_OBJ_VAL(temp, 3) = 0;
-// }
-// return;
-// }
-//
-//
-//
-// ACMD(do_eat)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct obj_data *food;
-// struct affected_type af;
-// int amount;
-//
-// one_argument(argument, arg);
-//
-// if (IS_NPC(ch))	/* Cannot use GET_COND() on mobs. */
-// return;
-//
-// if (!*arg) {
-// send_to_char(ch, "Eat what?\r\n");
-// return;
-// }
-// if (!(food = get_obj_in_list_vis(ch, arg, NULL, ch->carrying))) {
-// send_to_char(ch, "You don't seem to have %s %s.\r\n", AN(arg), arg);
-// return;
-// }
-// if (subcmd == SCMD_TASTE && ((GET_OBJ_TYPE(food) == ITEM_DRINKCON) ||
-// (GET_OBJ_TYPE(food) == ITEM_FOUNTAIN))) {
-// do_drink(ch, argument, 0, SCMD_SIP);
-// return;
-// }
-// if ((GET_OBJ_TYPE(food) != ITEM_FOOD) && (GET_LEVEL(ch) < LVL_GOD)) {
-// send_to_char(ch, "You can't eat THAT!\r\n");
-// return;
-// }
-// if (GET_COND(ch, FULL) > 20) {/* Stomach full */
-// send_to_char(ch, "You are too full to eat more!\r\n");
-// return;
-// }
-// if (subcmd == SCMD_EAT) {
-// act("You eat $p.", FALSE, ch, food, 0, TO_CHAR);
-// act("$n eats $p.", TRUE, ch, food, 0, TO_ROOM);
-// } else {
-// act("You nibble a little bit of $p.", FALSE, ch, food, 0, TO_CHAR);
-// act("$n tastes a little bit of $p.", TRUE, ch, food, 0, TO_ROOM);
-// }
-//
-// amount = (subcmd == SCMD_EAT ? GET_OBJ_VAL(food, 0) : 1);
-//
-// gain_condition(ch, FULL, amount);
-//
-// if (GET_COND(ch, FULL) > 20)
-// send_to_char(ch, "You are full.\r\n");
-//
-// if (GET_OBJ_VAL(food, 3) && (GET_LEVEL(ch) < LVL_IMMORT)) {
-// /* The crap was poisoned ! */
-// send_to_char(ch, "Oops, that tasted rather strange!\r\n");
-// act("$n coughs and utters some strange sounds.", FALSE, ch, 0, 0, TO_ROOM);
-//
-// af.type = SPELL_POISON;
-// af.duration = amount * 2;
-// af.modifier = 0;
-// af.location = APPLY_NONE;
-// af.bitvector = AFF_POISON;
-// affect_join(ch, &af, FALSE, FALSE, FALSE, FALSE);
-// }
-// if (subcmd == SCMD_EAT)
-// extract_obj(food);
-// else {
-// if (!(--GET_OBJ_VAL(food, 0))) {
-// send_to_char(ch, "There's nothing left now.\r\n");
-// extract_obj(food);
-// }
-// }
-// }
-//
-//
+#[allow(unused_variables)]
+pub fn do_drink(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+
+    if ch.is_npc() {
+        /* Cannot use ) on mobs. */
+        return;
+    }
+
+    if arg.len() == 0 {
+        send_to_char(ch, "Drink from what?\r\n");
+        return;
+    }
+    let db = &game.db;
+    let mut temp;
+    let mut on_ground = false;
+    if {
+        temp = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+        temp.is_none()
+    } {
+        if {
+            temp = db.get_obj_in_list_vis(
+                ch,
+                &arg,
+                None,
+                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            );
+            temp.is_none()
+        } {
+            send_to_char(ch, "You can't find it!\r\n");
+            return;
+        } else {
+            on_ground = true;
+        }
+    }
+    let temp = temp.unwrap();
+    if temp.get_obj_type() != ITEM_DRINKCON && temp.get_obj_type() != ITEM_FOUNTAIN {
+        send_to_char(ch, "You can't drink from that!\r\n");
+        return;
+    }
+    if on_ground && temp.get_obj_type() == ITEM_DRINKCON {
+        send_to_char(ch, "You have to be holding that to drink from it.\r\n");
+        return;
+    }
+    if ch.get_cond(DRUNK) > 10 && ch.get_cond(THIRST) > 0 {
+        /* The pig is drunk */
+        send_to_char(ch, "You can't seem to get close enough to your mouth.\r\n");
+        db.act(
+            "$n tries to drink but misses $s mouth!",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        return;
+    }
+    if ch.get_cond(FULL) > 20 && ch.get_cond(THIRST) > 0 {
+        send_to_char(ch, "Your stomach can't contain anymore!\r\n");
+        return;
+    }
+    if temp.get_obj_val(1) == 0 {
+        send_to_char(ch, "It's empty.\r\n");
+        return;
+    }
+    let mut amount;
+    if subcmd == SCMD_DRINK {
+        let buf = format!(
+            "$n DRINKS {} from $p.",
+            DRINKS[temp.get_obj_val(2) as usize]
+        );
+        db.act(&buf, true, Some(ch), Some(&temp), None, TO_ROOM);
+
+        send_to_char(
+            ch,
+            format!(
+                "You drink the {}.\r\n",
+                DRINKS[temp.get_obj_val(2) as usize]
+            )
+            .as_str(),
+        );
+        if DRINK_AFF[temp.get_obj_val(2) as usize][DRUNK as usize] > 0 {
+            amount = (25 - ch.get_cond(THIRST)) as i32
+                / DRINK_AFF[temp.get_obj_val(2) as usize][DRUNK as usize];
+        } else {
+            amount = rand_number(3, 10) as i32;
+        }
+    } else {
+        db.act(
+            "$n sips from $p.",
+            true,
+            Some(ch),
+            Some(&temp),
+            None,
+            TO_ROOM,
+        );
+        send_to_char(
+            ch,
+            format!(
+                "It tastes like {}.\r\n",
+                DRINKS[temp.get_obj_val(2) as usize]
+            )
+            .as_str(),
+        );
+        amount = 1;
+    }
+
+    amount = min(amount, temp.get_obj_val(1));
+
+    /* You can't subtract more than the object weighs */
+    let weight = min(amount, temp.get_obj_weight());
+
+    weight_change_object(db, &temp, -weight as i32); /* Subtract amount */
+
+    db.gain_condition(
+        ch,
+        DRUNK,
+        DRINK_AFF[temp.get_obj_val(2) as usize][DRUNK as usize] * amount / 4,
+    );
+    db.gain_condition(
+        ch,
+        FULL,
+        DRINK_AFF[temp.get_obj_val(2) as usize][FULL as usize] * amount / 4,
+    );
+    db.gain_condition(
+        ch,
+        THIRST,
+        DRINK_AFF[temp.get_obj_val(2) as usize][THIRST as usize] * amount / 4,
+    );
+
+    if ch.get_cond(DRUNK) > 10 {
+        send_to_char(ch, "You feel drunk.\r\n");
+    }
+
+    if ch.get_cond(THIRST) > 20 {
+        send_to_char(ch, "You don't feel thirsty any more.\r\n");
+    }
+
+    if ch.get_cond(FULL) > 20 {
+        send_to_char(ch, "You are full.\r\n");
+    }
+
+    if temp.get_obj_val(3) != 0 {
+        /* The crap was poisoned ! */
+        send_to_char(ch, "Oops, it tasted rather strange!\r\n");
+        db.act(
+            "$n chokes and utters some strange sounds.",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        let mut af = AffectedType {
+            _type: SPELL_POISON as i16,
+            duration: (amount * 3) as i16,
+            modifier: 0,
+            location: APPLY_NONE as u8,
+            bitvector: AFF_POISON,
+        };
+
+        affect_join(ch, &mut af, false, false, false, false);
+    }
+    /* empty the container, and no longer poison. */
+    temp.set_obj_val(1, temp.get_obj_val(1) - amount);
+
+    if temp.get_obj_val(1) == 0 {
+        /* The last bit */
+        name_from_drinkcon(Some(&temp));
+        temp.set_obj_val(2, 0);
+        temp.set_obj_val(3, 0);
+    }
+    return;
+}
+
+#[allow(unused_variables)]
+pub fn do_eat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // char arg[MAX_INPUT_LENGTH];
+    // struct obj_data *food;
+    // struct affected_type af;
+    // int amount;
+
+    let mut arg = String::new();
+    one_argument(argument, &mut arg);
+    let db = &game.db;
+
+    if ch.is_npc() {
+        /* Cannot use ) on mobs. */
+        return;
+    }
+
+    if arg.len() == 0 {
+        send_to_char(ch, "Eat what?\r\n");
+        return;
+    }
+    let mut food;
+    if {
+        food = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+        food.is_none()
+    } {
+        send_to_char(
+            ch,
+            format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
+        );
+        return;
+    }
+    let food = food.unwrap();
+    if subcmd == SCMD_TASTE
+        && (food.get_obj_type() == ITEM_DRINKCON || food.get_obj_type() == ITEM_FOUNTAIN)
+    {
+        do_drink(game, ch, argument, 0, SCMD_SIP);
+        return;
+    }
+    if (food.get_obj_type() != ITEM_FOOD) && (ch.get_level() < LVL_GOD as u8) {
+        send_to_char(ch, "You can't eat THAT!\r\n");
+        return;
+    }
+    if ch.get_cond(FULL) > 20 {
+        /* Stomach full */
+        send_to_char(ch, "You are too full to eat more!\r\n");
+        return;
+    }
+    if subcmd == SCMD_EAT {
+        db.act("You eat $p.", false, Some(ch), Some(&food), None, TO_CHAR);
+        db.act("$n eats $p.", true, Some(ch), Some(&food), None, TO_ROOM);
+    } else {
+        db.act(
+            "You nibble a little bit of $p.",
+            false,
+            Some(ch),
+            Some(&food),
+            None,
+            TO_CHAR,
+        );
+        db.act(
+            "$n tastes a little bit of $p.",
+            true,
+            Some(ch),
+            Some(&food),
+            None,
+            TO_ROOM,
+        );
+    }
+
+    let amount = if subcmd == SCMD_EAT {
+        food.get_obj_val(0)
+    } else {
+        1
+    };
+
+    db.gain_condition(ch, FULL, amount);
+
+    if ch.get_cond(FULL) > 20 {
+        send_to_char(ch, "You are full.\r\n");
+    }
+
+    if food.get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT as u8) {
+        /* The crap was poisoned ! */
+        send_to_char(ch, "Oops, that tasted rather strange!\r\n");
+        db.act(
+            "$n coughs and utters some strange sounds.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+
+        let mut af = AffectedType {
+            _type: SPELL_POISON as i16,
+            duration: (amount * 2) as i16,
+            modifier: 0,
+            location: APPLY_NONE as u8,
+            bitvector: AFF_POISON,
+        };
+
+        affect_join(ch, &mut af, false, false, false, false);
+    }
+    if subcmd == SCMD_EAT {
+        db.extract_obj(&food);
+    } else {
+        if {
+            food.decr_obj_val(0);
+            food.get_obj_val(0) == 0
+        } {
+            send_to_char(ch, "There's nothing left now.\r\n");
+            db.extract_obj(&food);
+        }
+    }
+}
+
 // ACMD(do_pour)
 // {
 // char arg1[MAX_INPUT_LENGTH], arg2[MAX_INPUT_LENGTH];
@@ -1196,7 +1312,7 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 // send_to_char(ch, "You can't find it!\r\n");
 // return;
 // }
-// if (GET_OBJ_TYPE(from_obj) != ITEM_DRINKCON) {
+// if (from_obj.get_obj_type() != ITEM_DRINKCON) {
 // send_to_char(ch, "You can't pour from that!\r\n");
 // return;
 // }
@@ -1210,25 +1326,25 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 // send_to_char(ch, "You can't find it!\r\n");
 // return;
 // }
-// if (GET_OBJ_TYPE(to_obj) != ITEM_DRINKCON) {
-// act("You can't fill $p!", FALSE, ch, to_obj, 0, TO_CHAR);
+// if (to_obj.get_obj_type() != ITEM_DRINKCON) {
+// act("You can't fill $p!", false, ch, to_obj, 0, TO_CHAR);
 // return;
 // }
 // if (!*arg2) {		/* no 2nd argument */
-// act("What do you want to fill $p from?", FALSE, ch, to_obj, 0, TO_CHAR);
+// act("What do you want to fill $p from?", false, ch, to_obj, 0, TO_CHAR);
 // return;
 // }
 // if (!(from_obj = get_obj_in_list_vis(ch, arg2, NULL, world[IN_ROOM(ch)].contents))) {
 // send_to_char(ch, "There doesn't seem to be %s %s here.\r\n", AN(arg2), arg2);
 // return;
 // }
-// if (GET_OBJ_TYPE(from_obj) != ITEM_FOUNTAIN) {
-// act("You can't fill something from $p.", FALSE, ch, from_obj, 0, TO_CHAR);
+// if (from_obj.get_obj_type() != ITEM_FOUNTAIN) {
+// act("You can't fill something from $p.", false, ch, from_obj, 0, TO_CHAR);
 // return;
 // }
 // }
-// if (GET_OBJ_VAL(from_obj, 1) == 0) {
-// act("The $p is empty.", FALSE, ch, from_obj, 0, TO_CHAR);
+// if (from_obj.get_obj_val( 1) == 0) {
+// act("The $p is empty.", false, ch, from_obj, 0, TO_CHAR);
 // return;
 // }
 // if (subcmd == SCMD_POUR) {	/* pour */
@@ -1237,15 +1353,15 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 // return;
 // }
 // if (!str_cmp(arg2, "out")) {
-// act("$n empties $p.", TRUE, ch, from_obj, 0, TO_ROOM);
-// act("You empty $p.", FALSE, ch, from_obj, 0, TO_CHAR);
+// act("$n empties $p.", true, ch, from_obj, 0, TO_ROOM);
+// act("You empty $p.", false, ch, from_obj, 0, TO_CHAR);
 //
-// weight_change_object(from_obj, -GET_OBJ_VAL(from_obj, 1)); /* Empty */
+// weight_change_object(from_obj, -from_obj.get_obj_val( 1)); /* Empty */
 //
 // name_from_drinkcon(from_obj);
-// GET_OBJ_VAL(from_obj, 1) = 0;
-// GET_OBJ_VAL(from_obj, 2) = 0;
-// GET_OBJ_VAL(from_obj, 3) = 0;
+// from_obj.get_obj_val( 1) = 0;
+// from_obj.get_obj_val( 2) = 0;
+// from_obj.get_obj_val( 3) = 0;
 //
 // return;
 // }
@@ -1253,8 +1369,8 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 // send_to_char(ch, "You can't find it!\r\n");
 // return;
 // }
-// if ((GET_OBJ_TYPE(to_obj) != ITEM_DRINKCON) &&
-// (GET_OBJ_TYPE(to_obj) != ITEM_FOUNTAIN)) {
+// if ((to_obj.get_obj_type() != ITEM_DRINKCON) &&
+// (to_obj.get_obj_type() != ITEM_FOUNTAIN)) {
 // send_to_char(ch, "You can't pour anything into that.\r\n");
 // return;
 // }
@@ -1263,46 +1379,46 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 // send_to_char(ch, "A most unproductive effort.\r\n");
 // return;
 // }
-// if ((GET_OBJ_VAL(to_obj, 1) != 0) &&
-// (GET_OBJ_VAL(to_obj, 2) != GET_OBJ_VAL(from_obj, 2))) {
+// if ((to_obj.get_obj_val( 1) != 0) &&
+// (to_obj.get_obj_val( 2) != from_obj.get_obj_val( 2))) {
 // send_to_char(ch, "There is already another liquid in it!\r\n");
 // return;
 // }
-// if (!(GET_OBJ_VAL(to_obj, 1) < GET_OBJ_VAL(to_obj, 0))) {
+// if (!(to_obj.get_obj_val( 1) < to_obj.get_obj_val( 0))) {
 // send_to_char(ch, "There is no room for more.\r\n");
 // return;
 // }
 // if (subcmd == SCMD_POUR)
-// send_to_char(ch, "You pour the %s into the %s.", DRINKS[GET_OBJ_VAL(from_obj, 2)], arg2);
+// send_to_char(ch, "You pour the %s into the %s.", DRINKS[from_obj.get_obj_val( 2)], arg2);
 //
 // if (subcmd == SCMD_FILL) {
-// act("You gently fill $p from $P.", FALSE, ch, to_obj, from_obj, TO_CHAR);
-// act("$n gently fills $p from $P.", TRUE, ch, to_obj, from_obj, TO_ROOM);
+// act("You gently fill $p from $P.", false, ch, to_obj, from_obj, TO_CHAR);
+// act("$n gently fills $p from $P.", true, ch, to_obj, from_obj, TO_ROOM);
 // }
 // /* New alias */
-// if (GET_OBJ_VAL(to_obj, 1) == 0)
-// name_to_drinkcon(to_obj, GET_OBJ_VAL(from_obj, 2));
+// if (to_obj.get_obj_val( 1) == 0)
+// name_to_drinkcon(to_obj, from_obj.get_obj_val( 2));
 //
 // /* First same type liq. */
-// GET_OBJ_VAL(to_obj, 2) = GET_OBJ_VAL(from_obj, 2);
+// to_obj.get_obj_val( 2) = from_obj.get_obj_val( 2);
 //
 // /* Then how much to pour */
-// GET_OBJ_VAL(from_obj, 1) -= (amount =
-// (GET_OBJ_VAL(to_obj, 0) - GET_OBJ_VAL(to_obj, 1)));
+// from_obj.get_obj_val( 1) -= (amount =
+// (to_obj.get_obj_val( 0) - to_obj.get_obj_val( 1)));
 //
-// GET_OBJ_VAL(to_obj, 1) = GET_OBJ_VAL(to_obj, 0);
+// to_obj.get_obj_val( 1) = to_obj.get_obj_val( 0);
 //
-// if (GET_OBJ_VAL(from_obj, 1) < 0) {	/* There was too little */
-// GET_OBJ_VAL(to_obj, 1) += GET_OBJ_VAL(from_obj, 1);
-// amount += GET_OBJ_VAL(from_obj, 1);
+// if (from_obj.get_obj_val( 1) < 0) {	/* There was too little */
+// to_obj.get_obj_val( 1) += from_obj.get_obj_val( 1);
+// amount += from_obj.get_obj_val( 1);
 // name_from_drinkcon(from_obj);
-// GET_OBJ_VAL(from_obj, 1) = 0;
-// GET_OBJ_VAL(from_obj, 2) = 0;
-// GET_OBJ_VAL(from_obj, 3) = 0;
+// from_obj.get_obj_val( 1) = 0;
+// from_obj.get_obj_val( 2) = 0;
+// from_obj.get_obj_val( 3) = 0;
 // }
 // /* Then the poison boogie */
-// GET_OBJ_VAL(to_obj, 3) =
-// (GET_OBJ_VAL(to_obj, 3) || GET_OBJ_VAL(from_obj, 3));
+// to_obj.get_obj_val( 3) =
+// (to_obj.get_obj_val( 3) || from_obj.get_obj_val( 3));
 //
 // /* And the weight boogie */
 // weight_change_object(from_obj, -amount);
@@ -1534,7 +1650,7 @@ pub fn find_eq_pos(ch: &Rc<CharData>, obj: &Rc<ObjData>, arg: &str) -> i16 {
 }
 
 #[allow(unused_variables)]
-pub fn do_wear(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wear(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
 
@@ -1634,7 +1750,7 @@ pub fn do_wear(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 }
 
 #[allow(unused_variables)]
-pub fn do_wield(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wield(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
     let obj;
@@ -1664,7 +1780,7 @@ pub fn do_wield(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usiz
 }
 
 #[allow(unused_variables)]
-pub fn do_grab(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_grab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let obj;
     let db = &game.db;
@@ -1749,7 +1865,7 @@ fn perform_remove(db: &DB, ch: &Rc<CharData>, pos: i8) {
 }
 
 #[allow(unused_variables)]
-pub fn do_remove(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_remove(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
     one_argument(argument, &mut arg);
@@ -1780,7 +1896,7 @@ pub fn do_remove(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usi
             for i in 0..NUM_WEARS {
                 if ch.get_eq(i).is_some()
                     && db.can_see_obj(ch, ch.get_eq(i).as_ref().unwrap())
-                    && isname(&arg, &ch.get_eq(i).as_ref().unwrap().name.borrow()) != 0
+                    && isname(&arg, &ch.get_eq(i).as_ref().unwrap().name.borrow())
                 {
                     perform_remove(db, ch, i);
                     found = true;

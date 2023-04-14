@@ -1,11 +1,11 @@
 /*
  * Definitions for the TELNET protocol.
  */
-pub const IAC: u8 = 255; /* interpret as command: */
+pub const IAC: u8 = 0xff; /* interpret as command: */
 pub const DONT: u8 = 254; /* you are not to use option */
 pub const DO: u8 = 253; /* please, you use option */
-pub const WONT: u8 = 252; /* I won't use option */
-pub const WILL: u8 = 251; /* I will use option */
+pub const WONT: u8 = 0xfc; /* I won't use option */
+pub const WILL: u8 = 0xfb; /* I will use option */
 pub const SB: u8 = 250; /* interpret as subnegotiation */
 pub const GA: u8 = 249; /* you may reverse the line */
 pub const EL: u8 = 248; /* erase the current line */
@@ -42,7 +42,7 @@ pub const SYNCH: u8 = 242; /* for telfunc calls */
 
 /* telnet options */
 pub const TELOPT_BINARY: u8 = 0; /* 8-bit data path */
-pub const TELOPT_ECHO: u8 = 1; /* echo */
+pub const TELOPT_ECHO: u8 = 0x01; /* echo */
 pub const TELOPT_RCP: u8 = 2; /* prepare to reconnect */
 pub const TELOPT_SGA: u8 = 3; /* suppress go ahead */
 pub const TELOPT_NAMS: u8 = 4; /* approximate message size */

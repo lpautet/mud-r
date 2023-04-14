@@ -20,10 +20,10 @@ use crate::structs::{
     POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
 use crate::util::{num_followers_charmed, rand_number};
-use crate::{MainGlobals, TO_ROOM};
+use crate::{Game, TO_ROOM};
 
 impl DB {
-    pub fn mobile_activity(&self, game: &MainGlobals) {
+    pub fn mobile_activity(&self, game: &Game) {
         // struct char_data *ch, *next_ch, *vict;
         // struct obj_data *obj, *best_obj;
         // int door, found, max;

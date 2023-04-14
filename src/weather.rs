@@ -12,10 +12,10 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::dice;
-use crate::MainGlobals;
+use crate::Game;
 use std::cmp::{max, min};
 
-impl MainGlobals {
+impl Game {
     pub(crate) fn weather_and_time(&self, mode: i32) {
         self.another_hour(mode);
         if mode != 0 {

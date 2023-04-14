@@ -32,7 +32,7 @@ use crate::structs::{
     ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
 use crate::util::{clone_vec, rand_number, SECS_PER_MUD_YEAR};
-use crate::{is_set, send_to_char, write_to_output, MainGlobals, TO_CHAR, TO_ROOM};
+use crate::{is_set, send_to_char, write_to_output, Game, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
 pub const FIND_CHAR_WORLD: i32 = 1 << 1;
@@ -70,15 +70,15 @@ pub fn fname(namelist: &str) -> Rc<str> {
     return Rc::from(holder.as_str());
 }
 
-pub fn isname(txt: &str, namelist: &str) -> i32 {
-    info!("[DEBUG] {} {} ", txt, namelist);
+pub fn isname(txt: &str, namelist: &str) -> bool {
+    info!("[DEBUG] {} namelist='{}'", txt, namelist);
     let mut curname = namelist.to_string();
     loop {
         let mut skip = false;
         let mut p = '\0';
         for c in txt.chars() {
             if curname.is_empty() {
-                return 0;
+                return false;
             }
 
             p = curname.remove(0);
@@ -93,11 +93,11 @@ pub fn isname(txt: &str, namelist: &str) -> i32 {
         }
         if !skip {
             if curname.is_empty() {
-                return 1;
+                return true;
             }
             p = curname.remove(0);
             if !p.is_alphanumeric() {
-                return 1;
+                return true;
             }
         }
 
@@ -371,8 +371,6 @@ pub fn affect_join(
     add_mod: bool,
     avg_mod: bool,
 ) {
-    let mut found = false;
-
     ch.affected.borrow_mut().retain_mut(|hjp| {
         if (hjp._type == af._type) && (hjp.location == af.location) {
             if add_dur {
@@ -918,14 +916,12 @@ pub fn object_list_new_owner(obj: &Rc<ObjData>, ch: Option<Rc<CharData>>) {
 impl DB {
     /* Extract an object from the world */
     pub fn extract_obj(&self, obj: &Rc<ObjData>) {
-        if obj.worn_by.borrow().is_some() {
+        let tch = obj.worn_by.borrow().clone();
+        if tch.is_some() {
             if Rc::ptr_eq(
-                self.unequip_char(
-                    obj.worn_by.borrow().as_ref().unwrap(),
-                    obj.worn_on.get() as i8,
-                )
-                .as_ref()
-                .unwrap(),
+                self.unequip_char(tch.as_ref().unwrap(), obj.worn_on.get() as i8)
+                    .as_ref()
+                    .unwrap(),
                 &obj,
             ) {
                 error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
@@ -1024,7 +1020,7 @@ impl DB {
     }
 
     /* Extract a ch completely from the world, and leave his stuff behind */
-    fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &MainGlobals) {
+    fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &Game) {
         if ch.in_room() == NOWHERE {
             error!(
                 "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
@@ -1186,7 +1182,7 @@ impl DB {
  * NOTE: This doesn't handle recursive extractions.
  */
 impl DB {
-    pub fn extract_pending_chars(&self, main_globals: &MainGlobals) {
+    pub fn extract_pending_chars(&self, main_globals: &Game) {
         // struct char_data * vict, * next_vict, * prev_vict;
 
         if self.extractions_pending.get() < 0 {
@@ -1297,7 +1293,7 @@ impl DB {
             .borrow()
             .iter()
         {
-            if isname(name, i.player.borrow().name.as_str()) != 0 {
+            if isname(name, i.player.borrow().name.as_str()) {
                 if self.can_see(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1339,7 +1335,7 @@ impl DB {
             if ch.in_room() == i.in_room() {
                 continue;
             }
-            if !isname(name, i.player.borrow().name.as_str()) != 0 {
+            if !isname(name, i.player.borrow().name.as_str()) {
                 continue;
             }
             if !self.can_see(ch, i) {
@@ -1393,7 +1389,7 @@ impl DB {
         }
 
         for i in list.iter() {
-            if isname(&name, &i.name.borrow()) != 0 {
+            if isname(&name, &i.name.borrow()) {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1446,7 +1442,7 @@ impl DB {
 
         /* ok.. no luck yet. scan the entire obj list   */
         for i in self.object_list.borrow().iter() {
-            if isname(&name, &i.name.borrow()) != 0 {
+            if isname(&name, &i.name.borrow()) {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1504,7 +1500,7 @@ impl DB {
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
                 && self.can_see_obj(ch, equipment[j].as_ref().unwrap())
-                && isname(arg, &equipment[j].as_ref().unwrap().name.borrow()) != 0
+                && isname(arg, &equipment[j].as_ref().unwrap().name.borrow())
             {
                 if {
                     *number -= 1;
@@ -1716,7 +1712,7 @@ impl DB {
                 }
 
                 if ch.get_eq(i).is_some()
-                    && isname(name.as_str(), &ch.get_eq(i).as_ref().unwrap().name.borrow()) != 0
+                    && isname(name.as_str(), &ch.get_eq(i).as_ref().unwrap().name.borrow())
                 {
                     number -= 1;
                     if number == 0 {

@@ -49,7 +49,7 @@ use crate::structs::{
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
 use crate::util::rand_number;
-use crate::{is_set, send_to_char, MainGlobals, TO_ROOM, TO_VICT};
+use crate::{is_set, send_to_char, Game, TO_ROOM, TO_VICT};
 
 /*
  * This arrangement is pretty stupid, but the number of skills is limited by
@@ -468,7 +468,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
 fn call_magic(
-    game: &MainGlobals,
+    game: &Game,
     caster: &Rc<CharData>,
     cvict: Option<&Rc<CharData>>,
     ovict: Option<&Rc<ObjData>>,
@@ -764,10 +764,10 @@ fn call_magic(
  * by NPCs via specprocs.
  */
 pub fn cast_spell(
-    game: &MainGlobals,
+    game: &Game,
     ch: &Rc<CharData>,
-    tch: &Rc<CharData>,
-    tobj: &Rc<ObjData>,
+    tch: Option<&Rc<CharData>>,
+    tobj: Option<&Rc<ObjData>>,
     spellnum: i32,
 ) -> i32 {
     let db = &game.db;
@@ -799,18 +799,18 @@ pub fn cast_spell(
         }
         return 0;
     }
-    if ch.aff_flagged(AFF_CHARM) && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch) {
+    if ch.aff_flagged(AFF_CHARM)
+        && tch.is_some()
+        && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch.unwrap())
+    {
         send_to_char(ch, "You are afraid you might hurt your master!\r\n");
         return 0;
     }
-    if !Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch)
-        && is_set!(sinfo.targets, TAR_SELF_ONLY)
-    {
+    if (tch.is_none() || !Rc::ptr_eq(ch, tch.unwrap())) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
         send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
         return 0;
     }
-    if Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch) && is_set!(sinfo.targets, TAR_NOT_SELF)
-    {
+    if tch.is_some() && Rc::ptr_eq(ch, tch.unwrap()) && is_set!(sinfo.targets, TAR_NOT_SELF) {
         send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
@@ -822,13 +822,13 @@ pub fn cast_spell(
         return 0;
     }
     send_to_char(ch, OK);
-    say_spell(db, ch, spellnum, Some(tch), Some(tobj));
+    say_spell(db, ch, spellnum, tch, tobj);
 
     return call_magic(
         game,
         ch,
-        Some(tch),
-        Some(tobj),
+        tch,
+        tobj,
         spellnum,
         ch.get_level() as i32,
         CAST_SPELL,
@@ -842,7 +842,7 @@ pub fn cast_spell(
  * passes control to cast_spell().
  */
 #[allow(unused_variables)]
-pub fn do_cast(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_cast(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // struct char_data *tch = NULL;
     // struct obj_data *tobj = NULL;
     // char *s, *t;
@@ -937,7 +937,7 @@ pub fn do_cast(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
-                if ch.get_eq(i).is_some() && isname(&t, &ch.get_eq(i).unwrap().name.borrow()) != 0 {
+                if ch.get_eq(i).is_some() && isname(&t, &ch.get_eq(i).unwrap().name.borrow()) {
                     tobj = Some(ch.get_eq(i).unwrap());
                     target = true;
                 }
@@ -1036,14 +1036,7 @@ pub fn do_cast(game: &MainGlobals, ch: &Rc<CharData>, argument: &str, cmd: usize
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
-        if cast_spell(
-            game,
-            ch,
-            tch.as_ref().unwrap(),
-            tobj.as_ref().unwrap(),
-            spellnum,
-        ) != 0
-        {
+        if cast_spell(game, ch, tch.as_ref(), tobj.as_ref(), spellnum) != 0 {
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if mana > 0 {
                 ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - mana)));

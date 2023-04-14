@@ -38,7 +38,7 @@ use crate::structs::{
 };
 use crate::util::{dice, rand_number, BRF};
 use crate::{
-    _clrlevel, clr, send_to_char, MainGlobals, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    _clrlevel, clr, send_to_char, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
     TO_SLEEP, TO_VICT,
 };
 
@@ -291,7 +291,7 @@ pub fn update_pos(victim: &Rc<CharData>) {
     }
 }
 
-pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &MainGlobals) {
+pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
     if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
         return;
     }
@@ -318,7 +318,7 @@ pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &MainGlobals) 
 
 /* start one char fighting another (yes, it is horrible, I know... )  */
 impl DB {
-    fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &MainGlobals) {
+    fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
         if Rc::ptr_eq(ch, vict) {
             return;
         }
@@ -475,7 +475,7 @@ impl DB {
     }
 }
 
-pub fn die(ch: &Rc<CharData>, game: &MainGlobals) {
+pub fn die(ch: &Rc<CharData>, game: &Game) {
     gain_exp(ch, -(ch.get_exp() / 2), game);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
@@ -483,7 +483,7 @@ pub fn die(ch: &Rc<CharData>, game: &MainGlobals) {
     game.db.raw_kill(ch);
 }
 
-pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &MainGlobals) {
+pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &Game) {
     let share = min(MAX_EXP_GAIN, max(1, base));
 
     if share > 1 {
@@ -505,7 +505,7 @@ pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, g
     change_alignment(ch, victim);
 }
 
-pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &MainGlobals) {
+pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
     // int tot_members, base, tot_gain;
     // struct char_data *k;
     // struct follow_type *f;
@@ -555,7 +555,7 @@ pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &MainGlobals) 
     }
 }
 
-pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &MainGlobals) {
+pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
     let mut exp = min(MAX_EXP_GAIN, victim.get_exp() / 3);
 
     /* Calculate level-difference bonus */
@@ -902,7 +902,7 @@ impl DB {
         victim: &Rc<CharData>,
         dam: i32,
         attacktype: i32,
-        game: &MainGlobals,
+        game: &Game,
     ) -> i32 {
         let mut dam = dam;
 
@@ -1185,7 +1185,7 @@ pub fn compute_thaco(ch: &Rc<CharData>, victim: &Rc<CharData>) -> i32 {
 }
 
 impl DB {
-    pub fn hit(&self, ch: &Rc<CharData>, victim: &Rc<CharData>, _type: i32, game: &MainGlobals) {
+    pub fn hit(&self, ch: &Rc<CharData>, victim: &Rc<CharData>, _type: i32, game: &Game) {
         let wielded = ch.get_eq(WEAR_WIELD as i8);
 
         /* Do some sanity checking, in case someone flees, etc. */
@@ -1312,7 +1312,7 @@ impl DB {
     }
 
     /* control the fights going on.  Called every 2 seconds from comm.c. */
-    pub fn perform_violence(&self, game: &MainGlobals) {
+    pub fn perform_violence(&self, game: &Game) {
         let mut old_combat_list = vec![];
         for c in self.combat_list.borrow().iter() {
             old_combat_list.push(c.clone());
