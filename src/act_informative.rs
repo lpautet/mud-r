@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: act.informative.c                             Part of CircleMUD *
+*   File: act.informative.rs                            Part of CircleMUD *
 *  Usage: Player-level commands of an informative nature                  *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::rc::Rc;
@@ -15,7 +16,10 @@ use regex::Regex;
 
 use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
 use crate::config::NOPERSON;
-use crate::constants::{COLOR_LIQUID, DIRS, FULLNESS, MONTH_NAME, ROOM_BITS, WEAR_WHERE, WEEKDAYS};
+use crate::constants::{
+    CIRCLEMUD_VERSION, COLOR_LIQUID, CONNECTED_TYPES, DIRS, FULLNESS, MONTH_NAME, ROOM_BITS,
+    WEAR_WHERE, WEEKDAYS,
+};
 use crate::db::DB;
 use crate::fight::compute_armor_class;
 use crate::handler::{
@@ -23,8 +27,9 @@ use crate::handler::{
     FIND_OBJ_INV, FIND_OBJ_ROOM,
 };
 use crate::interpreter::{
-    half_chop, is_abbrev, one_argument, search_block, CMD_INFO, SCMD_READ, SCMD_SOCIALS,
-    SCMD_WIZHELP,
+    half_chop, is_abbrev, one_argument, search_block, CMD_INFO, SCMD_CLEAR, SCMD_CREDITS,
+    SCMD_HANDBOOK, SCMD_IMMLIST, SCMD_IMOTD, SCMD_INFO, SCMD_MOTD, SCMD_NEWS, SCMD_POLICIES,
+    SCMD_READ, SCMD_SOCIALS, SCMD_VERSION, SCMD_WHOAMI, SCMD_WIZHELP, SCMD_WIZLIST,
 };
 use crate::modify::page_string;
 use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
@@ -45,7 +50,10 @@ use crate::structs::{
     POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
     POS_STUNNED, PRF_SUMMONABLE, THIRST,
 };
-use crate::util::{age, rand_number, real_time_passed, sprintbit, sprinttype, time_now};
+use crate::util::{
+    age, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR,
+    SECS_PER_REAL_MIN,
+};
 use crate::{
     _clrlevel, an, clr, send_to_char, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT,
 };
@@ -1613,201 +1621,307 @@ pub fn do_who(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
     }
 }
 
-// #define USERS_FORMAT \
-// "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n"
-//
-// /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
-// ACMD(do_users)
-// {
-// char line[200], line2[220], idletime[10], classname[20];
-// char state[30], *timeptr, mode;
-// char name_search[MAX_INPUT_LENGTH], host_search[MAX_INPUT_LENGTH];
-// struct char_data *tch;
-// struct descriptor_data *d;
-// int low = 0, high = LVL_IMPL, num_can_see = 0;
-// int showclass = 0, outlaws = 0, playing = 0, deadweight = 0;
-// char buf[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
-//
-// host_search[0] = name_search[0] = '\0';
-//
-// strcpy(buf, argument);	/* strcpy: OK (sizeof: argument == buf) */
-// while (*buf) {
-// char buf1[MAX_INPUT_LENGTH];
-//
-// half_chop(buf, arg, buf1);
-// if (*arg == '-') {
-// mode = *(arg + 1);  /* just in case; we destroy arg in the switch */
-// switch (mode) {
-// case 'o':
-// case 'k':
-// outlaws = 1;
-// playing = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'p':
-// playing = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'd':
-// deadweight = 1;
-// strcpy(buf, buf1);	/* strcpy: OK (sizeof: buf1 == buf) */
-// break;
-// case 'l':
-// playing = 1;
-// half_chop(buf1, arg, buf);
-// sscanf(arg, "%d-%d", &low, &high);
-// break;
-// case 'n':
-// playing = 1;
-// half_chop(buf1, name_search, buf);
-// break;
-// case 'h':
-// playing = 1;
-// half_chop(buf1, host_search, buf);
-// break;
-// case 'c':
-// playing = 1;
-// half_chop(buf1, arg, buf);
-// showclass = find_class_bitvector(arg);
-// break;
-// default:
-// send_to_char(ch, "%s", USERS_FORMAT);
-// return;
-// }				/* end of switch */
-//
-// } else {			/* endif */
-// send_to_char(ch, "%s", USERS_FORMAT);
-// return;
-// }
-// }				/* end while (parser) */
-// send_to_char(ch,
-// "Num Class   Name         State          Idl Login@   Site\r\n"
-// "--- ------- ------------ -------------- --- -------- ------------------------\r\n");
-//
-// one_argument(argument, arg);
-//
-// for (d = descriptor_list; d; d = d.next) {
-// if (STATE(d) != CON_PLAYING && playing)
-// continue;
-// if (STATE(d) == CON_PLAYING && deadweight)
-// continue;
-// if (STATE(d) == CON_PLAYING) {
-// if (d.original)
-// tch = d.original;
-// else if (!(tch = d.character))
-// continue;
-//
-// if (*host_search && !strstr(d.host, host_search))
-// continue;
-// if (*name_search && str_cmp(GET_NAME(tch), name_search))
-// continue;
-// if (!CAN_SEE(ch, tch) || GET_LEVEL(tch) < low || GET_LEVEL(tch) > high)
-// continue;
-// if (outlaws && !PLR_FLAGGED(tch, PLR_KILLER) &&
-// !PLR_FLAGGED(tch, PLR_THIEF))
-// continue;
-// if (showclass && !(showclass & (1 << GET_CLASS(tch))))
-// continue;
-// if (GET_INVIS_LEV(ch) > GET_LEVEL(ch))
-// continue;
-//
-// if (d.original)
-// sprintf(classname, "[%2d %s]", GET_LEVEL(d.original),
-// CLASS_ABBR(d.original));
-// else
-// sprintf(classname, "[%2d %s]", GET_LEVEL(d.character),
-// CLASS_ABBR(d.character));
-// } else
-// strcpy(classname, "   -   ");
-//
-// timeptr = asctime(localtime(&d.login_time));
-// timeptr += 11;
-// *(timeptr + 8) = '\0';
-//
-// if (STATE(d) == CON_PLAYING && d.original)
-// strcpy(state, "Switched");
-// else
-// strcpy(state, connected_types[STATE(d)]);
-//
-// if (d.character && STATE(d) == CON_PLAYING && GET_LEVEL(d.character) < LVL_GOD)
-// sprintf(idletime, "%3d", d.character.char_specials.timer *
-// SECS_PER_MUD_HOUR / SECS_PER_REAL_MIN);
-// else
-// strcpy(idletime, "");
-//
-// sprintf(line, "%3d %-7s %-12s %-14s {:3} %-8s ", d.desc_num, classname,
-// d.original && d.original.player.name ? d.original.player.name :
-// d.character && d.character.player.name ? d.character.player.name :
-// "UNDEFINED",
-// state, idletime, timeptr);
-//
-// if (d.host && *d.host)
-// sprintf(line + strlen(line), "[%s]\r\n", d.host);
-// else
-// strcat(line, "[Hostname unknown]\r\n");
-//
-// if (STATE(d) != CON_PLAYING) {
-// sprintf(line2, "%s%s%s", CCGRN(ch, C_SPR), line, CCNRM(ch, C_SPR));
-// strcpy(line, line2);
-// }
-// if (STATE(d) != CON_PLAYING ||
-// (STATE(d) == CON_PLAYING && CAN_SEE(ch, d.character))) {
-// send_to_char(ch, "%s", line);
-// num_can_see++;
-// }
-// }
-//
-// send_to_char(ch, "\r\n%d visible sockets connected.\r\n", num_can_see);
-// }
-//
-//
-// /* Generic page_string function for displaying text */
-// ACMD(do_gen_ps)
-// {
-// switch (subcmd) {
-// case SCMD_CREDITS:
-// page_string(ch.desc, credits, 0);
-// break;
-// case SCMD_NEWS:
-// page_string(ch.desc, news, 0);
-// break;
-// case SCMD_INFO:
-// page_string(ch.desc, info, 0);
-// break;
-// case SCMD_WIZLIST:
-// page_string(ch.desc, wizlist, 0);
-// break;
-// case SCMD_IMMLIST:
-// page_string(ch.desc, immlist, 0);
-// break;
-// case SCMD_HANDBOOK:
-// page_string(ch.desc, handbook, 0);
-// break;
-// case SCMD_POLICIES:
-// page_string(ch.desc, policies, 0);
-// break;
-// case SCMD_MOTD:
-// page_string(ch.desc, motd, 0);
-// break;
-// case SCMD_IMOTD:
-// page_string(ch.desc, imotd, 0);
-// break;
-// case SCMD_CLEAR:
-// send_to_char(ch, "\033[H\033[J");
-// break;
-// case SCMD_VERSION:
-// send_to_char(ch, "%s\r\n", circlemud_version);
-// break;
-// case SCMD_WHOAMI:
-// send_to_char(ch, "%s\r\n", GET_NAME(ch));
-// break;
-// default:
-// log("SYSERR: Unhandled case in do_gen_ps. (%d)", subcmd);
-// return;
-// }
-// }
-//
-//
+const USERS_FORMAT: &str =
+    "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n";
+
+/* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
+#[allow(unused_variables)]
+pub fn do_users(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    // char line[200], line2[220], idletime[10], classname[20];
+    // char state[30], *timeptr, mode;
+    // char name_search[MAX_INPUT_LENGTH], host_search[MAX_INPUT_LENGTH];
+    // struct char_data *tch;
+    // struct descriptor_data *d;
+    // int low = 0, high = LVL_IMPL, num_can_see = 0;
+    // int showclass = 0, outlaws = 0, playing = 0, deadweight = 0;
+    // char buf[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
+    //
+    // host_search[0] = name_search[0] = '\0';
+
+    let mut buf = argument.to_string();
+    let mut arg = String::new();
+    let mut outlaws = false;
+    let mut playing = false;
+    let mut deadweight = false;
+    let mut low = 0;
+    let mut high = LVL_IMPL;
+    let mut name_search = String::new();
+    let mut host_search = String::new();
+    let mut showclass = 0;
+    let mut num_can_see = 0;
+    let mut classname;
+
+    while !buf.is_empty() {
+        let mut buf1 = String::new();
+
+        half_chop(&mut buf, &mut arg, &mut buf1);
+        if arg.starts_with('-') {
+            arg.remove(0);
+            let mode = arg.chars().next().unwrap(); /* just in case; we destroy arg in the switch */
+            match mode {
+                'o' | 'k' => {
+                    outlaws = true;
+                    playing = true;
+                    buf.push_str(&buf1);
+                }
+                'p' => {
+                    playing = true;
+                    buf.push_str(&buf1);
+                }
+                'd' => {
+                    deadweight = true;
+                    buf.push_str(&buf1);
+                }
+                'l' => {
+                    playing = true;
+                    half_chop(&mut buf1, &mut arg, &mut buf);
+                    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
+                    let f = regex.captures(&arg);
+                    if f.is_some() {
+                        let f = f.unwrap();
+                        low = f[1].parse::<i16>().unwrap();
+                        high = f[2].parse::<i16>().unwrap();
+                    }
+                }
+                'n' => {
+                    playing = true;
+                    half_chop(&mut buf1, &mut name_search, &mut buf);
+                }
+                'h' => {
+                    playing = true;
+                    half_chop(&mut buf1, &mut host_search, &mut buf);
+                }
+                'c' => {
+                    playing = true;
+                    half_chop(&mut buf1, &mut arg, &mut buf);
+                    showclass = find_class_bitvector(&arg);
+                }
+                _ => {
+                    send_to_char(ch, USERS_FORMAT);
+                    return;
+                }
+            } /* end of switch */
+        } else {
+            /* endif */
+            send_to_char(ch, USERS_FORMAT);
+            return;
+        }
+    } /* end while (parser) */
+    send_to_char(
+        ch,
+        "Num Class   Name         State          Idl Login@   Site\r\n\
+--- ------- ------------ -------------- --- -------- ------------------------\r\n",
+    );
+
+    one_argument(argument, &mut arg);
+    let db = &game.db;
+    for d in game.descriptor_list.borrow().iter() {
+        if d.state() != ConPlaying && playing {
+            continue;
+        }
+        if d.state() == ConPlaying && deadweight {
+            continue;
+        }
+        if d.state() == ConPlaying {
+            let character;
+            if d.original.borrow().is_some() {
+                character = d.original.borrow();
+            } else if {
+                character = d.character.borrow();
+                character.is_none()
+            } {
+                continue;
+            }
+            let tch = character.as_ref().unwrap();
+
+            if !host_search.is_empty() && !d.host.borrow().contains(&host_search) {
+                continue;
+            }
+            if !name_search.is_empty() && tch.get_name().as_ref() != &name_search {
+                continue;
+            }
+            if !db.can_see(ch, tch) || tch.get_level() < low as u8 || tch.get_level() > high as u8 {
+                continue;
+            }
+            if outlaws && !tch.plr_flagged(PLR_KILLER) && !tch.plr_flagged(PLR_THIEF) {
+                continue;
+            }
+            if showclass != 0 && (showclass & (1 << tch.get_class())) == 0 {
+                continue;
+            }
+            if ch.get_invis_lev() > ch.get_level() as i16 {
+                continue;
+            }
+
+            if d.original.borrow().is_some() {
+                classname = format!(
+                    "[{:2} {}]",
+                    d.original.borrow().as_ref().unwrap().get_level(),
+                    d.original.borrow().as_ref().unwrap().class_abbr()
+                );
+            } else {
+                classname = format!(
+                    "[{:2} {}]",
+                    d.character.borrow().as_ref().unwrap().get_level(),
+                    d.character.borrow().as_ref().unwrap().class_abbr()
+                );
+            }
+        } else {
+            classname = "   -   ".to_string();
+        }
+
+        let timeptr = d.login_time.elapsed().as_secs().to_string();
+
+        let state;
+        if d.state() == ConPlaying && d.original.borrow().is_some() {
+            state = "Switched";
+        } else {
+            state = CONNECTED_TYPES[d.state() as usize];
+        }
+
+        let idletime;
+        if d.character.borrow().is_some()
+            && d.state() == ConPlaying
+            && d.character.borrow().as_ref().unwrap().get_level() < LVL_GOD as u8
+        {
+            idletime = format!(
+                "{:3}",
+                d.character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .char_specials
+                    .borrow()
+                    .timer
+                    .get()
+                    * SECS_PER_MUD_HOUR as i32
+                    / SECS_PER_REAL_MIN as i32
+            );
+        } else {
+            idletime = "".to_string();
+        }
+
+        let mut line = format!(
+            "{:3} {:7} {:12} {:14} {:3} {:8} ",
+            d.desc_num.get(),
+            classname,
+            if d.original.borrow().is_some()
+                && !d
+                    .original
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .borrow()
+                    .name
+                    .is_empty()
+            {
+                d.original
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .borrow()
+                    .name
+                    .clone()
+            } else if d.character.borrow().is_some()
+                && !d
+                    .character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .borrow()
+                    .name
+                    .is_empty()
+            {
+                d.character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .player
+                    .borrow()
+                    .name
+                    .clone()
+            } else {
+                "UNDEFINED".to_string()
+            },
+            state,
+            idletime,
+            timeptr
+        );
+
+        if !d.host.borrow().is_empty() {
+            line.push_str(format!("[{}]\r\n", d.host.borrow()).as_str());
+        } else {
+            line.push_str("[Hostname unknown]\r\n");
+        }
+
+        if d.state() != ConPlaying {
+            let line2 = format!("{}{}{}", CCGRN!(ch, C_SPR), line, CCNRM!(ch, C_SPR));
+            line.push_str(&line2);
+        }
+        if d.state() != ConPlaying
+            || (d.state() == ConPlaying && db.can_see(ch, d.character.borrow().as_ref().unwrap()))
+        {
+            send_to_char(ch, &line);
+            num_can_see += 1;
+        }
+    }
+
+    send_to_char(
+        ch,
+        format!("\r\n{} visible sockets connected.\r\n", num_can_see).as_str(),
+    );
+}
+
+/* Generic page_string function for displaying text */
+#[allow(unused_variables)]
+pub fn do_gen_ps(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    match subcmd {
+        SCMD_CREDITS => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.credits, false);
+        }
+        SCMD_NEWS => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.news, false);
+        }
+        SCMD_INFO => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.info, false);
+        }
+        SCMD_WIZLIST => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.wizlist, false);
+        }
+        SCMD_IMMLIST => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.immlist, false);
+        }
+        SCMD_HANDBOOK => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.handbook, false);
+        }
+        SCMD_POLICIES => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.policies, false);
+        }
+        SCMD_MOTD => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.motd, false);
+        }
+        SCMD_IMOTD => {
+            page_string(ch.desc.borrow().as_ref(), &game.db.imotd, false);
+        }
+        SCMD_CLEAR => {
+            send_to_char(ch, "\x21[H\x21[J");
+        }
+        SCMD_VERSION => {
+            send_to_char(ch, format!("{}\r\n", CIRCLEMUD_VERSION).as_str());
+        }
+        SCMD_WHOAMI => {
+            send_to_char(ch, format!("{}\r\n", ch.get_name()).as_str());
+        }
+        _ => {
+            error!("SYSERR: Unhandled case in do_gen_ps. ({})", subcmd);
+            return;
+        }
+    }
+}
+
 // void perform_mortal_where(struct char_data *ch, char *arg)
 // {
 // struct char_data *i;

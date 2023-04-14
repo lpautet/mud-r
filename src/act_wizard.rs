@@ -635,7 +635,7 @@ use std::rc::Rc;
 // send_to_char(ch, ", Attack type: %s", attack_hit_text[(int) k->mob_specials.attack_type].singular);
 //
 // if (k->desc) {
-// sprinttype(STATE(k->desc), connected_types, buf, sizeof(buf));
+// sprinttype(STATE(k->desc), CONNECTED_TYPES, buf, sizeof(buf));
 // send_to_char(ch, ", Connected: %s", buf);
 // }
 //

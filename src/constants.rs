@@ -194,28 +194,28 @@ pub const AFFECTED_BITS: [&str; 23] = [
     "\n",
 ];
 
-// /* CON_x */
-// const char *connected_types[] = {
-// "Playing",
-// "Disconnecting",
-// "Get name",
-// "Confirm name",
-// "Get password",
-// "Get new PW",
-// "Confirm new PW",
-// "Select sex",
-// "Select class",
-// "Reading MOTD",
-// "Main Menu",
-// "Get descript.",
-// "Changing PW 1",
-// "Changing PW 2",
-// "Changing PW 3",
-// "Self-Delete 1",
-// "Self-Delete 2",
-// "Disconnecting",
-// "\n"
-// };
+/* CON_x */
+pub const CONNECTED_TYPES: [&str; 19] = [
+    "Playing",
+    "Disconnecting",
+    "Get name",
+    "Confirm name",
+    "Get password",
+    "Get new PW",
+    "Confirm new PW",
+    "Select sex",
+    "Select class",
+    "Reading MOTD",
+    "Main Menu",
+    "Get descript.",
+    "Changing PW 1",
+    "Changing PW 2",
+    "Changing PW 3",
+    "Self-Delete 1",
+    "Self-Delete 2",
+    "Disconnecting",
+    "\n",
+];
 
 /*
  * WEAR_x - for eq list

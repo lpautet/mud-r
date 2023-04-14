@@ -17,8 +17,9 @@ use log::error;
 use sha2::Sha256;
 
 use crate::act_informative::{
-    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gold,
-    do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_weather, do_who,
+    do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gen_ps,
+    do_gold, do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_users,
+    do_weather, do_who,
 };
 use crate::act_item::{do_drink, do_drop, do_eat, do_get, do_grab, do_remove, do_wear, do_wield};
 use crate::act_movement::do_move;
@@ -67,6 +68,20 @@ pub const SCMD_SOUTH: i32 = 3;
 pub const SCMD_WEST: i32 = 4;
 pub const SCMD_UP: i32 = 5;
 pub const SCMD_DOWN: i32 = 6;
+
+/* do_gen_ps */
+pub const SCMD_INFO: i32 = 0;
+pub const SCMD_HANDBOOK: i32 = 1;
+pub const SCMD_CREDITS: i32 = 2;
+pub const SCMD_NEWS: i32 = 3;
+pub const SCMD_WIZLIST: i32 = 4;
+pub const SCMD_POLICIES: i32 = 5;
+pub const SCMD_VERSION: i32 = 6;
+pub const SCMD_IMMLIST: i32 = 7;
+pub const SCMD_MOTD: i32 = 8;
+pub const SCMD_IMOTD: i32 = 9;
+pub const SCMD_CLEAR: i32 = 10;
+pub const SCMD_WHOAMI: i32 = 11;
 
 /* do_gen_tog */
 pub const SCMD_NOSUMMON: i32 = 0;
@@ -144,7 +159,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 69] = [
+pub const CMD_INFO: [CommandInfo; 83] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -262,8 +277,22 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     // { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
     // { "clap"     , POS_RESTING , do_action   , 0, 0 },
     // { "clear"    , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
+    CommandInfo {
+        command: "clear",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_CLEAR,
+    },
     // { "close"    , POS_SITTING , do_gen_door , 0, SCMD_CLOSE },
     // { "cls"      , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
+    CommandInfo {
+        command: "cls",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_CLEAR,
+    },
     // { "consider" , POS_RESTING , do_consider , 0, 0 },
     CommandInfo {
         command: "consider",
@@ -300,6 +329,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     },
     // { "cough"    , POS_RESTING , do_action   , 0, 0 },
     // { "credits"  , POS_DEAD    , do_gen_ps   , 0, SCMD_CREDITS },
+    CommandInfo {
+        command: "credits",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_CREDITS,
+    },
     // { "cringe"   , POS_RESTING , do_action   , 0, 0 },
     // { "cry"      , POS_RESTING , do_action   , 0, 0 },
     // { "cuddle"   , POS_RESTING , do_action   , 0, 0 },
@@ -462,6 +498,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
         subcmd: 0,
     },
     // { "handbook" , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_HANDBOOK },
+    CommandInfo {
+        command: "handbook",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_HANDBOOK,
+    },
     // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
     // { "hide"     , POS_RESTING , do_hide     , 1, 0 },
@@ -497,8 +540,29 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     },
     // { "idea"     , POS_DEAD    , do_gen_write, 0, SCMD_IDEA },
     // { "imotd"    , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_IMOTD },
+    CommandInfo {
+        command: "imotd",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_IMOTD,
+    },
     // { "immlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_IMMLIST },
+    CommandInfo {
+        command: "immlist",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_IMMLIST,
+    },
     // { "info"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_INFO },
+    CommandInfo {
+        command: "info",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_INFO,
+    },
     // { "insult"   , POS_RESTING , do_insult   , 0, 0 },
     // { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
     //
@@ -548,6 +612,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     //
     // { "moan"     , POS_RESTING , do_action   , 0, 0 },
     // { "motd"     , POS_DEAD    , do_gen_ps   , 0, SCMD_MOTD },
+    CommandInfo {
+        command: "motd",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_MOTD,
+    },
     // { "mail"     , POS_STANDING, do_not_here , 1, 0 },
     // { "massage"  , POS_RESTING , do_action   , 0, 0 },
     // { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
@@ -561,6 +632,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     },
     //
     // { "news"     , POS_SLEEPING, do_gen_ps   , 0, SCMD_NEWS },
+    CommandInfo {
+        command: "news",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_NEWS,
+    },
     // { "nibble"   , POS_RESTING , do_action   , 0, 0 },
     // { "nod"      , POS_RESTING , do_action   , 0, 0 },
     // { "noauction", POS_DEAD    , do_gen_tog  , 0, SCMD_NOAUCTION },
@@ -653,6 +731,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     // { "point"    , POS_RESTING , do_action   , 0, 0 },
     // { "poke"     , POS_RESTING , do_action   , 0, 0 },
     // { "policy"   , POS_DEAD    , do_gen_ps   , 0, SCMD_POLICIES },
+    CommandInfo {
+        command: "policy",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_POLICIES,
+    },
     // { "ponder"   , POS_RESTING , do_action   , 0, 0 },
     // { "poofin"   , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFIN },
     // { "poofout"  , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFOUT },
@@ -880,9 +965,23 @@ pub const CMD_INFO: [CommandInfo; 69] = [
     // { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
     // { "use"      , POS_SITTING , do_use      , 1, SCMD_USE },
     // { "users"    , POS_DEAD    , do_users    , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "users",
+        minimum_position: POS_DEAD,
+        command_pointer: do_users,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     //
     // { "value"    , POS_STANDING, do_not_here , 0, 0 },
     // { "version"  , POS_DEAD    , do_gen_ps   , 0, SCMD_VERSION },
+    CommandInfo {
+        command: "version",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_VERSION,
+    },
     // { "visible"  , POS_RESTING , do_visible  , 1, 0 },
     // { "vnum"     , POS_DEAD    , do_vnum     , LVL_IMMORT, 0 },
     // { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
@@ -914,6 +1013,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
         subcmd: 0,
     },
     // { "whoami"   , POS_DEAD    , do_gen_ps   , 0, SCMD_WHOAMI },
+    CommandInfo {
+        command: "whoami",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_WHOAMI,
+    },
     // { "where"    , POS_RESTING , do_where    , 1, 0 },
     // { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
     // { "whine"    , POS_RESTING , do_action   , 0, 0 },
@@ -941,6 +1047,13 @@ pub const CMD_INFO: [CommandInfo; 69] = [
         subcmd: SCMD_WIZHELP,
     },
     // { "wizlist"  , POS_DEAD    , do_gen_ps   , 0, SCMD_WIZLIST },
+    CommandInfo {
+        command: "wizlist",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_ps,
+        minimum_level: 0,
+        subcmd: SCMD_WIZLIST,
+    },
     // { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
     // { "worship"  , POS_RESTING , do_action   , 0, 0 },
     // { "write"    , POS_STANDING, do_write    , 1, 0 },

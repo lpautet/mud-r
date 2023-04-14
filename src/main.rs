@@ -1,5 +1,5 @@
 /* ************************************************************************
-*   File: main.rs                                        Part of CircleMUD *
+*   File: main.rs                                       Part of CircleMUD *
 *  Usage: Communication, socket handling, main(), central game loop       *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
