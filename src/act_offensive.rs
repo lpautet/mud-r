@@ -8,67 +8,122 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::borrow::Borrow;
 use std::rc::Rc;
 
 use crate::act_movement::do_simple_move;
-use crate::config::PK_ALLOWED;
-use crate::fight::check_killer;
+use crate::config::{NOPERSON, OK, PK_ALLOWED};
+use crate::fight::{check_killer, compute_armor_class};
 use crate::handler::FIND_CHAR_ROOM;
-use crate::interpreter::{one_argument, SCMD_MURDER};
+use crate::interpreter::{command_interpreter, half_chop, is_abbrev, one_argument, SCMD_MURDER};
 use crate::limits::gain_exp;
-use crate::spells::TYPE_UNDEFINED;
+use crate::spells::{
+    SKILL_BACKSTAB, SKILL_BASH, SKILL_KICK, SKILL_RESCUE, TYPE_HIT, TYPE_PIERCE, TYPE_UNDEFINED,
+};
 use crate::structs::{
-    CharData, AFF_CHARM, NUM_OF_DIRS, POS_FIGHTING, POS_STANDING, PULSE_VIOLENCE, ROOM_DEATH,
+    CharData, AFF_CHARM, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS, POS_FIGHTING, POS_SITTING,
+    POS_STANDING, PULSE_VIOLENCE, ROOM_DEATH, ROOM_PEACEFUL, WEAR_WIELD,
 };
 use crate::util::rand_number;
-use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
+use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-// ACMD(do_assist)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *helpee, *opponent;
-//
-// if (FIGHTING(ch)) {
-// send_to_char(ch, "You're already fighting!  How can you assist someone else?\r\n");
-// return;
-// }
-// one_argument(argument, arg);
-//
-// if (!*arg)
-// send_to_char(ch, "Whom do you wish to assist?\r\n");
-// else if (!(helpee = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (helpee == ch)
-// send_to_char(ch, "You can't help yourself any more than this!\r\n");
-// else {
-// /*
-//  * Hit the same enemy the person you're helping is.
-//  */
-// if (FIGHTING(helpee))
-// opponent = FIGHTING(helpee);
-// else
-// for (opponent = world[IN_ROOM(ch)].people;
-// opponent && (FIGHTING(opponent) != helpee);
-// opponent = opponent->next_in_room)
-// ;
-//
-// if (!opponent)
-// act("But nobody is fighting $M!", FALSE, ch, 0, helpee, TO_CHAR);
-// else if (!CAN_SEE(ch, opponent))
-// act("You can't see who is fighting $M!", FALSE, ch, 0, helpee, TO_CHAR);
-// else if (!pk_allowed && !IS_NPC(opponent))	/* prevent accidental pkill */
-// act("Use 'murder' if you really want to attack $N.", FALSE,
-// ch, 0, opponent, TO_CHAR);
-// else {
-// send_to_char(ch, "You join the fight!\r\n");
-// act("$N assists you!", 0, helpee, 0, ch, TO_CHAR);
-// act("$n assists $N.", FALSE, ch, 0, helpee, TO_NOTVICT);
-// hit(ch, opponent, TYPE_UNDEFINED);
-// }
-// }
-// }
-//
-//
+#[allow(unused_variables)]
+pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+
+    if ch.fighting().is_some() {
+        send_to_char(
+            ch,
+            "You're already fighting!  How can you assist someone else?\r\n",
+        );
+        return;
+    }
+    one_argument(argument, &mut arg);
+    let helpee;
+    if arg.is_empty() {
+        send_to_char(ch, "Whom do you wish to assist?\r\n");
+    } else if {
+        helpee = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee.is_none()
+    } {
+        send_to_char(ch, NOPERSON);
+    } else if Rc::ptr_eq(helpee.as_ref().unwrap(), ch) {
+        send_to_char(ch, "You can't help yourself any more than this!\r\n");
+    } else {
+        /*
+         * Hit the same enemy the person you're helping is.
+         */
+        let helpee = helpee.as_ref().unwrap();
+        let mut opponent = None;
+        if helpee.fighting().is_some() {
+            opponent = helpee.fighting();
+        } else {
+            for p in db.world.borrow()[ch.in_room() as usize]
+                .peoples
+                .borrow()
+                .iter()
+            {
+                opponent = Some(p.clone());
+                if p.fighting().borrow().is_some()
+                    && Rc::ptr_eq(p.fighting().borrow().as_ref().unwrap(), helpee)
+                {
+                    break;
+                }
+            }
+        }
+
+        if opponent.is_none() {
+            db.act(
+                "But nobody is fighting $M!",
+                false,
+                Some(ch),
+                None,
+                Some(helpee),
+                TO_CHAR,
+            );
+        } else if db.can_see(ch, opponent.as_ref().unwrap()) {
+            db.act(
+                "You can't see who is fighting $M!",
+                false,
+                Some(ch),
+                None,
+                Some(helpee),
+                TO_CHAR,
+            );
+        } else if !PK_ALLOWED && !opponent.as_ref().unwrap().is_npc() {
+            /* prevent accidental pkill */
+            db.act(
+                "Use 'murder' if you really want to attack $N.",
+                false,
+                Some(ch),
+                None,
+                Some(opponent.as_ref().unwrap()),
+                TO_CHAR,
+            );
+        } else {
+            send_to_char(ch, "You join the fight!\r\n");
+            db.act(
+                "$N assists you!",
+                false,
+                Some(helpee),
+                None,
+                Some(ch),
+                TO_CHAR,
+            );
+            db.act(
+                "$n assists $N.",
+                false,
+                Some(ch),
+                None,
+                Some(helpee),
+                TO_NOTVICT,
+            );
+            db.hit(ch, opponent.as_ref().unwrap(), TYPE_UNDEFINED, game);
+        }
+    }
+}
+
 #[allow(unused_variables)]
 pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
@@ -134,142 +189,220 @@ pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
     }
 }
 
-// ACMD(do_kill)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-//
-// if (GET_LEVEL(ch) < LVL_IMPL || IS_NPC(ch)) {
-// do_hit(ch, argument, cmd, subcmd);
-// return;
-// }
-// one_argument(argument, arg);
-//
-// if (!*arg) {
-// send_to_char(ch, "Kill who?\r\n");
-// } else {
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM)))
-// send_to_char(ch, "They aren't here.\r\n");
-// else if (ch == vict)
-// send_to_char(ch, "Your mother would be so sad.. :(\r\n");
-// else {
-// act("You chop $M to pieces!  Ah!  The blood!", FALSE, ch, 0, vict, TO_CHAR);
-// act("$N chops you to pieces!", FALSE, vict, 0, ch, TO_CHAR);
-// act("$n brutally slays $N!", FALSE, ch, 0, vict, TO_NOTVICT);
-// raw_kill(vict);
-// }
-// }
-// }
-//
-//
-//
-// ACMD(do_backstab)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// int percent, prob;
-//
-// if (IS_NPC(ch) || !GET_SKILL(ch, SKILL_BACKSTAB)) {
-// send_to_char(ch, "You have no idea how to do that.\r\n");
-// return;
-// }
-//
-// one_argument(argument, buf);
-//
-// if (!(vict = get_char_vis(ch, buf, NULL, FIND_CHAR_ROOM))) {
-// send_to_char(ch, "Backstab who?\r\n");
-// return;
-// }
-// if (vict == ch) {
-// send_to_char(ch, "How can you sneak up on yourself?\r\n");
-// return;
-// }
-// if (!GET_EQ(ch, WEAR_WIELD)) {
-// send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
-// return;
-// }
-// if (GET_OBJ_VAL(GET_EQ(ch, WEAR_WIELD), 3) != TYPE_PIERCE - TYPE_HIT) {
-// send_to_char(ch, "Only piercing weapons can be used for backstabbing.\r\n");
-// return;
-// }
-// if (FIGHTING(vict)) {
-// send_to_char(ch, "You can't backstab a fighting person -- they're too alert!\r\n");
-// return;
-// }
-//
-// if (MOB_FLAGGED(vict, MOB_AWARE) && AWAKE(vict)) {
-// act("You notice $N lunging at you!", FALSE, vict, 0, ch, TO_CHAR);
-// act("$e notices you lunging at $m!", FALSE, vict, 0, ch, TO_VICT);
-// act("$n notices $N lunging at $m!", FALSE, vict, 0, ch, TO_NOTVICT);
-// hit(vict, ch, TYPE_UNDEFINED);
-// return;
-// }
-//
-// percent = rand_number(1, 101);	/* 101% is a complete failure */
-// prob = GET_SKILL(ch, SKILL_BACKSTAB);
-//
-// if (AWAKE(vict) && (percent > prob))
-// damage(ch, vict, 0, SKILL_BACKSTAB);
-// else
-// hit(ch, vict, SKILL_BACKSTAB);
-//
-// WAIT_STATE(ch, 2 * PULSE_VIOLENCE);
-// }
-//
-//
-// ACMD(do_order)
-// {
-// char name[MAX_INPUT_LENGTH], message[MAX_INPUT_LENGTH];
-// bool found = FALSE;
-// struct char_data *vict;
-// struct follow_type *k;
-//
-// half_chop(argument, name, message);
-//
-// if (!*name || !*message)
-// send_to_char(ch, "Order who to do what?\r\n");
-// else if (!(vict = get_char_vis(ch, name, NULL, FIND_CHAR_ROOM)) && !is_abbrev(name, "followers"))
-// send_to_char(ch, "That person isn't here.\r\n");
-// else if (ch == vict)
-// send_to_char(ch, "You obviously suffer from skitzofrenia.\r\n");
-// else {
-// if (AFF_FLAGGED(ch, AFF_CHARM)) {
-// send_to_char(ch, "Your superior would not aprove of you giving orders.\r\n");
-// return;
-// }
-// if (vict) {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "$N orders you to '%s'", message);
-// act(buf, FALSE, vict, 0, ch, TO_CHAR);
-// act("$n gives $N an order.", FALSE, ch, 0, vict, TO_ROOM);
-//
-// if ((vict->master != ch) || !AFF_FLAGGED(vict, AFF_CHARM))
-// act("$n has an indifferent look.", FALSE, vict, 0, 0, TO_ROOM);
-// else {
-// send_to_char(ch, "%s", OK);
-// command_interpreter(vict, message);
-// }
-// } else {			/* This is order "followers" */
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "$n issues the order '%s'.", message);
-// act(buf, FALSE, ch, 0, 0, TO_ROOM);
-//
-// for (k = ch->followers; k; k = k->next) {
-// if (IN_ROOM(ch) == IN_ROOM(k->follower))
-// if (AFF_FLAGGED(k->follower, AFF_CHARM)) {
-// found = TRUE;
-// command_interpreter(k->follower, message);
-// }
-// }
-// if (found)
-// send_to_char(ch, "%s", OK);
-// else
-// send_to_char(ch, "Nobody here is a loyal subject of yours!\r\n");
-// }
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_kill(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+
+    if ch.get_level() < LVL_IMPL as u8 || ch.is_npc() {
+        do_hit(game, ch, argument, cmd, subcmd);
+        return;
+    }
+    one_argument(argument, &mut arg);
+    let vict;
+    if arg.is_empty() {
+        send_to_char(ch, "Kill who?\r\n");
+    } else {
+        if {
+            vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict.is_none()
+        } {
+            send_to_char(ch, "They aren't here.\r\n");
+        } else if Rc::ptr_eq(ch, vict.as_ref().unwrap()) {
+            send_to_char(ch, "Your mother would be so sad.. :(\r\n");
+        } else {
+            db.act(
+                "You chop $M to pieces!  Ah!  The blood!",
+                false,
+                Some(ch),
+                None,
+                Some(vict.as_ref().unwrap()),
+                TO_CHAR,
+            );
+            db.act(
+                "$N chops you to pieces!",
+                false,
+                Some(vict.as_ref().unwrap()),
+                None,
+                Some(ch),
+                TO_CHAR,
+            );
+            db.act(
+                "$n brutally slays $N!",
+                false,
+                Some(ch),
+                None,
+                Some(vict.as_ref().unwrap()),
+                TO_NOTVICT,
+            );
+            db.raw_kill(vict.as_ref().unwrap());
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut buf = String::new();
+    let db = &game.db;
+
+    if ch.is_npc() || ch.get_skill(SKILL_BACKSTAB) == 0 {
+        send_to_char(ch, "You have no idea how to do that.\r\n");
+        return;
+    }
+
+    one_argument(argument, &mut buf);
+    let vict;
+    if {
+        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
+    } {
+        send_to_char(ch, "Backstab who?\r\n");
+        return;
+    }
+    let vict = vict.as_ref().unwrap();
+    if Rc::ptr_eq(vict, ch) {
+        send_to_char(ch, "How can you sneak up on yourself?\r\n");
+        return;
+    }
+    if ch.get_eq(WEAR_WIELD as i8).is_none() {
+        send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
+        return;
+    }
+    if ch.get_eq(WEAR_WIELD as i8).as_ref().unwrap().get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
+        send_to_char(
+            ch,
+            "Only piercing weapons can be used for backstabbing.\r\n",
+        );
+        return;
+    }
+    if vict.fighting().is_some() {
+        send_to_char(
+            ch,
+            "You can't backstab a fighting person -- they're too alert!\r\n",
+        );
+        return;
+    }
+
+    if vict.mob_flagged(MOB_AWARE) && vict.awake() {
+        db.act(
+            "You notice $N lunging at you!",
+            false,
+            Some(vict),
+            None,
+            Some(ch),
+            TO_CHAR,
+        );
+        db.act(
+            "$e notices you lunging at $m!",
+            false,
+            Some(vict),
+            None,
+            Some(ch),
+            TO_VICT,
+        );
+        db.act(
+            "$n notices $N lunging at $m!",
+            false,
+            Some(vict),
+            None,
+            Some(ch),
+            TO_NOTVICT,
+        );
+        db.hit(vict, ch, TYPE_UNDEFINED, game);
+        return;
+    }
+
+    let percent = rand_number(1, 101); /* 101% is a complete failure */
+    let prob = ch.get_skill(SKILL_BACKSTAB);
+
+    if vict.awake() && percent > prob as u32 {
+        db.damage(ch, vict, 0, SKILL_BACKSTAB, game);
+    } else {
+        db.hit(ch, vict, SKILL_BACKSTAB, game);
+    }
+    ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
+}
+
+#[allow(unused_variables)]
+pub fn do_order(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let buf = String::new();
+    let db = &game.db;
+    let mut name = String::new();
+    let mut message = String::new();
+    let mut found = false;
+    let mut argument = argument.to_string();
+
+    half_chop(&mut argument, &mut name, &mut message);
+    let vict;
+    if name.is_empty() || message.is_empty() {
+        send_to_char(ch, "Order who to do what?\r\n");
+    } else if {
+        vict = db.get_char_vis(ch, &mut name, None, FIND_CHAR_ROOM);
+        vict.is_none() && !is_abbrev(&name, "followers")
+    } {
+        send_to_char(ch, "That person isn't here.\r\n");
+    } else if vict.is_some() && Rc::ptr_eq(ch, vict.as_ref().unwrap()) {
+        send_to_char(ch, "You obviously suffer from skitzofrenia.\r\n");
+    } else {
+        if ch.aff_flagged(AFF_CHARM) {
+            send_to_char(
+                ch,
+                "Your superior would not aprove of you giving orders.\r\n",
+            );
+            return;
+        }
+        if vict.is_some() {
+            let vict = vict.as_ref().unwrap();
+
+            let buf = format!("$N orders you to '{}'", message);
+            db.act(&buf, false, Some(vict), None, Some(ch), TO_CHAR);
+            db.act(
+                "$n gives $N an order.",
+                false,
+                Some(ch),
+                None,
+                Some(vict),
+                TO_ROOM,
+            );
+
+            if vict.master.borrow().is_some()
+                && !Rc::ptr_eq(vict.master.borrow().as_ref().unwrap(), ch)
+                || !vict.aff_flagged(AFF_CHARM)
+            {
+                db.act(
+                    "$n has an indifferent look.",
+                    false,
+                    Some(vict),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                send_to_char(ch, OK);
+                command_interpreter(game, vict, &message);
+            }
+        } else {
+            /* This is order "followers" */
+
+            let buf = format!("$n issues the order '{}'.", message);
+            db.act(&buf, false, Some(ch), None, None, TO_ROOM);
+            for k in ch.followers.borrow().iter() {
+                if ch.in_room() == k.follower.in_room() {
+                    if k.follower.aff_flagged(AFF_CHARM) {
+                        found = true;
+                        command_interpreter(game, &k.follower, &message);
+                    }
+                }
+            }
+            if found {
+                send_to_char(ch, OK);
+            } else {
+                send_to_char(ch, "Nobody here is a loyal subject of yours!\r\n");
+            }
+        }
+    }
+}
+
 #[allow(unused_variables)]
 pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
@@ -323,154 +456,201 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
 }
 
-// ACMD(do_bash)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// int percent, prob;
-//
-// one_argument(argument, arg);
-//
-// if (IS_NPC(ch) || !GET_SKILL(ch, SKILL_BASH)) {
-// send_to_char(ch, "You have no idea how.\r\n");
-// return;
-// }
-// if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_PEACEFUL)) {
-// send_to_char(ch, "This room just has such a peaceful, easy feeling...\r\n");
-// return;
-// }
-// if (!GET_EQ(ch, WEAR_WIELD)) {
-// send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
-// return;
-// }
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM))) {
-// if (FIGHTING(ch) && IN_ROOM(ch) == IN_ROOM(FIGHTING(ch))) {
-// vict = FIGHTING(ch);
-// } else {
-// send_to_char(ch, "Bash who?\r\n");
-// return;
-// }
-// }
-// if (vict == ch) {
-// send_to_char(ch, "Aren't we funny today...\r\n");
-// return;
-// }
-// percent = rand_number(1, 101);	/* 101% is a complete failure */
-// prob = GET_SKILL(ch, SKILL_BASH);
-//
-// if (MOB_FLAGGED(vict, MOB_NOBASH))
-// percent = 101;
-//
-// if (percent > prob) {
-// damage(ch, vict, 0, SKILL_BASH);
-// GET_POS(ch) = POS_SITTING;
-// } else {
-// /*
-//  * If we bash a player and they wimp out, they will move to the previous
-//  * room before we set them sitting.  If we try to set the victim sitting
-//  * first to make sure they don't flee, then we can't bash them!  So now
-//  * we only set them sitting if they didn't flee. -gg 9/21/98
-//  */
-// if (damage(ch, vict, 1, SKILL_BASH) > 0) {	/* -1 = dead, 0 = miss */
-// WAIT_STATE(vict, PULSE_VIOLENCE);
-// if (IN_ROOM(ch) == IN_ROOM(vict))
-// GET_POS(vict) = POS_SITTING;
-// }
-// }
-// WAIT_STATE(ch, PULSE_VIOLENCE * 2);
-// }
-//
-//
-// ACMD(do_rescue)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *vict, *tmp_ch;
-// int percent, prob;
-//
-// if (IS_NPC(ch) || !GET_SKILL(ch, SKILL_RESCUE)) {
-// send_to_char(ch, "You have no idea how to do that.\r\n");
-// return;
-// }
-//
-// one_argument(argument, arg);
-//
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM))) {
-// send_to_char(ch, "Whom do you want to rescue?\r\n");
-// return;
-// }
-// if (vict == ch) {
-// send_to_char(ch, "What about fleeing instead?\r\n");
-// return;
-// }
-// if (FIGHTING(ch) == vict) {
-// send_to_char(ch, "How can you rescue someone you are trying to kill?\r\n");
-// return;
-// }
-// for (tmp_ch = world[IN_ROOM(ch)].people; tmp_ch &&
-// (FIGHTING(tmp_ch) != vict); tmp_ch = tmp_ch->next_in_room);
-//
-// if (!tmp_ch) {
-// act("But nobody is fighting $M!", FALSE, ch, 0, vict, TO_CHAR);
-// return;
-// }
-// percent = rand_number(1, 101);	/* 101% is a complete failure */
-// prob = GET_SKILL(ch, SKILL_RESCUE);
-//
-// if (percent > prob) {
-// send_to_char(ch, "You fail the rescue!\r\n");
-// return;
-// }
-// send_to_char(ch, "Banzai!  To the rescue...\r\n");
-// act("You are rescued by $N, you are confused!", FALSE, vict, 0, ch, TO_CHAR);
-// act("$n heroically rescues $N!", FALSE, ch, 0, vict, TO_NOTVICT);
-//
-// if (FIGHTING(vict) == tmp_ch)
-// stop_fighting(vict);
-// if (FIGHTING(tmp_ch))
-// stop_fighting(tmp_ch);
-// if (FIGHTING(ch))
-// stop_fighting(ch);
-//
-// set_fighting(ch, tmp_ch);
-// set_fighting(tmp_ch, ch);
-//
-// WAIT_STATE(vict, 2 * PULSE_VIOLENCE);
-// }
-//
-//
-//
-// ACMD(do_kick)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// int percent, prob;
-//
-// if (IS_NPC(ch) || !GET_SKILL(ch, SKILL_KICK)) {
-// send_to_char(ch, "You have no idea how.\r\n");
-// return;
-// }
-// one_argument(argument, arg);
-//
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM))) {
-// if (FIGHTING(ch) && IN_ROOM(ch) == IN_ROOM(FIGHTING(ch))) {
-// vict = FIGHTING(ch);
-// } else {
-// send_to_char(ch, "Kick who?\r\n");
-// return;
-// }
-// }
-// if (vict == ch) {
-// send_to_char(ch, "Aren't we funny today...\r\n");
-// return;
-// }
-// /* 101% is a complete failure */
-// percent = ((10 - (compute_armor_class(vict) / 10)) * 2) + rand_number(1, 101);
-// prob = GET_SKILL(ch, SKILL_KICK);
-//
-// if (percent > prob) {
-// damage(ch, vict, 0, SKILL_KICK);
-// } else
-// damage(ch, vict, GET_LEVEL(ch) / 2, SKILL_KICK);
-//
-// WAIT_STATE(ch, PULSE_VIOLENCE * 3);
-// }
+#[allow(unused_variables)]
+pub fn do_bash(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+
+    one_argument(argument, &mut arg);
+
+    if ch.is_npc() || ch.get_skill(SKILL_BASH) == 0 {
+        send_to_char(ch, "You have no idea how.\r\n");
+        return;
+    }
+    if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+        send_to_char(
+            ch,
+            "This room just has such a peaceful, easy feeling...\r\n",
+        );
+        return;
+    }
+    if ch.get_eq(WEAR_WIELD as i8).is_none() {
+        send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
+        return;
+    }
+    let mut victo;
+    if {
+        victo = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        victo.is_some()
+    } {
+        let vict = victo.as_ref().unwrap();
+        if ch.fighting().is_some() && ch.in_room() == ch.fighting().as_ref().unwrap().in_room() {
+            victo = ch.fighting();
+        } else {
+            send_to_char(ch, "Bash who?\r\n");
+            return;
+        }
+    }
+    let vict = victo.as_ref().unwrap();
+    if Rc::ptr_eq(vict, ch) {
+        send_to_char(ch, "Aren't we funny today...\r\n");
+        return;
+    }
+    let mut percent = rand_number(1, 101); /* 101% is a complete failure */
+    let prob = ch.get_skill(SKILL_BASH);
+
+    if vict.mob_flagged(MOB_NOBASH) {
+        percent = 101;
+    }
+
+    if percent > prob as u32 {
+        db.damage(ch, vict, 0, SKILL_BASH, game);
+        ch.set_pos(POS_SITTING);
+    } else {
+        /*
+         * If we bash a player and they wimp out, they will move to the previous
+         * room before we set them sitting.  If we try to set the victim sitting
+         * first to make sure they don't flee, then we can't bash them!  So now
+         * we only set them sitting if they didn't flee. -gg 9/21/98
+         */
+        if db.damage(ch, vict, 1, SKILL_BASH, game) > 0 {
+            /* -1 = dead, 0 = miss */
+            vict.set_wait_state(PULSE_VIOLENCE as i32);
+            if ch.in_room() == vict.in_room() {
+                vict.set_pos(POS_SITTING);
+            }
+        }
+    }
+    ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
+}
+
+#[allow(unused_variables)]
+pub fn do_rescue(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+
+    if ch.is_npc() || ch.get_skill(SKILL_RESCUE) == 0 {
+        send_to_char(ch, "You have no idea how to do that.\r\n");
+        return;
+    }
+
+    one_argument(argument, &mut arg);
+    let vict;
+    if {
+        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict.is_none()
+    } {
+        send_to_char(ch, "Whom do you want to rescue?\r\n");
+        return;
+    }
+    let vict = vict.as_ref().unwrap();
+    if Rc::ptr_eq(vict, ch) {
+        send_to_char(ch, "What about fleeing instead?\r\n");
+        return;
+    }
+    if ch.fighting().is_some() && Rc::ptr_eq(ch.fighting().as_ref().unwrap(), vict) {
+        send_to_char(ch, "How can you rescue someone you are trying to kill?\r\n");
+        return;
+    }
+    let mut tmp_ch = None;
+    {
+        let w = db.world.borrow();
+        for tch in w[ch.in_room() as usize].peoples.borrow().iter() {
+            if tch.fighting().is_some() && Rc::ptr_eq(tch.fighting().as_ref().unwrap(), vict) {
+                tmp_ch = Some(tch.clone());
+                break;
+            }
+        }
+    }
+
+    if tmp_ch.is_none() {
+        db.act(
+            "But nobody is fighting $M!",
+            false,
+            Some(ch),
+            None,
+            Some(vict),
+            TO_CHAR,
+        );
+        return;
+    }
+    let tmp_ch = tmp_ch.unwrap();
+    let percent = rand_number(1, 101); /* 101% is a complete failure */
+    let prob = ch.get_skill(SKILL_RESCUE);
+
+    if percent > prob as u32 {
+        send_to_char(ch, "You fail the rescue!\r\n");
+        return;
+    }
+    send_to_char(ch, "Banzai!  To the rescue...\r\n");
+    db.act(
+        "You are rescued by $N, you are confused!",
+        false,
+        Some(vict),
+        None,
+        Some(ch),
+        TO_CHAR,
+    );
+    db.act(
+        "$n heroically rescues $N!",
+        false,
+        Some(ch),
+        None,
+        Some(vict),
+        TO_NOTVICT,
+    );
+
+    if vict.fighting().is_some() && Rc::ptr_eq(vict.fighting().as_ref().unwrap(), &tmp_ch) {
+        db.stop_fighting(vict);
+    }
+    if tmp_ch.fighting().is_some() {
+        db.stop_fighting(&tmp_ch);
+    }
+    if ch.fighting().is_some() {
+        db.stop_fighting(ch);
+    }
+
+    db.set_fighting(ch, &tmp_ch, game);
+    db.set_fighting(&tmp_ch, ch, game);
+
+    vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
+}
+
+#[allow(unused_variables)]
+pub fn do_kick(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    let db = &game.db;
+
+    if ch.is_npc() || ch.get_skill(SKILL_KICK) == 0 {
+        send_to_char(ch, "You have no idea how.\r\n");
+        return;
+    }
+    one_argument(argument, &mut arg);
+    let mut vict;
+    if {
+        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict.is_none()
+    } {
+        if ch.fighting().is_some() && ch.in_room() == ch.fighting().as_ref().unwrap().in_room() {
+            vict = ch.fighting();
+        } else {
+            send_to_char(ch, "Kick who?\r\n");
+            return;
+        }
+    }
+    let vict = vict.as_ref().unwrap();
+    if Rc::ptr_eq(vict, ch) {
+        send_to_char(ch, "Aren't we funny today...\r\n");
+        return;
+    }
+    /* 101% is a complete failure */
+    let percent = ((10 - (compute_armor_class(vict) / 10)) * 2) + rand_number(1, 101) as i16;
+    let prob = ch.get_skill(SKILL_KICK);
+
+    if percent > prob as i16 {
+        db.damage(ch, vict, 0, SKILL_KICK, game);
+    } else {
+        db.damage(ch, vict, (ch.get_level() / 2) as i32, SKILL_KICK, game);
+    }
+    ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);
+}

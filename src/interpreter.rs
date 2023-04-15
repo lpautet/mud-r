@@ -26,9 +26,12 @@ use crate::act_item::{
     do_wield,
 };
 use crate::act_movement::{
-    do_enter, do_gen_door, do_leave, do_move, do_rest, do_sit, do_sleep, do_stand, do_wake,
+    do_enter, do_follow, do_gen_door, do_leave, do_move, do_rest, do_sit, do_sleep, do_stand,
+    do_wake,
 };
-use crate::act_offensive::{do_flee, do_hit};
+use crate::act_offensive::{
+    do_assist, do_backstab, do_bash, do_flee, do_hit, do_kick, do_kill, do_order, do_rescue,
+};
 use crate::act_other::{do_display, do_gen_tog, do_not_here, do_practice, do_quit};
 use crate::act_wizard::do_advance;
 use crate::ban::valid_name;
@@ -175,7 +178,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 100] = [
+pub const CMD_INFO: [CommandInfo; 108] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -240,6 +243,13 @@ pub const CMD_INFO: [CommandInfo; 100] = [
     // { "accuse"   , POS_SITTING , do_action   , 0, 0 },
     // { "applaud"  , POS_RESTING , do_action   , 0, 0 },
     // { "assist"   , POS_FIGHTING, do_assist   , 1, 0 },
+    CommandInfo {
+        command: "assist",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_assist,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "ask"      , POS_RESTING , do_spec_comm, 0, SCMD_ASK },
     // { "auction"  , POS_SLEEPING, do_gen_comm , 0, SCMD_AUCTION },
     // { "autoexit" , POS_DEAD    , do_gen_tog  , 0, SCMD_AUTOEXIT },
@@ -253,9 +263,23 @@ pub const CMD_INFO: [CommandInfo; 100] = [
     //
     // { "bounce"   , POS_STANDING, do_action   , 0, 0 },
     // { "backstab" , POS_STANDING, do_backstab , 1, 0 },
+    CommandInfo {
+        command: "backstab",
+        minimum_position: POS_STANDING,
+        command_pointer: do_backstab,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "ban"      , POS_DEAD    , do_ban      , LVL_GRGOD, 0 },
     // { "balance"  , POS_STANDING, do_not_here , 1, 0 },
     // { "bash"     , POS_FIGHTING, do_bash     , 1, 0 },
+    CommandInfo {
+        command: "bash",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_bash,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "beg"      , POS_RESTING , do_action   , 0, 0 },
     // { "bleed"    , POS_RESTING , do_action   , 0, 0 },
     // { "blush"    , POS_RESTING , do_action   , 0, 0 },
@@ -478,6 +502,13 @@ pub const CMD_INFO: [CommandInfo; 100] = [
     // { "flip"     , POS_STANDING, do_action   , 0, 0 },
     // { "flirt"    , POS_RESTING , do_action   , 0, 0 },
     // { "follow"   , POS_RESTING , do_follow   , 0, 0 },
+    CommandInfo {
+        command: "follow",
+        minimum_position: POS_RESTING,
+        command_pointer: do_follow,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "fondle"   , POS_RESTING , do_action   , 0, 0 },
     // { "freeze"   , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_FREEZE },
     // { "french"   , POS_RESTING , do_action   , 0, 0 },
@@ -619,7 +650,21 @@ pub const CMD_INFO: [CommandInfo; 100] = [
         subcmd: SCMD_JUNK as i32,
     },
     // { "kill"     , POS_FIGHTING, do_kill     , 0, 0 },
+    CommandInfo {
+        command: "kill",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_kill,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "kick"     , POS_FIGHTING, do_kick     , 1, 0 },
+    CommandInfo {
+        command: "kick",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_kick,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "kiss"     , POS_RESTING , do_action   , 0, 0 },
     //
     // { "look"     , POS_RESTING , do_look     , 0, SCMD_LOOK },
@@ -777,6 +822,13 @@ pub const CMD_INFO: [CommandInfo; 100] = [
     //
     // { "olc"      , POS_DEAD    , do_olc      , LVL_IMPL, 0 },
     // { "order"    , POS_RESTING , do_order    , 1, 0 },
+    CommandInfo {
+        command: "order",
+        minimum_position: POS_RESTING,
+        command_pointer: do_order,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "offer"    , POS_STANDING, do_not_here , 1, 0 },
     // { "open"     , POS_SITTING , do_gen_door , 0, SCMD_OPEN },
     CommandInfo {
@@ -904,6 +956,13 @@ pub const CMD_INFO: [CommandInfo; 100] = [
     // { "report"   , POS_RESTING , do_report   , 0, 0 },
     // { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
     // { "rescue"   , POS_FIGHTING, do_rescue   , 1, 0 },
+    CommandInfo {
+        command: "rescue",
+        minimum_position: POS_FIGHTING,
+        command_pointer: do_rescue,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
     // { "return"   , POS_DEAD    , do_return   , 0, 0 },
     // { "roll"     , POS_RESTING , do_action   , 0, 0 },
@@ -1587,7 +1646,7 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
     // }
     let mut ret;
     loop {
-        let mut argument = argument.trim_start();
+        let argument = argument.trim_start();
         first_arg.clear();
 
         let mut i = 0;
@@ -1750,7 +1809,6 @@ fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
         .iter()
     {
         if !k.mob_flagged(MOB_NOTDEADYET) {
-            let x = db.get_mob_spec(k);
             if db.get_mob_spec(k).is_some()
                 && db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
             {

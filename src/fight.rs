@@ -318,7 +318,7 @@ pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
 
 /* start one char fighting another (yes, it is horrible, I know... )  */
 impl DB {
-    fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
+    pub(crate) fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
         if Rc::ptr_eq(ch, vict) {
             return;
         }

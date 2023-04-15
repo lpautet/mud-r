@@ -22,14 +22,14 @@ use crate::interpreter::{
 };
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
-    CharData, ObjData, ObjVnum, RoomDirectionData, RoomRnum, AFF_CHARM, AFF_SLEEP, AFF_SNEAK,
-    AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, EX_CLOSED, EX_ISDOOR,
-    EX_LOCKED, EX_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING,
-    NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
+    CharData, ObjData, ObjVnum, RoomDirectionData, RoomRnum, AFF_CHARM, AFF_GROUP, AFF_SLEEP,
+    AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, EX_CLOSED,
+    EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
+    NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
     POS_STANDING, ROOM_DEATH, ROOM_GODROOM, ROOM_INDOORS, ROOM_TUNNEL, SECT_WATER_NOSWIM,
     WEAR_HOLD,
 };
-use crate::util::{log_death_trap, num_pc_in_room, rand_number};
+use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number};
 use crate::{an, is_set, send_to_char, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
@@ -1058,7 +1058,7 @@ pub fn do_sleep(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 pub fn do_wake(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
-    let mut vict;
+    let vict;
     let mut self_ = false;
 
     one_argument(argument, &mut arg);
@@ -1133,45 +1133,70 @@ pub fn do_wake(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     }
 }
 
-// ACMD(do_follow)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// struct char_data *leader;
-//
-// one_argument(argument, buf);
-//
-// if (*buf) {
-// if (!(leader = get_char_vis(ch, buf, NULL, FIND_CHAR_ROOM))) {
-// send_to_char(ch, "%s", NOPERSON);
-// return;
-// }
-// } else {
-// send_to_char(ch, "Whom do you wish to follow?\r\n");
-// return;
-// }
-//
-// if (ch->master == leader) {
-// act("You are already following $M.", false, ch, 0, leader, TO_CHAR);
-// return;
-// }
-// if (ch.aff_flagged( AFF_CHARM) && (ch->master)) {
-// act("But you only feel like following $N!", false, ch, 0, ch->master, TO_CHAR);
-// } else {			/* Not Charmed follow person */
-// if (leader == ch) {
-// if (!ch->master) {
-// send_to_char(ch, "You are already following yourself.\r\n");
-// return;
-// }
-// stop_follower(ch);
-// } else {
-// if (circle_follow(ch, leader)) {
-// send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
-// return;
-// }
-// if (ch->master)
-// stop_follower(ch);
-// REMOVE_BIT(AFF_FLAGS(ch), AFF_GROUP);
-// add_follower(ch, leader);
-// }
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_follow(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+
+    one_argument(argument, &mut buf);
+    let leader;
+    if !buf.is_empty() {
+        if {
+            leader = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+            leader.is_none()
+        } {
+            send_to_char(ch, NOPERSON);
+            return;
+        }
+    } else {
+        send_to_char(ch, "Whom do you wish to follow?\r\n");
+        return;
+    }
+
+    if ch.master.borrow().is_some()
+        && Rc::ptr_eq(
+            ch.master.borrow().as_ref().unwrap(),
+            leader.as_ref().unwrap(),
+        )
+    {
+        db.act(
+            "You are already following $M.",
+            false,
+            Some(ch),
+            None,
+            Some(leader.as_ref().unwrap()),
+            TO_CHAR,
+        );
+        return;
+    }
+    if ch.aff_flagged(AFF_CHARM) && (ch.master.borrow().is_some()) {
+        db.act(
+            "But you only feel like following $N!",
+            false,
+            Some(ch),
+            None,
+            Some(ch.master.borrow().as_ref().unwrap()),
+            TO_CHAR,
+        );
+    } else {
+        /* Not Charmed follow person */
+        if Rc::ptr_eq(leader.as_ref().unwrap(), ch) {
+            if ch.master.borrow().is_none() {
+                send_to_char(ch, "You are already following yourself.\r\n");
+                return;
+            }
+            db.stop_follower(ch);
+        } else {
+            if circle_follow(ch, leader.as_ref()) {
+                send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
+                return;
+            }
+            if ch.master.borrow().is_some() {
+                db.stop_follower(ch);
+            }
+            ch.remove_aff_flags(AFF_GROUP);
+
+            add_follower(db, ch, leader.as_ref().unwrap());
+        }
+    }
+}
