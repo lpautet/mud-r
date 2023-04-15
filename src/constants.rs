@@ -10,7 +10,7 @@
 
 use crate::structs::{ConAppType, DexAppType, DexSkillType, IntAppType, StrAppType, WisAppType};
 
-pub const CIRCLEMUD_VERSION: &str = "CircleMUD, version 3.1";
+pub const CIRCLEMUD_VERSION: &str = "mud-r version 1.0, based on CircleMUD, version 3.1";
 
 /* strings corresponding to ordinals/bitvectors in structs.h ***********/
 
@@ -1080,17 +1080,8 @@ pub const WIS_APP: [WisAppType; 26] = [
 // "Undead",
 // "\n"
 // };
-//
-//
-// int rev_dir[] =
-// {
-// 2,
-// 3,
-// 0,
-// 1,
-// 5,
-// 4
-// };
+
+pub const REV_DIR: [i32; 6] = [2, 3, 0, 1, 5, 4];
 
 pub const MOVEMENT_LOSS: [i32; 10] = [
     1, /* Inside     */

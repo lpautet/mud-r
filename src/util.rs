@@ -32,9 +32,9 @@ use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     CharData, ConState, FollowType, ObjData, RoomData, RoomDirectionData, Special, AFF_BLIND,
     AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC,
-    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING,
-    PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK, SECT_CITY, SECT_INSIDE,
-    SEX_MALE,
+    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING,
+    POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK,
+    SECT_CITY, SECT_INSIDE, SEX_MALE,
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
@@ -854,6 +854,12 @@ impl ObjData {
     pub fn objval_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_val(1), flag)
     }
+    pub fn remove_objval_bit(&self, val: i32, flag: i32) {
+        self.obj_flags.value[val as usize].set(self.obj_flags.value[val as usize].get() & !flag)
+    }
+    pub fn set_objval_bit(&self, val: i32, flag: i32) {
+        self.obj_flags.value[val as usize].set(self.obj_flags.value[val as usize].get() | flag)
+    }
     pub fn get_obj_weight(&self) -> i32 {
         self.obj_flags.weight.get()
     }
@@ -1252,10 +1258,20 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-// void log_death_trap(struct char_data *ch)
-// {
-// mudlog(BRF, LVL_IMMORT, TRUE, "%s hit death trap #%d (%s)", GET_NAME(ch), GET_RoomVnum(IN_ROOM(ch)), world[IN_ROOM(ch)].name);
-// }
+pub fn log_death_trap(game: &Game, ch: &Rc<CharData>) {
+    game.mudlog(
+        BRF,
+        LVL_IMMORT as i32,
+        true,
+        format!(
+            "{} hit death trap #{} ({})",
+            ch.get_name(),
+            game.db.get_room_vnum(ch.in_room()),
+            game.db.world.borrow()[ch.in_room() as usize].name
+        )
+        .as_str(),
+    );
+}
 
 /*
  * New variable argument log() function.  Works the same as the old for

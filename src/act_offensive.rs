@@ -299,7 +299,7 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
                 TO_ROOM,
             );
             was_fighting = ch.fighting();
-            if do_simple_move(db, ch, attempt as i32, 1) != 0 {
+            if do_simple_move(game, ch, attempt as i32, 1) {
                 send_to_char(ch, "You flee head over heels.\r\n");
                 if was_fighting.is_some() && !ch.is_npc() {
                     let mut loss = was_fighting.as_ref().unwrap().get_max_hit()
