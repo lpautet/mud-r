@@ -7,51 +7,34 @@
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
-// /* local functions */
-// void sort_spells(void);
-// int compare_spells(const void *x, const void *y);
-// const char *how_good(int percent);
-// void list_skills(struct char_data *ch);
-// SPECIAL(guild);
-// SPECIAL(dump);
-// SPECIAL(mayor);
-// void npc_steal(struct char_data *ch, struct char_data *victim);
-// SPECIAL(snake);
-// SPECIAL(thief);
-// SPECIAL(magic_user);
-// SPECIAL(guild_guard);
-// SPECIAL(puff);
-// SPECIAL(fido);
-// SPECIAL(janitor);
-// SPECIAL(cityguard);
-// SPECIAL(pet_shops);
-// SPECIAL(bank);
-
-/* ********************************************************************
-*  Special procedures for mobiles                                     *
-******************************************************************** */
-
-//
-// int compare_spells(const void *x, const void *y)
-// {
-// int	a = *(const int *)x,
-// b = *(const int *)y;
-//
-// return strcmp(spell_info[a].name, spell_info[b].name);
-// }
 
 use std::any::Any;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
+use crate::act_comm::do_say;
+use crate::act_social::do_action;
 use crate::class::{GUILD_INFO, PRAC_PARAMS};
 use crate::constants::INT_APP;
 use crate::db::DB;
-use crate::interpreter::{cmd_is, is_move};
+use crate::interpreter::{cmd_is, find_command, is_move};
 use crate::modify::page_string;
-use crate::spell_parser::find_skill_num;
-use crate::structs::{CharData, AFF_BLIND, LVL_IMMORT, MAX_SKILLS, NOWHERE};
-use crate::{send_to_char, Game, TO_ROOM};
+use crate::spell_parser::{call_magic, cast_spell, find_skill_num};
+use crate::spells::{
+    CAST_SPELL, SPELL_BLINDNESS, SPELL_BURNING_HANDS, SPELL_CHILL_TOUCH, SPELL_COLOR_SPRAY,
+    SPELL_DISPEL_EVIL, SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_LIGHTNING_BOLT,
+    SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
+};
+use crate::structs::{
+    CharData, AFF_BLIND, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
+    PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_STANDING,
+};
+use crate::util::{clone_vec, rand_number};
+use crate::{send_to_char, Game, TO_NOTVICT, TO_ROOM, TO_VICT};
+
+/* ********************************************************************
+*  Special procedures for mobiles                                     *
+******************************************************************** */
 
 pub fn sort_spells(db: &mut DB) {
     /* initialize array, avoiding reserved. */
@@ -148,6 +131,7 @@ pub fn list_skills(db: &DB, ch: &Rc<CharData>) {
     page_string(ch.desc.borrow().as_ref(), &buf, true);
 }
 
+#[allow(unused_variables)]
 pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     if ch.is_npc() || !cmd_is(cmd, "practice") {
@@ -206,61 +190,57 @@ pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &
 // int value = 0;
 //
 // for (k = world[IN_ROOM(ch)].contents; k; k = world[IN_ROOM(ch)].contents) {
-// act("$p vanishes in a puff of smoke!", FALSE, 0, k, 0, TO_ROOM);
+// act("$p vanishes in a puff of smoke!", false, 0, k, 0, TO_ROOM);
 // extract_obj(k);
 // }
 //
 // if (!CMD_IS("drop"))
-// return (FALSE);
+// return (false);
 //
 // do_drop(ch, argument, cmd, SCMD_DROP);
 //
 // for (k = world[IN_ROOM(ch)].contents; k; k = world[IN_ROOM(ch)].contents) {
-// act("$p vanishes in a puff of smoke!", FALSE, 0, k, 0, TO_ROOM);
+// act("$p vanishes in a puff of smoke!", false, 0, k, 0, TO_ROOM);
 // value += MAX(1, MIN(50, GET_OBJ_COST(k) / 10));
 // extract_obj(k);
 // }
 //
 // if (value) {
 // send_to_char(ch, "You are awarded for outstanding performance.\r\n");
-// act("$n has been awarded for being a good citizen.", TRUE, ch, 0, 0, TO_ROOM);
+// act("$n has been awarded for being a good citizen.", true, ch, 0, 0, TO_ROOM);
 //
 // if (GET_LEVEL(ch) < 3)
 // gain_exp(ch, value);
 // else
 // GET_GOLD(ch) += value;
 // }
-// return (TRUE);
+// return (true);
 // }
 //
 //
-// SPECIAL(mayor)
-// {
-// char actbuf[MAX_INPUT_LENGTH];
+// pub fn mayor(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
 //
-// const char open_path[] =
-// "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
-// const char close_path[] =
-// "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
+// const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
+// const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 //
-// static const char *path = NULL;
+// static const char *path = None;
 // static int path_index;
-// static bool move = FALSE;
+// static bool move = false;
 //
 // if (!move) {
 // if (time_info.hours == 6) {
-// move = TRUE;
-// path = open_path;
+// move = true;
+// path = OPEN_PATH;
 // path_index = 0;
 // } else if (time_info.hours == 20) {
-// move = TRUE;
-// path = close_path;
+// move = true;
+// path = CLOSE_PATH;
 // path_index = 0;
 // }
 // }
 // if (cmd || !move || (GET_POS(ch) < POS_SLEEPING) ||
 // (GET_POS(ch) == POS_FIGHTING))
-// return (FALSE);
+// return (false);
 //
 // switch (path[path_index]) {
 // case '0':
@@ -272,39 +252,39 @@ pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &
 //
 // case 'W':
 // GET_POS(ch) = POS_STANDING;
-// act("$n awakens and groans loudly.", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n awakens and groans loudly.", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'S':
 // GET_POS(ch) = POS_SLEEPING;
-// act("$n lies down and instantly falls asleep.", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n lies down and instantly falls asleep.", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'a':
-// act("$n says 'Hello Honey!'", FALSE, ch, 0, 0, TO_ROOM);
-// act("$n smirks.", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n says 'Hello Honey!'", false, ch, 0, 0, TO_ROOM);
+// act("$n smirks.", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'b':
 // act("$n says 'What a view!  I must get something done about that dump!'",
-// FALSE, ch, 0, 0, TO_ROOM);
+// false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'c':
 // act("$n says 'Vandals!  Youngsters nowadays have no respect for anything!'",
-// FALSE, ch, 0, 0, TO_ROOM);
+// false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'd':
-// act("$n says 'Good day, citizens!'", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n says 'Good day, citizens!'", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'e':
-// act("$n says 'I hereby declare the bazaar open!'", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n says 'I hereby declare the bazaar open!'", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'E':
-// act("$n says 'I hereby declare Midgaard closed!'", FALSE, ch, 0, 0, TO_ROOM);
+// act("$n says 'I hereby declare Midgaard closed!'", false, ch, 0, 0, TO_ROOM);
 // break;
 //
 // case 'O':
@@ -318,156 +298,204 @@ pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &
 // break;
 //
 // case '.':
-// move = FALSE;
+// move = false;
 // break;
 //
 // }
 //
 // path_index++;
-// return (FALSE);
+// return (false);
 // }
-//
-//
-// /* ********************************************************************
-// *  General special procedures for mobiles                             *
-// ******************************************************************** */
-//
-//
-// void npc_steal(struct char_data *ch, struct char_data *victim)
-// {
-// int gold;
-//
-// if (IS_NPC(victim))
-// return;
-// if (GET_LEVEL(victim) >= LVL_IMMORT)
-// return;
-// if (!CAN_SEE(ch, victim))
-// return;
-//
-// if (AWAKE(victim) && (rand_number(0, GET_LEVEL(ch)) == 0)) {
-// act("You discover that $n has $s hands in your wallet.", FALSE, ch, 0, victim, TO_VICT);
-// act("$n tries to steal gold from $N.", TRUE, ch, 0, victim, TO_NOTVICT);
-// } else {
-// /* Steal some gold coins */
-// gold = (GET_GOLD(victim) * rand_number(1, 10)) / 100;
-// if (gold > 0) {
-// GET_GOLD(ch) += gold;
-// GET_GOLD(victim) -= gold;
-// }
-// }
-// }
-//
-//
-// /*
-//  * Quite lethal to low-level characters.
-//  */
-// SPECIAL(snake)
-// {
-// if (cmd || GET_POS(ch) != POS_FIGHTING || !FIGHTING(ch))
-// return (FALSE);
-//
-// if (IN_ROOM(FIGHTING(ch)) != IN_ROOM(ch) || rand_number(0, GET_LEVEL(ch)) != 0)
-// return (FALSE);
-//
-// act("$n bites $N!", 1, ch, 0, FIGHTING(ch), TO_NOTVICT);
-// act("$n bites you!", 1, ch, 0, FIGHTING(ch), TO_VICT);
-// call_magic(ch, FIGHTING(ch), 0, SPELL_POISON, GET_LEVEL(ch), CAST_SPELL);
-// return (TRUE);
-// }
-//
-//
-// SPECIAL(thief)
-// {
-// struct char_data *cons;
-//
-// if (cmd || GET_POS(ch) != POS_STANDING)
-// return (FALSE);
-//
-// for (cons = world[IN_ROOM(ch)].people; cons; cons = cons->next_in_room)
-// if (!IS_NPC(cons) && GET_LEVEL(cons) < LVL_IMMORT && !rand_number(0, 4)) {
-// npc_steal(ch, cons);
-// return (TRUE);
-// }
-//
-// return (FALSE);
-// }
-//
-//
-// SPECIAL(magic_user)
-// {
-// struct char_data *vict;
-//
-// if (cmd || GET_POS(ch) != POS_FIGHTING)
-// return (FALSE);
-//
-// /* pseudo-randomly choose someone in the room who is fighting me */
-// for (vict = world[IN_ROOM(ch)].people; vict; vict = vict->next_in_room)
-// if (FIGHTING(vict) == ch && !rand_number(0, 4))
-// break;
-//
-// /* if I didn't pick any of those, then just slam the guy I'm fighting */
-// if (vict == NULL && IN_ROOM(FIGHTING(ch)) == IN_ROOM(ch))
-// vict = FIGHTING(ch);
-//
-// /* Hm...didn't pick anyone...I'll wait a round. */
-// if (vict == NULL)
-// return (TRUE);
-//
-// if (GET_LEVEL(ch) > 13 && rand_number(0, 10) == 0)
-// cast_spell(ch, vict, NULL, SPELL_POISON);
-//
-// if (GET_LEVEL(ch) > 7 && rand_number(0, 8) == 0)
-// cast_spell(ch, vict, NULL, SPELL_BLINDNESS);
-//
-// if (GET_LEVEL(ch) > 12 && rand_number(0, 12) == 0) {
-// if (IS_EVIL(ch))
-// cast_spell(ch, vict, NULL, SPELL_ENERGY_DRAIN);
-// else if (IS_GOOD(ch))
-// cast_spell(ch, vict, NULL, SPELL_DISPEL_EVIL);
-// }
-//
-// if (rand_number(0, 4))
-// return (TRUE);
-//
-// switch (GET_LEVEL(ch)) {
-// case 4:
-// case 5:
-// cast_spell(ch, vict, NULL, SPELL_MAGIC_MISSILE);
-// break;
-// case 6:
-// case 7:
-// cast_spell(ch, vict, NULL, SPELL_CHILL_TOUCH);
-// break;
-// case 8:
-// case 9:
-// cast_spell(ch, vict, NULL, SPELL_BURNING_HANDS);
-// break;
-// case 10:
-// case 11:
-// cast_spell(ch, vict, NULL, SPELL_SHOCKING_GRASP);
-// break;
-// case 12:
-// case 13:
-// cast_spell(ch, vict, NULL, SPELL_LIGHTNING_BOLT);
-// break;
-// case 14:
-// case 15:
-// case 16:
-// case 17:
-// cast_spell(ch, vict, NULL, SPELL_COLOR_SPRAY);
-// break;
-// default:
-// cast_spell(ch, vict, NULL, SPELL_FIREBALL);
-// break;
-// }
-// return (TRUE);
-//
-// }
+
+/* ********************************************************************
+*  General special procedures for mobiles                             *
+******************************************************************** */
+
+fn npc_steal(db: &DB, ch: &Rc<CharData>, victim: &Rc<CharData>) {
+    if victim.is_npc() {
+        return;
+    }
+
+    if victim.get_level() >= LVL_IMMORT as u8 {
+        return;
+    }
+    if !db.can_see(ch, victim) {
+        return;
+    }
+
+    if victim.awake() && rand_number(0, ch.get_level() as u32) == 0 {
+        db.act(
+            "You discover that $n has $s hands in your wallet.",
+            false,
+            Some(ch),
+            None,
+            Some(victim),
+            TO_VICT,
+        );
+        db.act(
+            "$n tries to steal gold from $N.",
+            true,
+            Some(ch),
+            None,
+            Some(victim),
+            TO_NOTVICT,
+        );
+    } else {
+        /* Steal some gold coins */
+        let gold = victim.get_gold() * rand_number(1, 10) as i32 / 100;
+        if gold > 0 {
+            ch.set_gold(ch.get_gold() + gold);
+            victim.set_gold(ch.get_gold() - gold);
+        }
+    }
+}
+
+/*
+ * Quite lethal to low-level characters.
+ */
+#[allow(unused_variables)]
+pub fn snake(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || ch.get_pos() != POS_FIGHTING || ch.fighting().is_none() {
+        return false;
+    }
+
+    if ch.fighting().as_ref().unwrap().in_room() != ch.in_room()
+        || rand_number(0, ch.get_level() as u32) != 0
+    {
+        return false;
+    }
+    let db = &game.db;
+    db.act(
+        "$n bites $N!",
+        true,
+        Some(ch),
+        None,
+        Some(ch.fighting().as_ref().unwrap()),
+        TO_NOTVICT,
+    );
+    db.act(
+        "$n bites you!",
+        true,
+        Some(ch),
+        None,
+        Some(ch.fighting().as_ref().unwrap()),
+        TO_VICT,
+    );
+    call_magic(
+        game,
+        ch,
+        ch.fighting().as_ref(),
+        None,
+        SPELL_POISON,
+        ch.get_level() as i32,
+        CAST_SPELL,
+    );
+    return true;
+}
+
+#[allow(unused_variables)]
+pub fn thief(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || ch.get_pos() != POS_STANDING {
+        return false;
+    }
+    let db = &game.db;
+    for cons in db.world.borrow()[ch.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if !cons.is_npc() && cons.get_level() < LVL_IMMORT as u8 && rand_number(0, 4) == 0 {
+            npc_steal(db, ch, cons);
+            return true;
+        }
+    }
+    return false;
+}
+
+#[allow(unused_variables)]
+pub fn magic_user(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || ch.get_pos() != POS_FIGHTING {
+        return false;
+    }
+    let db = &game.db;
+    /* pseudo-randomly choose someone in the room who is fighting me */
+    let mut vict = None;
+    let w = db.world.borrow();
+    let peoples = w[ch.in_room() as usize].peoples.borrow();
+    for v in peoples.iter() {
+        if v.fighting().is_some()
+            && Rc::ptr_eq(v.fighting().as_ref().unwrap(), ch)
+            && rand_number(0, 4) == 0
+        {
+            vict = Some(v);
+            break;
+        }
+    }
+
+    let mut my_vict = None;
+    /* if I didn't pick any of those, then just slam the guy I'm fighting */
+    if vict.is_none() && ch.fighting().as_ref().unwrap().in_room() == ch.in_room() {
+        my_vict = ch.fighting().clone();
+    }
+    if my_vict.is_some() {
+        vict = my_vict.as_ref();
+    }
+
+    /* Hm...didn't pick anyone...I'll wait a round. */
+    if vict.is_none() {
+        return true;
+    }
+
+    if ch.get_level() > 13 && rand_number(0, 10) == 0 {
+        cast_spell(game, ch, vict, None, SPELL_POISON);
+    }
+
+    if ch.get_level() > 7 && rand_number(0, 8) == 0 {
+        cast_spell(game, ch, vict, None, SPELL_BLINDNESS);
+    }
+
+    if ch.get_level() > 12 && rand_number(0, 12) == 0 {
+        if ch.is_evil() {
+            cast_spell(game, ch, vict, None, SPELL_ENERGY_DRAIN);
+        } else if ch.is_good() {
+            cast_spell(game, ch, vict, None, SPELL_DISPEL_EVIL);
+        }
+    }
+
+    if rand_number(0, 4) != 0 {
+        return true;
+    }
+
+    match ch.get_level() {
+        4 | 5 => {
+            cast_spell(game, ch, vict, None, SPELL_MAGIC_MISSILE);
+        }
+        6 | 7 => {
+            cast_spell(game, ch, vict, None, SPELL_CHILL_TOUCH);
+        }
+        8 | 9 => {
+            cast_spell(game, ch, vict, None, SPELL_BURNING_HANDS);
+        }
+        10 | 11 => {
+            cast_spell(game, ch, vict, None, SPELL_SHOCKING_GRASP);
+        }
+        12 | 13 => {
+            cast_spell(game, ch, vict, None, SPELL_LIGHTNING_BOLT);
+        }
+        14 | 15 | 16 | 17 => {
+            cast_spell(game, ch, vict, None, SPELL_COLOR_SPRAY);
+        }
+        _ => {
+            cast_spell(game, ch, vict, None, SPELL_FIREBALL);
+        }
+    }
+    return true;
+}
 
 /* ********************************************************************
 *  Special procedures for mobiles                                      *
 ******************************************************************** */
-
+#[allow(unused_variables)]
 pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let guard = me.downcast_ref::<Rc<CharData>>().unwrap();
     let buf = "The guard humiliates you, and blocks your way.\r\n";
@@ -501,148 +529,197 @@ pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
     false
 }
 
-// SPECIAL(puff)
-// {
-// char actbuf[MAX_INPUT_LENGTH];
-//
-// if (cmd)
-// return (FALSE);
-//
-// switch (rand_number(0, 60)) {
-// case 0:
-// do_say(ch, strcpy(actbuf, "My god!  It's full of stars!"), 0, 0);	/* strcpy: OK */
-// return (TRUE);
-// case 1:
-// do_say(ch, strcpy(actbuf, "How'd all those fish get up here?"), 0, 0);	/* strcpy: OK */
-// return (TRUE);
-// case 2:
-// do_say(ch, strcpy(actbuf, "I'm a very female dragon."), 0, 0);	/* strcpy: OK */
-// return (TRUE);
-// case 3:
-// do_say(ch, strcpy(actbuf, "I've got a peaceful, easy feeling."), 0, 0);	/* strcpy: OK */
-// return (TRUE);
-// default:
-// return (FALSE);
-// }
-// }
-//
-//
-//
-// SPECIAL(fido)
-// {
-// struct obj_data *i, *temp, *next_obj;
-//
-// if (cmd || !AWAKE(ch))
-// return (FALSE);
-//
-// for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content) {
-// if (!IS_CORPSE(i))
-// continue;
-//
-// act("$n savagely devours a corpse.", FALSE, ch, 0, 0, TO_ROOM);
-// for (temp = i->contains; temp; temp = next_obj) {
-// next_obj = temp->next_content;
-// obj_from_obj(temp);
-// obj_to_room(temp, IN_ROOM(ch));
-// }
-// extract_obj(i);
-// return (TRUE);
-// }
-//
-// return (FALSE);
-// }
-//
-//
-//
-// SPECIAL(janitor)
-// {
-// struct obj_data *i;
-//
-// if (cmd || !AWAKE(ch))
-// return (FALSE);
-//
-// for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content) {
-// if (!CAN_WEAR(i, ITEM_WEAR_TAKE))
-// continue;
-// if (GET_OBJ_TYPE(i) != ITEM_DRINKCON && GET_OBJ_COST(i) >= 15)
-// continue;
-// act("$n picks up some trash.", FALSE, ch, 0, 0, TO_ROOM);
-// obj_from_room(i);
-// obj_to_char(i, ch);
-// return (TRUE);
-// }
-//
-// return (FALSE);
-// }
-//
-//
-// SPECIAL(cityguard)
-// {
-// struct char_data *tch, *evil, *spittle;
-// int max_evil, min_cha;
-//
-// if (cmd || !AWAKE(ch) || FIGHTING(ch))
-// return (FALSE);
-//
-// max_evil = 1000;
-// min_cha = 6;
-// spittle = evil = NULL;
-//
-// for (tch = world[IN_ROOM(ch)].people; tch; tch = tch->next_in_room) {
-// if (!CAN_SEE(ch, tch))
-// continue;
-//
-// if (!IS_NPC(tch) && PLR_FLAGGED(tch, PLR_KILLER)) {
-// act("$n screams 'HEY!!!  You're one of those PLAYER KILLERS!!!!!!'", FALSE, ch, 0, 0, TO_ROOM);
-// hit(ch, tch, TYPE_UNDEFINED);
-// return (TRUE);
-// }
-//
-// if (!IS_NPC(tch) && PLR_FLAGGED(tch, PLR_THIEF)) {
-// act("$n screams 'HEY!!!  You're one of those PLAYER THIEVES!!!!!!'", FALSE, ch, 0, 0, TO_ROOM);
-// hit(ch, tch, TYPE_UNDEFINED);
-// return (TRUE);
-// }
-//
-// if (FIGHTING(tch) && GET_ALIGNMENT(tch) < max_evil && (IS_NPC(tch) || IS_NPC(FIGHTING(tch)))) {
-// max_evil = GET_ALIGNMENT(tch);
-// evil = tch;
-// }
-//
-// if (GET_CHA(tch) < min_cha) {
-// spittle = tch;
-// min_cha = GET_CHA(tch);
-// }
-// }
-//
-// if (evil && GET_ALIGNMENT(FIGHTING(evil)) >= 0) {
-// act("$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'", FALSE, ch, 0, 0, TO_ROOM);
-// hit(ch, evil, TYPE_UNDEFINED);
-// return (TRUE);
-// }
-//
-// /* Reward the socially inept. */
-// if (spittle && !rand_number(0, 9)) {
-// static int spit_social;
-//
-// if (!spit_social)
-// spit_social = find_command("spit");
-//
-// if (spit_social > 0) {
-// char spitbuf[MAX_NAME_LENGTH + 1];
-//
-// strncpy(spitbuf, GET_NAME(spittle), sizeof(spitbuf));	/* strncpy: OK */
-// spitbuf[sizeof(spitbuf) - 1] = '\0';
-//
-// do_action(ch, spitbuf, spit_social, 0);
-// return (TRUE);
-// }
-// }
-//
-// return (FALSE);
-// }
-//
-//
+#[allow(unused_variables)]
+pub fn puff(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 {
+        return false;
+    }
+
+    return match rand_number(0, 60) {
+        0 => {
+            do_say(game, ch, "My god!  It's full of stars!", 0, 0);
+            true
+        }
+        1 => {
+            do_say(game, ch, "How'd all those fish get up here?", 0, 0);
+            true
+        }
+        2 => {
+            do_say(game, ch, "I'm a very female dragon.", 0, 0);
+            true
+        }
+        3 => {
+            do_say(game, ch, "I've got a peaceful, easy feeling.", 0, 0);
+            true
+        }
+        _ => false,
+    };
+}
+
+#[allow(unused_variables)]
+pub fn fido(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || !ch.awake() {
+        return false;
+    }
+
+    for i in game.db.world.borrow()[ch.in_room() as usize]
+        .contents
+        .borrow()
+        .iter()
+    {
+        if !i.is_corpse() {
+            continue;
+        }
+
+        game.db.act(
+            "$n savagely devours a corpse.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        for temp in clone_vec(&i.contains).iter() {
+            DB::obj_from_obj(temp);
+            game.db.obj_to_room(Some(temp), ch.in_room());
+        }
+        game.db.extract_obj(i);
+        return true;
+    }
+
+    return false;
+}
+
+#[allow(unused_variables)]
+pub fn janitor(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || !ch.awake() {
+        return false;
+    }
+    let db = &game.db;
+    for i in clone_vec(&db.world.borrow()[ch.in_room() as usize].contents).iter() {
+        if !i.can_wear(ITEM_WEAR_TAKE) {
+            continue;
+        }
+        if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {
+            continue;
+        }
+        db.act(
+            "$n picks up some trash.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.obj_from_room(Some(i));
+        DB::obj_to_char(Some(i), Some(ch));
+        return true;
+    }
+
+    return false;
+}
+
+#[allow(unused_variables)]
+pub fn cityguard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if cmd != 0 || !ch.awake() || ch.fighting().is_some() {
+        return false;
+    }
+
+    let mut max_evil = 1000;
+    let mut min_cha = 6;
+    let mut spittle = None;
+    let mut evil = None;
+    let db = &game.db;
+    let w = db.world.borrow();
+    let peoples = w[ch.in_room() as usize].peoples.borrow();
+    for tch in peoples.iter() {
+        if !db.can_see(ch, tch) {
+            continue;
+        }
+
+        if !tch.is_npc() && tch.plr_flagged(PLR_KILLER) {
+            db.act(
+                "$n screams 'HEY!!!  You're one of those PLAYER KILLERS!!!!!!'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.hit(ch, tch, TYPE_UNDEFINED, game);
+            return true;
+        }
+
+        if !tch.is_npc() && tch.plr_flagged(PLR_THIEF) {
+            db.act(
+                "$n screams 'HEY!!!  You're one of those PLAYER THIEVES!!!!!!'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.hit(ch, tch, TYPE_UNDEFINED, game);
+            return true;
+        }
+
+        if tch.fighting().is_some()
+            && tch.get_alignment() < max_evil
+            && (tch.is_npc() || tch.fighting().as_ref().unwrap().is_npc())
+        {
+            max_evil = tch.get_alignment();
+            evil = Some(tch);
+        }
+
+        if tch.get_cha() < min_cha {
+            spittle = Some(tch);
+            min_cha = tch.get_cha();
+        }
+    }
+
+    if evil.is_some()
+        && evil
+            .as_ref()
+            .unwrap()
+            .fighting()
+            .as_ref()
+            .unwrap()
+            .get_alignment()
+            >= 0
+    {
+        db.act(
+            "$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.hit(ch, evil.as_ref().unwrap(), TYPE_UNDEFINED, game);
+        return true;
+    }
+
+    /* Reward the socially inept. */
+    if spittle.is_some() && rand_number(0, 9) == 0 {
+        let spit_social = find_command("spit");
+
+        if spit_social.is_some() {
+            let spit_social = spit_social.unwrap();
+
+            do_action(
+                game,
+                ch,
+                &spittle.as_ref().unwrap().get_name(),
+                spit_social,
+                0,
+            );
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // #define PET_PRICE(pet) (GET_LEVEL(pet) * 300)
 //
 // SPECIAL(pet_shops)
@@ -662,18 +739,18 @@ pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 // continue;
 // send_to_char(ch, "%8d - %s\r\n", PET_PRICE(pet), GET_NAME(pet));
 // }
-// return (TRUE);
+// return (true);
 // } else if (CMD_IS("buy")) {
 //
 // two_arguments(argument, buf, pet_name);
 //
-// if (!(pet = get_char_room(buf, NULL, pet_room)) || !IS_NPC(pet)) {
+// if (!(pet = get_char_room(buf, None, pet_room)) || !IS_NPC(pet)) {
 // send_to_char(ch, "There is no such pet!\r\n");
-// return (TRUE);
+// return (true);
 // }
 // if (GET_GOLD(ch) < PET_PRICE(pet)) {
 // send_to_char(ch, "You don't have enough gold!\r\n");
-// return (TRUE);
+// return (true);
 // }
 // GET_GOLD(ch) -= PET_PRICE(pet);
 //
@@ -699,13 +776,13 @@ pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 // IS_CARRYING_N(pet) = 100;
 //
 // send_to_char(ch, "May you enjoy your pet.\r\n");
-// act("$n buys $N as a pet.", FALSE, ch, 0, pet, TO_ROOM);
+// act("$n buys $N as a pet.", false, ch, 0, pet, TO_ROOM);
 //
-// return (TRUE);
+// return (true);
 // }
 //
 // /* All commands except list and buy */
-// return (FALSE);
+// return (false);
 // }
 //
 //
@@ -724,36 +801,36 @@ pub fn guild_guard(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 // send_to_char(ch, "Your current balance is %d coins.\r\n", GET_BANK_GOLD(ch));
 // else
 // send_to_char(ch, "You currently have no money deposited.\r\n");
-// return (TRUE);
+// return (true);
 // } else if (CMD_IS("deposit")) {
 // if ((amount = atoi(argument)) <= 0) {
 // send_to_char(ch, "How much do you want to deposit?\r\n");
-// return (TRUE);
+// return (true);
 // }
 // if (GET_GOLD(ch) < amount) {
 // send_to_char(ch, "You don't have that many coins!\r\n");
-// return (TRUE);
+// return (true);
 // }
 // GET_GOLD(ch) -= amount;
 // GET_BANK_GOLD(ch) += amount;
 // send_to_char(ch, "You deposit %d coins.\r\n", amount);
-// act("$n makes a bank transaction.", TRUE, ch, 0, FALSE, TO_ROOM);
-// return (TRUE);
+// act("$n makes a bank transaction.", true, ch, 0, false, TO_ROOM);
+// return (true);
 // } else if (CMD_IS("withdraw")) {
 // if ((amount = atoi(argument)) <= 0) {
 // send_to_char(ch, "How much do you want to withdraw?\r\n");
-// return (TRUE);
+// return (true);
 // }
 // if (GET_BANK_GOLD(ch) < amount) {
 // send_to_char(ch, "You don't have that many coins deposited!\r\n");
-// return (TRUE);
+// return (true);
 // }
 // GET_GOLD(ch) += amount;
 // GET_BANK_GOLD(ch) -= amount;
 // send_to_char(ch, "You withdraw %d coins.\r\n", amount);
-// act("$n makes a bank transaction.", TRUE, ch, 0, FALSE, TO_ROOM);
-// return (TRUE);
+// act("$n makes a bank transaction.", true, ch, 0, false, TO_ROOM);
+// return (true);
 // } else
-// return (FALSE);
+// return (false);
 // }
 //

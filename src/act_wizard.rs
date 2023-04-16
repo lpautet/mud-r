@@ -24,48 +24,6 @@ use crate::structs::{
 };
 use crate::{send_to_char, Game, TO_VICT};
 
-// /* local functions */
-// int perform_set(struct char_data *ch, struct char_data *vict, int mode, char *val_arg);
-// void perform_immort_invis(struct char_data *ch, int level);
-// ACMD(do_echo);
-// ACMD(do_send);
-// room_rnum find_target_room(struct char_data *ch, char *rawroomstr);
-// ACMD(do_at);
-// ACMD(do_goto);
-// ACMD(do_trans);
-// ACMD(do_teleport);
-// ACMD(do_vnum);
-// void do_stat_room(struct char_data *ch);
-// void do_stat_object(struct char_data *ch, struct obj_data *j);
-// void do_stat_character(struct char_data *ch, struct char_data *k);
-// ACMD(do_stat);
-// ACMD(do_shutdown);
-// void stop_snooping(struct char_data *ch);
-// ACMD(do_snoop);
-// ACMD(do_switch);
-// ACMD(do_return);
-// ACMD(do_load);
-// ACMD(do_vstat);
-// ACMD(do_purge);
-// ACMD(do_syslog);
-// ACMD(do_advance);
-// ACMD(do_restore);
-// void perform_immort_vis(struct char_data *ch);
-// ACMD(do_invis);
-// ACMD(do_gecho);
-// ACMD(do_poofset);
-// ACMD(do_dc);
-// ACMD(do_wizlock);
-// ACMD(do_date);
-// ACMD(do_last);
-// ACMD(do_force);
-// ACMD(do_wiznet);
-// ACMD(do_zreset);
-// ACMD(do_wizutil);
-// size_t print_zone_to_buf(char *bufptr, size_t left, zone_rnum zone);
-// ACMD(do_show);
-// ACMD(do_set);
-// void snoop_check(struct char_data *ch);
 //
 //
 // ACMD(do_echo)

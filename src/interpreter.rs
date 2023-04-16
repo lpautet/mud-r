@@ -16,6 +16,7 @@ use hmac::Hmac;
 use log::error;
 use sha2::Sha256;
 
+use crate::act_comm::{do_gsay, do_reply, do_say, do_tell};
 use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gen_ps,
     do_gold, do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_users,
@@ -193,7 +194,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 231] = [
+pub const CMD_INFO: [CommandInfo; 236] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -871,6 +872,13 @@ pub const CMD_INFO: [CommandInfo; 231] = [
         subcmd: 0,
     },
     // { "gsay"     , POS_SLEEPING, do_gsay     , 0, 0 },
+    CommandInfo {
+        command: "gsay",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gsay,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "gtell"    , POS_SLEEPING, do_gsay     , 0, 0 },
     //
     // { "help"     , POS_DEAD    , do_help     , 0, 0 },
@@ -1423,6 +1431,13 @@ pub const CMD_INFO: [CommandInfo; 231] = [
     // { "qsay"     , POS_RESTING , do_qcomm    , 0, SCMD_QSAY },
     //
     // { "reply"    , POS_SLEEPING, do_reply    , 0, 0 },
+    CommandInfo {
+        command: "reply",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_reply,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "rest"     , POS_RESTING , do_rest     , 0, 0 },
     CommandInfo {
         command: "rest",
@@ -1503,7 +1518,21 @@ pub const CMD_INFO: [CommandInfo; 231] = [
     },
     //
     // { "say"      , POS_RESTING , do_say      , 0, 0 },
+    CommandInfo {
+        command: "say",
+        minimum_position: POS_RESTING,
+        command_pointer: do_say,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "'"        , POS_RESTING , do_say      , 0, 0 },
+    CommandInfo {
+        command: "'",
+        minimum_position: POS_RESTING,
+        command_pointer: do_say,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "save"     , POS_SLEEPING, do_save     , 0, 0 },
     CommandInfo {
         command: "save",
@@ -1806,6 +1835,13 @@ pub const CMD_INFO: [CommandInfo; 231] = [
     // { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
     //
     // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
+    CommandInfo {
+        command: "tell",
+        minimum_position: POS_DEAD,
+        command_pointer: do_tell,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "tackle"   , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "tackle",

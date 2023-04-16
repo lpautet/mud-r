@@ -654,6 +654,7 @@ pub fn mag_groups(db: &DB, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32,
  *
  * No spells of this class currently implemented.
  */
+#[allow(unused_variables)]
 pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetype: i32) {
     for tch in db.world.borrow()[ch.in_room() as usize]
         .peoples
@@ -678,6 +679,7 @@ pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetyp
  *
  *  area spells have limited targets within the room.
  */
+#[allow(unused_variables)]
 pub fn mag_areas(game: &Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
     let db = &game.db;
     let mut to_char = "";
@@ -791,7 +793,7 @@ const MAG_SUMMON_FAIL_MSGS: [&str; 8] = [
 const MOB_CLONE: i32 = 10;
 const MOB_ZOMBIE: i32 = 11;
 // #define MOB_AERIALSERVANT	19
-
+#[allow(unused_variables)]
 pub fn mag_summons(
     db: &DB,
     level: i32,
@@ -893,6 +895,7 @@ pub fn mag_summons(
     }
 }
 
+#[allow(unused_variables)]
 pub fn mag_points(
     level: i32,
     ch: &Rc<CharData>,
@@ -930,6 +933,7 @@ pub fn mag_points(
     update_pos(victim);
 }
 
+#[allow(unused_variables)]
 pub fn mag_unaffects(
     db: &DB,
     level: i32,
@@ -994,6 +998,7 @@ pub fn mag_unaffects(
     }
 }
 
+#[allow(unused_variables)]
 pub fn mag_alter_objs(
     db: &DB,
     level: i32,

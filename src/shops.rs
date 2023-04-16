@@ -1,13 +1,12 @@
-// /* ************************************************************************
-// *   File: shop.h                                        Part of CircleMUD *
-// *  Usage: shop file definitions, structures, constants                    *
-// *                                                                         *
-// *  All rights reserved.  See license.doc for complete information.        *
-// *                                                                         *
-// *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
-// *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-// ************************************************************************ */
-//
+/* ************************************************************************
+*   File: shop.h                                        Part of CircleMUD *
+*  Usage: shop file definitions, structures, constants                    *
+*                                                                         *
+*  All rights reserved.  See license.doc for complete information.        *
+*                                                                         *
+*  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
+*  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+************************************************************************ */
 
 use std::any::Any;
 use std::borrow::BorrowMut;

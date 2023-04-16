@@ -367,6 +367,7 @@ pub struct AttackHitType {
 /*
  * Special spells appear below.
  */
+#[allow(unused_variables)]
 pub fn spell_create_water(
     db: &DB,
     level: i32,
@@ -402,6 +403,7 @@ pub fn spell_create_water(
     }
 }
 
+#[allow(unused_variables)]
 pub fn spell_recall(
     db: &DB,
     level: i32,
@@ -429,6 +431,7 @@ pub fn spell_recall(
     db.look_at_room(victim, false);
 }
 
+#[allow(unused_variables)]
 pub fn spell_teleport(
     db: &DB,
     level: i32,
@@ -476,6 +479,7 @@ pub fn spell_teleport(
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
+#[allow(unused_variables)]
 pub fn spell_summon(
     game: &Game,
     level: i32,
@@ -570,6 +574,7 @@ pub fn spell_summon(
     db.look_at_room(victim, false);
 }
 
+#[allow(unused_variables)]
 pub fn spell_locate_object(
     db: &DB,
     level: i32,
@@ -655,6 +660,7 @@ pub fn spell_locate_object(
     }
 }
 
+#[allow(unused_variables)]
 pub fn spell_charm(
     db: &DB,
     level: i32,
@@ -722,6 +728,7 @@ pub fn spell_charm(
     }
 }
 
+#[allow(unused_variables)]
 pub fn spell_identify(
     db: &DB,
     level: i32,
@@ -922,6 +929,7 @@ pub fn spell_identify(
  * Cannot use this spell on an equipped object or it will mess up the
  * wielding character's hit/dam totals.
  */
+#[allow(unused_variables)]
 pub fn spell_enchant_weapon(
     db: &DB,
     level: i32,
@@ -977,6 +985,7 @@ pub fn spell_enchant_weapon(
     }
 }
 
+#[allow(unused_variables)]
 pub fn spell_detect_poison(
     db: &DB,
     level: i32,

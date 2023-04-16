@@ -162,6 +162,12 @@ use crate::spells::SPELL_CHARM;
 pub use check_player_special;
 
 impl CharData {
+    pub fn get_last_tell(&self) -> i64 {
+        self.player_specials.borrow().last_tell
+    }
+    pub fn set_last_tell(&self, val: i64) {
+        self.player_specials.borrow_mut().last_tell = val;
+    }
     pub fn get_invis_lev(&self) -> i16 {
         check_player_special!(self, self.player_specials.borrow().saved.invis_level)
     }

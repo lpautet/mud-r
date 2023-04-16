@@ -38,6 +38,7 @@ use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
 use crate::util::{clone_vec, hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
 
+mod act_comm;
 mod act_informative;
 mod act_item;
 mod act_movement;

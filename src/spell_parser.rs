@@ -435,7 +435,7 @@ pub fn skill_name(db: &DB, num: i32) -> &'static str {
 }
 
 pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
-    let mut ok = false;
+    let mut ok;
     for skindex in 1..(TOP_SPELL_DEFINE + 1) {
         if is_abbrev(name, &db.spell_info[skindex].name) {
             return Some(skindex as i32);
@@ -471,7 +471,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * This is also the entry point for non-spoken or unrestricted spells.
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
-fn call_magic(
+pub fn call_magic(
     game: &Game,
     caster: &Rc<CharData>,
     cvict: Option<&Rc<CharData>>,
@@ -514,7 +514,7 @@ fn call_magic(
         );
         return 0;
     }
-    let mut savetype = 0;
+    let mut savetype;
     /* determine the type of saving throw */
     match casttype {
         CAST_STAFF | CAST_SCROLL | CAST_POTION | CAST_WAND => {
@@ -1124,7 +1124,7 @@ pub fn do_cast(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                let mut nt = String::new();
+                let nt = String::new();
                 tch = db.get_char_vis(ch, &mut t, None, FIND_CHAR_ROOM);
                 tch.is_some()
             } {
