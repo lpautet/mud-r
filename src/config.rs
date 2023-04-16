@@ -44,7 +44,7 @@ use crate::structs::{RoomRnum, LVL_GOD};
 pub const PK_ALLOWED: bool = false;
 
 /* is playerthieving allowed? */
-// static mut PT_ALLOWED: bool = false;
+pub const PT_ALLOWED: bool = false;
 
 /* minimum level a player must be to shout/holler/gossip/auction */
 //static mut LEVEL_CAN_SHOUT: i32 = 1;
@@ -203,7 +203,7 @@ pub const DFLT_DIR: &str = "lib";
 pub const MAX_PLAYING: i32 = 300;
 
 /* maximum size of bug, typo and idea files in bytes (to prevent bombing) */
-// int max_filesize = 50000;
+pub const MAX_FILESIZE: i32 = 50000;
 
 /* maximum number of password attempts before disconnection */
 pub const MAX_BAD_PWS: u8 = 3;

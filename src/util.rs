@@ -168,6 +168,9 @@ impl CharData {
     pub fn get_wimp_lev(&self) -> i32 {
         self.player_specials.borrow().saved.wimp_level
     }
+    pub fn set_wimp_lev(&self, val: i32) {
+        self.player_specials.borrow_mut().saved.wimp_level = val;
+    }
     pub fn set_invis_lev(&self, val: i16) {
         self.player_specials.borrow_mut().saved.invis_level = val;
     }
@@ -722,6 +725,10 @@ macro_rules! spell_routines {
     ($spl:expr) => {
         (spell_infos[spl].routines)
     };
+}
+
+pub fn has_spell_routine(db: &DB, spl: i32, flag: i32) -> bool {
+    is_set!(db.spell_info[spl as usize].routines, flag)
 }
 
 impl CharData {

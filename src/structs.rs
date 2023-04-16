@@ -385,6 +385,7 @@ pub struct CharPointData {
 }
 
 /* Structure used for chars following other chars */
+#[derive(Clone)]
 pub struct FollowType {
     pub follower: Rc<CharData>,
 }

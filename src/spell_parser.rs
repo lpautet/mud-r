@@ -15,7 +15,9 @@ use log::error;
 
 use crate::config::OK;
 use crate::db::DB;
-use crate::handler::{isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{
+    isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV, FIND_OBJ_ROOM,
+};
 use crate::interpreter::{any_one_arg, is_abbrev, one_argument};
 use crate::magic::{
     mag_affects, mag_alter_objs, mag_areas, mag_creations, mag_damage, mag_groups, mag_masses,
@@ -24,32 +26,34 @@ use crate::magic::{
 use crate::spells::{
     spell_charm, spell_create_water, spell_detect_poison, spell_enchant_weapon, spell_identify,
     spell_locate_object, spell_recall, spell_summon, spell_teleport, SpellInfoType, CAST_POTION,
-    CAST_SCROLL, CAST_SPELL, CAST_STAFF, CAST_WAND, MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS,
-    MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL, MAG_MASSES, MAG_POINTS, MAG_SUMMONS,
-    MAG_UNAFFECTS, MAX_SPELLS, SAVING_BREATH, SAVING_ROD, SAVING_SPELL, SKILL_BACKSTAB, SKILL_BASH,
-    SKILL_HIDE, SKILL_KICK, SKILL_PICK_LOCK, SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK,
-    SPELL_ACID_BREATH, SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS,
-    SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING, SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE,
-    SPELL_COLOR_SPRAY, SPELL_CONTROL_WEATHER, SPELL_CREATE_FOOD, SPELL_CREATE_WATER,
-    SPELL_CURE_BLIND, SPELL_CURE_CRITIC, SPELL_CURE_LIGHT, SPELL_CURSE, SPELL_DETECT_ALIGN,
-    SPELL_DETECT_INVIS, SPELL_DETECT_MAGIC, SPELL_DETECT_POISON, SPELL_DISPEL_EVIL,
-    SPELL_DISPEL_GOOD, SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON, SPELL_ENERGY_DRAIN, SPELL_FIREBALL,
-    SPELL_FIRE_BREATH, SPELL_FROST_BREATH, SPELL_GAS_BREATH, SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL,
-    SPELL_HARM, SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION, SPELL_INVISIBLE,
-    SPELL_LIGHTNING_BOLT, SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT, SPELL_MAGIC_MISSILE,
-    SPELL_POISON, SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE, SPELL_REMOVE_POISON, SPELL_SANCTUARY,
-    SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_SUMMON,
-    SPELL_TELEPORT, SPELL_WATERWALK, SPELL_WORD_OF_RECALL, TAR_CHAR_ROOM, TAR_CHAR_WORLD,
-    TAR_FIGHT_SELF, TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF, TAR_OBJ_EQUIP, TAR_OBJ_INV,
-    TAR_OBJ_ROOM, TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE, TYPE_UNDEFINED,
+    CAST_SCROLL, CAST_SPELL, CAST_STAFF, CAST_WAND, DEFAULT_STAFF_LVL, DEFAULT_WAND_LVL,
+    MAG_AFFECTS, MAG_ALTER_OBJS, MAG_AREAS, MAG_CREATIONS, MAG_DAMAGE, MAG_GROUPS, MAG_MANUAL,
+    MAG_MASSES, MAG_POINTS, MAG_SUMMONS, MAG_UNAFFECTS, MAX_SPELLS, SAVING_BREATH, SAVING_ROD,
+    SAVING_SPELL, SKILL_BACKSTAB, SKILL_BASH, SKILL_HIDE, SKILL_KICK, SKILL_PICK_LOCK,
+    SKILL_RESCUE, SKILL_SNEAK, SKILL_STEAL, SKILL_TRACK, SPELL_ACID_BREATH, SPELL_ANIMATE_DEAD,
+    SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS, SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING,
+    SPELL_CHARM, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY, SPELL_CONTROL_WEATHER,
+    SPELL_CREATE_FOOD, SPELL_CREATE_WATER, SPELL_CURE_BLIND, SPELL_CURE_CRITIC, SPELL_CURE_LIGHT,
+    SPELL_CURSE, SPELL_DETECT_ALIGN, SPELL_DETECT_INVIS, SPELL_DETECT_MAGIC, SPELL_DETECT_POISON,
+    SPELL_DISPEL_EVIL, SPELL_DISPEL_GOOD, SPELL_EARTHQUAKE, SPELL_ENCHANT_WEAPON,
+    SPELL_ENERGY_DRAIN, SPELL_FIREBALL, SPELL_FIRE_BREATH, SPELL_FROST_BREATH, SPELL_GAS_BREATH,
+    SPELL_GROUP_ARMOR, SPELL_GROUP_HEAL, SPELL_HARM, SPELL_HEAL, SPELL_IDENTIFY, SPELL_INFRAVISION,
+    SPELL_INVISIBLE, SPELL_LIGHTNING_BOLT, SPELL_LIGHTNING_BREATH, SPELL_LOCATE_OBJECT,
+    SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_PROT_FROM_EVIL, SPELL_REMOVE_CURSE,
+    SPELL_REMOVE_POISON, SPELL_SANCTUARY, SPELL_SENSE_LIFE, SPELL_SHOCKING_GRASP, SPELL_SLEEP,
+    SPELL_STRENGTH, SPELL_SUMMON, SPELL_TELEPORT, SPELL_WATERWALK, SPELL_WORD_OF_RECALL,
+    TAR_CHAR_ROOM, TAR_CHAR_WORLD, TAR_FIGHT_SELF, TAR_FIGHT_VICT, TAR_IGNORE, TAR_NOT_SELF,
+    TAR_OBJ_EQUIP, TAR_OBJ_INV, TAR_OBJ_ROOM, TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE,
+    TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, ObjData, AFF_CHARM, AFF_GROUP, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING,
-    POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
+    CharData, ObjData, AFF_CHARM, AFF_GROUP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
+    LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
+    PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
-use crate::util::rand_number;
-use crate::{is_set, send_to_char, Game, TO_ROOM, TO_VICT};
+use crate::util::{has_spell_routine, rand_number};
+use crate::{is_set, send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 /*
  * This arrangement is pretty stupid, but the number of skills is limited by
@@ -601,159 +605,369 @@ fn call_magic(
     return 1;
 }
 
-// /*
-//  * mag_objectmagic: This is the entry-point for all magic items.  This should
-//  * only be called by the 'quaff', 'use', 'recite', etc. routines.
-//  *
-//  * For reference, object values 0-3:
-//  * staff  - [0]	level	[1] max charges	[2] num charges	[3] spell num
-//  * wand   - [0]	level	[1] max charges	[2] num charges	[3] spell num
-//  * scroll - [0]	level	[1] spell num	[2] spell num	[3] spell num
-//  * potion - [0] level	[1] spell num	[2] spell num	[3] spell num
-//  *
-//  * Staves and wands will default to level 14 if the level is not specified;
-//  * the DikuMUD format did not specify staff and wand levels in the world
-//  * files (this is a CircleMUD enhancement).
-//  */
-// void mag_objectmagic(struct char_data *ch, struct obj_data *obj,
-// char *argument)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// int i, k;
-// struct char_data *tch = NULL, *next_tch;
-// struct obj_data *tobj = NULL;
-//
-// one_argument(argument, arg);
-//
-// k = generic_find(arg, FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM |
-// FIND_OBJ_EQUIP, ch, &tch, &tobj);
-//
-// switch (GET_OBJ_TYPE(obj)) {
-// case ITEM_STAFF:
-// act("You tap $p three times on the ground.", false, ch, obj, 0, TO_CHAR);
-// if (obj->action_description)
-// act(obj->action_description, false, ch, obj, 0, TO_ROOM);
-// else
-// act("$n taps $p three times on the ground.", false, ch, obj, 0, TO_ROOM);
-//
-// if (GET_OBJ_VAL(obj, 2) <= 0) {
-// send_to_char(ch, "It seems powerless.\r\n");
-// act("Nothing seems to happen.", false, ch, obj, 0, TO_ROOM);
-// } else {
-// GET_OBJ_VAL(obj, 2)--;
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// /* Level to cast spell at. */
-// k = GET_OBJ_VAL(obj, 0) ? GET_OBJ_VAL(obj, 0) : DEFAULT_STAFF_LVL;
-//
-// /*
-//  * Problem : Area/mass spells on staves can cause crashes.
-//  * Solution: Remove the special nature of area/mass spells on staves.
-//  * Problem : People like that behavior.
-//  * Solution: We special case the area/mass spells here.
-//  */
-// if (HAS_SPELL_ROUTINE(GET_OBJ_VAL(obj, 3), MAG_MASSES | MAG_AREAS)) {
-// for (i = 0, tch = world[IN_ROOM(ch)].people; tch; tch = tch->next_in_room)
-// i++;
-// while (i-- > 0)
-// call_magic(ch, NULL, NULL, GET_OBJ_VAL(obj, 3), k, CAST_STAFF);
-// } else {
-// for (tch = world[IN_ROOM(ch)].people; tch; tch = next_tch) {
-// next_tch = tch->next_in_room;
-// if (ch != tch)
-// call_magic(ch, tch, NULL, GET_OBJ_VAL(obj, 3), k, CAST_STAFF);
-// }
-// }
-// }
-// break;
-// case ITEM_WAND:
-// if (k == FIND_CHAR_ROOM) {
-// if (tch == ch) {
-// act("You point $p at yourself.", false, ch, obj, 0, TO_CHAR);
-// act("$n points $p at $mself.", false, ch, obj, 0, TO_ROOM);
-// } else {
-// act("You point $p at $N.", false, ch, obj, tch, TO_CHAR);
-// if (obj->action_description)
-// act(obj->action_description, false, ch, obj, tch, TO_ROOM);
-// else
-// act("$n points $p at $N.", TRUE, ch, obj, tch, TO_ROOM);
-// }
-// } else if (tobj != NULL) {
-// act("You point $p at $P.", false, ch, obj, tobj, TO_CHAR);
-// if (obj->action_description)
-// act(obj->action_description, false, ch, obj, tobj, TO_ROOM);
-// else
-// act("$n points $p at $P.", TRUE, ch, obj, tobj, TO_ROOM);
-// } else if (IS_SET(spell_info[GET_OBJ_VAL(obj, 3)].routines, MAG_AREAS | MAG_MASSES)) {
-// /* Wands with area spells don't need to be pointed. */
-// act("You point $p outward.", false, ch, obj, NULL, TO_CHAR);
-// act("$n points $p outward.", TRUE, ch, obj, NULL, TO_ROOM);
-// } else {
-// act("At what should $p be pointed?", false, ch, obj, NULL, TO_CHAR);
-// return;
-// }
-//
-// if (GET_OBJ_VAL(obj, 2) <= 0) {
-// send_to_char(ch, "It seems powerless.\r\n");
-// act("Nothing seems to happen.", false, ch, obj, 0, TO_ROOM);
-// return;
-// }
-// GET_OBJ_VAL(obj, 2)--;
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// if (GET_OBJ_VAL(obj, 0))
-// call_magic(ch, tch, tobj, GET_OBJ_VAL(obj, 3),
-// GET_OBJ_VAL(obj, 0), CAST_WAND);
-// else
-// call_magic(ch, tch, tobj, GET_OBJ_VAL(obj, 3),
-// DEFAULT_WAND_LVL, CAST_WAND);
-// break;
-// case ITEM_SCROLL:
-// if (*arg) {
-// if (!k) {
-// act("There is nothing to here to affect with $p.", false,
-// ch, obj, NULL, TO_CHAR);
-// return;
-// }
-// } else
-// tch = ch;
-//
-// act("You recite $p which dissolves.", TRUE, ch, obj, 0, TO_CHAR);
-// if (obj->action_description)
-// act(obj->action_description, false, ch, obj, NULL, TO_ROOM);
-// else
-// act("$n recites $p.", false, ch, obj, NULL, TO_ROOM);
-//
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// for (i = 1; i <= 3; i++)
-// if (call_magic(ch, tch, tobj, GET_OBJ_VAL(obj, i),
-// GET_OBJ_VAL(obj, 0), CAST_SCROLL) <= 0)
-// break;
-//
-// if (obj != NULL)
-// extract_obj(obj);
-// break;
-// case ITEM_POTION:
-// tch = ch;
-// act("You quaff $p.", false, ch, obj, NULL, TO_CHAR);
-// if (obj->action_description)
-// act(obj->action_description, false, ch, obj, NULL, TO_ROOM);
-// else
-// act("$n quaffs $p.", TRUE, ch, obj, NULL, TO_ROOM);
-//
-// WAIT_STATE(ch, PULSE_VIOLENCE);
-// for (i = 1; i <= 3; i++)
-// if (call_magic(ch, ch, NULL, GET_OBJ_VAL(obj, i),
-// GET_OBJ_VAL(obj, 0), CAST_POTION) <= 0)
-// break;
-//
-// if (obj != NULL)
-// extract_obj(obj);
-// break;
-// default:
-// log("SYSERR: Unknown object_type %d in mag_objectmagic.",
-// GET_OBJ_TYPE(obj));
-// break;
-// }
-// }
+/*
+ * mag_objectmagic: This is the entry-point for all magic items.  This should
+ * only be called by the 'quaff', 'use', 'recite', etc. routines.
+ *
+ * For reference, object values 0-3:
+ * staff  - [0]	level	[1] max charges	[2] num charges	[3] spell num
+ * wand   - [0]	level	[1] max charges	[2] num charges	[3] spell num
+ * scroll - [0]	level	[1] spell num	[2] spell num	[3] spell num
+ * potion - [0] level	[1] spell num	[2] spell num	[3] spell num
+ *
+ * Staves and wands will default to level 14 if the level is not specified;
+ * the DikuMUD format did not specify staff and wand levels in the world
+ * files (this is a CircleMUD enhancement).
+ */
+pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argument: &str) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    let mut tch = None;
+    let mut tobj = None;
+    let k = db.generic_find(
+        &arg,
+        (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
+        ch,
+        &mut tch,
+        &mut tobj,
+    );
+
+    match obj.get_obj_type() {
+        ITEM_STAFF => {
+            db.act(
+                "You tap $p three times on the ground.",
+                false,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
+            if !obj.action_description.is_empty() {
+                db.act(
+                    &obj.action_description,
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                db.act(
+                    "$n taps $p three times on the ground.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            }
+
+            if obj.get_obj_val(2) <= 0 {
+                send_to_char(ch, "It seems powerless.\r\n");
+                db.act(
+                    "Nothing seems to happen.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                obj.decr_obj_val(2);
+                ch.set_wait_state(PULSE_VIOLENCE as i32);
+                /* Level to cast spell at. */
+                let k = if obj.get_obj_val(0) != 0 {
+                    obj.get_obj_val(0)
+                } else {
+                    DEFAULT_STAFF_LVL
+                };
+
+                /*
+                 * Problem : Area/mass spells on staves can cause crashes.
+                 * Solution: Remove the special nature of area/mass spells on staves.
+                 * Problem : People like that behavior.
+                 * Solution: We special case the area/mass spells here.
+                 */
+                if has_spell_routine(db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
+                    let mut i = db.world.borrow()[ch.in_room() as usize]
+                        .peoples
+                        .borrow()
+                        .len();
+                    while i > 0 {
+                        i -= 1;
+                        call_magic(game, ch, None, None, obj.get_obj_val(3), k, CAST_STAFF);
+                    }
+                } else {
+                    for tch in db.world.borrow()[ch.in_room() as usize]
+                        .peoples
+                        .borrow()
+                        .iter()
+                    {
+                        if !Rc::ptr_eq(ch, tch) {
+                            call_magic(
+                                game,
+                                ch,
+                                Some(tch),
+                                None,
+                                obj.get_obj_val(3),
+                                k,
+                                CAST_STAFF,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        ITEM_WAND => {
+            if k == FIND_CHAR_ROOM {
+                if Rc::ptr_eq(tch.as_ref().unwrap(), ch) {
+                    db.act(
+                        "You point $p at yourself.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        None,
+                        TO_CHAR,
+                    );
+                    db.act(
+                        "$n points $p at $mself.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        None,
+                        TO_ROOM,
+                    );
+                } else {
+                    db.act(
+                        "You point $p at $N.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        Some(tch.as_ref().unwrap()),
+                        TO_CHAR,
+                    );
+                    if !obj.action_description.is_empty() {
+                        db.act(
+                            &obj.action_description,
+                            false,
+                            Some(ch),
+                            Some(obj),
+                            Some(tch.as_ref().unwrap()),
+                            TO_ROOM,
+                        );
+                    } else {
+                        db.act(
+                            "$n points $p at $N.",
+                            true,
+                            Some(ch),
+                            Some(obj),
+                            Some(tch.as_ref().unwrap()),
+                            TO_ROOM,
+                        );
+                    }
+                }
+            } else if tobj.is_some() {
+                db.act(
+                    "You point $p at $P.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    Some(tobj.as_ref().unwrap()),
+                    TO_CHAR,
+                );
+                if !obj.action_description.is_empty() {
+                    db.act(
+                        &obj.action_description,
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        Some(tobj.as_ref().unwrap()),
+                        TO_ROOM,
+                    );
+                } else {
+                    db.act(
+                        "$n points $p at $P.",
+                        true,
+                        Some(ch),
+                        Some(obj),
+                        Some(tobj.as_ref().unwrap()),
+                        TO_ROOM,
+                    );
+                }
+            } else if is_set!(
+                db.spell_info[obj.get_obj_val(3) as usize].routines,
+                MAG_AREAS | MAG_MASSES
+            ) {
+                /* Wands with area spells don't need to be pointed. */
+                db.act(
+                    "You point $p outward.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_CHAR,
+                );
+                db.act(
+                    "$n points $p outward.",
+                    true,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                db.act(
+                    "At what should $p be pointed?",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_CHAR,
+                );
+                return;
+            }
+
+            if obj.get_obj_val(2) <= 0 {
+                send_to_char(ch, "It seems powerless.\r\n");
+                db.act(
+                    "Nothing seems to happen.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+                return;
+            }
+            obj.decr_obj_val(2);
+
+            ch.set_wait_state(PULSE_VIOLENCE as i32);
+            if obj.get_obj_val(0) != 0 {
+                call_magic(
+                    game,
+                    ch,
+                    tch.as_ref(),
+                    tobj.as_ref(),
+                    obj.get_obj_val(3),
+                    obj.get_obj_val(0),
+                    CAST_WAND,
+                );
+            } else {
+                call_magic(
+                    game,
+                    ch,
+                    tch.as_ref(),
+                    tobj.as_ref(),
+                    obj.get_obj_val(3),
+                    DEFAULT_WAND_LVL,
+                    CAST_WAND,
+                );
+            }
+        }
+        ITEM_SCROLL => {
+            if !arg.is_empty() {
+                if k == 0 {
+                    db.act(
+                        "There is nothing to here to affect with $p.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        None,
+                        TO_CHAR,
+                    );
+                    return;
+                }
+            } else {
+                tch = Some(ch.clone());
+            }
+
+            db.act(
+                "You recite $p which dissolves.",
+                true,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
+            if !obj.action_description.is_empty() {
+                db.act(
+                    &obj.action_description,
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                db.act("$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
+            }
+
+            ch.set_wait_state(PULSE_VIOLENCE as i32);
+            for i in 1..3 {
+                if call_magic(
+                    game,
+                    ch,
+                    tch.as_ref(),
+                    tobj.as_ref(),
+                    obj.get_obj_val(i),
+                    obj.get_obj_val(0),
+                    CAST_SCROLL,
+                ) <= 0
+                {
+                    break;
+                }
+            }
+
+            // if obj.is_some() {
+            db.extract_obj(obj);
+            // }
+        }
+        ITEM_POTION => {
+            tch = Some(ch.clone());
+            db.act("You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
+            if !obj.action_description.is_empty() {
+                db.act(
+                    &obj.action_description,
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                db.act("$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
+            }
+
+            ch.set_wait_state(PULSE_VIOLENCE as i32);
+            for i in 1..3 {
+                if call_magic(
+                    game,
+                    ch,
+                    Some(ch),
+                    None,
+                    obj.get_obj_val(i),
+                    obj.get_obj_val(0),
+                    CAST_POTION,
+                ) <= 0
+                {
+                    break;
+                }
+            }
+
+            // if obj.is_some() {
+            db.extract_obj(obj);
+            // }
+        }
+        _ => {
+            error!(
+                "SYSERR: Unknown object_type {} in mag_objectmagic.",
+                obj.get_obj_type()
+            );
+        }
+    }
+}
 
 /*
  * cast_spell is used generically to cast any spoken spell, assuming we
@@ -843,8 +1057,8 @@ pub fn cast_spell(
  */
 #[allow(unused_variables)]
 pub fn do_cast(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // struct char_data *tch = NULL;
-    // struct obj_data *tobj = NULL;
+    // struct char_data *tch = None;
+    // struct obj_data *tobj = None;
     // char *s, *t;
     // int mana, spellnum, i, target = 0;
 
@@ -1157,7 +1371,7 @@ fn skillo(db: &mut DB, skill: i32, name: &'static str) {
  * (usually fighting or standing). targets :  A "list" of the valid targets
  * for the spell, joined with bitwise OR ('|').
  *
- * violent :  TRUE or false, depending on if this is considered a violent
+ * violent :  true or false, depending on if this is considered a violent
  * spell and should not be cast in PEACEFUL rooms or on yourself.  Should be
  * set on any spell that inflicts damage, is considered aggressive (i.e.
  * charm, curse), or is otherwise nasty.

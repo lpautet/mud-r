@@ -8,17 +8,21 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::rc::Rc;
+
+use log::info;
+
 use crate::class::level_exp;
 use crate::config::OK;
+use crate::db::DB;
 use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::two_arguments;
 use crate::limits::gain_exp_regardless;
 use crate::structs::{
-    CharData, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE,
+    CharData, AFF_HIDE, AFF_INVISIBLE, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
+    PRF_NOHASSLE,
 };
 use crate::{send_to_char, Game, TO_VICT};
-use log::info;
-use std::rc::Rc;
 
 // /* local functions */
 // int perform_set(struct char_data *ch, struct char_data *vict, int mode, char *val_arg);
@@ -1328,21 +1332,19 @@ You feel slightly different.",
 // act("You have been fully healed by $N!", FALSE, vict, 0, ch, TO_CHAR);
 // }
 // }
-//
-//
-// void perform_immort_vis(struct char_data *ch)
-// {
-// if (GET_INVIS_LEV(ch) == 0 && !AFF_FLAGGED(ch, AFF_HIDE | AFF_INVISIBLE)) {
-// send_to_char(ch, "You are already fully visible.\r\n");
-// return;
-// }
-//
-// GET_INVIS_LEV(ch) = 0;
-// appear(ch);
-// send_to_char(ch, "You are now fully visible.\r\n");
-// }
-//
-//
+
+pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
+    if ch.get_invis_lev() == 0 && !ch.aff_flagged(AFF_HIDE | AFF_INVISIBLE) {
+        send_to_char(ch, "You are already fully visible.\r\n");
+        return;
+    }
+
+    ch.set_invis_lev(0);
+
+    db.appear(ch);
+    send_to_char(ch, "You are now fully visible.\r\n");
+}
+
 // void perform_immort_invis(struct char_data *ch, int level)
 // {
 // struct char_data *tch;

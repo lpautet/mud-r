@@ -880,7 +880,7 @@ fn crash_extract_norents(db: &DB, obj: Option<&Rc<ObjData>>) {
 // }
 // }
 
-fn crash_crashsave(db: &DB, ch: &Rc<CharData>) {
+pub fn crash_crashsave(db: &DB, ch: &Rc<CharData>) {
     if ch.is_npc() {
         return;
     }

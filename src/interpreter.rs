@@ -32,7 +32,11 @@ use crate::act_movement::{
 use crate::act_offensive::{
     do_assist, do_backstab, do_bash, do_flee, do_hit, do_kick, do_kill, do_order, do_rescue,
 };
-use crate::act_other::{do_display, do_gen_tog, do_not_here, do_practice, do_quit};
+use crate::act_other::{
+    do_display, do_gen_tog, do_gen_write, do_group, do_hide, do_not_here, do_practice, do_quit,
+    do_report, do_save, do_sneak, do_split, do_steal, do_title, do_ungroup, do_use, do_visible,
+    do_wimpy,
+};
 use crate::act_wizard::do_advance;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
@@ -124,6 +128,11 @@ pub const SCMD_DROP: u8 = 0;
 pub const SCMD_JUNK: u8 = 1;
 pub const SCMD_DONATE: u8 = 2;
 
+/* do_gen_write */
+pub const SCMD_BUG: i32 = 0;
+pub const SCMD_TYPO: i32 = 1;
+pub const SCMD_IDEA: i32 = 2;
+
 /* do_pour */
 pub const SCMD_POUR: i32 = 0;
 pub const SCMD_FILL: i32 = 1;
@@ -137,6 +146,11 @@ pub const SCMD_EAT: i32 = 0;
 pub const SCMD_TASTE: i32 = 1;
 pub const SCMD_DRINK: i32 = 2;
 pub const SCMD_SIP: i32 = 3;
+
+/* do_use */
+pub const SCMD_USE: i32 = 0;
+pub const SCMD_QUAFF: i32 = 1;
+pub const SCMD_RECITE: i32 = 2;
 
 /* do_look */
 pub const SCMD_LOOK: i32 = 0;
@@ -178,7 +192,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 108] = [
+pub const CMD_INFO: [CommandInfo; 125] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -303,6 +317,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
         subcmd: 0,
     },
     // { "bug"      , POS_DEAD    , do_gen_write, 0, SCMD_BUG },
+    CommandInfo {
+        command: "bug",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_write,
+        minimum_level: 0,
+        subcmd: SCMD_BUG,
+    },
     //
     // { "cast"     , POS_SITTING , do_cast     , 1, 0 },
     CommandInfo {
@@ -546,6 +567,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     },
     // { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
     // { "group"    , POS_RESTING , do_group    , 1, 0 },
+    CommandInfo {
+        command: "group",
+        minimum_position: POS_RESTING,
+        command_pointer: do_group,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "grab"     , POS_RESTING , do_grab     , 0, 0 },
     CommandInfo {
         command: "grab",
@@ -583,6 +611,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
     // { "hide"     , POS_RESTING , do_hide     , 1, 0 },
+    CommandInfo {
+        command: "hide",
+        minimum_position: POS_RESTING,
+        command_pointer: do_hide,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "hit"      , POS_FIGHTING, do_hit      , 0, SCMD_HIT },
     CommandInfo {
         command: "hit",
@@ -614,6 +649,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
         subcmd: 0,
     },
     // { "idea"     , POS_DEAD    , do_gen_write, 0, SCMD_IDEA },
+    CommandInfo {
+        command: "idea",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_write,
+        minimum_level: 0,
+        subcmd: SCMD_IDEA,
+    },
     // { "imotd"    , POS_DEAD    , do_gen_ps   , LVL_IMMORT, SCMD_IMOTD },
     CommandInfo {
         command: "imotd",
@@ -904,6 +946,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "purge"    , POS_DEAD    , do_purge    , LVL_GOD, 0 },
     //
     // { "quaff"    , POS_RESTING , do_use      , 0, SCMD_QUAFF },
+    CommandInfo {
+        command: "quaff",
+        minimum_position: POS_RESTING,
+        command_pointer: do_use,
+        minimum_level: 0,
+        subcmd: SCMD_QUAFF,
+    },
     // { "qecho"    , POS_DEAD    , do_qcomm    , LVL_IMMORT, SCMD_QECHO },
     // { "quest"    , POS_DEAD    , do_gen_tog  , 0, SCMD_QUEST },
     CommandInfo {
@@ -943,6 +992,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     },
     // { "reload"   , POS_DEAD    , do_reboot   , LVL_IMPL, 0 },
     // { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
+    CommandInfo {
+        command: "recite",
+        minimum_position: POS_RESTING,
+        command_pointer: do_use,
+        minimum_level: 0,
+        subcmd: SCMD_RECITE,
+    },
     // { "receive"  , POS_STANDING, do_not_here , 1, 0 },
     // { "remove"   , POS_RESTING , do_remove   , 0, 0 },
     CommandInfo {
@@ -954,6 +1010,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     },
     // { "rent"     , POS_STANDING, do_not_here , 1, 0 },
     // { "report"   , POS_RESTING , do_report   , 0, 0 },
+    CommandInfo {
+        command: "report",
+        minimum_position: POS_RESTING,
+        command_pointer: do_report,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
     // { "rescue"   , POS_FIGHTING, do_rescue   , 1, 0 },
     CommandInfo {
@@ -979,6 +1042,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "say"      , POS_RESTING , do_say      , 0, 0 },
     // { "'"        , POS_RESTING , do_say      , 0, 0 },
     // { "save"     , POS_SLEEPING, do_save     , 0, 0 },
+    CommandInfo {
+        command: "save",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_save,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "score"    , POS_DEAD    , do_score    , 0, 0 },
     CommandInfo {
         command: "score",
@@ -1041,6 +1111,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "snarl"    , POS_RESTING , do_action   , 0, 0 },
     // { "sneeze"   , POS_RESTING , do_action   , 0, 0 },
     // { "sneak"    , POS_STANDING, do_sneak    , 1, 0 },
+    CommandInfo {
+        command: "sneak",
+        minimum_position: POS_STANDING,
+        command_pointer: do_sneak,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "sniff"    , POS_RESTING , do_action   , 0, 0 },
     // { "snore"    , POS_SLEEPING, do_action   , 0, 0 },
     // { "snowball" , POS_STANDING, do_action   , LVL_IMMORT, 0 },
@@ -1055,6 +1132,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
         subcmd: SCMD_SOCIALS,
     },
     // { "split"    , POS_SITTING , do_split    , 1, 0 },
+    CommandInfo {
+        command: "split",
+        minimum_position: POS_SITTING,
+        command_pointer: do_split,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "spank"    , POS_RESTING , do_action   , 0, 0 },
     // { "spit"     , POS_STANDING, do_action   , 0, 0 },
     // { "squeeze"  , POS_RESTING , do_action   , 0, 0 },
@@ -1069,6 +1153,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "stare"    , POS_RESTING , do_action   , 0, 0 },
     // { "stat"     , POS_DEAD    , do_stat     , LVL_IMMORT, 0 },
     // { "steal"    , POS_STANDING, do_steal    , 1, 0 },
+    CommandInfo {
+        command: "steal",
+        minimum_position: POS_STANDING,
+        command_pointer: do_steal,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "steam"    , POS_RESTING , do_action   , 0, 0 },
     // { "stroke"   , POS_RESTING , do_action   , 0, 0 },
     // { "strut"    , POS_STANDING, do_action   , 0, 0 },
@@ -1101,6 +1192,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "think"    , POS_RESTING , do_action   , 0, 0 },
     // { "thaw"     , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_THAW },
     // { "title"    , POS_DEAD    , do_title    , 0, 0 },
+    CommandInfo {
+        command: "title",
+        minimum_position: POS_DEAD,
+        command_pointer: do_title,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "tickle"   , POS_RESTING , do_action   , 0, 0 },
     // { "time"     , POS_DEAD    , do_time     , 0, 0 },
     CommandInfo {
@@ -1130,6 +1228,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     // { "transfer" , POS_SLEEPING, do_trans    , LVL_GOD, 0 },
     // { "twiddle"  , POS_RESTING , do_action   , 0, 0 },
     // { "typo"     , POS_DEAD    , do_gen_write, 0, SCMD_TYPO },
+    CommandInfo {
+        command: "typo",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gen_write,
+        minimum_level: 0,
+        subcmd: SCMD_TYPO,
+    },
     //
     // { "unlock"   , POS_SITTING , do_gen_door , 0, SCMD_UNLOCK },
     CommandInfo {
@@ -1140,10 +1245,24 @@ pub const CMD_INFO: [CommandInfo; 108] = [
         subcmd: SCMD_UNLOCK,
     },
     // { "ungroup"  , POS_DEAD    , do_ungroup  , 0, 0 },
+    CommandInfo {
+        command: "ungroup",
+        minimum_position: POS_DEAD,
+        command_pointer: do_ungroup,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
     // { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
     // { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
     // { "use"      , POS_SITTING , do_use      , 1, SCMD_USE },
+    CommandInfo {
+        command: "use",
+        minimum_position: POS_SITTING,
+        command_pointer: do_use,
+        minimum_level: 1,
+        subcmd: SCMD_USE,
+    },
     // { "users"    , POS_DEAD    , do_users    , LVL_IMMORT, 0 },
     CommandInfo {
         command: "users",
@@ -1163,6 +1282,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
         subcmd: SCMD_VERSION,
     },
     // { "visible"  , POS_RESTING , do_visible  , 1, 0 },
+    CommandInfo {
+        command: "visible",
+        minimum_position: POS_RESTING,
+        command_pointer: do_visible,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "vnum"     , POS_DEAD    , do_vnum     , LVL_IMMORT, 0 },
     // { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
     //
@@ -1228,6 +1354,13 @@ pub const CMD_INFO: [CommandInfo; 108] = [
     },
     // { "wiggle"   , POS_STANDING, do_action   , 0, 0 },
     // { "wimpy"    , POS_DEAD    , do_wimpy    , 0, 0 },
+    CommandInfo {
+        command: "wimpy",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wimpy,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "wink"     , POS_RESTING , do_action   , 0, 0 },
     // { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
     // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
@@ -1603,27 +1736,28 @@ pub fn is_number(txt: &str) -> bool {
  *
  * Modifies the string in-place.
  */
-// char *delete_doubledollar(char *string)
-// {
-// char *ddread, *ddwrite;
-//
-// /* If the string has no dollar signs, return immediately */
-// if ((ddwrite = strchr(string, '$')) == NULL)
-// return (string);
-//
-// /* Start from the location of the first dollar sign */
-// ddread = ddwrite;
-//
-//
-// while (*ddread)   /* Until we reach the end of the string... */
-// if ((*(ddwrite++) = *(ddread++)) == '$') /* copy one char */
-// if (*ddread == '$')
-// ddread++; /* skip if we saw 2 $'s in a row */
-//
-// *ddwrite = '\0';
-//
-// return (string);
-// }
+pub fn delete_doubledollar(text: &mut String) -> &String {
+    *text = text.replace("$$", "$");
+    text
+    // char *ddread, *ddwrite;
+    //
+    // /* If the string has no dollar signs, return immediately */
+    // if ((ddwrite = strchr(string, '$')) == NULL)
+    // return (string);
+    //
+    // /* Start from the location of the first dollar sign */
+    // ddread = ddwrite;
+    //
+    //
+    // while (*ddread)   /* Until we reach the end of the string... */
+    // if ((*(ddwrite++) = *(ddread++)) == '$') /* copy one char */
+    // if (*ddread == '$')
+    // ddread++; /* skip if we saw 2 $'s in a row */
+    //
+    // *ddwrite = '\0';
+    //
+    // return (string);
+}
 
 fn fill_word(argument: &str) -> bool {
     return search_block(argument, &FILL, true).is_some();
