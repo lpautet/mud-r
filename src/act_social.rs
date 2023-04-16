@@ -8,162 +8,239 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-// /* local globals */
-// static int list_top = -1;
-//
-// /* local functions */
-// char *fread_action(FILE *fl, int nr);
-// int find_action(int cmd);
-// ACMD(do_action);
-// ACMD(do_insult);
-// void boot_social_messages(void);
-// void free_social_messages(void);
-//
-//
-// struct social_messg {
-//     int act_nr;
-//     int hide;
-//     int min_victim_position;	/* Position of victim */
-//
-//     /* No argument was supplied */
-//     char *char_no_arg;
-//     char *others_no_arg;
-//
-//     /* An argument was there, and a victim was found */
-//     char *char_found;		/* if NULL, read no further, ignore args */
-//     char *others_found;
-//     char *vict_found;
-//
-//     /* An argument was there, but no victim was found */
-//     char *not_found;
-//
-//     /* The victim turned out to be the character */
-//     char *char_auto;
-//     char *others_auto;
-// } *soc_mess_list;
-//
-//
-// int find_action(int cmd)
-// {
-// int bot, top, mid;
-//
-// bot = 0;
-// top = list_top;
-//
-// if (top < 0)
-// return (-1);
-//
-// for (;;) {
-// mid = (bot + top) / 2;
-//
-// if (soc_mess_list[mid].act_nr == cmd)
-// return (mid);
-// if (bot >= top)
-// return (-1);
-//
-// if (soc_mess_list[mid].act_nr > cmd)
-// top = --mid;
-// else
-// bot = ++mid;
-// }
-// }
-//
-//
-//
-// ACMD(do_action)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// int act_nr;
-// struct social_messg *action;
-// struct char_data *vict;
-//
-// if ((act_nr = find_action(cmd)) < 0) {
-// send_to_char(ch, "That action is not supported.\r\n");
-// return;
-// }
-// action = &soc_mess_list[act_nr];
-//
-// if (action->char_found && argument)
-// one_argument(argument, buf);
-// else
-// *buf = '\0';
-//
-// if (!*buf) {
-// send_to_char(ch, "%s\r\n", action->char_no_arg);
-// act(action->others_no_arg, action->hide, ch, 0, 0, TO_ROOM);
-// return;
-// }
-// if (!(vict = get_char_vis(ch, buf, NULL, FIND_CHAR_ROOM)))
-// send_to_char(ch, "%s\r\n", action->not_found);
-// else if (vict == ch) {
-// send_to_char(ch, "%s\r\n", action->char_auto);
-// act(action->others_auto, action->hide, ch, 0, 0, TO_ROOM);
-// } else {
-// if (GET_POS(vict) < action->min_victim_position)
-// act("$N is not in a proper position for that.", FALSE, ch, 0, vict, TO_CHAR | TO_SLEEP);
-// else {
-// act(action->char_found, 0, ch, 0, vict, TO_CHAR | TO_SLEEP);
-// act(action->others_found, action->hide, ch, 0, vict, TO_NOTVICT);
-// act(action->vict_found, action->hide, ch, 0, vict, TO_VICT);
-// }
-// }
-// }
-//
-//
-//
-// ACMD(do_insult)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *victim;
-//
-// one_argument(argument, arg);
-//
-// if (*arg) {
-// if (!(victim = get_char_vis(ch, arg, NULL, FIND_CHAR_ROOM)))
-// send_to_char(ch, "Can't hear you!\r\n");
-// else {
-// if (victim != ch) {
-// send_to_char(ch, "You insult %s.\r\n", GET_NAME(victim));
-//
-// switch (rand_number(0, 2)) {
-// case 0:
-// if (GET_SEX(ch) == SEX_MALE) {
-// if (GET_SEX(victim) == SEX_MALE)
-// act("$n accuses you of fighting like a woman!", FALSE, ch, 0, victim, TO_VICT);
-// else
-// act("$n says that women can't fight.", FALSE, ch, 0, victim, TO_VICT);
-// } else {		/* Ch == Woman */
-// if (GET_SEX(victim) == SEX_MALE)
-// act("$n accuses you of having the smallest... (brain?)",
-// FALSE, ch, 0, victim, TO_VICT);
-// else
-// act("$n tells you that you'd lose a beauty contest against a troll.",
-// FALSE, ch, 0, victim, TO_VICT);
-// }
-// break;
-// case 1:
-// act("$n calls your mother a bitch!", FALSE, ch, 0, victim, TO_VICT);
-// break;
-// default:
-// act("$n tells you to get lost!", FALSE, ch, 0, victim, TO_VICT);
-// break;
-// }			/* end switch */
-//
-// act("$n insults $N.", TRUE, ch, 0, victim, TO_NOTVICT);
-// } else {			/* ch == victim */
-// send_to_char(ch, "You feel insulted.\r\n");
-// }
-// }
-// } else
-// send_to_char(ch, "I'm sure you don't want to insult *everybody*...\r\n");
-// }
-
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::process;
 use std::rc::Rc;
 
 use log::error;
+use regex::Regex;
+
+use crate::db::{DB, SOCMESS_FILE};
+use crate::handler::FIND_CHAR_ROOM;
+use crate::interpreter::{find_command, one_argument, CMD_INFO};
+use crate::structs::{CharData, SEX_MALE};
+use crate::util::rand_number;
+use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT};
+
+// /* local globals */
+// static int list_top = -1;
+
+pub struct SocialMessg {
+    act_nr: usize,
+    hide: bool,
+    min_victim_position: i32,
+    /* Position of victim */
+
+    /* No argument was supplied */
+    char_no_arg: Rc<str>,
+    others_no_arg: Rc<str>,
+
+    /* An argument was there, and a victim was found */
+    char_found: Rc<str>,
+    /* if NULL, read no further, ignore args */
+    others_found: Rc<str>,
+    vict_found: Rc<str>,
+
+    /* An argument was there, but no victim was found */
+    not_found: Rc<str>,
+
+    /* The victim turned out to be the character */
+    char_auto: Rc<str>,
+    others_auto: Rc<str>,
+}
+
+fn find_action(db: &DB, cmd: usize) -> Option<usize> {
+    db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
+}
+
+#[allow(unused_variables)]
+pub fn do_action(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let act_nr;
+
+    if {
+        act_nr = find_action(db, cmd);
+        act_nr.is_none()
+    } {
+        send_to_char(ch, "That action is not supported.\r\n");
+        return;
+    }
+    let act_nr = act_nr.unwrap();
+    let action = &db.soc_mess_list[act_nr];
+
+    let mut buf = String::new();
+    if !action.char_found.is_empty() && !argument.is_empty() {
+        one_argument(argument, &mut buf);
+    }
+
+    if buf.is_empty() {
+        send_to_char(ch, format!("{}\r\n", action.char_no_arg).as_str());
+        db.act(
+            &action.others_no_arg,
+            action.hide,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        return;
+    }
+    let vict;
+    if {
+        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
+    } {
+        send_to_char(ch, format!("{}\r\n", &action.not_found).as_str());
+    } else if Rc::ptr_eq(vict.as_ref().unwrap(), ch) {
+        send_to_char(ch, format!("{}\r\n", &action.char_auto).as_str());
+        db.act(
+            &action.others_auto,
+            action.hide,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+    } else {
+        let vict = vict.as_ref().unwrap();
+        if vict.get_pos() < action.min_victim_position as u8 {
+            db.act(
+                "$N is not in a proper position for that.",
+                false,
+                Some(ch),
+                None,
+                Some(vict),
+                TO_CHAR | TO_SLEEP,
+            );
+        } else {
+            db.act(
+                &action.char_found,
+                false,
+                Some(ch),
+                None,
+                Some(vict),
+                TO_CHAR | TO_SLEEP,
+            );
+            db.act(
+                &action.others_found,
+                action.hide,
+                Some(ch),
+                None,
+                Some(vict),
+                TO_NOTVICT,
+            );
+            db.act(
+                &action.vict_found,
+                action.hide,
+                Some(ch),
+                None,
+                Some(vict),
+                TO_VICT,
+            );
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_insult(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+    one_argument(argument, &mut arg);
+
+    if !arg.is_empty() {
+        let victim;
+        if {
+            victim = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+            victim.is_none()
+        } {
+            send_to_char(ch, "Can't hear you!\r\n");
+        } else {
+            let victim = victim.as_ref().unwrap();
+            if !Rc::ptr_eq(victim, ch) {
+                send_to_char(
+                    ch,
+                    format!("You insult {}.\r\n", victim.get_name()).as_str(),
+                );
+
+                match rand_number(0, 2) {
+                    0 => {
+                        if ch.get_sex() == SEX_MALE {
+                            if victim.get_sex() == SEX_MALE {
+                                db.act(
+                                    "$n accuses you of fighting like a woman!",
+                                    false,
+                                    Some(ch),
+                                    None,
+                                    Some(victim),
+                                    TO_VICT,
+                                );
+                            } else {
+                                db.act(
+                                    "$n says that women can't fight.",
+                                    false,
+                                    Some(ch),
+                                    None,
+                                    Some(victim),
+                                    TO_VICT,
+                                );
+                            }
+                        } else {
+                            /* Ch == Woman */
+                            if victim.get_sex() == SEX_MALE {
+                                db.act(
+                                    "$n accuses you of having the smallest... (brain?)",
+                                    false,
+                                    Some(ch),
+                                    None,
+                                    Some(victim),
+                                    TO_VICT,
+                                );
+                            } else {
+                                db.act("$n tells you that you'd lose a beauty contest against a troll.",
+                                       false, Some(ch), None, Some(victim), TO_VICT);
+                            }
+                        }
+                    }
+                    1 => {
+                        db.act(
+                            "$n calls your mother a bitch!",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(victim),
+                            TO_VICT,
+                        );
+                    }
+                    _ => {
+                        db.act(
+                            "$n tells you to get lost!",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(victim),
+                            TO_VICT,
+                        );
+                    }
+                } /* end switch */
+
+                db.act(
+                    "$n insults $N.",
+                    true,
+                    Some(ch),
+                    None,
+                    Some(victim),
+                    TO_NOTVICT,
+                );
+            } else {
+                /* ch == victim */
+                send_to_char(ch, "You feel insulted.\r\n");
+            }
+        }
+    } else {
+        send_to_char(ch, "I'm sure you don't want to insult *everybody*...\r\n");
+    }
+}
 
 pub fn fread_action(reader: &mut BufReader<File>, nr: i32) -> Rc<str> {
     let mut buf = String::new();
@@ -185,7 +262,7 @@ pub fn fread_action(reader: &mut BufReader<File>, nr: i32) -> Rc<str> {
 // void free_social_messages(void)
 // {
 // int ac;
-// struct social_messg *soc;
+// struct SocialMessg *soc;
 //
 // for (ac = 0; ac <= list_top; ac++) {
 // soc = &soc_mess_list[ac];
@@ -201,93 +278,122 @@ pub fn fread_action(reader: &mut BufReader<File>, nr: i32) -> Rc<str> {
 // }
 // free(soc_mess_list);
 // }
-//
-//
-// void boot_social_messages(void)
-// {
-// FILE *fl;
-// int nr, i, hide, min_pos, curr_soc = -1;
-// char next_soc[100];
-// struct social_messg temp;
-//
-// /* open social file */
-// if (!(fl = fopen(SOCMESS_FILE, "r"))) {
-// log("SYSERR: can't open socials file '%s': %s", SOCMESS_FILE, strerror(errno));
-// exit(1);
-// }
-// /* count socials & allocate space */
-// for (nr = 0; *cmd_info[nr].command != '\n'; nr++)
-// if (cmd_info[nr].command_pointer == do_action)
-// list_top++;
-//
-// CREATE(soc_mess_list, struct social_messg, list_top + 1);
-//
-// /* now read 'em */
-// for (;;) {
-// fscanf(fl, " %s ", next_soc);
-// if (*next_soc == '$')
-// break;
-// if (fscanf(fl, " %d %d \n", &hide, &min_pos) != 2) {
-// log("SYSERR: format error in social file near social '%s'", next_soc);
-// exit(1);
-// }
-// if (++curr_soc > list_top) {
-// log("SYSERR: Ran out of slots in social array. (%d > %d)", curr_soc, list_top);
-// break;
-// }
-//
-// /* read the stuff */
-// soc_mess_list[curr_soc].act_nr = nr = find_command(next_soc);
-// soc_mess_list[curr_soc].hide = hide;
-// soc_mess_list[curr_soc].min_victim_position = min_pos;
-//
-// #ifdef CIRCLE_ACORN
-// if (fgetc(fl) != '\n')
-// log("SYSERR: Acorn bug workaround failed.");
-// #endif
-//
-// soc_mess_list[curr_soc].char_no_arg = fread_action(fl, nr);
-// soc_mess_list[curr_soc].others_no_arg = fread_action(fl, nr);
-// soc_mess_list[curr_soc].char_found = fread_action(fl, nr);
-//
-// /* if no char_found, the rest is to be ignored */
-// if (!soc_mess_list[curr_soc].char_found)
-// continue;
-//
-// soc_mess_list[curr_soc].others_found = fread_action(fl, nr);
-// soc_mess_list[curr_soc].vict_found = fread_action(fl, nr);
-// soc_mess_list[curr_soc].not_found = fread_action(fl, nr);
-// soc_mess_list[curr_soc].char_auto = fread_action(fl, nr);
-// soc_mess_list[curr_soc].others_auto = fread_action(fl, nr);
-//
-// /* If social not found, re-use this slot.  'curr_soc' will be reincremented. */
-// if (nr < 0) {
-// log("SYSERR: Unknown social '%s' in social file.", next_soc);
-// memset(&soc_mess_list[curr_soc--], 0, sizeof(struct social_messg));
-// continue;
-// }
-//
-// /* If the command we found isn't do_action, we didn't count it for the CREATE(). */
-// if (cmd_info[nr].command_pointer != do_action) {
-// log("SYSERR: Social '%s' already assigned to a command.", next_soc);
-// memset(&soc_mess_list[curr_soc--], 0, sizeof(struct social_messg));
-// }
-// }
-//
-// /* close file & set top */
-// fclose(fl);
-// list_top = curr_soc;
-//
-// /* now, sort 'em */
-// for (curr_soc = 0; curr_soc < list_top; curr_soc++) {
-// min_pos = curr_soc;
-// for (i = curr_soc + 1; i <= list_top; i++)
-// if (soc_mess_list[i].act_nr < soc_mess_list[min_pos].act_nr)
-// min_pos = i;
-// if (curr_soc != min_pos) {
-// temp = soc_mess_list[curr_soc];
-// soc_mess_list[curr_soc] = soc_mess_list[min_pos];
-// soc_mess_list[min_pos] = temp;
-// }
-// }
-// }
+
+impl DB {
+    pub fn boot_social_messages(&mut self) {
+        /* open social file */
+        let fl;
+        if {
+            fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
+            fl.is_err()
+        } {
+            error!(
+                "SYSERR: can't open socials file '{}': {}",
+                SOCMESS_FILE,
+                fl.err().unwrap()
+            );
+            process::exit(1);
+        }
+        let fl = fl.unwrap();
+        let mut list_top = 0;
+        /* count socials & allocate space */
+        for nr in 0..CMD_INFO.len() - 1 {
+            if CMD_INFO[nr].command_pointer as usize == do_action as usize {
+                list_top += 1;
+            }
+        }
+
+        self.soc_mess_list.reserve_exact(list_top + 1);
+        let mut cur_soc = 0;
+        let mut reader = BufReader::new(fl);
+        /* now read 'em */
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("Reading socials file");
+            if line.starts_with('$') {
+                break;
+            }
+
+            let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
+            let f = regex.captures(line.as_str());
+            if f.is_none() {
+                error!("SYSERR: format error in social file near social '{}'", line);
+                process::exit(1);
+            }
+            let f = f.unwrap();
+            let next_soc = &f[1];
+            let hide = f[2].parse::<i32>().unwrap();
+            let min_victim_position = f[2].parse::<i32>().unwrap();
+
+            if {
+                cur_soc += 1;
+                cur_soc > list_top
+            } {
+                error!(
+                    "SYSERR: Ran out of slots in social array. ({} > {})",
+                    cur_soc, list_top
+                );
+                break;
+            }
+            let hide = if hide == 0 { false } else { true };
+            let mut sm = SocialMessg {
+                act_nr: 0,
+                hide,
+                min_victim_position,
+                char_no_arg: Rc::from(""),
+                others_no_arg: Rc::from(""),
+                char_found: Rc::from(""),
+                others_found: Rc::from(""),
+                vict_found: Rc::from(""),
+                not_found: Rc::from(""),
+                char_auto: Rc::from(""),
+                others_auto: Rc::from(""),
+            };
+
+            /* read the stuff */
+            sm.act_nr =
+                find_command(next_soc).expect(format!("Cannot find command {next_soc}").as_str());
+            let nr = sm.act_nr as i32;
+            sm.char_no_arg = fread_action(&mut reader, nr);
+            sm.others_no_arg = fread_action(&mut reader, nr);
+            sm.char_found = fread_action(&mut reader, nr);
+
+            /* if no char_found, the rest is to be ignored */
+            if sm.char_found.is_empty() {
+                self.soc_mess_list.push(sm);
+                line.clear();
+                reader.read_line(&mut line).expect("reading social file");
+                continue;
+            }
+
+            sm.others_found = fread_action(&mut reader, nr);
+            sm.vict_found = fread_action(&mut reader, nr);
+            sm.not_found = fread_action(&mut reader, nr);
+            sm.char_auto = fread_action(&mut reader, nr);
+            sm.others_auto = fread_action(&mut reader, nr);
+
+            /* If social not found, re-use this slot.  'curr_soc' will be reincremented. */
+            if nr < 0 {
+                error!("SYSERR: Unknown social '{}' in social file.", next_soc);
+                cur_soc -= 1;
+                continue;
+            }
+
+            /* If the command we found isn't do_action, we didn't count it for the CREATE(). */
+            if CMD_INFO[nr as usize].command_pointer as usize != do_action as usize {
+                error!(
+                    "SYSERR: Social '{}' already assigned to a command.",
+                    next_soc
+                );
+                cur_soc -= 1;
+                continue;
+            }
+            self.soc_mess_list.push(sm);
+            line.clear();
+            reader.read_line(&mut line).expect("reading social file");
+        }
+
+        /* now, sort 'em */
+        self.soc_mess_list.sort_by_key(|e| e.act_nr);
+    }
+}

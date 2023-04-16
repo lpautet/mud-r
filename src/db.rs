@@ -20,6 +20,7 @@ use std::{fs, io, mem, process, slice};
 use log::{error, info, warn};
 use regex::Regex;
 
+use crate::act_social::SocialMessg;
 use crate::class::init_spell_levels;
 use crate::{check_player_special, get_last_tell_mut, Game};
 // long get_id_by_name(const char *name)
@@ -201,6 +202,7 @@ pub struct DB {
     pub shop_index: RefCell<Vec<ShopData>>,
     pub spell_sort_info: [i32; MAX_SKILLS as usize + 1],
     pub spell_info: [SpellInfoType; (TOP_SPELL_DEFINE + 1) as usize],
+    pub soc_mess_list: Vec<SocialMessg>,
 }
 
 pub const REAL: i32 = 0;
@@ -547,6 +549,7 @@ impl DB {
             shop_index: RefCell::new(vec![]),
             spell_sort_info: [0; MAX_SKILLS + 1],
             spell_info: [SpellInfoType::default(); TOP_SPELL_DEFINE + 1],
+            soc_mess_list: vec![],
         }
     }
 
@@ -588,9 +591,9 @@ impl DB {
         info!("Loading fight messages.");
         ret.load_messages();
 
-        // log("Loading social messages.");
-        // boot_social_messages();
-        //
+        info!("Loading social messages.");
+        ret.boot_social_messages();
+
         info!("Assigning function pointers:");
 
         if !ret.no_specials {

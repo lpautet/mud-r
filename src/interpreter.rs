@@ -37,6 +37,7 @@ use crate::act_other::{
     do_report, do_save, do_sneak, do_split, do_steal, do_title, do_ungroup, do_use, do_visible,
     do_wimpy,
 };
+use crate::act_social::{do_action, do_insult};
 use crate::act_wizard::do_advance;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
@@ -192,7 +193,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 125] = [
+pub const CMD_INFO: [CommandInfo; 231] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -255,7 +256,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
     // { "accuse"   , POS_SITTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "accuse",
+        minimum_position: POS_SITTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "applaud"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "applaud",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "assist"   , POS_FIGHTING, do_assist   , 1, 0 },
     CommandInfo {
         command: "assist",
@@ -276,6 +291,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     //
     // { "bounce"   , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "bounce",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "backstab" , POS_STANDING, do_backstab , 1, 0 },
     CommandInfo {
         command: "backstab",
@@ -295,10 +317,45 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "beg"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "beg",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "bleed"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "bleed",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "blush"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "blush",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "bow"      , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "bow",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "brb"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "brb",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "brief"    , POS_DEAD    , do_gen_tog  , 0, SCMD_BRIEF },
     CommandInfo {
         command: "brief",
@@ -308,6 +365,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_BRIEF,
     },
     // { "burp"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "burp",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "buy"      , POS_STANDING, do_not_here , 0, 0 },
     CommandInfo {
         command: "buy",
@@ -334,9 +398,30 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "cackle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "cackle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "check"    , POS_STANDING, do_not_here , 1, 0 },
     // { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "chuckle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "clap"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "clap",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "clear"    , POS_DEAD    , do_gen_ps   , 0, SCMD_CLEAR },
     CommandInfo {
         command: "clear",
@@ -378,7 +463,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "comfort"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "comfort",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "comb"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "comb",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "commands" , POS_DEAD    , do_commands , 0, SCMD_COMMANDS },
     CommandInfo {
         command: "commands",
@@ -396,6 +495,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_COMPACT,
     },
     // { "cough"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "cough",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "credits"  , POS_DEAD    , do_gen_ps   , 0, SCMD_CREDITS },
     CommandInfo {
         command: "credits",
@@ -405,14 +511,63 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_CREDITS,
     },
     // { "cringe"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "cringe",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "cry"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "cry",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "cuddle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "cuddle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "curse"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "curse",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "curtsey"  , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "curtsey",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "dance"    , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "dance",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "date"     , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_DATE },
     // { "daydream" , POS_SLEEPING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "daydream",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "dc"       , POS_DEAD    , do_dc       , LVL_GOD, 0 },
     // { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
     // { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
@@ -456,6 +611,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_DROP as i32,
     },
     // { "drool"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "drool",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "eat"      , POS_RESTING , do_eat      , 0, SCMD_EAT },
     CommandInfo {
@@ -469,6 +631,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     // { "emote"    , POS_RESTING , do_echo     , 1, SCMD_EMOTE },
     // { ":"        , POS_RESTING, do_echo      , 1, SCMD_EMOTE },
     // { "embrace"  , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "embrace",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "enter"    , POS_STANDING, do_enter    , 0, 0 },
     CommandInfo {
         command: "enter",
@@ -504,6 +673,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     //
     // { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
     // { "fart"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "fart",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "FILL"     , POS_STANDING, do_pour     , 0, SCMD_FILL },
     CommandInfo {
         command: "FILL",
@@ -521,7 +697,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "flip"     , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "flip",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "flirt"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "flirt",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "follow"   , POS_RESTING , do_follow   , 0, 0 },
     CommandInfo {
         command: "follow",
@@ -531,10 +721,38 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "fondle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "fondle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "freeze"   , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_FREEZE },
     // { "french"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "french",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "frown"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "frown",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "fume"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "fume",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "get"      , POS_RESTING , do_get      , 0, 0 },
     CommandInfo {
@@ -545,6 +763,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "gasp"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "gasp",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "gecho"    , POS_DEAD    , do_gecho    , LVL_GOD, 0 },
     // { "give"     , POS_RESTING , do_give     , 0, 0 },
     CommandInfo {
@@ -555,7 +780,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "giggle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "giggle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "glare"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "glare",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "goto"     , POS_SLEEPING, do_goto     , LVL_IMMORT, 0 },
     // { "gold"     , POS_RESTING , do_gold     , 0, 0 },
     CommandInfo {
@@ -584,11 +823,53 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "grats"    , POS_SLEEPING, do_gen_comm , 0, SCMD_GRATZ },
     // { "greet"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "greet",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "grin"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "grin",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "groan"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "groan",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "grope"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "grope",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "grovel"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "grovel",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "growl"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "growl",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "gsay"     , POS_SLEEPING, do_gsay     , 0, 0 },
     // { "gtell"    , POS_SLEEPING, do_gsay     , 0, 0 },
     //
@@ -610,6 +891,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "hiccup",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "hide"     , POS_RESTING , do_hide     , 1, 0 },
     CommandInfo {
         command: "hide",
@@ -637,8 +925,22 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_HOLYLIGHT,
     },
     // { "hop"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "hop",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "house"    , POS_RESTING , do_house    , 0, 0 },
     // { "hug"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "hug",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "inventory", POS_DEAD    , do_inventory, 0, 0 },
     CommandInfo {
@@ -681,6 +983,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_INFO,
     },
     // { "insult"   , POS_RESTING , do_insult   , 0, 0 },
+    CommandInfo {
+        command: "insult",
+        minimum_position: POS_RESTING,
+        command_pointer: do_insult,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
     //
     // { "junk"     , POS_RESTING , do_drop     , 0, SCMD_JUNK },
@@ -708,6 +1017,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "kiss"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "kiss",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "look"     , POS_RESTING , do_look     , 0, SCMD_LOOK },
     CommandInfo {
@@ -718,6 +1034,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_LOOK,
     },
     // { "laugh"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "laugh",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "last"     , POS_DEAD    , do_last     , LVL_GOD, 0 },
     // { "leave"    , POS_STANDING, do_leave    , 0, 0 },
     CommandInfo {
@@ -744,6 +1067,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "lick"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "lick",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "lock"     , POS_SITTING , do_gen_door , 0, SCMD_LOCK },
     CommandInfo {
         command: "lock",
@@ -754,8 +1084,22 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "load"     , POS_DEAD    , do_load     , LVL_GOD, 0 },
     // { "love"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "love",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "moan"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "moan",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "motd"     , POS_DEAD    , do_gen_ps   , 0, SCMD_MOTD },
     CommandInfo {
         command: "motd",
@@ -766,6 +1110,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "mail"     , POS_STANDING, do_not_here , 1, 0 },
     // { "massage"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "massage",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
     // { "murder"   , POS_FIGHTING, do_hit      , 0, SCMD_MURDER },
     CommandInfo {
@@ -785,7 +1136,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_NEWS,
     },
     // { "nibble"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "nibble",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "nod"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "nod",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "noauction", POS_DEAD    , do_gen_tog  , 0, SCMD_NOAUCTION },
     CommandInfo {
         command: "noauction",
@@ -860,7 +1225,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_NOWIZ,
     },
     // { "nudge"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "nudge",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "nuzzle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "nuzzle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "olc"      , POS_DEAD    , do_olc      , LVL_IMPL, 0 },
     // { "order"    , POS_RESTING , do_order    , 1, 0 },
@@ -890,9 +1269,23 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "pat"      , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "pat",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "page"     , POS_DEAD    , do_page     , LVL_GOD, 0 },
     // { "pardon"   , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_PARDON },
     // { "peer"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "peer",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "pick"     , POS_STANDING, do_gen_door , 1, SCMD_PICK },
     CommandInfo {
         command: "pick",
@@ -902,7 +1295,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_PICK,
     },
     // { "point"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "point",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "poke"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "poke",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "policy"   , POS_DEAD    , do_gen_ps   , 0, SCMD_POLICIES },
     CommandInfo {
         command: "policy",
@@ -912,6 +1319,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_POLICIES,
     },
     // { "ponder"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "ponder",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "poofin"   , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFIN },
     // { "poofout"  , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFOUT },
     // { "pour"     , POS_STANDING, do_pour     , 0, SCMD_POUR },
@@ -923,6 +1337,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_POUR,
     },
     // { "pout"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "pout",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "prompt"   , POS_DEAD    , do_display  , 0, 0 },
     CommandInfo {
         command: "prompt",
@@ -940,9 +1361,37 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "pray"     , POS_SITTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "pray",
+        minimum_position: POS_SITTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "puke"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "puke",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "punch"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "punch",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "purr"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "purr",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "purge"    , POS_DEAD    , do_purge    , LVL_GOD, 0 },
     //
     // { "quaff"    , POS_RESTING , do_use      , 0, SCMD_QUAFF },
@@ -1029,6 +1478,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     // { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
     // { "return"   , POS_DEAD    , do_return   , 0, 0 },
     // { "roll"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "roll",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "roomflags", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_ROOMFLAGS },
     CommandInfo {
         command: "roomflags",
@@ -1038,6 +1494,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_ROOMFLAGS,
     },
     // { "ruffle"   , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "ruffle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "say"      , POS_RESTING , do_say      , 0, 0 },
     // { "'"        , POS_RESTING , do_say      , 0, 0 },
@@ -1058,18 +1521,60 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "scream"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "scream",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sell"     , POS_STANDING, do_not_here , 0, 0 },
     // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
     // { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
     // { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
     // { "shake"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "shake",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "shiver"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "shiver",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "show"     , POS_DEAD    , do_show     , LVL_IMMORT, 0 },
     // { "shrug"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "shrug",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "shutdow"  , POS_DEAD    , do_shutdown , LVL_IMPL, 0 },
     // { "shutdown" , POS_DEAD    , do_shutdown , LVL_IMPL, SCMD_SHUTDOWN },
     // { "sigh"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "sigh",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sing"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "sing",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sip"      , POS_RESTING , do_drink    , 0, SCMD_SIP },
     CommandInfo {
         command: "sip",
@@ -1096,6 +1601,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "slap"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "slap",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "slowns"   , POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_SLOWNS },
     CommandInfo {
         command: "slowns",
@@ -1105,11 +1617,53 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: SCMD_SLOWNS,
     },
     // { "smile"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "smile",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "smirk"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "smirk",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snicker"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "snicker",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snap"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "snap",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snarl"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "snarl",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sneeze"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "sneeze",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sneak"    , POS_STANDING, do_sneak    , 1, 0 },
     CommandInfo {
         command: "sneak",
@@ -1119,10 +1673,38 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "sniff"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "sniff",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snore"    , POS_SLEEPING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "snore",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snowball" , POS_STANDING, do_action   , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "snowball",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "snoop"    , POS_DEAD    , do_snoop    , LVL_GOD, 0 },
     // { "snuggle"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "snuggle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "socials"  , POS_DEAD    , do_commands , 0, SCMD_SOCIALS },
     CommandInfo {
         command: "socials",
@@ -1140,8 +1722,29 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "spank"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "spank",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "spit"     , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "spit",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "squeeze"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "squeeze",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "stand"    , POS_RESTING , do_stand    , 0, 0 },
     CommandInfo {
         command: "stand",
@@ -1151,6 +1754,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "stare"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "stare",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "stat"     , POS_DEAD    , do_stat     , LVL_IMMORT, 0 },
     // { "steal"    , POS_STANDING, do_steal    , 1, 0 },
     CommandInfo {
@@ -1161,14 +1771,49 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "steam"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "steam",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "stroke"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "stroke",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "strut"    , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "strut",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "sulk"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "sulk",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "switch"   , POS_DEAD    , do_switch   , LVL_GRGOD, 0 },
     // { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
     //
     // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
     // { "tackle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "tackle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "take"     , POS_RESTING , do_get      , 0, 0 },
     CommandInfo {
         command: "take",
@@ -1178,7 +1823,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "tango"    , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "tango",
+        minimum_position: POS_STANDING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "taunt"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "taunt",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "taste"    , POS_RESTING , do_eat      , 0, SCMD_TASTE },
     CommandInfo {
         command: "taste",
@@ -1189,7 +1848,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "teleport" , POS_DEAD    , do_teleport , LVL_GOD, 0 },
     // { "thank"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "thank",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "think"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "think",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "thaw"     , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_THAW },
     // { "title"    , POS_DEAD    , do_title    , 0, 0 },
     CommandInfo {
@@ -1200,6 +1873,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "tickle"   , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "tickle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "time"     , POS_DEAD    , do_time     , 0, 0 },
     CommandInfo {
         command: "time",
@@ -1227,6 +1907,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "transfer" , POS_SLEEPING, do_trans    , LVL_GOD, 0 },
     // { "twiddle"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "twiddle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "typo"     , POS_DEAD    , do_gen_write, 0, SCMD_TYPO },
     CommandInfo {
         command: "typo",
@@ -1301,6 +1988,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "wave"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "wave",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "wear"     , POS_RESTING , do_wear     , 0, 0 },
     CommandInfo {
         command: "wear",
@@ -1343,7 +2037,21 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
     // { "whine"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "whine",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "whistle"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "whistle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "wield"    , POS_RESTING , do_wield    , 0, 0 },
     CommandInfo {
         command: "wield",
@@ -1353,6 +2061,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "wiggle"   , POS_STANDING, do_action   , 0, 0 },
+    CommandInfo {
+        command: "wiggle",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "wimpy"    , POS_DEAD    , do_wimpy    , 0, 0 },
     CommandInfo {
         command: "wimpy",
@@ -1362,6 +2077,13 @@ pub const CMD_INFO: [CommandInfo; 125] = [
         subcmd: 0,
     },
     // { "wink"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "wink",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
     // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
     // { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
@@ -1383,10 +2105,31 @@ pub const CMD_INFO: [CommandInfo; 125] = [
     },
     // { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
     // { "worship"  , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "worship",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "write"    , POS_STANDING, do_write    , 1, 0 },
     //
     // { "yawn"     , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "yawn",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "yodel"    , POS_RESTING , do_action   , 0, 0 },
+    CommandInfo {
+        command: "yodel",
+        minimum_position: POS_RESTING,
+        command_pointer: do_action,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     //
     // { "zreset"   , POS_DEAD    , do_zreset   , LVL_GRGOD, 0 },
     //
@@ -1888,16 +2631,9 @@ pub fn half_chop(string: &mut String, arg1: &mut String, arg2: &mut String) {
 }
 
 /* Used in specprocs, mostly.  (Exactly) matches "command" to cmd number */
-// int find_command(const char *command)
-// {
-// int cmd;
-//
-// for (cmd = 0; *CMD_INFO[cmd].command != '\n'; cmd++)
-// if (!strcmp(CMD_INFO[cmd].command, command))
-// return (cmd);
-//
-// return (-1);
-// }
+pub fn find_command(command: &str) -> Option<usize> {
+    CMD_INFO.iter().position(|e| e.command == command)
+}
 
 pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
