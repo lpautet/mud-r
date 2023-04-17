@@ -9,6 +9,7 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use log::{error, info};
@@ -75,10 +76,10 @@ fn show_obj_to_char(obj: &ObjData, ch: &CharData, mode: i32) {
 
         SHOW_OBJ_ACTION => match obj.get_obj_type() {
             ITEM_NOTE => {
-                if !obj.action_description.is_empty() {
+                if !RefCell::borrow(&obj.action_description).is_empty() {
                     let notebuf = format!(
                         "There is something written on it:\r\n\r\n{}",
-                        obj.action_description
+                        RefCell::borrow(&obj.action_description)
                     );
                     page_string(ch.desc.borrow().as_ref(), notebuf.as_str(), true);
                 } else {
@@ -218,8 +219,8 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
         return;
     }
 
-    if !i.player.borrow().description.is_empty() {
-        send_to_char(ch, i.player.borrow().description.as_str());
+    if !RefCell::borrow(&i.player.borrow().description).is_empty() {
+        send_to_char(ch, RefCell::borrow(&i.player.borrow().description).as_str());
     } else {
         db.act(
             "You see nothing special about $m.",

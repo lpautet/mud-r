@@ -542,7 +542,7 @@ pub struct CharPlayerData {
     /* for NPC 'actions'                    */
     pub long_descr: String,
     /* for 'look'			       */
-    pub description: String,
+    pub description: Rc<RefCell<String>>,
     /* Extra descriptions                   */
     pub title: Option<String>,
     /* PC / NPC's title                     */
@@ -648,7 +648,7 @@ pub struct ObjData {
     /* When in room                     */
     pub(crate) short_description: String,
     /* when worn/carry/in cont.         */
-    pub action_description: String,
+    pub action_description: Rc<RefCell<String>>,
     /* What to write when used          */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* extra descriptions     */

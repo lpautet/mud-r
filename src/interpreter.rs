@@ -8,7 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::cmp::max;
 use std::rc::Rc;
 
@@ -16,7 +16,9 @@ use hmac::Hmac;
 use log::error;
 use sha2::Sha256;
 
-use crate::act_comm::{do_gsay, do_reply, do_say, do_tell};
+use crate::act_comm::{
+    do_gen_comm, do_gsay, do_page, do_qcomm, do_reply, do_say, do_spec_comm, do_tell, do_write,
+};
 use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gen_ps,
     do_gold, do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_users,
@@ -116,6 +118,17 @@ pub const SCMD_SLOWNS: i32 = 14;
 pub const SCMD_AUTOEXIT: i32 = 15;
 pub const SCMD_TRACK: i32 = 16;
 
+/* do_spec_com */
+pub const SCMD_WHISPER: i32 = 0;
+pub const SCMD_ASK: i32 = 1;
+
+/* do_gen_com */
+pub const SCMD_HOLLER: i32 = 0;
+pub const SCMD_SHOUT: i32 = 1;
+pub const SCMD_GOSSIP: i32 = 2;
+pub const SCMD_AUCTION: i32 = 3;
+pub const SCMD_GRATZ: i32 = 4;
+
 /* do_quit */
 pub const SCMD_QUI: i32 = 0;
 pub const SCMD_QUIT: i32 = 1;
@@ -158,6 +171,10 @@ pub const SCMD_RECITE: i32 = 2;
 pub const SCMD_LOOK: i32 = 0;
 pub const SCMD_READ: i32 = 1;
 
+/* do_qcomm */
+pub const SCMD_QSAY: i32 = 0;
+pub const SCMD_QECHO: i32 = 1;
+
 /* do_gen_door */
 pub const SCMD_OPEN: i32 = 0;
 pub const SCMD_CLOSE: i32 = 1;
@@ -194,7 +211,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 236] = [
+pub const CMD_INFO: [CommandInfo; 247] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -281,7 +298,21 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "ask"      , POS_RESTING , do_spec_comm, 0, SCMD_ASK },
+    CommandInfo {
+        command: "ask",
+        minimum_position: POS_RESTING,
+        command_pointer: do_spec_comm,
+        minimum_level: 0,
+        subcmd: SCMD_ASK,
+    },
     // { "auction"  , POS_SLEEPING, do_gen_comm , 0, SCMD_AUCTION },
+    CommandInfo {
+        command: "auction",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gen_comm,
+        minimum_level: 0,
+        subcmd: SCMD_AUCTION,
+    },
     // { "autoexit" , POS_DEAD    , do_gen_tog  , 0, SCMD_AUTOEXIT },
     CommandInfo {
         command: "autoexit",
@@ -806,6 +837,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "gossip"   , POS_SLEEPING, do_gen_comm , 0, SCMD_GOSSIP },
+    CommandInfo {
+        command: "gossip",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gen_comm,
+        minimum_level: 0,
+        subcmd: SCMD_GOSSIP,
+    },
     // { "group"    , POS_RESTING , do_group    , 1, 0 },
     CommandInfo {
         command: "group",
@@ -823,6 +861,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "grats"    , POS_SLEEPING, do_gen_comm , 0, SCMD_GRATZ },
+    CommandInfo {
+        command: "grats",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_gen_comm,
+        minimum_level: 0,
+        subcmd: SCMD_GRATZ,
+    },
     // { "greet"    , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "greet",
@@ -924,6 +969,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
     },
     // { "hold"     , POS_RESTING , do_grab     , 1, 0 },
     // { "holler"   , POS_RESTING , do_gen_comm , 1, SCMD_HOLLER },
+    CommandInfo {
+        command: "holler",
+        minimum_position: POS_RESTING,
+        command_pointer: do_gen_comm,
+        minimum_level: 0,
+        subcmd: SCMD_HOLLER,
+    },
     // { "holylight", POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_HOLYLIGHT },
     CommandInfo {
         command: "holylight",
@@ -1285,6 +1337,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "page"     , POS_DEAD    , do_page     , LVL_GOD, 0 },
+    CommandInfo {
+        command: "page",
+        minimum_position: POS_DEAD,
+        command_pointer: do_page,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "pardon"   , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_PARDON },
     // { "peer"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
@@ -1411,6 +1470,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: SCMD_QUAFF,
     },
     // { "qecho"    , POS_DEAD    , do_qcomm    , LVL_IMMORT, SCMD_QECHO },
+    CommandInfo {
+        command: "qecho",
+        minimum_position: POS_DEAD,
+        command_pointer: do_qcomm,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_QECHO,
+    },
     // { "quest"    , POS_DEAD    , do_gen_tog  , 0, SCMD_QUEST },
     CommandInfo {
         command: "quest",
@@ -1429,6 +1495,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: SCMD_QUIT,
     },
     // { "qsay"     , POS_RESTING , do_qcomm    , 0, SCMD_QSAY },
+    CommandInfo {
+        command: "qsay",
+        minimum_position: POS_RESTING,
+        command_pointer: do_qcomm,
+        minimum_level: 0,
+        subcmd: SCMD_QSAY,
+    },
     //
     // { "reply"    , POS_SLEEPING, do_reply    , 0, 0 },
     CommandInfo {
@@ -1561,6 +1634,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
     // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
     // { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
     // { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
+    CommandInfo {
+        command: "shout",
+        minimum_position: POS_RESTING,
+        command_pointer: do_gen_comm,
+        minimum_level: 0,
+        subcmd: SCMD_SHOUT,
+    },
     // { "shake"    , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "shake",
@@ -2072,6 +2152,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "whisper"  , POS_RESTING , do_spec_comm, 0, SCMD_WHISPER },
+    CommandInfo {
+        command: "whisper",
+        minimum_position: POS_RESTING,
+        command_pointer: do_spec_comm,
+        minimum_level: 0,
+        subcmd: SCMD_WHISPER,
+    },
     // { "whine"    , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "whine",
@@ -2149,6 +2236,13 @@ pub const CMD_INFO: [CommandInfo; 236] = [
         subcmd: 0,
     },
     // { "write"    , POS_STANDING, do_write    , 1, 0 },
+    CommandInfo {
+        command: "write",
+        minimum_position: POS_STANDING,
+        command_pointer: do_write,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     //
     // { "yawn"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
@@ -3411,13 +3505,14 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                 }
 
                 '2' => {
-                    if !character.player.borrow().description.is_empty() {
-                        let player_description = character.player.borrow().description.clone();
+                    if !RefCell::borrow(&character.player.borrow().description).is_empty() {
+                        let cp = character.player.borrow();
+                        let player_description = RefCell::borrow(&cp.description);
                         write_to_output(
                             d.as_ref(),
                             format!("Old description:\r\n{}", player_description).as_str(),
                         );
-                        character.player.borrow_mut().description.clear();
+                        RefCell::borrow_mut(&character.player.borrow().description).clear();
                     }
                     write_to_output(d.as_ref(), "Enter the new text you'd like others to see when they look at you.\r\nTerminate with a '@' on a new line.\r\n");
                     let description = character.player.borrow().description.clone();

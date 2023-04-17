@@ -8,6 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
@@ -644,9 +645,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                 None,
                 TO_CHAR,
             );
-            if !obj.action_description.is_empty() {
+            if !RefCell::borrow(&obj.action_description).is_empty() {
                 db.act(
-                    &obj.action_description,
+                    &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
                     Some(obj),
@@ -748,9 +749,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         Some(tch.as_ref().unwrap()),
                         TO_CHAR,
                     );
-                    if !obj.action_description.is_empty() {
+                    if !RefCell::borrow(&obj.action_description).is_empty() {
                         db.act(
-                            &obj.action_description,
+                            &RefCell::borrow(&obj.action_description),
                             false,
                             Some(ch),
                             Some(obj),
@@ -777,9 +778,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     Some(tobj.as_ref().unwrap()),
                     TO_CHAR,
                 );
-                if !obj.action_description.is_empty() {
+                if !RefCell::borrow(&obj.action_description).is_empty() {
                     db.act(
-                        &obj.action_description,
+                        &RefCell::borrow(&obj.action_description),
                         false,
                         Some(ch),
                         Some(obj),
@@ -891,9 +892,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                 None,
                 TO_CHAR,
             );
-            if !obj.action_description.is_empty() {
+            if !RefCell::borrow(&obj.action_description).is_empty() {
                 db.act(
-                    &obj.action_description,
+                    &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
                     Some(obj),
@@ -927,9 +928,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
         ITEM_POTION => {
             tch = Some(ch.clone());
             db.act("You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
-            if !obj.action_description.is_empty() {
+            if !RefCell::borrow(&obj.action_description).is_empty() {
                 db.act(
-                    &obj.action_description,
+                    &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
                     Some(obj),

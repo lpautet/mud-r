@@ -102,11 +102,11 @@ pub struct DescriptorData {
     /* number of pages to page through	*/
     showstr_page: Cell<i32>,
     /* which page are we currently showing?	*/
-    str: RefCell<Option<String>>,
+    str: RefCell<Option<Rc<RefCell<String>>>>,
     /* for the modify-str system		*/
     pub max_str: Cell<usize>,
     /*		-			*/
-    // long	mail_to;		/* name for mail system			*/
+    mail_to: Cell<u64>, /* name for mail system			*/
     has_prompt: Cell<bool>,
     /* is the user at a prompt?             */
     inbuf: RefCell<String>,
@@ -1163,6 +1163,7 @@ impl Game {
             showstr_page: Cell::from(0),
             str: RefCell::new(None),
             max_str: Cell::new(0),
+            mail_to: Cell::new(0),
             has_prompt: Cell::new(false),
             inbuf: RefCell::from(String::new()),
             history: RefCell::new(vec![]),

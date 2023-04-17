@@ -47,10 +47,10 @@ pub const PK_ALLOWED: bool = false;
 pub const PT_ALLOWED: bool = false;
 
 /* minimum level a player must be to shout/holler/gossip/auction */
-//static mut LEVEL_CAN_SHOUT: i32 = 1;
+pub const LEVEL_CAN_SHOUT: i32 = 1;
 
 /* number of movement points it costs to holler */
-//static mut HOLLER_MOVE_COST: i32 = 20;
+pub const HOLLER_MOVE_COST: i32 = 20;
 
 /*  how many people can get into a tunnel?  The default is two, but there
 *  is also an alternate message in the case of one person being allowed.

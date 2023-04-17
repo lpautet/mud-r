@@ -14,14 +14,17 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::process;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use log::{error, info};
 use regex::Regex;
 
+use crate::act_comm::{do_say, do_tell};
+use crate::act_social::do_action;
 use crate::constants::{DRINKS, ITEM_TYPES};
 use crate::db::{fread_string, DB, REAL};
 use crate::handler::{fname, get_number, isname, obj_from_char};
-use crate::interpreter::{cmd_is, is_number, one_argument};
+use crate::interpreter::{cmd_is, find_command, is_number, one_argument};
 use crate::modify::page_string;
 use crate::structs::{
     CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, ITEM_DRINKCON, ITEM_STAFF,
@@ -339,11 +342,10 @@ pub const MSG_CANT_KILL_KEEPER: &str = "Get out of here before I call the guards
 // "\n"
 // };
 
-fn is_ok_char(db: &DB, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
+fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
     // char buf[MAX_INPUT_LENGTH];
-
+    let db = &game.db;
     if !db.can_see(keeper, ch) {
-        // TODO implement do_say
         //do_say(MSG_NO_SEE_CHAR, actbuf, cmd_say, 0);
         return false;
     }
@@ -356,8 +358,7 @@ fn is_ok_char(db: &DB, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData
         || ch.is_neutral() && shop.notrade_neutral()
     {
         let buf = format!("{} {}", ch.get_name(), MSG_NO_SELL_ALIGN);
-        // TODO implement do_tell
-        //do_tell(keeper, buf, cmd_tell, 0);
+        do_tell(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
         return false;
     }
     if ch.is_npc() {
@@ -370,14 +371,14 @@ fn is_ok_char(db: &DB, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData
         || ch.is_warrior() && shop.notrade_warrior()
     {
         let buf = format!("{} {}", ch.get_name(), MSG_NO_SELL_CLASS);
-        // TODO implement do_tell
-        // do_tell(keeper, buf, cmd_tell, 0);
+        do_tell(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
         return false;
     }
     true
 }
 
-fn is_open(db: &DB, keeper: &Rc<CharData>, shop: &ShopData, msg: bool) -> bool {
+fn is_open(game: &Game, keeper: &Rc<CharData>, shop: &ShopData, msg: bool) -> bool {
+    let db = &game.db;
     let mut buf = String::new();
     if shop.open1 > db.time_info.borrow().hours {
         buf.push_str(MSG_NOT_OPEN_YET);
@@ -393,15 +394,14 @@ fn is_open(db: &DB, keeper: &Rc<CharData>, shop: &ShopData, msg: bool) -> bool {
     }
 
     if msg {
-        // TODO implement do_say
-        // do_say(keeper, buf, cmd_tell, 0);
+        do_say(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
     }
     false
 }
 
-fn is_ok(db: &DB, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
-    if is_open(db, keeper, shop, true) {
-        return is_ok_char(db, keeper, ch, shop);
+fn is_ok(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
+    if is_open(game, keeper, shop, true) {
+        return is_ok_char(game, keeper, ch, shop);
     }
     false
 }
@@ -694,7 +694,7 @@ fn get_purchase_obj(
 ) -> Option<Rc<ObjData>> {
     let mut name = String::new();
     one_argument(arg, &mut name);
-    let mut obj: Option<Rc<ObjData>> = None;
+    let mut obj: Option<Rc<ObjData>>;
     loop {
         if name.starts_with('#') || is_number(&name) {
             obj = get_hash_obj_vis(db, ch, &name, &keeper.carrying.borrow());
@@ -768,12 +768,19 @@ fn buy_price(
 // return (int) (GET_OBJ_COST(obj) * sell_cost_modifier);
 // }
 
-fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, shop: &mut ShopData) {
+fn shopping_buy(
+    game: &Game,
+    arg: &str,
+    ch: &Rc<CharData>,
+    keeper: &Rc<CharData>,
+    shop: &mut ShopData,
+) {
+    let db = &game.db;
     // char tempstr[MAX_INPUT_LENGTH], tempbuf[MAX_INPUT_LENGTH];
     // struct obj_data *obj, *last_obj = NULL;
     // int goldamt = 0, buynum, bought = 0;
 
-    if !is_ok(db, keeper, ch, shop) {
+    if !is_ok(game, keeper, ch, shop) {
         return;
     }
 
@@ -791,14 +798,12 @@ fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, sh
             "{}s A negative amount?  Try selling me something.",
             ch.get_name()
         );
-        // TODO do_tell
-        // do_tell(keeper, buf, cmd_tell, 0);
+        do_tell(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
         return;
     }
     if arg.is_empty() || buynum == 0 {
         let buf = format!("{} What do you want to buy??", ch.get_name());
-        // TODO do_tell
-        //do_tell(keeper, buf, cmd_tell, 0);
+        do_tell(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
         return;
     }
     let mut obj: Option<Rc<ObjData>>;
@@ -815,9 +820,13 @@ fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, sh
 
         match shop.temper1 {
             0 => {
-                // TODO implement action
-                // do_action(keeper, strcpy(actbuf, GET_NAME(ch)), cmd_puke,
-                //           0);    /* strcpy: OK (MAX_NAME_LENGTH < MAX_INPUT_LENGTH) */
+                do_action(
+                    game,
+                    keeper,
+                    &ch.get_name(),
+                    cmd_puke.load(Ordering::Relaxed),
+                    0,
+                );
             }
 
             1 => {
@@ -904,8 +913,7 @@ fn shopping_buy(db: &DB, arg: &str, ch: &Rc<CharData>, keeper: &Rc<CharData>, sh
                 bought,
             );
         }
-        // TODO implement do_tell
-        // do_tell(keeper, buf, cmd_tell, 0);
+        do_tell(game, keeper, &buf, cmd_tell.load(Ordering::Relaxed), 0);
     }
     if !ch.is_god() {
         keeper.set_gold(keeper.get_gold() + goldamt);
@@ -1150,7 +1158,7 @@ fn list_object(
 ) -> String {
     let mut result = String::new();
     let mut quantity = String::new();
-    let mut itemname;
+    let itemname;
     if shop_producing(db, obj, shop) {
         quantity.push_str("Unlimited"); /* strcpy: OK (for 'quantity >= 10') */
     } else {
@@ -1200,12 +1208,13 @@ fn list_object(
 }
 
 pub fn shopping_list(
-    db: &DB,
+    game: &Game,
     arg: &str,
     ch: &Rc<CharData>,
     keeper: &Rc<CharData>,
     shop: &mut ShopData,
 ) {
+    let db = &game.db;
     let mut cnt = 0;
     let mut lindex = 0;
     let mut found = false;
@@ -1213,7 +1222,7 @@ pub fn shopping_list(
 
     /* cnt is the number of that particular object available */
 
-    if !is_ok(db, keeper, ch, shop) {
+    if !is_ok(game, keeper, ch, shop) {
         return;
     }
 
@@ -1279,7 +1288,7 @@ pub fn shopping_list(
     }
 }
 
-fn ok_shop_room(db: &DB, shop: &ShopData, room: RoomVnum) -> bool {
+fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
     for mindex in 0..shop.in_room.len() {
         if shop.in_room[mindex] == room {
             return true;
@@ -1294,7 +1303,7 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
     let keeper = me
         .downcast_ref::<Rc<CharData>>()
         .expect("Unexpected type for Rc<CharData> in shop_keeper");
-    let mut shop = b.iter_mut().find(|s| s.keeper == keeper.nr);
+    let shop = b.iter_mut().find(|s| s.keeper == keeper.nr);
 
     if shop.is_none() {
         return false;
@@ -1313,7 +1322,7 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
         return false;
     }
 
-    if !ok_shop_room(db, shop, db.get_room_vnum(ch.in_room())) {
+    if !ok_shop_room(shop, db.get_room_vnum(ch.in_room())) {
         return false;
     }
 
@@ -1324,13 +1333,18 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
     if cmd_is(cmd, "steal") {
         let argm = format!("$N shouts '{}'", MSG_NO_STEAL_HERE);
         db.act(&argm, false, Some(ch), None, Some(keeper), TO_CHAR);
-        // TODO implement cmd_slap, do_action
-        //do_action(keeper, GET_NAME(ch), cmd_slap, 0);
+        do_action(
+            game,
+            keeper,
+            &ch.get_name(),
+            cmd_slap.load(Ordering::Relaxed),
+            0,
+        );
         return true;
     }
 
     if cmd_is(cmd, "buy") {
-        shopping_buy(db, argument, ch, keeper, shop);
+        shopping_buy(game, argument, ch, keeper, shop);
         return true;
         // } else if cmd_si(cmd, "sell") {
         //     shopping_sell(argument, ch, keeper, shop);
@@ -1339,7 +1353,7 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
         //     shopping_value(argument, ch, keeper, shop);
         //     return true;
     } else if cmd_is(cmd, "list") {
-        shopping_list(db, argument, ch, keeper, shop);
+        shopping_list(game, argument, ch, keeper, shop);
         return true;
     }
     return false;
@@ -1541,7 +1555,7 @@ fn read_shop_message(mnum: i32, shr: RoomRnum, reader: &mut BufReader<File>, why
     let mut err = 0;
     let mut ds = 0;
     let mut ss = 0;
-    let mut tbuf = String::new();
+    let tbuf;
     if {
         tbuf = fread_string(reader, why);
         tbuf.len() == 0
@@ -1703,13 +1717,19 @@ impl DB {
     }
 }
 
+static cmd_say: AtomicUsize = AtomicUsize::new(0);
+static cmd_tell: AtomicUsize = AtomicUsize::new(0);
+// static cmd_emote: Cell<usize> = Cell::new(0);
+static cmd_slap: AtomicUsize = AtomicUsize::new(0);
+static cmd_puke: AtomicUsize = AtomicUsize::new(0);
+
 pub fn assign_the_shopkeepers(db: &mut DB) {
-    // TODO implement say tell emote slap puke
-    // cmd_say = find_command("say");
-    // cmd_tell = find_command("tell");
+    // TODO implement emote
+    cmd_say.store(find_command("say").unwrap(), Ordering::Relaxed);
+    cmd_tell.store(find_command("tell").unwrap(), Ordering::Relaxed);
     // cmd_emote = find_command("emote");
-    // cmd_slap = find_command("slap");
-    // cmd_puke = find_command("puke");
+    cmd_slap.store(find_command("slap").unwrap(), Ordering::Relaxed);
+    cmd_puke.store(find_command("puke").unwrap(), Ordering::Relaxed);
 
     for shop in db.shop_index.borrow_mut().iter_mut() {
         if shop.keeper == NOBODY {

@@ -10,17 +10,24 @@
 
 use std::rc::Rc;
 
-use crate::config::{NOPERSON, OK};
+use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
 use crate::db::DB;
-use crate::handler::FIND_CHAR_WORLD;
-use crate::interpreter::{delete_doubledollar, half_chop};
-use crate::screen::{C_CMP, C_NRM, KNRM, KNUL, KRED};
+use crate::handler::{FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::interpreter::{
+    delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
+    SCMD_SHOUT, SCMD_WHISPER,
+};
+use crate::modify::string_write;
+use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
+use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, AFF_GROUP, LVL_IMMORT, NOBODY, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_NOREPEAT,
-    PRF_NOTELL, ROOM_SOUNDPROOF,
+    CharData, AFF_GROUP, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY,
+    PLR_NOSHOUT, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS,
+    PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
 use crate::{
-    _clrlevel, clr, send_to_char, Game, CCNRM, CCRED, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT,
+    _clrlevel, an, clr, send_to_char, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    TO_SLEEP, TO_VICT,
 };
 
 #[allow(unused_variables)]
@@ -224,320 +231,490 @@ pub fn do_reply(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
     }
 }
 
-// ACMD(do_spec_comm)
-// {
-// char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// const char *action_sing, *action_plur, *action_others;
-//
-// switch (subcmd) {
-// case SCMD_WHISPER:
-// action_sing = "whisper to";
-// action_plur = "whispers to";
-// action_others = "$n whispers something to $N.";
-// break;
-//
-// case SCMD_ASK:
-// action_sing = "ask";
-// action_plur = "asks";
-// action_others = "$n asks $N a question.";
-// break;
-//
-// default:
-// action_sing = "oops";
-// action_plur = "oopses";
-// action_others = "$n is tongue-tied trying to speak with $N.";
-// break;
-// }
-//
-// half_chop(argument, buf, buf2);
-//
-// if (!*buf || !*buf2)
-// send_to_char(ch, "Whom do you want to %s.. and what??\r\n", action_sing);
-// else if (!(vict = get_char_vis(ch, buf, None, FIND_CHAR_ROOM)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (vict == ch)
-// send_to_char(ch, "You can't get your mouth close enough to your ear...\r\n");
-// else {
-// char buf1[MAX_STRING_LENGTH];
-//
-// snprintf(buf1, sizeof(buf1), "$n %s you, '%s'", action_plur, buf2);
-// act(buf1, false, ch, 0, vict, TO_VICT);
-//
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else
-// send_to_char(ch, "You %s %s, '%s'\r\n", action_sing, GET_NAME(vict), buf2);
-// act(action_others, false, ch, 0, vict, TO_NOTVICT);
-// }
-// }
-//
-//
-// /*
-//  * buf1, buf2 = MAX_OBJECT_NAME_LENGTH
-//  *	(if it existed)
-//  */
-// ACMD(do_write)
-// {
-// struct obj_data *paper, *pen = None;
-// char *papername, *penname;
-// char buf1[MAX_STRING_LENGTH], buf2[MAX_STRING_LENGTH];
-//
-// papername = buf1;
-// penname = buf2;
-//
-// two_arguments(argument, papername, penname);
-//
-// if (!ch->desc)
-// return;
-//
-// if (!*papername) {		/* nothing was delivered */
-// send_to_char(ch, "Write?  With what?  ON what?  What are you trying to do?!?\r\n");
-// return;
-// }
-// if (*penname) {		/* there were two arguments */
-// if (!(paper = get_obj_in_list_vis(ch, papername, None, ch->carrying))) {
-// send_to_char(ch, "You have no %s.\r\n", papername);
-// return;
-// }
-// if (!(pen = get_obj_in_list_vis(ch, penname, None, ch->carrying))) {
-// send_to_char(ch, "You have no %s.\r\n", penname);
-// return;
-// }
-// } else {		/* there was one arg.. let's see what we can find */
-// if (!(paper = get_obj_in_list_vis(ch, papername, None, ch->carrying))) {
-// send_to_char(ch, "There is no %s in your inventory.\r\n", papername);
-// return;
-// }
-// if (GET_OBJ_TYPE(paper) == ITEM_PEN) {	/* oops, a pen.. */
-// pen = paper;
-// paper = None;
-// } else if (GET_OBJ_TYPE(paper) != ITEM_NOTE) {
-// send_to_char(ch, "That thing has nothing to do with writing.\r\n");
-// return;
-// }
-// /* One object was found.. now for the other one. */
-// if (!GET_EQ(ch, WEAR_HOLD)) {
-// send_to_char(ch, "You can't write with %s %s alone.\r\n", AN(papername), papername);
-// return;
-// }
-// if (!CAN_SEE_OBJ(ch, GET_EQ(ch, WEAR_HOLD))) {
-// send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
-// return;
-// }
-// if (pen)
-// paper = GET_EQ(ch, WEAR_HOLD);
-// else
-// pen = GET_EQ(ch, WEAR_HOLD);
-// }
-//
-//
-// /* ok.. now let's see what kind of stuff we've found */
-// if (GET_OBJ_TYPE(pen) != ITEM_PEN)
-// act("$p is no good for writing with.", false, ch, pen, 0, TO_CHAR);
-// else if (GET_OBJ_TYPE(paper) != ITEM_NOTE)
-// act("You can't write on $p.", false, ch, paper, 0, TO_CHAR);
-// else if (paper->action_description)
-// send_to_char(ch, "There's something written on it already.\r\n");
-// else {
-// /* we can write - hooray! */
-// send_to_char(ch, "Write your note.  End with '@' on a new line.\r\n");
-// act("$n begins to jot down a note.", true, ch, 0, 0, TO_ROOM);
-// string_write(ch->desc, &paper->action_description, MAX_NOTE_LENGTH, 0, None);
-// }
-// }
-//
-//
-//
-// ACMD(do_page)
-// {
-// struct descriptor_data *d;
-// struct char_data *vict;
-// char buf2[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
-//
-// half_chop(argument, arg, buf2);
-//
-// if (IS_NPC(ch))
-// send_to_char(ch, "Monsters can't page.. go away.\r\n");
-// else if (!*arg)
-// send_to_char(ch, "Whom do you wish to page?\r\n");
-// else {
-// char buf[MAX_STRING_LENGTH];
-//
-// snprintf(buf, sizeof(buf), "\007\007*$n* %s", buf2);
-// if (!str_cmp(arg, "all")) {
-// if (GET_LEVEL(ch) > LVL_GOD) {
-// for (d = descriptor_list; d; d = d->next)
-// if (STATE(d) == CON_PLAYING && d->character)
-// act(buf, false, ch, 0, d->character, TO_VICT);
-// } else
-// send_to_char(ch, "You will never be godly enough to do that!\r\n");
-// return;
-// }
-// if ((vict = get_char_vis(ch, arg, None, FIND_CHAR_WORLD)) != None) {
-// act(buf, false, ch, 0, vict, TO_VICT);
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else
-// act(buf, false, ch, 0, vict, TO_CHAR);
-// } else
-// send_to_char(ch, "There is no such person in the game!\r\n");
-// }
-// }
-//
-//
-// /**********************************************************************
-//  * generalized communication func, originally by Fred C. Merkel (Torg) *
-//   *********************************************************************/
-//
-// ACMD(do_gen_comm)
-// {
-// struct descriptor_data *i;
-// char color_on[24];
-// char buf1[MAX_INPUT_LENGTH];
-//
-// /* Array of flags which must _not_ be set in order for comm to be heard */
-// int channels[] = {
-// 0,
-// PRF_DEAF,
-// PRF_NOGOSS,
-// PRF_NOAUCT,
-// PRF_NOGRATZ,
-// 0
-// };
-//
-// /*
-//  * com_msgs: [0] Message if you can't perform the action because of noshout
-//  *           [1] name of the action
-//  *           [2] message if you're not on the channel
-//  *           [3] a color string.
-//  */
-// const char *com_msgs[][4] = {
-// {"You cannot holler!!\r\n",
-// "holler",
-// "",
-// KYEL},
-//
-// {"You cannot shout!!\r\n",
-// "shout",
-// "Turn off your noshout flag first!\r\n",
-// KYEL},
-//
-// {"You cannot gossip!!\r\n",
-// "gossip",
-// "You aren't even on the channel!\r\n",
-// KYEL},
-//
-// {"You cannot auction!!\r\n",
-// "auction",
-// "You aren't even on the channel!\r\n",
-// KMAG},
-//
-// {"You cannot congratulate!\r\n",
-// "congrat",
-// "You aren't even on the channel!\r\n",
-// KGRN}
-// };
-//
-// /* to keep pets, etc from being ordered to shout */
-// if (!ch->desc)
-// return;
-//
-// if (PLR_FLAGGED(ch, PLR_NOSHOUT)) {
-// send_to_char(ch, "%s", com_msgs[subcmd][0]);
-// return;
-// }
-// if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_SOUNDPROOF)) {
-// send_to_char(ch, "The walls seem to absorb your words.\r\n");
-// return;
-// }
-// /* level_can_shout defined in config.c */
-// if (GET_LEVEL(ch) < level_can_shout) {
-// send_to_char(ch, "You must be at least level %d before you can %s.\r\n", level_can_shout, com_msgs[subcmd][1]);
-// return;
-// }
-// /* make sure the char is on the channel */
-// if (PRF_FLAGGED(ch, channels[subcmd])) {
-// send_to_char(ch, "%s", com_msgs[subcmd][2]);
-// return;
-// }
-// /* skip leading spaces */
-// skip_spaces(&argument);
-//
-// /* make sure that there is something there to say! */
-// if (!*argument) {
-// send_to_char(ch, "Yes, %s, fine, %s we must, but WHAT???\r\n", com_msgs[subcmd][1], com_msgs[subcmd][1]);
-// return;
-// }
-// if (subcmd == SCMD_HOLLER) {
-// if (GET_MOVE(ch) < holler_move_cost) {
-// send_to_char(ch, "You're too exhausted to holler.\r\n");
-// return;
-// } else
-// GET_MOVE(ch) -= holler_move_cost;
-// }
-// /* set up the color on code */
-// strlcpy(color_on, com_msgs[subcmd][3], sizeof(color_on));
-//
-// /* first, set up strings to be given to the communicator */
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else
-// send_to_char(ch, "%sYou %s, '%s'%s\r\n", COLOR_LEV(ch) >= C_CMP ? color_on : "", com_msgs[subcmd][1], argument, CCNRM(ch, C_CMP));
-//
-// snprintf(buf1, sizeof(buf1), "$n %ss, '%s'", com_msgs[subcmd][1], argument);
-//
-// /* now send all the strings out */
-// for (i = descriptor_list; i; i = i->next) {
-// if (STATE(i) == CON_PLAYING && i != ch->desc && i->character &&
-// !PRF_FLAGGED(i->character, channels[subcmd]) &&
-// !PLR_FLAGGED(i->character, PLR_WRITING) &&
-// !ROOM_FLAGGED(IN_ROOM(i->character), ROOM_SOUNDPROOF)) {
-//
-// if (subcmd == SCMD_SHOUT &&
-// ((world[IN_ROOM(ch)].zone != world[IN_ROOM(i->character)].zone) ||
-// !AWAKE(i->character)))
-// continue;
-//
-// if (COLOR_LEV(i->character) >= C_NRM)
-// send_to_char(i->character, "%s", color_on);
-// act(buf1, false, ch, 0, i->character, TO_VICT | TO_SLEEP);
-// if (COLOR_LEV(i->character) >= C_NRM)
-// send_to_char(i->character, "%s", KNRM);
-// }
-// }
-// }
-//
-//
-// ACMD(do_qcomm)
-// {
-// if (!PRF_FLAGGED(ch, PRF_QUEST)) {
-// send_to_char(ch, "You aren't even part of the quest!\r\n");
-// return;
-// }
-// skip_spaces(&argument);
-//
-// if (!*argument)
-// send_to_char(ch, "%c%s?  Yes, fine, %s we must, but WHAT??\r\n", UPPER(*CMD_NAME), CMD_NAME + 1, CMD_NAME);
-// else {
-// char buf[MAX_STRING_LENGTH];
-// struct descriptor_data *i;
-//
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else if (subcmd == SCMD_QSAY) {
-// snprintf(buf, sizeof(buf), "You quest-say, '%s'", argument);
-// act(buf, false, ch, 0, argument, TO_CHAR);
-// } else
-// act(argument, false, ch, 0, argument, TO_CHAR);
-//
-// if (subcmd == SCMD_QSAY)
-// snprintf(buf, sizeof(buf), "$n quest-says, '%s'", argument);
-// else
-// strlcpy(buf, argument, sizeof(buf));
-//
-// for (i = descriptor_list; i; i = i->next)
-// if (STATE(i) == CON_PLAYING && i != ch->desc && PRF_FLAGGED(i->character, PRF_QUEST))
-// act(buf, 0, ch, 0, i->character, TO_VICT | TO_SLEEP);
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_spec_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let action_sing;
+    let action_plur;
+    let action_others;
+
+    match subcmd {
+        SCMD_WHISPER => {
+            action_sing = "whisper to";
+            action_plur = "whispers to";
+            action_others = "$n whispers something to $N.";
+        }
+
+        SCMD_ASK => {
+            action_sing = "ask";
+            action_plur = "asks";
+            action_others = "$n asks $N a question.";
+        }
+
+        _ => {
+            action_sing = "oops";
+            action_plur = "oopses";
+            action_others = "$n is tongue-tied trying to speak with $N.";
+        }
+    }
+
+    let mut argument = argument.to_string();
+    let mut buf = String::new();
+    let mut buf2 = String::new();
+    let db = &game.db;
+
+    half_chop(&mut argument, &mut buf, &mut buf2);
+    let vict;
+    if buf.is_empty() || buf2.is_empty() {
+        send_to_char(
+            ch,
+            format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
+        );
+    } else if {
+        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
+    } {
+        send_to_char(ch, NOPERSON);
+    } else if Rc::ptr_eq(vict.as_ref().unwrap(), ch) {
+        send_to_char(
+            ch,
+            "You can't get your mouth close enough to your ear...\r\n",
+        );
+    } else {
+        let vict = vict.as_ref().unwrap();
+
+        let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
+        db.act(&buf1, false, Some(ch), None, Some(vict), TO_VICT);
+
+        if ch.prf_flagged(PRF_NOREPEAT) {
+            send_to_char(ch, OK);
+        } else {
+            send_to_char(
+                ch,
+                format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
+            );
+        }
+        db.act(action_others, false, Some(ch), None, Some(vict), TO_NOTVICT);
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_write(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+
+    let mut paper;
+    let mut pen = None;
+    let mut papername = String::new();
+    let mut penname = String::new();
+
+    two_arguments(&argument, &mut papername, &mut penname);
+
+    if ch.desc.borrow().is_none() {
+        return;
+    }
+
+    if papername.is_empty() {
+        /* nothing was delivered */
+        send_to_char(
+            ch,
+            "Write?  With what?  ON what?  What are you trying to do?!?\r\n",
+        );
+        return;
+    }
+    if !penname.is_empty() {
+        /* there were two arguments */
+        if {
+            paper = db.get_obj_in_list_vis(ch, &papername, None, ch.carrying.borrow());
+            paper.is_none()
+        } {
+            send_to_char(ch, format!("You have no {}.\r\n", papername).as_str());
+            return;
+        }
+        if {
+            pen = db.get_obj_in_list_vis(ch, &penname, None, ch.carrying.borrow());
+            pen.is_none()
+        } {
+            send_to_char(ch, format!("You have no {}.\r\n", penname).as_str());
+            return;
+        }
+    } else {
+        /* there was one arg.. let's see what we can find */
+        if {
+            paper = db.get_obj_in_list_vis(ch, &papername, None, ch.carrying.borrow());
+            paper.is_none()
+        } {
+            send_to_char(
+                ch,
+                format!("There is no {} in your inventory.\r\n", papername).as_str(),
+            );
+            return;
+        }
+        if paper.as_ref().unwrap().get_obj_type() == ITEM_PEN {
+            /* oops, a pen.. */
+            pen = paper;
+            paper = None;
+        } else if paper.as_ref().unwrap().get_obj_type() != ITEM_NOTE {
+            send_to_char(ch, "That thing has nothing to do with writing.\r\n");
+            return;
+        }
+        /* One object was found.. now for the other one. */
+        if ch.get_eq(WEAR_HOLD as i8).is_none() {
+            send_to_char(
+                ch,
+                format!(
+                    "You can't write with {} {} alone.\r\n",
+                    an!(papername),
+                    papername
+                )
+                .as_str(),
+            );
+            return;
+        }
+        if !db.can_see_obj(ch, ch.get_eq(WEAR_HOLD as i8).as_ref().unwrap()) {
+            send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
+            return;
+        }
+        if pen.is_some() {
+            paper = ch.get_eq(WEAR_HOLD as i8);
+        } else {
+            pen = ch.get_eq(WEAR_HOLD as i8);
+        }
+    }
+    let pen = pen.as_ref().unwrap();
+    let paper = paper.as_ref().unwrap();
+
+    /* ok.. now let's see what kind of stuff we've found */
+    if pen.get_obj_type() != ITEM_PEN {
+        db.act(
+            "$p is no good for writing with.",
+            false,
+            Some(ch),
+            Some(pen),
+            None,
+            TO_CHAR,
+        );
+    } else if paper.get_obj_type() != ITEM_NOTE {
+        db.act(
+            "You can't write on $p.",
+            false,
+            Some(ch),
+            Some(paper),
+            None,
+            TO_CHAR,
+        );
+    } else if !paper.action_description.borrow().is_empty() {
+        send_to_char(ch, "There's something written on it already.\r\n");
+    } else {
+        /* we can write - hooray! */
+        send_to_char(ch, "Write your note.  End with '@' on a new line.\r\n");
+        db.act(
+            "$n begins to jot down a note.",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        string_write(
+            ch.desc.borrow().as_ref().unwrap(),
+            paper.action_description.clone(),
+            MAX_NOTE_LENGTH as usize,
+            0,
+        );
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_page(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+    let mut buf2 = String::new();
+    let mut argument = argument.to_string();
+
+    half_chop(&mut argument, &mut arg, &mut buf2);
+
+    if ch.is_npc() {
+        send_to_char(ch, "Monsters can't page.. go away.\r\n");
+    } else if arg.is_empty() {
+        send_to_char(ch, "Whom do you wish to page?\r\n");
+    } else {
+        let buf = format!("\007\007*$n* {}", buf2);
+        if arg == "all" {
+            if ch.get_level() > LVL_GOD as u8 {
+                for d in game.descriptor_list.borrow().iter() {
+                    if d.state() == ConPlaying && d.character.borrow().is_some() {
+                        db.act(
+                            &buf,
+                            false,
+                            Some(ch),
+                            None,
+                            Some(d.character.borrow().as_ref().unwrap()),
+                            TO_VICT,
+                        );
+                    } else {
+                        send_to_char(ch, "You will never be godly enough to do that!\r\n");
+                    }
+                }
+                return;
+            }
+        }
+        let vict;
+        if {
+            vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict.is_some()
+        } {
+            let vict = vict.as_ref().unwrap();
+
+            db.act(&buf, false, Some(ch), None, Some(vict), TO_VICT);
+            if ch.prf_flagged(PRF_NOREPEAT) {
+                send_to_char(ch, OK);
+            } else {
+                db.act(&buf, false, Some(ch), None, Some(vict), TO_CHAR);
+            }
+        } else {
+            send_to_char(ch, "There is no such person in the game!\r\n");
+        }
+    }
+}
+
+/**********************************************************************
+ * generalized communication func, originally by Fred C. Merkel (Torg) *
+ *********************************************************************/
+
+#[allow(unused_variables)]
+pub fn do_gen_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    // char color_on[24];
+
+    /* Array of flags which must _not_ be set in order for comm to be heard */
+    const CHANNELS: [i64; 6] = [0, PRF_DEAF, PRF_NOGOSS, PRF_NOAUCT, PRF_NOGRATZ, 0];
+
+    /*
+     * COM_MSGS: [0] Message if you can't perform the action because of noshout
+     *           [1] name of the action
+     *           [2] message if you're not on the channel
+     *           [3] a color string.
+     */
+    const COM_MSGS: [[&str; 4]; 5] = [
+        ["You cannot holler!!\r\n", "holler", "", KYEL],
+        [
+            "You cannot shout!!\r\n",
+            "shout",
+            "Turn off your noshout flag first!\r\n",
+            KYEL,
+        ],
+        [
+            "You cannot gossip!!\r\n",
+            "gossip",
+            "You aren't even on the channel!\r\n",
+            KYEL,
+        ],
+        [
+            "You cannot auction!!\r\n",
+            "auction",
+            "You aren't even on the channel!\r\n",
+            KMAG,
+        ],
+        [
+            "You cannot congratulate!\r\n",
+            "congrat",
+            "You aren't even on the channel!\r\n",
+            KGRN,
+        ],
+    ];
+
+    /* to keep pets, etc from being ordered to shout */
+    if ch.desc.borrow().is_none() {
+        return;
+    }
+
+    if ch.plr_flagged(PLR_NOSHOUT) {
+        send_to_char(ch, COM_MSGS[subcmd as usize][0]);
+        return;
+    }
+    if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
+        send_to_char(ch, "The walls seem to absorb your words.\r\n");
+        return;
+    }
+    /* level_can_shout defined in config.c */
+    if ch.get_level() < LEVEL_CAN_SHOUT as u8 {
+        send_to_char(
+            ch,
+            format!(
+                "You must be at least level {} before you can {}.\r\n",
+                LEVEL_CAN_SHOUT, COM_MSGS[subcmd as usize][1]
+            )
+            .as_str(),
+        );
+        return;
+    }
+    /* make sure the char is on the channel */
+    if ch.prf_flagged(CHANNELS[subcmd as usize] as i64) {
+        send_to_char(ch, COM_MSGS[subcmd as usize][2]);
+        return;
+    }
+    /* skip leading spaces */
+    let argument = argument.trim_start();
+
+    /* make sure that there is something there to say! */
+    if argument.is_empty() {
+        send_to_char(
+            ch,
+            format!(
+                "Yes, {}, fine, {} we must, but WHAT???\r\n",
+                COM_MSGS[subcmd as usize][1], COM_MSGS[subcmd as usize][1]
+            )
+            .as_str(),
+        );
+        return;
+    }
+    if subcmd == SCMD_HOLLER {
+        if ch.get_move() < HOLLER_MOVE_COST as i16 {
+            send_to_char(ch, "You're too exhausted to holler.\r\n");
+            return;
+        } else {
+            ch.set_move(ch.get_move() - HOLLER_MOVE_COST as i16);
+        }
+    }
+    /* set up the color on code */
+    let color_on = COM_MSGS[subcmd as usize][3];
+
+    /* first, set up strings to be given to the communicator */
+    if ch.prf_flagged(PRF_NOREPEAT) {
+        send_to_char(ch, OK);
+    } else {
+        send_to_char(
+            ch,
+            format!(
+                "{}You {}, '{}'{}\r\n",
+                if COLOR_LEV!(ch) >= C_CMP {
+                    color_on
+                } else {
+                    ""
+                },
+                COM_MSGS[subcmd as usize][1],
+                argument,
+                CCNRM!(ch, C_CMP)
+            )
+            .as_str(),
+        );
+    }
+
+    let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
+
+    /* now send all the strings out */
+    for i in game.descriptor_list.borrow().iter() {
+        if i.state() == ConPlaying
+            && !Rc::ptr_eq(i, ch.desc.borrow().as_ref().unwrap())
+            && i.character.borrow().is_some()
+            && !i
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .prf_flagged(CHANNELS[subcmd as usize] as i64)
+            && !i
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .plr_flagged(PLR_WRITING)
+            && !db.room_flagged(
+                i.character.borrow().as_ref().unwrap().in_room(),
+                ROOM_SOUNDPROOF,
+            )
+        {
+            let ib = i.character.borrow();
+            let ic = ib.as_ref().unwrap();
+            if subcmd == SCMD_SHOUT
+                && (db.world.borrow()[ch.in_room() as usize].zone
+                    != db.world.borrow()[ic.in_room() as usize].zone
+                    || !ic.awake())
+            {
+                continue;
+            }
+
+            if COLOR_LEV!(ic) >= C_NRM {
+                send_to_char(ic, color_on);
+            }
+            db.act(&buf1, false, Some(ch), None, Some(ic), TO_VICT | TO_SLEEP);
+            if COLOR_LEV!(ic) >= C_NRM {
+                send_to_char(ic, KNRM);
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_qcomm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    if ch.prf_flagged(PRF_QUEST) {
+        send_to_char(ch, "You aren't even part of the quest!\r\n");
+        return;
+    }
+    let argument = argument.trim_start();
+
+    if argument.is_empty() {
+        send_to_char(
+            ch,
+            format!(
+                "{}{}?  Yes, fine, {} we must, but WHAT??\r\n",
+                CMD_INFO[cmd].command.chars().next().unwrap().to_uppercase(),
+                &CMD_INFO[cmd].command[11..],
+                CMD_INFO[cmd].command
+            )
+            .as_str(),
+        );
+    } else {
+        let mut buf;
+
+        if ch.prf_flagged(PRF_NOREPEAT) {
+            send_to_char(ch, OK);
+        } else if subcmd == SCMD_QSAY {
+            buf = format!("You quest-say, '{}'", argument);
+            db.act(
+                &buf,
+                false,
+                Some(ch),
+                None,
+                Some(&argument.to_string()),
+                TO_CHAR,
+            );
+        } else {
+            db.act(
+                argument,
+                false,
+                Some(ch),
+                None,
+                Some(&argument.to_string()),
+                TO_CHAR,
+            );
+        }
+
+        if subcmd == SCMD_QSAY {
+            buf = format!("$n quest-says, '{}'", argument);
+        } else {
+            buf = argument.to_string();
+        }
+
+        for i in game.descriptor_list.borrow().iter() {
+            if i.state() == ConPlaying
+                && !Rc::ptr_eq(i, ch.desc.borrow().as_ref().unwrap())
+                && i.character.borrow().is_some()
+                && i.character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .prf_flagged(PRF_QUEST)
+            {
+                db.act(
+                    &buf,
+                    false,
+                    Some(ch),
+                    None,
+                    Some(i.character.borrow().as_ref().unwrap()),
+                    TO_VICT | TO_SLEEP,
+                );
+            }
+        }
+    }
+}

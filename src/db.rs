@@ -1801,7 +1801,8 @@ impl DB {
         }
         mobch.player.borrow_mut().short_descr = tmpstr;
         mobch.player.borrow_mut().long_descr = fread_string(reader, buf2.as_str());
-        mobch.player.borrow_mut().description = fread_string(reader, buf2.as_str());
+        mobch.player.borrow_mut().description =
+            Rc::new(RefCell::from(fread_string(reader, buf2.as_str())));
         mobch.set_title(None);
 
         /* *** Numeric data *** */
@@ -1940,7 +1941,7 @@ impl DB {
             name: RefCell::from("".to_string()),
             description: "".to_string(),
             short_description: "".to_string(),
-            action_description: "".to_string(),
+            action_description: Rc::new(RefCell::new(String::new())),
             ex_descriptions: vec![],
             carried_by: RefCell::new(None),
             worn_by: RefCell::new(None),
@@ -1974,7 +1975,7 @@ impl DB {
 
         let tmpptr = fread_string(reader, &buf2);
         obj.description = tmpptr;
-        obj.action_description = fread_string(reader, &buf2);
+        obj.action_description = Rc::new(RefCell::from(fread_string(reader, &buf2)));
 
         /* *** numeric data *** */
         if get_line(reader, &mut line) == 0 {
@@ -3080,7 +3081,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
     ch.player.borrow_mut().short_descr = String::new();
     ch.player.borrow_mut().long_descr = String::new();
     //ch.player.title = st.title;
-    ch.player.borrow_mut().description = parse_c_string(&st.description);
+    ch.player.borrow_mut().description = Rc::new(RefCell::from(parse_c_string(&st.description)));
 
     ch.player.borrow_mut().hometown = st.hometown;
     ch.player.borrow_mut().time.birth = st.birth;
@@ -3205,21 +3206,22 @@ fn char_to_store(ch: &CharData, st: &mut CharFileU) {
     // } else {
     //     *st.title = '\0';
     // }
-    if !ch.player.borrow().description.is_empty() {
-        if ch.player.borrow().description.len() >= st.description.len() {
+    if !RefCell::borrow(&ch.player.borrow().description).is_empty() {
+        if RefCell::borrow(&ch.player.borrow().description).len() >= st.description.len() {
             error!(
                 "SYSERR: char_to_store: {}'s description length: {}, max: {}!  Truncated.",
                 ch.get_pc_name(),
-                ch.player.borrow().description.len(),
+                RefCell::borrow(&ch.player.borrow().description).len(),
                 st.description.len()
             );
-            ch.player
-                .borrow_mut()
-                .description
-                .truncate(st.description.len() - 3);
-            ch.player.borrow_mut().description.push_str("\r\n");
+            RefCell::borrow_mut(&ch.player.borrow().description)
+                .truncate(&st.description.len() - 3);
+            RefCell::borrow_mut(&ch.player.borrow().description).push_str("\r\n");
         }
-        copy_to_stored(&mut st.description, &ch.player.borrow().description);
+        copy_to_stored(
+            &mut st.description,
+            &RefCell::borrow(&ch.player.borrow().description),
+        );
         //strcpy(st.description, ch.player.description);    /* strcpy: OK (checked above) */
     } else {
         st.description[0] = 0;
@@ -3612,7 +3614,7 @@ impl DB {
         //set_title(ch, NULL);
         ch.player.borrow_mut().short_descr = String::new();
         ch.player.borrow_mut().long_descr = String::new();
-        ch.player.borrow_mut().description = String::new();
+        ch.player.borrow_mut().description = Rc::new(RefCell::new(String::new()));
 
         let now = time_now();
         ch.player.borrow_mut().time.birth = now;
@@ -3943,7 +3945,7 @@ impl CharData {
                 name: "".to_string(),
                 short_descr: "".to_string(),
                 long_descr: "".to_string(),
-                description: "".to_string(),
+                description: Rc::new(RefCell::new(String::new())),
                 title: Option::from("".to_string()),
                 sex: 0,
                 chclass: 0,
@@ -4195,7 +4197,7 @@ impl ObjData {
             name: RefCell::from("".to_string()),
             description: "".to_string(),
             short_description: "".to_string(),
-            action_description: "".to_string(),
+            action_description: Rc::new(RefCell::new(String::new())),
             ex_descriptions: vec![],
             carried_by: RefCell::new(None),
             worn_by: RefCell::new(None),

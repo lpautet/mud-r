@@ -55,27 +55,28 @@
 // *str = ' ';
 // #endif
 // }
-//
-// /*
-//  * Basic API function to start writing somewhere.
-//  *
-//  * 'data' isn't used in stock CircleMUD but you can use it to pass whatever
-//  * else you may want through it.  The improved editor patch when updated
-//  * could use it to pass the old text buffer, for instance.
-//  */
-// void string_write(struct descriptor_data *d, char **writeto, size_t len, long mailto, void *data)
-// {
-// if (d->character && !IS_NPC(d->character))
-// SET_BIT(PLR_FLAGS(d->character), PLR_WRITING);
-//
-// if (data)
-// mudlog(BRF, LVL_IMMORT, TRUE, "SYSERR: string_write: I don't understand special data.");
-//
-// d->str = writeto;
-// d->max_str = len;
-// d->mail_to = mailto;
-// }
-//
+
+/*
+ * Basic API function to start writing somewhere.
+ *
+ * 'data' isn't used in stock CircleMUD but you can use it to pass whatever
+ * else you may want through it.  The improved editor patch when updated
+ * could use it to pass the old text buffer, for instance.
+ */
+pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: u64) {
+    if d.character.borrow().is_some() && !d.character.borrow().as_ref().unwrap().is_npc() {
+        d.character
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .set_plr_flag_bit(PLR_WRITING);
+    }
+
+    *d.str.borrow_mut() = Some(writeto);
+    d.max_str.set(len);
+    d.mail_to.set(mailto);
+}
+
 // /* Add user input to the 'current' string (as defined by d->str) */
 // void string_add(struct descriptor_data *d, char *str)
 // {
@@ -301,7 +302,9 @@ fn count_pages(msg: &str) -> i32 {
  * showstr_count set.
  */
 use crate::interpreter::any_one_arg;
+use crate::structs::PLR_WRITING;
 use crate::{send_to_char, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
