@@ -30,11 +30,11 @@ use crate::handler::{affect_from_char, affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ConState, FollowType, ObjData, RoomData, RoomDirectionData, Special, AFF_BLIND,
-    AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE, CLASS_CLERIC,
-    CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING,
-    POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, ROOM_DARK,
-    SECT_CITY, SECT_INSIDE, SEX_MALE,
+    CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, Special,
+    AFF_BLIND, AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE,
+    CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE,
+    PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
+    ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
@@ -162,6 +162,12 @@ use crate::spells::SPELL_CHARM;
 pub use check_player_special;
 
 impl CharData {
+    pub fn poofin(&self) -> Rc<str> {
+        self.player_specials.borrow().poofin.clone()
+    }
+    pub fn poofout(&self) -> Rc<str> {
+        self.player_specials.borrow().poofout.clone()
+    }
     pub fn get_last_tell(&self) -> i64 {
         self.player_specials.borrow().last_tell
     }
@@ -1001,6 +1007,13 @@ impl DB {
             self.obj_index[obj.get_obj_rnum() as usize].vnum
         } else {
             NOTHING
+        }
+    }
+    pub fn get_mob_vnum(&self, mob: &Rc<CharData>) -> MobVnum {
+        if self.is_mob(mob) {
+            self.mob_index[mob.get_mob_rnum() as usize].vnum
+        } else {
+            NOBODY
         }
     }
 }

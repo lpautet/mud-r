@@ -16,7 +16,7 @@ use std::process;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use log::{error, info};
+use log::error;
 use regex::Regex;
 
 use crate::act_comm::{do_say, do_tell};
@@ -1506,7 +1506,7 @@ fn read_type_list(
             buf.truncate(pos.unwrap());
         } else {
             buf.pop();
-            info!("{}", buf);
+            // info!("{}", buf);
         }
 
         let mut num = NOTHING as i32;
@@ -1654,12 +1654,12 @@ impl DB {
                     LIST_PRODUCE,
                 ) as i32;
                 for count in 0..temp {
-                    info!(
-                        "{} {} {} ",
-                        shop.vnum,
-                        count,
-                        list[count as usize].buy_type()
-                    );
+                    // info!(
+                    //     "{} {} {} ",
+                    //     shop.vnum,
+                    //     count,
+                    //     list[count as usize].buy_type()
+                    // );
                     shop.producing
                         .push(list[count as usize].buy_type() as ObjVnum);
                 }

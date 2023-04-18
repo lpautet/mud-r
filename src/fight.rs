@@ -43,7 +43,7 @@ use crate::{
 };
 
 /* Weapon attack texts */
-const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
+pub const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
     AttackHitType {
         singular: "hit",
         plural: "hits",

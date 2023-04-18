@@ -440,8 +440,8 @@ pub struct CharSpecialDataSaved {
  */
 pub struct PlayerSpecialData {
     pub saved: PlayerSpecialDataSaved,
-    // char	*poofin;		/* Description on arrival of a god.     */
-    // char	*poofout;		/* Description upon a god's exit.       */
+    pub poofin: Rc<str>,  /* Description on arrival of a god.     */
+    pub poofout: Rc<str>, /* Description upon a god's exit.       */
     // struct alias_data *aliases;	/* Character's aliases			*/
     pub last_tell: i64,
     /* idnum of last tell from		*/

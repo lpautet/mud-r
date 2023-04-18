@@ -639,7 +639,7 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
                     fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
                 )
                 .as_str(),
-            )
+            );
         } else {
             send_to_char(ch, "Nothing special there...\r\n");
         }
@@ -2308,6 +2308,7 @@ macro_rules! onoff {
     };
 }
 
+#[macro_export]
 macro_rules! yesno {
     ($a:expr) => {
         if ($a) {

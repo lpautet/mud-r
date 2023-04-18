@@ -19,9 +19,11 @@
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
+use std::rc::Rc;
 
 use log::{error, info};
 
+use crate::act_wizard::snoop_check;
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
@@ -51,7 +53,7 @@ use crate::{check_player_special, set_skill, Game};
 
 pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
-const PC_CLASS_TYPES: [&str; 4] = ["Magic User", "Cleric", "Thief", "Warrior"];
+pub const PC_CLASS_TYPES: [&str; 4] = ["Magic User", "Cleric", "Thief", "Warrior"];
 
 /* The menu for choosing a class in interpreter.c: */
 pub const CLASS_MENU: &str = "\r\n\
@@ -3521,7 +3523,7 @@ fn roll_real_abils(ch: &CharData) {
 
 /* Some initializations for characters, including initial skills */
 impl Game {
-    pub fn do_start(&self, ch: &CharData) {
+    pub fn do_start(&self, ch: &Rc<CharData>) {
         ch.set_level(1);
         ch.set_exp(1);
 
@@ -3576,7 +3578,7 @@ impl Game {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(ch: &CharData, db: &DB) {
+pub fn advance_level(ch: &Rc<CharData>, db: &DB) {
     //int add_hp, add_mana = 0, add_move = 0, i;
 
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
@@ -3632,7 +3634,7 @@ pub fn advance_level(ch: &CharData, db: &DB) {
         ch.set_prf_flags_bits(PRF_HOLYLIGHT);
     }
 
-    //snoop_check(ch);
+    snoop_check(ch);
     db.save_char(ch);
 }
 

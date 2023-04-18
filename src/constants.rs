@@ -40,81 +40,51 @@ pub const ROOM_BITS: [&str; 17] = [
     "\n",
 ];
 
-// /* EX_x */
-// const char *exit_bits[] = {
-// "DOOR",
-// "CLOSED",
-// "LOCKED",
-// "PICKPROOF",
-// "\n"
-// };
-//
-//
-// /* SECT_ */
-// const char *sector_types[] = {
-// "Inside",
-// "City",
-// "Field",
-// "Forest",
-// "Hills",
-// "Mountains",
-// "Water (Swim)",
-// "Water (No Swim)",
-// "In Flight",
-// "Underwater",
-// "\n"
-// };
-//
-//
-// /*
-//  * SEX_x
-//  * Not used in sprinttype() so no \n.
-//  */
-// const char *genders[] =
-// {
-// "neutral",
-// "male",
-// "female",
-// "\n"
-// };
-//
-//
-// /* POS_x */
-// const char *position_types[] = {
-// "Dead",
-// "Mortally wounded",
-// "Incapacitated",
-// "Stunned",
-// "Sleeping",
-// "Resting",
-// "Sitting",
-// "Fighting",
-// "Standing",
-// "\n"
-// };
-//
-//
-// /* PLR_x */
-// const char *player_bits[] = {
-// "KILLER",
-// "THIEF",
-// "FROZEN",
-// "DONTSET",
-// "WRITING",
-// "MAILING",
-// "CSH",
-// "SITEOK",
-// "NOSHOUT",
-// "NOTITLE",
-// "DELETED",
-// "LOADRM",
-// "NO_WIZL",
-// "NO_DEL",
-// "INVST",
-// "CRYO",
-// "DEAD",    /* You should never see this. */
-// "\n"
-// };
+/* EX_x */
+pub const EXIT_BITS: [&str; 5] = ["DOOR", "CLOSED", "LOCKED", "PICKPROOF", "\n"];
+
+/* SECT_ */
+pub const SECTOR_TYPES: [&str; 11] = [
+    "Inside",
+    "City",
+    "Field",
+    "Forest",
+    "Hills",
+    "Mountains",
+    "Water (Swim)",
+    "Water (No Swim)",
+    "In Flight",
+    "Underwater",
+    "\n",
+];
+
+/*
+ * SEX_x
+ * Not used in sprinttype() so no \n.
+ */
+pub const GENDERS: [&str; 4] = ["neutral", "male", "female", "\n"];
+
+/* POS_x */
+pub const POSITION_TYPES: [&str; 10] = [
+    "Dead",
+    "Mortally wounded",
+    "Incapacitated",
+    "Stunned",
+    "Sleeping",
+    "Resting",
+    "Sitting",
+    "Fighting",
+    "Standing",
+    "\n",
+];
+
+/* PLR_x */
+pub const PLAYER_BITS: [&str; 18] = [
+    "KILLER", "THIEF", "FROZEN", "DONTSET", "WRITING", "MAILING", "CSH", "SITEOK", "NOSHOUT",
+    "NOTITLE", "DELETED", "LOADRM", "NO_WIZL", "NO_DEL", "INVST", "CRYO",
+    "DEAD", /* You should never see this. */
+    "\n",
+];
 
 /* MOB_x */
 pub const ACTION_BITS: [&str; 20] = [
@@ -140,32 +110,12 @@ pub const ACTION_BITS: [&str; 20] = [
     "\n",
 ];
 
-// /* PRF_x */
-// const char *preference_bits[] = {
-// "BRIEF",
-// "COMPACT",
-// "DEAF",
-// "NO_TELL",
-// "D_HP",
-// "D_MANA",
-// "D_MOVE",
-// "AUTOEX",
-// "NO_HASS",
-// "QUEST",
-// "SUMN",
-// "NO_REP",
-// "LIGHT",
-// "C1",
-// "C2",
-// "NO_WIZ",
-// "L1",
-// "L2",
-// "NO_AUC",
-// "NO_GOS",
-// "NO_GTZ",
-// "RMFLG",
-// "\n"
-// };
+/* PRF_x */
+pub const PREFERENCE_BITS: [&str; 23] = [
+    "BRIEF", "COMPACT", "DEAF", "NO_TELL", "D_HP", "D_MANA", "D_MOVE", "AUTOEX", "NO_HASS",
+    "QUEST", "SUMN", "NO_REP", "LIGHT", "C1", "C2", "NO_WIZ", "L1", "L2", "NO_AUC", "NO_GOS",
+    "NO_GTZ", "RMFLG", "\n",
+];
 
 /* AFF_x */
 pub const AFFECTED_BITS: [&str; 23] = [
@@ -352,14 +302,8 @@ pub const APPLY_TYPES: [&str; 26] = [
     "\n",
 ];
 
-// /* CONT_x */
-// const char *container_bits[] = {
-// "CLOSEABLE",
-// "PICKPROOF",
-// "CLOSED",
-// "LOCKED",
-// "\n",
-// };
+/* CONT_x */
+pub const CONTAINER_BITS: [&str; 5] = ["CLOSEABLE", "PICKPROOF", "CLOSED", "LOCKED", "\n"];
 
 /* LIQ_x */
 pub const DRINKS: [&str; 17] = [
@@ -1075,11 +1019,7 @@ pub const WIS_APP: [WisAppType; 26] = [
     WisAppType { bonus: 7 }, /* wis = 25 */
 ];
 
-// const char *npc_class_types[] = {
-// "Normal",
-// "Undead",
-// "\n"
-// };
+pub const NPC_CLASS_TYPES: [&str; 3] = ["Normal", "Undead", "\n"];
 
 pub const REV_DIR: [i32; 6] = [2, 3, 0, 1, 5, 4];
 

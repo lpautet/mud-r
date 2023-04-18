@@ -8,935 +8,1892 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::borrow::Borrow;
+use std::path::Path;
 use std::rc::Rc;
 
 use log::info;
 
-use crate::class::level_exp;
-use crate::config::OK;
-use crate::db::DB;
-use crate::handler::FIND_CHAR_WORLD;
-use crate::interpreter::two_arguments;
-use crate::limits::gain_exp_regardless;
-use crate::structs::{
-    CharData, AFF_HIDE, AFF_INVISIBLE, LVL_IMMORT, LVL_IMPL, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
-    PRF_NOHASSLE,
+use crate::class::{level_exp, PC_CLASS_TYPES};
+use crate::config::{NOPERSON, OK};
+use crate::constants::{
+    ACTION_BITS, AFFECTED_BITS, APPLY_TYPES, CONNECTED_TYPES, CONTAINER_BITS, DEX_APP, DIRS,
+    DRINKS, EXIT_BITS, EXTRA_BITS, GENDERS, INT_APP, ITEM_TYPES, NPC_CLASS_TYPES, PLAYER_BITS,
+    POSITION_TYPES, PREFERENCE_BITS, ROOM_BITS, SECTOR_TYPES, WEAR_BITS, WIS_APP,
 };
-use crate::{send_to_char, Game, TO_VICT};
+use crate::db::{
+    clear_char, store_to_char, vnum_mobile, vnum_object, DB, FASTBOOT_FILE, KILLSCRIPT_FILE,
+    PAUSE_FILE,
+};
+use crate::fight::ATTACK_HIT_TEXT;
+use crate::handler::{get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::interpreter::{
+    command_interpreter, half_chop, is_abbrev, one_argument, two_arguments, SCMD_EMOTE,
+    SCMD_SHUTDOWN,
+};
+use crate::limits::{gain_exp_regardless, hit_gain, mana_gain, move_gain};
+use crate::screen::{C_NRM, KCYN, KGRN, KNRM, KNUL, KYEL};
+use crate::spell_parser::skill_name;
+use crate::structs::ConState::{ConDisconnect, ConPlaying};
+use crate::structs::{
+    CharData, CharFileU, ObjData, RoomRnum, AFF_HIDE, AFF_INVISIBLE, DRUNK, FULL, ITEM_ARMOR,
+    ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY,
+    ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_GRGOD,
+    LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PRF_COLOR_1,
+    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, ROOM_GODROOM,
+    ROOM_HOUSE, ROOM_PRIVATE, THIRST,
+};
+use crate::util::{sprintbit, sprinttype, touch};
+use crate::{
+    _clrlevel, clr, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_ROOM,
+    TO_VICT,
+};
 
-//
-//
-// ACMD(do_echo)
-// {
-// skip_spaces(&argument);
-//
-// if (!*argument)
-// send_to_char(ch, "Yes.. but what?\r\n");
-// else {
-// char buf[MAX_INPUT_LENGTH + 4];
-//
-// if (subcmd == SCMD_EMOTE)
-// snprintf(buf, sizeof(buf), "$n %s", argument);
-// else
-// strlcpy(buf, argument, sizeof(buf));
-//
-// act(buf, FALSE, ch, 0, 0, TO_ROOM);
-//
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else
-// act(buf, FALSE, ch, 0, 0, TO_CHAR);
-// }
-// }
-//
-//
-// ACMD(do_send)
-// {
-// char arg[MAX_INPUT_LENGTH], buf[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-//
-// half_chop(argument, arg, buf);
-//
-// if (!*arg) {
-// send_to_char(ch, "Send what to who?\r\n");
-// return;
-// }
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_WORLD))) {
-// send_to_char(ch, "%s", NOPERSON);
-// return;
-// }
-// send_to_char(vict, "%s\r\n", buf);
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "Sent.\r\n");
-// else
-// send_to_char(ch, "You send '%s' to %s.\r\n", buf, GET_NAME(vict));
-// }
-//
-//
-//
-// /* take a string, and return an rnum.. used for goto, at, etc.  -je 4/6/93 */
-// room_rnum find_target_room(struct char_data *ch, char *rawroomstr)
-// {
-// room_rnum location = NOWHERE;
-// char roomstr[MAX_INPUT_LENGTH];
-//
-// one_argument(rawroomstr, roomstr);
-//
-// if (!*roomstr) {
-// send_to_char(ch, "You must supply a room number or name.\r\n");
-// return (NOWHERE);
-// }
-//
-// if (isdigit(*roomstr) && !strchr(roomstr, '.')) {
-// if ((location = real_room((room_vnum)atoi(roomstr))) == NOWHERE) {
-// send_to_char(ch, "No room exists with that number.\r\n");
-// return (NOWHERE);
-// }
-// } else {
-// struct char_data *target_mob;
-// struct obj_data *target_obj;
-// char *mobobjstr = roomstr;
-// int num;
-//
-// num = get_number(&mobobjstr);
-// if ((target_mob = get_char_vis(ch, mobobjstr, &num, FIND_CHAR_WORLD)) != NULL) {
-// if ((location = IN_ROOM(target_mob)) == NOWHERE) {
-// send_to_char(ch, "That character is currently lost.\r\n");
-// return (NOWHERE);
-// }
-// } else if ((target_obj = get_obj_vis(ch, mobobjstr, &num)) != NULL) {
-// if (IN_ROOM(target_obj) != NOWHERE)
-// location = IN_ROOM(target_obj);
-// else if (target_obj->carried_by && IN_ROOM(target_obj->carried_by) != NOWHERE)
-// location = IN_ROOM(target_obj->carried_by);
-// else if (target_obj->worn_by && IN_ROOM(target_obj->worn_by) != NOWHERE)
-// location = IN_ROOM(target_obj->worn_by);
-//
-// if (location == NOWHERE) {
-// send_to_char(ch, "That object is currently not in a room.\r\n");
-// return (NOWHERE);
-// }
-// }
-//
-// if (location == NOWHERE) {
-// send_to_char(ch, "Nothing exists by that name.\r\n");
-// return (NOWHERE);
-// }
-// }
-//
-// /* a location has been found -- if you're >= GRGOD, no restrictions. */
-// if (GET_LEVEL(ch) >= LVL_GRGOD)
-// return (location);
-//
-// if (ROOM_FLAGGED(location, ROOM_GODROOM))
-// send_to_char(ch, "You are not godly enough to use that room!\r\n");
-// else if (ROOM_FLAGGED(location, ROOM_PRIVATE) && world[location].people && world[location].people->next_in_room)
-// send_to_char(ch, "There's a private conversation going on in that room.\r\n");
-// else if (ROOM_FLAGGED(location, ROOM_HOUSE) && !House_can_enter(ch, GET_ROOM_VNUM(location)))
-// send_to_char(ch, "That's private property -- no trespassing!\r\n");
-// else
-// return (location);
-//
-// return (NOWHERE);
-// }
-//
-//
-//
-// ACMD(do_at)
-// {
-// char command[MAX_INPUT_LENGTH], buf[MAX_INPUT_LENGTH];
-// room_rnum location, original_loc;
-//
-// half_chop(argument, buf, command);
-// if (!*buf) {
-// send_to_char(ch, "You must supply a room number or a name.\r\n");
-// return;
-// }
-//
-// if (!*command) {
-// send_to_char(ch, "What do you want to do there?\r\n");
-// return;
-// }
-//
-// if ((location = find_target_room(ch, buf)) == NOWHERE)
-// return;
-//
-// /* a location has been found. */
-// original_loc = IN_ROOM(ch);
-// char_from_room(ch);
-// char_to_room(ch, location);
-// command_interpreter(ch, command);
-//
-// /* check if the char is still there */
-// if (IN_ROOM(ch) == location) {
-// char_from_room(ch);
-// char_to_room(ch, original_loc);
-// }
-// }
-//
-//
-// ACMD(do_goto)
-// {
-// char buf[MAX_STRING_LENGTH];
-// room_rnum location;
-//
-// if ((location = find_target_room(ch, argument)) == NOWHERE)
-// return;
-//
-// snprintf(buf, sizeof(buf), "$n %s", POOFOUT(ch) ? POOFOUT(ch) : "disappears in a puff of smoke.");
-// act(buf, TRUE, ch, 0, 0, TO_ROOM);
-//
-// char_from_room(ch);
-// char_to_room(ch, location);
-//
-// snprintf(buf, sizeof(buf), "$n %s", POOFIN(ch) ? POOFIN(ch) : "appears with an ear-splitting bang.");
-// act(buf, TRUE, ch, 0, 0, TO_ROOM);
-//
-// look_at_room(ch, 0);
-// }
-//
-//
-//
-// ACMD(do_trans)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// struct descriptor_data *i;
-// struct char_data *victim;
-//
-// one_argument(argument, buf);
-// if (!*buf)
-// send_to_char(ch, "Whom do you wish to transfer?\r\n");
-// else if (str_cmp("all", buf)) {
-// if (!(victim = get_char_vis(ch, buf, NULL, FIND_CHAR_WORLD)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (victim == ch)
-// send_to_char(ch, "That doesn't make much sense, does it?\r\n");
-// else {
-// if ((GET_LEVEL(ch) < GET_LEVEL(victim)) && !IS_NPC(victim)) {
-// send_to_char(ch, "Go transfer someone your own size.\r\n");
-// return;
-// }
-// act("$n disappears in a mushroom cloud.", FALSE, victim, 0, 0, TO_ROOM);
-// char_from_room(victim);
-// char_to_room(victim, IN_ROOM(ch));
-// act("$n arrives from a puff of smoke.", FALSE, victim, 0, 0, TO_ROOM);
-// act("$n has transferred you!", FALSE, ch, 0, victim, TO_VICT);
-// look_at_room(victim, 0);
-// }
-// } else {			/* Trans All */
-// if (GET_LEVEL(ch) < LVL_GRGOD) {
-// send_to_char(ch, "I think not.\r\n");
-// return;
-// }
-//
-// for (i = descriptor_list; i; i = i->next)
-// if (STATE(i) == CON_PLAYING && i->character && i->character != ch) {
-// victim = i->character;
-// if (GET_LEVEL(victim) >= GET_LEVEL(ch))
-// continue;
-// act("$n disappears in a mushroom cloud.", FALSE, victim, 0, 0, TO_ROOM);
-// char_from_room(victim);
-// char_to_room(victim, IN_ROOM(ch));
-// act("$n arrives from a puff of smoke.", FALSE, victim, 0, 0, TO_ROOM);
-// act("$n has transferred you!", FALSE, ch, 0, victim, TO_VICT);
-// look_at_room(victim, 0);
-// }
-// send_to_char(ch, "%s", OK);
-// }
-// }
-//
-//
-//
-// ACMD(do_teleport)
-// {
-// char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-// struct char_data *victim;
-// room_rnum target;
-//
-// two_arguments(argument, buf, buf2);
-//
-// if (!*buf)
-// send_to_char(ch, "Whom do you wish to teleport?\r\n");
-// else if (!(victim = get_char_vis(ch, buf, NULL, FIND_CHAR_WORLD)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (victim == ch)
-// send_to_char(ch, "Use 'goto' to teleport yourself.\r\n");
-// else if (GET_LEVEL(victim) >= GET_LEVEL(ch))
-// send_to_char(ch, "Maybe you shouldn't do that.\r\n");
-// else if (!*buf2)
-// send_to_char(ch, "Where do you wish to send this person?\r\n");
-// else if ((target = find_target_room(ch, buf2)) != NOWHERE) {
-// send_to_char(ch, "%s", OK);
-// act("$n disappears in a puff of smoke.", FALSE, victim, 0, 0, TO_ROOM);
-// char_from_room(victim);
-// char_to_room(victim, target);
-// act("$n arrives from a puff of smoke.", FALSE, victim, 0, 0, TO_ROOM);
-// act("$n has teleported you!", FALSE, ch, 0, (char *) victim, TO_VICT);
-// look_at_room(victim, 0);
-// }
-// }
-//
-//
-//
-// ACMD(do_vnum)
-// {
-// char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-//
-// half_chop(argument, buf, buf2);
-//
-// if (!*buf || !*buf2 || (!is_abbrev(buf, "mob") && !is_abbrev(buf, "obj"))) {
-// send_to_char(ch, "Usage: vnum { obj | mob } <name>\r\n");
-// return;
-// }
-// if (is_abbrev(buf, "mob"))
-// if (!vnum_mobile(buf2, ch))
-// send_to_char(ch, "No mobiles by that name.\r\n");
-//
-// if (is_abbrev(buf, "obj"))
-// if (!vnum_object(buf2, ch))
-// send_to_char(ch, "No objects by that name.\r\n");
-// }
-//
-//
-//
-// void do_stat_room(struct char_data *ch)
-// {
-// char buf2[MAX_STRING_LENGTH];
-// struct extra_descr_data *desc;
-// struct room_data *rm = &world[IN_ROOM(ch)];
-// int i, found, column;
-// struct obj_data *j;
-// struct char_data *k;
-//
-// send_to_char(ch, "Room name: %s%s%s\r\n", CCCYN(ch, C_NRM), rm->name, CCNRM(ch, C_NRM));
-//
-// sprinttype(rm->sector_type, sector_types, buf2, sizeof(buf2));
-// send_to_char(ch, "Zone: [%3d], VNum: [%s%5d%s], RNum: [%5d], Type: %s\r\n",
-// zone_table[rm->zone].number, CCGRN(ch, C_NRM), rm->number,
-// CCNRM(ch, C_NRM), IN_ROOM(ch), buf2);
-//
-// sprintbit(rm->room_flags, room_bits, buf2, sizeof(buf2));
-// send_to_char(ch, "SpecProc: %s, Flags: %s\r\n", rm->func == NULL ? "None" : "Exists", buf2);
-//
-// send_to_char(ch, "Description:\r\n%s", rm->description ? rm->description : "  None.\r\n");
-//
-// if (rm->ex_description) {
-// send_to_char(ch, "Extra descs:%s", CCCYN(ch, C_NRM));
-// for (desc = rm->ex_description; desc; desc = desc->next)
-// send_to_char(ch, " %s", desc->keyword);
-// send_to_char(ch, "%s\r\n", CCNRM(ch, C_NRM));
-// }
-//
-// send_to_char(ch, "Chars present:%s", CCYEL(ch, C_NRM));
-// column = 14;	/* ^^^ strlen ^^^ */
-// for (found = FALSE, k = rm->people; k; k = k->next_in_room) {
-// if (!CAN_SEE(ch, k))
-// continue;
-//
-// column += send_to_char(ch, "%s %s(%s)", found++ ? "," : "", GET_NAME(k),
-// !IS_NPC(k) ? "PC" : (!IS_MOB(k) ? "NPC" : "MOB"));
-// if (column >= 62) {
-// send_to_char(ch, "%s\r\n", k->next_in_room ? "," : "");
-// found = FALSE;
-// column = 0;
-// }
-// }
-// send_to_char(ch, "%s", CCNRM(ch, C_NRM));
-//
-// if (rm->contents) {
-// send_to_char(ch, "Contents:%s", CCGRN(ch, C_NRM));
-// column = 9;	/* ^^^ strlen ^^^ */
-//
-// for (found = 0, j = rm->contents; j; j = j->next_content) {
-// if (!CAN_SEE_OBJ(ch, j))
-// continue;
-//
-// column += send_to_char(ch, "%s %s", found++ ? "," : "", j->short_description);
-// if (column >= 62) {
-// send_to_char(ch, "%s\r\n", j->next_content ? "," : "");
-// found = FALSE;
-// column = 0;
-// }
-// }
-// send_to_char(ch, "%s", CCNRM(ch, C_NRM));
-// }
-//
-// for (i = 0; i < NUM_OF_DIRS; i++) {
-// char buf1[128];
-//
-// if (!rm->dir_option[i])
-// continue;
-//
-// if (rm->dir_option[i]->to_room == NOWHERE)
-// snprintf(buf1, sizeof(buf1), " %sNONE%s", CCCYN(ch, C_NRM), CCNRM(ch, C_NRM));
-// else
-// snprintf(buf1, sizeof(buf1), "%s%5d%s", CCCYN(ch, C_NRM), GET_ROOM_VNUM(rm->dir_option[i]->to_room), CCNRM(ch, C_NRM));
-//
-// sprintbit(rm->dir_option[i]->exit_info, exit_bits, buf2, sizeof(buf2));
-//
-// send_to_char(ch, "Exit %s%-5s%s:  To: [%s], Key: [%5d], Keywrd: %s, Type: %s\r\n%s",
-// CCCYN(ch, C_NRM), dirs[i], CCNRM(ch, C_NRM), buf1, rm->dir_option[i]->key,
-// rm->dir_option[i]->keyword ? rm->dir_option[i]->keyword : "None", buf2,
-// rm->dir_option[i]->general_description ? rm->dir_option[i]->general_description : "  No exit description.\r\n");
-// }
-// }
-//
-//
-//
-// void do_stat_object(struct char_data *ch, struct obj_data *j)
-// {
-// int i, found;
-// obj_vnum vnum;
-// struct obj_data *j2;
-// struct extra_descr_data *desc;
-// char buf[MAX_STRING_LENGTH];
-//
-// vnum = GET_OBJ_VNUM(j);
-// send_to_char(ch, "Name: '%s%s%s', Aliases: %s\r\n", CCYEL(ch, C_NRM),
-// j->short_description ? j->short_description : "<None>",
-// CCNRM(ch, C_NRM), j->name);
-//
-// sprinttype(GET_OBJ_TYPE(j), item_types, buf, sizeof(buf));
-// send_to_char(ch, "VNum: [%s%5d%s], RNum: [%5d], Type: %s, SpecProc: %s\r\n",
-// CCGRN(ch, C_NRM), vnum, CCNRM(ch, C_NRM), GET_OBJ_RNUM(j), buf,
-// GET_OBJ_SPEC(j) ? "Exists" : "None");
-//
-// if (j->ex_description) {
-// send_to_char(ch, "Extra descs:%s", CCCYN(ch, C_NRM));
-// for (desc = j->ex_description; desc; desc = desc->next)
-// send_to_char(ch, " %s", desc->keyword);
-// send_to_char(ch, "%s\r\n", CCNRM(ch, C_NRM));
-// }
-//
-// sprintbit(GET_OBJ_WEAR(j), wear_bits, buf, sizeof(buf));
-// send_to_char(ch, "Can be worn on: %s\r\n", buf);
-//
-// sprintbit(GET_OBJ_AFFECT(j), affected_bits, buf, sizeof(buf));
-// send_to_char(ch, "Set char bits : %s\r\n", buf);
-//
-// sprintbit(GET_OBJ_EXTRA(j), extra_bits, buf, sizeof(buf));
-// send_to_char(ch, "Extra flags   : %s\r\n", buf);
-//
-// send_to_char(ch, "Weight: %d, Value: %d, Cost/day: %d, Timer: %d\r\n",
-// GET_OBJ_WEIGHT(j), GET_OBJ_COST(j), GET_OBJ_RENT(j), GET_OBJ_TIMER(j));
-//
-// send_to_char(ch, "In room: %d (%s), ", GET_ROOM_VNUM(IN_ROOM(j)),
-// IN_ROOM(j) == NOWHERE ? "Nowhere" : world[IN_ROOM(j)].name);
-//
-// /*
-//  * NOTE: In order to make it this far, we must already be able to see the
-//  *       character holding the object. Therefore, we do not need CAN_SEE().
-//  */
-// send_to_char(ch, "In object: %s, ", j->in_obj ? j->in_obj->short_description : "None");
-// send_to_char(ch, "Carried by: %s, ", j->carried_by ? GET_NAME(j->carried_by) : "Nobody");
-// send_to_char(ch, "Worn by: %s\r\n", j->worn_by ? GET_NAME(j->worn_by) : "Nobody");
-//
-// switch (GET_OBJ_TYPE(j)) {
-// case ITEM_LIGHT:
-// if (GET_OBJ_VAL(j, 2) == -1)
-// send_to_char(ch, "Hours left: Infinite\r\n");
-// else
-// send_to_char(ch, "Hours left: [%d]\r\n", GET_OBJ_VAL(j, 2));
-// break;
-// case ITEM_SCROLL:
-// case ITEM_POTION:
-// send_to_char(ch, "Spells: (Level %d) %s, %s, %s\r\n", GET_OBJ_VAL(j, 0),
-// skill_name(GET_OBJ_VAL(j, 1)), skill_name(GET_OBJ_VAL(j, 2)),
-// skill_name(GET_OBJ_VAL(j, 3)));
-// break;
-// case ITEM_WAND:
-// case ITEM_STAFF:
-// send_to_char(ch, "Spell: %s at level %d, %d (of %d) charges remaining\r\n",
-// skill_name(GET_OBJ_VAL(j, 3)), GET_OBJ_VAL(j, 0),
-// GET_OBJ_VAL(j, 2), GET_OBJ_VAL(j, 1));
-// break;
-// case ITEM_WEAPON:
-// send_to_char(ch, "Todam: %dd%d, Message type: %d\r\n",
-// GET_OBJ_VAL(j, 1), GET_OBJ_VAL(j, 2), GET_OBJ_VAL(j, 3));
-// break;
-// case ITEM_ARMOR:
-// send_to_char(ch, "AC-apply: [%d]\r\n", GET_OBJ_VAL(j, 0));
-// break;
-// case ITEM_TRAP:
-// send_to_char(ch, "Spell: %d, - Hitpoints: %d\r\n", GET_OBJ_VAL(j, 0), GET_OBJ_VAL(j, 1));
-// break;
-// case ITEM_CONTAINER:
-// sprintbit(GET_OBJ_VAL(j, 1), container_bits, buf, sizeof(buf));
-// send_to_char(ch, "Weight capacity: %d, Lock Type: %s, Key Num: %d, Corpse: %s\r\n",
-// GET_OBJ_VAL(j, 0), buf, GET_OBJ_VAL(j, 2),
-// YESNO(GET_OBJ_VAL(j, 3)));
-// break;
-// case ITEM_DRINKCON:
-// case ITEM_FOUNTAIN:
-// sprinttype(GET_OBJ_VAL(j, 2), drinks, buf, sizeof(buf));
-// send_to_char(ch, "Capacity: %d, Contains: %d, Poisoned: %s, Liquid: %s\r\n",
-// GET_OBJ_VAL(j, 0), GET_OBJ_VAL(j, 1), YESNO(GET_OBJ_VAL(j, 3)), buf);
-// break;
-// case ITEM_NOTE:
-// send_to_char(ch, "Tongue: %d\r\n", GET_OBJ_VAL(j, 0));
-// break;
-// case ITEM_KEY:
-// /* Nothing */
-// break;
-// case ITEM_FOOD:
-// send_to_char(ch, "Makes full: %d, Poisoned: %s\r\n", GET_OBJ_VAL(j, 0), YESNO(GET_OBJ_VAL(j, 3)));
-// break;
-// case ITEM_MONEY:
-// send_to_char(ch, "Coins: %d\r\n", GET_OBJ_VAL(j, 0));
-// break;
-// default:
-// send_to_char(ch, "Values 0-3: [%d] [%d] [%d] [%d]\r\n",
-// GET_OBJ_VAL(j, 0), GET_OBJ_VAL(j, 1),
-// GET_OBJ_VAL(j, 2), GET_OBJ_VAL(j, 3));
-// break;
-// }
-//
-// /*
-//  * I deleted the "equipment status" code from here because it seemed
-//  * more or less useless and just takes up valuable screen space.
-//  */
-//
-// if (j->contains) {
-// int column;
-//
-// send_to_char(ch, "\r\nContents:%s", CCGRN(ch, C_NRM));
-// column = 9;	/* ^^^ strlen ^^^ */
-//
-// for (found = 0, j2 = j->contains; j2; j2 = j2->next_content) {
-// column += send_to_char(ch, "%s %s", found++ ? "," : "", j2->short_description);
-// if (column >= 62) {
-// send_to_char(ch, "%s\r\n", j2->next_content ? "," : "");
-// found = FALSE;
-// column = 0;
-// }
-// }
-// send_to_char(ch, "%s", CCNRM(ch, C_NRM));
-// }
-//
-// found = FALSE;
-// send_to_char(ch, "Affections:");
-// for (i = 0; i < MAX_OBJ_AFFECT; i++)
-// if (j->affected[i].modifier) {
-// sprinttype(j->affected[i].location, apply_types, buf, sizeof(buf));
-// send_to_char(ch, "%s %+d to %s", found++ ? "," : "", j->affected[i].modifier, buf);
-// }
-// if (!found)
-// send_to_char(ch, " None");
-//
-// send_to_char(ch, "\r\n");
-// }
-//
-//
-// void do_stat_character(struct char_data *ch, struct char_data *k)
-// {
-// char buf[MAX_STRING_LENGTH];
-// int i, i2, column, found = FALSE;
-// struct obj_data *j;
-// struct follow_type *fol;
-// struct affected_type *aff;
-//
-// sprinttype(GET_SEX(k), genders, buf, sizeof(buf));
-// send_to_char(ch, "%s %s '%s'  IDNum: [%5ld], In room [%5d]\r\n",
-// buf, (!IS_NPC(k) ? "PC" : (!IS_MOB(k) ? "NPC" : "MOB")),
-// GET_NAME(k), GET_IDNUM(k), GET_ROOM_VNUM(IN_ROOM(k)));
-//
-// if (IS_MOB(k))
-// send_to_char(ch, "Alias: %s, VNum: [%5d], RNum: [%5d]\r\n", k->player.name, GET_MOB_VNUM(k), GET_MOB_RNUM(k));
-//
-// send_to_char(ch, "Title: %s\r\n", k->player.title ? k->player.title : "<None>");
-//
-// send_to_char(ch, "L-Des: %s", k->player.long_descr ? k->player.long_descr : "<None>\r\n");
-//
-// sprinttype(k->player.chclass, IS_NPC(k) ? npc_class_types : pc_class_types, buf, sizeof(buf));
-// send_to_char(ch, "%sClass: %s, Lev: [%s%2d%s], XP: [%s%7d%s], Align: [%4d]\r\n",
-// IS_NPC(k) ? "Monster " : "", buf, CCYEL(ch, C_NRM), GET_LEVEL(k), CCNRM(ch, C_NRM),
-// CCYEL(ch, C_NRM), GET_EXP(k), CCNRM(ch, C_NRM), GET_ALIGNMENT(k));
-//
-// if (!IS_NPC(k)) {
-// char buf1[64], buf2[64];
-//
-// strlcpy(buf1, asctime(localtime(&(k->player.time.birth))), sizeof(buf1));
-// strlcpy(buf2, asctime(localtime(&(k->player.time.logon))), sizeof(buf2));
-// buf1[10] = buf2[10] = '\0';
-//
-// send_to_char(ch, "Created: [%s], Last Logon: [%s], Played [%dh %dm], Age [%d]\r\n",
-// buf1, buf2, k->player.time.played / 3600,
-// ((k->player.time.played % 3600) / 60), age(k)->year);
-//
-// send_to_char(ch, "Hometown: [%d], Speaks: [%d/%d/%d], (STL[%d]/per[%d]/NSTL[%d])\r\n",
-// k->player.hometown, GET_TALK(k, 0), GET_TALK(k, 1), GET_TALK(k, 2),
-// GET_PRACTICES(k), int_app[GET_INT(k)].learn,
-// wis_app[GET_WIS(k)].bonus);
-// }
-// send_to_char(ch, "Str: [%s%d/%d%s]  Int: [%s%d%s]  Wis: [%s%d%s]  "
-// "Dex: [%s%d%s]  Con: [%s%d%s]  Cha: [%s%d%s]\r\n",
-// CCCYN(ch, C_NRM), GET_STR(k), GET_ADD(k), CCNRM(ch, C_NRM),
-// CCCYN(ch, C_NRM), GET_INT(k), CCNRM(ch, C_NRM),
-// CCCYN(ch, C_NRM), GET_WIS(k), CCNRM(ch, C_NRM),
-// CCCYN(ch, C_NRM), GET_DEX(k), CCNRM(ch, C_NRM),
-// CCCYN(ch, C_NRM), GET_CON(k), CCNRM(ch, C_NRM),
-// CCCYN(ch, C_NRM), GET_CHA(k), CCNRM(ch, C_NRM));
-//
-// send_to_char(ch, "Hit p.:[%s%d/%d+%d%s]  Mana p.:[%s%d/%d+%d%s]  Move p.:[%s%d/%d+%d%s]\r\n",
-// CCGRN(ch, C_NRM), GET_HIT(k), GET_MAX_HIT(k), hit_gain(k), CCNRM(ch, C_NRM),
-// CCGRN(ch, C_NRM), GET_MANA(k), GET_MAX_MANA(k), mana_gain(k), CCNRM(ch, C_NRM),
-// CCGRN(ch, C_NRM), GET_MOVE(k), GET_MAX_MOVE(k), move_gain(k), CCNRM(ch, C_NRM));
-//
-// send_to_char(ch, "Coins: [%9d], Bank: [%9d] (Total: %d)\r\n",
-// GET_GOLD(k), GET_BANK_GOLD(k), GET_GOLD(k) + GET_BANK_GOLD(k));
-//
-// send_to_char(ch, "AC: [%d%+d/10], Hitroll: [%2d], Damroll: [%2d], Saving throws: [%d/%d/%d/%d/%d]\r\n",
-// GET_AC(k), dex_app[GET_DEX(k)].defensive, k->points.hitroll,
-// k->points.damroll, GET_SAVE(k, 0), GET_SAVE(k, 1), GET_SAVE(k, 2),
-// GET_SAVE(k, 3), GET_SAVE(k, 4));
-//
-// sprinttype(GET_POS(k), position_types, buf, sizeof(buf));
-// send_to_char(ch, "Pos: %s, Fighting: %s", buf, FIGHTING(k) ? GET_NAME(FIGHTING(k)) : "Nobody");
-//
-// if (IS_NPC(k))
-// send_to_char(ch, ", Attack type: %s", attack_hit_text[(int) k->mob_specials.attack_type].singular);
-//
-// if (k->desc) {
-// sprinttype(STATE(k->desc), CONNECTED_TYPES, buf, sizeof(buf));
-// send_to_char(ch, ", Connected: %s", buf);
-// }
-//
-// if (IS_NPC(k)) {
-// sprinttype(k->mob_specials.default_pos, position_types, buf, sizeof(buf));
-// send_to_char(ch, ", Default position: %s\r\n", buf);
-// sprintbit(MOB_FLAGS(k), action_bits, buf, sizeof(buf));
-// send_to_char(ch, "NPC flags: %s%s%s\r\n", CCCYN(ch, C_NRM), buf, CCNRM(ch, C_NRM));
-// } else {
-// send_to_char(ch, ", Idle Timer (in tics) [%d]\r\n", k->char_specials.timer);
-//
-// sprintbit(PLR_FLAGS(k), player_bits, buf, sizeof(buf));
-// send_to_char(ch, "PLR: %s%s%s\r\n", CCCYN(ch, C_NRM), buf, CCNRM(ch, C_NRM));
-//
-// sprintbit(PRF_FLAGS(k), preference_bits, buf, sizeof(buf));
-// send_to_char(ch, "PRF: %s%s%s\r\n", CCGRN(ch, C_NRM), buf, CCNRM(ch, C_NRM));
-// }
-//
-// if (IS_MOB(k))
-// send_to_char(ch, "Mob Spec-Proc: %s, NPC Bare Hand Dam: %dd%d\r\n",
-// (mob_index[GET_MOB_RNUM(k)].func ? "Exists" : "None"),
-// k->mob_specials.damnodice, k->mob_specials.damsizedice);
-//
-// for (i = 0, j = k->carrying; j; j = j->next_content, i++);
-// send_to_char(ch, "Carried: weight: %d, items: %d; Items in: inventory: %d, ", IS_CARRYING_W(k), IS_CARRYING_N(k), i);
-//
-// for (i = 0, i2 = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(k, i))
-// i2++;
-// send_to_char(ch, "eq: %d\r\n", i2);
-//
-// if (!IS_NPC(k))
-// send_to_char(ch, "Hunger: %d, Thirst: %d, Drunk: %d\r\n", GET_COND(k, FULL), GET_COND(k, THIRST), GET_COND(k, DRUNK));
-//
-// column = send_to_char(ch, "Master is: %s, Followers are:", k->master ? GET_NAME(k->master) : "<none>");
-// if (!k->followers)
-// send_to_char(ch, " <none>\r\n");
-// else {
-// for (fol = k->followers; fol; fol = fol->next) {
-// column += send_to_char(ch, "%s %s", found++ ? "," : "", PERS(fol->follower, ch));
-// if (column >= 62) {
-// send_to_char(ch, "%s\r\n", fol->next ? "," : "");
-// found = FALSE;
-// column = 0;
-// }
-// }
-// if (column != 0)
-// send_to_char(ch, "\r\n");
-// }
-//
-// /* Showing the bitvector */
-// sprintbit(AFF_FLAGS(k), affected_bits, buf, sizeof(buf));
-// send_to_char(ch, "AFF: %s%s%s\r\n", CCYEL(ch, C_NRM), buf, CCNRM(ch, C_NRM));
-//
-// /* Routine to show what spells a char is affected by */
-// if (k->affected) {
-// for (aff = k->affected; aff; aff = aff->next) {
-// send_to_char(ch, "SPL: (%3dhr) %s%-21s%s ", aff->duration + 1, CCCYN(ch, C_NRM), skill_name(aff->type), CCNRM(ch, C_NRM));
-//
-// if (aff->modifier)
-// send_to_char(ch, "%+d to %s", aff->modifier, apply_types[(int) aff->location]);
-//
-// if (aff->bitvector) {
-// if (aff->modifier)
-// send_to_char(ch, ", ");
-//
-// sprintbit(aff->bitvector, affected_bits, buf, sizeof(buf));
-// send_to_char(ch, "sets %s", buf);
-// }
-// send_to_char(ch, "\r\n");
-// }
-// }
-// }
-//
-//
-// ACMD(do_stat)
-// {
-// char buf1[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-// struct char_data *victim;
-// struct obj_data *object;
-// struct char_file_u tmp_store;
-//
-// half_chop(argument, buf1, buf2);
-//
-// if (!*buf1) {
-// send_to_char(ch, "Stats on who or what?\r\n");
-// return;
-// } else if (is_abbrev(buf1, "room")) {
-// do_stat_room(ch);
-// } else if (is_abbrev(buf1, "mob")) {
-// if (!*buf2)
-// send_to_char(ch, "Stats on which mobile?\r\n");
-// else {
-// if ((victim = get_char_vis(ch, buf2, NULL, FIND_CHAR_WORLD)) != NULL)
-// do_stat_character(ch, victim);
-// else
-// send_to_char(ch, "No such mobile around.\r\n");
-// }
-// } else if (is_abbrev(buf1, "player")) {
-// if (!*buf2) {
-// send_to_char(ch, "Stats on which player?\r\n");
-// } else {
-// if ((victim = get_player_vis(ch, buf2, NULL, FIND_CHAR_WORLD)) != NULL)
-// do_stat_character(ch, victim);
-// else
-// send_to_char(ch, "No such player around.\r\n");
-// }
-// } else if (is_abbrev(buf1, "file")) {
-// if (!*buf2)
-// send_to_char(ch, "Stats on which player?\r\n");
-// else if ((victim = get_player_vis(ch, buf2, NULL, FIND_CHAR_WORLD)) != NULL)
-// do_stat_character(ch, victim);
-// else {
-// CREATE(victim, struct char_data, 1);
-// clear_char(victim);
-// if (load_char(buf2, &tmp_store) >= 0) {
-// store_to_char(&tmp_store, victim);
-// victim->player.time.logon = tmp_store.last_logon;
-// char_to_room(victim, 0);
-// if (GET_LEVEL(victim) > GET_LEVEL(ch))
-// send_to_char(ch, "Sorry, you can't do that.\r\n");
-// else
-// do_stat_character(ch, victim);
-// extract_char_final(victim);
-// } else {
-// send_to_char(ch, "There is no such player.\r\n");
-// free(victim);
-// }
-// }
-// } else if (is_abbrev(buf1, "object")) {
-// if (!*buf2)
-// send_to_char(ch, "Stats on which object?\r\n");
-// else {
-// if ((object = get_obj_vis(ch, buf2, NULL)) != NULL)
-// do_stat_object(ch, object);
-// else
-// send_to_char(ch, "No such object around.\r\n");
-// }
-// } else {
-// char *name = buf1;
-// int number = get_number(&name);
-//
-// if ((object = get_obj_in_equip_vis(ch, name, &number, ch->equipment)) != NULL)
-// do_stat_object(ch, object);
-// else if ((object = get_obj_in_list_vis(ch, name, &number, ch->carrying)) != NULL)
-// do_stat_object(ch, object);
-// else if ((victim = get_char_vis(ch, name, &number, FIND_CHAR_ROOM)) != NULL)
-// do_stat_character(ch, victim);
-// else if ((object = get_obj_in_list_vis(ch, name, &number, world[IN_ROOM(ch)].contents)) != NULL)
-// do_stat_object(ch, object);
-// else if ((victim = get_char_vis(ch, name, &number, FIND_CHAR_WORLD)) != NULL)
-// do_stat_character(ch, victim);
-// else if ((object = get_obj_vis(ch, name, &number)) != NULL)
-// do_stat_object(ch, object);
-// else
-// send_to_char(ch, "Nothing around by that name.\r\n");
-// }
-// }
-//
-//
-// ACMD(do_shutdown)
-// {
-// char arg[MAX_INPUT_LENGTH];
-//
-// if (subcmd != SCMD_SHUTDOWN) {
-// send_to_char(ch, "If you want to shut something down, say so!\r\n");
-// return;
-// }
-// one_argument(argument, arg);
-//
-// if (!*arg) {
-// log("(GC) Shutdown by %s.", GET_NAME(ch));
-// send_to_all("Shutting down.\r\n");
-// circle_shutdown = 1;
-// } else if (!str_cmp(arg, "reboot")) {
-// log("(GC) Reboot by %s.", GET_NAME(ch));
-// send_to_all("Rebooting.. come back in a minute or two.\r\n");
-// touch(FASTBOOT_FILE);
-// circle_shutdown = circle_reboot = 1;
-// } else if (!str_cmp(arg, "die")) {
-// log("(GC) Shutdown by %s.", GET_NAME(ch));
-// send_to_all("Shutting down for maintenance.\r\n");
-// touch(KILLSCRIPT_FILE);
-// circle_shutdown = 1;
-// } else if (!str_cmp(arg, "pause")) {
-// log("(GC) Shutdown by %s.", GET_NAME(ch));
-// send_to_all("Shutting down for maintenance.\r\n");
-// touch(PAUSE_FILE);
-// circle_shutdown = 1;
-// } else
-// send_to_char(ch, "Unknown shutdown option.\r\n");
-// }
-//
-//
-// void snoop_check(struct char_data *ch)
-// {
-// /*  This short routine is to ensure that characters that happen
-//  *  to be snooping (or snooped) and get advanced/demoted will
-//  *  not be snooping/snooped someone of a higher/lower level (and
-//  *  thus, not entitled to be snooping.
-//  */
-// if (!ch || !ch->desc)
-// return;
-// if (ch->desc->snooping &&
-// (GET_LEVEL(ch->desc->snooping->character) >= GET_LEVEL(ch))) {
-// ch->desc->snooping->snoop_by = NULL;
-// ch->desc->snooping = NULL;
-// }
-//
-// if (ch->desc->snoop_by &&
-// (GET_LEVEL(ch) >= GET_LEVEL(ch->desc->snoop_by->character))) {
-// ch->desc->snoop_by->snooping = NULL;
-// ch->desc->snoop_by = NULL;
-// }
-// }
-//
-// void stop_snooping(struct char_data *ch)
-// {
-// if (!ch->desc->snooping)
-// send_to_char(ch, "You aren't snooping anyone.\r\n");
-// else {
-// send_to_char(ch, "You stop snooping.\r\n");
-// ch->desc->snooping->snoop_by = NULL;
-// ch->desc->snooping = NULL;
-// }
-// }
-//
-//
-// ACMD(do_snoop)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *victim, *tch;
-//
-// if (!ch->desc)
-// return;
-//
-// one_argument(argument, arg);
-//
-// if (!*arg)
-// stop_snooping(ch);
-// else if (!(victim = get_char_vis(ch, arg, NULL, FIND_CHAR_WORLD)))
-// send_to_char(ch, "No such person around.\r\n");
-// else if (!victim->desc)
-// send_to_char(ch, "There's no link.. nothing to snoop.\r\n");
-// else if (victim == ch)
-// stop_snooping(ch);
-// else if (victim->desc->snoop_by)
-// send_to_char(ch, "Busy already. \r\n");
-// else if (victim->desc->snooping == ch->desc)
-// send_to_char(ch, "Don't be stupid.\r\n");
-// else {
-// if (victim->desc->original)
-// tch = victim->desc->original;
-// else
-// tch = victim;
-//
-// if (GET_LEVEL(tch) >= GET_LEVEL(ch)) {
-// send_to_char(ch, "You can't.\r\n");
-// return;
-// }
-// send_to_char(ch, "%s", OK);
-//
-// if (ch->desc->snooping)
-// ch->desc->snooping->snoop_by = NULL;
-//
-// ch->desc->snooping = victim->desc;
-// victim->desc->snoop_by = ch->desc;
-// }
-// }
-//
-//
-//
-// ACMD(do_switch)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *victim;
-//
-// one_argument(argument, arg);
-//
-// if (ch->desc->original)
-// send_to_char(ch, "You're already switched.\r\n");
-// else if (!*arg)
-// send_to_char(ch, "Switch with who?\r\n");
-// else if (!(victim = get_char_vis(ch, arg, NULL, FIND_CHAR_WORLD)))
-// send_to_char(ch, "No such character.\r\n");
-// else if (ch == victim)
-// send_to_char(ch, "Hee hee... we are jolly funny today, eh?\r\n");
-// else if (victim->desc)
-// send_to_char(ch, "You can't do that, the body is already in use!\r\n");
-// else if ((GET_LEVEL(ch) < LVL_IMPL) && !IS_NPC(victim))
-// send_to_char(ch, "You aren't holy enough to use a mortal's body.\r\n");
-// else if (GET_LEVEL(ch) < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_GODROOM))
-// send_to_char(ch, "You are not godly enough to use that room!\r\n");
-// else if (GET_LEVEL(ch) < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_HOUSE)
-// && !House_can_enter(ch, GET_ROOM_VNUM(IN_ROOM(victim))))
-// send_to_char(ch, "That's private property -- no trespassing!\r\n");
-// else {
-// send_to_char(ch, "%s", OK);
-//
-// ch->desc->character = victim;
-// ch->desc->original = ch;
-//
-// victim->desc = ch->desc;
-// ch->desc = NULL;
-// }
-// }
-//
-//
-// ACMD(do_return)
-// {
-// if (ch->desc && ch->desc->original) {
-// send_to_char(ch, "You return to your original body.\r\n");
-//
-// /*
-//  * If someone switched into your original body, disconnect them.
-//  *   - JE 2/22/95
-//  *
-//  * Zmey: here we put someone switched in our body to disconnect state
-//  * but we must also NULL his pointer to our character, otherwise
-//  * close_socket() will damage our character's pointer to our descriptor
-//  * (which is assigned below in this function). 12/17/99
-//  */
-// if (ch->desc->original->desc) {
-// ch->desc->original->desc->character = NULL;
-// STATE(ch->desc->original->desc) = CON_DISCONNECT;
-// }
-//
-// /* Now our descriptor points to our original body. */
-// ch->desc->character = ch->desc->original;
-// ch->desc->original = NULL;
-//
-// /* And our body's pointer to descriptor now points to our descriptor. */
-// ch->desc->character->desc = ch->desc;
-// ch->desc = NULL;
-// }
-// }
-//
-//
-//
+#[allow(unused_variables)]
+pub fn do_echo(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let argument = argument.trim_start();
+
+    if argument.is_empty() {
+        send_to_char(ch, "Yes.. but what?\r\n");
+    } else {
+        let buf;
+        if subcmd == SCMD_EMOTE {
+            buf = format!("$n {}", argument);
+        } else {
+            buf = argument.to_string();
+        }
+
+        db.act(&buf, false, Some(ch), None, None, TO_ROOM);
+
+        if ch.prf_flagged(PRF_NOREPEAT) {
+            send_to_char(ch, OK);
+        } else {
+            db.act(&buf, false, Some(ch), None, None, TO_CHAR);
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_send(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut argument = argument.to_string();
+    let mut arg = String::new();
+    let mut buf = String::new();
+    let vict;
+
+    half_chop(&mut argument, &mut arg, &mut buf);
+
+    if argument.is_empty() {
+        send_to_char(ch, "Send what to who?\r\n");
+        return;
+    }
+    if {
+        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict.is_none()
+    } {
+        send_to_char(ch, NOPERSON);
+        return;
+    }
+    send_to_char(vict.as_ref().unwrap(), format!("{}\r\n", buf).as_str());
+    if ch.prf_flagged(PRF_NOREPEAT) {
+        send_to_char(ch, "Sent.\r\n");
+    } else {
+        send_to_char(
+            ch,
+            format!(
+                "You send '{}' to {}.\r\n",
+                buf,
+                vict.as_ref().unwrap().get_name()
+            )
+            .as_str(),
+        );
+    }
+}
+
+/* take a string, and return an rnum.. used for goto, at, etc.  -je 4/6/93 */
+fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
+    let mut location = NOWHERE;
+    let mut roomstr = String::new();
+    one_argument(rawroomstr, &mut roomstr);
+
+    if roomstr.is_empty() {
+        send_to_char(ch, "You must supply a room number or name.\r\n");
+        return NOWHERE;
+    }
+
+    if roomstr.chars().next().unwrap().is_digit(10) && !roomstr.contains('.') {
+        if {
+            location = db.real_room(roomstr.parse::<i16>().unwrap());
+            location == NOWHERE
+        } {
+            send_to_char(ch, "No room exists with that number.\r\n");
+            return NOWHERE;
+        }
+    } else {
+        let target_mob;
+        let target_obj;
+        let mut mobobjstr = roomstr;
+
+        let mut num = get_number(&mut mobobjstr);
+        if {
+            target_mob = db.get_char_vis(ch, &mut mobobjstr, Some(&mut num), FIND_CHAR_WORLD);
+            target_mob.is_some()
+        } {
+            if {
+                location = target_mob.as_ref().unwrap().in_room();
+                location == NOWHERE
+            } {
+                send_to_char(ch, "That character is currently lost.\r\n");
+                return NOWHERE;
+            }
+        } else if {
+            target_obj = db.get_obj_vis(ch, &mut mobobjstr, Some(&mut num));
+            target_obj.is_some()
+        } {
+            if target_obj.as_ref().unwrap().in_room() != NOWHERE {
+                location = target_obj.as_ref().unwrap().in_room();
+            } else if target_obj.as_ref().unwrap().carried_by.borrow().is_some()
+                && target_obj
+                    .as_ref()
+                    .unwrap()
+                    .carried_by
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .in_room()
+                    != NOWHERE
+            {
+                location = target_obj
+                    .as_ref()
+                    .unwrap()
+                    .carried_by
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .in_room();
+            } else if target_obj.as_ref().unwrap().worn_by.borrow().is_some()
+                && target_obj
+                    .as_ref()
+                    .unwrap()
+                    .worn_by
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .in_room()
+                    != NOWHERE
+            {
+                location = target_obj
+                    .as_ref()
+                    .unwrap()
+                    .worn_by
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .in_room();
+            }
+
+            if location == NOWHERE {
+                send_to_char(ch, "That object is currently not in a room.\r\n");
+                return NOWHERE;
+            }
+        }
+
+        if location == NOWHERE {
+            send_to_char(ch, "Nothing exists by that name.\r\n");
+            return NOWHERE;
+        }
+    }
+
+    /* a location has been found -- if you're >= GRGOD, no restrictions. */
+    if ch.get_level() >= LVL_GRGOD as u8 {
+        return location;
+    }
+
+    if db.room_flagged(location, ROOM_GODROOM) {
+        send_to_char(ch, "You are not godly enough to use that room!\r\n");
+    } else if db.room_flagged(location, ROOM_PRIVATE)
+        && db.world.borrow()[location as usize].peoples.borrow().len() > 1
+    {
+        send_to_char(
+            ch,
+            "There's a private conversation going on in that room.\r\n",
+        );
+        // TODO implement house
+        // } else if db.room_flagged(location, ROOM_HOUSE) && !House_can_enter(ch, GET_ROOM_VNUM(location)) {
+        //     send_to_char(ch, "That's private property -- no trespassing!\r\n");
+    } else {
+        return location;
+    }
+
+    return NOWHERE;
+}
+
+#[allow(unused_variables)]
+pub fn do_at(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut argument = argument.to_string();
+    let mut buf = String::new();
+    let mut command = String::new();
+
+    half_chop(&mut argument, &mut buf, &mut command);
+    if buf.is_empty() {
+        send_to_char(ch, "You must supply a room number or a name.\r\n");
+        return;
+    }
+
+    if command.is_empty() {
+        send_to_char(ch, "What do you want to do there?\r\n");
+        return;
+    }
+    let location;
+    if {
+        location = find_target_room(db, ch, &buf);
+        location == NOWHERE
+    } {
+        return;
+    }
+
+    /* a location has been found. */
+    let original_loc = ch.in_room();
+    db.char_from_room(ch);
+    db.char_to_room(Some(ch), location);
+    command_interpreter(game, ch, &command);
+
+    /* check if the char is still there */
+    if ch.in_room() == location {
+        db.char_from_room(ch);
+        db.char_to_room(Some(ch), original_loc);
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_goto(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let location;
+
+    if {
+        location = find_target_room(db, ch, argument);
+        location == NOWHERE
+    } {
+        return;
+    }
+
+    let x = ch.poofout();
+    let buf = format!(
+        "$n {}",
+        if !x.is_empty() {
+            x.as_ref()
+        } else {
+            "disappears in a puff of smoke."
+        }
+    );
+    db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+
+    db.char_from_room(ch);
+    db.char_to_room(Some(ch), location);
+
+    let x = ch.poofin();
+    let buf = format!(
+        "$n {}",
+        if !x.is_empty() {
+            x.as_ref()
+        } else {
+            "appears with an ear-splitting bang."
+        }
+    );
+    db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+
+    db.look_at_room(ch, false);
+}
+
+#[allow(unused_variables)]
+pub fn do_trans(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+
+    one_argument(argument, &mut buf);
+    let victim;
+    if buf.is_empty() {
+        send_to_char(ch, "Whom do you wish to transfer?\r\n");
+    } else if "all" != buf {
+        if {
+            victim = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+            victim.is_none()
+        } {
+            send_to_char(ch, NOPERSON);
+        } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
+            send_to_char(ch, "That doesn't make much sense, does it?\r\n");
+        } else {
+            let victim = victim.as_ref().unwrap();
+            if (ch.get_level() < victim.get_level()) && !victim.is_npc() {
+                send_to_char(ch, "Go transfer someone your own size.\r\n");
+                return;
+            }
+            db.act(
+                "$n disappears in a mushroom cloud.",
+                false,
+                Some(victim),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.char_from_room(victim);
+            db.char_to_room(Some(victim), ch.in_room());
+            db.act(
+                "$n arrives from a puff of smoke.",
+                false,
+                Some(victim),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.act(
+                "$n has transferred you!",
+                false,
+                Some(ch),
+                None,
+                Some(victim),
+                TO_VICT,
+            );
+            db.look_at_room(victim, false);
+        }
+    } else {
+        /* Trans All */
+        if ch.get_level() < LVL_GRGOD as u8 {
+            send_to_char(ch, "I think not.\r\n");
+            return;
+        }
+
+        for i in game.descriptor_list.borrow().iter() {
+            if i.state() == ConPlaying
+                && i.character.borrow().is_some()
+                && !Rc::ptr_eq(i.character.borrow().as_ref().unwrap(), ch)
+            {
+                let ic = i.character.borrow();
+                let victim = ic.as_ref().unwrap();
+                if victim.get_level() >= ch.get_level() {
+                    continue;
+                }
+                db.act(
+                    "$n disappears in a mushroom cloud.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                db.char_from_room(victim);
+                db.char_to_room(Some(victim), ch.in_room());
+                db.act(
+                    "$n arrives from a puff of smoke.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                db.act(
+                    "$n has transferred you!",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(victim),
+                    TO_VICT,
+                );
+                db.look_at_room(victim, false);
+            }
+        }
+    }
+    send_to_char(ch, OK);
+}
+
+#[allow(unused_variables)]
+pub fn do_teleport(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+    let mut buf2 = String::new();
+
+    two_arguments(argument, &mut buf, &mut buf2);
+    let victim;
+    let target;
+    if buf.is_empty() {
+        send_to_char(ch, "Whom do you wish to teleport?\r\n");
+    } else if {
+        victim = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+        victim.is_none()
+    } {
+        send_to_char(ch, NOPERSON);
+    } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
+        send_to_char(ch, "Use 'goto' to teleport yourself.\r\n");
+    } else if victim.as_ref().unwrap().get_level() >= ch.get_level() {
+        send_to_char(ch, "Maybe you shouldn't do that.\r\n");
+    } else if buf2.is_empty() {
+        send_to_char(ch, "Where do you wish to send this person?\r\n");
+    } else if {
+        target = find_target_room(db, ch, &buf2);
+        target != NOWHERE
+    } {
+        let victim = victim.as_ref().unwrap();
+        send_to_char(ch, OK);
+        db.act(
+            "$n disappears in a puff of smoke.",
+            false,
+            Some(victim),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.char_from_room(victim);
+        db.char_to_room(Some(victim), target);
+        db.act(
+            "$n arrives from a puff of smoke.",
+            false,
+            Some(victim),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.act(
+            "$n has teleported you!",
+            false,
+            Some(ch),
+            None,
+            Some(victim),
+            TO_VICT,
+        );
+        db.look_at_room(victim, false);
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_vnum(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+    let mut buf2 = String::new();
+    let mut argument = argument.to_string();
+
+    half_chop(&mut argument, &mut buf, &mut buf2);
+
+    if buf.is_empty() || buf2.is_empty() || !is_abbrev(&buf, "mob") && !is_abbrev(&buf, "obj") {
+        send_to_char(ch, "Usage: vnum { obj | mob } <name>\r\n");
+        return;
+    }
+    if is_abbrev(&buf, "mob") {
+        if vnum_mobile(db, &buf2, ch) == 0 {
+            send_to_char(ch, "No mobiles by that name.\r\n");
+        }
+    }
+
+    if is_abbrev(&buf, "obj") {
+        if vnum_object(db, &buf2, ch) == 0 {
+            send_to_char(ch, "No objects by that name.\r\n");
+        }
+    }
+}
+
+fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
+    let rm = &db.world.borrow()[ch.in_room() as usize];
+
+    send_to_char(
+        ch,
+        format!(
+            "Room name: {}{}{}\r\n",
+            CCCYN!(ch, C_NRM),
+            rm.name,
+            CCNRM!(ch, C_NRM)
+        )
+        .as_str(),
+    );
+    let mut buf2 = String::new();
+    sprinttype(rm.sector_type, &SECTOR_TYPES, &mut buf2);
+    send_to_char(
+        ch,
+        format!(
+            "Zone: [{:3}], VNum: [{}{:5}{}], RNum: [{:5}], Type: {}\r\n",
+            db.zone_table.borrow()[rm.zone as usize].number,
+            CCGRN!(ch, C_NRM),
+            rm.number,
+            CCNRM!(ch, C_NRM),
+            ch.in_room(),
+            buf2
+        )
+        .as_str(),
+    );
+
+    sprintbit(rm.room_flags.get() as i64, &ROOM_BITS, &mut buf2);
+    // TODO spec proc for rooms
+    // send_to_char(ch, format!("SpecProc: {}, Flags: {}\r\n", rm.func.is_none() "None" : "Exists", buf2).as_str());
+
+    send_to_char(
+        ch,
+        format!(
+            "Description:\r\n{}",
+            if !rm.description.is_empty() {
+                &rm.description
+            } else {
+                "  None.\r\n"
+            }
+        )
+        .as_str(),
+    );
+
+    if !rm.ex_descriptions.is_empty() {
+        send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
+        for desc in rm.ex_descriptions.iter() {
+            send_to_char(ch, format!(" {}", desc.keyword).as_str());
+            send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+        }
+
+        send_to_char(ch, format!("Chars present:{}", CCYEL!(ch, C_NRM)).as_str());
+        let mut column = 14; /* ^^^ strlen ^^^ */
+        let mut found = 0;
+        for (i, k) in rm.peoples.borrow().iter().enumerate() {
+            if !db.can_see(ch, k) {
+                continue;
+            }
+
+            column += send_to_char(
+                ch,
+                format!(
+                    "{} {}({})",
+                    if found != 0 { "," } else { "" },
+                    k.get_name(),
+                    if !k.is_npc() {
+                        "PC"
+                    } else {
+                        if !db.is_mob(k) {
+                            "NPC"
+                        } else {
+                            "MOB"
+                        }
+                    }
+                )
+                .as_str(),
+            );
+            found += 1;
+            if column >= 62 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}\r\n",
+                        if i == rm.peoples.borrow().len() - 1 {
+                            ","
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+                found = 0;
+                column = 0;
+            }
+        }
+        send_to_char(ch, CCNRM!(ch, C_NRM));
+    }
+    if !rm.contents.borrow().is_empty() {
+        send_to_char(ch, format!("Contents:{}", CCGRN!(ch, C_NRM)).as_str());
+        let mut column = 9; /* ^^^ strlen ^^^ */
+        let mut found = 0;
+        for (i, j) in rm.contents.borrow().iter().enumerate() {
+            if !db.can_see_obj(ch, j) {
+                continue;
+            }
+
+            column += send_to_char(
+                ch,
+                format!(
+                    "{} {}",
+                    if found != 0 { "," } else { "" },
+                    j.short_description
+                )
+                .as_str(),
+            );
+            found += 1;
+            if column >= 62 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}\r\n",
+                        if i == rm.contents.borrow().len() - 1 {
+                            ","
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+                found = 0;
+                column = 0;
+            }
+        }
+        send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+    }
+
+    for i in 0..NUM_OF_DIRS {
+        if rm.dir_option[i].is_none() {
+            continue;
+        }
+        let buf1;
+        if rm.dir_option[i].as_ref().unwrap().to_room.get() == NOWHERE {
+            buf1 = format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM));
+        } else {
+            buf1 = format!(
+                "{}{:5}{}",
+                CCCYN!(ch, C_NRM),
+                db.get_room_vnum(rm.dir_option[i].as_ref().unwrap().to_room.get()),
+                CCNRM!(ch, C_NRM)
+            );
+        }
+        let mut buf2 = String::new();
+        sprintbit(
+            rm.dir_option[i].as_ref().unwrap().exit_info.get() as i64,
+            &EXIT_BITS,
+            &mut buf2,
+        );
+
+        send_to_char(
+            ch,
+            format!(
+                "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
+                CCCYN!(ch, C_NRM),
+                DIRS[i],
+                CCNRM!(ch, C_NRM),
+                buf1,
+                rm.dir_option[i].as_ref().unwrap().key,
+                if !rm.dir_option[i].as_ref().unwrap().keyword.is_empty() {
+                    &rm.dir_option[i].as_ref().unwrap().keyword
+                } else {
+                    "None"
+                },
+                buf2,
+                if !rm.dir_option[i]
+                    .as_ref()
+                    .unwrap()
+                    .general_description
+                    .is_empty()
+                {
+                    &rm.dir_option[i].as_ref().unwrap().general_description
+                } else {
+                    "  No exit description.\r\n"
+                }
+            )
+            .as_str(),
+        );
+    }
+}
+
+fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
+    let vnum = db.get_obj_vnum(j);
+    send_to_char(
+        ch,
+        format!(
+            "Name: '{}{}{}', Aliases: {}\r\n",
+            CCYEL!(ch, C_NRM),
+            if !j.short_description.is_empty() {
+                &j.short_description
+            } else {
+                "<None>"
+            },
+            CCNRM!(ch, C_NRM),
+            j.name.borrow()
+        )
+        .as_str(),
+    );
+    let mut buf = String::new();
+    sprinttype(j.get_obj_type() as i32, &ITEM_TYPES, &mut buf);
+    send_to_char(
+        ch,
+        format!(
+            "VNum: [{}{:5}{}], RNum: [{:5}], Type: {}, SpecProc: {}\r\n",
+            CCGRN!(ch, C_NRM),
+            vnum,
+            CCNRM!(ch, C_NRM),
+            j.get_obj_rnum(),
+            buf,
+            /* TODO implement GET_OBJ_SPEC(j) ? "Exists" :*/ "None"
+        )
+        .as_str(),
+    );
+
+    if !j.ex_descriptions.is_empty() {
+        send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
+
+        for desc in j.ex_descriptions.iter() {
+            send_to_char(ch, format!(" {}", desc.keyword).as_str());
+            send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+        }
+    }
+    buf.clear();
+    sprintbit(j.get_obj_wear() as i64, &WEAR_BITS, &mut buf);
+    send_to_char(ch, format!("Can be worn on: {}\r\n", buf).as_str());
+    buf.clear();
+    sprintbit(j.get_obj_affect(), &AFFECTED_BITS, &mut buf);
+    send_to_char(ch, format!("Set char bits : {}\r\n", buf).as_str());
+    buf.clear();
+    sprintbit(j.get_obj_extra() as i64, &EXTRA_BITS, &mut buf);
+    send_to_char(ch, format!("Extra flags   : {}\r\n", buf).as_str());
+
+    send_to_char(
+        ch,
+        format!(
+            "Weight: {}, Value: {}, Cost/day: {}, Timer: {}\r\n",
+            j.get_obj_weight(),
+            j.get_obj_cost(),
+            j.get_obj_rent(),
+            j.get_obj_timer()
+        )
+        .as_str(),
+    );
+    let w = db.world.borrow();
+    send_to_char(
+        ch,
+        format!(
+            "In room: {} ({}), ",
+            db.get_room_vnum(j.in_room()),
+            if j.in_room() == NOWHERE {
+                "Nowhere"
+            } else {
+                w[j.in_room() as usize].name.as_str()
+            }
+        )
+        .as_str(),
+    );
+
+    /*
+     * NOTE: In order to make it this far, we must already be able to see the
+     *       character holding the object. Therefore, we do not need CAN_SEE().
+     */
+    let jio = j.in_obj.borrow();
+    send_to_char(
+        ch,
+        format!(
+            "In object: {}, ",
+            if j.in_obj.borrow().is_some() {
+                &jio.as_ref().unwrap().short_description
+            } else {
+                "None"
+            }
+        )
+        .as_str(),
+    );
+    send_to_char(
+        ch,
+        format!(
+            "Carried by: {}, ",
+            if j.carried_by.borrow().is_some() {
+                j.carried_by.borrow().as_ref().unwrap().get_name()
+            } else {
+                Rc::from("Nobody")
+            }
+        )
+        .as_str(),
+    );
+    send_to_char(
+        ch,
+        format!(
+            "Worn by: {}\r\n",
+            if j.worn_by.borrow().is_some() {
+                j.worn_by.borrow().as_ref().unwrap().get_name()
+            } else {
+                Rc::from("Nobody")
+            }
+        )
+        .as_str(),
+    );
+
+    match j.get_obj_type() {
+        ITEM_LIGHT => {
+            if j.get_obj_val(2) == -1 {
+                send_to_char(ch, "Hours left: Infinite\r\n");
+            } else {
+                send_to_char(
+                    ch,
+                    format!("Hours left: [{}]\r\n", j.get_obj_val(2)).as_str(),
+                );
+            }
+        }
+        ITEM_SCROLL | ITEM_POTION => {
+            send_to_char(
+                ch,
+                format!(
+                    "Spells: (Level {}) {}, {}, {}\r\n",
+                    j.get_obj_val(0),
+                    skill_name(db, j.get_obj_val(1)),
+                    skill_name(db, j.get_obj_val(2)),
+                    skill_name(db, j.get_obj_val(3))
+                )
+                .as_str(),
+            );
+        }
+        ITEM_WAND | ITEM_STAFF => {
+            send_to_char(
+                ch,
+                format!(
+                    "Spell: {} at level {}, {} (of {}) charges remaining\r\n",
+                    skill_name(db, j.get_obj_val(3)),
+                    j.get_obj_val(0),
+                    j.get_obj_val(2),
+                    j.get_obj_val(1)
+                )
+                .as_str(),
+            );
+        }
+        ITEM_WEAPON => {
+            send_to_char(
+                ch,
+                format!(
+                    "Todam: {}d{}, Message type: {}\r\n",
+                    j.get_obj_val(1),
+                    j.get_obj_val(2),
+                    j.get_obj_val(3)
+                )
+                .as_str(),
+            );
+        }
+        ITEM_ARMOR => {
+            send_to_char(ch, format!("AC-apply: [{}]\r\n", j.get_obj_val(0)).as_str());
+        }
+        ITEM_TRAP => {
+            send_to_char(
+                ch,
+                format!(
+                    "Spell: {}, - Hitpoints: {}\r\n",
+                    j.get_obj_val(0),
+                    j.get_obj_val(1)
+                )
+                .as_str(),
+            );
+        }
+        ITEM_CONTAINER => {
+            buf.clear();
+            sprintbit(j.get_obj_val(1) as i64, &CONTAINER_BITS, &mut buf);
+            send_to_char(
+                ch,
+                format!(
+                    "Weight capacity: {}, Lock Type: {}, Key Num: {}, Corpse: {}\r\n",
+                    j.get_obj_val(0),
+                    buf,
+                    j.get_obj_val(2),
+                    yesno!(j.get_obj_val(3) != 0)
+                )
+                .as_str(),
+            );
+        }
+        ITEM_DRINKCON | ITEM_FOUNTAIN => {
+            buf.clear();
+            sprinttype(j.get_obj_val(2), &DRINKS, &mut buf);
+            send_to_char(
+                ch,
+                format!(
+                    "Capacity: {}, Contains: {}, Poisoned: {}, Liquid: {}\r\n",
+                    j.get_obj_val(0),
+                    j.get_obj_val(1),
+                    yesno!(j.get_obj_val(3) != 0),
+                    buf
+                )
+                .as_str(),
+            );
+        }
+        ITEM_NOTE => {
+            send_to_char(ch, format!("Tongue: {}\r\n", j.get_obj_val(0)).as_str());
+        }
+        ITEM_KEY => { /* Nothing */ }
+        ITEM_FOOD => {
+            send_to_char(
+                ch,
+                format!(
+                    "Makes full: {}, Poisoned: {}\r\n",
+                    j.get_obj_val(0),
+                    yesno!(j.get_obj_val(3) != 0)
+                )
+                .as_str(),
+            );
+        }
+        ITEM_MONEY => {
+            send_to_char(ch, format!("Coins: {}\r\n", j.get_obj_val(0)).as_str());
+        }
+        _ => {
+            send_to_char(
+                ch,
+                format!(
+                    "Values 0-3: [{}] [{}] [{}] [{}]\r\n",
+                    j.get_obj_val(0),
+                    j.get_obj_val(1),
+                    j.get_obj_val(2),
+                    j.get_obj_val(3)
+                )
+                .as_str(),
+            );
+        }
+    }
+
+    /*
+     * I deleted the "equipment status" code from here because it seemed
+     * more or less useless and just takes up valuable screen space.
+     */
+
+    if !j.contains.borrow().is_empty() {
+        send_to_char(ch, format!("\r\nContents:{}", CCGRN!(ch, C_NRM)).as_str());
+        let mut column = 9; /* ^^^ strlen ^^^ */
+        let mut found = 0;
+
+        for (i2, j2) in j.contains.borrow().iter().enumerate() {
+            column += send_to_char(
+                ch,
+                format!(
+                    "{} {}",
+                    if found != 0 { "," } else { "" },
+                    j2.short_description
+                )
+                .as_str(),
+            );
+            if column >= 62 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}\r\n",
+                        if i2 < j.contains.borrow().len() - 1 {
+                            ","
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+                found = 0;
+                column = 0;
+            }
+        }
+        send_to_char(ch, CCNRM!(ch, C_NRM));
+    }
+
+    let mut found = 0;
+    send_to_char(ch, "Affections:");
+
+    for i in 0..MAX_OBJ_AFFECT as usize {
+        if j.affected[i].get().modifier != 0 {
+            buf.clear();
+            sprinttype(j.affected[i].get().location as i32, &APPLY_TYPES, &mut buf);
+            send_to_char(
+                ch,
+                format!(
+                    "{} {} to {}",
+                    if found != 0 { "," } else { "" },
+                    j.affected[i].get().modifier,
+                    buf
+                )
+                .as_str(),
+            );
+            found += 1;
+        }
+        if found == 0 {
+            send_to_char(ch, " None");
+        }
+        send_to_char(ch, "\r\n");
+    }
+}
+
+fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
+    let mut buf = String::new();
+    sprinttype(k.get_sex() as i32, &GENDERS, &mut buf);
+    send_to_char(
+        ch,
+        format!(
+            "{} {} '{}'  IDNum: [{:5}], In room [{:5}]\r\n",
+            buf,
+            if !k.is_npc() {
+                "PC"
+            } else {
+                if !db.is_mob(k) {
+                    "NPC"
+                } else {
+                    "MOB"
+                }
+            },
+            k.get_name(),
+            k.get_idnum(),
+            db.get_room_vnum(k.in_room())
+        )
+        .as_str(),
+    );
+
+    if db.is_mob(k) {
+        send_to_char(
+            ch,
+            format!(
+                "Alias: {}, VNum: [{:5}], RNum: [{:5}]\r\n",
+                k.player.borrow().name,
+                db.get_mob_vnum(k),
+                k.get_mob_rnum()
+            )
+            .as_str(),
+        );
+    }
+    let kp = k.player.borrow();
+    send_to_char(
+        ch,
+        format!(
+            "Title: {}\r\n",
+            if k.player.borrow().title.is_some() {
+                kp.title.as_ref().unwrap()
+            } else {
+                "<None>"
+            }
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "L-Des: {}",
+            if !k.player.borrow().long_descr.is_empty() {
+                &kp.long_descr
+            } else {
+                "<None>\r\n"
+            }
+        )
+        .as_str(),
+    );
+    buf.clear();
+    sprinttype(
+        k.player.borrow().chclass as i32,
+        if k.is_npc() {
+            &NPC_CLASS_TYPES
+        } else {
+            &PC_CLASS_TYPES
+        },
+        &mut buf,
+    );
+    send_to_char(
+        ch,
+        format!(
+            "{}Class: {}, Lev: [{}{:2}{}], XP: [{}{:7}{}], Align: [{:4}]\r\n",
+            if k.is_npc() { "Monster " } else { "" },
+            buf,
+            CCYEL!(ch, C_NRM),
+            k.get_level(),
+            CCNRM!(ch, C_NRM),
+            CCYEL!(ch, C_NRM),
+            k.get_exp(),
+            CCNRM!(ch, C_NRM),
+            k.get_alignment()
+        )
+        .as_str(),
+    );
+
+    if !k.is_npc() {
+        //TODO figure out time issue
+        // strlcpy(buf1, asctime(localtime(&(k->player.time.birth))), sizeof(buf1));
+        // strlcpy(buf2, asctime(localtime(&(k->player.time.logon))), sizeof(buf2));
+        // buf1[10] = buf2[10] = '\0';
+        //
+        // send_to_char(ch, "Created: [%s], Last Logon: [%s], Played [%dh %dm], Age [%d]\r\n",
+        // buf1, buf2, k->player.time.played / 3600,
+        // ((k->player.time.played % 3600) / 60), age(k)->year);
+
+        send_to_char(
+            ch,
+            format!(
+                "Hometown: [{}], Speaks: [{}/{}/{}], (STL[{}]/per[{}]/NSTL[{}])\r\n",
+                k.player.borrow().hometown,
+                k.get_talk_mut(0),
+                k.get_talk_mut(1),
+                k.get_talk_mut(2),
+                k.get_practices(),
+                INT_APP[k.get_int() as usize].learn,
+                WIS_APP[k.get_wis() as usize].bonus
+            )
+            .as_str(),
+        );
+    }
+    send_to_char(
+        ch,
+        format!(
+            "Str: [{}{}/{}{}]  Int: [{}{}{}]  Wis: [{}{}{}]  \
+Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
+            CCCYN!(ch, C_NRM),
+            k.get_str(),
+            k.get_add(),
+            CCNRM!(ch, C_NRM),
+            CCCYN!(ch, C_NRM),
+            k.get_int(),
+            CCNRM!(ch, C_NRM),
+            CCCYN!(ch, C_NRM),
+            k.get_wis(),
+            CCNRM!(ch, C_NRM),
+            CCCYN!(ch, C_NRM),
+            k.get_dex(),
+            CCNRM!(ch, C_NRM),
+            CCCYN!(ch, C_NRM),
+            k.get_con(),
+            CCNRM!(ch, C_NRM),
+            CCCYN!(ch, C_NRM),
+            k.get_cha(),
+            CCNRM!(ch, C_NRM)
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "Hit p.:[{}{}/{}+{}{}]  Mana p.:[{}{}/{}+{}{}]  Move p.:[{}{}/{}+{}{}]\r\n",
+            CCGRN!(ch, C_NRM),
+            k.get_hit(),
+            k.get_max_hit(),
+            hit_gain(k),
+            CCNRM!(ch, C_NRM),
+            CCGRN!(ch, C_NRM),
+            k.get_mana(),
+            k.get_max_mana(),
+            mana_gain(k),
+            CCNRM!(ch, C_NRM),
+            CCGRN!(ch, C_NRM),
+            k.get_move(),
+            k.get_max_move(),
+            move_gain(k),
+            CCNRM!(ch, C_NRM)
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "Coins: [{:9}], Bank: [{:9}] (Total: {})\r\n",
+            k.get_gold(),
+            k.get_bank_gold(),
+            k.get_gold() + k.get_bank_gold()
+        )
+        .as_str(),
+    );
+
+    send_to_char(
+        ch,
+        format!(
+            "AC: [{}{}/10], Hitroll: [{:2}], Damroll: [{:2}], Saving throws: [{}/{}/{}/{}/{}]\r\n",
+            k.get_ac(),
+            DEX_APP[k.get_dex() as usize].defensive,
+            k.points.borrow().hitroll,
+            k.points.borrow().damroll,
+            k.get_save(0),
+            k.get_save(1),
+            k.get_save(2),
+            k.get_save(3),
+            k.get_save(4)
+        )
+        .as_str(),
+    );
+    buf.clear();
+    sprinttype(k.get_pos() as i32, &POSITION_TYPES, &mut buf);
+    send_to_char(
+        ch,
+        format!(
+            "Pos: {}, Fighting: {}",
+            buf,
+            if k.fighting().is_some() {
+                k.fighting().as_ref().unwrap().get_name()
+            } else {
+                Rc::from("Nobody")
+            }
+        )
+        .as_str(),
+    );
+
+    if k.is_npc() {
+        send_to_char(
+            ch,
+            format!(
+                ", Attack type: {}",
+                &ATTACK_HIT_TEXT[k.mob_specials.attack_type as usize].singular
+            )
+            .as_str(),
+        );
+    }
+
+    if k.desc.borrow().is_some() {
+        buf.clear();
+        sprinttype(
+            k.desc.borrow().as_ref().unwrap().state() as i32,
+            &CONNECTED_TYPES,
+            &mut buf,
+        );
+        send_to_char(ch, format!(", Connected: {}", buf).as_str());
+    }
+
+    if k.is_npc() {
+        buf.clear();
+        sprinttype(k.mob_specials.default_pos as i32, &POSITION_TYPES, &mut buf);
+        send_to_char(ch, format!(", Default position: {}\r\n", buf).as_str());
+        buf.clear();
+        sprintbit(k.mob_flags(), &ACTION_BITS, &mut buf);
+        send_to_char(
+            ch,
+            format!(
+                "NPC flags: {}{}{}\r\n",
+                CCCYN!(ch, C_NRM),
+                buf,
+                CCNRM!(ch, C_NRM)
+            )
+            .as_str(),
+        );
+    } else {
+        send_to_char(
+            ch,
+            format!(
+                ", Idle Timer (in tics) [{}]\r\n",
+                k.char_specials.borrow().timer.get()
+            )
+            .as_str(),
+        );
+        buf.clear();
+        sprintbit(k.plr_flags(), &PLAYER_BITS, &mut buf);
+        send_to_char(
+            ch,
+            format!("PLR: {}{}{}\r\n", CCCYN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
+        );
+        buf.clear();
+        sprintbit(k.prf_flags(), &PREFERENCE_BITS, &mut buf);
+        send_to_char(
+            ch,
+            format!("PRF: {}{}{}\r\n", CCGRN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
+        );
+    }
+
+    if db.is_mob(k) {
+        send_to_char(
+            ch,
+            format!(
+                "Mob Spec-Proc: {}, NPC Bare Hand Dam: {}d{}\r\n",
+                if db.mob_index[k.get_mob_rnum() as usize].func.is_some() {
+                    "Exists"
+                } else {
+                    "None"
+                },
+                k.mob_specials.damnodice,
+                k.mob_specials.damsizedice
+            )
+            .as_str(),
+        );
+    }
+
+    send_to_char(
+        ch,
+        format!(
+            "Carried: weight: {}, items: {}; Items in: inventory: {}, ",
+            k.is_carrying_w(),
+            k.is_carrying_n(),
+            k.carrying.borrow().len()
+        )
+        .as_str(),
+    );
+
+    let mut i2 = 0;
+    for i in 0..NUM_WEARS {
+        if k.get_eq(i).is_some() {
+            i2 += 1;
+        }
+    }
+
+    send_to_char(ch, format!("eq: {}\r\n", i2).as_str());
+
+    if !k.is_npc() {
+        send_to_char(
+            ch,
+            format!(
+                "Hunger: {}, Thirst: {}, Drunk: {}\r\n",
+                k.get_cond(FULL),
+                k.get_cond(THIRST),
+                k.get_cond(DRUNK)
+            )
+            .as_str(),
+        );
+    }
+
+    let mut column = send_to_char(
+        ch,
+        format!(
+            "Master is: {}, Followers are:",
+            if k.master.borrow().is_some() {
+                k.master.borrow().as_ref().unwrap().get_name()
+            } else {
+                Rc::from("<none>")
+            }
+        )
+        .as_str(),
+    );
+    if k.followers.borrow().is_empty() {
+        send_to_char(ch, " <none>\r\n");
+    } else {
+        let mut found = 0;
+        for (i, fol) in k.followers.borrow().iter().enumerate() {
+            column += send_to_char(
+                ch,
+                format!(
+                    "{} {}",
+                    if found != 0 { "," } else { "" },
+                    db.pers(fol.follower.borrow(), ch)
+                )
+                .as_str(),
+            );
+            found += 1;
+            if column >= 62 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}\r\n",
+                        if i < k.followers.borrow().len() - 1 {
+                            ","
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+                found = 0;
+                column = 0;
+            }
+        }
+        if column != 0 {
+            send_to_char(ch, "\r\n");
+        }
+    }
+
+    /* Showing the bitvector */
+    buf.clear();
+    sprintbit(k.aff_flags(), &AFFECTED_BITS, &mut buf);
+    send_to_char(
+        ch,
+        format!("AFF: {}{}{}\r\n", CCYEL!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
+    );
+
+    /* Routine to show what spells a char is affected by */
+    if k.affected.borrow().len() != 0 {
+        for aff in k.affected.borrow().iter() {
+            send_to_char(
+                ch,
+                format!(
+                    "SPL: ({:3}hr) {}{:21}{} ",
+                    aff.duration + 1,
+                    CCCYN!(ch, C_NRM),
+                    skill_name(db, aff._type as i32),
+                    CCNRM!(ch, C_NRM)
+                )
+                .as_str(),
+            );
+
+            if aff.modifier != 0 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{} to {}",
+                        aff.modifier, &APPLY_TYPES[aff.location as usize]
+                    )
+                    .as_str(),
+                );
+            }
+
+            if aff.bitvector != 0 {
+                if aff.modifier != 0 {
+                    send_to_char(ch, ", ");
+                }
+                buf.clear();
+                sprintbit(aff.bitvector, &AFFECTED_BITS, &mut buf);
+                send_to_char(ch, format!("sets {}", buf).as_str());
+            }
+            send_to_char(ch, "\r\n");
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf1 = String::new();
+    let mut buf2 = String::new();
+    let mut argument = argument.to_string();
+
+    half_chop(&mut argument, &mut buf1, &mut buf2);
+
+    if buf1.is_empty() {
+        send_to_char(ch, "Stats on who or what?\r\n");
+        return;
+    } else if is_abbrev(&buf1, "room") {
+        do_stat_room(db, ch);
+    } else if is_abbrev(&buf1, "mob") {
+        if buf2.is_empty() {
+            send_to_char(ch, "Stats on which mobile?\r\n");
+        } else {
+            let victim;
+            if {
+                victim = db.get_char_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim.is_some()
+            } {
+                do_stat_character(db, ch, victim.as_ref().unwrap());
+            } else {
+                send_to_char(ch, "No such mobile around.\r\n");
+            }
+        }
+    } else if is_abbrev(&buf1, "player") {
+        if buf2.is_empty() {
+            send_to_char(ch, "Stats on which player?\r\n");
+        } else {
+            let victim;
+            if {
+                victim = db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim.is_some()
+            } {
+                do_stat_character(db, ch, victim.as_ref().unwrap());
+            } else {
+                send_to_char(ch, "No such player around.\r\n");
+            }
+        }
+    } else if is_abbrev(&buf1, "file") {
+        let victim;
+        if buf2.is_empty() {
+            send_to_char(ch, "Stats on which player?\r\n");
+        } else if {
+            victim = db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+            victim.is_some()
+        } {
+            do_stat_character(db, ch, victim.as_ref().unwrap());
+        } else {
+            let mut victim = CharData::new();
+            let mut tmp_store = CharFileU::new();
+            clear_char(&mut victim);
+            if db.load_char(&buf2, &mut tmp_store).is_some() {
+                store_to_char(&tmp_store, &mut victim);
+                victim.player.borrow_mut().time.logon = tmp_store.last_logon;
+                let victim = Rc::new(victim);
+                db.char_to_room(Some(&victim), 0);
+                if victim.get_level() > ch.get_level() {
+                    send_to_char(ch, "Sorry, you can't do that.\r\n");
+                } else {
+                    do_stat_character(db, ch, &victim);
+                }
+                db.extract_char_final(&victim, game);
+            } else {
+                send_to_char(ch, "There is no such player.\r\n");
+            }
+        }
+    } else if is_abbrev(&buf1, "object") {
+        if buf2.is_empty() {
+            send_to_char(ch, "Stats on which object?\r\n");
+        } else {
+            let object;
+            if {
+                object = db.get_obj_vis(ch, &mut buf2, None);
+                object.is_some()
+            } {
+                do_stat_object(db, ch, object.as_ref().unwrap());
+            } else {
+                send_to_char(ch, "No such object around.\r\n");
+            }
+        }
+    } else {
+        let mut name = buf1;
+        let mut number = get_number(&mut name);
+        let mut object;
+        let mut victim;
+        if {
+            object = db.get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
+            object.is_some()
+        } {
+            do_stat_object(db, ch, object.as_ref().unwrap());
+        } else if {
+            object = db.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
+            object.is_some()
+        } {
+            do_stat_object(db, ch, object.as_ref().unwrap());
+        } else if {
+            victim = db.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
+            victim.is_some()
+        } {
+            do_stat_character(db, ch, victim.as_ref().unwrap());
+        } else if {
+            object = db.get_obj_in_list_vis(
+                ch,
+                &mut name,
+                Some(&mut number),
+                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            );
+            object.is_some()
+        } {
+            do_stat_object(db, ch, object.as_ref().unwrap());
+        } else if {
+            victim = db.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
+            victim.is_some()
+        } {
+            do_stat_character(db, ch, victim.as_ref().unwrap());
+        } else if {
+            object = db.get_obj_vis(ch, &mut name, Some(&mut number));
+            object.is_some()
+        } {
+            do_stat_object(db, ch, object.as_ref().unwrap());
+        } else {
+            send_to_char(ch, "Nothing around by that name.\r\n");
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_shutdown(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+    if subcmd != SCMD_SHUTDOWN {
+        send_to_char(ch, "If you want to shut something down, say so!\r\n");
+        return;
+    }
+    one_argument(argument, &mut arg);
+
+    if arg.is_empty() {
+        info!("(GC) Shutdown by {}.", ch.get_name());
+        game.send_to_all("Shutting down.\r\n");
+        game.circle_shutdown.set(true);
+    } else if arg == "reboot" {
+        info!("(GC) Reboot by {}.", ch.get_name());
+        game.send_to_all("Rebooting.. come back in a minute or two.\r\n");
+        touch(Path::new(FASTBOOT_FILE)).unwrap();
+        game.circle_shutdown.set(true);
+        game.circle_reboot.set(true);
+    } else if arg == "die" {
+        info!("(GC) Shutdown by {}.", ch.get_name());
+        game.send_to_all("Shutting down for maintenance.\r\n");
+        touch(Path::new(KILLSCRIPT_FILE)).unwrap();
+        game.circle_shutdown.set(true);
+    } else if arg == "pause" {
+        info!("(GC) Shutdown by {}.", ch.get_name());
+        game.send_to_all("Shutting down for maintenance.\r\n");
+        touch(Path::new(PAUSE_FILE)).unwrap();
+        game.circle_shutdown.set(true);
+    } else {
+        send_to_char(ch, "Unknown shutdown option.\r\n");
+    }
+}
+
+pub fn snoop_check(ch: &Rc<CharData>) {
+    /*  This short routine is to ensure that characters that happen
+     *  to be snooping (or snooped) and get advanced/demoted will
+     *  not be snooping/snooped someone of a higher/lower level (and
+     *  thus, not entitled to be snooping.
+     */
+    if ch.desc.borrow().is_none() {
+        return;
+    }
+    let desco = ch.desc.borrow();
+    let desc = desco.as_ref().unwrap();
+    if desc.snooping.borrow().is_some()
+        && desc
+            .snooping
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .character
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_level()
+            >= ch.get_level()
+    {
+        *desc
+            .snooping
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snoop_by
+            .borrow_mut() = None;
+        *desc.snooping.borrow_mut() = None;
+    }
+
+    if desc.snoop_by.borrow().is_some()
+        && ch.get_level()
+            >= desc
+                .snoop_by
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .get_level()
+    {
+        *desc
+            .snoop_by
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snooping
+            .borrow_mut() = None;
+        *desc.snoop_by.borrow_mut() = None;
+    }
+}
+
+fn stop_snooping(ch: &Rc<CharData>) {
+    if ch
+        .desc
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .snooping
+        .borrow()
+        .is_none()
+    {
+        send_to_char(ch, "You aren't snooping anyone.\r\n");
+    } else {
+        send_to_char(ch, "You stop snooping.\r\n");
+        *ch.desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snooping
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snoop_by
+            .borrow_mut() = None;
+        *ch.desc.borrow().as_ref().unwrap().snooping.borrow_mut() = None;
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_snoop(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    if ch.desc.borrow().is_none() {
+        return;
+    }
+
+    one_argument(argument, &mut arg);
+    let victim;
+    let vdesco;
+    let voriginal;
+    let tch;
+    if arg.is_empty() {
+        stop_snooping(ch);
+    } else if {
+        victim = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim.is_none()
+    } {
+        send_to_char(ch, "No such person around.\r\n");
+    } else if victim.as_ref().unwrap().desc.borrow().is_none() {
+        send_to_char(ch, "There's no link.. nothing to snoop.\r\n");
+    } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
+        stop_snooping(ch);
+    } else if victim
+        .as_ref()
+        .unwrap()
+        .desc
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .snoop_by
+        .borrow()
+        .is_some()
+    {
+        send_to_char(ch, "Busy already. \r\n");
+    } else if Rc::ptr_eq(
+        victim
+            .as_ref()
+            .unwrap()
+            .desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snooping
+            .borrow()
+            .as_ref()
+            .unwrap(),
+        ch.desc.borrow().as_ref().unwrap(),
+    ) {
+        send_to_char(ch, "Don't be stupid.\r\n");
+    } else {
+        if victim
+            .as_ref()
+            .unwrap()
+            .desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .original
+            .borrow()
+            .is_some()
+        {
+            vdesco = victim.as_ref().unwrap().desc.borrow();
+            voriginal = vdesco.as_ref().unwrap().original.borrow();
+            tch = voriginal.as_ref();
+        } else {
+            tch = victim.as_ref();
+        }
+        if tch.as_ref().unwrap().get_level() >= ch.get_level() {
+            send_to_char(ch, "You can't.\r\n");
+            return;
+        }
+        send_to_char(ch, OK);
+
+        if ch
+            .desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .snooping
+            .borrow()
+            .is_some()
+        {
+            *ch.desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .snooping
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .snoop_by
+                .borrow_mut() = None;
+        }
+        *ch.desc.borrow().as_ref().unwrap().snooping.borrow_mut() =
+            victim.as_ref().unwrap().desc.borrow().clone();
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_switch(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    let victim;
+    if ch
+        .desc
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .original
+        .borrow()
+        .is_some()
+    {
+        send_to_char(ch, "You're already switched.\r\n");
+    } else if arg.is_empty() {
+        send_to_char(ch, "Switch with who?\r\n");
+    } else if {
+        victim = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim.is_none()
+    } {
+        send_to_char(ch, "No such character.\r\n");
+    } else if Rc::ptr_eq(ch, victim.as_ref().unwrap()) {
+        send_to_char(ch, "Hee hee... we are jolly funny today, eh?\r\n");
+    } else if victim.as_ref().unwrap().desc.borrow().is_some() {
+        send_to_char(ch, "You can't do that, the body is already in use!\r\n");
+    } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
+        send_to_char(ch, "You aren't holy enough to use a mortal's body.\r\n");
+    } else if ch.get_level() < LVL_GRGOD as u8
+        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
+    {
+        send_to_char(ch, "You are not godly enough to use that room!\r\n");
+    }
+    // TODO implement house
+    // else if (GET_LEVEL(ch) < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_HOUSE)
+    // && !House_can_enter(ch, GET_ROOM_VNUM(IN_ROOM(victim)))) {
+    //         send_to_char(ch, "That's private property -- no trespassing!\r\n");
+    //     }
+    else {
+        send_to_char(ch, OK);
+        *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = victim.clone();
+        *ch.desc.borrow().as_ref().unwrap().original.borrow_mut() = Some(ch.clone());
+
+        *victim.as_ref().unwrap().desc.borrow_mut() = ch.desc.borrow().clone();
+        *ch.desc.borrow_mut() = None;
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_return(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    if ch.desc.borrow().is_some()
+        && ch
+            .desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .original
+            .borrow()
+            .is_some()
+    {
+        send_to_char(ch, "You return to your original body.\r\n");
+
+        /*
+         * If someone switched into your original body, disconnect them.
+         *   - JE 2/22/95
+         *
+         * Zmey: here we put someone switched in our body to disconnect state
+         * but we must also None his pointer to our character, otherwise
+         * close_socket() will damage our character's pointer to our descriptor
+         * (which is assigned below in this function). 12/17/99
+         */
+        if ch
+            .desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .original
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .desc
+            .borrow()
+            .is_some()
+        {
+            *ch.desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .original
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .character
+                .borrow_mut() = None;
+            ch.desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .original
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .desc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .set_state(ConDisconnect);
+        }
+
+        /* Now our descriptor points to our original body. */
+        *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() =
+            ch.desc.borrow().as_ref().unwrap().original.borrow().clone();
+        *ch.desc.borrow().as_ref().unwrap().original.borrow_mut() = None;
+
+        /* And our body's pointer to descriptor now points to our descriptor. */
+        *ch.desc
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .character
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .desc
+            .borrow_mut() = ch.desc.borrow().clone();
+        *ch.desc.borrow_mut() = None;
+    }
+}
+
 // ACMD(do_load)
 // {
 // char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
@@ -963,10 +1920,10 @@ use crate::{send_to_char, Game, TO_VICT};
 // mob = read_mobile(r_num, REAL);
 // char_to_room(mob, IN_ROOM(ch));
 //
-// act("$n makes a quaint, magical gesture with one hand.", TRUE, ch,
+// act("$n makes a quaint, magical gesture with one hand.", true, ch,
 // 0, 0, TO_ROOM);
-// act("$n has created $N!", FALSE, ch, 0, mob, TO_ROOM);
-// act("You create $N.", FALSE, ch, 0, mob, TO_CHAR);
+// act("$n has created $N!", false, ch, 0, mob, TO_ROOM);
+// act("You create $N.", false, ch, 0, mob, TO_CHAR);
 // } else if (is_abbrev(buf, "obj")) {
 // struct obj_data *obj;
 // obj_rnum r_num;
@@ -980,9 +1937,9 @@ use crate::{send_to_char, Game, TO_VICT};
 // obj_to_char(obj, ch);
 // else
 // obj_to_room(obj, IN_ROOM(ch));
-// act("$n makes a strange magical gesture.", TRUE, ch, 0, 0, TO_ROOM);
-// act("$n has created $p!", FALSE, ch, obj, 0, TO_ROOM);
-// act("You create $p.", FALSE, ch, obj, 0, TO_CHAR);
+// act("$n makes a strange magical gesture.", true, ch, 0, 0, TO_ROOM);
+// act("$n has created $p!", false, ch, obj, 0, TO_ROOM);
+// act("You create $p.", false, ch, obj, 0, TO_CHAR);
 // } else
 // send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
 // }
@@ -1045,24 +2002,24 @@ use crate::{send_to_char, Game, TO_VICT};
 //
 // /* argument supplied. destroy single object or char */
 // if (*buf) {
-// if ((vict = get_char_vis(ch, buf, NULL, FIND_CHAR_ROOM)) != NULL) {
+// if ((vict = get_char_vis(ch, buf, None, FIND_CHAR_ROOM)) != None) {
 // if (!IS_NPC(vict) && (GET_LEVEL(ch) <= GET_LEVEL(vict))) {
 // send_to_char(ch, "Fuuuuuuuuu!\r\n");
 // return;
 // }
-// act("$n disintegrates $N.", FALSE, ch, 0, vict, TO_NOTVICT);
+// act("$n disintegrates $N.", false, ch, 0, vict, TO_NOTVICT);
 //
 // if (!IS_NPC(vict)) {
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s has purged %s.", GET_NAME(ch), GET_NAME(vict));
+// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s has purged %s.", GET_NAME(ch), GET_NAME(vict));
 // if (vict->desc) {
 // STATE(vict->desc) = CON_CLOSE;
-// vict->desc->character = NULL;
-// vict->desc = NULL;
+// vict->desc->character = None;
+// vict->desc = None;
 // }
 // }
 // extract_char(vict);
-// } else if ((obj = get_obj_in_list_vis(ch, buf, NULL, world[IN_ROOM(ch)].contents)) != NULL) {
-// act("$n destroys $p.", FALSE, ch, obj, 0, TO_ROOM);
+// } else if ((obj = get_obj_in_list_vis(ch, buf, None, world[IN_ROOM(ch)].contents)) != None) {
+// act("$n destroys $p.", false, ch, obj, 0, TO_ROOM);
 // extract_obj(obj);
 // } else {
 // send_to_char(ch, "Nothing here by that name.\r\n");
@@ -1074,7 +2031,7 @@ use crate::{send_to_char, Game, TO_VICT};
 // int i;
 //
 // act("$n gestures... You are surrounded by scorching flames!",
-// FALSE, ch, 0, 0, TO_ROOM);
+// false, ch, 0, 0, TO_ROOM);
 // send_to_room(IN_ROOM(ch), "The world seems a little cleaner.\r\n");
 //
 // for (vict = world[IN_ROOM(ch)].people; vict; vict = vict->next_in_room) {
@@ -1117,7 +2074,7 @@ use crate::{send_to_char, Game, TO_VICT};
 // logtypes[(PRF_FLAGGED(ch, PRF_LOG1) ? 1 : 0) + (PRF_FLAGGED(ch, PRF_LOG2) ? 2 : 0)]);
 // return;
 // }
-// if (((tp = search_block(arg, logtypes, FALSE)) == -1)) {
+// if (((tp = search_block(arg, logtypes, false)) == -1)) {
 // send_to_char(ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
 // return;
 // }
@@ -1132,7 +2089,7 @@ use crate::{send_to_char, Game, TO_VICT};
 pub fn do_advance(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut name = String::new();
     let mut level = String::new();
-    let mut victim;
+    let victim;
     let db = &game.db;
     two_arguments(argument, &mut name, &mut level);
 
@@ -1260,7 +2217,7 @@ You feel slightly different.",
 // one_argument(argument, buf);
 // if (!*buf)
 // send_to_char(ch, "Whom do you wish to restore?\r\n");
-// else if (!(vict = get_char_vis(ch, buf, NULL, FIND_CHAR_WORLD)))
+// else if (!(vict = get_char_vis(ch, buf, None, FIND_CHAR_WORLD)))
 // send_to_char(ch, "%s", NOPERSON);
 // else if (!IS_NPC(vict) && ch != vict && GET_LEVEL(vict) >= GET_LEVEL(ch))
 // send_to_char(ch, "They don't need your help.\r\n");
@@ -1287,7 +2244,7 @@ You feel slightly different.",
 // update_pos(vict);
 // affect_total(vict);
 // send_to_char(ch, "%s", OK);
-// act("You have been fully healed by $N!", FALSE, vict, 0, ch, TO_CHAR);
+// act("You have been fully healed by $N!", false, vict, 0, ch, TO_CHAR);
 // }
 // }
 
@@ -1311,10 +2268,10 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // if (tch == ch)
 // continue;
 // if (GET_LEVEL(tch) >= GET_INVIS_LEV(ch) && GET_LEVEL(tch) < level)
-// act("You blink and suddenly realize that $n is gone.", FALSE, ch, 0,
+// act("You blink and suddenly realize that $n is gone.", false, ch, 0,
 // tch, TO_VICT);
 // if (GET_LEVEL(tch) < GET_INVIS_LEV(ch) && GET_LEVEL(tch) >= level)
-// act("You suddenly realize that $n is standing beside you.", FALSE, ch, 0,
+// act("You suddenly realize that $n is standing beside you.", false, ch, 0,
 // tch, TO_VICT);
 // }
 //
@@ -1389,7 +2346,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // free(*msg);
 //
 // if (!*argument)
-// *msg = NULL;
+// *msg = None;
 // else
 // *msg = strdup(argument);
 //
@@ -1556,38 +2513,38 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // if (!*arg || !*to_force)
 // send_to_char(ch, "Whom do you wish to force do what?\r\n");
 // else if ((GET_LEVEL(ch) < LVL_GRGOD) || (str_cmp("all", arg) && str_cmp("room", arg))) {
-// if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_WORLD)))
+// if (!(vict = get_char_vis(ch, arg, None, FIND_CHAR_WORLD)))
 // send_to_char(ch, "%s", NOPERSON);
 // else if (!IS_NPC(vict) && GET_LEVEL(ch) <= GET_LEVEL(vict))
 // send_to_char(ch, "No, no, no!\r\n");
 // else {
 // send_to_char(ch, "%s", OK);
-// act(buf1, TRUE, ch, NULL, vict, TO_VICT);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s forced %s to %s", GET_NAME(ch), GET_NAME(vict), to_force);
+// act(buf1, true, ch, None, vict, TO_VICT);
+// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced %s to %s", GET_NAME(ch), GET_NAME(vict), to_force);
 // command_interpreter(vict, to_force);
 // }
 // } else if (!str_cmp("room", arg)) {
 // send_to_char(ch, "%s", OK);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s forced room %d to %s",
+// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced room %d to %s",
 // GET_NAME(ch), GET_ROOM_VNUM(IN_ROOM(ch)), to_force);
 //
 // for (vict = world[IN_ROOM(ch)].people; vict; vict = next_force) {
 // next_force = vict->next_in_room;
 // if (!IS_NPC(vict) && GET_LEVEL(vict) >= GET_LEVEL(ch))
 // continue;
-// act(buf1, TRUE, ch, NULL, vict, TO_VICT);
+// act(buf1, true, ch, None, vict, TO_VICT);
 // command_interpreter(vict, to_force);
 // }
 // } else { /* force all */
 // send_to_char(ch, "%s", OK);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s forced all to %s", GET_NAME(ch), to_force);
+// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced all to %s", GET_NAME(ch), to_force);
 //
 // for (i = descriptor_list; i; i = next_desc) {
 // next_desc = i->next;
 //
 // if (STATE(i) != CON_PLAYING || !(vict = i->character) || (!IS_NPC(vict) && GET_LEVEL(vict) >= GET_LEVEL(ch)))
 // continue;
-// act(buf1, TRUE, ch, NULL, vict, TO_VICT);
+// act(buf1, true, ch, None, vict, TO_VICT);
 // command_interpreter(vict, to_force);
 // }
 // }
@@ -1600,8 +2557,8 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // char buf1[MAX_INPUT_LENGTH + MAX_NAME_LENGTH + 32],
 // buf2[MAX_INPUT_LENGTH + MAX_NAME_LENGTH + 32];
 // struct descriptor_data *d;
-// char emote = FALSE;
-// char any = FALSE;
+// char emote = false;
+// char any = false;
 // int level = LVL_IMMORT;
 //
 // skip_spaces(&argument);
@@ -1613,7 +2570,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // }
 // switch (*argument) {
 // case '*':
-// emote = TRUE;
+// emote = true;
 // case '#':
 // one_argument(argument + 1, buf1);
 // if (is_number(buf1)) {
@@ -1671,12 +2628,12 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // (!PRF_FLAGGED(d->character, PRF_NOWIZ)) &&
 // (!PLR_FLAGGED(d->character, PLR_WRITING | PLR_MAILING))
 // && (d != ch->desc || !(PRF_FLAGGED(d->character, PRF_NOREPEAT)))) {
-// send_to_char(d->character, "%s", CCCYN(d->character, C_NRM));
+// send_to_char(d->character, "%s", CCCYN!(d->character, C_NRM));
 // if (CAN_SEE(d->character, ch))
 // send_to_char(d->character, "%s", buf1);
 // else
 // send_to_char(d->character, "%s", buf2);
-// send_to_char(d->character, "%s", CCNRM(d->character, C_NRM));
+// send_to_char(d->character, "%s", CCNRM!(d->character, C_NRM));
 // }
 // }
 //
@@ -1701,7 +2658,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // for (i = 0; i <= top_of_zone_table; i++)
 // reset_zone(i);
 // send_to_char(ch, "Reset world.\r\n");
-// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s reset entire world.", GET_NAME(ch));
+// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), true, "(GC) %s reset entire world.", GET_NAME(ch));
 // return;
 // } else if (*arg == '.')
 // i = world[IN_ROOM(ch)].zone;
@@ -1714,7 +2671,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // if (i <= top_of_zone_table) {
 // reset_zone(i);
 // send_to_char(ch, "Reset zone %d (#%d): %s.\r\n", i, zone_table[i].number, zone_table[i].name);
-// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s reset zone %d (%s)", GET_NAME(ch), i, zone_table[i].name);
+// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), true, "(GC) %s reset zone %d (%s)", GET_NAME(ch), i, zone_table[i].name);
 // } else
 // send_to_char(ch, "Invalid zone number.\r\n");
 // }
@@ -1733,7 +2690,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 //
 // if (!*arg)
 // send_to_char(ch, "Yes, but for whom?!?\r\n");
-// else if (!(vict = get_char_vis(ch, arg, NULL, FIND_CHAR_WORLD)))
+// else if (!(vict = get_char_vis(ch, arg, None, FIND_CHAR_WORLD)))
 // send_to_char(ch, "There is no such player.\r\n");
 // else if (IS_NPC(vict))
 // send_to_char(ch, "You can't do that to a mob!\r\n");
@@ -1757,17 +2714,17 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // REMOVE_BIT(PLR_FLAGS(vict), PLR_THIEF | PLR_KILLER);
 // send_to_char(ch, "Pardoned.\r\n");
 // send_to_char(vict, "You have been pardoned by the Gods!\r\n");
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s pardoned by %s", GET_NAME(vict), GET_NAME(ch));
+// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s pardoned by %s", GET_NAME(vict), GET_NAME(ch));
 // break;
 // case SCMD_NOTITLE:
 // result = PLR_TOG_CHK(vict, PLR_NOTITLE);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) Notitle %s for %s by %s.",
+// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) Notitle %s for %s by %s.",
 // ONOFF(result), GET_NAME(vict), GET_NAME(ch));
 // send_to_char(ch, "(GC) Notitle %s for %s by %s.\r\n", ONOFF(result), GET_NAME(vict), GET_NAME(ch));
 // break;
 // case SCMD_SQUELCH:
 // result = PLR_TOG_CHK(vict, PLR_NOSHOUT);
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) Squelch %s for %s by %s.",
+// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) Squelch %s for %s by %s.",
 // ONOFF(result), GET_NAME(vict), GET_NAME(ch));
 // send_to_char(ch, "(GC) Squelch %s for %s by %s.\r\n", ONOFF(result), GET_NAME(vict), GET_NAME(ch));
 // break;
@@ -1784,8 +2741,8 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // GET_FREEZE_LEV(vict) = GET_LEVEL(ch);
 // send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
 // send_to_char(ch, "Frozen.\r\n");
-// act("A sudden cold wind conjured from nowhere freezes $n!", FALSE, vict, 0, 0, TO_ROOM);
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s frozen by %s.", GET_NAME(vict), GET_NAME(ch));
+// act("A sudden cold wind conjured from nowhere freezes $n!", false, vict, 0, 0, TO_ROOM);
+// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s frozen by %s.", GET_NAME(vict), GET_NAME(ch));
 // break;
 // case SCMD_THAW:
 // if (!PLR_FLAGGED(vict, PLR_FROZEN)) {
@@ -1797,11 +2754,11 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // GET_FREEZE_LEV(vict), GET_NAME(vict), HMHR(vict));
 // return;
 // }
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "(GC) %s un-frozen by %s.", GET_NAME(vict), GET_NAME(ch));
+// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s un-frozen by %s.", GET_NAME(vict), GET_NAME(ch));
 // REMOVE_BIT(PLR_FLAGS(vict), PLR_FROZEN);
 // send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
 // send_to_char(ch, "Thawed.\r\n");
-// act("A sudden fireball conjured from nowhere thaws $n!", FALSE, vict, 0, 0, TO_ROOM);
+// act("A sudden fireball conjured from nowhere thaws $n!", false, vict, 0, 0, TO_ROOM);
 // break;
 // case SCMD_UNAFFECT:
 // if (vict->affected) {
@@ -1845,7 +2802,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // size_t len;
 // zone_rnum zrn;
 // zone_vnum zvn;
-// byte self = FALSE;
+// byte self = false;
 // struct char_data *vict;
 // struct obj_data *obj;
 // struct descriptor_data *d;
@@ -1892,7 +2849,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // return;
 // }
 // if (!strcmp(value, "."))
-// self = TRUE;
+// self = true;
 // buf[0] = '\0';
 //
 // switch (l) {
@@ -1916,7 +2873,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // break;
 // len += nlen;
 // }
-// page_string(ch->desc, buf, TRUE);
+// page_string(ch->desc, buf, true);
 // break;
 //
 // /* show player */
@@ -1932,7 +2889,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // }
 //
 // send_to_char(ch, "Player: %-12s (%s) [%2d %s]\r\n", vbuf.name,
-// genders[(int) vbuf.sex], vbuf.level, class_abbrevs[(int) vbuf.chclass]);
+// GENDERS[(int) vbuf.sex], vbuf.level, class_abbrevs[(int) vbuf.chclass]);
 // send_to_char(ch, "Au: %-8d  Bal: %-8d  Exp: %-8d  Align: %-5d  Lessons: %-3d\r\n",
 // vbuf.points.gold, vbuf.points.bank_gold, vbuf.points.exp,
 // vbuf.char_specials_saved.alignment, vbuf.player_specials_saved.spells_to_learn);
@@ -1997,7 +2954,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // break;
 // len += nlen;
 // }
-// page_string(ch->desc, buf, TRUE);
+// page_string(ch->desc, buf, true);
 // break;
 //
 // /* show death */
@@ -2010,7 +2967,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // break;
 // len += nlen;
 // }
-// page_string(ch->desc, buf, TRUE);
+// page_string(ch->desc, buf, true);
 // break;
 //
 // /* show godrooms */
@@ -2023,7 +2980,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // break;
 // len += nlen;
 // }
-// page_string(ch->desc, buf, TRUE);
+// page_string(ch->desc, buf, true);
 // break;
 //
 // /* show shops */
@@ -2041,7 +2998,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // i = 0;
 // send_to_char(ch, "People currently snooping:\r\n--------------------------\r\n");
 // for (d = descriptor_list; d; d = d->next) {
-// if (d->snooping == NULL || d->character == NULL)
+// if (d->snooping == None || d->character == None)
 // continue;
 // if (STATE(d) != CON_PLAYING || GET_LEVEL(ch) < GET_LEVEL(d->character))
 // continue;
@@ -2434,7 +3391,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // SET_OR_REMOVE(PLR_FLAGS(vict), PLR_NODELETE);
 // break;
 // case 47:
-// if ((i = search_block(val_arg, genders, FALSE)) < 0) {
+// if ((i = search_block(val_arg, GENDERS, false)) < 0) {
 // send_to_char(ch, "Must be 'male', 'female', or 'neutral'.\r\n");
 // return (0);
 // }
@@ -2474,7 +3431,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 //
 // ACMD(do_set)
 // {
-// struct char_data *vict = NULL, *cbuf = NULL;
+// struct char_data *vict = None, *cbuf = None;
 // struct char_file_u tmp_store;
 // char field[MAX_INPUT_LENGTH], name[MAX_INPUT_LENGTH], buf[MAX_INPUT_LENGTH];
 // int mode, len, player_i = 0, retval;
@@ -2501,12 +3458,12 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // /* find the target */
 // if (!is_file) {
 // if (is_player) {
-// if (!(vict = get_player_vis(ch, name, NULL, FIND_CHAR_WORLD))) {
+// if (!(vict = get_player_vis(ch, name, None, FIND_CHAR_WORLD))) {
 // send_to_char(ch, "There is no such player.\r\n");
 // return;
 // }
 // } else { /* is_mob */
-// if (!(vict = get_char_vis(ch, name, NULL, FIND_CHAR_WORLD))) {
+// if (!(vict = get_char_vis(ch, name, None, FIND_CHAR_WORLD))) {
 // send_to_char(ch, "There is no such creature.\r\n");
 // return;
 // }

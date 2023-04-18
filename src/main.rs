@@ -106,7 +106,8 @@ pub struct DescriptorData {
     /* for the modify-str system		*/
     pub max_str: Cell<usize>,
     /*		-			*/
-    mail_to: Cell<u64>, /* name for mail system			*/
+    mail_to: Cell<u64>,
+    /* name for mail system			*/
     has_prompt: Cell<bool>,
     /* is the user at a prompt?             */
     inbuf: RefCell<String>,
@@ -124,8 +125,8 @@ pub struct DescriptorData {
     /* linked to char			*/
     original: RefCell<Option<Rc<CharData>>>,
     /* original char if switched		*/
-    // struct descriptor_data *snooping; /* Who is this char snooping	*/
-    // struct descriptor_data *snoop_by; /* And who is snooping this char	*/
+    snooping: RefCell<Option<Rc<DescriptorData>>>, /* Who is this char snooping	*/
+    snoop_by: RefCell<Option<Rc<DescriptorData>>>, /* And who is snooping this char	*/
 }
 
 pub struct Game {
@@ -135,7 +136,7 @@ pub struct Game {
     last_desc: Cell<usize>,
     circle_shutdown: Cell<bool>,
     /* clean shutdown */
-    circle_reboot: bool,
+    circle_reboot: Cell<bool>,
     /* reboot the game after a shutdown */
     no_specials: bool,
     /* Suppress ass. of special routines */
@@ -166,7 +167,7 @@ fn main() -> ExitCode {
         descriptor_list: RefCell::new(Vec::new()),
         last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
-        circle_reboot: false,
+        circle_reboot: Cell::new(false),
         no_specials: false,
         db: DB::new(),
         mother_desc: None,
@@ -340,7 +341,7 @@ impl Game {
     /* Init sockets, run game, and cleanup sockets */
     fn init_game(&mut self, _port: u16) {
         /* We don't want to restart if we crash before we get up. */
-        util::touch(Path::new(KILLSCRIPT)).expect("Cannot create KILLSCRIPT path");
+        util::touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
 
         info!("Finding player limit.");
         self.max_players = get_max_players();
@@ -352,7 +353,7 @@ impl Game {
         // signal_setup();
 
         /* If we made it this far, we will be able to restart without problem. */
-        fs::remove_file(Path::new(KILLSCRIPT)).unwrap();
+        fs::remove_file(Path::new(KILLSCRIPT_FILE)).unwrap();
 
         info!("Entering game loop.");
 
@@ -987,7 +988,7 @@ fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut
 // }
 
 /* Add a new string to a player's output queue. */
-fn write_to_output(t: &DescriptorData, txt: &str) {
+fn write_to_output(t: &DescriptorData, txt: &str) -> usize {
     // static char txt[MAX_STRING_LENGTH];
     // size_t wantsize;
     // int size;
@@ -1048,6 +1049,7 @@ fn write_to_output(t: &DescriptorData, txt: &str) {
     //
     // return (t -> bufspace);
     t.output.borrow_mut().push_str(txt);
+    txt.len()
 }
 
 /* ******************************************************************
@@ -1171,6 +1173,8 @@ impl Game {
             input: RefCell::new(LinkedList::new()),
             character: RefCell::new(None),
             original: RefCell::new(None),
+            snooping: RefCell::new(None),
+            snoop_by: RefCell::new(None),
         };
 
         /* find the sitename */
@@ -1288,9 +1292,12 @@ fn process_output(t: &DescriptorData) -> i32 {
     }
 
     /* Handle snooping: prepend "% " and send to snooper. */
-    // if (RefCell::borrow(&t).snoop_by) {
-    //     write_to_output(RefCell::borrow(&t).snoop_by, "%% %*s%%%%", result, t ->output);
-    // }
+    if t.snoop_by.borrow().is_some() {
+        write_to_output(
+            t.snoop_by.borrow().as_ref().unwrap(),
+            format!("% {}%%", result).as_str(),
+        );
+    }
 
     // /* The common case: all saved output was handed off to the kernel buffer. */
     // if (result > = t ->bufptr) {
@@ -1795,14 +1802,17 @@ impl Game {
         // flush_queues(d);
 
         /* Forget snooping */
-        // TODO implement snooping
-        // if (d ->snooping)
-        // d -> snooping -> snoop_by = NULL;
-        //
-        // if (d -> snoop_by) {
-        // write_to_output(d -> snoop_by, "Your victim is no longer among us.\r\n");
-        // d-> snoop_by -> snooping = NULL;
-        // }
+        if d.snooping.borrow().is_some() {
+            *d.snooping.borrow().as_ref().unwrap().snoop_by.borrow_mut() = None;
+        }
+
+        if d.snoop_by.borrow().is_some() {
+            write_to_output(
+                d.snoop_by.borrow().as_ref().unwrap(),
+                "Your victim is no longer among us.\r\n",
+            );
+            *d.snoop_by.borrow_mut() = None;
+        }
 
         if d.character.borrow().is_some() {
             /* If we're switched, this resets the mobile taken. */
@@ -2103,31 +2113,27 @@ impl Game {
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-pub fn send_to_char(ch: &CharData, messg: &str) {
+pub fn send_to_char(ch: &CharData, messg: &str) -> usize {
     if ch.desc.borrow().is_some() && messg != "" {
-        write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
+        return write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
     }
+    0
 }
 
-// void send_to_all(const char * messg, ...)
-// {
-// struct descriptor_data * i;
-// va_list args;
-//
-// if (messg == NULL)
-// return;
-//
-// for (i = descriptor_list; i; i = i -> next) {
-// if (STATE(i) != ConPlaying)
-// continue;
-//
-// va_start(args, messg);
-// vwrite_to_output(i, messg, args);
-// va_end(args);
-// }
-// }
-
 impl Game {
+    pub fn send_to_all(&self, messg: &str) {
+        if messg.is_empty() {
+            return;
+        }
+
+        for i in self.descriptor_list.borrow().iter() {
+            if i.state() != ConPlaying {
+                continue;
+            }
+            write_to_output(i, messg);
+        }
+    }
+
     fn send_to_outdoor(&self, messg: &str) {
         if messg.is_empty() {
             return;

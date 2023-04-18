@@ -8,6 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
+use std::borrow::Borrow;
 use std::cell::{Ref, RefCell};
 use std::cmp::{max, min};
 use std::process;
@@ -1020,7 +1021,7 @@ impl DB {
     }
 
     /* Extract a ch completely from the world, and leave his stuff behind */
-    fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &Game) {
+    pub(crate) fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &Game) {
         if ch.in_room() == NOWHERE {
             error!(
                 "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
@@ -1454,27 +1455,43 @@ impl DB {
         None
     }
 }
-// struct obj_data *get_obj_in_equip_vis(struct char_data *ch, char *arg, int *number, struct obj_data *equipment[])
-// {
-// int j, num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&arg);
-// }
-//
-// if (*number == 0)
-// return (NULL);
-//
-// for (j = 0; j < NUM_WEARS; j++)
-// if (equipment[j] && CAN_SEE_OBJ(ch, equipment[j]) && isname(arg, equipment[j].name))
-// if (--(*number) == 0)
-// return (equipment[j]);
-//
-// return (NULL);
-// }
-
 impl DB {
+    pub fn get_obj_in_equip_vis(
+        &self,
+        ch: &Rc<CharData>,
+        arg: &str,
+        number: Option<&mut i32>,
+        equipment: &RefCell<[Option<Rc<ObjData>>]>,
+    ) -> Option<Rc<ObjData>> {
+        let mut num = 0;
+        let mut t: &mut i32;
+        let mut name = arg.to_string();
+        if number.is_none() {
+            num = get_number(&mut name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let mut number: &mut i32 = t;
+        if *number == 0 {
+            return None;
+        }
+        let equipment = equipment.borrow();
+        for j in 0..NUM_WEARS as usize {
+            if equipment[j].is_some()
+                && self.can_see_obj(ch, equipment[j].as_ref().unwrap())
+                && isname(&arg, &equipment[j].borrow().as_ref().unwrap().name.borrow())
+            {
+                *number -= 1;
+                if *number == 0 {
+                    return equipment[j].clone();
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn get_obj_pos_in_equip_vis(
         &self,
         ch: &Rc<CharData>,

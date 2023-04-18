@@ -22,7 +22,7 @@ use regex::Regex;
 
 use crate::act_social::SocialMessg;
 use crate::class::init_spell_levels;
-use crate::{check_player_special, get_last_tell_mut, Game};
+use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
 // long get_id_by_name(const char *name)
 // {
 // int i;
@@ -49,7 +49,7 @@ use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
 use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
-use crate::handler::fname;
+use crate::handler::{fname, isname};
 use crate::interpreter::one_word;
 use crate::modify::paginate_string;
 use crate::shops::{assign_the_shopkeepers, ShopData};
@@ -99,7 +99,9 @@ pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 pub const LIB_PLRTEXT: &str = "plrtext/";
 pub const LIB_PLROBJS: &str = "plrobjs/";
 
-pub const KILLSCRIPT: &str = "./.killscript";
+pub const KILLSCRIPT_FILE: &str = "./.killscript";
+pub const FASTBOOT_FILE: &str = "./fastboot";
+pub const PAUSE_FILE: &str = "./pause";
 
 pub const PLAYER_FILE: &str = "etc/players";
 pub const LIB_PLRALIAS: &str = "plralias/";
@@ -136,7 +138,7 @@ pub struct DB {
     /* index table for object file	 */
     pub obj_proto: Vec<Rc<ObjData>>,
     /* prototypes for objs		 */
-    zone_table: RefCell<Vec<ZoneData>>,
+    pub(crate) zone_table: RefCell<Vec<ZoneData>>,
     /* zone table			 */
     pub(crate) fight_messages: Vec<MessageList>,
     /* fighting messages	 */
@@ -155,7 +157,8 @@ pub struct DB {
     pub boot_time: Cell<u128>,
     pub no_specials: bool,
     /* time of mud boot		 */
-    pub circle_restrict: u8, /* level of game restriction	 */
+    pub circle_restrict: u8,
+    /* level of game restriction	 */
     pub r_mortal_start_room: RefCell<RoomRnum>,
     /* rnum of mortal start room	 */
     pub r_immort_start_room: RefCell<RoomRnum>,
@@ -188,7 +191,6 @@ pub struct DB {
     /* policies page		 */
     pub help_table: Vec<HelpIndexElement>,
     /* the help table	 */
-    //
     pub time_info: RefCell<TimeInfoData>,
     /* the infomation about the time    */
     pub weather_info: RefCell<WeatherData>,
@@ -491,9 +493,7 @@ impl DB {
 impl DB {
     pub fn new() -> DB {
         DB {
-            //   globals: Some(main_globals.clone()),
             world: RefCell::new(vec![]),
-            //        top_of_world: RefCell::new(0),
             character_list: RefCell::new(vec![]),
             mob_index: vec![],
             mob_protos: vec![],
@@ -501,11 +501,9 @@ impl DB {
             obj_index: vec![],
             obj_proto: vec![],
             zone_table: RefCell::new(vec![]),
-            //top_of_zone_table: RefCell::new(0),
             fight_messages: vec![],
             player_table: RefCell::new(vec![]),
             player_fl: RefCell::new(None),
-            //      top_of_p_table: RefCell::new(0),
             top_idnum: Cell::new(0),
             no_mail: false,
             mini_mud: false,
@@ -843,55 +841,59 @@ impl DB {
                 dummy.char_specials_saved.idnum as i32,
             ));
         }
-
-        // *self.top_of_p_table.borrow_mut() = nr;
     }
 }
 
-// /*
-//  * Thanks to Andrey (andrey@alex-ua.com) for this bit of code, although I
-//  * did add the 'goto' and changed some "while()" into "do { } while()".
-//  *	-gg 6/24/98 (technically 6/25/98, but I care not.)
-//  */
-// int count_alias_records(FILE *fl)
-// {
-// char key[READ_SIZE], next_key[READ_SIZE];
-// char line[READ_SIZE], *scan;
-// int total_keywords = 0;
-//
-// /* get the first keyword line */
-// get_one_line(fl, key);
-//
-// while (*key != '$') {
-// /* skip the text */
-// do {
-// get_one_line(fl, line);
-// if (feof(fl))
-// goto ackeof;
-// } while (*line != '#');
-//
-// /* now count keywords */
-// scan = key;
-// do {
-// scan = one_word(scan, next_key);
-// if (*next_key)
-// ++total_keywords;
-// } while (*next_key);
-//
-// /* get next keyword line (or $) */
-// get_one_line(fl, key);
-//
-// if (feof(fl))
-// goto ackeof;
-// }
-//
-// return (total_keywords);
-//
-// /* No, they are not evil. -gg 6/24/98 */
-// ackeof:
-// log("SYSERR: Unexpected end of help file.");
-// exit(1);	/* Some day we hope to handle these things better... */
-// }
+/*
+ * Thanks to Andrey (andrey@alex-ua.com) for this bit of code, although I
+ * did add the 'goto' and changed some "while()" into "do { } while()".
+ *	-gg 6/24/98 (technically 6/25/98, but I care not.)
+ */
+fn count_alias_records(fl: File) -> i32 {
+    let mut total_keywords = 0;
+    let mut key = String::new();
+    let mut line = String::new();
+    /* get the first keyword line */
+    let mut reader = BufReader::new(fl);
+    get_one_line(&mut reader, &mut key);
+
+    while !key.starts_with('$') {
+        /* skip the text */
+        loop {
+            line.clear();
+            get_one_line(&mut reader, &mut line);
+            // if (feof(fl))
+            // goto ackeof;
+            if line.starts_with('#') {
+                break;
+            }
+        }
+
+        /* now count keywords */
+        let mut scan = key.as_str();
+        let mut next_key = String::new();
+        loop {
+            scan = one_word(&mut scan, &mut next_key);
+            if !next_key.is_empty() {
+                total_keywords += 1;
+            } else {
+                break;
+            }
+        }
+
+        /* get next keyword line (or $) */
+        key.clear();
+        get_one_line(&mut reader, &mut key);
+
+        // if (feof(fl))
+        // goto ackeof;
+    }
+
+    return total_keywords;
+    // ackeof:
+    // log("SYSERR: Unexpected end of help file.");
+    // exit(1);	/* Some day we hope to handle these things better... */
+}
 
 /* function to count how many hash-mark delimited records exist in a file */
 fn count_hash_records(fl: File) -> i32 {
@@ -924,12 +926,9 @@ const DB_BOOT_HLP: u8 = 5;
 impl DB {
     fn index_boot(&mut self, mode: u8) {
         let index_filename: &str;
-        let prefix: &str; /* NULL or egcs 1.1 complains */
+        let prefix: &str;
         let mut rec_count = 0;
         let mut size: [usize; 2] = [0; 2];
-        //FILE *db_index, *db_file;
-        //int rec_count = 0, size[2];
-        //char buf2[PATH_MAX], buf1[MAX_STRING_LENGTH];
 
         match mode {
             DB_BOOT_WLD => {
@@ -1001,8 +1000,8 @@ impl DB {
             } else {
                 if mode == DB_BOOT_ZON {
                     rec_count += 1;
-                    // } else if mode == DB_BOOT_HLP {
-                    //     rec_count += count_alias_records(db_file);
+                } else if mode == DB_BOOT_HLP {
+                    rec_count += count_alias_records(db_file.unwrap());
                 } else {
                     rec_count += count_hash_records(db_file.unwrap());
                 }
@@ -1026,9 +1025,6 @@ impl DB {
             process::exit(1);
         }
 
-        /*
-         * NOTE: "bytes" does _not_ include strings or other later malloc'd things.
-         */
         match mode {
             DB_BOOT_WLD => {
                 self.world.borrow_mut().reserve_exact(rec_count as usize);
@@ -1220,12 +1216,9 @@ fn asciiflag_conv(flag: &str) -> i64 {
 impl DB {
     /* load the rooms */
     fn parse_room(&self, reader: &mut BufReader<File>, virtual_nr: i32) {
-        //static int room_nr = 0, zone = 0;
         let mut t = [0; 10];
         let mut line = String::new();
         let mut zone = 0;
-        //     char line[READ_SIZE], flags[128], buf2[MAX_STRING_LENGTH], buf[128];
-        // struct extra_descr_data * new_descr;
 
         /* This really had better fit or there are other problems. */
         let buf2 = format!("room #{}", virtual_nr);
@@ -1248,7 +1241,6 @@ impl DB {
             name: fread_string(reader, buf2.as_str()),
             description: fread_string(reader, buf2.as_str()),
             ex_descriptions: vec![],
-            //dir_option: [None, None, None, None, None, None],
             dir_option: [None, None, None, None, None, None],
             room_flags: Cell::new(0),
             light: Cell::new(0),
@@ -1293,13 +1285,8 @@ impl DB {
         rd.sector_type = t[2];
 
         //rd.func = NULL;
-        //rd.contents = NULL;
         rd.peoples = RefCell::new(vec![]);
         rd.light.set(0); /* Zero light sources */
-
-        // for i in 0..NUM_OF_DIRS {
-        //     rd.dir_option[i] = None;
-        // }
 
         let buf = format!(
             "SYSERR: Format error in room #{} (expecting D/E/S)",
@@ -2408,36 +2395,51 @@ impl DB {
 // }
 //
 //
-// /*************************************************************************
-// *  procedures for resetting, both play-time and boot-time	 	 *
-// *************************************************************************/
-//
-//
-// int vnum_mobile(char *searchname, struct char_data *ch)
-// {
-// int nr, found = 0;
-//
-// for (nr = 0; nr <= top_of_mobt; nr++)
-// if (isname(searchname, mob_proto[nr].player.name))
-// send_to_char(ch, "%3d. [%5d] %s\r\n", ++found, mob_index[nr].vnum, mob_proto[nr].player.short_descr);
-//
-// return (found);
-// }
-//
-//
-//
-// int vnum_object(char *searchname, struct char_data *ch)
-// {
-// int nr, found = 0;
-//
-// for (nr = 0; nr <= top_of_objt; nr++)
-// if (isname(searchname, obj_proto[nr].name))
-// send_to_char(ch, "%3d. [%5d] %s\r\n", ++found, obj_index[nr].vnum, obj_proto[nr].short_description);
-//
-// return (found);
-// }
-//
-//
+/*************************************************************************
+*  procedures for resetting, both play-time and boot-time	 	 *
+*************************************************************************/
+
+pub fn vnum_mobile(db: &DB, searchname: &str, ch: &Rc<CharData>) -> i32 {
+    let mut found = 0;
+    for nr in 0..db.mob_protos.len() {
+        let mp = &db.mob_protos[nr];
+        if isname(searchname, &mp.player.borrow().name) {
+            found += 1;
+            send_to_char(
+                ch,
+                format!(
+                    "{:3}. [{:5}] {}\r\n",
+                    found,
+                    db.mob_index[nr].vnum,
+                    mp.player.borrow().short_descr
+                )
+                .as_str(),
+            );
+        }
+    }
+    return found;
+}
+
+pub fn vnum_object(db: &DB, searchname: &str, ch: &Rc<CharData>) -> i32 {
+    let mut found = 0;
+    for nr in 0..db.obj_proto.len() {
+        let op = &db.obj_proto[nr];
+        if isname(searchname, &op.name.borrow()) {
+            found += 1;
+            send_to_char(
+                ch,
+                format!(
+                    "{:3}. [{:5}] {}\r\n",
+                    found, db.obj_index[nr].vnum, op.short_description
+                )
+                .as_str(),
+            );
+        }
+    }
+
+    return found;
+}
+
 // /* create a character, and add it to the char list */
 // struct char_data *create_char(void)
 // {
@@ -4041,6 +4043,8 @@ impl CharData {
                     spare20: 0,
                     spare21: 0,
                 },
+                poofin: Rc::from(""),
+                poofout: Rc::from(""),
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {
@@ -4130,6 +4134,8 @@ impl CharData {
                     spare20: 0,
                     spare21: 0,
                 },
+                poofin: Rc::from(""),
+                poofout: Rc::from(""),
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {

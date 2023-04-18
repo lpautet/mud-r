@@ -60,7 +60,7 @@ fn graf(grafage: i32, p0: i32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: 
  */
 
 /* manapoint gain pr. game hour */
-fn mana_gain(ch: &CharData) -> u8 {
+pub fn mana_gain(ch: &CharData) -> u8 {
     let mut gain;
 
     if ch.is_npc() {
@@ -100,7 +100,7 @@ fn mana_gain(ch: &CharData) -> u8 {
 }
 
 /* Hitpoint gain pr. game hour */
-fn hit_gain(ch: &CharData) -> u8 {
+pub fn hit_gain(ch: &CharData) -> u8 {
     let mut gain;
     if ch.is_npc() {
         /* Neat and fast */
@@ -141,7 +141,7 @@ fn hit_gain(ch: &CharData) -> u8 {
 }
 
 /* move gain pr. game hour */
-fn move_gain(ch: &CharData) -> u8 {
+pub fn move_gain(ch: &CharData) -> u8 {
     let mut gain;
 
     if ch.is_npc() {

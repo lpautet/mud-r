@@ -41,7 +41,10 @@ use crate::act_other::{
     do_wimpy,
 };
 use crate::act_social::{do_action, do_insult};
-use crate::act_wizard::do_advance;
+use crate::act_wizard::{
+    do_advance, do_at, do_echo, do_goto, do_return, do_send, do_shutdown, do_snoop, do_stat,
+    do_switch, do_teleport, do_trans, do_vnum,
+};
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
@@ -56,9 +59,9 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, AFF_HIDE, LVL_GOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, PLR_FROZEN, PLR_INVSTART,
-    PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING,
-    POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    CharData, AFF_HIDE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, PLR_FROZEN,
+    PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING,
+    POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
     CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -129,6 +132,10 @@ pub const SCMD_GOSSIP: i32 = 2;
 pub const SCMD_AUCTION: i32 = 3;
 pub const SCMD_GRATZ: i32 = 4;
 
+/* do_shutdown */
+pub const SCMD_SHUTDOW: i32 = 0;
+pub const SCMD_SHUTDOWN: i32 = 1;
+
 /* do_quit */
 pub const SCMD_QUI: i32 = 0;
 pub const SCMD_QUIT: i32 = 1;
@@ -175,6 +182,10 @@ pub const SCMD_READ: i32 = 1;
 pub const SCMD_QSAY: i32 = 0;
 pub const SCMD_QECHO: i32 = 1;
 
+/* do_echo */
+pub const SCMD_ECHO: i32 = 0;
+pub const SCMD_EMOTE: i32 = 1;
+
 /* do_gen_door */
 pub const SCMD_OPEN: i32 = 0;
 pub const SCMD_CLOSE: i32 = 1;
@@ -211,7 +222,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 247] = [
+pub const CMD_INFO: [CommandInfo; 262] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -264,6 +275,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
     },
     /* now, the main list */
     // { "at"       , POS_DEAD    , do_at       , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "at",
+        minimum_position: POS_DEAD,
+        command_pointer: do_at,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "advance"  , POS_DEAD    , do_advance  , LVL_IMPL, 0 },
     CommandInfo {
         command: "advance",
@@ -660,8 +678,29 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: SCMD_EAT,
     },
     // { "echo"     , POS_SLEEPING, do_echo     , LVL_IMMORT, SCMD_ECHO },
+    CommandInfo {
+        command: "echo",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_echo,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_ECHO,
+    },
     // { "emote"    , POS_RESTING , do_echo     , 1, SCMD_EMOTE },
+    CommandInfo {
+        command: "emote",
+        minimum_position: POS_RESTING,
+        command_pointer: do_echo,
+        minimum_level: 1,
+        subcmd: SCMD_ECHO,
+    },
     // { ":"        , POS_RESTING, do_echo      , 1, SCMD_EMOTE },
+    CommandInfo {
+        command: ":",
+        minimum_position: POS_RESTING,
+        command_pointer: do_echo,
+        minimum_level: 1,
+        subcmd: SCMD_ECHO,
+    },
     // { "embrace"  , POS_STANDING, do_action   , 0, 0 },
     CommandInfo {
         command: "embrace",
@@ -828,6 +867,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "goto"     , POS_SLEEPING, do_goto     , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "goto",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_goto,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "gold"     , POS_RESTING , do_gold     , 0, 0 },
     CommandInfo {
         command: "gold",
@@ -1565,6 +1611,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
     },
     // { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
     // { "return"   , POS_DEAD    , do_return   , 0, 0 },
+    CommandInfo {
+        command: "return",
+        minimum_position: POS_DEAD,
+        command_pointer: do_return,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "roll"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "roll",
@@ -1632,6 +1685,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
     },
     // { "sell"     , POS_STANDING, do_not_here , 0, 0 },
     // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
+    CommandInfo {
+        command: "send",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_send,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
     // { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
     CommandInfo {
@@ -1667,7 +1727,21 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "shutdow"  , POS_DEAD    , do_shutdown , LVL_IMPL, 0 },
+    CommandInfo {
+        command: "shutdow",
+        minimum_position: POS_DEAD,
+        command_pointer: do_shutdown,
+        minimum_level: LVL_IMPL,
+        subcmd: 0,
+    },
     // { "shutdown" , POS_DEAD    , do_shutdown , LVL_IMPL, SCMD_SHUTDOWN },
+    CommandInfo {
+        command: "shutdown",
+        minimum_position: POS_DEAD,
+        command_pointer: do_shutdown,
+        minimum_level: LVL_IMPL,
+        subcmd: SCMD_SHUTDOWN,
+    },
     // { "sigh"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "sigh",
@@ -1806,6 +1880,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "snoop"    , POS_DEAD    , do_snoop    , LVL_GOD, 0 },
+    CommandInfo {
+        command: "snoop",
+        minimum_position: POS_DEAD,
+        command_pointer: do_snoop,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "snuggle"  , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "snuggle",
@@ -1871,6 +1952,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "stat"     , POS_DEAD    , do_stat     , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "stat",
+        minimum_position: POS_DEAD,
+        command_pointer: do_stat,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "steal"    , POS_STANDING, do_steal    , 1, 0 },
     CommandInfo {
         command: "steal",
@@ -1912,6 +2000,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "switch"   , POS_DEAD    , do_switch   , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "switch",
+        minimum_position: POS_DEAD,
+        command_pointer: do_switch,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     // { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
     //
     // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
@@ -1963,6 +2058,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: SCMD_TASTE,
     },
     // { "teleport" , POS_DEAD    , do_teleport , LVL_GOD, 0 },
+    CommandInfo {
+        command: "teleport",
+        minimum_position: POS_DEAD,
+        command_pointer: do_teleport,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "thank"    , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "thank",
@@ -2022,6 +2124,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: SCMD_TRACK,
     },
     // { "transfer" , POS_SLEEPING, do_trans    , LVL_GOD, 0 },
+    CommandInfo {
+        command: "transfer",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_trans,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "twiddle"  , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "twiddle",
@@ -2093,6 +2202,13 @@ pub const CMD_INFO: [CommandInfo; 247] = [
         subcmd: 0,
     },
     // { "vnum"     , POS_DEAD    , do_vnum     , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "vnum",
+        minimum_position: POS_DEAD,
+        command_pointer: do_vnum,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
     //
     // { "wake"     , POS_SLEEPING, do_wake     , 0, 0 },
@@ -2852,11 +2968,11 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
+fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
-    let db = &main_globals.db;
+    let db = &game.db;
 
     id = d.character.borrow().as_ref().unwrap().get_idnum();
 
@@ -2864,7 +2980,7 @@ fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
      * Now that this descriptor has successfully logged in, disconnect all
      * other descriptors controlling a character with the same ID number.
      */
-    for k in main_globals.descriptor_list.borrow().iter() {
+    for k in game.descriptor_list.borrow().iter() {
         if Rc::ptr_eq(k, &d) {
             continue;
         }
@@ -2892,8 +3008,7 @@ fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
             && k.original.borrow().is_some()
         {
             /* Character taking over their own body, while an immortal was switched to it. */
-            // TODO implement do_return
-            //do_return(k.character, NULL, 0, 0);
+            do_return(game, k.character.borrow().as_ref().unwrap(), "", 0, 0);
         } else if k.character.borrow().is_some()
             && k.character.borrow().as_ref().unwrap().get_idnum() == id
         {
@@ -2989,7 +3104,7 @@ fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
                 None,
                 TO_ROOM,
             );
-            main_globals.mudlog(
+            game.mudlog(
                 NRM,
                 max(
                     LVL_IMMORT as i32,
@@ -3010,7 +3125,7 @@ fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
                 "You take over your own body, already in use!\r\n",
             );
             db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().as_ref(), None, None, TO_ROOM);
-            main_globals.mudlog(
+            game.mudlog(
                 NRM,
                 max(
                     LVL_IMMORT as i32,
@@ -3026,7 +3141,7 @@ fn perform_dupe_check(main_globals: &Game, d: Rc<DescriptorData>) -> bool {
         }
         UNSWITCH => {
             write_to_output(d.as_ref(), "Reconnecting to unswitched char.");
-            main_globals.mudlog(
+            game.mudlog(
                 NRM,
                 max(
                     LVL_IMMORT as i32,
@@ -3489,7 +3604,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     }
                     d.set_state(ConPlaying);
                     if character.get_level() == 0 {
-                        game.do_start(character.as_ref());
+                        game.do_start(character);
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
                         game.db.look_at_room(och.as_ref().unwrap(), false);
                     }
