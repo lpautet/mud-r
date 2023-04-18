@@ -157,7 +157,7 @@ pub struct DB {
     pub boot_time: Cell<u128>,
     pub no_specials: bool,
     /* time of mud boot		 */
-    pub circle_restrict: u8,
+    pub circle_restrict: Cell<u8>,
     /* level of game restriction	 */
     pub r_mortal_start_room: RefCell<RoomRnum>,
     /* rnum of mortal start room	 */
@@ -510,7 +510,7 @@ impl DB {
             no_rent_check: false,
             boot_time: Cell::new(0),
             no_specials: false,
-            circle_restrict: 0,
+            circle_restrict: Cell::new(0),
             r_mortal_start_room: RefCell::new(0),
             r_immort_start_room: RefCell::new(0),
             r_frozen_start_room: RefCell::new(0),

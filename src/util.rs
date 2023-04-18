@@ -9,6 +9,7 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
+use chrono::{TimeZone, Utc};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -1201,6 +1202,11 @@ pub const SECS_PER_REAL_MIN: u64 = 60;
 pub const SECS_PER_REAL_HOUR: u64 = 60 * SECS_PER_REAL_MIN;
 pub const SECS_PER_REAL_DAY: u64 = 24 * SECS_PER_REAL_HOUR;
 pub const SECS_PER_REAL_YEAR: u64 = 365 * SECS_PER_REAL_DAY;
+
+pub fn ctime(t: u64) -> String {
+    let date_time = Utc.timestamp_millis_opt(t as i64).unwrap();
+    date_time.to_rfc2822()
+}
 
 pub fn time_now() -> u64 {
     return SystemTime::now()

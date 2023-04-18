@@ -81,7 +81,7 @@ pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 * able to carry around things like boards.  That's not necessarily a bad
 * thing, but this will be left at a default of 'NO' for historic reasons.
 */
-// int load_into_inventory = NO;
+pub const LOAD_INTO_INVENTORY: bool = false;
 
 /* "okay" etc. */
 pub const OK: &str = "Okay.\r\n";

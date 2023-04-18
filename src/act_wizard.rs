@@ -9,44 +9,47 @@
 ************************************************************************ */
 
 use std::borrow::Borrow;
+use std::cmp::max;
 use std::path::Path;
 use std::rc::Rc;
 
+use chrono::{TimeZone, Utc};
 use log::info;
 
-use crate::class::{level_exp, PC_CLASS_TYPES};
-use crate::config::{NOPERSON, OK};
+use crate::class::{level_exp, CLASS_ABBREVS, PC_CLASS_TYPES};
+use crate::config::{LOAD_INTO_INVENTORY, NOPERSON, OK};
 use crate::constants::{
     ACTION_BITS, AFFECTED_BITS, APPLY_TYPES, CONNECTED_TYPES, CONTAINER_BITS, DEX_APP, DIRS,
     DRINKS, EXIT_BITS, EXTRA_BITS, GENDERS, INT_APP, ITEM_TYPES, NPC_CLASS_TYPES, PLAYER_BITS,
     POSITION_TYPES, PREFERENCE_BITS, ROOM_BITS, SECTOR_TYPES, WEAR_BITS, WIS_APP,
 };
 use crate::db::{
-    clear_char, store_to_char, vnum_mobile, vnum_object, DB, FASTBOOT_FILE, KILLSCRIPT_FILE,
-    PAUSE_FILE,
+    clear_char, parse_c_string, store_to_char, vnum_mobile, vnum_object, DB, FASTBOOT_FILE,
+    KILLSCRIPT_FILE, PAUSE_FILE, REAL,
 };
-use crate::fight::ATTACK_HIT_TEXT;
-use crate::handler::{get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::fight::{update_pos, ATTACK_HIT_TEXT};
+use crate::handler::{affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::interpreter::{
-    command_interpreter, half_chop, is_abbrev, one_argument, two_arguments, SCMD_EMOTE,
-    SCMD_SHUTDOWN,
+    command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
+    search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_POOFIN, SCMD_POOFOUT, SCMD_SHUTDOWN,
 };
 use crate::limits::{gain_exp_regardless, hit_gain, mana_gain, move_gain};
 use crate::screen::{C_NRM, KCYN, KGRN, KNRM, KNUL, KYEL};
 use crate::spell_parser::skill_name;
-use crate::structs::ConState::{ConDisconnect, ConPlaying};
+use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
     CharData, CharFileU, ObjData, RoomRnum, AFF_HIDE, AFF_INVISIBLE, DRUNK, FULL, ITEM_ARMOR,
     ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY,
-    ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_GRGOD,
-    LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PRF_COLOR_1,
-    PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, ROOM_GODROOM,
-    ROOM_HOUSE, ROOM_PRIVATE, THIRST,
+    ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_GOD,
+    LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE,
+    NUM_OF_DIRS, NUM_WEARS, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT,
+    PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, ROOM_GODROOM, ROOM_HOUSE,
+    ROOM_PRIVATE, THIRST,
 };
-use crate::util::{sprintbit, sprinttype, touch};
+use crate::util::{ctime, sprintbit, sprinttype, time_now, touch, BRF, NRM};
 use crate::{
-    _clrlevel, clr, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_ROOM,
-    TO_VICT,
+    _clrlevel, clr, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_NOTVICT,
+    TO_ROOM, TO_VICT,
 };
 
 #[allow(unused_variables)]
@@ -1894,197 +1897,310 @@ pub fn do_return(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     }
 }
 
-// ACMD(do_load)
-// {
-// char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-//
-// two_arguments(argument, buf, buf2);
-//
-// if (!*buf || !*buf2 || !isdigit(*buf2)) {
-// send_to_char(ch, "Usage: load { obj | mob } <number>\r\n");
-// return;
-// }
-// if (!is_number(buf2)) {
-// send_to_char(ch, "That is not a number.\r\n");
-// return;
-// }
-//
-// if (is_abbrev(buf, "mob")) {
-// struct char_data *mob;
-// mob_rnum r_num;
-//
-// if ((r_num = real_mobile(atoi(buf2))) == NOBODY) {
-// send_to_char(ch, "There is no monster with that number.\r\n");
-// return;
-// }
-// mob = read_mobile(r_num, REAL);
-// char_to_room(mob, IN_ROOM(ch));
-//
-// act("$n makes a quaint, magical gesture with one hand.", true, ch,
-// 0, 0, TO_ROOM);
-// act("$n has created $N!", false, ch, 0, mob, TO_ROOM);
-// act("You create $N.", false, ch, 0, mob, TO_CHAR);
-// } else if (is_abbrev(buf, "obj")) {
-// struct obj_data *obj;
-// obj_rnum r_num;
-//
-// if ((r_num = real_object(atoi(buf2))) == NOTHING) {
-// send_to_char(ch, "There is no object with that number.\r\n");
-// return;
-// }
-// obj = read_object(r_num, REAL);
-// if (load_into_inventory)
-// obj_to_char(obj, ch);
-// else
-// obj_to_room(obj, IN_ROOM(ch));
-// act("$n makes a strange magical gesture.", true, ch, 0, 0, TO_ROOM);
-// act("$n has created $p!", false, ch, obj, 0, TO_ROOM);
-// act("You create $p.", false, ch, obj, 0, TO_CHAR);
-// } else
-// send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
-// }
-//
-//
-//
-// ACMD(do_vstat)
-// {
-// char buf[MAX_INPUT_LENGTH], buf2[MAX_INPUT_LENGTH];
-//
-// two_arguments(argument, buf, buf2);
-//
-// if (!*buf || !*buf2 || !isdigit(*buf2)) {
-// send_to_char(ch, "Usage: vstat { obj | mob } <number>\r\n");
-// return;
-// }
-// if (!is_number(buf2)) {
-// send_to_char(ch, "That's not a valid number.\r\n");
-// return;
-// }
-//
-// if (is_abbrev(buf, "mob")) {
-// struct char_data *mob;
-// mob_rnum r_num;
-//
-// if ((r_num = real_mobile(atoi(buf2))) == NOBODY) {
-// send_to_char(ch, "There is no monster with that number.\r\n");
-// return;
-// }
-// mob = read_mobile(r_num, REAL);
-// char_to_room(mob, 0);
-// do_stat_character(ch, mob);
-// extract_char(mob);
-// } else if (is_abbrev(buf, "obj")) {
-// struct obj_data *obj;
-// obj_rnum r_num;
-//
-// if ((r_num = real_object(atoi(buf2))) == NOTHING) {
-// send_to_char(ch, "There is no object with that number.\r\n");
-// return;
-// }
-// obj = read_object(r_num, REAL);
-// do_stat_object(ch, obj);
-// extract_obj(obj);
-// } else
-// send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
-// }
-//
-//
-//
-//
-// /* clean a room of all mobiles and objects */
-// ACMD(do_purge)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// struct obj_data *obj;
-//
-// one_argument(argument, buf);
-//
-// /* argument supplied. destroy single object or char */
-// if (*buf) {
-// if ((vict = get_char_vis(ch, buf, None, FIND_CHAR_ROOM)) != None) {
-// if (!IS_NPC(vict) && (GET_LEVEL(ch) <= GET_LEVEL(vict))) {
-// send_to_char(ch, "Fuuuuuuuuu!\r\n");
-// return;
-// }
-// act("$n disintegrates $N.", false, ch, 0, vict, TO_NOTVICT);
-//
-// if (!IS_NPC(vict)) {
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s has purged %s.", GET_NAME(ch), GET_NAME(vict));
-// if (vict->desc) {
-// STATE(vict->desc) = CON_CLOSE;
-// vict->desc->character = None;
-// vict->desc = None;
-// }
-// }
-// extract_char(vict);
-// } else if ((obj = get_obj_in_list_vis(ch, buf, None, world[IN_ROOM(ch)].contents)) != None) {
-// act("$n destroys $p.", false, ch, obj, 0, TO_ROOM);
-// extract_obj(obj);
-// } else {
-// send_to_char(ch, "Nothing here by that name.\r\n");
-// return;
-// }
-//
-// send_to_char(ch, "%s", OK);
-// } else {			/* no argument. clean out the room */
-// int i;
-//
-// act("$n gestures... You are surrounded by scorching flames!",
-// false, ch, 0, 0, TO_ROOM);
-// send_to_room(IN_ROOM(ch), "The world seems a little cleaner.\r\n");
-//
-// for (vict = world[IN_ROOM(ch)].people; vict; vict = vict->next_in_room) {
-// if (!IS_NPC(vict))
-// continue;
-//
-// /* Dump inventory. */
-// while (vict->carrying)
-// extract_obj(vict->carrying);
-//
-// /* Dump equipment. */
-// for (i = 0; i < NUM_WEARS; i++)
-// if (GET_EQ(vict, i))
-// extract_obj(GET_EQ(vict, i));
-//
-// /* Dump character. */
-// extract_char(vict);
-// }
-//
-// /* Clear the ground. */
-// while (world[IN_ROOM(ch)].contents)
-// extract_obj(world[IN_ROOM(ch)].contents);
-// }
-// }
-//
-//
-//
-// const char *logtypes[] = {
-// "off", "brief", "normal", "complete", "\n"
-// };
-//
-// ACMD(do_syslog)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// int tp;
-//
-// one_argument(argument, arg);
-// if (!*arg) {
-// send_to_char(ch, "Your syslog is currently %s.\r\n",
-// logtypes[(PRF_FLAGGED(ch, PRF_LOG1) ? 1 : 0) + (PRF_FLAGGED(ch, PRF_LOG2) ? 2 : 0)]);
-// return;
-// }
-// if (((tp = search_block(arg, logtypes, false)) == -1)) {
-// send_to_char(ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
-// return;
-// }
-// REMOVE_BIT(PRF_FLAGS(ch), PRF_LOG1 | PRF_LOG2);
-// SET_BIT(PRF_FLAGS(ch), (PRF_LOG1 * (tp & 1)) | (PRF_LOG2 * (tp & 2) >> 1));
-//
-// send_to_char(ch, "Your syslog is now %s.\r\n", logtypes[tp]);
-// }
-//
-//
+#[allow(unused_variables)]
+pub fn do_load(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+    let mut buf2 = String::new();
+
+    two_arguments(argument, &mut buf, &mut buf2);
+
+    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
+        send_to_char(ch, "Usage: load { obj | mob } <number>\r\n");
+        return;
+    }
+    if !is_number(&buf2) {
+        send_to_char(ch, "That is not a number.\r\n");
+        return;
+    }
+
+    if is_abbrev(&buf, "mob") {
+        let r_num;
+
+        if {
+            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num == NOBODY
+        } {
+            send_to_char(ch, "There is no monster with that number.\r\n");
+            return;
+        }
+        let mob = db.read_mobile(r_num, REAL);
+        db.char_to_room(mob.as_ref(), ch.in_room());
+
+        db.act(
+            "$n makes a quaint, magical gesture with one hand.",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.act(
+            "$n has created $N!",
+            false,
+            Some(ch),
+            None,
+            Some(mob.as_ref().unwrap()),
+            TO_ROOM,
+        );
+        db.act(
+            "You create $N.",
+            false,
+            Some(ch),
+            None,
+            Some(mob.as_ref().unwrap()),
+            TO_CHAR,
+        );
+    } else if is_abbrev(&buf, "obj") {
+        let r_num;
+
+        if {
+            r_num = db.real_object(buf2.parse::<i16>().unwrap());
+            r_num == NOTHING
+        } {
+            send_to_char(ch, "There is no object with that number.\r\n");
+            return;
+        }
+        let obj = db.read_object(r_num, REAL);
+        if LOAD_INTO_INVENTORY {
+            DB::obj_to_char(obj.as_ref(), Some(ch));
+        } else {
+            db.obj_to_room(obj.as_ref(), ch.in_room());
+        }
+        db.act(
+            "$n makes a strange magical gesture.",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.act(
+            "$n has created $p!",
+            false,
+            Some(ch),
+            obj.as_ref(),
+            None,
+            TO_ROOM,
+        );
+        db.act(
+            "You create $p.",
+            false,
+            Some(ch),
+            obj.as_ref(),
+            None,
+            TO_CHAR,
+        );
+    } else {
+        send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_vstat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+    let mut buf2 = String::new();
+
+    two_arguments(argument, &mut buf, &mut buf2);
+
+    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
+        send_to_char(ch, "Usage: vstat { obj | mob } <number>\r\n");
+        return;
+    }
+    if !is_number(&buf2) {
+        send_to_char(ch, "That's not a valid number.\r\n");
+        return;
+    }
+
+    if is_abbrev(&buf, "mob") {
+        let r_num;
+
+        if {
+            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num == NOBODY
+        } {
+            send_to_char(ch, "There is no monster with that number.\r\n");
+            return;
+        }
+        let mob = db.read_mobile(r_num, REAL);
+        db.char_to_room(mob.as_ref(), 0);
+        do_stat_character(db, ch, mob.as_ref().unwrap());
+        db.extract_char(mob.as_ref().unwrap());
+    } else if is_abbrev(&buf, "obj") {
+        let r_num;
+
+        if {
+            r_num = db.real_object(buf2.parse::<i16>().unwrap());
+            r_num == NOTHING
+        } {
+            send_to_char(ch, "There is no object with that number.\r\n");
+            return;
+        }
+        let obj = db.read_object(r_num, REAL);
+        do_stat_object(db, ch, obj.as_ref().unwrap());
+        db.extract_obj(obj.as_ref().unwrap());
+    } else {
+        send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_purge(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    /* clean a room of all mobiles and objects */
+    let db = &game.db;
+    let mut buf = String::new();
+    one_argument(argument, &mut buf);
+    let vict;
+    let obj;
+    /* argument supplied. destroy single object or char */
+    if !buf.is_empty() {
+        if {
+            vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+            vict.is_some()
+        } {
+            if !vict.as_ref().unwrap().is_npc()
+                && ch.get_level() <= vict.as_ref().unwrap().get_level()
+            {
+                send_to_char(ch, "Fuuuuuuuuu!\r\n");
+                return;
+            }
+            db.act(
+                "$n disintegrates $N.",
+                false,
+                Some(ch),
+                None,
+                Some(vict.as_ref().unwrap()),
+                TO_NOTVICT,
+            );
+            let vict = vict.as_ref().unwrap();
+            if !vict.is_npc() {
+                game.mudlog(
+                    BRF,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
+                );
+                if vict.desc.borrow().is_some() {
+                    vict.desc.borrow().as_ref().unwrap().set_state(ConClose);
+                    *vict.desc.borrow().as_ref().unwrap().character.borrow_mut() = None;
+                    *vict.desc.borrow_mut() = None;
+                }
+            }
+            db.extract_char(vict);
+        } else if {
+            obj = db.get_obj_in_list_vis(
+                ch,
+                &mut buf,
+                None,
+                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            );
+            obj.is_some()
+        } {
+            db.act(
+                "$n destroys $p.",
+                false,
+                Some(ch),
+                obj.as_ref(),
+                None,
+                TO_ROOM,
+            );
+            db.extract_obj(obj.as_ref().unwrap());
+        } else {
+            send_to_char(ch, "Nothing here by that name.\r\n");
+            return;
+        }
+
+        send_to_char(ch, OK);
+    } else {
+        /* no argument. clean out the room */
+
+        db.act(
+            "$n gestures... You are surrounded by scorching flames!",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+        db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
+
+        for vict in db.world.borrow()[ch.in_room() as usize]
+            .peoples
+            .borrow()
+            .iter()
+        {
+            if !vict.is_npc() {
+                continue;
+            }
+
+            /* Dump inventory. */
+            while vict.carrying.borrow().len() > 0 {
+                db.extract_obj(&vict.carrying.borrow()[0].clone());
+            }
+
+            /* Dump equipment. */
+            for i in 0..NUM_WEARS {
+                if vict.get_eq(i).is_some() {
+                    db.extract_obj(vict.get_eq(i).as_ref().unwrap())
+                }
+            }
+
+            /* Dump character. */
+            db.extract_char(vict);
+        }
+
+        /* Clear the ground. */
+        while db.world.borrow()[ch.in_room() as usize]
+            .contents
+            .borrow()
+            .len()
+            > 0
+        {
+            let o = db.world.borrow()[ch.in_room() as usize].contents.borrow()[0].clone();
+            db.extract_obj(&o);
+        }
+    }
+}
+
+const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
+
+#[allow(unused_variables)]
+pub fn do_syslog(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    if arg.is_empty() {
+        send_to_char(
+            ch,
+            format!(
+                "Your syslog is currently {}.\r\n",
+                LOGTYPES[if ch.prf_flagged(PRF_LOG1) { 1 } else { 0 }
+                    + if ch.prf_flagged(PRF_LOG2) { 2 } else { 0 }]
+            )
+            .as_str(),
+        );
+        return;
+    }
+    let tp;
+    if {
+        tp = search_block(&arg, &LOGTYPES, false);
+        tp.is_none()
+    } {
+        send_to_char(ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
+        return;
+    }
+    let tp = tp.unwrap();
+    ch.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
+    ch.set_prf_flags_bits(PRF_LOG1 * (tp & 1) as i64 | PRF_LOG2 * (tp & 2) as i64 >> 1);
+
+    send_to_char(
+        ch,
+        format!("Your syslog is now {}.\r\n", &LOGTYPES[tp]).as_str(),
+    );
+}
+
 #[allow(unused_variables)]
 pub fn do_advance(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut name = String::new();
@@ -2208,45 +2324,61 @@ You feel slightly different.",
     db.save_char(&victim);
 }
 
-// ACMD(do_restore)
-// {
-// char buf[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// int i;
-//
-// one_argument(argument, buf);
-// if (!*buf)
-// send_to_char(ch, "Whom do you wish to restore?\r\n");
-// else if (!(vict = get_char_vis(ch, buf, None, FIND_CHAR_WORLD)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (!IS_NPC(vict) && ch != vict && GET_LEVEL(vict) >= GET_LEVEL(ch))
-// send_to_char(ch, "They don't need your help.\r\n");
-// else {
-// GET_HIT(vict) = GET_MAX_HIT(vict);
-// GET_MANA(vict) = GET_MAX_MANA(vict);
-// GET_MOVE(vict) = GET_MAX_MOVE(vict);
-//
-// if (!IS_NPC(vict) && GET_LEVEL(ch) >= LVL_GRGOD) {
-// if (GET_LEVEL(vict) >= LVL_IMMORT)
-// for (i = 1; i <= MAX_SKILLS; i++)
-// SET_SKILL(vict, i, 100);
-//
-// if (GET_LEVEL(vict) >= LVL_GRGOD) {
-// vict->real_abils.str_add = 100;
-// vict->real_abils.intel = 25;
-// vict->real_abils.wis = 25;
-// vict->real_abils.dex = 25;
-// vict->real_abils.str = 25;
-// vict->real_abils.con = 25;
-// vict->real_abils.cha = 25;
-// }
-// }
-// update_pos(vict);
-// affect_total(vict);
-// send_to_char(ch, "%s", OK);
-// act("You have been fully healed by $N!", false, vict, 0, ch, TO_CHAR);
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_restore(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut buf = String::new();
+
+    one_argument(argument, &mut buf);
+    let vict;
+    if buf.is_empty() {
+        send_to_char(ch, "Whom do you wish to restore?\r\n");
+    } else if {
+        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict.is_none()
+    } {
+        send_to_char(ch, NOPERSON);
+    } else if !vict.as_ref().unwrap().is_npc()
+        && !Rc::ptr_eq(ch, vict.as_ref().unwrap())
+        && vict.as_ref().unwrap().get_level() >= ch.get_level()
+    {
+        send_to_char(ch, "They don't need your help.\r\n");
+    } else {
+        let vict = vict.as_ref().unwrap();
+        vict.set_hit(vict.get_max_hit());
+        vict.set_mana(vict.get_max_mana());
+        vict.set_move(vict.get_move());
+
+        if !vict.is_npc() && ch.get_level() >= LVL_GRGOD as u8 {
+            if vict.get_level() >= LVL_IMMORT as u8 {
+                for i in 1..MAX_SKILLS + 1 {
+                    vict.set_skill(i as i32, 100);
+                }
+            }
+
+            if vict.get_level() >= LVL_GRGOD as u8 {
+                vict.real_abils.borrow_mut().str_add = 100;
+                vict.real_abils.borrow_mut().intel = 25;
+                vict.real_abils.borrow_mut().wis = 25;
+                vict.real_abils.borrow_mut().dex = 25;
+                vict.real_abils.borrow_mut().str = 25;
+                vict.real_abils.borrow_mut().con = 25;
+                vict.real_abils.borrow_mut().cha = 25;
+            }
+        }
+        update_pos(vict);
+        affect_total(vict);
+        send_to_char(ch, OK);
+        db.act(
+            "You have been fully healed by $N!",
+            false,
+            Some(vict),
+            None,
+            Some(ch),
+            TO_CHAR,
+        );
+    }
+}
 
 pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
     if ch.get_invis_lev() == 0 && !ch.aff_flagged(AFF_HIDE | AFF_INVISIBLE) {
@@ -2260,389 +2392,582 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
     send_to_char(ch, "You are now fully visible.\r\n");
 }
 
-// void perform_immort_invis(struct char_data *ch, int level)
-// {
-// struct char_data *tch;
-//
-// for (tch = world[IN_ROOM(ch)].people; tch; tch = tch->next_in_room) {
-// if (tch == ch)
-// continue;
-// if (GET_LEVEL(tch) >= GET_INVIS_LEV(ch) && GET_LEVEL(tch) < level)
-// act("You blink and suddenly realize that $n is gone.", false, ch, 0,
-// tch, TO_VICT);
-// if (GET_LEVEL(tch) < GET_INVIS_LEV(ch) && GET_LEVEL(tch) >= level)
-// act("You suddenly realize that $n is standing beside you.", false, ch, 0,
-// tch, TO_VICT);
-// }
-//
-// GET_INVIS_LEV(ch) = level;
-// send_to_char(ch, "Your invisibility level is %d.\r\n", level);
-// }
-//
-//
-// ACMD(do_invis)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// int level;
-//
-// if (IS_NPC(ch)) {
-// send_to_char(ch, "You can't do that!\r\n");
-// return;
-// }
-//
-// one_argument(argument, arg);
-// if (!*arg) {
-// if (GET_INVIS_LEV(ch) > 0)
-// perform_immort_vis(ch);
-// else
-// perform_immort_invis(ch, GET_LEVEL(ch));
-// } else {
-// level = atoi(arg);
-// if (level > GET_LEVEL(ch))
-// send_to_char(ch, "You can't go invisible above your own level.\r\n");
-// else if (level < 1)
-// perform_immort_vis(ch);
-// else
-// perform_immort_invis(ch, level);
-// }
-// }
-//
-//
-// ACMD(do_gecho)
-// {
-// struct descriptor_data *pt;
-//
-// skip_spaces(&argument);
-// delete_doubledollar(argument);
-//
-// if (!*argument)
-// send_to_char(ch, "That must be a mistake...\r\n");
-// else {
-// for (pt = descriptor_list; pt; pt = pt->next)
-// if (STATE(pt) == CON_PLAYING && pt->character && pt->character != ch)
-// send_to_char(pt->character, "%s\r\n", argument);
-//
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// else
-// send_to_char(ch, "%s\r\n", argument);
-// }
-// }
-//
-//
-// ACMD(do_poofset)
-// {
-// char **msg;
-//
-// switch (subcmd) {
-// case SCMD_POOFIN:    msg = &(POOFIN(ch));    break;
-// case SCMD_POOFOUT:   msg = &(POOFOUT(ch));   break;
-// default:    return;
-// }
-//
-// skip_spaces(&argument);
-//
-// if (*msg)
-// free(*msg);
-//
-// if (!*argument)
-// *msg = None;
-// else
-// *msg = strdup(argument);
-//
-// send_to_char(ch, "%s", OK);
-// }
-//
-//
-//
-// ACMD(do_dc)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct descriptor_data *d;
-// int num_to_dc;
-//
-// one_argument(argument, arg);
-// if (!(num_to_dc = atoi(arg))) {
-// send_to_char(ch, "Usage: DC <user number> (type USERS for a list)\r\n");
-// return;
-// }
-// for (d = descriptor_list; d && d->desc_num != num_to_dc; d = d->next);
-//
-// if (!d) {
-// send_to_char(ch, "No such connection.\r\n");
-// return;
-// }
-// if (d->character && GET_LEVEL(d->character) >= GET_LEVEL(ch)) {
-// if (!CAN_SEE(ch, d->character))
-// send_to_char(ch, "No such connection.\r\n");
-// else
-// send_to_char(ch, "Umm.. maybe that's not such a good idea...\r\n");
-// return;
-// }
-//
-// /* We used to just close the socket here using close_socket(), but
-//  * various people pointed out this could cause a crash if you're
-//  * closing the person below you on the descriptor list.  Just setting
-//  * to CON_CLOSE leaves things in a massively inconsistent state so I
-//  * had to add this new flag to the descriptor. -je
-//  *
-//  * It is a much more logical extension for a CON_DISCONNECT to be used
-//  * for in-game socket closes and CON_CLOSE for out of game closings.
-//  * This will retain the stability of the close_me hack while being
-//  * neater in appearance. -gg 12/1/97
-//  *
-//  * For those unlucky souls who actually manage to get disconnected
-//  * by two different immortals in the same 1/10th of a second, we have
-//  * the below 'if' check. -gg 12/17/99
-//  */
-// if (STATE(d) == CON_DISCONNECT || STATE(d) == CON_CLOSE)
-// send_to_char(ch, "They're already being disconnected.\r\n");
-// else {
-// /*
-//  * Remember that we can disconnect people not in the game and
-//  * that rather confuses the code when it expected there to be
-//  * a character context.
-//  */
-// if (STATE(d) == CON_PLAYING)
-// STATE(d) = CON_DISCONNECT;
-// else
-// STATE(d) = CON_CLOSE;
-//
-// send_to_char(ch, "Connection #%d closed.\r\n", num_to_dc);
-// log("(GC) Connection closed by %s.", GET_NAME(ch));
-// }
-// }
-//
-//
-//
-// ACMD(do_wizlock)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// int value;
-// const char *when;
-//
-// one_argument(argument, arg);
-// if (*arg) {
-// value = atoi(arg);
-// if (value < 0 || value > GET_LEVEL(ch)) {
-// send_to_char(ch, "Invalid wizlock value.\r\n");
-// return;
-// }
-// circle_restrict = value;
-// when = "now";
-// } else
-// when = "currently";
-//
-// switch (circle_restrict) {
-// case 0:
-// send_to_char(ch, "The game is %s completely open.\r\n", when);
-// break;
-// case 1:
-// send_to_char(ch, "The game is %s closed to new players.\r\n", when);
-// break;
-// default:
-// send_to_char(ch, "Only level %d and above may enter the game %s.\r\n", circle_restrict, when);
-// break;
-// }
-// }
-//
-//
-// ACMD(do_date)
-// {
-// char *tmstr;
-// time_t mytime;
-// int d, h, m;
-//
-// if (subcmd == SCMD_DATE)
-// mytime = time(0);
-// else
-// mytime = boot_time;
-//
-// tmstr = (char *) asctime(localtime(&mytime));
-// *(tmstr + strlen(tmstr) - 1) = '\0';
-//
-// if (subcmd == SCMD_DATE)
-// send_to_char(ch, "Current machine time: %s\r\n", tmstr);
-// else {
-// mytime = time(0) - boot_time;
-// d = mytime / 86400;
-// h = (mytime / 3600) % 24;
-// m = (mytime / 60) % 60;
-//
-// send_to_char(ch, "Up since %s: %d day%s, %d:%02d\r\n", tmstr, d, d == 1 ? "" : "s", h, m);
-// }
-// }
-//
-//
-//
-// ACMD(do_last)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_file_u chdata;
-//
-// one_argument(argument, arg);
-// if (!*arg) {
-// send_to_char(ch, "For whom do you wish to search?\r\n");
-// return;
-// }
-// if (load_char(arg, &chdata) < 0) {
-// send_to_char(ch, "There is no such player.\r\n");
-// return;
-// }
-// if ((chdata.level > GET_LEVEL(ch)) && (GET_LEVEL(ch) < LVL_IMPL)) {
-// send_to_char(ch, "You are not sufficiently godly for that!\r\n");
-// return;
-// }
-// send_to_char(ch, "[%5ld] [%2d %s] %-12s : %-18s : %-20s\r\n",
-// chdata.char_specials_saved.idnum, chdata.level,
-// class_abbrevs[(int) chdata.chclass], chdata.name, chdata.host,
-// ctime(&chdata.last_logon));
-// }
-//
-//
-// ACMD(do_force)
-// {
-// struct descriptor_data *i, *next_desc;
-// struct char_data *vict, *next_force;
-// char arg[MAX_INPUT_LENGTH], to_force[MAX_INPUT_LENGTH], buf1[MAX_INPUT_LENGTH + 32];
-//
-// half_chop(argument, arg, to_force);
-//
-// snprintf(buf1, sizeof(buf1), "$n has forced you to '%s'.", to_force);
-//
-// if (!*arg || !*to_force)
-// send_to_char(ch, "Whom do you wish to force do what?\r\n");
-// else if ((GET_LEVEL(ch) < LVL_GRGOD) || (str_cmp("all", arg) && str_cmp("room", arg))) {
-// if (!(vict = get_char_vis(ch, arg, None, FIND_CHAR_WORLD)))
-// send_to_char(ch, "%s", NOPERSON);
-// else if (!IS_NPC(vict) && GET_LEVEL(ch) <= GET_LEVEL(vict))
-// send_to_char(ch, "No, no, no!\r\n");
-// else {
-// send_to_char(ch, "%s", OK);
-// act(buf1, true, ch, None, vict, TO_VICT);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced %s to %s", GET_NAME(ch), GET_NAME(vict), to_force);
-// command_interpreter(vict, to_force);
-// }
-// } else if (!str_cmp("room", arg)) {
-// send_to_char(ch, "%s", OK);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced room %d to %s",
-// GET_NAME(ch), GET_ROOM_VNUM(IN_ROOM(ch)), to_force);
-//
-// for (vict = world[IN_ROOM(ch)].people; vict; vict = next_force) {
-// next_force = vict->next_in_room;
-// if (!IS_NPC(vict) && GET_LEVEL(vict) >= GET_LEVEL(ch))
-// continue;
-// act(buf1, true, ch, None, vict, TO_VICT);
-// command_interpreter(vict, to_force);
-// }
-// } else { /* force all */
-// send_to_char(ch, "%s", OK);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s forced all to %s", GET_NAME(ch), to_force);
-//
-// for (i = descriptor_list; i; i = next_desc) {
-// next_desc = i->next;
-//
-// if (STATE(i) != CON_PLAYING || !(vict = i->character) || (!IS_NPC(vict) && GET_LEVEL(vict) >= GET_LEVEL(ch)))
-// continue;
-// act(buf1, true, ch, None, vict, TO_VICT);
-// command_interpreter(vict, to_force);
-// }
-// }
-// }
-//
-//
-//
-// ACMD(do_wiznet)
-// {
-// char buf1[MAX_INPUT_LENGTH + MAX_NAME_LENGTH + 32],
-// buf2[MAX_INPUT_LENGTH + MAX_NAME_LENGTH + 32];
-// struct descriptor_data *d;
-// char emote = false;
-// char any = false;
-// int level = LVL_IMMORT;
-//
-// skip_spaces(&argument);
-// delete_doubledollar(argument);
-//
-// if (!*argument) {
-// send_to_char(ch, "Usage: wiznet <text> | #<level> <text> | *<emotetext> |\r\n        wiznet @<level> *<emotetext> | wiz @\r\n");
-// return;
-// }
-// switch (*argument) {
-// case '*':
-// emote = true;
-// case '#':
-// one_argument(argument + 1, buf1);
-// if (is_number(buf1)) {
-// half_chop(argument+1, buf1, argument);
-// level = MAX(atoi(buf1), LVL_IMMORT);
-// if (level > GET_LEVEL(ch)) {
-// send_to_char(ch, "You can't wizline above your own level.\r\n");
-// return;
-// }
-// } else if (emote)
-// argument++;
-// break;
-//
-// case '@':
-// send_to_char(ch, "God channel status:\r\n");
-// for (any = 0, d = descriptor_list; d; d = d->next) {
-// if (STATE(d) != CON_PLAYING || GET_LEVEL(d->character) < LVL_IMMORT)
-// continue;
-// if (!CAN_SEE(ch, d->character))
-// continue;
-//
-// send_to_char(ch, "  %-*s%s%s%s\r\n", MAX_NAME_LENGTH, GET_NAME(d->character),
-// PLR_FLAGGED(d->character, PLR_WRITING) ? " (Writing)" : "",
-// PLR_FLAGGED(d->character, PLR_MAILING) ? " (Writing mail)" : "",
-// PRF_FLAGGED(d->character, PRF_NOWIZ) ? " (Offline)" : "");
-// }
-// return;
-//
-// case '\\':
-// ++argument;
-// break;
-// default:
-// break;
-// }
-// if (PRF_FLAGGED(ch, PRF_NOWIZ)) {
-// send_to_char(ch, "You are offline!\r\n");
-// return;
-// }
-// skip_spaces(&argument);
-//
-// if (!*argument) {
-// send_to_char(ch, "Don't bother the gods like that!\r\n");
-// return;
-// }
-// if (level > LVL_IMMORT) {
-// snprintf(buf1, sizeof(buf1), "%s: <%d> %s%s\r\n", GET_NAME(ch), level, emote ? "<--- " : "", argument);
-// snprintf(buf2, sizeof(buf1), "Someone: <%d> %s%s\r\n", level, emote ? "<--- " : "", argument);
-// } else {
-// snprintf(buf1, sizeof(buf1), "%s: %s%s\r\n", GET_NAME(ch), emote ? "<--- " : "", argument);
-// snprintf(buf2, sizeof(buf1), "Someone: %s%s\r\n", emote ? "<--- " : "", argument);
-// }
-//
-// for (d = descriptor_list; d; d = d->next) {
-// if ((STATE(d) == CON_PLAYING) && (GET_LEVEL(d->character) >= level) &&
-// (!PRF_FLAGGED(d->character, PRF_NOWIZ)) &&
-// (!PLR_FLAGGED(d->character, PLR_WRITING | PLR_MAILING))
-// && (d != ch->desc || !(PRF_FLAGGED(d->character, PRF_NOREPEAT)))) {
-// send_to_char(d->character, "%s", CCCYN!(d->character, C_NRM));
-// if (CAN_SEE(d->character, ch))
-// send_to_char(d->character, "%s", buf1);
-// else
-// send_to_char(d->character, "%s", buf2);
-// send_to_char(d->character, "%s", CCNRM!(d->character, C_NRM));
-// }
-// }
-//
-// if (PRF_FLAGGED(ch, PRF_NOREPEAT))
-// send_to_char(ch, "%s", OK);
-// }
-//
-//
-//
+fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
+    for tch in db.world.borrow()[ch.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if Rc::ptr_eq(tch, ch) {
+            continue;
+        }
+        if tch.get_level() >= ch.get_invis_lev() as u8 && tch.get_level() < level as u8 {
+            db.act(
+                "You blink and suddenly realize that $n is gone.",
+                false,
+                Some(ch),
+                None,
+                Some(tch),
+                TO_VICT,
+            );
+        }
+        if tch.get_level() < ch.get_invis_lev() as u8 && tch.get_level() >= level as u8 {
+            db.act(
+                "You suddenly realize that $n is standing beside you.",
+                false,
+                Some(ch),
+                None,
+                Some(tch),
+                TO_VICT,
+            );
+        }
+    }
+
+    ch.set_invis_lev(level as i16);
+    send_to_char(
+        ch,
+        format!("Your invisibility level is {}.\r\n", level).as_str(),
+    );
+}
+
+#[allow(unused_variables)]
+pub fn do_invis(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    if ch.is_npc() {
+        send_to_char(ch, "You can't do that!\r\n");
+        return;
+    }
+
+    one_argument(argument, &mut arg);
+    if arg.is_empty() {
+        if ch.get_invis_lev() > 0 {
+            perform_immort_vis(db, ch);
+        } else {
+            perform_immort_invis(db, ch, ch.get_level() as i32);
+        }
+    } else {
+        let level = arg.parse::<i32>();
+        let level = if level.is_err() { 0 } else { level.unwrap() };
+        if level > ch.get_level() as i32 {
+            send_to_char(ch, "You can't go invisible above your own level.\r\n");
+        } else if level < 1 {
+            perform_immort_vis(db, ch);
+        } else {
+            perform_immort_invis(db, ch, level);
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_gecho(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+
+    let mut argument = argument.trim_start().to_string();
+    delete_doubledollar(&mut argument);
+
+    if argument.is_empty() {
+        send_to_char(ch, "That must be a mistake...\r\n");
+    } else {
+        for pt in game.descriptor_list.borrow().iter() {
+            if pt.state() == ConPlaying
+                && pt.character.borrow().is_some()
+                && !Rc::ptr_eq(pt.character.borrow().as_ref().unwrap(), ch)
+            {
+                send_to_char(
+                    pt.character.borrow().as_ref().unwrap(),
+                    format!("{}\r\n", argument).as_str(),
+                );
+            }
+        }
+        if ch.prf_flagged(PRF_NOREPEAT) {
+            send_to_char(ch, OK);
+        } else {
+            send_to_char(ch, format!("{}\r\n", argument).as_str());
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_poofset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let msg;
+    let mut cps = ch.player_specials.borrow_mut();
+    match subcmd {
+        SCMD_POOFIN => {
+            msg = &mut cps.poofin;
+        }
+        SCMD_POOFOUT => {
+            msg = &mut cps.poofout;
+        }
+        _ => {
+            return;
+        }
+    }
+
+    let argument = argument.trim_start();
+
+    *msg = Rc::from(argument.clone());
+
+    send_to_char(ch, OK);
+}
+
+#[allow(unused_variables)]
+pub fn do_dc(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    let num_to_dc = arg.parse::<u32>();
+    if num_to_dc.is_err() {
+        send_to_char(ch, "Usage: DC <user number> (type USERS for a list)\r\n");
+        return;
+    }
+    let num_to_dc = num_to_dc.unwrap();
+    let mut d = None;
+    {
+        let gdl = game.descriptor_list.borrow();
+        for cd in gdl.iter() {
+            if cd.desc_num.get() == num_to_dc as usize {
+                d = Some(cd.clone());
+            }
+        }
+    }
+
+    if d.is_none() {
+        send_to_char(ch, "No such connection.\r\n");
+        return;
+    }
+    let d = d.as_ref().unwrap();
+    if d.character.borrow().is_some()
+        && d.character.borrow().as_ref().unwrap().get_level() >= ch.get_level()
+    {
+        if !db.can_see(ch, d.character.borrow().as_ref().unwrap()) {
+            send_to_char(ch, "No such connection.\r\n");
+        } else {
+            send_to_char(ch, "Umm.. maybe that's not such a good idea...\r\n");
+        }
+        return;
+    }
+
+    /* We used to just close the socket here using close_socket(), but
+     * various people pointed out this could cause a crash if you're
+     * closing the person below you on the descriptor list.  Just setting
+     * to CON_CLOSE leaves things in a massively inconsistent state so I
+     * had to add this new flag to the descriptor. -je
+     *
+     * It is a much more logical extension for a CON_DISCONNECT to be used
+     * for in-game socket closes and CON_CLOSE for out of game closings.
+     * This will retain the stability of the close_me hack while being
+     * neater in appearance. -gg 12/1/97
+     *
+     * For those unlucky souls who actually manage to get disconnected
+     * by two different immortals in the same 1/10th of a second, we have
+     * the below 'if' check. -gg 12/17/99
+     */
+    if d.state() == ConDisconnect || d.state() == ConClose {
+        send_to_char(ch, "They're already being disconnected.\r\n");
+    } else {
+        /*
+         * Remember that we can disconnect people not in the game and
+         * that rather confuses the code when it expected there to be
+         * a character context.
+         */
+        if d.state() == ConPlaying {
+            d.set_state(ConDisconnect);
+        } else {
+            d.set_state(ConClose);
+        }
+        send_to_char(
+            ch,
+            format!("Connection #{} closed.\r\n", num_to_dc).as_str(),
+        );
+        info!("(GC) Connection closed by {}.", ch.get_name());
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_wizlock(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+    let value;
+    one_argument(argument, &mut arg);
+    let when;
+    if !arg.is_empty() {
+        value = arg.parse::<i32>();
+        let value = if value.is_err() { -1 } else { value.unwrap() };
+        if value < 0 || value > ch.get_level() as i32 {
+            send_to_char(ch, "Invalid wizlock value.\r\n");
+            return;
+        }
+        game.db.circle_restrict.set(value as u8);
+        when = "now";
+    } else {
+        when = "currently";
+    }
+
+    match game.db.circle_restrict.get() {
+        0 => {
+            send_to_char(
+                ch,
+                format!("The game is {} completely open.\r\n", when).as_str(),
+            );
+        }
+        1 => {
+            send_to_char(
+                ch,
+                format!("The game is {} closed to new players.\r\n", when).as_str(),
+            );
+        }
+        _ => {
+            send_to_char(
+                ch,
+                format!(
+                    "Only level {} and above may enter the game {}.\r\n",
+                    game.db.circle_restrict.get(),
+                    when
+                )
+                .as_str(),
+            );
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_date(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mytime;
+    if subcmd == SCMD_DATE {
+        mytime = time_now();
+    } else {
+        mytime = game.db.boot_time.get() as u64;
+    }
+
+    let date_time = Utc.timestamp_millis_opt(mytime as i64).unwrap();
+    let tmstr = date_time.to_rfc2822();
+
+    if subcmd == SCMD_DATE {
+        send_to_char(ch, format!("Current machine time: {}\r\n", tmstr).as_str());
+    } else {
+        let mytime = time_now() - game.db.boot_time.get() as u64;
+        let d = mytime / 86400;
+        let h = (mytime / 3600) % 24;
+        let m = (mytime / 60) % 60;
+
+        send_to_char(
+            ch,
+            format!(
+                "Up since {}: {} day{}, {}:{:2}\r\n",
+                tmstr,
+                d,
+                if d == 1 { "" } else { "s" },
+                h,
+                m
+            )
+            .as_str(),
+        );
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_last(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    if arg.is_empty() {
+        send_to_char(ch, "For whom do you wish to search?\r\n");
+        return;
+    }
+    let mut chdata = CharFileU::new();
+    if db.load_char(&arg, &mut chdata).is_none() {
+        send_to_char(ch, "There is no such player.\r\n");
+        return;
+    }
+    if chdata.level > ch.get_level() && ch.get_level() < LVL_IMPL as u8 {
+        send_to_char(ch, "You are not sufficiently godly for that!\r\n");
+        return;
+    }
+    let id = chdata.char_specials_saved.idnum;
+    send_to_char(
+        ch,
+        format!(
+            "[{:5}] [{:2} {}] {:12} : {:-18} : {:20}\r\n",
+            id,
+            chdata.level,
+            CLASS_ABBREVS[chdata.chclass as usize],
+            parse_c_string(&chdata.name.clone()),
+            parse_c_string(&chdata.host.clone()),
+            ctime(chdata.last_logon)
+        )
+        .as_str(),
+    );
+}
+
+#[allow(unused_variables)]
+pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut argument = argument.to_string();
+    let mut arg = String::new();
+    let mut to_force = String::new();
+
+    half_chop(&mut argument, &mut arg, &mut to_force);
+
+    let buf1 = format!("$n has forced you to '{}'.", to_force);
+    let vict;
+    if arg.is_empty() || to_force.is_empty() {
+        send_to_char(ch, "Whom do you wish to force do what?\r\n");
+    } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
+        if {
+            vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict.is_none()
+        } {
+            send_to_char(ch, NOPERSON);
+        } else if !vict.as_ref().unwrap().is_npc()
+            && ch.get_level() <= vict.as_ref().unwrap().get_level()
+        {
+            send_to_char(ch, "No, no, no!\r\n");
+        } else {
+            let vict = vict.as_ref().unwrap();
+            send_to_char(ch, OK);
+            db.act(&buf1, true, Some(ch), None, Some(vict.as_ref()), TO_VICT);
+            game.mudlog(
+                NRM,
+                max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                true,
+                format!(
+                    "(GC) {} forced {} to {}",
+                    ch.get_name(),
+                    vict.get_name(),
+                    to_force
+                )
+                .as_str(),
+            );
+            command_interpreter(game, vict, &to_force);
+        }
+    } else if arg == "room" {
+        send_to_char(ch, OK);
+        game.mudlog(
+            NRM,
+            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+            true,
+            format!(
+                "(GC) {} forced room {} to {}",
+                ch.get_name(),
+                db.get_room_vnum(ch.in_room()),
+                to_force
+            )
+            .as_str(),
+        );
+        for vict in db.world.borrow()[ch.in_room() as usize]
+            .peoples
+            .borrow()
+            .iter()
+        {
+            if !vict.is_npc() && vict.get_level() >= ch.get_level() {
+                continue;
+            }
+            db.act(&buf1, true, Some(ch), None, Some(vict), TO_VICT);
+            command_interpreter(game, vict, &to_force);
+        }
+    } else {
+        /* force all */
+        send_to_char(ch, OK);
+        game.mudlog(
+            NRM,
+            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+            true,
+            format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
+        );
+        let gdl = game.descriptor_list.borrow();
+        for i in gdl.iter() {
+            let mut vict = None;
+            let ic = i.character.borrow();
+            if i.state() != ConPlaying
+                || {
+                    vict = ic.as_ref().clone();
+                    vict.is_none()
+                }
+                || !vict.as_ref().unwrap().is_npc()
+                    && vict.as_ref().unwrap().get_level() >= ch.get_level()
+            {
+                continue;
+            }
+            db.act(
+                &buf1,
+                true,
+                Some(ch),
+                None,
+                Some(vict.as_ref().unwrap().clone()),
+                TO_VICT,
+            );
+            command_interpreter(game, vict.as_ref().unwrap(), &to_force);
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub fn do_wiznet(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut emote = false;
+    let any = false;
+    let mut level = LVL_IMMORT;
+    let mut buf1 = String::new();
+    let mut argument = argument.trim_start().to_string();
+    delete_doubledollar(&mut argument);
+
+    if argument.is_empty() {
+        send_to_char(ch, "Usage: wiznet <text> | #<level> <text> | *<emotetext> |\r\n        wiznet @<level> *<emotetext> | wiz @\r\n");
+        return;
+    }
+    match argument.chars().next().unwrap() {
+        '*' | '#' => {
+            if argument.remove(0) == '*' {
+                emote = true;
+            }
+            one_argument(&argument, &mut buf1);
+            if is_number(&buf1) {
+                let mut arg_left = argument.clone();
+                half_chop(&mut arg_left, &mut buf1, &mut argument);
+                level = max(buf1.parse::<i16>().unwrap(), LVL_IMMORT);
+                if level > ch.get_level() as i16 {
+                    send_to_char(ch, "You can't wizline above your own level.\r\n");
+                    return;
+                }
+            } else if emote {
+            }
+        }
+
+        '@' => {
+            send_to_char(ch, "God channel status:\r\n");
+            let any = 0;
+            for d in game.descriptor_list.borrow().iter() {
+                if d.state() != ConPlaying
+                    || d.character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
+                {
+                    continue;
+                }
+                if !db.can_see(ch, d.character.borrow().as_ref().unwrap()) {
+                    continue;
+                }
+                let dco = d.character.borrow();
+                let dc = dco.as_ref().unwrap();
+                send_to_char(
+                    ch,
+                    format!(
+                        "  {:20}{}{}{}\r\n",
+                        dc.get_name(),
+                        if dc.plr_flagged(PLR_WRITING) {
+                            " (Writing)"
+                        } else {
+                            ""
+                        },
+                        if dc.plr_flagged(PLR_MAILING) {
+                            " (Writing mail)"
+                        } else {
+                            ""
+                        },
+                        if dc.prf_flagged(PRF_NOWIZ) {
+                            " (Offline)"
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+            }
+            return;
+        }
+
+        '\\' => {
+            argument.remove(0);
+        }
+
+        _ => {}
+    }
+
+    if ch.prf_flagged(PRF_NOWIZ) {
+        send_to_char(ch, "You are offline!\r\n");
+        return;
+    }
+    let argument = argument.trim_start();
+
+    if argument.is_empty() {
+        send_to_char(ch, "Don't bother the gods like that!\r\n");
+        return;
+    }
+    let buf2;
+    if level > LVL_IMMORT {
+        buf1 = format!(
+            "{}: <{}> {}{}\r\n",
+            ch.get_name(),
+            level,
+            if emote { "<--- " } else { "" },
+            argument
+        );
+        buf2 = format!(
+            "Someone: <{}> {}{}\r\n",
+            level,
+            if emote { "<--- " } else { "" },
+            argument
+        );
+    } else {
+        buf1 = format!(
+            "{}: {}{}\r\n",
+            ch.get_name(),
+            if emote { "<--- " } else { "" },
+            argument
+        );
+        buf2 = format!(
+            "Someone: {}{}\r\n",
+            if emote { "<--- " } else { "" },
+            argument
+        );
+    }
+    for d in game.descriptor_list.borrow().iter() {
+        let db = &game.db;
+        if d.state() == ConPlaying
+            && d.character.borrow().as_ref().unwrap().get_level() >= level as u8
+            && !d
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .prf_flagged(PRF_NOWIZ)
+            && !d
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .plr_flagged(PLR_WRITING | PLR_MAILING)
+            && !Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap())
+            || !d
+                .character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .prf_flagged(PRF_NOREPEAT)
+        {
+            send_to_char(
+                d.character.borrow().as_ref().unwrap(),
+                CCCYN!(d.character.borrow().as_ref().unwrap(), C_NRM),
+            );
+            let dco = d.character.borrow();
+            let dc = dco.as_ref().unwrap();
+            if db.can_see(dc, ch) {
+                send_to_char(dc, &buf1);
+            } else {
+                send_to_char(dc, &buf2);
+            }
+            send_to_char(dc, CCNRM!(dc, C_NRM));
+        }
+    }
+
+    if ch.prf_flagged(PRF_NOREPEAT) {
+        send_to_char(ch, OK);
+    }
+}
+
 // ACMD(do_zreset)
 // {
 // char arg[MAX_INPUT_LENGTH];
@@ -3191,14 +3516,14 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.str = value;
-// vict->real_abils.str_add = 0;
+// victreal_abilis.borrow_mut().str = value;
+// victreal_abilis.borrow_mut().str_add = 0;
 // affect_total(vict);
 // break;
 // case 12:
-// vict->real_abils.str_add = RANGE(0, 100);
+// victreal_abilis.borrow_mut().str_add = RANGE(0, 100);
 // if (value > 0)
-// vict->real_abils.str = 18;
+// victreal_abilis.borrow_mut().str = 18;
 // affect_total(vict);
 // break;
 // case 13:
@@ -3206,7 +3531,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.intel = value;
+// victreal_abilis.borrow_mut().intel = value;
 // affect_total(vict);
 // break;
 // case 14:
@@ -3214,7 +3539,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.wis = value;
+// victreal_abilis.borrow_mut().wis = value;
 // affect_total(vict);
 // break;
 // case 15:
@@ -3222,7 +3547,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.dex = value;
+// victreal_abilis.borrow_mut().dex = value;
 // affect_total(vict);
 // break;
 // case 16:
@@ -3230,7 +3555,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.con = value;
+// victreal_abilis.borrow_mut().con = value;
 // affect_total(vict);
 // break;
 // case 17:
@@ -3238,7 +3563,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 // RANGE(3, 25);
 // else
 // RANGE(3, 18);
-// vict->real_abils.cha = value;
+// victreal_abilis.borrow_mut().cha = value;
 // affect_total(vict);
 // break;
 // case 18:

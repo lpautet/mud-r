@@ -225,7 +225,7 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
 
 /* This updates a character by subtracting everything he is affected by */
 /* restoring original abilities, and then affecting all again           */
-fn affect_total(ch: &CharData) {
+pub fn affect_total(ch: &CharData) {
     //struct affected_type *af;
     //int i, j;
 

@@ -42,8 +42,9 @@ use crate::act_other::{
 };
 use crate::act_social::{do_action, do_insult};
 use crate::act_wizard::{
-    do_advance, do_at, do_echo, do_goto, do_return, do_send, do_shutdown, do_snoop, do_stat,
-    do_switch, do_teleport, do_trans, do_vnum,
+    do_advance, do_at, do_date, do_dc, do_echo, do_force, do_gecho, do_goto, do_invis, do_last,
+    do_load, do_poofset, do_purge, do_restore, do_return, do_send, do_shutdown, do_snoop, do_stat,
+    do_switch, do_syslog, do_teleport, do_trans, do_vnum, do_vstat, do_wizlock, do_wiznet,
 };
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
@@ -140,6 +141,10 @@ pub const SCMD_SHUTDOWN: i32 = 1;
 pub const SCMD_QUI: i32 = 0;
 pub const SCMD_QUIT: i32 = 1;
 
+/* do_date */
+pub const SCMD_DATE: i32 = 0;
+pub const SCMD_UPTIME: i32 = 1;
+
 /* do_commands */
 pub const SCMD_COMMANDS: i32 = 0;
 pub const SCMD_SOCIALS: i32 = 1;
@@ -158,6 +163,10 @@ pub const SCMD_IDEA: i32 = 2;
 /* do_pour */
 pub const SCMD_POUR: i32 = 0;
 pub const SCMD_FILL: i32 = 1;
+
+/* do_poof */
+pub const SCMD_POOFIN: i32 = 0;
+pub const SCMD_POOFOUT: i32 = 1;
 
 /* do_hit */
 pub const SCMD_HIT: i32 = 0;
@@ -222,7 +231,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 262] = [
+pub const CMD_INFO: [CommandInfo; 279] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -610,6 +619,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "date"     , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_DATE },
+    CommandInfo {
+        command: "date",
+        minimum_position: POS_DEAD,
+        command_pointer: do_date,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_DATE,
+    },
     // { "daydream" , POS_SLEEPING, do_action   , 0, 0 },
     CommandInfo {
         command: "daydream",
@@ -619,6 +635,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "dc"       , POS_DEAD    , do_dc       , LVL_GOD, 0 },
+    CommandInfo {
+        command: "dc",
+        minimum_position: POS_DEAD,
+        command_pointer: do_dc,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
     // { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
     CommandInfo {
@@ -743,6 +766,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
     },
     //
     // { "force"    , POS_SLEEPING, do_force    , LVL_GOD, 0 },
+    CommandInfo {
+        command: "force",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_force,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "fart"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "fart",
@@ -842,6 +872,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "gecho"    , POS_DEAD    , do_gecho    , LVL_GOD, 0 },
+    CommandInfo {
+        command: "gecho",
+        minimum_position: POS_DEAD,
+        command_pointer: do_gecho,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "give"     , POS_RESTING , do_give     , 0, 0 },
     CommandInfo {
         command: "give",
@@ -1097,6 +1134,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "invis"    , POS_DEAD    , do_invis    , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "invis",
+        minimum_position: POS_DEAD,
+        command_pointer: do_invis,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     //
     // { "junk"     , POS_RESTING , do_drop     , 0, SCMD_JUNK },
     CommandInfo {
@@ -1148,6 +1192,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "last"     , POS_DEAD    , do_last     , LVL_GOD, 0 },
+    CommandInfo {
+        command: "last",
+        minimum_position: POS_DEAD,
+        command_pointer: do_last,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "leave"    , POS_STANDING, do_leave    , 0, 0 },
     CommandInfo {
         command: "leave",
@@ -1189,6 +1240,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: SCMD_LOCK,
     },
     // { "load"     , POS_DEAD    , do_load     , LVL_GOD, 0 },
+    CommandInfo {
+        command: "load",
+        minimum_position: POS_DEAD,
+        command_pointer: do_load,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "love"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "love",
@@ -1440,7 +1498,21 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "poofin"   , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFIN },
+    CommandInfo {
+        command: "poofin",
+        minimum_position: POS_DEAD,
+        command_pointer: do_poofset,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_POOFIN,
+    },
     // { "poofout"  , POS_DEAD    , do_poofset  , LVL_IMMORT, SCMD_POOFOUT },
+    CommandInfo {
+        command: "poofout",
+        minimum_position: POS_DEAD,
+        command_pointer: do_poofset,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_POOFOUT,
+    },
     // { "pour"     , POS_STANDING, do_pour     , 0, SCMD_POUR },
     CommandInfo {
         command: "pour",
@@ -1506,6 +1578,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "purge"    , POS_DEAD    , do_purge    , LVL_GOD, 0 },
+    CommandInfo {
+        command: "purge",
+        minimum_position: POS_DEAD,
+        command_pointer: do_purge,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     //
     // { "quaff"    , POS_RESTING , do_use      , 0, SCMD_QUAFF },
     CommandInfo {
@@ -1610,6 +1689,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "restore"  , POS_DEAD    , do_restore  , LVL_GOD, 0 },
+    CommandInfo {
+        command: "restore",
+        minimum_position: POS_DEAD,
+        command_pointer: do_restore,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "return"   , POS_DEAD    , do_return   , 0, 0 },
     CommandInfo {
         command: "return",
@@ -2008,6 +2094,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "syslog"   , POS_DEAD    , do_syslog   , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "syslog",
+        minimum_position: POS_DEAD,
+        command_pointer: do_syslog,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     //
     // { "tell"     , POS_DEAD    , do_tell     , 0, 0 },
     CommandInfo {
@@ -2167,6 +2260,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
     // { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
     // { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
     // { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
+    CommandInfo {
+        command: "uptime",
+        minimum_position: POS_DEAD,
+        command_pointer: do_date,
+        minimum_level: LVL_IMMORT,
+        subcmd: SCMD_UPTIME,
+    },
     // { "use"      , POS_SITTING , do_use      , 1, SCMD_USE },
     CommandInfo {
         command: "use",
@@ -2210,7 +2310,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: 0,
     },
     // { "vstat"    , POS_DEAD    , do_vstat    , LVL_IMMORT, 0 },
-    //
+    CommandInfo {
+        command: "vstat",
+        minimum_position: POS_DEAD,
+        command_pointer: do_vstat,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "wake"     , POS_SLEEPING, do_wake     , 0, 0 },
     CommandInfo {
         command: "wake",
@@ -2325,7 +2431,21 @@ pub const CMD_INFO: [CommandInfo; 262] = [
     },
     // { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
     // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "wiznet",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wiznet,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "wiznet",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wiznet,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "wizhelp"  , POS_SLEEPING, do_commands , LVL_IMMORT, SCMD_WIZHELP },
     CommandInfo {
         command: "wizhelp",
@@ -2343,6 +2463,13 @@ pub const CMD_INFO: [CommandInfo; 262] = [
         subcmd: SCMD_WIZLIST,
     },
     // { "wizlock"  , POS_DEAD    , do_wizlock  , LVL_IMPL, 0 },
+    CommandInfo {
+        command: "wizlock",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizlock,
+        minimum_level: LVL_IMPL,
+        subcmd: 0,
+    },
     // { "worship"  , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "worship",
@@ -3258,13 +3385,22 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                 //     STATE(d) = CON_CLOSE;
                 //     return;
                 // }
-                // TODO: support restrict
-                // if (circle_restrict) {
-                //     write_to_output(d, "Sorry, new players can't be created at the moment.\r\n");
-                //     mudlog(NRM, LVL_GOD, true, "Request for new char %s denied from [%s] (wizlock)", GET_PC_NAME(d->character), d->host);
-                //     STATE(d) = CON_CLOSE;
-                //     return;
-                // }
+                if db.circle_restrict.get() != 0 {
+                    write_to_output(&d, "Sorry, new players can't be created at the moment.\r\n");
+                    game.mudlog(
+                        NRM,
+                        LVL_GOD as i32,
+                        true,
+                        format!(
+                            "Request for new char {} denied from [{}] (wizlock)",
+                            d.character.borrow().as_ref().unwrap().get_pc_name(),
+                            d.host.borrow()
+                        )
+                        .as_str(),
+                    );
+                    d.set_state(ConClose);
+                    return;
+                }
 
                 let msg = format!(
                     "New character.\r\nGive me a password for {}: ",
@@ -3353,13 +3489,26 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     //     mudlog(NRM, LVL_GOD, true, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
                     //     return;
                     // }
-                    // TODO implement restrict
-                    // if (GET_LEVEL(d->character) < circle_restrict) {
-                    //     write_to_output(d, "The game is temporarily restricted.. try again later.\r\n");
-                    //     STATE(d) = CON_CLOSE;
-                    //     mudlog(NRM, LVL_GOD, true, "Request for login denied for %s [%s] (wizlock)", GET_NAME(d->character), d->host);
-                    //     return;
-                    // }
+                    if d.character.borrow().as_ref().unwrap().get_level() < db.circle_restrict.get()
+                    {
+                        write_to_output(
+                            &d,
+                            "The game is temporarily restricted.. try again later.\r\n",
+                        );
+                        d.set_state(ConClose);
+                        game.mudlog(
+                            NRM,
+                            LVL_GOD as i32,
+                            true,
+                            format!(
+                                "Request for login denied for {} [{}] (wizlock)",
+                                d.character.borrow().as_ref().unwrap().get_name(),
+                                d.host.borrow()
+                            )
+                            .as_str(),
+                        );
+                        return;
+                    }
                 }
                 /* check and make sure no other copies of this player are logged in */
                 if perform_dupe_check(&game, d.clone()) {
