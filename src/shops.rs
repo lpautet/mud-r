@@ -28,10 +28,10 @@ use crate::interpreter::{cmd_is, find_command, is_number, one_argument};
 use crate::modify::page_string;
 use crate::structs::{
     CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, ITEM_DRINKCON, ITEM_STAFF,
-    ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
+    ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING, NOWHERE,
 };
-use crate::util::get_line;
-use crate::{an, is_set, send_to_char, Game, TO_CHAR, TO_ROOM};
+use crate::util::{get_line, sprintbit};
+use crate::{an, is_set, send_to_char, yesno, Game, PAGE_LENGTH, TO_CHAR, TO_ROOM};
 
 pub struct ShopBuyData {
     pub type_: i32,
@@ -322,25 +322,20 @@ pub const MSG_CANT_KILL_KEEPER: &str = "Get out of here before I call the guards
 // "&*",
 // "^'"
 // } ;
-//
-// /* Constant list for printing out who we sell to */
-// const char *trade_letters[] = {
-// "Good",                 /* First, the alignment based ones */
-// "Evil",
-// "Neutral",
-// "Magic User",           /* Then the class based ones */
-// "Cleric",
-// "Thief",
-// "Warrior",
-// "\n"
-// };
-//
-//
-// const char *shop_bits[] = {
-// "WILL_FIGHT",
-// "USES_BANK",
-// "\n"
-// };
+
+/* Constant list for printing out who we sell to */
+const TRADE_LETTERS: [&str; 8] = [
+    "Good", /* First, the alignment based ones */
+    "Evil",
+    "Neutral",
+    "Magic User", /* Then the class based ones */
+    "Cleric",
+    "Thief",
+    "Warrior",
+    "\n",
+];
+
+const SHOP_BITS: [&str; 3] = ["WILL_FIGHT", "USES_BANK", "\n"];
 
 fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
     // char buf[MAX_INPUT_LENGTH];
@@ -426,7 +421,7 @@ fn is_ok(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData)
 // if (S_LEN(stack) > 0)
 // return (S_DATA(stack, --S_LEN(stack)));
 // else {
-// log("SYSERR: Illegal expression %d in shop keyword list.", S_LEN(stack));
+// log("SYSERR: Illegal expression {} in shop keyword list.", S_LEN(stack));
 // return (0);
 // }
 // }
@@ -469,7 +464,7 @@ fn is_ok(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData)
 // int temp, eindex;
 //
 // if (!expr || !*expr)	/* Allows opening ( first. */
-// return (TRUE);
+// return (true);
 //
 // ops.len = vals.len = 0;
 // ptr = expr;
@@ -961,17 +956,17 @@ fn shopping_buy(
 //
 // switch (result) {
 // case OBJECT_NOVAL:
-// snprintf(buf, sizeof(buf), "%s You've got to be kidding, that thing is worthless!", GET_NAME(ch));
+// snprintf(buf, sizeof(buf), "{} You've got to be kidding, that thing is worthless!", GET_NAME(ch));
 // break;
 // case OBJECT_NOTOK:
 // snprintf(buf, sizeof(buf), shop_index[shop_nr].do_not_buy, GET_NAME(ch));
 // break;
 // case OBJECT_DEAD:
-// snprintf(buf, sizeof(buf), "%s %s", GET_NAME(ch), MSG_NO_USED_WANDSTAFF);
+// snprintf(buf, sizeof(buf), "{} {}", GET_NAME(ch), MSG_NO_USED_WANDSTAFF);
 // break;
 // default:
-// log("SYSERR: Illegal return value of %d from trade_with() (%s)", result, __FILE__);	/* Someone might rename it... */
-// snprintf(buf, sizeof(buf), "%s An error has occurred.", GET_NAME(ch));
+// log("SYSERR: Illegal return value of {} from trade_with() ({})", result, __FILE__);	/* Someone might rename it... */
+// snprintf(buf, sizeof(buf), "{} An error has occurred.", GET_NAME(ch));
 // break;
 // }
 // do_tell(keeper, buf, cmd_tell, 0);
@@ -1061,19 +1056,19 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
 // if ((sellnum = transaction_amt(arg)) < 0) {
 // char buf[MAX_INPUT_LENGTH];
 //
-// snprintf(buf, sizeof(buf), "%s A negative amount?  Try buying something.", GET_NAME(ch));
+// snprintf(buf, sizeof(buf), "{} A negative amount?  Try buying something.", GET_NAME(ch));
 // do_tell(keeper, buf, cmd_tell, 0);
 // return;
 // }
 // if (!*arg || !sellnum) {
 // char buf[MAX_INPUT_LENGTH];
 //
-// snprintf(buf, sizeof(buf), "%s What do you want to sell??", GET_NAME(ch));
+// snprintf(buf, sizeof(buf), "{} What do you want to sell??", GET_NAME(ch));
 // do_tell(keeper, buf, cmd_tell, 0);
 // return;
 // }
 // one_argument(arg, name);
-// if (!(obj = get_selling_obj(ch, name, keeper, shop_nr, TRUE)))
+// if (!(obj = get_selling_obj(ch, name, keeper, shop_nr, true)))
 // return;
 //
 // if (GET_GOLD(keeper) + SHOP_BANK(shop_nr) < sell_price(obj, shop_nr, keeper, ch)) {
@@ -1099,24 +1094,24 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
 // char buf[MAX_INPUT_LENGTH];
 //
 // if (!obj)
-// snprintf(buf, sizeof(buf), "%s You only have %d of those.", GET_NAME(ch), sold);
+// snprintf(buf, sizeof(buf), "{} You only have {} of those.", GET_NAME(ch), sold);
 // else if (GET_GOLD(keeper) + SHOP_BANK(shop_nr) < sell_price(obj, shop_nr, keeper, ch))
-// snprintf(buf, sizeof(buf), "%s I can only afford to buy %d of those.", GET_NAME(ch), sold);
+// snprintf(buf, sizeof(buf), "{} I can only afford to buy {} of those.", GET_NAME(ch), sold);
 // else
-// snprintf(buf, sizeof(buf), "%s Something really screwy made me buy %d.", GET_NAME(ch), sold);
+// snprintf(buf, sizeof(buf), "{} Something really screwy made me buy {}.", GET_NAME(ch), sold);
 //
 // do_tell(keeper, buf, cmd_tell, 0);
 // }
 // GET_GOLD(ch) += goldamt;
 //
 // strlcpy(tempstr, times_message(0, name, sold), sizeof(tempstr));
-// snprintf(tempbuf, sizeof(tempbuf), "$n sells %s.", tempstr);
+// snprintf(tempbuf, sizeof(tempbuf), "$n sells {}.", tempstr);
 // act(tempbuf, FALSE, ch, obj, 0, TO_ROOM);
 //
 // snprintf(tempbuf, sizeof(tempbuf), shop_index[shop_nr].message_sell, GET_NAME(ch), goldamt);
 // do_tell(keeper, tempbuf, cmd_tell, 0);
 //
-// send_to_char(ch, "The shopkeeper now has %s.\r\n", tempstr);
+// send_to_char(ch, "The shopkeeper now has {}.\r\n", tempstr);
 //
 // if (GET_GOLD(keeper) < MIN_OUTSIDE_BANK) {
 // goldamt = MIN(MAX_OUTSIDE_BANK - GET_GOLD(keeper), SHOP_BANK(shop_nr));
@@ -1135,15 +1130,15 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
 // return;
 //
 // if (!*arg) {
-// snprintf(buf, sizeof(buf), "%s What do you want me to evaluate??", GET_NAME(ch));
+// snprintf(buf, sizeof(buf), "{} What do you want me to evaluate??", GET_NAME(ch));
 // do_tell(keeper, buf, cmd_tell, 0);
 // return;
 // }
 // one_argument(arg, name);
-// if (!(obj = get_selling_obj(ch, name, keeper, shop_nr, TRUE)))
+// if (!(obj = get_selling_obj(ch, name, keeper, shop_nr, true)))
 // return;
 //
-// snprintf(buf, sizeof(buf), "%s I'll give you %d gold coins for that!", GET_NAME(ch), sell_price(obj, shop_nr, keeper, ch));
+// snprintf(buf, sizeof(buf), "{} I'll give you {} gold coins for that!", GET_NAME(ch), sell_price(obj, shop_nr, keeper, ch));
 // do_tell(keeper, buf, cmd_tell, 0);
 // }
 
@@ -1313,7 +1308,7 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 
     // if (SHOP_FUNC(shop_nr))	/* Check secondary function */
     // if ((SHOP_FUNC(shop_nr)) (ch, me, cmd, argument))
-    // return (TRUE);
+    // return (true);
 
     if Rc::ptr_eq(keeper, ch) {
         if cmd != 0 {
@@ -1364,24 +1359,24 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 // int sindex;
 //
 // if (!IS_MOB(victim) || mob_index[GET_MOB_RNUM(victim)].func != shop_keeper)
-// return (TRUE);
+// return (true);
 //
 // /* Prevent "invincible" shopkeepers if they're charmed. */
 // if (AFF_FLAGGED(victim, AFF_CHARM))
-// return (TRUE);
+// return (true);
 //
 // for (sindex = 0; sindex <= top_shop; sindex++)
 // if (GET_MOB_RNUM(victim) == SHOP_KEEPER(sindex) && !SHOP_KILL_CHARS(sindex)) {
 // char buf[MAX_INPUT_LENGTH];
 //
-// snprintf(buf, sizeof(buf), "%s %s", GET_NAME(ch), MSG_CANT_KILL_KEEPER);
+// snprintf(buf, sizeof(buf), "{} {}", GET_NAME(ch), MSG_CANT_KILL_KEEPER);
 // do_tell(victim, buf, cmd_tell, 0);
 //
 // do_action(victim, GET_NAME(ch), cmd_slap, 0);
 // return (FALSE);
 // }
 //
-// return (TRUE);
+// return (true);
 // }
 //
 //
@@ -1408,7 +1403,7 @@ fn add_to_list(db: &DB, list: &mut Vec<ShopBuyData>, type_: i32, val: &mut i32) 
 
 fn end_read_list(list: &mut Vec<ShopBuyData>, error: i32) -> usize {
     // if (error)
-    // log("SYSERR: Raise MAX_SHOP_OBJ constant in shop.h to %d", len + error);
+    // log("SYSERR: Raise MAX_SHOP_OBJ constant in shop.h to {}", len + error);
     list.push(ShopBuyData {
         type_: NOTHING as i32,
         keywords: Rc::from(""),
@@ -1529,7 +1524,7 @@ fn read_type_list(
 
         // ptr = buf;
         // if num == NOTHING {
-        //     sscanf(buf, "%d", &num);
+        //     sscanf(buf, "{}", &num);
         //     while (!isdigit(*ptr))
         //     ptr + +;
         //     while (isdigit(*ptr))
@@ -1570,7 +1565,7 @@ fn read_shop_message(mnum: i32, shr: RoomRnum, reader: &mut BufReader<File>, why
         ss += 1;
     } else if &tbuf[cht + 1..cht + 2] == "d" && (mnum == 5 || mnum == 6) {
         if ss == 0 {
-            error!("SYSERR: Shop #{} has %d before %s, message #{}.", shr, mnum);
+            error!("SYSERR: Shop #{} has before {}, message", shr, mnum);
             err += 1;
         }
         ds += 1;
@@ -1586,7 +1581,7 @@ fn read_shop_message(mnum: i32, shr: RoomRnum, reader: &mut BufReader<File>, why
 
     if ss > 1 || ds > 1 {
         error!(
-            "SYSERR: Shop #{} has too many specifiers for message #{}. %s={} %d={}",
+            "SYSERR: Shop #{} has too many specifiers for message #{}. {} {}",
             shr, mnum, ss, ds
         );
         err += 1;
@@ -1743,237 +1738,291 @@ pub fn assign_the_shopkeepers(db: &mut DB) {
     // TODO implement shopkeeper spec proc
 }
 
-// char *customer_string(int shop_nr, int detailed)
-// {
-// int sindex = 0, flag = 1, nlen;
-// size_t len = 0;
-// static char buf[256];
-//
-// while (*trade_letters[sindex] != '\n' && len + 1 < sizeof(buf)) {
-// if (detailed) {
-// if (!IS_SET(flag, SHOP_TRADE_WITH(shop_nr))) {
-// nlen = snprintf(buf + len, sizeof(buf) - len, ", %s", trade_letters[sindex]);
-//
-// if (len + nlen >= sizeof(buf) || nlen < 0)
-// break;
-//
-// len += nlen;
-// }
-// } else {
-// buf[len++] = (IS_SET(flag, SHOP_TRADE_WITH(shop_nr)) ? '_' : *trade_letters[sindex]);
-// buf[len] = '\0';
-//
-// if (len >= sizeof(buf))
-// break;
-// }
-//
-// sindex++;
-// flag <<= 1;
-// }
-//
-// buf[sizeof(buf) - 1] = '\0';
-// return (buf);
-// }
-//
-//
+fn customer_string(db: &DB, shop: &ShopData, detailed: bool) -> String {
+    let mut sindex = 0;
+    let mut flag = 1;
+    let mut buf = String::new();
+    while TRADE_LETTERS[sindex] != "\n" {
+        if detailed {
+            if !is_set!(flag, shop.with_who) {
+                buf.push_str(format!(", {}", TRADE_LETTERS[sindex]).as_str());
+            }
+        } else {
+            buf.push(if !is_set!(flag, shop.with_who) {
+                '_'
+            } else {
+                TRADE_LETTERS[sindex].chars().next().unwrap()
+            });
+        }
+        sindex += 1;
+        flag <<= 1;
+    }
+    buf
+}
+
 // /* END_OF inefficient */
-// void list_all_shops(struct char_data *ch)
-// {
-// const char *list_all_shops_header =
-// " ##   Virtual   Where    Keeper    Buy   Sell   Customers\r\n"
-// "---------------------------------------------------------\r\n";
-// int shop_nr, headerlen = strlen(list_all_shops_header);
-// size_t len = 0;
-// char buf[MAX_STRING_LENGTH], buf1[16];
-//
-// *buf = '\0';
-// for (shop_nr = 0; shop_nr <= top_shop && len < sizeof(buf); shop_nr++) {
-// /* New page in page_string() mechanism, print the header again. */
-// if (!(shop_nr % (PAGE_LENGTH - 2))) {
-// /*
-//  * If we don't have enough room for the header, or all we have room left
-//  * for is the header, then don't add it and just quit now.
-//  */
-// if (len + headerlen + 1 >= sizeof(buf))
-// break;
-// strcpy(buf + len, list_all_shops_header);	/* strcpy: OK (length checked above) */
-// len += headerlen;
-// }
-//
-// if (SHOP_KEEPER(shop_nr) == NOBODY)
-// strcpy(buf1, "<NONE>");	/* strcpy: OK (for 'buf1 >= 7') */
-// else
-// sprintf(buf1, "%6d", mob_index[SHOP_KEEPER(shop_nr)].vnum);	/* sprintf: OK (for 'buf1 >= 11', 32-bit int) */
-//
-// len += snprintf(buf + len, sizeof(buf) - len,
-// "%3d   %6d   %6d    %s   %3.2f   %3.2f    %s\r\n",
-// shop_nr + 1, SHOP_NUM(shop_nr), SHOP_ROOM(shop_nr, 0), buf1,
-// SHOP_SELLPROFIT(shop_nr), SHOP_BUYPROFIT(shop_nr),
-// customer_string(shop_nr, FALSE));
-// }
-//
-// page_string(ch->desc, buf, TRUE);
-// }
-//
-//
-// void list_detailed_shop(struct char_data *ch, int shop_nr)
-// {
-// struct char_data *k;
-// int sindex, column;
-// char *ptrsave;
-//
-// send_to_char(ch, "Vnum:       [%5d], Rnum: [%5d]\r\n", SHOP_NUM(shop_nr), shop_nr + 1);
-//
-//
-// send_to_char(ch, "Rooms:      ");
-// column = 12;	/* ^^^ strlen ^^^ */
-// for (sindex = 0; SHOP_ROOM(shop_nr, sindex) != NOWHERE; sindex++) {
-// char buf1[128];
-// int linelen, temp;
-//
-// if (sindex) {
-// send_to_char(ch, ", ");
-// column += 2;
-// }
-//
-// if ((temp = real_room(SHOP_ROOM(shop_nr, sindex))) != NOWHERE)
-// linelen = snprintf(buf1, sizeof(buf1), "%s (#%d)", world[temp].name, GET_ROOM_VNUM(temp));
-// else
-// linelen = snprintf(buf1, sizeof(buf1), "<UNKNOWN> (#%d)", SHOP_ROOM(shop_nr, sindex));
-//
-// /* Implementing word-wrapping: assumes screen-size == 80 */
-// if (linelen + column >= 78 && column >= 20) {
-// send_to_char(ch, "\r\n            ");
-// /* 12 is to line up with "Rooms:" printed first, and spaces above. */
-// column = 12;
-// }
-//
-// if (!send_to_char(ch, "%s", buf1))
-// return;
-// column += linelen;
-// }
-// if (!sindex)
-// send_to_char(ch, "Rooms:      None!");
-//
-// send_to_char(ch, "\r\nShopkeeper: ");
-// if (SHOP_KEEPER(shop_nr) != NOBODY) {
-// send_to_char(ch, "%s (#%d), Special Function: %s\r\n",
-// GET_NAME(&mob_proto[SHOP_KEEPER(shop_nr)]),
-// mob_index[SHOP_KEEPER(shop_nr)].vnum,
-// YESNO(SHOP_FUNC(shop_nr)));
-//
-// if ((k = get_char_num(SHOP_KEEPER(shop_nr))))
-// send_to_char(ch, "Coins:      [%9d], Bank: [%9d] (Total: %d)\r\n",
-// GET_GOLD(k), SHOP_BANK(shop_nr), GET_GOLD(k) + SHOP_BANK(shop_nr));
-// } else
-// send_to_char(ch, "<NONE>\r\n");
-//
-//
-// send_to_char(ch, "Customers:  %s\r\n", (ptrsave = customer_string(shop_nr, TRUE)) ? ptrsave : "None");
-//
-//
-// send_to_char(ch, "Produces:   ");
-// column = 12;	/* ^^^ strlen ^^^ */
-// for (sindex = 0; SHOP_PRODUCT(shop_nr, sindex) != NOTHING; sindex++) {
-// char buf1[128];
-// int linelen;
-//
-// if (sindex) {
-// send_to_char(ch, ", ");
-// column += 2;
-// }
-// linelen = snprintf(buf1, sizeof(buf1), "%s (#%d)",
-// obj_proto[SHOP_PRODUCT(shop_nr, sindex)].short_description,
-// obj_index[SHOP_PRODUCT(shop_nr, sindex)].vnum);
-//
-// /* Implementing word-wrapping: assumes screen-size == 80 */
-// if (linelen + column >= 78 && column >= 20) {
-// send_to_char(ch, "\r\n            ");
-// /* 12 is to line up with "Produces:" printed first, and spaces above. */
-// column = 12;
-// }
-//
-// if (!send_to_char(ch, "%s", buf1))
-// return;
-// column += linelen;
-// }
-// if (!sindex)
-// send_to_char(ch, "Produces:   Nothing!");
-//
-// send_to_char(ch, "\r\nBuys:       ");
-// column = 12;	/* ^^^ strlen ^^^ */
-// for (sindex = 0; SHOP_BUYTYPE(shop_nr, sindex) != NOTHING; sindex++) {
-// char buf1[128];
-// size_t linelen;
-//
-// if (sindex) {
-// send_to_char(ch, ", ");
-// column += 2;
-// }
-//
-// linelen = snprintf(buf1, sizeof(buf1), "%s (#%d) [%s]",
-// ITEM_TYPES[SHOP_BUYTYPE(shop_nr, sindex)],
-// SHOP_BUYTYPE(shop_nr, sindex),
-// SHOP_BUYWORD(shop_nr, sindex) ? SHOP_BUYWORD(shop_nr, sindex) : "all");
-//
-// /* Implementing word-wrapping: assumes screen-size == 80 */
-// if (linelen + column >= 78 && column >= 20) {
-// send_to_char(ch, "\r\n            ");
-// /* 12 is to line up with "Buys:" printed first, and spaces above. */
-// column = 12;
-// }
-//
-// if (!send_to_char(ch, "%s", buf1))
-// return;
-// column += linelen;
-// }
-// if (!sindex)
-// send_to_char(ch, "Buys:       Nothing!");
-//
-// send_to_char(ch, "\r\nBuy at:     [%4.2f], Sell at: [%4.2f], Open: [%d-%d, %d-%d]\r\n",
-// SHOP_SELLPROFIT(shop_nr), SHOP_BUYPROFIT(shop_nr), SHOP_OPEN1(shop_nr),
-// SHOP_CLOSE1(shop_nr), SHOP_OPEN2(shop_nr), SHOP_CLOSE2(shop_nr));
-//
-//
-// /* Need a local buffer. */
-// {
-// char buf1[128];
-// sprintbit(SHOP_BITVECTOR(shop_nr), shop_bits, buf1, sizeof(buf1));
-// send_to_char(ch, "Bits:       %s\r\n", buf1);
-// }
-// }
-//
-//
-// void show_shops(struct char_data *ch, char *arg)
-// {
-// int shop_nr;
-//
-// if (!*arg)
-// list_all_shops(ch);
-// else {
-// if (!str_cmp(arg, ".")) {
-// for (shop_nr = 0; shop_nr <= top_shop; shop_nr++)
-// if (ok_shop_room(shop_nr, GET_ROOM_VNUM(IN_ROOM(ch))))
-// break;
-//
-// if (shop_nr > top_shop) {
-// send_to_char(ch, "This isn't a shop!\r\n");
-// return;
-// }
-// } else if (is_number(arg))
-// shop_nr = atoi(arg) - 1;
-// else
-// shop_nr = -1;
-//
-// if (shop_nr < 0 || shop_nr > top_shop) {
-// send_to_char(ch, "Illegal shop number.\r\n");
-// return;
-// }
-// list_detailed_shop(ch, shop_nr);
-// }
-// }
-//
-//
+fn list_all_shops(db: &DB, ch: &Rc<CharData>) {
+    const LIST_ALL_SHOPS_HEADER: &str =
+        " ##   Virtual   Where    Keeper    Buy   Sell   Customers\r\n\
+---------------------------------------------------------\r\n";
+    let mut buf = String::new();
+    for (shop_nr, shop) in db.shop_index.borrow().iter().enumerate() {
+        /* New page in page_string() mechanism, print the header again. */
+        if shop_nr as i32 % (PAGE_LENGTH - 2) == 0 {
+            /*
+             * If we don't have enough room for the header, or all we have room left
+             * for is the header, then don't add it and just quit now.
+             */
+
+            buf.push_str(LIST_ALL_SHOPS_HEADER);
+        }
+        let mut buf1 = String::new();
+        if shop.keeper == NOBODY {
+            buf1.push_str("<NONE>");
+        } else {
+            buf1.push_str(format!("{:6}", db.mob_index[shop.keeper as usize].vnum).as_str());
+        }
+
+        buf.push_str(
+            format!(
+                "{:3}   {:6}   {:6}    {}   {:5}   {:5}    {}\r\n",
+                shop_nr + 1,
+                shop.vnum,
+                shop.in_room[0],
+                buf1,
+                shop.profit_sell,
+                shop.profit_buy,
+                customer_string(db, shop, false)
+            )
+            .as_str(),
+        );
+    }
+
+    page_string(ch.desc.borrow().as_ref(), &buf, true);
+}
+
+fn list_detailed_shop(db: &DB, ch: &Rc<CharData>, shop_nr: i32) {
+    let shop = &db.shop_index.borrow_mut()[shop_nr as usize];
+    send_to_char(
+        ch,
+        format!(
+            "Vnum:       [{:5}], Rnum: [{:5}]\r\n",
+            shop.vnum,
+            shop_nr + 1
+        )
+        .as_str(),
+    );
+
+    send_to_char(ch, "Rooms:      ");
+    let mut column = 12; /* ^^^ strlen ^^^ */
+    let mut count = 0;
+    for sindex in 0..shop.in_room.len() {
+        count += 1;
+        if sindex != 0 {
+            send_to_char(ch, ", ");
+            column += 2;
+        }
+        let temp;
+        let buf1;
+        if {
+            temp = db.real_room(shop.in_room[sindex]);
+            temp != NOWHERE
+        } {
+            buf1 = format!(
+                "{} (#{})",
+                db.world.borrow()[temp as usize].name,
+                db.get_room_vnum(temp)
+            );
+        } else {
+            buf1 = format!("<UNKNOWN> (#{})", shop.in_room[sindex]);
+        }
+
+        /* Implementing word-wrapping: assumes screen-size == 80 */
+        if buf1.len() + column >= 78 && column >= 20 {
+            send_to_char(ch, "\r\n            ");
+            /* 12 is to line up with "Rooms:" printed first, and spaces above. */
+            column = 12;
+        }
+
+        send_to_char(ch, &buf1);
+
+        column += buf1.len();
+    }
+    if count == 0 {
+        send_to_char(ch, "Rooms:      None!");
+    }
+
+    send_to_char(ch, "\r\nShopkeeper: ");
+    if shop.keeper != NOBODY {
+        send_to_char(
+            ch,
+            format!(
+                "{} (#{}), Special Function: {}\r\n",
+                db.mob_protos[shop.keeper as usize].get_name(),
+                db.mob_index[shop.keeper as usize].vnum,
+                // TODO implement shop spec proc function
+                yesno!(/*shop.function*/ false)
+            )
+            .as_str(),
+        );
+        let k;
+        if {
+            k = db.get_char_num(shop.keeper);
+            k.is_some()
+        } {
+            let k = k.as_ref().unwrap();
+
+            send_to_char(
+                ch,
+                format!(
+                    "Coins:      [{:9}], Bank: [{:9}] (Total: {})\r\n",
+                    k.get_gold(),
+                    shop.bank_account,
+                    k.get_gold() + shop.bank_account
+                )
+                .as_str(),
+            );
+        } else {
+            send_to_char(ch, "<NONE>\r\n");
+        }
+    }
+    let ptrsave;
+    send_to_char(
+        ch,
+        format!(
+            "Customers:  {}\r\n",
+            if {
+                ptrsave = customer_string(db, shop, true);
+                !ptrsave.is_empty()
+            } {
+                ptrsave
+            } else {
+                "None".to_string()
+            }
+        )
+        .as_str(),
+    );
+
+    send_to_char(ch, "Produces:   ");
+    let mut column = 12; /* ^^^ strlen ^^^ */
+    let mut sindex = 0;
+    let mut buf1 = String::new();
+    let mut count = 0;
+    while shop.shop_product(sindex) != NOTHING {
+        count += 1;
+        if sindex != 0 {
+            send_to_char(ch, ", ");
+            column += 2;
+        }
+        let nbuf = format!(
+            "{} (#{})",
+            db.obj_proto[shop.shop_product(sindex) as usize].short_description,
+            db.obj_index[shop.shop_product(sindex) as usize].vnum
+        );
+        buf1.push_str(&nbuf);
+        /* Implementing word-wrapping: assumes screen-size == 80 */
+        if nbuf.len() + column >= 78 && column >= 20 {
+            send_to_char(ch, "\r\n            ");
+            /* 12 is to line up with "Produces:" printed first, and spaces above. */
+            column = 12;
+        }
+
+        send_to_char(ch, &buf1);
+        buf1.clear();
+        column += nbuf.len();
+        sindex += 1;
+    }
+    if count == 0 {
+        send_to_char(ch, "Produces:   Nothing!");
+    }
+
+    send_to_char(ch, "\r\nBuys:       ");
+    let mut column = 12; /* ^^^ strlen ^^^ */
+
+    sindex = 0;
+    count = 0;
+    while shop.type_[sindex as usize].type_ != NOTHING as i32 {
+        count += 1;
+
+        let buf1;
+        if sindex != 0 {
+            send_to_char(ch, ", ");
+            column += 2;
+        }
+
+        buf1 = format!(
+            "{} (#{}) [{}]",
+            ITEM_TYPES[shop.type_[sindex as usize].type_ as usize],
+            shop.type_[sindex as usize].type_,
+            if !shop.type_[sindex as usize].keywords.is_empty() {
+                shop.type_[sindex as usize].keywords.clone()
+            } else {
+                Rc::from("all")
+            }
+        );
+
+        /* Implementing word-wrapping: assumes screen-size == 80 */
+        if buf1.len() + column >= 78 && column >= 20 {
+            send_to_char(ch, "\r\n            ");
+            /* 12 is to line up with "Buys:" printed first, and spaces above. */
+            column = 12;
+        }
+
+        send_to_char(ch, &buf1);
+
+        column += buf1.len();
+        sindex += 1;
+    }
+    if count == 0 {
+        send_to_char(ch, "Buys:       Nothing!");
+    }
+
+    send_to_char(
+        ch,
+        format!(
+            "\r\nBuy at:     [{:6}], Sell at: [{:6}], Open: [{}-{}, {}-{}]\r\n",
+            shop.profit_sell, shop.profit_buy, shop.open1, shop.close1, shop.open2, shop.close2
+        )
+        .as_str(),
+    );
+
+    /* Need a local buffer. */
+    let mut buf1 = String::new();
+    sprintbit(shop.bitvector as i64, &SHOP_BITS, &mut buf1);
+    send_to_char(ch, format!("Bits:       {}\r\n", buf1).as_str());
+}
+
+pub fn show_shops(db: &DB, ch: &Rc<CharData>, arg: &str) {
+    if arg.is_empty() {
+        list_all_shops(db, ch);
+    } else {
+        let mut shop_nr = None;
+        if arg == "." {
+            for (i, shop) in db.shop_index.borrow().iter().enumerate() {
+                if ok_shop_room(shop, db.get_room_vnum(ch.in_room())) {
+                    shop_nr = Some(i as i32);
+                    break;
+                }
+            }
+
+            if shop_nr.is_none() {
+                send_to_char(ch, "This isn't a shop!\r\n");
+                return;
+            }
+        } else if is_number(arg) {
+            let ap = arg.parse::<i32>();
+            if ap.is_ok() {
+                shop_nr = Some(ap.unwrap() - 1);
+            }
+        }
+        if shop_nr.is_none() {
+            send_to_char(ch, "Illegal shop number.\r\n");
+            return;
+        }
+        list_detailed_shop(db, ch, shop_nr.unwrap());
+    }
+}
+
 // void destroy_shops(void)
 // {
 // ssize_t cnt, itr;

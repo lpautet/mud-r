@@ -23,14 +23,14 @@ use crate::interpreter::one_argument;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    AffectedType, CharData, ExtraDescrData, ObjData, ObjRnum, RoomRnum, APPLY_AC, APPLY_AGE,
-    APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL,
-    APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA,
-    APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI,
-    APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD,
-    ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, ITEM_WEAR_TAKE, LVL_GRGOD,
-    MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET,
-    ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
+    AffectedType, CharData, ExtraDescrData, MobRnum, ObjData, ObjRnum, RoomRnum, APPLY_AC,
+    APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON,
+    APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT,
+    APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA,
+    APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL,
+    ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, ITEM_WEAR_TAKE,
+    LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
+    PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
 use crate::util::{clone_vec, rand_number, SECS_PER_MUD_YEAR};
 use crate::{is_set, send_to_char, write_to_output, Game, TO_CHAR, TO_ROOM};
@@ -758,22 +758,19 @@ impl DB {
 //
 // return (NULL);
 // }
-//
-//
-//
-// /* search all over the world for a char num, and return a pointer if found */
-// struct char_data *get_char_num(mob_rnum nr)
-// {
-// struct char_data *i;
-//
-// for (i = character_list; i; i = i.next)
-// if (GET_MOB_RNUM(i) == nr)
-// return (i);
-//
-// return (NULL);
-// }
 
 impl DB {
+    /* search all over the world for a char num, and return a pointer if found */
+    pub fn get_char_num(&self, nr: MobRnum) -> Option<Rc<CharData>> {
+        for i in self.character_list.borrow().iter() {
+            if i.get_mob_rnum() == nr {
+                return Some(i.clone());
+            }
+        }
+
+        None
+    }
+
     /* put an object in a room */
     pub fn obj_to_room(&self, object: Option<&Rc<ObjData>>, room: RoomRnum) {
         if object.is_none() || room == NOWHERE || room >= self.world.borrow().len() as i16 {

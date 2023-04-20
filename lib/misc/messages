@@ -19,7 +19,7 @@
 * automatically be wrapped to 79 columns when they are printed.  '#' can
 * be substituted for a message if none should be printed.  Note however
 * that, unlike the socials file, all twelve lines must be present for each
-* record, regardless of any '#' fields which may be contained in it.
+* record, regardless of any '#' FIELDS which may be contained in it.
 
 ***************************************************************************
 *                           Offensive Spells                              *

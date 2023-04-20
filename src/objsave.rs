@@ -18,7 +18,7 @@ use log::error;
 
 use crate::class::invalid_class;
 use crate::config::max_obj_save;
-use crate::db::{DB, REAL};
+use crate::db::{DB, REAL, VIRTUAL};
 use crate::handler::{invalid_align, obj_from_char};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
@@ -240,14 +240,14 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 // return (0);
 // if (!(fl = fopen(filename, "rb"))) {
 // if (errno != ENOENT)	/* if it fails but NOT because of no file */
-// log("SYSERR: deleting crash file %s (1): %s", filename, strerror(errno));
+// log("SYSERR: deleting crash file {} (1): {}", filename, strerror(errno));
 // return (0);
 // }
 // fclose(fl);
 //
 // /* if it fails, NOT because of no file */
 // if (remove(filename) < 0 && errno != ENOENT)
-// log("SYSERR: deleting crash file %s (2): %s", filename, strerror(errno));
+// log("SYSERR: deleting crash file {} (2): {}", filename, strerror(errno));
 //
 // return (1);
 // }
@@ -264,7 +264,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 // return (0);
 // if (!(fl = fopen(filename, "rb"))) {
 // if (errno != ENOENT)	/* if it fails, NOT because of no file */
-// log("SYSERR: checking for crash file %s (3): %s", filename, strerror(errno));
+// log("SYSERR: checking for crash file {} (3): {}", filename, strerror(errno));
 // return (0);
 // }
 // numread = fread(&rent, sizeof(struct rent_info), 1, fl);
@@ -295,7 +295,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 //  */
 // if (!(fl = fopen(filename, "r+b"))) {
 // if (errno != ENOENT)	/* if it fails, NOT because of no file */
-// log("SYSERR: OPENING OBJECT FILE %s (4): %s", filename, strerror(errno));
+// log("SYSERR: OPENING OBJECT FILE {} (4): {}", filename, strerror(errno));
 // return (0);
 // }
 // numread = fread(&rent, sizeof(struct rent_info), 1, fl);
@@ -324,14 +324,14 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 // filetype = "UNKNOWN!";
 // break;
 // }
-// log("    Deleting %s's %s file.", name, filetype);
+// log("    Deleting {}'s {} file.", name, filetype);
 // return (1);
 // }
 // /* Must retrieve rented items w/in 30 days */
 // } else if (rent.rentcode == RENT_RENTED)
 // if (rent.time < time(0) - (rent_file_timeout * SECS_PER_REAL_DAY)) {
 // Crash_delete_file(name);
-// log("    Deleting %s's rent file.", name);
+// log("    Deleting {}'s rent file.", name);
 // return (1);
 // }
 // return (0);
@@ -346,74 +346,89 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 // if (*player_table[i].name)
 // Crash_clean_file(player_table[i].name);
 // }
-//
-//
-// void Crash_listrent(struct char_data *ch, char *name)
-// {
-// FILE *fl;
-// char filename[MAX_INPUT_LENGTH];
-// struct obj_file_elem object;
-// struct obj_data *obj;
-// struct rent_info rent;
-// int numread;
-//
-// if (!get_filename(filename, sizeof(filename), CRASH_FILE, name))
-// return;
-// if (!(fl = fopen(filename, "rb"))) {
-// send_to_char(ch, "%s has no rent file.\r\n", name);
-// return;
-// }
-// numread = fread(&rent, sizeof(struct rent_info), 1, fl);
-//
-// /* Oops, can't get the data, punt. */
-// if (numread == 0) {
-// send_to_char(ch, "Error reading rent information.\r\n");
-// fclose(fl);
-// return;
-// }
-//
-// send_to_char(ch, "%s\r\n", filename);
-// switch (rent.rentcode) {
-// case RENT_RENTED:
-// send_to_char(ch, "Rent\r\n");
-// break;
-// case RENT_CRASH:
-// send_to_char(ch, "Crash\r\n");
-// break;
-// case RENT_CRYO:
-// send_to_char(ch, "Cryo\r\n");
-// break;
-// case RENT_TIMEDOUT:
-// case RENT_FORCED:
-// send_to_char(ch, "TimedOut\r\n");
-// break;
-// default:
-// send_to_char(ch, "Undef\r\n");
-// break;
-// }
-// while (!feof(fl)) {
-// fread(&object, sizeof(struct obj_file_elem), 1, fl);
-// if (ferror(fl)) {
-// fclose(fl);
-// return;
-// }
-// if (!feof(fl))
-// if (real_object(object.item_number) != NOTHING) {
-// obj = read_object(object.item_number, VIRTUAL);
-// #if USE_AUTOEQ
-// send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
-// object.item_number, GET_OBJ_RENT(obj),
-// object.location, obj->short_description);
-// #else
-// send_to_char(ch, " [%5d] (%5dau) %-20s\r\n",
-// object.item_number, GET_OBJ_RENT(obj),
-// obj->short_description);
-// #endif
-// extract_obj(obj);
-// }
-// }
-// fclose(fl);
-// }
+
+pub fn crash_listrent(db: &DB, ch: &Rc<CharData>, name: &str) {
+    let mut filename = String::new();
+    if !get_filename(&mut filename, CRASH_FILE, name) {
+        return;
+    }
+    let fl = OpenOptions::new().read(true).open(&filename);
+    if fl.is_err() {
+        send_to_char(ch, format!("{} has no rent file.\r\n", name).as_str());
+        return;
+    }
+    let mut rent = RentInfo::new();
+    let mut fl = fl.unwrap();
+    let slice;
+    unsafe {
+        slice =
+            slice::from_raw_parts_mut(&mut rent as *mut _ as *mut u8, mem::size_of::<RentInfo>());
+    }
+    let r = fl.read_exact(slice);
+
+    /* Oops, can't get the data, punt. */
+    if r.is_err() {
+        send_to_char(ch, "Error reading rent information.\r\n");
+        return;
+    }
+
+    send_to_char(ch, format!("{}\r\n", filename).as_str());
+    match rent.rentcode {
+        RENT_RENTED => {
+            send_to_char(ch, "Rent\r\n");
+        }
+        RENT_CRASH => {
+            send_to_char(ch, "Crash\r\n");
+        }
+        RENT_CRYO => {
+            send_to_char(ch, "Cryo\r\n");
+        }
+        RENT_TIMEDOUT | RENT_FORCED => {
+            send_to_char(ch, "TimedOut\r\n");
+        }
+        _ => {
+            send_to_char(ch, "Undef\r\n");
+        }
+    }
+
+    loop {
+        let mut object = ObjFileElem::new();
+        let slice;
+        unsafe {
+            slice = slice::from_raw_parts_mut(
+                &mut object as *mut _ as *mut u8,
+                mem::size_of::<ObjFileElem>(),
+            );
+        }
+        let r = fl.read_exact(slice);
+
+        if r.is_err() {
+            return;
+        }
+
+        if db.real_object(object.item_number) != NOTHING {
+            let obj = db.read_object(object.item_number, VIRTUAL);
+            // #if USE_AUTOEQ
+            // send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
+            // object.item_number, GET_OBJ_RENT(obj),
+            // object.location, obj->short_description);
+            // #else
+            let oin = object.item_number;
+            send_to_char(
+                ch,
+                format!(
+                    " [{:5}] ({:5}au) {:20}\r\n",
+                    oin,
+                    obj.as_ref().unwrap().get_obj_rent(),
+                    obj.as_ref().unwrap().short_description
+                )
+                .as_str(),
+            );
+            // #endif
+            db.extract_obj(obj.as_ref().unwrap());
+        }
+    }
+}
 
 fn crash_write_rentcode(ch: &Rc<CharData>, fl: &mut File, rent: &mut RentInfo) -> bool {
     let record_size = mem::size_of::<RentInfo>();
@@ -429,6 +444,45 @@ fn crash_write_rentcode(ch: &Rc<CharData>, fl: &mut File, rent: &mut RentInfo) -
         return false;
     }
     true
+}
+
+impl RentInfo {
+    fn new() -> RentInfo {
+        RentInfo {
+            time: 0,
+            rentcode: 0,
+            net_cost_per_diem: 0,
+            gold: 0,
+            account: 0,
+            nitems: 0,
+            spare0: 0,
+            spare1: 0,
+            spare2: 0,
+            spare3: 0,
+            spare4: 0,
+            spare5: 0,
+            spare6: 0,
+            spare7: 0,
+        }
+    }
+}
+
+impl ObjFileElem {
+    fn new() -> ObjFileElem {
+        ObjFileElem {
+            item_number: 0,
+            location: 0,
+            value: [0; 4],
+            extra_flags: 0,
+            weight: 0,
+            timer: 0,
+            bitvector: 0,
+            affected: [ObjAffectedType {
+                location: 0,
+                modifier: 0,
+            }; MAX_OBJ_AFFECT as usize],
+        }
+    }
 }
 
 /*
@@ -470,22 +524,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
         return 1;
     }
     let mut fl = fl.unwrap();
-    let mut rent = RentInfo {
-        time: 0,
-        rentcode: 0,
-        net_cost_per_diem: 0,
-        gold: 0,
-        account: 0,
-        nitems: 0,
-        spare0: 0,
-        spare1: 0,
-        spare2: 0,
-        spare3: 0,
-        spare4: 0,
-        spare5: 0,
-        spare6: 0,
-        spare7: 0,
-    };
+    let mut rent = RentInfo::new();
     let slice;
     unsafe {
         slice =
@@ -582,19 +621,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
     }
 
     loop {
-        let mut object = ObjFileElem {
-            item_number: 0,
-            location: 0,
-            value: [0; 4],
-            extra_flags: 0,
-            weight: 0,
-            timer: 0,
-            bitvector: 0,
-            affected: [ObjAffectedType {
-                location: 0,
-                modifier: 0,
-            }; MAX_OBJ_AFFECT as usize],
-        };
+        let mut object = ObjFileElem::new();
 
         let slice;
         unsafe {
@@ -1141,7 +1168,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // return;
 //
 // rent_deadline = ((GET_GOLD(ch) + GET_BANK_GOLD(ch)) / cost);
-// snprintf(buf, sizeof(buf), "$n tells you, 'You can rent for %ld day%s with the gold you have\r\n"
+// snprintf(buf, sizeof(buf), "$n tells you, 'You can rent for %ld day{} with the gold you have\r\n"
 // "on hand and in the bank.'\r\n", rent_deadline, rent_deadline != 1 ? "s" : "");
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 // }
@@ -1156,7 +1183,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // char buf[128];
 //
 // has_norents = 1;
-// snprintf(buf, sizeof(buf), "$n tells you, 'You cannot store %s.'", OBJS(obj, ch));
+// snprintf(buf, sizeof(buf), "$n tells you, 'You cannot store {}.'", OBJS(obj, ch));
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 // }
 // has_norents += Crash_report_unrentables(ch, recep, obj->contains);
@@ -1177,7 +1204,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // if (display) {
 // char buf[256];
 //
-// snprintf(buf, sizeof(buf), "$n tells you, '%5d coins for %s..'", GET_OBJ_RENT(obj) * factor, OBJS(obj, ch));
+// snprintf(buf, sizeof(buf), "$n tells you, '%5d coins for {}..'", GET_OBJ_RENT(obj) * factor, OBJS(obj, ch));
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 // }
 // }
@@ -1226,7 +1253,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // snprintf(buf, sizeof(buf), "$n tells you, 'Plus, my %d coin fee..'", min_rent_cost * factor);
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 //
-// snprintf(buf, sizeof(buf), "$n tells you, 'For a total of %ld coins%s.'", totalcost, factor == RENT_FACTOR ? " per day" : "");
+// snprintf(buf, sizeof(buf), "$n tells you, 'For a total of %ld coins{}.'", totalcost, factor == RENT_FACTOR ? " per day" : "");
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 //
 // if (totalcost > GET_GOLD(ch) + GET_BANK_GOLD(ch)) {
@@ -1259,7 +1286,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // return (FALSE);
 //
 // if (!AWAKE(recep)) {
-// send_to_char(ch, "%s is unable to talk to you...\r\n", HSSH(recep));
+// send_to_char(ch, "{} is unable to talk to you...\r\n", HSSH(recep));
 // return (TRUE);
 // }
 //
@@ -1296,7 +1323,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // if (mode == RENT_FACTOR) {
 // act("$n stores your belongings and helps you into your private chamber.", FALSE, recep, 0, ch, TO_VICT);
 // Crash_rentsave(ch, cost);
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "%s has rented (%d/day, %d tot.)",
+// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "{} has rented (%d/day, %d tot.)",
 // GET_NAME(ch), cost, GET_GOLD(ch) + GET_BANK_GOLD(ch));
 // } else {			/* cryo */
 // act("$n stores your belongings and helps you into your private chamber.\r\n"
@@ -1304,7 +1331,7 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // "You begin to lose consciousness...",
 // FALSE, recep, 0, ch, TO_VICT);
 // Crash_cryosave(ch, cost);
-// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "%s has cryo-rented.", GET_NAME(ch));
+// mudlog(NRM, MAX(LVL_IMMORT, GET_INVIS_LEV(ch)), TRUE, "{} has cryo-rented.", GET_NAME(ch));
 // SET_BIT(PLR_FLAGS(ch), PLR_CRYO);
 // }
 //

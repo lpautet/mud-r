@@ -2298,6 +2298,7 @@ pub fn do_color(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
     );
 }
 
+#[macro_export]
 macro_rules! onoff {
     ($a:expr) => {
         if ($a) {

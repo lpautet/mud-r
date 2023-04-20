@@ -43,8 +43,9 @@ use crate::act_other::{
 use crate::act_social::{do_action, do_insult};
 use crate::act_wizard::{
     do_advance, do_at, do_date, do_dc, do_echo, do_force, do_gecho, do_goto, do_invis, do_last,
-    do_load, do_poofset, do_purge, do_restore, do_return, do_send, do_shutdown, do_snoop, do_stat,
-    do_switch, do_syslog, do_teleport, do_trans, do_vnum, do_vstat, do_wizlock, do_wiznet,
+    do_load, do_poofset, do_purge, do_restore, do_return, do_send, do_set, do_show, do_shutdown,
+    do_snoop, do_stat, do_switch, do_syslog, do_teleport, do_trans, do_vnum, do_vstat, do_wizlock,
+    do_wiznet, do_wizutil, do_zreset,
 };
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
@@ -60,9 +61,9 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, AFF_HIDE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, PLR_FROZEN,
-    PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING,
-    POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    CharData, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE,
+    PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW,
+    POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
     CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -121,6 +122,15 @@ pub const SCMD_HOLYLIGHT: i32 = 13;
 pub const SCMD_SLOWNS: i32 = 14;
 pub const SCMD_AUTOEXIT: i32 = 15;
 pub const SCMD_TRACK: i32 = 16;
+
+/* do_wizutil */
+pub const SCMD_REROLL: i32 = 0;
+pub const SCMD_PARDON: i32 = 1;
+pub const SCMD_NOTITLE: i32 = 2;
+pub const SCMD_SQUELCH: i32 = 3;
+pub const SCMD_FREEZE: i32 = 4;
+pub const SCMD_THAW: i32 = 5;
+pub const SCMD_UNAFFECT: i32 = 6;
 
 /* do_spec_com */
 pub const SCMD_WHISPER: i32 = 0;
@@ -231,7 +241,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 279] = [
+pub const CMD_INFO: [CommandInfo; 289] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -830,6 +840,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "freeze"   , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_FREEZE },
+    CommandInfo {
+        command: "freeze",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_FREEZE as i16,
+        subcmd: SCMD_FREEZE,
+    },
     // { "french"   , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "french",
@@ -1282,6 +1299,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "mute"     , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_SQUELCH },
+    CommandInfo {
+        command: "mute",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_GOD,
+        subcmd: SCMD_SQUELCH,
+    },
     // { "murder"   , POS_FIGHTING, do_hit      , 0, SCMD_MURDER },
     CommandInfo {
         command: "murder",
@@ -1380,6 +1404,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: SCMD_NOTELL,
     },
     // { "notitle"  , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_NOTITLE },
+    CommandInfo {
+        command: "notitle",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_GOD,
+        subcmd: SCMD_NOTITLE,
+    },
     // { "nowiz"    , POS_DEAD    , do_gen_tog  , LVL_IMMORT, SCMD_NOWIZ },
     CommandInfo {
         command: "nowiz",
@@ -1449,6 +1480,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "pardon"   , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_PARDON },
+    CommandInfo {
+        command: "pardon",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_GOD,
+        subcmd: SCMD_PARDON,
+    },
     // { "peer"     , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "peer",
@@ -1680,6 +1718,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "reroll"   , POS_DEAD    , do_wizutil  , LVL_GRGOD, SCMD_REROLL },
+    CommandInfo {
+        command: "reroll",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_GRGOD,
+        subcmd: SCMD_REROLL,
+    },
     // { "rescue"   , POS_FIGHTING, do_rescue   , 1, 0 },
     CommandInfo {
         command: "rescue",
@@ -1779,6 +1824,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "set"      , POS_DEAD    , do_set      , LVL_GOD, 0 },
+    CommandInfo {
+        command: "set",
+        minimum_position: POS_DEAD,
+        command_pointer: do_set,
+        minimum_level: LVL_GOD,
+        subcmd: 0,
+    },
     // { "shout"    , POS_RESTING , do_gen_comm , 0, SCMD_SHOUT },
     CommandInfo {
         command: "shout",
@@ -1804,6 +1856,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "show"     , POS_DEAD    , do_show     , LVL_IMMORT, 0 },
+    CommandInfo {
+        command: "show",
+        minimum_position: POS_DEAD,
+        command_pointer: do_show,
+        minimum_level: LVL_IMMORT,
+        subcmd: 0,
+    },
     // { "shrug"    , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "shrug",
@@ -2175,6 +2234,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
         subcmd: 0,
     },
     // { "thaw"     , POS_DEAD    , do_wizutil  , LVL_FREEZE, SCMD_THAW },
+    CommandInfo {
+        command: "thaw",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_FREEZE as i16,
+        subcmd: SCMD_THAW,
+    },
     // { "title"    , POS_DEAD    , do_title    , 0, 0 },
     CommandInfo {
         command: "title",
@@ -2259,6 +2325,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
     },
     // { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
     // { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
+    CommandInfo {
+        command: "unaffect",
+        minimum_position: POS_DEAD,
+        command_pointer: do_wizutil,
+        minimum_level: LVL_GOD,
+        subcmd: SCMD_UNAFFECT,
+    },
     // { "uptime"   , POS_DEAD    , do_date     , LVL_IMMORT, SCMD_UPTIME },
     CommandInfo {
         command: "uptime",
@@ -2505,6 +2578,13 @@ pub const CMD_INFO: [CommandInfo; 279] = [
     },
     //
     // { "zreset"   , POS_DEAD    , do_zreset   , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "zreset",
+        minimum_position: POS_DEAD,
+        command_pointer: do_zreset,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     //
     CommandInfo {
         command: "\n",

@@ -3456,7 +3456,7 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
  * the best 3 out of 4 rolls of a 6-sided die.  Each class then decides
  * which priority will be given for the best to worst stats.
  */
-fn roll_real_abils(ch: &CharData) {
+pub fn roll_real_abils(ch: &CharData) {
     //int i, j, k, temp;
     let mut table: [u8; 6] = [0; 6];
     let mut rolls: [u8; 4] = [0; 4];

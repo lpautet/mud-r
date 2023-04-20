@@ -136,6 +136,16 @@ impl CharData {
         self.player_specials.borrow_mut().saved.pref ^= flag;
         self.player_specials.borrow().saved.pref
     }
+    pub fn toggle_plr_flag_bits(&self, flag: i64) -> i64 {
+        self.char_specials.borrow_mut().saved.act ^= flag;
+        self.char_specials.borrow().saved.act
+    }
+    pub fn plr_tog_chk(&self, flag: i64) -> i64 {
+        self.toggle_plr_flag_bits(flag) & flag
+    }
+    pub fn prf_tog_chk(&self, flag: i64) -> i64 {
+        self.toggle_prf_flag_bits(flag) & flag
+    }
 }
 
 // #[macro_export]
@@ -823,6 +833,12 @@ impl CharData {
     }
     pub fn set_is_carrying_n(&self, val: u8) {
         self.char_specials.borrow_mut().carry_items = val;
+    }
+    pub fn get_freeze_lev(&self) -> i8 {
+        self.player_specials.borrow().saved.freeze_level
+    }
+    pub fn set_freeze_lev(&self, val: i8) {
+        self.player_specials.borrow_mut().saved.freeze_level = val;
     }
 }
 

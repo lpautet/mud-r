@@ -9,14 +9,18 @@
 ************************************************************************ */
 
 use std::borrow::Borrow;
-use std::cmp::max;
+use std::cmp::{max, min};
+use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::rc::Rc;
+use std::{mem, slice};
 
 use chrono::{TimeZone, Utc};
-use log::info;
+use hmac::Hmac;
+use log::{error, info};
+use sha2::Sha256;
 
-use crate::class::{level_exp, CLASS_ABBREVS, PC_CLASS_TYPES};
+use crate::class::{level_exp, parse_class, roll_real_abils, CLASS_ABBREVS, PC_CLASS_TYPES};
 use crate::config::{LOAD_INTO_INVENTORY, NOPERSON, OK};
 use crate::constants::{
     ACTION_BITS, AFFECTED_BITS, APPLY_TYPES, CONNECTED_TYPES, CONTAINER_BITS, DEX_APP, DIRS,
@@ -24,32 +28,41 @@ use crate::constants::{
     POSITION_TYPES, PREFERENCE_BITS, ROOM_BITS, SECTOR_TYPES, WEAR_BITS, WIS_APP,
 };
 use crate::db::{
-    clear_char, parse_c_string, store_to_char, vnum_mobile, vnum_object, DB, FASTBOOT_FILE,
-    KILLSCRIPT_FILE, PAUSE_FILE, REAL,
+    char_to_store, clear_char, parse_c_string, store_to_char, vnum_mobile, vnum_object, DB,
+    FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
 };
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
-use crate::handler::{affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{affect_remove, affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
-    search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_POOFIN, SCMD_POOFOUT, SCMD_SHUTDOWN,
+    search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_FREEZE, SCMD_NOTITLE, SCMD_PARDON,
+    SCMD_POOFIN, SCMD_POOFOUT, SCMD_REROLL, SCMD_SHUTDOWN, SCMD_SQUELCH, SCMD_THAW, SCMD_UNAFFECT,
 };
-use crate::limits::{gain_exp_regardless, hit_gain, mana_gain, move_gain};
+use crate::limits::{gain_exp_regardless, hit_gain, mana_gain, move_gain, set_title};
+use crate::modify::page_string;
+use crate::objsave::crash_listrent;
 use crate::screen::{C_NRM, KCYN, KGRN, KNRM, KNUL, KYEL};
+use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    CharData, CharFileU, ObjData, RoomRnum, AFF_HIDE, AFF_INVISIBLE, DRUNK, FULL, ITEM_ARMOR,
-    ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY,
-    ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_GOD,
-    LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE,
-    NUM_OF_DIRS, NUM_WEARS, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT,
-    PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, ROOM_GODROOM, ROOM_HOUSE,
+    CharData, CharFileU, ObjData, RoomRnum, RoomVnum, ZoneRnum, AFF_HIDE, AFF_INVISIBLE,
+    CLASS_UNDEFINED, DRUNK, FULL, ITEM_ARMOR, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD,
+    ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY, ITEM_NOTE, ITEM_POTION, ITEM_SCROLL,
+    ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
+    LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS,
+    PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE,
+    PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF,
+    PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT,
+    PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, ROOM_DEATH, ROOM_GODROOM, ROOM_HOUSE,
     ROOM_PRIVATE, THIRST,
 };
-use crate::util::{ctime, sprintbit, sprinttype, time_now, touch, BRF, NRM};
+use crate::util::{
+    ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR,
+};
 use crate::{
-    _clrlevel, clr, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_NOTVICT,
-    TO_ROOM, TO_VICT,
+    _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
+    TO_NOTVICT, TO_ROOM, TO_VICT,
 };
 
 #[allow(unused_variables)]
@@ -1092,7 +1105,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
         // strlcpy(buf2, asctime(localtime(&(k->player.time.logon))), sizeof(buf2));
         // buf1[10] = buf2[10] = '\0';
         //
-        // send_to_char(ch, "Created: [%s], Last Logon: [%s], Played [%dh %dm], Age [%d]\r\n",
+        // send_to_char(ch, "Created: [{}], Last Logon: [{}], Played [{}h {}m], Age [{}]\r\n",
         // buf1, buf2, k->player.time.played / 3600,
         // ((k->player.time.played % 3600) / 60), age(k)->year);
 
@@ -1797,7 +1810,7 @@ pub fn do_switch(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
         send_to_char(ch, "You are not godly enough to use that room!\r\n");
     }
     // TODO implement house
-    // else if (GET_LEVEL(ch) < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_HOUSE)
+    // else if (ch.get_level() < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_HOUSE)
     // && !House_can_enter(ch, GET_ROOM_VNUM(IN_ROOM(victim)))) {
     //         send_to_char(ch, "That's private property -- no trespassing!\r\n");
     //     }
@@ -2968,873 +2981,1589 @@ pub fn do_wiznet(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     }
 }
 
-// ACMD(do_zreset)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// zone_rnum i;
-// zone_vnum j;
-//
-// one_argument(argument, arg);
-// if (!*arg) {
-// send_to_char(ch, "You must specify a zone.\r\n");
-// return;
-// }
-// if (*arg == '*') {
-// for (i = 0; i <= top_of_zone_table; i++)
-// reset_zone(i);
-// send_to_char(ch, "Reset world.\r\n");
-// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), true, "(GC) %s reset entire world.", GET_NAME(ch));
-// return;
-// } else if (*arg == '.')
-// i = world[IN_ROOM(ch)].zone;
-// else {
-// j = atoi(arg);
-// for (i = 0; i <= top_of_zone_table; i++)
-// if (zone_table[i].number == j)
-// break;
-// }
-// if (i <= top_of_zone_table) {
-// reset_zone(i);
-// send_to_char(ch, "Reset zone %d (#%d): %s.\r\n", i, zone_table[i].number, zone_table[i].name);
-// mudlog(NRM, MAX(LVL_GRGOD, GET_INVIS_LEV(ch)), true, "(GC) %s reset zone %d (%s)", GET_NAME(ch), i, zone_table[i].name);
-// } else
-// send_to_char(ch, "Invalid zone number.\r\n");
-// }
-//
-//
-// /*
-//  *  General fn for wizcommands of the sort: cmd <player>
-//  */
-// ACMD(do_wizutil)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// struct char_data *vict;
-// long result;
-//
-// one_argument(argument, arg);
-//
-// if (!*arg)
-// send_to_char(ch, "Yes, but for whom?!?\r\n");
-// else if (!(vict = get_char_vis(ch, arg, None, FIND_CHAR_WORLD)))
-// send_to_char(ch, "There is no such player.\r\n");
-// else if (IS_NPC(vict))
-// send_to_char(ch, "You can't do that to a mob!\r\n");
-// else if (GET_LEVEL(vict) > GET_LEVEL(ch))
-// send_to_char(ch, "Hmmm...you'd better not.\r\n");
-// else {
-// switch (subcmd) {
-// case SCMD_REROLL:
-// send_to_char(ch, "Rerolled...\r\n");
-// roll_real_abils(vict);
-// log("(GC) %s has rerolled %s.", GET_NAME(ch), GET_NAME(vict));
-// send_to_char(ch, "New stats: Str %d/%d, Int %d, Wis %d, Dex %d, Con %d, Cha %d\r\n",
-// GET_STR(vict), GET_ADD(vict), GET_INT(vict), GET_WIS(vict),
-// GET_DEX(vict), GET_CON(vict), GET_CHA(vict));
-// break;
-// case SCMD_PARDON:
-// if (!PLR_FLAGGED(vict, PLR_THIEF | PLR_KILLER)) {
-// send_to_char(ch, "Your victim is not flagged.\r\n");
-// return;
-// }
-// REMOVE_BIT(PLR_FLAGS(vict), PLR_THIEF | PLR_KILLER);
-// send_to_char(ch, "Pardoned.\r\n");
-// send_to_char(vict, "You have been pardoned by the Gods!\r\n");
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s pardoned by %s", GET_NAME(vict), GET_NAME(ch));
-// break;
-// case SCMD_NOTITLE:
-// result = PLR_TOG_CHK(vict, PLR_NOTITLE);
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) Notitle %s for %s by %s.",
-// ONOFF(result), GET_NAME(vict), GET_NAME(ch));
-// send_to_char(ch, "(GC) Notitle %s for %s by %s.\r\n", ONOFF(result), GET_NAME(vict), GET_NAME(ch));
-// break;
-// case SCMD_SQUELCH:
-// result = PLR_TOG_CHK(vict, PLR_NOSHOUT);
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) Squelch %s for %s by %s.",
-// ONOFF(result), GET_NAME(vict), GET_NAME(ch));
-// send_to_char(ch, "(GC) Squelch %s for %s by %s.\r\n", ONOFF(result), GET_NAME(vict), GET_NAME(ch));
-// break;
-// case SCMD_FREEZE:
-// if (ch == vict) {
-// send_to_char(ch, "Oh, yeah, THAT'S real smart...\r\n");
-// return;
-// }
-// if (PLR_FLAGGED(vict, PLR_FROZEN)) {
-// send_to_char(ch, "Your victim is already pretty cold.\r\n");
-// return;
-// }
-// SET_BIT(PLR_FLAGS(vict), PLR_FROZEN);
-// GET_FREEZE_LEV(vict) = GET_LEVEL(ch);
-// send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
-// send_to_char(ch, "Frozen.\r\n");
-// act("A sudden cold wind conjured from nowhere freezes $n!", false, vict, 0, 0, TO_ROOM);
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s frozen by %s.", GET_NAME(vict), GET_NAME(ch));
-// break;
-// case SCMD_THAW:
-// if (!PLR_FLAGGED(vict, PLR_FROZEN)) {
-// send_to_char(ch, "Sorry, your victim is not morbidly encased in ice at the moment.\r\n");
-// return;
-// }
-// if (GET_FREEZE_LEV(vict) > GET_LEVEL(ch)) {
-// send_to_char(ch, "Sorry, a level %d God froze %s... you can't unfreeze %s.\r\n",
-// GET_FREEZE_LEV(vict), GET_NAME(vict), HMHR(vict));
-// return;
-// }
-// mudlog(BRF, MAX(LVL_GOD, GET_INVIS_LEV(ch)), true, "(GC) %s un-frozen by %s.", GET_NAME(vict), GET_NAME(ch));
-// REMOVE_BIT(PLR_FLAGS(vict), PLR_FROZEN);
-// send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
-// send_to_char(ch, "Thawed.\r\n");
-// act("A sudden fireball conjured from nowhere thaws $n!", false, vict, 0, 0, TO_ROOM);
-// break;
-// case SCMD_UNAFFECT:
-// if (vict->affected) {
-// while (vict->affected)
-// affect_remove(vict, vict->affected);
-// send_to_char(vict, "There is a brief flash of light!\r\nYou feel slightly different.\r\n");
-// send_to_char(ch, "All spells removed.\r\n");
-// } else {
-// send_to_char(ch, "Your victim does not have any affections!\r\n");
-// return;
-// }
-// break;
-// default:
-// log("SYSERR: Unknown subcmd %d passed to do_wizutil (%s)", subcmd, __FILE__);
-// break;
-// }
-// save_char(vict);
-// }
-// }
-//
-//
-// /* single zone printing fn used by "show zone" so it's not repeated in the
-//    code 3 times ... -je, 4/6/93 */
-//
-// /* FIXME: overflow possible */
-// size_t print_zone_to_buf(char *bufptr, size_t left, zone_rnum zone)
-// {
-// return snprintf(bufptr, left,
-// "%3d %-30.30s Age: %3d; Reset: %3d (%1d); Range: %5d-%5d\r\n",
-// zone_table[zone].number, zone_table[zone].name,
-// zone_table[zone].age, zone_table[zone].lifespan,
-// zone_table[zone].reset_mode,
-// zone_table[zone].bot, zone_table[zone].top);
-// }
-//
-//
-// ACMD(do_show)
-// {
-// struct char_file_u vbuf;
-// int i, j, k, l, con, nlen;		/* i, j, k to specifics? */
-// size_t len;
-// zone_rnum zrn;
-// zone_vnum zvn;
-// byte self = false;
-// struct char_data *vict;
-// struct obj_data *obj;
-// struct descriptor_data *d;
-// char field[MAX_INPUT_LENGTH], value[MAX_INPUT_LENGTH],
-// arg[MAX_INPUT_LENGTH], buf[MAX_STRING_LENGTH];
-//
-// struct show_struct {
-// const char *cmd;
-// const char level;
-// } fields[] = {
-// { "nothing",	0  },				/* 0 */
-// { "zones",		LVL_IMMORT },			/* 1 */
-// { "player",		LVL_GOD },
-// { "rent",		LVL_GOD },
-// { "stats",		LVL_IMMORT },
-// { "errors",		LVL_IMPL },			/* 5 */
-// { "death",		LVL_GOD },
-// { "godrooms",	LVL_GOD },
-// { "shops",		LVL_IMMORT },
-// { "houses",		LVL_GOD },
-// { "snoop",		LVL_GRGOD },			/* 10 */
-// { "\n", 0 }
-// };
-//
-// skip_spaces(&argument);
-//
-// if (!*argument) {
-// send_to_char(ch, "Show options:\r\n");
-// for (j = 0, i = 1; fields[i].level; i++)
-// if (fields[i].level <= GET_LEVEL(ch))
-// send_to_char(ch, "%-15s%s", fields[i].cmd, (!(++j % 5) ? "\r\n" : ""));
-// send_to_char(ch, "\r\n");
-// return;
-// }
-//
-// strcpy(arg, two_arguments(argument, field, value));	/* strcpy: OK (argument <= MAX_INPUT_LENGTH == arg) */
-//
-// for (l = 0; *(fields[l].cmd) != '\n'; l++)
-// if (!strncmp(field, fields[l].cmd, strlen(field)))
-// break;
-//
-// if (GET_LEVEL(ch) < fields[l].level) {
-// send_to_char(ch, "You are not godly enough for that!\r\n");
-// return;
-// }
-// if (!strcmp(value, "."))
-// self = true;
-// buf[0] = '\0';
-//
-// switch (l) {
-// /* show zone */
-// case 1:
-// /* tightened up by JE 4/6/93 */
-// if (self)
-// print_zone_to_buf(buf, sizeof(buf), world[IN_ROOM(ch)].zone);
-// else if (*value && is_number(value)) {
-// for (zvn = atoi(value), zrn = 0; zone_table[zrn].number != zvn && zrn <= top_of_zone_table; zrn++);
-// if (zrn <= top_of_zone_table)
-// print_zone_to_buf(buf, sizeof(buf), zrn);
-// else {
-// send_to_char(ch, "That is not a valid zone.\r\n");
-// return;
-// }
-// } else
-// for (len = zrn = 0; zrn <= top_of_zone_table; zrn++) {
-// nlen = print_zone_to_buf(buf + len, sizeof(buf) - len, zrn);
-// if (len + nlen >= sizeof(buf) || nlen < 0)
-// break;
-// len += nlen;
-// }
-// page_string(ch->desc, buf, true);
-// break;
-//
-// /* show player */
-// case 2:
-// if (!*value) {
-// send_to_char(ch, "A name would help.\r\n");
-// return;
-// }
-//
-// if (load_char(value, &vbuf) < 0) {
-// send_to_char(ch, "There is no such player.\r\n");
-// return;
-// }
-//
-// send_to_char(ch, "Player: %-12s (%s) [%2d %s]\r\n", vbuf.name,
-// GENDERS[(int) vbuf.sex], vbuf.level, class_abbrevs[(int) vbuf.chclass]);
-// send_to_char(ch, "Au: %-8d  Bal: %-8d  Exp: %-8d  Align: %-5d  Lessons: %-3d\r\n",
-// vbuf.points.gold, vbuf.points.bank_gold, vbuf.points.exp,
-// vbuf.char_specials_saved.alignment, vbuf.player_specials_saved.spells_to_learn);
-// /* ctime() uses static buffer: do not combine. */
-// send_to_char(ch, "Started: %-20.16s  ", ctime(&vbuf.birth));
-// send_to_char(ch, "Last: %-20.16s  Played: %3dh %2dm\r\n", ctime(&vbuf.last_logon), vbuf.played / 3600, vbuf.played / 60 % 60);
-// break;
-//
-// /* show rent */
-// case 3:
-// if (!*value) {
-// send_to_char(ch, "A name would help.\r\n");
-// return;
-// }
-// Crash_listrent(ch, value);
-// break;
-//
-// /* show stats */
-// case 4:
-// i = 0;
-// j = 0;
-// k = 0;
-// con = 0;
-// for (vict = character_list; vict; vict = vict->next) {
-// if (IS_NPC(vict))
-// j++;
-// else if (CAN_SEE(ch, vict)) {
-// i++;
-// if (vict->desc)
-// con++;
-// }
-// }
-// for (obj = object_list; obj; obj = obj->next)
-// k++;
-// send_to_char(ch,
-// "Current stats:\r\n"
-// "  %5d players in game  %5d connected\r\n"
-// "  %5d registered\r\n"
-// "  %5d mobiles          %5d prototypes\r\n"
-// "  %5d objects          %5d prototypes\r\n"
-// "  %5d rooms            %5d zones\r\n"
-// "  %5d large bufs\r\n"
-// "  %5d buf switches     %5d overflows\r\n",
-// i, con,
-// top_of_p_table + 1,
-// j, top_of_mobt + 1,
-// k, top_of_objt + 1,
-// top_of_world + 1, top_of_zone_table + 1,
-// buf_largecount,
-// buf_switches, buf_overflows
-// );
-// break;
-//
-// /* show errors */
-// case 5:
-// len = strlcpy(buf, "Errant Rooms\r\n------------\r\n", sizeof(buf));
-// for (i = 0, k = 0; i <= top_of_world; i++)
-// for (j = 0; j < NUM_OF_DIRS; j++)
-// if (world[i].dir_option[j] && world[i].dir_option[j]->to_room == 0) {
-// nlen = snprintf(buf + len, sizeof(buf) - len, "%2d: [%5d] %s\r\n", ++k, GET_ROOM_VNUM(i), world[i].name);
-// if (len + nlen >= sizeof(buf) || nlen < 0)
-// break;
-// len += nlen;
-// }
-// page_string(ch->desc, buf, true);
-// break;
-//
-// /* show death */
-// case 6:
-// len = strlcpy(buf, "Death Traps\r\n-----------\r\n", sizeof(buf));
-// for (i = 0, j = 0; i <= top_of_world; i++)
-// if (ROOM_FLAGGED(i, ROOM_DEATH)) {
-// nlen = snprintf(buf + len, sizeof(buf) - len, "%2d: [%5d] %s\r\n", ++j, GET_ROOM_VNUM(i), world[i].name);
-// if (len + nlen >= sizeof(buf) || nlen < 0)
-// break;
-// len += nlen;
-// }
-// page_string(ch->desc, buf, true);
-// break;
-//
-// /* show godrooms */
-// case 7:
-// len = strlcpy(buf, "Godrooms\r\n--------------------------\r\n", sizeof(buf));
-// for (i = 0, j = 0; i <= top_of_world; i++)
-// if (ROOM_FLAGGED(i, ROOM_GODROOM)) {
-// nlen = snprintf(buf + len, sizeof(buf) - len, "%2d: [%5d] %s\r\n", ++j, GET_ROOM_VNUM(i), world[i].name);
-// if (len + nlen >= sizeof(buf) || nlen < 0)
-// break;
-// len += nlen;
-// }
-// page_string(ch->desc, buf, true);
-// break;
-//
-// /* show shops */
-// case 8:
-// show_shops(ch, value);
-// break;
-//
-// /* show houses */
-// case 9:
-// hcontrol_list_houses(ch);
-// break;
-//
-// /* show snoop */
-// case 10:
-// i = 0;
-// send_to_char(ch, "People currently snooping:\r\n--------------------------\r\n");
-// for (d = descriptor_list; d; d = d->next) {
-// if (d->snooping == None || d->character == None)
-// continue;
-// if (STATE(d) != CON_PLAYING || GET_LEVEL(ch) < GET_LEVEL(d->character))
-// continue;
-// if (!CAN_SEE(ch, d->character) || IN_ROOM(d->character) == NOWHERE)
-// continue;
-// i++;
-// send_to_char(ch, "%-10s - snooped by %s.\r\n", GET_NAME(d->snooping->character), GET_NAME(d->character));
-// }
-// if (i == 0)
-// send_to_char(ch, "No one is currently snooping.\r\n");
-// break;
-//
-// /* show what? */
-// default:
-// send_to_char(ch, "Sorry, I don't understand that.\r\n");
-// break;
-// }
-// }
-//
-//
-// /***************** The do_set function ***********************************/
-//
-// #define PC   1
-// #define NPC  2
-// #define BOTH 3
-//
-// #define MISC	0
-// #define BINARY	1
-// #define NUMBER	2
+#[allow(unused_variables)]
+pub fn do_zreset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    if arg.is_empty() {
+        send_to_char(ch, "You must specify a zone.\r\n");
+        return;
+    }
+    let mut i = db.zone_table.borrow().len();
+    if arg.starts_with('*') {
+        for i in 0..db.zone_table.borrow().len() {
+            db.reset_zone(game, i);
+        }
+        send_to_char(ch, "Reset world.\r\n");
+        game.mudlog(
+            NRM,
+            max(LVL_GRGOD as i32, ch.get_invis_lev() as i32),
+            true,
+            format!("(GC) {} reset entire world.", ch.get_name()).as_str(),
+        );
+        return;
+    } else if arg.starts_with('.') {
+        i = db.world.borrow()[ch.in_room() as usize].zone as usize;
+    } else {
+        let j = arg.parse::<i32>();
+        if j.is_err() {
+            return;
+        };
+        let j = j.unwrap();
+        for ii in 0..db.zone_table.borrow().len() {
+            if db.zone_table.borrow()[ii].number == j as i16 {
+                i = ii;
+                break;
+            }
+        }
+    }
+    if i < db.zone_table.borrow().len() {
+        db.reset_zone(game, i as usize);
+        send_to_char(
+            ch,
+            format!(
+                "Reset zone {} (#{}): {}.\r\n",
+                i,
+                db.zone_table.borrow()[i].number,
+                db.zone_table.borrow()[i].name
+            )
+            .as_str(),
+        );
+        game.mudlog(
+            NRM,
+            max(LVL_GRGOD as i32, ch.get_invis_lev() as i32),
+            true,
+            format!(
+                "(GC) {} reset zone {} ({})",
+                ch.get_name(),
+                i,
+                db.zone_table.borrow()[i].name
+            )
+            .as_str(),
+        );
+    } else {
+        send_to_char(ch, "Invalid zone number.\r\n");
+    }
+}
+
+/*
+ *  General fn for wizcommands of the sort: cmd <player>
+ */
+#[allow(unused_variables)]
+pub fn do_wizutil(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+    one_argument(argument, &mut arg);
+    let vict;
+    if arg.is_empty() {
+        send_to_char(ch, "Yes, but for whom?!?\r\n");
+    } else if {
+        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict.is_none()
+    } {
+        send_to_char(ch, "There is no such player.\r\n");
+    } else if vict.as_ref().unwrap().is_npc() {
+        send_to_char(ch, "You can't do that to a mob!\r\n");
+    } else if vict.as_ref().unwrap().get_level() > ch.get_level() {
+        send_to_char(ch, "Hmmm...you'd better not.\r\n");
+    } else {
+        let vict = vict.as_ref().unwrap();
+        match subcmd {
+            SCMD_REROLL => {
+                send_to_char(ch, "Rerolled...\r\n");
+                roll_real_abils(vict);
+                info!("(GC) {} has rerolled {}.", ch.get_name(), vict.get_name());
+                send_to_char(
+                    ch,
+                    format!(
+                        "New stats: Str {}/{}, Int {}, Wis {}, Dex {}, Con {}, Cha {}\r\n",
+                        vict.get_str(),
+                        vict.get_add(),
+                        vict.get_int(),
+                        vict.get_wis(),
+                        vict.get_dex(),
+                        vict.get_con(),
+                        vict.get_cha()
+                    )
+                    .as_str(),
+                );
+            }
+            SCMD_PARDON => {
+                if !vict.plr_flagged(PLR_THIEF | PLR_KILLER) {
+                    send_to_char(ch, "Your victim is not flagged.\r\n");
+                    return;
+                }
+                vict.remove_plr_flag(PLR_THIEF | PLR_KILLER);
+                send_to_char(ch, "Pardoned.\r\n");
+                send_to_char(vict, "You have been pardoned by the Gods!\r\n");
+                game.mudlog(
+                    BRF,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!("(GC) {} pardoned by {}", vict.get_name(), ch.get_name()).as_str(),
+                );
+            }
+            SCMD_NOTITLE => {
+                let result = vict.plr_tog_chk(PLR_NOTITLE);
+                game.mudlog(
+                    NRM,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!(
+                        "(GC) Notitle {} for {} by {}.",
+                        onoff!(result != 0),
+                        vict.get_name(),
+                        ch.get_name()
+                    )
+                    .as_str(),
+                );
+                send_to_char(
+                    ch,
+                    format!(
+                        "(GC) Notitle {} for {} by {}.\r\n",
+                        onoff!(result != 0),
+                        vict.get_name(),
+                        ch.get_name()
+                    )
+                    .as_str(),
+                );
+            }
+            SCMD_SQUELCH => {
+                let result = vict.plr_tog_chk(PLR_NOSHOUT);
+                game.mudlog(
+                    BRF,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!(
+                        "(GC) Squelch {} for {} by {}.",
+                        onoff!(result != 0),
+                        vict.get_name(),
+                        ch.get_name()
+                    )
+                    .as_str(),
+                );
+                send_to_char(
+                    ch,
+                    format!(
+                        "(GC) Squelch {} for {} by {}.\r\n",
+                        onoff!(result != 0),
+                        vict.get_name(),
+                        ch.get_name()
+                    )
+                    .as_str(),
+                );
+            }
+            SCMD_FREEZE => {
+                if Rc::ptr_eq(ch, vict) {
+                    send_to_char(ch, "Oh, yeah, THAT'S real smart...\r\n");
+                    return;
+                }
+                if vict.plr_flagged(PLR_FROZEN) {
+                    send_to_char(ch, "Your victim is already pretty cold.\r\n");
+                    return;
+                }
+                vict.set_plr_flag_bit(PLR_FROZEN);
+                vict.set_freeze_lev(ch.get_level() as i8);
+                send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
+                send_to_char(ch, "Frozen.\r\n");
+                db.act(
+                    "A sudden cold wind conjured from nowhere freezes $n!",
+                    false,
+                    Some(vict),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                game.mudlog(
+                    BRF,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!("(GC) {} frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
+                );
+            }
+            SCMD_THAW => {
+                if !vict.plr_flagged(PLR_FROZEN) {
+                    send_to_char(
+                        ch,
+                        "Sorry, your victim is not morbidly encased in ice at the moment.\r\n",
+                    );
+                    return;
+                }
+                if vict.get_freeze_lev() > ch.get_level() as i8 {
+                    send_to_char(
+                        ch,
+                        format!(
+                            "Sorry, a level {} God froze {}... you can't unfreeze {}.\r\n",
+                            vict.get_freeze_lev(),
+                            vict.get_name(),
+                            hmhr(vict)
+                        )
+                        .as_str(),
+                    );
+                    return;
+                }
+                game.mudlog(
+                    BRF,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
+                );
+                vict.remove_plr_flag(PLR_FROZEN);
+                send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
+                send_to_char(ch, "Thawed.\r\n");
+                db.act(
+                    "A sudden fireball conjured from nowhere thaws $n!",
+                    false,
+                    Some(vict),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+            }
+            SCMD_UNAFFECT => {
+                if vict.affected.borrow().len() != 0 {
+                    while vict.affected.borrow().len() != 0 {
+                        affect_remove(vict, &vict.affected.borrow()[0]);
+                    }
+                    send_to_char(
+                        vict,
+                        "There is a brief flash of light!\r\nYou feel slightly different.\r\n",
+                    );
+                    send_to_char(ch, "All spells removed.\r\n");
+                } else {
+                    send_to_char(ch, "Your victim does not have any affections!\r\n");
+                    return;
+                }
+            }
+            _ => {
+                error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
+            }
+        }
+        db.save_char(vict);
+    }
+}
+
+/* single zone printing fn used by "show zone" so it's not repeated in the
+code 3 times ... -je, 4/6/93 */
+
+fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
+    let zt = db.zone_table.borrow();
+    let zone = &zt[zone as usize];
+    *buf = format!(
+        "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
+        zone.number,
+        zone.name,
+        zone.age.get(),
+        zone.lifespan,
+        zone.reset_mode,
+        zone.bot,
+        zone.top
+    );
+}
+
+#[allow(unused_variables)]
+pub fn do_show(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut self_ = false;
+
+    struct ShowStruct {
+        cmd: &'static str,
+        level: i16,
+    }
+
+    const FIELDS: [ShowStruct; 12] = [
+        ShowStruct {
+            cmd: "nothing",
+            level: 0,
+        }, /* 0 */
+        ShowStruct {
+            cmd: "zones",
+            level: LVL_IMMORT,
+        }, /* 1 */
+        ShowStruct {
+            cmd: "player",
+            level: LVL_GOD,
+        },
+        ShowStruct {
+            cmd: "rent",
+            level: LVL_GOD,
+        },
+        ShowStruct {
+            cmd: "stats",
+            level: LVL_IMMORT,
+        },
+        ShowStruct {
+            cmd: "errors",
+            level: LVL_IMPL,
+        }, /* 5 */
+        ShowStruct {
+            cmd: "death",
+            level: LVL_GOD,
+        },
+        ShowStruct {
+            cmd: "godrooms",
+            level: LVL_GOD,
+        },
+        ShowStruct {
+            cmd: "shops",
+            level: LVL_IMMORT,
+        },
+        ShowStruct {
+            cmd: "houses",
+            level: LVL_GOD,
+        },
+        ShowStruct {
+            cmd: "snoop",
+            level: LVL_GRGOD,
+        }, /* 10 */
+        ShowStruct {
+            cmd: "\n",
+            level: 0,
+        },
+    ];
+
+    let argument = argument.trim_start();
+
+    if argument.is_empty() {
+        send_to_char(ch, "Show options:\r\n");
+        let mut j = 0;
+        for i in 1..FIELDS.len() - 1 {
+            if FIELDS[i].level <= ch.get_level() as i16 {
+                send_to_char(
+                    ch,
+                    format!(
+                        "{:15}{}",
+                        FIELDS[i].cmd,
+                        if {
+                            j += 1;
+                            j % 5 == 0
+                        } {
+                            "\r\n"
+                        } else {
+                            ""
+                        }
+                    )
+                    .as_str(),
+                );
+            }
+            send_to_char(ch, "\r\n");
+            return;
+        }
+    }
+
+    let mut field = String::new();
+    let mut value = String::new();
+    let arg = two_arguments(argument, &mut field, &mut value);
+
+    let l = FIELDS.iter().position(|f| f.cmd == field);
+    let l = if l.is_some() { l.unwrap() } else { 0 };
+
+    if ch.get_level() < FIELDS[l].level as u8 {
+        send_to_char(ch, "You are not godly enough for that!\r\n");
+        return;
+    }
+    if value == "." {
+        self_ = true;
+    }
+    let mut buf = String::new();
+
+    match l {
+        /* show zone */
+        1 => {
+            /* tightened up by JE 4/6/93 */
+            if self_ {
+                print_zone_to_buf(db, &mut buf, db.world.borrow()[ch.in_room() as usize].zone);
+            } else if !value.is_empty() && is_number(&value) {
+                let value = value.parse::<i32>().unwrap();
+                let zrn = db
+                    .zone_table
+                    .borrow()
+                    .iter()
+                    .position(|z| z.number == value as i16);
+                if zrn.is_some() {
+                    print_zone_to_buf(db, &mut buf, zrn.unwrap() as ZoneRnum);
+                } else {
+                    send_to_char(ch, "That is not a valid zone.\r\n");
+                    return;
+                }
+            } else {
+                for i in 0..db.zone_table.borrow().len() {
+                    print_zone_to_buf(db, &mut buf, i as ZoneRnum);
+                }
+            }
+            page_string(ch.desc.borrow().as_ref(), &buf, true);
+        }
+
+        /* show player */
+        2 => {
+            if value.is_empty() {
+                send_to_char(ch, "A name would help.\r\n");
+                return;
+            }
+
+            let mut vbuf = CharFileU::new();
+            if db.load_char(&value, &mut vbuf).is_none() {
+                send_to_char(ch, "There is no such player.\r\n");
+                return;
+            }
+
+            send_to_char(
+                ch,
+                format!(
+                    "Player: {:12} ({}) [{:2} {}]\r\n",
+                    parse_c_string(&vbuf.name),
+                    GENDERS[vbuf.sex as usize],
+                    vbuf.level,
+                    CLASS_ABBREVS[vbuf.chclass as usize]
+                )
+                .as_str(),
+            );
+            let g = vbuf.points.gold;
+            let bg = vbuf.points.bank_gold;
+            let exp = vbuf.points.exp;
+            let ali = vbuf.char_specials_saved.alignment;
+            let stl = vbuf.player_specials_saved.spells_to_learn;
+            send_to_char(
+                ch,
+                format!(
+                    "Au:{:8}  Bal:{:8}  Exp:{:8}  Align: {:5}  Lessons: {:3}\r\n",
+                    g, bg, exp, ali, stl
+                )
+                .as_str(),
+            );
+            /* ctime() uses static buffer: do not combine. */
+            send_to_char(ch, format!("Started: {}  ", ctime(vbuf.birth)).as_str());
+            send_to_char(
+                ch,
+                format!(
+                    "Last: {:20}  Played: {:3}h {:2}m\r\n",
+                    ctime(vbuf.last_logon),
+                    vbuf.played / 3600,
+                    vbuf.played / 60 % 60
+                )
+                .as_str(),
+            );
+        }
+
+        /* show rent */
+        3 => {
+            if value.is_empty() {
+                send_to_char(ch, "A name would help.\r\n");
+                return;
+            }
+            crash_listrent(db, ch, &value);
+        }
+
+        /* show stats */
+        4 => {
+            let mut i = 0;
+            let mut j = 0;
+            let mut k = 0;
+            let mut con = 0;
+            for vict in db.character_list.borrow().iter() {
+                if vict.is_npc() {
+                    j += 1;
+                } else if db.can_see(ch, vict) {
+                    i += 1;
+                    if vict.desc.borrow().is_some() {
+                        con += 1;
+                    }
+                }
+            }
+            for obj in db.object_list.borrow().iter() {
+                k += 1;
+            }
+            send_to_char(
+                ch,
+                format!(
+                    "Current stats:\r\n\
+                               {:5} players in game  {:5} connected\r\n\
+                               {:5} registered\r\n\
+                               {:5} mobiles          {:5} prototypes\r\n\
+                               {:5} objects          {:5} prototypes\r\n\
+                               {:5} rooms            {:5} zones\r\n",
+                    i,
+                    con,
+                    db.player_table.borrow().len(),
+                    j,
+                    db.mob_protos.len(),
+                    k,
+                    db.obj_proto.len(),
+                    db.world.borrow().len(),
+                    db.zone_table.borrow().len()
+                )
+                .as_str(),
+            );
+        }
+
+        /* show errors */
+        5 => {
+            let mut buf = "Errant Rooms\r\n------------\r\n".to_string();
+            let mut k = 0;
+            for i in 0..db.world.borrow().len() {
+                for j in 0..NUM_OF_DIRS {
+                    if db.world.borrow()[i].dir_option[j].is_some()
+                        && db.world.borrow()[i].dir_option[j]
+                            .as_ref()
+                            .unwrap()
+                            .to_room
+                            .get()
+                            == 0
+                    {
+                        k += 1;
+
+                        buf.push_str(
+                            format!(
+                                "{:2}: [{:5}] {}\r\n",
+                                k,
+                                db.get_room_vnum(i as RoomVnum),
+                                db.world.borrow()[i].name
+                            )
+                            .as_str(),
+                        )
+                    }
+                }
+            }
+            page_string(ch.desc.borrow().as_ref(), &buf, true);
+        }
+
+        /* show death */
+        6 => {
+            let mut buf = "Death Traps\r\n-----------\r\n".to_string();
+            let mut j = 0;
+            for i in 0..db.world.borrow().len() {
+                if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
+                    j += 1;
+                    buf.push_str(
+                        format!(
+                            "{:2}: [{:5}] {}\r\n",
+                            j,
+                            db.get_room_vnum(i as RoomVnum),
+                            db.borrow().world.borrow()[i].name
+                        )
+                        .as_str(),
+                    );
+                }
+            }
+            page_string(ch.desc.borrow().as_ref(), &buf, true);
+        }
+
+        /* show godrooms */
+        7 => {
+            let mut buf = "Godrooms\r\n--------------------------\r\n".to_string();
+            let mut j = 0;
+            for i in 0..db.world.borrow().len() {
+                if db.room_flagged(i as RoomRnum, ROOM_GODROOM) {
+                    j += 1;
+                    buf.push_str(
+                        format!(
+                            "{:2}: [{:5}] {}\r\n",
+                            j,
+                            db.get_room_vnum(i as RoomVnum),
+                            db.borrow().world.borrow()[i].name
+                        )
+                        .as_str(),
+                    );
+                }
+            }
+            page_string(ch.desc.borrow().as_ref(), &buf, true);
+        }
+
+        /* show shops */
+        8 => {
+            show_shops(db, ch, &value);
+        }
+
+        /* show houses */
+        // TODO implement houses
+        // case
+        //     9:
+        //         hcontrol_list_houses(ch);
+        // break;
+
+        /* show snoop */
+        10 => {
+            let mut i = 0;
+            send_to_char(
+                ch,
+                "People currently snooping:\r\n--------------------------\r\n",
+            );
+            for d in game.descriptor_list.borrow().iter() {
+                if d.snooping.borrow().is_none() || d.character.borrow().is_none() {
+                    continue;
+                }
+                let dco = d.character.borrow();
+                let dc = dco.as_ref().unwrap();
+                if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
+                    continue;
+                }
+                if !db.can_see(ch, dc) || dc.in_room() == NOWHERE {
+                    continue;
+                }
+                i += 1;
+                send_to_char(
+                    ch,
+                    format!(
+                        "{:10} - snooped by {}.\r\n",
+                        d.snooping
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                            .character
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                            .get_name(),
+                        dc.get_name()
+                    )
+                    .as_str(),
+                );
+            }
+            if i == 0 {
+                send_to_char(ch, "No one is currently snooping.\r\n");
+            }
+        }
+
+        /* show what? */
+        _ => {
+            send_to_char(ch, "Sorry, I don't understand that.\r\n");
+        }
+    }
+}
+
+/***************** The do_set function ***********************************/
+
+const PC: u8 = 1;
+const NPC: u8 = 2;
+const BOTH: u8 = 3;
+
+const MISC: u8 = 0;
+const BINARY: u8 = 1;
+const NUMBER: u8 = 2;
 //
 // #define SET_OR_REMOVE(flagset, flags) { \
 // if (on) SET_BIT(flagset, flags); \
 // else if (off) REMOVE_BIT(flagset, flags); }
 //
-// #define RANGE(low, high) (value = MAX((low), MIN((high), (value))))
+// #define RANGE(low, high) (value = max((low), MIN((high), (value))))
+macro_rules! range {
+    ($value:expr, $low:expr, $high:expr) => {
+        max($low as i32, min($high as i32, $value))
+    };
+}
 //
 //
-// /* The set options available */
-// struct set_struct {
-//     const char *cmd;
-//     const char level;
-//     const char pcnpc;
-//     const char type;
-// } set_fields[] = {
-// { "brief",		LVL_GOD, 	PC, 	BINARY },  /* 0 */
-// { "invstart", 	LVL_GOD, 	PC, 	BINARY },  /* 1 */
-// { "title",		LVL_GOD, 	PC, 	MISC },
-// { "nosummon", 	LVL_GRGOD, 	PC, 	BINARY },
-// { "maxhit",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "maxmana", 	LVL_GRGOD, 	BOTH, 	NUMBER },  /* 5 */
-// { "maxmove", 	LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "hit", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "mana",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "move",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "align",		LVL_GOD, 	BOTH, 	NUMBER },  /* 10 */
-// { "str",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "stradd",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "int", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "wis", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "dex", 		LVL_GRGOD, 	BOTH, 	NUMBER },  /* 15 */
-// { "con", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "cha",		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "ac", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "gold",		LVL_GOD, 	BOTH, 	NUMBER },
-// { "bank",		LVL_GOD, 	PC, 	NUMBER },  /* 20 */
-// { "exp", 		LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "hitroll", 	LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "damroll", 	LVL_GRGOD, 	BOTH, 	NUMBER },
-// { "invis",		LVL_IMPL, 	PC, 	NUMBER },
-// { "nohassle", 	LVL_GRGOD, 	PC, 	BINARY },  /* 25 */
-// { "frozen",		LVL_FREEZE, 	PC, 	BINARY },
-// { "practices", 	LVL_GRGOD, 	PC, 	NUMBER },
-// { "lessons", 	LVL_GRGOD, 	PC, 	NUMBER },
-// { "drunk",		LVL_GRGOD, 	BOTH, 	MISC },
-// { "hunger",		LVL_GRGOD, 	BOTH, 	MISC },    /* 30 */
-// { "thirst",		LVL_GRGOD, 	BOTH, 	MISC },
-// { "killer",		LVL_GOD, 	PC, 	BINARY },
-// { "thief",		LVL_GOD, 	PC, 	BINARY },
-// { "level",		LVL_IMPL, 	BOTH, 	NUMBER },
-// { "room",		LVL_IMPL, 	BOTH, 	NUMBER },  /* 35 */
-// { "roomflag", 	LVL_GRGOD, 	PC, 	BINARY },
-// { "siteok",		LVL_GRGOD, 	PC, 	BINARY },
-// { "deleted", 	LVL_IMPL, 	PC, 	BINARY },
-// { "class",		LVL_GRGOD, 	BOTH, 	MISC },
-// { "nowizlist", 	LVL_GOD, 	PC, 	BINARY },  /* 40 */
-// { "quest",		LVL_GOD, 	PC, 	BINARY },
-// { "loadroom", 	LVL_GRGOD, 	PC, 	MISC },
-// { "color",		LVL_GOD, 	PC, 	BINARY },
-// { "idnum",		LVL_IMPL, 	PC, 	NUMBER },
-// { "passwd",		LVL_IMPL, 	PC, 	MISC },    /* 45 */
-// { "nodelete", 	LVL_GOD, 	PC, 	BINARY },
-// { "sex", 		LVL_GRGOD, 	BOTH, 	MISC },
-// { "age",		LVL_GRGOD,	BOTH,	NUMBER },
-// { "height",		LVL_GOD,	BOTH,	NUMBER },
-// { "weight",		LVL_GOD,	BOTH,	NUMBER },  /* 50 */
-// { "\n", 0, BOTH, MISC }
-// };
-//
-//
-// int perform_set(struct char_data *ch, struct char_data *vict, int mode,
-// char *val_arg)
-// {
-// int i, on = 0, off = 0, value = 0;
-// room_rnum rnum;
-// room_vnum rvnum;
-//
-// /* Check to make sure all the levels are correct */
-// if (GET_LEVEL(ch) != LVL_IMPL) {
-// if (!IS_NPC(vict) && GET_LEVEL(ch) <= GET_LEVEL(vict) && vict != ch) {
-// send_to_char(ch, "Maybe that's not such a great idea...\r\n");
-// return (0);
-// }
-// }
-// if (GET_LEVEL(ch) < set_fields[mode].level) {
-// send_to_char(ch, "You are not godly enough for that!\r\n");
-// return (0);
-// }
-//
-// /* Make sure the PC/NPC is correct */
-// if (IS_NPC(vict) && !(set_fields[mode].pcnpc & NPC)) {
-// send_to_char(ch, "You can't do that to a beast!\r\n");
-// return (0);
-// } else if (!IS_NPC(vict) && !(set_fields[mode].pcnpc & PC)) {
-// send_to_char(ch, "That can only be done to a beast!\r\n");
-// return (0);
-// }
-//
-// /* Find the value of the argument */
-// if (set_fields[mode].type == BINARY) {
-// if (!strcmp(val_arg, "on") || !strcmp(val_arg, "yes"))
-// on = 1;
-// else if (!strcmp(val_arg, "off") || !strcmp(val_arg, "no"))
-// off = 1;
-// if (!(on || off)) {
-// send_to_char(ch, "Value must be 'on' or 'off'.\r\n");
-// return (0);
-// }
-// send_to_char(ch, "%s %s for %s.\r\n", set_fields[mode].cmd, ONOFF(on), GET_NAME(vict));
-// } else if (set_fields[mode].type == NUMBER) {
-// value = atoi(val_arg);
-// send_to_char(ch, "%s's %s set to %d.\r\n", GET_NAME(vict), set_fields[mode].cmd, value);
-// } else
-// send_to_char(ch, "%s", OK);
-//
-// switch (mode) {
-// case 0:
-// SET_OR_REMOVE(PRF_FLAGS(vict), PRF_BRIEF);
-// break;
-// case 1:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_INVSTART);
-// break;
-// case 2:
-// set_title(vict, val_arg);
-// send_to_char(ch, "%s's title is now: %s\r\n", GET_NAME(vict), GET_TITLE(vict));
-// break;
-// case 3:
-// SET_OR_REMOVE(PRF_FLAGS(vict), PRF_SUMMONABLE);
-// send_to_char(ch, "Nosummon %s for %s.\r\n", ONOFF(!on), GET_NAME(vict));
-// break;
-// case 4:
-// vict->points.max_hit = RANGE(1, 5000);
-// affect_total(vict);
-// break;
-// case 5:
-// vict->points.max_mana = RANGE(1, 5000);
-// affect_total(vict);
-// break;
-// case 6:
-// vict->points.max_move = RANGE(1, 5000);
-// affect_total(vict);
-// break;
-// case 7:
-// vict->points.hit = RANGE(-9, vict->points.max_hit);
-// affect_total(vict);
-// break;
-// case 8:
-// vict->points.mana = RANGE(0, vict->points.max_mana);
-// affect_total(vict);
-// break;
-// case 9:
-// vict->points.move = RANGE(0, vict->points.max_move);
-// affect_total(vict);
-// break;
-// case 10:
-// GET_ALIGNMENT(vict) = RANGE(-1000, 1000);
-// affect_total(vict);
-// break;
-// case 11:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().str = value;
-// victreal_abilis.borrow_mut().str_add = 0;
-// affect_total(vict);
-// break;
-// case 12:
-// victreal_abilis.borrow_mut().str_add = RANGE(0, 100);
-// if (value > 0)
-// victreal_abilis.borrow_mut().str = 18;
-// affect_total(vict);
-// break;
-// case 13:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().intel = value;
-// affect_total(vict);
-// break;
-// case 14:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().wis = value;
-// affect_total(vict);
-// break;
-// case 15:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().dex = value;
-// affect_total(vict);
-// break;
-// case 16:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().con = value;
-// affect_total(vict);
-// break;
-// case 17:
-// if (IS_NPC(vict) || GET_LEVEL(vict) >= LVL_GRGOD)
-// RANGE(3, 25);
-// else
-// RANGE(3, 18);
-// victreal_abilis.borrow_mut().cha = value;
-// affect_total(vict);
-// break;
-// case 18:
-// vict->points.armor = RANGE(-100, 100);
-// affect_total(vict);
-// break;
-// case 19:
-// GET_GOLD(vict) = RANGE(0, 100000000);
-// break;
-// case 20:
-// GET_BANK_GOLD(vict) = RANGE(0, 100000000);
-// break;
-// case 21:
-// vict->points.exp = RANGE(0, 50000000);
-// break;
-// case 22:
-// vict->points.hitroll = RANGE(-20, 20);
-// affect_total(vict);
-// break;
-// case 23:
-// vict->points.damroll = RANGE(-20, 20);
-// affect_total(vict);
-// break;
-// case 24:
-// if (GET_LEVEL(ch) < LVL_IMPL && ch != vict) {
-// send_to_char(ch, "You aren't godly enough for that!\r\n");
-// return (0);
-// }
-// GET_INVIS_LEV(vict) = RANGE(0, GET_LEVEL(vict));
-// break;
-// case 25:
-// if (GET_LEVEL(ch) < LVL_IMPL && ch != vict) {
-// send_to_char(ch, "You aren't godly enough for that!\r\n");
-// return (0);
-// }
-// SET_OR_REMOVE(PRF_FLAGS(vict), PRF_NOHASSLE);
-// break;
-// case 26:
-// if (ch == vict && on) {
-// send_to_char(ch, "Better not -- could be a long winter!\r\n");
-// return (0);
-// }
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_FROZEN);
-// break;
-// case 27:
-// case 28:
-// GET_PRACTICES(vict) = RANGE(0, 100);
-// break;
-// case 29:
-// case 30:
-// case 31:
-// if (!str_cmp(val_arg, "off")) {
-// GET_COND(vict, (mode - 29)) = -1; /* warning: magic number here */
-// send_to_char(ch, "%s's %s now off.\r\n", GET_NAME(vict), set_fields[mode].cmd);
-// } else if (is_number(val_arg)) {
-// value = atoi(val_arg);
-// RANGE(0, 24);
-// GET_COND(vict, (mode - 29)) = value; /* and here too */
-// send_to_char(ch, "%s's %s set to %d.\r\n", GET_NAME(vict), set_fields[mode].cmd, value);
-// } else {
-// send_to_char(ch, "Must be 'off' or a value from 0 to 24.\r\n");
-// return (0);
-// }
-// break;
-// case 32:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_KILLER);
-// break;
-// case 33:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_THIEF);
-// break;
-// case 34:
-// if (value > GET_LEVEL(ch) || value > LVL_IMPL) {
-// send_to_char(ch, "You can't do that.\r\n");
-// return (0);
-// }
-// RANGE(0, LVL_IMPL);
-// vict->player.level = value;
-// break;
-// case 35:
-// if ((rnum = real_room(value)) == NOWHERE) {
-// send_to_char(ch, "No room exists with that number.\r\n");
-// return (0);
-// }
-// if (IN_ROOM(vict) != NOWHERE)	/* Another Eric Green special. */
-// char_from_room(vict);
-// char_to_room(vict, rnum);
-// break;
-// case 36:
-// SET_OR_REMOVE(PRF_FLAGS(vict), PRF_ROOMFLAGS);
-// break;
-// case 37:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_SITEOK);
-// break;
-// case 38:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_DELETED);
-// break;
-// case 39:
-// if ((i = parse_class(*val_arg)) == CLASS_UNDEFINED) {
-// send_to_char(ch, "That is not a class.\r\n");
-// return (0);
-// }
-// GET_CLASS(vict) = i;
-// break;
-// case 40:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_NOWIZLIST);
-// break;
-// case 41:
-// SET_OR_REMOVE(PRF_FLAGS(vict), PRF_QUEST);
-// break;
-// case 42:
-// if (!str_cmp(val_arg, "off")) {
-// REMOVE_BIT(PLR_FLAGS(vict), PLR_LOADROOM);
-// } else if (is_number(val_arg)) {
-// rvnum = atoi(val_arg);
-// if (real_room(rvnum) != NOWHERE) {
-// SET_BIT(PLR_FLAGS(vict), PLR_LOADROOM);
-// GET_LOADROOM(vict) = rvnum;
-// send_to_char(ch, "%s will enter at room #%d.", GET_NAME(vict), GET_LOADROOM(vict));
-// } else {
-// send_to_char(ch, "That room does not exist!\r\n");
-// return (0);
-// }
-// } else {
-// send_to_char(ch, "Must be 'off' or a room's virtual number.\r\n");
-// return (0);
-// }
-// break;
-// case 43:
-// SET_OR_REMOVE(PRF_FLAGS(vict), (PRF_COLOR_1 | PRF_COLOR_2));
-// break;
-// case 44:
-// if (GET_IDNUM(ch) != 1 || !IS_NPC(vict))
-// return (0);
-// GET_IDNUM(vict) = value;
-// break;
-// case 45:
-// if (GET_IDNUM(ch) > 1) {
-// send_to_char(ch, "Please don't use this command, yet.\r\n");
-// return (0);
-// }
-// if (GET_LEVEL(vict) >= LVL_GRGOD) {
-// send_to_char(ch, "You cannot change that.\r\n");
-// return (0);
-// }
-// strncpy(GET_PASSWD(vict), CRYPT(val_arg, GET_NAME(vict)), MAX_PWD_LENGTH);	/* strncpy: OK (G_P:MAX_PWD_LENGTH) */
-// *(GET_PASSWD(vict) + MAX_PWD_LENGTH) = '\0';
-// send_to_char(ch, "Password changed to '%s'.\r\n", val_arg);
-// break;
-// case 46:
-// SET_OR_REMOVE(PLR_FLAGS(vict), PLR_NODELETE);
-// break;
-// case 47:
-// if ((i = search_block(val_arg, GENDERS, false)) < 0) {
-// send_to_char(ch, "Must be 'male', 'female', or 'neutral'.\r\n");
-// return (0);
-// }
-// GET_SEX(vict) = i;
-// break;
-// case 48:	/* set age */
-// if (value < 2 || value > 200) {	/* Arbitrary limits. */
-// send_to_char(ch, "Ages 2 to 200 accepted.\r\n");
-// return (0);
-// }
-// /*
-//  * NOTE: May not display the exact age specified due to the integer
-//  * division used elsewhere in the code.  Seems to only happen for
-//  * some values below the starting age (17) anyway. -gg 5/27/98
-//  */
-// vict->player.time.birth = time(0) - ((value - 17) * SECS_PER_MUD_YEAR);
-// break;
-//
-// case 49:	/* Blame/Thank Rick Glover. :) */
-// GET_HEIGHT(vict) = value;
-// affect_total(vict);
-// break;
-//
-// case 50:
-// GET_WEIGHT(vict) = value;
-// affect_total(vict);
-// break;
-//
-// default:
-// send_to_char(ch, "Can't set that!\r\n");
-// return (0);
-// }
-//
-// return (1);
-// }
-//
-//
-// ACMD(do_set)
-// {
-// struct char_data *vict = None, *cbuf = None;
-// struct char_file_u tmp_store;
-// char field[MAX_INPUT_LENGTH], name[MAX_INPUT_LENGTH], buf[MAX_INPUT_LENGTH];
-// int mode, len, player_i = 0, retval;
-// char is_file = 0, is_player = 0;
-//
-// half_chop(argument, name, buf);
-//
-// if (!strcmp(name, "file")) {
-// is_file = 1;
-// half_chop(buf, name, buf);
-// } else if (!str_cmp(name, "player")) {
-// is_player = 1;
-// half_chop(buf, name, buf);
-// } else if (!str_cmp(name, "mob"))
-// half_chop(buf, name, buf);
-//
-// half_chop(buf, field, buf);
-//
-// if (!*name || !*field) {
-// send_to_char(ch, "Usage: set <victim> <field> <value>\r\n");
-// return;
-// }
-//
-// /* find the target */
-// if (!is_file) {
-// if (is_player) {
-// if (!(vict = get_player_vis(ch, name, None, FIND_CHAR_WORLD))) {
-// send_to_char(ch, "There is no such player.\r\n");
-// return;
-// }
-// } else { /* is_mob */
-// if (!(vict = get_char_vis(ch, name, None, FIND_CHAR_WORLD))) {
-// send_to_char(ch, "There is no such creature.\r\n");
-// return;
-// }
-// }
-// } else if (is_file) {
-// /* try to load the player off disk */
-// CREATE(cbuf, struct char_data, 1);
-// clear_char(cbuf);
-// if ((player_i = load_char(name, &tmp_store)) > -1) {
-// store_to_char(&tmp_store, cbuf);
-// if (GET_LEVEL(cbuf) >= GET_LEVEL(ch)) {
-// free_char(cbuf);
-// send_to_char(ch, "Sorry, you can't do that.\r\n");
-// return;
-// }
-// vict = cbuf;
-// } else {
-// free(cbuf);
-// send_to_char(ch, "There is no such player.\r\n");
-// return;
-// }
-// }
-//
-// /* find the command in the list */
-// len = strlen(field);
-// for (mode = 0; *(set_fields[mode].cmd) != '\n'; mode++)
-// if (!strncmp(field, set_fields[mode].cmd, len))
-// break;
-//
-// /* perform the set */
-// retval = perform_set(ch, vict, mode, buf);
-//
-// /* save the character if a change was made */
-// if (retval) {
-// if (!is_file && !IS_NPC(vict))
-// save_char(vict);
-// if (is_file) {
-// char_to_store(vict, &tmp_store);
-// fseek(player_fl, (player_i) * sizeof(struct char_file_u), SEEK_SET);
-// fwrite(&tmp_store, sizeof(struct char_file_u), 1, player_fl);
-// send_to_char(ch, "Saved in file.\r\n");
-// }
-// }
-//
-// /* free the memory if we allocated it earlier */
-// if (is_file)
-// free_char(cbuf);
-// }
-//
+/* The set options available */
+struct SetStruct {
+    cmd: &'static str,
+    level: i16,
+    pcnpc: u8,
+    type_: u8,
+}
+
+const SET_FIELDS: [SetStruct; 52] = [
+    SetStruct {
+        cmd: "brief",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    }, /* 0 */
+    SetStruct {
+        cmd: "invstart",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    }, /* 1 */
+    SetStruct {
+        cmd: "title",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "nosummon",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "maxhit",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "maxmana",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    }, /* 5 */
+    SetStruct {
+        cmd: "maxmove",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "hit",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "mana",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "move",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "align",
+        level: LVL_GOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    }, /* 10 */
+    SetStruct {
+        cmd: "str",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "stradd",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "int",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "wis",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "dex",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    }, /* 15 */
+    SetStruct {
+        cmd: "con",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "cha",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "ac",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "gold",
+        level: LVL_GOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "bank",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: NUMBER,
+    }, /* 20 */
+    SetStruct {
+        cmd: "exp",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "hitroll",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "damroll",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "invis",
+        level: LVL_IMPL,
+        pcnpc: PC,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "nohassle",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: BINARY,
+    }, /* 25 */
+    SetStruct {
+        cmd: "frozen",
+        level: LVL_FREEZE as i16,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "practices",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "lessons",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "drunk",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "hunger",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: MISC,
+    }, /* 30 */
+    SetStruct {
+        cmd: "thirst",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "killer",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "thief",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "level",
+        level: LVL_IMPL,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "room",
+        level: LVL_IMPL,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    }, /* 35 */
+    SetStruct {
+        cmd: "roomflag",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "siteok",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "deleted",
+        level: LVL_IMPL,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "class",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "nowizlist",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    }, /* 40 */
+    SetStruct {
+        cmd: "quest",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "loadroom",
+        level: LVL_GRGOD,
+        pcnpc: PC,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "color",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "idnum",
+        level: LVL_IMPL,
+        pcnpc: PC,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "passwd",
+        level: LVL_IMPL,
+        pcnpc: PC,
+        type_: MISC,
+    }, /* 45 */
+    SetStruct {
+        cmd: "nodelete",
+        level: LVL_GOD,
+        pcnpc: PC,
+        type_: BINARY,
+    },
+    SetStruct {
+        cmd: "sex",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: MISC,
+    },
+    SetStruct {
+        cmd: "age",
+        level: LVL_GRGOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "height",
+        level: LVL_GOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    },
+    SetStruct {
+        cmd: "weight",
+        level: LVL_GOD,
+        pcnpc: BOTH,
+        type_: NUMBER,
+    }, /* 50 */
+    SetStruct {
+        cmd: "\n",
+        level: 0,
+        pcnpc: BOTH,
+        type_: MISC,
+    },
+];
+
+fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
+    let mut on = false;
+    let mut off = false;
+    let mut value = 0;
+    let mode = mode as usize;
+
+    /* Check to make sure all the levels are correct */
+    if ch.get_level() != LVL_IMPL as u8 {
+        if !vict.is_npc() && ch.get_level() <= vict.get_level() && !Rc::ptr_eq(vict, ch) {
+            send_to_char(ch, "Maybe that's not such a great idea...\r\n");
+            return false;
+        }
+    }
+    if ch.get_level() < SET_FIELDS[mode].level as u8 {
+        send_to_char(ch, "You are not godly enough for that!\r\n");
+        return false;
+    }
+
+    /* Make sure the PC/NPC is correct */
+    if vict.is_npc() && SET_FIELDS[mode].pcnpc & NPC == 0 {
+        send_to_char(ch, "You can't do that to a beast!\r\n");
+        return false;
+    } else if !vict.is_npc() && SET_FIELDS[mode].pcnpc & PC == 0 {
+        send_to_char(ch, "That can only be done to a beast!\r\n");
+        return false;
+    }
+
+    /* Find the value of the argument */
+    if SET_FIELDS[mode].type_ == BINARY {
+        if val_arg == "on" || val_arg == "yes" {
+            on = true;
+        } else if val_arg == "off" || val_arg == "no" {
+            off = true;
+        }
+        if !on || off {
+            send_to_char(ch, "Value must be 'on' or 'off'.\r\n");
+            return false;
+        }
+        send_to_char(
+            ch,
+            format!(
+                "{} {} for {}.\r\n",
+                SET_FIELDS[mode].cmd,
+                onoff!(on),
+                vict.get_name()
+            )
+            .as_str(),
+        );
+    } else if SET_FIELDS[mode].type_ == NUMBER {
+        let r = val_arg.parse::<i32>();
+        value = if r.is_ok() { r.unwrap() } else { 0 };
+        send_to_char(
+            ch,
+            format!(
+                "{}'s {} set to {}.\r\n",
+                vict.get_name(),
+                SET_FIELDS[mode].cmd,
+                value
+            )
+            .as_str(),
+        );
+    } else {
+        send_to_char(ch, OK);
+    }
+    let rnum;
+    match mode {
+        0 => {
+            if on {
+                vict.set_prf_flags_bits(PRF_BRIEF)
+            } else {
+                vict.remove_prf_flags_bits(PRF_BRIEF)
+            }
+        }
+        1 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_INVSTART)
+            } else {
+                vict.remove_plr_flag(PLR_INVSTART)
+            }
+        }
+        2 => {
+            set_title(vict, Some(val_arg.to_string()));
+            send_to_char(
+                ch,
+                format!(
+                    "{}'s title is now: {}\r\n",
+                    vict.get_name(),
+                    vict.get_title()
+                )
+                .as_str(),
+            );
+        }
+        3 => {
+            if on {
+                vict.set_prf_flags_bits(PRF_SUMMONABLE)
+            } else {
+                vict.remove_prf_flags_bits(PRF_SUMMONABLE)
+            }
+            send_to_char(
+                ch,
+                format!("Nosummon {} for {}.\r\n", onoff!(!on), vict.get_name()).as_str(),
+            );
+        }
+        4 => {
+            vict.points.borrow_mut().max_hit = range!(value, 1, 5000) as i16;
+            affect_total(vict);
+        }
+        5 => {
+            vict.points.borrow_mut().max_mana = range!(value, 1, 5000) as i16;
+            affect_total(vict);
+        }
+        6 => {
+            vict.points.borrow_mut().max_move = range!(value, 1, 5000) as i16;
+            affect_total(vict);
+        }
+        7 => {
+            vict.points.borrow_mut().hit = range!(value, -9, vict.points.borrow().max_hit) as i16;
+            affect_total(vict);
+        }
+        8 => {
+            vict.points.borrow_mut().mana = range!(value, 0, vict.points.borrow().max_mana) as i16;
+            affect_total(vict);
+        }
+        9 => {
+            vict.points.borrow_mut().movem = range!(value, 0, vict.points.borrow().max_move) as i16;
+            affect_total(vict);
+        }
+        10 => {
+            vict.set_alignment(range!(value, -1000, 1000));
+            affect_total(vict);
+        }
+        11 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().str = value as i8;
+            vict.real_abils.borrow_mut().str_add = 0;
+            affect_total(vict);
+        }
+        12 => {
+            vict.real_abils.borrow_mut().str_add = range!(value, 0, 100) as i8;
+            if value > 0 {
+                vict.real_abils.borrow_mut().str = 18;
+            }
+            affect_total(vict);
+        }
+        13 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().intel = value as i8;
+            affect_total(vict);
+        }
+        14 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().wis = value as i8;
+            affect_total(vict);
+        }
+        15 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().dex = value as i8;
+            affect_total(vict);
+        }
+        16 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().con = value as i8;
+            affect_total(vict);
+        }
+        17 => {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+                value = range!(value, 3, 25);
+            } else {
+                value = range!(value, 3, 18);
+            }
+            vict.real_abils.borrow_mut().cha = value as i8;
+            affect_total(vict);
+        }
+        18 => {
+            vict.points.borrow_mut().armor = range!(value, -100, 100) as i16;
+            affect_total(vict);
+        }
+        19 => {
+            vict.set_gold(range!(value, 0, 100000000));
+        }
+        20 => {
+            vict.set_bank_gold(range!(value, 0, 100000000));
+        }
+        21 => {
+            vict.points.borrow_mut().exp = range!(value, 0, 50000000);
+        }
+        22 => {
+            vict.points.borrow_mut().hitroll = range!(value, -20, 20) as i8;
+            affect_total(vict);
+        }
+        23 => {
+            vict.points.borrow_mut().damroll = range!(value, -20, 20) as i8;
+            affect_total(vict);
+        }
+        24 => {
+            if ch.get_level() < LVL_IMPL as u8 && !Rc::ptr_eq(ch, vict) {
+                send_to_char(ch, "You aren't godly enough for that!\r\n");
+                return false;
+            }
+            vict.set_invis_lev(range!(value, 0, vict.get_level()) as i16);
+        }
+        25 => {
+            if ch.get_level() < LVL_IMPL as u8 && !Rc::ptr_eq(ch, vict) {
+                send_to_char(ch, "You aren't godly enough for that!\r\n");
+                return false;
+            }
+            if on {
+                vict.set_prf_flags_bits(PRF_NOHASSLE)
+            } else {
+                vict.remove_prf_flags_bits(PRF_NOHASSLE)
+            }
+        }
+        26 => {
+            if Rc::ptr_eq(ch, vict) && on {
+                send_to_char(ch, "Better not -- could be a long winter!\r\n");
+                return false;
+            }
+            if on {
+                vict.set_plr_flag_bit(PLR_FROZEN)
+            } else {
+                vict.remove_plr_flag(PLR_FROZEN)
+            }
+        }
+        27 | 28 => {
+            vict.set_practices(range!(value, 0, 100));
+        }
+        29 | 30 | 31 => {
+            if val_arg == "off" {
+                vict.set_cond((mode - 29) as i32, -1); /* warning: magic number here */
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}'s {} now off.\r\n",
+                        vict.get_name(),
+                        SET_FIELDS[mode].cmd
+                    )
+                    .as_str(),
+                );
+            } else if is_number(val_arg) {
+                value = val_arg.parse::<i32>().unwrap();
+                value = range!(value, 0, 24);
+                vict.set_cond((mode - 29) as i32, value as i16); /* and here too */
+                send_to_char(
+                    ch,
+                    format!(
+                        "{}'s {} set to {}.\r\n",
+                        vict.get_name(),
+                        SET_FIELDS[mode].cmd,
+                        value
+                    )
+                    .as_str(),
+                );
+            } else {
+                send_to_char(ch, "Must be 'off' or a value from 0 to 24.\r\n");
+                return false;
+            }
+        }
+        32 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_KILLER)
+            } else {
+                vict.remove_plr_flag(PLR_KILLER)
+            }
+        }
+        33 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_THIEF)
+            } else {
+                vict.remove_plr_flag(PLR_THIEF)
+            }
+        }
+        34 => {
+            if value > ch.get_level() as i32 || value > LVL_IMPL as i32 {
+                send_to_char(ch, "You can't do that.\r\n");
+                return false;
+            }
+            value = range!(value, 0, LVL_IMPL);
+            vict.player.borrow_mut().level = value as u8;
+        }
+        35 => {
+            if {
+                rnum = db.real_room(value as RoomRnum);
+                rnum == NOWHERE
+            } {
+                send_to_char(ch, "No room exists with that number.\r\n");
+                return false;
+            }
+            if vict.in_room() != NOWHERE {
+                /* Another Eric Green special. */
+                db.char_from_room(vict);
+            }
+            db.char_to_room(Some(vict), rnum);
+        }
+        36 => {
+            if on {
+                vict.set_plr_flag_bit(PRF_ROOMFLAGS)
+            } else {
+                vict.remove_plr_flag(PRF_ROOMFLAGS)
+            }
+        }
+        37 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_SITEOK)
+            } else {
+                vict.remove_plr_flag(PLR_SITEOK)
+            }
+        }
+        38 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_DELETED)
+            } else {
+                vict.remove_plr_flag(PLR_DELETED)
+            }
+        }
+        39 => {
+            let i;
+            if {
+                i = parse_class(val_arg.chars().next().unwrap());
+                i == CLASS_UNDEFINED
+            } {
+                send_to_char(ch, "That is not a class.\r\n");
+                return false;
+            }
+            vict.set_class(i);
+        }
+        40 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_NOWIZLIST)
+            } else {
+                vict.remove_plr_flag(PLR_NOWIZLIST)
+            }
+        }
+        41 => {
+            if on {
+                vict.set_prf_flags_bits(PRF_QUEST)
+            } else {
+                vict.remove_prf_flags_bits(PRF_QUEST)
+            }
+        }
+        42 => {
+            if val_arg == "off" {
+                vict.remove_prf_flags_bits(PLR_LOADROOM);
+            } else if is_number(val_arg) {
+                let rvnum = val_arg.parse::<i32>().unwrap() as RoomRnum;
+                if db.real_room(rvnum) != NOWHERE {
+                    vict.set_plr_flag_bit(PLR_LOADROOM);
+                    vict.set_loadroom(rvnum);
+                    send_to_char(
+                        ch,
+                        format!(
+                            "{} will enter at room #{}.",
+                            vict.get_name(),
+                            vict.get_loadroom()
+                        )
+                        .as_str(),
+                    );
+                } else {
+                    send_to_char(ch, "That room does not exist!\r\n");
+                    return false;
+                }
+            } else {
+                send_to_char(ch, "Must be 'off' or a room's virtual number.\r\n");
+                return false;
+            }
+        }
+        43 => {
+            if on {
+                vict.set_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2)
+            } else {
+                vict.remove_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2)
+            }
+        }
+        44 => {
+            if ch.get_idnum() != 1 || !vict.is_npc() {
+                return false;
+            }
+            vict.set_idnum(value as i64);
+        }
+        45 => {
+            if ch.get_idnum() > 1 {
+                send_to_char(ch, "Please don't use this command, yet.\r\n");
+                return false;
+            }
+            if vict.get_level() >= LVL_GRGOD as u8 {
+                send_to_char(ch, "You cannot change that.\r\n");
+                return false;
+            }
+            let mut passwd2 = [0 as u8; 16];
+            let salt = vict.get_name();
+            pbkdf2::pbkdf2::<Hmac<Sha256>>(val_arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
+                .expect("Error while encrypting password");
+            vict.set_passwd(passwd2);
+            send_to_char(
+                ch,
+                format!("Password changed to '{}'.\r\n", val_arg).as_str(),
+            );
+        }
+        46 => {
+            if on {
+                vict.set_plr_flag_bit(PLR_NODELETE)
+            } else {
+                vict.remove_plr_flag(PLR_NODELETE)
+            }
+        }
+        47 => {
+            let i;
+            if {
+                i = search_block(val_arg, &GENDERS, false);
+                i.is_none()
+            } {
+                send_to_char(ch, "Must be 'male', 'female', or 'neutral'.\r\n");
+                return false;
+            }
+            vict.set_sex(i.unwrap() as u8);
+        }
+        48 => {
+            /* set age */
+            if value < 2 || value > 200 {
+                /* Arbitrary limits. */
+                send_to_char(ch, "Ages 2 to 200 accepted.\r\n");
+                return false;
+            }
+            /*
+             * NOTE: May not display the exact age specified due to the integer
+             * division used elsewhere in the code.  Seems to only happen for
+             * some values below the starting age (17) anyway. -gg 5/27/98
+             */
+            vict.player.borrow_mut().time.birth =
+                time_now() - ((value as u64 - 17) * SECS_PER_MUD_YEAR);
+        }
+
+        49 => {
+            /* Blame/Thank Rick Glover. :) */
+            vict.set_height(value as u8);
+            affect_total(vict);
+        }
+
+        50 => {
+            vict.set_weight(value as u8);
+            affect_total(vict);
+        }
+
+        _ => {
+            send_to_char(ch, "Can't set that!\r\n");
+            return false;
+        }
+    }
+
+    true
+}
+
+#[allow(unused_variables)]
+pub fn do_set(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut player_i = None;
+    let mut is_file = false;
+    let mut is_player = false;
+    let mut argument = argument.to_string();
+    let mut name = String::new();
+    let mut buf = String::new();
+    let mut field = String::new();
+    let mut tmp_store = CharFileU::new();
+
+    half_chop(&mut argument, &mut name, &mut buf);
+
+    if name == "file" {
+        is_file = true;
+        let mut buf2 = buf.clone();
+        half_chop(&mut buf2, &mut name, &mut buf);
+        buf = buf2;
+    } else if name == "player" {
+        is_player = true;
+        let mut buf2 = buf.clone();
+        half_chop(&mut buf2, &mut name, &mut buf);
+        buf = buf2;
+    } else if name == "mob" {
+        let mut buf2 = buf.clone();
+        half_chop(&mut buf2, &mut name, &mut buf);
+        buf = buf2;
+    }
+    let mut buf2 = buf.clone();
+    half_chop(&mut buf2, &mut field, &mut buf);
+    buf = buf2;
+
+    if name.is_empty() || field.is_empty() {
+        send_to_char(ch, "Usage: set <victim> <field> <value>\r\n");
+        return;
+    }
+    let mut vict = None;
+    /* find the target */
+    if !is_file {
+        if is_player {
+            if {
+                vict = db.get_player_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict.is_none()
+            } {
+                send_to_char(ch, "There is no such player.\r\n");
+                return;
+            }
+        } else {
+            /* is_mob */
+            if {
+                vict = db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict.is_none()
+            } {
+                send_to_char(ch, "There is no such creature.\r\n");
+                return;
+            }
+        }
+    } else if is_file {
+        /* try to load the player off disk */
+        let mut cbuf = CharData::new();
+        clear_char(&mut cbuf);
+        if {
+            player_i = db.load_char(&name, &mut tmp_store);
+            player_i.is_some()
+        } {
+            store_to_char(&tmp_store, &mut cbuf);
+            if cbuf.get_level() >= ch.get_level() {
+                send_to_char(ch, "Sorry, you can't do that.\r\n");
+                return;
+            }
+            vict = Some(Rc::new(cbuf));
+        } else {
+            send_to_char(ch, "There is no such player.\r\n");
+            return;
+        }
+    }
+
+    /* find the command in the list */
+    let len = field.len();
+    let mode = SET_FIELDS.iter().position(|e| e.cmd.starts_with(&field));
+    let mode = if mode.is_some() {
+        mode.unwrap()
+    } else {
+        SET_FIELDS.len() - 1
+    };
+
+    /* perform the set */
+    let retval = perform_set(db, ch, vict.as_ref().unwrap(), mode as i32, &buf);
+
+    /* save the character if a change was made */
+    if retval {
+        if !is_file && !vict.as_ref().unwrap().is_npc() {
+            db.save_char(vict.as_ref().unwrap());
+        }
+        if is_file {
+            char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
+
+            unsafe {
+                let player_slice = slice::from_raw_parts(
+                    &mut tmp_store as *mut _ as *mut u8,
+                    mem::size_of::<CharFileU>(),
+                );
+                db.player_fl
+                    .borrow_mut()
+                    .as_mut()
+                    .unwrap()
+                    .write_all_at(
+                        player_slice,
+                        (player_i.unwrap() * mem::size_of::<CharFileU>()) as u64,
+                    )
+                    .expect("Error while writing player record to file");
+            }
+
+            send_to_char(ch, "Saved in file.\r\n");
+        }
+    }
+}

@@ -112,7 +112,7 @@ pub const SUF_OBJS: &str = "objs";
 pub const SUF_TEXT: &str = "text";
 pub const SUF_ALIAS: &str = "alias";
 
-struct PlayerIndexElement {
+pub struct PlayerIndexElement {
     name: String,
     id: i64,
 }
@@ -142,9 +142,9 @@ pub struct DB {
     /* zone table			 */
     pub(crate) fight_messages: Vec<MessageList>,
     /* fighting messages	 */
-    player_table: RefCell<Vec<PlayerIndexElement>>,
+    pub(crate) player_table: RefCell<Vec<PlayerIndexElement>>,
     /* index to plr file	 */
-    player_fl: RefCell<Option<File>>,
+    pub(crate) player_fl: RefCell<Option<File>>,
     /* file desc of player file	 */
     top_idnum: Cell<i32>,
     /* highest idnum in use		 */
@@ -2639,7 +2639,7 @@ impl DB {
         *last_cmd = 0;
     }
 
-    fn reset_zone(&self, main_globals: &Game, zone: usize) {
+    pub(crate) fn reset_zone(&self, main_globals: &Game, zone: usize) {
         //int cmd_no, last_cmd = 0;
         //struct char_data *mob = NULL;
         //struct obj_data * obj, *obj_to;
@@ -2957,19 +2957,19 @@ impl DB {
             ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
         );
 
-        let record_size = mem::size_of::<CharFileU>();
         // self.player_fl.borrow_mut().as_mut().unwrap()
         //     .fseek(SeekFrom::Start((ch.get_pfilepos() * record_size) as u64))
         //     .expect("Error while seeking for writing player");
         unsafe {
-            let player_slice = slice::from_raw_parts(&mut st as *mut _ as *mut u8, record_size);
+            let player_slice =
+                slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
             self.player_fl
                 .borrow_mut()
                 .as_mut()
                 .unwrap()
                 .write_all_at(
                     player_slice,
-                    (ch.get_pfilepos() as usize * record_size) as u64,
+                    (ch.get_pfilepos() as usize * mem::size_of::<CharFileU>()) as u64,
                 )
                 .expect("Error while writing player record to file");
         }
@@ -3137,7 +3137,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 } /* store_to_char */
 
 /* copy vital data from a players char-structure to the file structure */
-fn char_to_store(ch: &CharData, st: &mut CharFileU) {
+pub fn char_to_store(ch: &CharData, st: &mut CharFileU) {
     //int i;
     //struct affected_type *af;
     //struct obj_data *char_eq[NUM_WEARS];
