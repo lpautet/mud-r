@@ -2,6 +2,7 @@ use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use crate::interpreter::AliasData;
 use crate::{DescriptorData, Game};
 
 pub type Special =
@@ -440,9 +441,9 @@ pub struct CharSpecialDataSaved {
  */
 pub struct PlayerSpecialData {
     pub saved: PlayerSpecialDataSaved,
-    pub poofin: Rc<str>,  /* Description on arrival of a god.     */
-    pub poofout: Rc<str>, /* Description upon a god's exit.       */
-    // struct alias_data *aliases;	/* Character's aliases			*/
+    pub poofin: Rc<str>,         /* Description on arrival of a god.     */
+    pub poofout: Rc<str>,        /* Description upon a god's exit.       */
+    pub aliases: Vec<AliasData>, /* Character's aliases			*/
     pub last_tell: i64,
     /* idnum of last tell from		*/
     // void *last_olc_targ;		/* olc control				*/

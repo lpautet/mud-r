@@ -18,6 +18,7 @@ use std::rc::Rc;
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
+use crate::alias::write_aliases;
 use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED};
 use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, DB, IDEA_FILE, TYPO_FILE};
@@ -105,9 +106,8 @@ pub fn do_save(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
          * immortal advances from mortality, you may want < instead of <=.
          */
         if AUTO_SAVE && ch.get_level() <= LVL_IMMORT as u8 {
-            // TODO implement aliases
-            // send_to_char(ch, "Saving aliases.\r\n");
-            // write_aliases(ch);
+            send_to_char(ch, "Saving aliases.\r\n");
+            write_aliases(ch);
             return;
         }
         send_to_char(
@@ -116,8 +116,7 @@ pub fn do_save(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         );
     }
 
-    // TODO implement aliases
-    // write_aliases(ch);
+    write_aliases(ch);
     game.db.save_char(ch);
     crash_crashsave(&game.db, ch);
     // TODO implement houses

@@ -10,6 +10,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::cmp::max;
+use std::collections::LinkedList;
 use std::rc::Rc;
 
 use hmac::Hmac;
@@ -47,6 +48,7 @@ use crate::act_wizard::{
     do_snoop, do_stat, do_switch, do_syslog, do_teleport, do_trans, do_vnum, do_vstat, do_wizlock,
     do_wiznet, do_wizutil, do_zreset,
 };
+use crate::alias::read_aliases;
 use crate::ban::valid_name;
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
@@ -61,9 +63,9 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE,
-    PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW,
-    POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
+    NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP,
+    POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
     CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -72,9 +74,28 @@ use crate::structs::{
 };
 use crate::util::{BRF, NRM};
 use crate::{
-    _clrlevel, clr, send_to_char, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
+    _clrlevel, clr, send_to_char, write_to_q, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED,
+    TO_ROOM,
 };
 use crate::{echo_off, echo_on, write_to_output};
+
+/*
+ * Alert! Changed from 'struct alias' to 'struct AliasData' in bpl15
+ * because a Windows 95 compiler gives a warning about it having similiar
+ * named member.
+ */
+pub struct AliasData {
+    pub alias: Rc<str>,
+    pub replacement: Rc<str>,
+    pub type_: i32,
+}
+
+pub const ALIAS_SIMPLE: i32 = 0;
+pub const ALIAS_COMPLEX: i32 = 1;
+
+pub const ALIAS_SEP_CHAR: char = ';';
+pub const ALIAS_VAR_CHAR: char = '$';
+pub const ALIAS_GLOB_CHAR: char = '*';
 
 /*
  * SUBCOMMANDS
@@ -241,7 +262,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 289] = [
+pub const CMD_INFO: [CommandInfo; 291] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -310,6 +331,13 @@ pub const CMD_INFO: [CommandInfo; 289] = [
         subcmd: 0,
     },
     // { "alias"    , POS_DEAD    , do_alias    , 0, 0 },
+    CommandInfo {
+        command: "alias",
+        minimum_position: POS_DEAD,
+        command_pointer: do_alias,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "accuse"   , POS_SITTING , do_action   , 0, 0 },
     CommandInfo {
         command: "accuse",
@@ -1649,6 +1677,13 @@ pub const CMD_INFO: [CommandInfo; 289] = [
         subcmd: SCMD_QUEST,
     },
     // { "qui"      , POS_DEAD    , do_quit     , 0, 0 },
+    CommandInfo {
+        command: "qui",
+        minimum_position: POS_DEAD,
+        command_pointer: do_quit,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "quit"     , POS_DEAD    , do_quit     , 0, SCMD_QUIT },
     CommandInfo {
         command: "quit",
@@ -2696,82 +2731,75 @@ pub fn command_interpreter(game: &Game, ch: &Rc<CharData>, argument: &str) {
  * Routines to handle aliasing                                             *
  **************************************************************************/
 
-//
-// struct alias_data *find_alias(struct alias_data *alias_list, char *str)
-// {
-// while (alias_list != NULL) {
-// if (*str == *alias_list->alias)	/* hey, every little bit counts :-) */
-// if (!strcmp(str, alias_list->alias))
-// return (alias_list);
-//
-// alias_list = alias_list->next;
-// }
-//
-// return (NULL);
-// }
-
-// void free_alias(struct alias_data *a)
-// {
-// if (a->alias)
-// free(a->alias);
-// if (a->replacement)
-// free(a->replacement);
-// free(a);
-// }
+fn find_alias<'a, 'b>(alias_list: &'a Vec<AliasData>, alias: &'b str) -> Option<&'a AliasData> {
+    alias_list.iter().find(|e| e.alias.as_ref() == alias)
+}
 
 /* The interface to the outside world: do_alias */
-// ACMD(do_alias)
-// {
-// char arg[MAX_INPUT_LENGTH];
-// char *repl;
-// struct alias_data *a, *temp;
-//
-// if (IS_NPC(ch))
-// return;
-//
-// repl = any_one_arg(argument, arg);
-//
-// if (!*arg) {			/* no argument specified -- list currently defined aliases */
-// send_to_char(ch, "Currently defined aliases:\r\n");
-// if ((a = GET_ALIASES(ch)) == NULL)
-// send_to_char(ch, " None.\r\n");
-// else {
-// while (a != NULL) {
-// send_to_char(ch, "%-15s %s\r\n", a->alias, a->replacement);
-// a = a->next;
-// }
-// }
-// } else {			/* otherwise, add or remove aliases */
-// /* is this an alias we've already defined? */
-// if ((a = find_alias(GET_ALIASES(ch), arg)) != NULL) {
-// REMOVE_FROM_LIST(a, GET_ALIASES(ch), next);
-// free_alias(a);
-// }
-// /* if no replacement string is specified, assume we want to delete */
-// if (!*repl) {
-// if (a == NULL)
-// send_to_char(ch, "No such alias.\r\n");
-// else
-// send_to_char(ch, "Alias deleted.\r\n");
-// } else {			/* otherwise, either add or redefine an alias */
-// if (!str_cmp(arg, "alias")) {
-// send_to_char(ch, "You can't alias 'alias'.\r\n");
-// return;
-// }
-// CREATE(a, struct alias_data, 1);
-// a->alias = strdup(arg);
-// delete_doubledollar(repl);
-// a->replacement = strdup(repl);
-// if (strchr(repl, ALIAS_SEP_CHAR) || strchr(repl, ALIAS_VAR_CHAR))
-// a->type = ALIAS_COMPLEX;
-// else
-// a->type = ALIAS_SIMPLE;
-// a->next = GET_ALIASES(ch);
-// GET_ALIASES(ch) = a;
-// send_to_char(ch, "Alias added.\r\n");
-// }
-// }
-// }
+#[allow(unused_variables)]
+pub fn do_alias(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut arg = String::new();
+
+    if ch.is_npc() {
+        return;
+    }
+
+    let mut repl = any_one_arg(argument, &mut arg).to_string();
+
+    if arg.is_empty() {
+        /* no argument specified -- list currently defined aliases */
+        send_to_char(ch, "Currently defined aliases:\r\n");
+        if ch.player_specials.borrow().aliases.len() == 0 {
+            send_to_char(ch, " None.\r\n");
+        } else {
+            for a in ch.player_specials.borrow().aliases.iter() {
+                send_to_char(ch, format!("{:15} {}\r\n", a.alias, a.replacement).as_str());
+            }
+        }
+    } else {
+        /* otherwise, add or remove aliases */
+        /* is this an alias we've already defined? */
+        let a = ch
+            .player_specials
+            .borrow_mut()
+            .aliases
+            .iter()
+            .position(|e| e.alias.as_ref() == &arg);
+        if a.is_some() {
+            ch.player_specials.borrow_mut().aliases.remove(a.unwrap());
+        }
+        /* if no replacement string is specified, assume we want to delete */
+        if repl.is_empty() {
+            if a.is_none() {
+                send_to_char(ch, "No such alias.\r\n");
+            } else {
+                send_to_char(ch, "Alias deleted.\r\n");
+            }
+        } else {
+            /* otherwise, either add or redefine an alias */
+            if arg == "alias" {
+                send_to_char(ch, "You can't alias 'alias'.\r\n");
+                return;
+            }
+            delete_doubledollar(&mut repl);
+
+            let mut a = AliasData {
+                alias: Rc::from(arg.as_str()),
+                replacement: Rc::from(repl),
+                type_: 0,
+            };
+
+            if a.replacement.contains(ALIAS_SEP_CHAR) || a.replacement.contains(ALIAS_VAR_CHAR) {
+                a.type_ = ALIAS_COMPLEX;
+            } else {
+                a.type_ = ALIAS_SIMPLE;
+            }
+            ch.player_specials.borrow_mut().aliases.push(a);
+            send_to_char(ch, "Alias added.\r\n");
+        }
+    }
+}
 
 /*
  * Valid numeric replacements are only $1 .. $9 (makes parsing a little
@@ -2779,60 +2807,58 @@ pub fn command_interpreter(game: &Game, ch: &Rc<CharData>, argument: &str) {
  * is "$*", which stands for the entire original line after the alias.
  * ";" is used to delimit commands.
  */
-// pub const NUM_TOKENS:i32 = 9;
-//
-// void perform_complex_alias(struct txt_q *input_q, char *orig, struct alias_data *a)
-// {
-// struct txt_q temp_queue;
-// char *tokens[NUM_TOKENS], *temp, *write_point;
-// char buf2[MAX_RAW_INPUT_LENGTH], buf[MAX_RAW_INPUT_LENGTH];	/* raw? */
-// int num_of_tokens = 0, num;
-//
-// /* First, parse the original string */
-// strcpy(buf2, orig);	/* strcpy: OK (orig:MAX_INPUT_LENGTH < buf2:MAX_RAW_INPUT_LENGTH) */
-// temp = strtok(buf2, " ");
-// while (temp != NULL && num_of_tokens < NUM_TOKENS) {
-// tokens[num_of_tokens++] = temp;
-// temp = strtok(NULL, " ");
-// }
-//
-// /* initialize */
-// write_point = buf;
-// temp_queue.head = temp_queue.tail = NULL;
-//
-// /* now parse the alias */
-// for (temp = a->replacement; *temp; temp++) {
-// if (*temp == ALIAS_SEP_CHAR) {
-// *write_point = '\0';
-// buf[MAX_INPUT_LENGTH - 1] = '\0';
-// write_to_q(buf, &temp_queue, 1);
-// write_point = buf;
-// } else if (*temp == ALIAS_VAR_CHAR) {
-// temp++;
-// if ((num = *temp - '1') < num_of_tokens && num >= 0) {
-// strcpy(write_point, tokens[num]);	/* strcpy: OK */
-// write_point += strlen(tokens[num]);
-// } else if (*temp == ALIAS_GLOB_CHAR) {
-// strcpy(write_point, orig);		/* strcpy: OK */
-// write_point += strlen(orig);
-// } else if ((*(write_point++) = *temp) == '$')	/* redouble $ for act safety */
-// *(write_point++) = '$';
-// } else
-// *(write_point++) = *temp;
-// }
-//
-// *write_point = '\0';
-// buf[MAX_INPUT_LENGTH - 1] = '\0';
-// write_to_q(buf, &temp_queue, 1);
-//
-// /* push our temp_queue on to the _front_ of the input queue */
-// if (input_q->head == NULL)
-// *input_q = temp_queue;
-// else {
-// temp_queue.tail->next = input_q->head;
-// input_q->head = temp_queue.head;
-// }
-// }
+const NUM_TOKENS: i32 = 9;
+
+fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &AliasData) {
+    let mut num_of_tokens = 0;
+    let mut tokens = [0 as usize; NUM_TOKENS as usize];
+
+    /* First, parse the original string */
+    let mut buf = String::new();
+    let buf2 = orig.to_string();
+    let mut temp = buf2.find(' ');
+
+    while temp.is_some() && num_of_tokens < NUM_TOKENS {
+        tokens[num_of_tokens as usize] = temp.unwrap();
+        num_of_tokens += 1;
+        temp = buf2.as_str()[temp.unwrap() + 1..].find(' ');
+    }
+
+    /* initialize */
+    // write_point = buf;
+    // temp_queue.head = temp_queue.tail = NULL;
+    let mut num;
+    /* now parse the alias */
+    let mut temp = a.replacement.as_ref();
+    while !temp.is_empty() {
+        if temp.starts_with(ALIAS_SEP_CHAR) {
+            write_to_q(&buf, input_q, true);
+            buf.clear();
+        } else if temp.starts_with(ALIAS_VAR_CHAR) {
+            temp = &temp[1..];
+            if {
+                num = temp.chars().next().unwrap() as u32 - '1' as u32;
+                num < num_of_tokens as u32 && num >= 0
+            } {
+                buf.push_str(&buf2[tokens[num as usize]..]);
+            } else if temp.starts_with(ALIAS_GLOB_CHAR) {
+                buf.push_str(orig);
+            } else if {
+                buf.push(temp.chars().next().unwrap());
+                temp.starts_with('$')
+            } {
+                /* redouble $ for act safety */
+                buf.push('$');
+            } else {
+                buf.push(temp.chars().next().unwrap());
+            }
+        }
+
+        temp = &temp[1..];
+    }
+
+    write_to_q(&buf, input_q, true);
+}
 
 /*
  * Given a character and a string, perform alias replacement on it.
@@ -2842,38 +2868,47 @@ pub fn command_interpreter(game: &Game, ch: &Rc<CharData>, argument: &str) {
  *   1: String was _not_ modified in place; rather, the expanded aliases
  *      have been placed at the front of the character's input queue.
  */
-// int perform_alias(struct descriptor_data *d, char *orig, size_t maxlen)
-// {
-// char first_arg[MAX_INPUT_LENGTH], *ptr;
-// struct alias_data *a, *tmp;
-//
-// /* Mobs don't have alaises. */
-// if (IS_NPC(d->character))
-// return (0);
-//
-// /* bail out immediately if the guy doesn't have any aliases */
-// if ((tmp = GET_ALIASES(d->character)) == NULL)
-// return (0);
-//
-// /* find the alias we're supposed to match */
-// ptr = any_one_arg(orig, first_arg);
-//
-// /* bail out if it's null */
-// if (!*first_arg)
-// return (0);
-//
-// /* if the first arg is not an alias, return without doing anything */
-// if ((a = find_alias(tmp, first_arg)) == NULL)
-// return (0);
-//
-// if (a->type == ALIAS_SIMPLE) {
-// strlcpy(orig, a->replacement, maxlen);
-// return (0);
-// } else {
-// perform_complex_alias(&d->input, ptr, a);
-// return (1);
-// }
-// }
+pub fn perform_alias(d: &Rc<DescriptorData>, orig: &mut String) -> bool {
+    let first_arg = String::new();
+
+    /* Mobs don't have aliases. */
+    if d.character.borrow().as_ref().unwrap().is_npc() {
+        return false;
+    }
+    let dco = d.character.borrow();
+    let dc = dco.as_ref().unwrap();
+    /* bail out immediately if the guy doesn't have any aliases */
+    if dc.player_specials.borrow().aliases.len() == 0 {
+        return false;
+    }
+
+    /* find the alias we're supposed to match */
+    let mut first_arg = String::new();
+    let ptr = any_one_arg(orig, &mut first_arg);
+
+    /* bail out if it's null */
+    if first_arg.is_empty() {
+        return false;
+    }
+    let a;
+    /* if the first arg is not an alias, return without doing anything */
+    let dcps = dc.player_specials.borrow();
+    if {
+        a = find_alias(&dcps.aliases, &first_arg);
+        a.is_none()
+    } {
+        return false;
+    }
+    let a = a.unwrap();
+    if a.type_ == ALIAS_SIMPLE {
+        orig.clear();
+        orig.push_str(a.replacement.as_ref());
+        return false;
+    } else {
+        perform_complex_alias(&mut d.input.borrow_mut(), ptr, a);
+        return true;
+    }
+}
 
 /***************************************************************************
  * Various other parsing utilities                                         *
@@ -3460,7 +3495,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
             if arg.to_uppercase().starts_with('Y') {
                 // TODO: support banning
                 // if (isbanned(d->host) >= BAN_NEW) {
-                //     mudlog(NRM, LVL_GOD, true, "Request for new char %s denied from [%s] (siteban)", GET_PC_NAME(d->character), d->host);
+                //     mudlog(NRM, LVL_GOD, true, "Request for new char {} denied from [{}] (siteban)", GET_PC_NAME(d->character), d->host);
                 //     write_to_output(d, "Sorry, new characters are not allowed from your site!\r\n");
                 //     STATE(d) = CON_CLOSE;
                 //     return;
@@ -3566,7 +3601,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
                     //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
                     //     STATE(d) = CON_CLOSE;
-                    //     mudlog(NRM, LVL_GOD, true, "Connection attempt for %s denied from %s", GET_NAME(d->character), d->host);
+                    //     mudlog(NRM, LVL_GOD, true, "Connection attempt for {} denied from {}", GET_NAME(d->character), d->host);
                     //     return;
                     // }
                     if d.character.borrow().as_ref().unwrap().get_level() < db.circle_restrict.get()
@@ -3783,8 +3818,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                 '1' => {
                     {
                         reset_char(character.as_ref());
-                        // TODO implement aliases
-                        //read_aliases(character);
+                        read_aliases(character);
                         if character.prf_flagged(PLR_INVSTART) {
                             character.set_invis_lev(character.get_level() as i16);
                         }
@@ -3890,7 +3924,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
         // ConChpwdGetold => {
         //     if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
         //         echo_on(d);
-        //         write_to_output(d, "\r\nIncorrect password.\r\n%s", MENU);
+        //         write_to_output(d, "\r\nIncorrect password.\r\n{}", MENU);
         //         STATE(d) = CON_MENU;
         //     } else {
         //         write_to_output(d, "\r\nEnter a new password: ");
@@ -3902,7 +3936,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
         // ConDelcnf1 => {
         //     echo_on(d);
         //     if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
-        //         write_to_output(d, "\r\nIncorrect password.\r\n%s", MENU);
+        //         write_to_output(d, "\r\nIncorrect password.\r\n{}", MENU);
         //         STATE(d) = CON_MENU;
         //     } else {
         //         write_to_output(d, "\r\nYOU ARE ABOUT TO DELETE THIS CHARACTER PERMANENTLY.\r\n"
@@ -3926,13 +3960,13 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
         //         save_char(d -> character);
         //         Crash_delete_file(GET_NAME(d -> character));
         //         delete_aliases(GET_NAME(d -> character));
-        //         write_to_output(d, "Character '%s' deleted!\r\n"
+        //         write_to_output(d, "Character '{}' deleted!\r\n"
         //                         "Goodbye.\r\n", GET_NAME(d -> character));
-        //         mudlog(NRM, LVL_GOD, true, "%s (lev %d) has self-deleted.", GET_NAME(d -> character), GET_LEVEL(d -> character));
+        //         mudlog(NRM, LVL_GOD, true, "{} (lev %d) has self-deleted.", GET_NAME(d -> character), GET_LEVEL(d -> character));
         //         STATE(d) = CON_CLOSE;
         //         return;
         //     } else {
-        //         write_to_output(d, "\r\nCharacter not deleted.\r\n%s", MENU);
+        //         write_to_output(d, "\r\nCharacter not deleted.\r\n{}", MENU);
         //         STATE(d) = CON_MENU;
         //     }
         // }

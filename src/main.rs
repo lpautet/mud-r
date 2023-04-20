@@ -29,7 +29,7 @@ use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
-use crate::interpreter::{command_interpreter, nanny};
+use crate::interpreter::{command_interpreter, nanny, perform_alias};
 use crate::magic::affect_update;
 use crate::modify::show_string;
 use crate::objsave::crash_save_all;
@@ -46,6 +46,7 @@ mod act_offensive;
 mod act_other;
 mod act_social;
 mod act_wizard;
+mod alias;
 mod ban;
 mod class;
 mod config;
@@ -125,8 +126,10 @@ pub struct DescriptorData {
     /* linked to char			*/
     original: RefCell<Option<Rc<CharData>>>,
     /* original char if switched		*/
-    snooping: RefCell<Option<Rc<DescriptorData>>>, /* Who is this char snooping	*/
-    snoop_by: RefCell<Option<Rc<DescriptorData>>>, /* And who is snooping this char	*/
+    snooping: RefCell<Option<Rc<DescriptorData>>>,
+    /* Who is this char snooping	*/
+    snoop_by: RefCell<Option<Rc<DescriptorData>>>,
+    /* And who is snooping this char	*/
 }
 
 pub struct Game {
@@ -696,10 +699,13 @@ impl Game {
                     nanny(self, d.clone(), &comm);
                 } else {
                     /* else: we're playing normally. */
-                    // if (aliased)        /* To prevent recursive aliases. */
-                    // d -> has_prompt = TRUE;    /* To get newline before next cmd output. */
-                    // else if (perform_alias(d, comm, sizeof(comm)))    /* Run it through aliasing system */
-                    get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
+                    if aliased {
+                        /* To prevent recursive aliases. */
+                        d.has_prompt.set(true); /* To get newline before next cmd output. */
+                    } else if perform_alias(d, &mut comm) {
+                        /* Run it through aliasing system */
+                        get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
+                    }
                     /* Send it to interpreter */
                     command_interpreter(self, d.character.borrow().as_ref().unwrap(), &comm);
                 }

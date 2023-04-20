@@ -4045,6 +4045,7 @@ impl CharData {
                 },
                 poofin: Rc::from(""),
                 poofout: Rc::from(""),
+                aliases: vec![],
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {
@@ -4136,6 +4137,7 @@ impl CharData {
                 },
                 poofin: Rc::from(""),
                 poofout: Rc::from(""),
+                aliases: vec![],
                 last_tell: 0,
             }),
             mob_specials: MobSpecialData {
