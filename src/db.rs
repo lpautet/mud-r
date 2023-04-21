@@ -21,6 +21,7 @@ use log::{error, info, warn};
 use regex::Regex;
 
 use crate::act_social::SocialMessg;
+use crate::ban::{load_banned, read_Invalid_List};
 use crate::class::init_spell_levels;
 use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
 // long get_id_by_name(const char *name)
@@ -104,9 +105,12 @@ pub const FASTBOOT_FILE: &str = "./fastboot";
 pub const PAUSE_FILE: &str = "./pause";
 
 pub const PLAYER_FILE: &str = "etc/players";
-pub const LIB_PLRALIAS: &str = "plralias/";
-
+pub const MAIL_FILE: &str = "etc/plrmail"; /* for the mudmail system	*/
+pub const BAN_FILE: &str = "etc/badsites"; /* for the siteban system	*/
+pub const HCONTROL_FILE: &str = "etc/hcontrol"; /* for the house system	*/
 pub const TIME_FILE: &str = "etc/time";
+
+pub const LIB_PLRALIAS: &str = "plralias/";
 
 pub const SUF_OBJS: &str = "objs";
 pub const SUF_TEXT: &str = "text";
@@ -205,6 +209,8 @@ pub struct DB {
     pub spell_sort_info: [i32; MAX_SKILLS as usize + 1],
     pub spell_info: [SpellInfoType; (TOP_SPELL_DEFINE + 1) as usize],
     pub soc_mess_list: Vec<SocialMessg>,
+    pub ban_list: RefCell<Vec<BanListElement>>,
+    pub invalid_list: RefCell<Vec<Rc<str>>>,
 }
 
 pub const REAL: i32 = 0;
@@ -262,6 +268,21 @@ pub struct ZoneData {
      *   1: Reset if no PC's are located in zone.
      *   2: Just reset.
      */
+}
+
+/* don't change these */
+pub const BAN_NOT: i32 = 0;
+pub const BAN_NEW: i32 = 1;
+pub const BAN_SELECT: i32 = 2;
+pub const BAN_ALL: i32 = 3;
+
+pub const BANNED_SITE_LENGTH: i32 = 50;
+
+pub struct BanListElement {
+    pub site: Rc<str>,
+    pub type_: i32,
+    pub date: u64,
+    pub name: Rc<str>,
 }
 
 /*************************************************************************
@@ -548,6 +569,8 @@ impl DB {
             spell_sort_info: [0; MAX_SKILLS + 1],
             spell_info: [SpellInfoType::default(); TOP_SPELL_DEFINE + 1],
             soc_mess_list: vec![],
+            ban_list: RefCell::new(vec![]),
+            invalid_list: RefCell::new(vec![]),
         }
     }
 
@@ -617,9 +640,9 @@ impl DB {
         // log("    Mail boot failed -- Mail system disabled");
         // no_mail = 1;
         // }
-        // log("Reading banned site and invalid-name list.");
-        // load_banned();
-        // Read_Invalid_List();
+        info!("Reading banned site and invalid-name list.");
+        load_banned(&mut ret);
+        read_Invalid_List(&mut ret);
         //
         // if (!no_rent_check) {
         // log("Deleting timed-out crash and rent files:");
@@ -628,10 +651,10 @@ impl DB {
         // }
         //
         // /* Moved here so the object limit code works. -gg 6/24/98 */
-        // if (!mini_mud) {
-        // log("Booting houses.");
-        // House_boot();
-        // }
+        if !ret.mini_mud {
+            // log("Booting houses.");
+            // House_boot();
+        }
 
         for (i, zone) in ret.zone_table.borrow().iter().enumerate() {
             info!(
@@ -3246,7 +3269,7 @@ pub fn char_to_store(ch: &CharData, st: &mut CharFileU) {
     /*   affect_total(ch); unnecessary, I think !?! */
 } /* Char to store */
 
-fn copy_to_stored(to: &mut [u8], from: &str) {
+pub fn copy_to_stored(to: &mut [u8], from: &str) {
     let bytes = from.as_bytes();
     let bytes_copied = min(to.len(), from.len());
     to[0..bytes_copied].copy_from_slice(&bytes[0..bytes_copied]);

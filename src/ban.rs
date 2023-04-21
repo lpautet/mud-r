@@ -8,230 +8,266 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 ************************************************************************ */
 
-/* local globals */
-// struct ban_list_element *ban_list = NULL;
+use std::cmp::max;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Write};
+use std::process;
+use std::rc::Rc;
 
-// const char *ban_types[] = {
-// "no",
-// "new",
-// "select",
-// "all",
-// "ERROR"
-// };
+use log::{error, info};
+use regex::Regex;
 
-//
-// void load_banned(void)
-// {
-// FILE *fl;
-// int i, date;
-// char site_name[BANNED_SITE_LENGTH + 1], ban_type[100];
-// char name[MAX_NAME_LENGTH + 1];
-// struct ban_list_element *next_node;
-//
-// ban_list = 0;
-//
-// if (!(fl = fopen(BAN_FILE, "r"))) {
-// if (errno != ENOENT) {
-// log("SYSERR: Unable to open banfile '%s': %s", BAN_FILE, strerror(errno));
-// } else
-// log("   Ban file '%s' doesn't exist.", BAN_FILE);
-// return;
-// }
-// while (fscanf(fl, " %s %s %d %s ", ban_type, site_name, &date, name) == 4) {
-// CREATE(next_node, struct ban_list_element, 1);
-// strncpy(next_node->site, site_name, BANNED_SITE_LENGTH);	/* strncpy: OK (n_n->site:BANNED_SITE_LENGTH+1) */
-// next_node->site[BANNED_SITE_LENGTH] = '\0';
-// strncpy(next_node->name, name, MAX_NAME_LENGTH);	/* strncpy: OK (n_n->name:MAX_NAME_LENGTH+1) */
-// next_node->name[MAX_NAME_LENGTH] = '\0';
-// next_node->date = date;
-//
-// for (i = BAN_NOT; i <= BAN_ALL; i++)
-// if (!strcmp(ban_type, ban_types[i]))
-// next_node->type = i;
-//
-// next_node->next = ban_list;
-// ban_list = next_node;
-// }
-//
-// fclose(fl);
-// }
+use crate::db::{BanListElement, BAN_FILE, DB, XNAME_FILE};
+use crate::interpreter::{one_argument, two_arguments};
+use crate::structs::ConState::ConPlaying;
+use crate::structs::{CharData, LVL_GOD};
+use crate::util::{ctime, time_now, NRM};
+use crate::{send_to_char, Game};
 
-//
-// int isbanned(char *hostname)
-// {
-// int i;
-// struct ban_list_element *banned_node;
-// char *nextchar;
-//
-// if (!hostname || !*hostname)
-// return (0);
-//
-// i = 0;
-// for (nextchar = hostname; *nextchar; nextchar++)
-// *nextchar = LOWER(*nextchar);
-//
-// for (banned_node = ban_list; banned_node; banned_node = banned_node->next)
-// if (strstr(hostname, banned_node->site))	/* if hostname is a substring */
-// i = MAX(i, banned_node->type);
-//
-// return (i);
-// }
+const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 
-//
-// void _write_one_node(FILE *fp, struct ban_list_element *node)
-// {
-// if (node) {
-// _write_one_node(fp, node->next);
-// fprintf(fp, "%s %s %ld %s\n", ban_types[node->type],
-// node->site, (long) node->date, node->name);
-// }
-// }
+pub fn load_banned(db: &mut DB) {
+    let fl = OpenOptions::new().read(true).open(BAN_FILE);
 
-//
-// void write_ban_list(void)
-// {
-// FILE *fl;
-//
-// if (!(fl = fopen(BAN_FILE, "w"))) {
-// perror("SYSERR: Unable to open '" BAN_FILE "' for writing");
-// return;
-// }
-// _write_one_node(fl, ban_list);/* recursively write from end to start */
-// fclose(fl);
-// return;
-// }
+    if fl.is_err() {
+        let err = fl.err().unwrap();
+        if err.kind() != ErrorKind::NotFound {
+            error!("SYSERR: Unable to open banfile '{}': {}", BAN_FILE, err);
+        } else {
+            info!("   Ban file '{}' doesn't exist.", BAN_FILE);
+        }
+        return;
+    }
 
-//
-// #define BAN_LIST_FORMAT "%-25.25s  %-8.8s  %-10.10s  %-16.16s\r\n"
-// ACMD(do_ban)
-// {
-// char flag[MAX_INPUT_LENGTH], site[MAX_INPUT_LENGTH], *nextchar;
-// char timestr[16];
-// int i;
-// struct ban_list_element *ban_node;
-//
-// if (!*argument) {
-// if (!ban_list) {
-// send_to_char(ch, "No sites are banned.\r\n");
-// return;
-// }
-// send_to_char(ch, BAN_LIST_FORMAT,
-// "Banned Site Name",
-// "Ban Type",
-// "Banned On",
-// "Banned By");
-// send_to_char(ch, BAN_LIST_FORMAT,
-// "---------------------------------",
-// "---------------------------------",
-// "---------------------------------",
-// "---------------------------------");
-//
-// for (ban_node = ban_list; ban_node; ban_node = ban_node->next) {
-// if (ban_node->date) {
-// strlcpy(timestr, asctime(localtime(&(ban_node->date))), 10);
-// timestr[10] = '\0';
-// } else
-// strcpy(timestr, "Unknown");	/* strcpy: OK (strlen("Unknown") < 16) */
-//
-// send_to_char(ch, BAN_LIST_FORMAT, ban_node->site, ban_types[ban_node->type], timestr, ban_node->name);
-// }
-// return;
-// }
-//
-// two_arguments(argument, flag, site);
-// if (!*site || !*flag) {
-// send_to_char(ch, "Usage: ban {all | select | new} site_name\r\n");
-// return;
-// }
-// if (!(!str_cmp(flag, "select") || !str_cmp(flag, "all") || !str_cmp(flag, "new"))) {
-// send_to_char(ch, "Flag must be ALL, SELECT, or NEW.\r\n");
-// return;
-// }
-// for (ban_node = ban_list; ban_node; ban_node = ban_node->next) {
-// if (!str_cmp(ban_node->site, site)) {
-// send_to_char(ch, "That site has already been banned -- unban it to change the ban type.\r\n");
-// return;
-// }
-// }
-//
-// CREATE(ban_node, struct ban_list_element, 1);
-// strncpy(ban_node->site, site, BANNED_SITE_LENGTH);	/* strncpy: OK (b_n->site:BANNED_SITE_LENGTH+1) */
-// for (nextchar = ban_node->site; *nextchar; nextchar++)
-// *nextchar = LOWER(*nextchar);
-// ban_node->site[BANNED_SITE_LENGTH] = '\0';
-// strncpy(ban_node->name, GET_NAME(ch), MAX_NAME_LENGTH);	/* strncpy: OK (b_n->size:MAX_NAME_LENGTH+1) */
-// ban_node->name[MAX_NAME_LENGTH] = '\0';
-// ban_node->date = time(0);
-//
-// for (i = BAN_NEW; i <= BAN_ALL; i++)
-// if (!str_cmp(flag, ban_types[i]))
-// ban_node->type = i;
-//
-// ban_node->next = ban_list;
-// ban_list = ban_node;
-//
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "%s has banned %s for %s players.",
-// GET_NAME(ch), site, ban_types[ban_node->type]);
-// send_to_char(ch, "Site banned.\r\n");
-// write_ban_list();
-// }
-// #undef BAN_LIST_FORMAT
+    let mut reader = BufReader::new(fl.unwrap());
 
-//
-// ACMD(do_unban)
-// {
-// char site[MAX_INPUT_LENGTH];
-// struct ban_list_element *ban_node, *temp;
-// int found = 0;
-//
-// one_argument(argument, site);
-// if (!*site) {
-// send_to_char(ch, "A site to unban might help.\r\n");
-// return;
-// }
-// ban_node = ban_list;
-// while (ban_node && !found) {
-// if (!str_cmp(ban_node->site, site))
-// found = 1;
-// else
-// ban_node = ban_node->next;
-// }
-//
-// if (!found) {
-// send_to_char(ch, "That site is not currently banned.\r\n");
-// return;
-// }
-// REMOVE_FROM_LIST(ban_node, ban_list, next);
-// send_to_char(ch, "Site unbanned.\r\n");
-// mudlog(NRM, MAX(LVL_GOD, GET_INVIS_LEV(ch)), TRUE, "%s removed the %s-player ban on %s.",
-// GET_NAME(ch), ban_types[ban_node->type], ban_node->site);
-//
-// free(ban_node);
-// write_ban_list();
-// }
+    loop {
+        let mut line = String::new();
+        let r = reader
+            .read_line(&mut line)
+            .expect("Error while reading ban file");
+        if r == 0 {
+            break;
+        }
+
+        let regex = Regex::new(r"(\S+)\s(\S+)\s#(\d{1,9})\s(\S+)").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: Format error in ban file");
+            process::exit(1);
+        }
+        let f = f.unwrap();
+        let ban_type = &f[1];
+        let mut ble = BanListElement {
+            site: Rc::from(&f[2]),
+            type_: 0,
+            date: f[3].parse::<u64>().unwrap(),
+            name: Rc::from(&f[4]),
+        };
+
+        let bt = BAN_TYPES.iter().position(|e| *e == ban_type);
+        ble.type_ = if bt.is_some() { bt.unwrap() } else { 0 } as i32;
+        db.ban_list.borrow_mut().push(ble);
+    }
+}
+
+pub fn isbanned(db: &DB, hostname: &mut String) -> i32 {
+    if hostname.is_empty() {
+        return 0;
+    }
+    *hostname = hostname.to_lowercase();
+    let mut i = 0;
+    db.ban_list
+        .borrow()
+        .iter()
+        .filter(|b| hostname.contains(b.site.as_ref()))
+        .for_each(|b| i = max(i, b.type_));
+    i
+}
+
+fn _write_one_node(writer: &mut BufWriter<File>, node: &BanListElement) {
+    let buf = format!(
+        "{} {} {} {}\n",
+        BAN_TYPES[node.type_ as usize], node.site, node.date, node.name
+    );
+    writer
+        .write_all(buf.as_bytes())
+        .expect("Error writing ban file");
+}
+
+fn write_ban_list(db: &DB) {
+    let fl = OpenOptions::new().write(true).open(BAN_FILE);
+
+    if fl.is_err() {
+        let err = fl.err().unwrap();
+        error!("SYSERR: Unable to open '{BAN_FILE}' for writing {err}");
+        return;
+    }
+    let mut writer = BufWriter::new(fl.unwrap());
+    for ban_node in db.ban_list.borrow().iter() {
+        _write_one_node(&mut writer, ban_node); /* recursively write from end to start */
+    }
+
+    return;
+}
+
+macro_rules! ban_list_format {
+    () => {
+        "{:25}  {:8}  {:10}  {:16}\r\n"
+    };
+}
+
+#[allow(unused_variables)]
+pub fn do_ban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    if argument.is_empty() {
+        if db.ban_list.borrow().is_empty() {
+            send_to_char(ch, "No sites are banned.\r\n");
+            return;
+        }
+        send_to_char(
+            ch,
+            format!(
+                ban_list_format!(),
+                "Banned Site Name", "Ban Type", "Banned On", "Banned By"
+            )
+            .as_str(),
+        );
+        send_to_char(
+            ch,
+            format!(
+                ban_list_format!(),
+                "---------------------------------",
+                "---------------------------------",
+                "---------------------------------",
+                "---------------------------------"
+            )
+            .as_str(),
+        );
+
+        for ban_node in db.ban_list.borrow().iter() {
+            let timestr;
+            if ban_node.date != 0 {
+                timestr = ctime(ban_node.date as u64);
+            } else {
+                timestr = "Unknown".to_string();
+            }
+
+            send_to_char(
+                ch,
+                format!(
+                    ban_list_format!(),
+                    ban_node.site, BAN_TYPES[ban_node.type_ as usize], timestr, ban_node.name
+                )
+                .as_str(),
+            );
+        }
+        return;
+    }
+    let mut flag = String::new();
+    let mut site = String::new();
+    two_arguments(argument, &mut flag, &mut site);
+    if site.is_empty() || flag.is_empty() {
+        send_to_char(ch, "Usage: ban {all | select | new} site_name\r\n");
+        return;
+    }
+    if !(flag == "select" || flag == "all" || flag == "new") {
+        send_to_char(ch, "Flag must be ALL, SELECT, or NEW.\r\n");
+        return;
+    }
+    let bnl = db.ban_list.borrow();
+    let ban_node = bnl.iter().find(|b| b.site.as_ref() == site);
+    if ban_node.is_some() {
+        send_to_char(
+            ch,
+            "That site has already been banned -- unban it to change the ban type.\r\n",
+        );
+        return;
+    }
+
+    let mut ban_node = BanListElement {
+        site: Rc::from(site.to_lowercase().as_str()),
+        type_: 0,
+        date: time_now(),
+        name: Rc::from(ch.get_name()),
+    };
+
+    let p = BAN_TYPES.iter().position(|t| *t == flag);
+    let mut ban_node_type = 0;
+    if p.is_some() {
+        ban_node_type = p.unwrap();
+        ban_node.type_ = ban_node_type as i32;
+    }
+
+    db.ban_list.borrow_mut().push(ban_node);
+
+    game.mudlog(
+        NRM,
+        max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+        true,
+        format!(
+            "{} has banned {} for {} players.",
+            ch.get_name(),
+            site,
+            BAN_TYPES[ban_node_type]
+        )
+        .as_str(),
+    );
+    send_to_char(ch, "Site banned.\r\n");
+    write_ban_list(db);
+}
+
+#[allow(unused_variables)]
+pub fn do_unban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut site = String::new();
+    one_argument(argument, &mut site);
+    if site.is_empty() {
+        send_to_char(ch, "A site to unban might help.\r\n");
+        return;
+    }
+    let p = db
+        .ban_list
+        .borrow()
+        .iter()
+        .position(|b| b.site.as_ref() == site);
+
+    if p.is_none() {
+        send_to_char(ch, "That site is not currently banned.\r\n");
+        return;
+    }
+
+    let ban_node = db.ban_list.borrow_mut().remove(p.unwrap());
+    send_to_char(ch, "Site unbanned.\r\n");
+    game.mudlog(
+        NRM,
+        max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+        true,
+        format!(
+            "{} removed the {}-player ban on {}.",
+            ch.get_name(),
+            BAN_TYPES[ban_node.type_ as usize],
+            ban_node.site
+        )
+        .as_str(),
+    );
+
+    write_ban_list(db);
+}
 
 /**************************************************************************
  *  Code to check for invalid names (i.e., profanity, etc.)		  *
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-// #define MAX_INVALID_NAMES	200
-//
-// char *invalid_list[MAX_INVALID_NAMES];
-// int num_invalid = 0;
-
-use crate::structs::ConState::ConPlaying;
-use crate::DescriptorData;
-use std::rc::Rc;
-
-pub fn valid_name<'a>(descriptor_list: &Vec<Rc<DescriptorData>>, newname: &str) -> bool {
+pub fn valid_name<'a>(game: &Game, newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login
      * will not have a character name yet and other people sitting at the
      * prompt won't have characters yet.
      */
-    for dt in descriptor_list {
+    for dt in game.descriptor_list.borrow().iter() {
         let character = dt.character.borrow();
 
         if character.is_none() {
@@ -245,53 +281,42 @@ pub fn valid_name<'a>(descriptor_list: &Vec<Rc<DescriptorData>>, newname: &str) 
         }
     }
 
+    let db = &game.db;
     /* return valid if list doesn't exist */
-    //if (!invalid_list || num_invalid < 1)
-    //return true;
+    if db.invalid_list.borrow().len() == 0 {
+        return true;
+    }
 
     /* change to lowercase */
-    // strlcpy(tempname, newname, sizeof(tempname));
-    // for (i = 0; tempname[i]; i++)
-    // tempname[i] = LOWER(tempname[i]);
+    let tmpname = newname.to_lowercase();
 
     /* Does the desired name contain a string in the invalid list? */
-    // for (i = 0; i < num_invalid; i++)
-    // if (strstr(tempname, invalid_list[i]))
-    // return (0);
+    for invalid in db.invalid_list.borrow().iter() {
+        if tmpname.contains(invalid.as_ref()) {
+            return false;
+        }
+    }
 
     return true;
 }
 
-/* What's with the wacky capitalization in here? */
-// void Free_Invalid_List(void)
-// {
-// int invl;
-//
-// for (invl = 0; invl < num_invalid; invl++)
-// free(invalid_list[invl]);
-//
-// num_invalid = 0;
-// }
+pub fn read_Invalid_List(db: &mut DB) {
+    let fp = OpenOptions::new().read(true).open(XNAME_FILE);
 
-//
-// void Read_Invalid_List(void)
-// {
-// FILE *fp;
-// char temp[256];
-//
-// if (!(fp = fopen(XNAME_FILE, "r"))) {
-// perror("SYSERR: Unable to open '" XNAME_FILE "' for reading");
-// return;
-// }
-//
-// num_invalid = 0;
-// while (get_line(fp, temp) && num_invalid < MAX_INVALID_NAMES)
-// invalid_list[num_invalid++] = strdup(temp);
-//
-// if (num_invalid >= MAX_INVALID_NAMES) {
-// log("SYSERR: Too many invalid names; change MAX_INVALID_NAMES in ban.c");
-// exit(1);
-// }
-//
-// fclose(fp);
-// }
+    if fp.is_err() {
+        let err = fp.err().unwrap();
+        error!("SYSERR: Unable to open '{XNAME_FILE}' for reading {err}");
+        return;
+    }
+
+    let mut reader = BufReader::new(fp.unwrap());
+
+    loop {
+        let mut line = String::new();
+        let r = reader.read_line(&mut line);
+        if r.is_err() {
+            break;
+        }
+        db.invalid_list.borrow_mut().push(Rc::from(line));
+    }
+}

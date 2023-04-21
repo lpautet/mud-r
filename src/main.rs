@@ -22,6 +22,7 @@ use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
+use crate::ban::isbanned;
 use env_logger::Env;
 use log::{debug, error, info, warn};
 
@@ -1197,12 +1198,18 @@ impl Game {
         }
 
         /* determine if the site is banned */
-        // if (isbanned(newd -> host) == BAN_ALL) {
-        //     CLOSE_SOCKET(desc);
-        //     mudlog(CMP, LVL_GOD, TRUE, "Connection attempt denied from [%s]", newd -> host);
-        //     free(newd);
-        //     return (0);
-        // }
+        if isbanned(&self.db, &mut newd.host.borrow_mut()) == BAN_ALL {
+            newd.stream
+                .borrow_mut()
+                .shutdown(Shutdown::Both)
+                .expect("shutdowning socket which is banned");
+            self.mudlog(
+                CMP,
+                LVL_GOD as i32,
+                true,
+                format!("Connection attempt denied from [{}]", newd.host.borrow()).as_str(),
+            );
+        }
 
         /* initialize descriptor data */
         //newd -> descriptor = desc;

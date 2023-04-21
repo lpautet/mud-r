@@ -49,10 +49,10 @@ use crate::act_wizard::{
     do_wiznet, do_wizutil, do_zreset,
 };
 use crate::alias::read_aliases;
-use crate::ban::valid_name;
+use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{clear_char, reset_char, store_to_char};
+use crate::db::{clear_char, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
 use crate::modify::page_string;
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
@@ -64,7 +64,7 @@ use crate::structs::ConState::{
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
     CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
-    NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, POS_DEAD, POS_FIGHTING, POS_INCAP,
+    NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP,
     POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
@@ -262,7 +262,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 291] = [
+pub const CMD_INFO: [CommandInfo; 293] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -404,6 +404,13 @@ pub const CMD_INFO: [CommandInfo; 291] = [
         subcmd: 0,
     },
     // { "ban"      , POS_DEAD    , do_ban      , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "ban",
+        minimum_position: POS_DEAD,
+        command_pointer: do_ban,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     // { "balance"  , POS_STANDING, do_not_here , 1, 0 },
     // { "bash"     , POS_FIGHTING, do_bash     , 1, 0 },
     CommandInfo {
@@ -2359,6 +2366,13 @@ pub const CMD_INFO: [CommandInfo; 291] = [
         subcmd: 0,
     },
     // { "unban"    , POS_DEAD    , do_unban    , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "unban",
+        minimum_position: POS_DEAD,
+        command_pointer: do_unban,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     // { "unaffect" , POS_DEAD    , do_wizutil  , LVL_GOD, SCMD_UNAFFECT },
     CommandInfo {
         command: "unaffect",
@@ -3427,7 +3441,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                 if tmp_name.is_none()
                     || tmp_name.unwrap().len() < 2
                     || tmp_name.unwrap().len() > MAX_NAME_LENGTH
-                    || !valid_name(&desc_list, tmp_name.unwrap())
+                    || !valid_name(game, tmp_name.unwrap())
                     || fill_word(tmp_name.unwrap())
                     || reserved_word(tmp_name.unwrap())
                 {
@@ -3474,7 +3488,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     /* player unknown -- make new character */
 
                     /* Check for multiple creations of a character. */
-                    if !valid_name(&game.descriptor_list.borrow(), tmp_name.unwrap().clone()) {
+                    if !valid_name(game, tmp_name.unwrap().clone()) {
                         write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                         return;
                     }
@@ -3493,13 +3507,25 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
         ConNameCnfrm => {
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
-                // TODO: support banning
-                // if (isbanned(d->host) >= BAN_NEW) {
-                //     mudlog(NRM, LVL_GOD, true, "Request for new char {} denied from [{}] (siteban)", GET_PC_NAME(d->character), d->host);
-                //     write_to_output(d, "Sorry, new characters are not allowed from your site!\r\n");
-                //     STATE(d) = CON_CLOSE;
-                //     return;
-                // }
+                if isbanned(db, &mut d.host.borrow_mut()) >= BAN_NEW {
+                    game.mudlog(
+                        NRM,
+                        LVL_GOD as i32,
+                        true,
+                        format!(
+                            "Request for new char {} denied from [{}] (siteban)",
+                            d.character.borrow().as_ref().unwrap().get_pc_name(),
+                            d.host.borrow()
+                        )
+                        .as_str(),
+                    );
+                    write_to_output(
+                        &d,
+                        "Sorry, new characters are not allowed from your site!\r\n",
+                    );
+                    d.set_state(ConClose);
+                    return;
+                }
                 if db.circle_restrict.get() != 0 {
                     write_to_output(&d, "Sorry, new players can't be created at the moment.\r\n");
                     game.mudlog(
@@ -3596,14 +3622,32 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     load_result = character.get_bad_pws() as i32;
                     character.reset_bad_pws();
                     d.bad_pws.set(0);
-                    // TODO implement ban
-                    // if (isbanned(d->host) == BAN_SELECT &&
-                    //     !PLR_FLAGGED(d->character, PLR_SITEOK)) {
-                    //     write_to_output(d, "Sorry, this char has not been cleared for login from your site!\r\n");
-                    //     STATE(d) = CON_CLOSE;
-                    //     mudlog(NRM, LVL_GOD, true, "Connection attempt for {} denied from {}", GET_NAME(d->character), d->host);
-                    //     return;
-                    // }
+                    if isbanned(db, &mut d.host.borrow_mut()) == BAN_SELECT
+                        && !d
+                            .character
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                            .plr_flagged(PLR_SITEOK)
+                    {
+                        write_to_output(
+                            &d,
+                            "Sorry, this char has not been cleared for login from your site!\r\n",
+                        );
+                        d.set_state(ConClose);
+                        game.mudlog(
+                            NRM,
+                            LVL_GOD as i32,
+                            true,
+                            format!(
+                                "Connection attempt for {} denied from {}",
+                                d.character.borrow().as_ref().unwrap().get_name(),
+                                d.host.borrow()
+                            )
+                            .as_str(),
+                        );
+                        return;
+                    }
                     if d.character.borrow().as_ref().unwrap().get_level() < db.circle_restrict.get()
                     {
                         write_to_output(
