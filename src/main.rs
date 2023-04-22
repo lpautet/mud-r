@@ -32,7 +32,7 @@ use crate::db::*;
 use crate::handler::fname;
 use crate::interpreter::{command_interpreter, nanny, perform_alias};
 use crate::magic::affect_update;
-use crate::modify::show_string;
+use crate::modify::{show_string, string_add};
 use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
@@ -49,6 +49,7 @@ mod act_social;
 mod act_wizard;
 mod alias;
 mod ban;
+mod boards;
 mod class;
 mod config;
 mod constants;
@@ -687,12 +688,10 @@ impl Game {
                 }
                 d.has_prompt.set(false);
 
-                // TODO implement writing
-                // if d.str.borrow().is_some() {
-                //     /* Writing boards, mail, etc. */
-                //     string_add(d, &comm);
-                // } else
-                if d.showstr_count.get() != 0 {
+                if d.str.borrow().is_some() {
+                    /* Writing boards, mail, etc. */
+                    string_add(&self.db, d, &comm);
+                } else if d.showstr_count.get() != 0 {
                     /* Reading something w/ pager */
                     show_string(d, &comm);
                 } else if d.state() != ConPlaying {

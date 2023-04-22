@@ -10,10 +10,11 @@
 
 /* functions to perform assignments */
 
+use crate::boards::gen_board;
 use crate::db::DB;
 use crate::spec_procs::{cityguard, fido, guild_guard, janitor, magic_user, snake, thief};
 use crate::spec_procs::{guild, puff};
-use crate::structs::{MobVnum, Special, NOBODY};
+use crate::structs::{MobVnum, ObjVnum, Special, NOBODY, NOTHING};
 use log::error;
 
 fn assignmob(db: &mut DB, mob: MobVnum, fname: Special) {
@@ -28,16 +29,19 @@ fn assignmob(db: &mut DB, mob: MobVnum, fname: Special) {
     }
 }
 
-// void ASSIGNOBJ(obj_vnum obj, SPECIAL(fname))
-// {
-// obj_rnum rnum;
-//
-// if ((rnum = real_object(obj)) != NOTHING)
-// obj_index[rnum].func = fname;
-// else if (!mini_mud)
-// log("SYSERR: Attempt to assign spec to non-existant obj #%d", obj);
-// }
-//
+pub fn assignobj(db: &mut DB, obj: ObjVnum, fname: Special) {
+    let rnum = db.real_object(obj);
+
+    if rnum != NOTHING {
+        db.obj_index[rnum as usize].func = Some(fname);
+    } else if !db.mini_mud {
+        error!(
+            "SYSERR: Attempt to assign spec to non-existant obj #{}",
+            obj
+        );
+    }
+}
+
 // void ASSIGNROOM(room_vnum room, SPECIAL(fname))
 // {
 // room_rnum rnum;
@@ -241,20 +245,17 @@ pub fn assign_mobiles(db: &mut DB) {
     assignmob(db, 6516, magic_user);
 }
 
-// /* assign special procedures to objects */
-// void assign_objects(void)
-// {
-// ASSIGNOBJ(3096, gen_board);	/* social board */
-// ASSIGNOBJ(3097, gen_board);	/* freeze board */
-// ASSIGNOBJ(3098, gen_board);	/* immortal board */
-// ASSIGNOBJ(3099, gen_board);	/* mortal board */
-//
-// ASSIGNOBJ(3034, bank);	/* atm */
-// ASSIGNOBJ(3036, bank);	/* cashcard */
-// }
-//
-//
-//
+/* assign special procedures to objects */
+pub fn assign_objects(db: &mut DB) {
+    assignobj(db, 3096, gen_board); /* social board */
+    assignobj(db, 3097, gen_board); /* freeze board */
+    assignobj(db, 3098, gen_board); /* immortal board */
+    assignobj(db, 3099, gen_board); /* mortal board */
+
+    // assignobj(db, 3034, bank);	/* atm */
+    // assignobj(db, 3036, bank);	/* cashcard */
+}
+
 // /* assign special procedures to rooms */
 // void assign_rooms(void)
 // {

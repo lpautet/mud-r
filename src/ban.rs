@@ -96,7 +96,7 @@ fn _write_one_node(writer: &mut BufWriter<File>, node: &BanListElement) {
 }
 
 fn write_ban_list(db: &DB) {
-    let fl = OpenOptions::new().write(true).open(BAN_FILE);
+    let fl = OpenOptions::new().write(true).create(true).open(BAN_FILE);
 
     if fl.is_err() {
         let err = fl.err().unwrap();
@@ -300,7 +300,7 @@ pub fn valid_name<'a>(game: &Game, newname: &str) -> bool {
     return true;
 }
 
-pub fn read_Invalid_List(db: &mut DB) {
+pub fn read_invalid_list(db: &mut DB) {
     let fp = OpenOptions::new().read(true).open(XNAME_FILE);
 
     if fp.is_err() {
@@ -315,6 +315,10 @@ pub fn read_Invalid_List(db: &mut DB) {
         let mut line = String::new();
         let r = reader.read_line(&mut line);
         if r.is_err() {
+            error!("Error while reading ban file! {}", r.err().unwrap());
+            break;
+        }
+        if r.unwrap() == 0 {
             break;
         }
         db.invalid_list.borrow_mut().push(Rc::from(line));

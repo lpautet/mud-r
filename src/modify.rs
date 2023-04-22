@@ -63,6 +63,18 @@
  * else you may want through it.  The improved editor patch when updated
  * could use it to pass the old text buffer, for instance.
  */
+use std::cell::RefCell;
+use std::cmp::{max, min};
+use std::rc::Rc;
+
+use crate::boards::{board_save_board, BOARD_MAGIC};
+use crate::config::MENU;
+use crate::db::DB;
+use crate::interpreter::{any_one_arg, delete_doubledollar};
+use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
+use crate::structs::{PLR_MAILING, PLR_WRITING};
+use crate::{send_to_char, write_to_output, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
+
 pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: u64) {
     if d.character.borrow().is_some() && !d.character.borrow().as_ref().unwrap().is_npc() {
         d.character
@@ -77,70 +89,88 @@ pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: u
     d.mail_to.set(mailto);
 }
 
-// /* Add user input to the 'current' string (as defined by d->str) */
-// void string_add(struct descriptor_data *d, char *str)
-// {
-// int terminator;
-//
-// /* determine if this is the terminal string, and truncate if so */
-// /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
-//
-// delete_doubledollar(str);
-//
-// if ((terminator = (*str == '@')))
-// *str = '\0';
-//
-// smash_tilde(str);
-//
-// if (!(*d->str)) {
-// if (strlen(str) + 3 > d->max_str) { /* \r\n\0 */
-// send_to_char(d->character, "String too long - Truncated.\r\n");
-// strcpy(&str[d->max_str - 3], "\r\n");	/* strcpy: OK (size checked) */
-// CREATE(*d->str, char, d->max_str);
-// strcpy(*d->str, str);	/* strcpy: OK (size checked) */
-// terminator = 1;
-// } else {
-// CREATE(*d->str, char, strlen(str) + 3);
-// strcpy(*d->str, str);	/* strcpy: OK (size checked) */
-// }
-// } else {
-// if (strlen(str) + strlen(*d->str) + 3 > d->max_str) { /* \r\n\0 */
-// send_to_char(d->character, "String too long.  Last line skipped.\r\n");
-// terminator = 1;
-// } else {
-// RECREATE(*d->str, char, strlen(*d->str) + strlen(str) + 3); /* \r\n\0 */
-// strcat(*d->str, str);	/* strcat: OK (size precalculated) */
-// }
-// }
-//
-// if (terminator) {
-// if (STATE(d) == CON_PLAYING && (PLR_FLAGGED(d->character, PLR_MAILING))) {
-// store_mail(d->mail_to, GET_IDNUM(d->character), *d->str);
-// d->mail_to = 0;
-// free(*d->str);
-// free(d->str);
-// write_to_output(d, "Message sent!\r\n");
-// if (!IS_NPC(d->character))
-// REMOVE_BIT(PLR_FLAGS(d->character), PLR_MAILING | PLR_WRITING);
-// }
-// d->str = NULL;
-//
-// if (d->mail_to >= BOARD_MAGIC) {
-// Board_save_board(d->mail_to - BOARD_MAGIC);
-// d->mail_to = 0;
-// }
-// if (STATE(d) == ConExdesc) {
-// write_to_output(d, "%s", MENU);
-// STATE(d) = ConMenu;
-// }
-// if (STATE(d) == CON_PLAYING && d->character && !IS_NPC(d->character))
-// REMOVE_BIT(PLR_FLAGS(d->character), PLR_WRITING);
-// } else
-// strcat(*d->str, "\r\n");	/* strcat: OK (size checked) */
-// }
-//
-//
-//
+/* Add user input to the 'current' string (as defined by d->str) */
+pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
+    /* determine if this is the terminal string, and truncate if so */
+    /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
+
+    let mut str_ = str_.to_string();
+    delete_doubledollar(&mut str_);
+    let t = str_.chars().next().unwrap();
+    let mut terminator = false;
+    if t == '@' {
+        terminator = true;
+        str_ = "".to_string();
+    }
+
+    // smash_tilde(str_);
+    let mut the_stro = d.str.borrow_mut();
+    let the_str = the_stro.as_ref().unwrap();
+    if the_str.borrow().is_empty() {
+        if str_.len() + 3 > d.max_str.get() {
+            send_to_char(
+                d.character.borrow().as_ref().unwrap(),
+                "String too long - Truncated.\r\n",
+            );
+            str_.truncate(d.max_str.get() - 3);
+            str_.push_str("\r\n");
+            *RefCell::borrow_mut(the_str) = str_;
+            terminator = true;
+        } else {
+            *RefCell::borrow_mut(the_str) = str_;
+        }
+    } else {
+        if str_.len() + the_str.borrow().len() + 3 > d.max_str.get() {
+            send_to_char(
+                d.character.borrow().as_ref().unwrap(),
+                "String too long.  Last line skipped.\r\n",
+            );
+            terminator = true;
+        } else {
+            RefCell::borrow_mut(the_str).push_str(str_.as_str());
+        }
+    }
+
+    if terminator {
+        // TODO implement mail
+        // if d.state() == ConPlaying && d.character.borrow().as_ref().unwrap().plr_flagged     ( PLR_MAILING) {
+        // store_mail(d->mail_to, GET_IDNUM(d->character), *d->str);
+        // d->mail_to = 0;
+        // free(*d->str);
+        // free(d->str);
+        // write_to_output(d, "Message sent!\r\n");
+        // if (!IS_NPC(d->character))
+        // REMOVE_BIT(PLR_FLAGS(d->character), PLR_MAILING | PLR_WRITING);
+        // }
+
+        *the_stro = None;
+
+        if d.mail_to.get() >= BOARD_MAGIC as u64 {
+            board_save_board(
+                &mut db.boards.borrow_mut(),
+                (d.mail_to.get() - BOARD_MAGIC as u64) as usize,
+            );
+            d.mail_to.set(0);
+        }
+        if d.state() == ConExdesc {
+            write_to_output(d, MENU);
+            d.set_state(ConMenu);
+        }
+        if d.state() == ConPlaying
+            && d.character.borrow().is_some()
+            && !d.character.borrow().as_ref().unwrap().is_npc()
+        {
+            d.character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .remove_plr_flag(PLR_WRITING);
+        }
+    } else {
+        RefCell::borrow_mut(the_str).push_str("\r\n");
+    }
+}
+
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
@@ -301,13 +331,6 @@ fn count_pages(msg: &str) -> i32 {
  * page_string function, after showstr_vector has been allocated and
  * showstr_count set.
  */
-use crate::interpreter::any_one_arg;
-use crate::structs::PLR_WRITING;
-use crate::{send_to_char, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
-use std::cell::RefCell;
-use std::cmp::{max, min};
-use std::rc::Rc;
-
 pub fn paginate_string<'a>(msg: &'a str, d: &'a DescriptorData) -> &'a str {
     if d.showstr_count.get() != 0 {
         d.showstr_vector.borrow_mut().push(Rc::from(msg));

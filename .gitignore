@@ -1,4 +1,3 @@
 /target
-/lib/etc/*
 /lib/.killscript
 /lib/plrobjs/*/*.objs

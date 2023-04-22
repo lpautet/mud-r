@@ -21,7 +21,8 @@ use log::{error, info, warn};
 use regex::Regex;
 
 use crate::act_social::SocialMessg;
-use crate::ban::{load_banned, read_Invalid_List};
+use crate::ban::{load_banned, read_invalid_list};
+use crate::boards::BoardSystem;
 use crate::class::init_spell_levels;
 use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
 // long get_id_by_name(const char *name)
@@ -54,7 +55,7 @@ use crate::handler::{fname, isname};
 use crate::interpreter::one_word;
 use crate::modify::paginate_string;
 use crate::shops::{assign_the_shopkeepers, ShopData};
-use crate::spec_assign::assign_mobiles;
+use crate::spec_assign::{assign_mobiles, assign_objects};
 use crate::spec_procs::sort_spells;
 use crate::spell_parser::mag_assign_spells;
 use crate::spells::{SpellInfoType, TOP_SPELL_DEFINE};
@@ -211,6 +212,7 @@ pub struct DB {
     pub soc_mess_list: Vec<SocialMessg>,
     pub ban_list: RefCell<Vec<BanListElement>>,
     pub invalid_list: RefCell<Vec<Rc<str>>>,
+    pub boards: RefCell<BoardSystem>,
 }
 
 pub const REAL: i32 = 0;
@@ -271,12 +273,12 @@ pub struct ZoneData {
 }
 
 /* don't change these */
-pub const BAN_NOT: i32 = 0;
+// pub const BAN_NOT: i32 = 0;
 pub const BAN_NEW: i32 = 1;
 pub const BAN_SELECT: i32 = 2;
 pub const BAN_ALL: i32 = 3;
 
-pub const BANNED_SITE_LENGTH: i32 = 50;
+// pub const BANNED_SITE_LENGTH: i32 = 50;
 
 pub struct BanListElement {
     pub site: Rc<str>,
@@ -571,6 +573,7 @@ impl DB {
             soc_mess_list: vec![],
             ban_list: RefCell::new(vec![]),
             invalid_list: RefCell::new(vec![]),
+            boards: RefCell::new(BoardSystem::new()),
         }
     }
 
@@ -622,8 +625,8 @@ impl DB {
             assign_mobiles(&mut ret);
             info!("   Shopkeepers.");
             assign_the_shopkeepers(&mut ret);
-            // info!("   Objects.");
-            // assign_objects();
+            info!("   Objects.");
+            assign_objects(&mut ret);
             // info!("   Rooms.");
             // assign_rooms();
         }
@@ -642,7 +645,7 @@ impl DB {
         // }
         info!("Reading banned site and invalid-name list.");
         load_banned(&mut ret);
-        read_Invalid_List(&mut ret);
+        read_invalid_list(&mut ret);
         //
         // if (!no_rent_check) {
         // log("Deleting timed-out crash and rent files:");
