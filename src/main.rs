@@ -55,6 +55,7 @@ mod config;
 mod constants;
 mod db;
 mod fight;
+mod graph;
 mod handler;
 mod interpreter;
 mod limits;

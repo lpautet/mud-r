@@ -55,6 +55,11 @@ pub const CRASH_FILE: i32 = 0;
 pub const ETEXT_FILE: i32 = 1;
 pub const ALIAS_FILE: i32 = 2;
 
+/* breadth-first searching */
+pub const BFS_ERROR: i32 = (-1);
+pub const BFS_ALREADY_THERE: i32 = (-2);
+pub const BFS_NO_PATH: i32 = (-3);
+
 #[macro_export]
 macro_rules! is_set {
     ($flag:expr, $bit:expr) => {
@@ -1196,6 +1201,10 @@ impl DB {
     }
     pub fn set_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) | flags as i32;
+        self.world.borrow()[loc as usize].room_flags.set(flags);
+    }
+    pub fn remove_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
+        let flags = self.room_flags(loc) & !flags as i32;
         self.world.borrow()[loc as usize].room_flags.set(flags);
     }
     pub fn sect(&self, loc: RoomRnum) -> i32 {

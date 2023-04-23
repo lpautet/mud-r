@@ -111,7 +111,7 @@ pub const IMMORT_LEVEL_OK: i16 = 0;
 pub const FREE_RENT: bool = true;
 
 /* maximum number of items players are allowed to rent */
-pub const max_obj_save: i32 = 30;
+pub const MAX_OBJ_SAVE: i32 = 30;
 
 /* receptionist's surcharge on top of item costs */
 // int min_rent_cost = 100;

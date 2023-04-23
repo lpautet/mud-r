@@ -53,6 +53,7 @@ use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
+use crate::graph::do_track;
 use crate::modify::page_string;
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
@@ -262,7 +263,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 293] = [
+pub const CMD_INFO: [CommandInfo; 294] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -2316,6 +2317,13 @@ pub const CMD_INFO: [CommandInfo; 293] = [
         subcmd: 0,
     },
     // { "track"    , POS_STANDING, do_track    , 0, 0 },
+    CommandInfo {
+        command: "track",
+        minimum_position: POS_STANDING,
+        command_pointer: do_track,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "trackthru", POS_DEAD    , do_gen_tog  , LVL_IMPL, SCMD_TRACK },
     CommandInfo {
         command: "trackthru",

@@ -17,7 +17,7 @@ use std::{mem, slice};
 use log::error;
 
 use crate::class::invalid_class;
-use crate::config::max_obj_save;
+use crate::config::MAX_OBJ_SAVE;
 use crate::db::{DB, REAL, VIRTUAL};
 use crate::handler::{invalid_align, obj_from_char};
 use crate::structs::ConState::ConPlaying;
@@ -766,7 +766,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
             ch.get_level(),
             num_objs,
             if num_objs != 1 { "s" } else { "" },
-            max_obj_save
+            MAX_OBJ_SAVE
         )
         .as_str(),
     );
@@ -1240,10 +1240,10 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 // FALSE, recep, 0, ch, TO_VICT);
 // return (0);
 // }
-// if (numitems > max_obj_save) {
+// if (numitems > MAX_OBJ_SAVE) {
 // char buf[256];
 //
-// snprintf(buf, sizeof(buf), "$n tells you, 'Sorry, but I cannot store more than %d items.'", max_obj_save);
+// snprintf(buf, sizeof(buf), "$n tells you, 'Sorry, but I cannot store more than %d items.'", MAX_OBJ_SAVE);
 // act(buf, FALSE, recep, 0, ch, TO_VICT);
 // return (0);
 // }
