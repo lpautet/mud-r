@@ -999,7 +999,7 @@ impl DB {
     }
     pub fn get_room_spec(&self, rnum: RoomRnum) -> Option<Special> {
         if self.valid_room_rnum(rnum) {
-            self.world.borrow()[rnum as usize].func
+            self.world.borrow()[rnum as usize].func.borrow().clone()
         } else {
             None
         }
@@ -1121,6 +1121,13 @@ impl DB {
             fname(obj.name.borrow().as_str())
         } else {
             Rc::from("something")
+        }
+    }
+    pub fn get_obj_spec(&self, obj: &Rc<ObjData>) -> Option<Special> {
+        if self.valid_obj_rnum(obj) {
+            self.obj_index[obj.get_obj_rnum() as usize].func
+        } else {
+            None
         }
     }
 }

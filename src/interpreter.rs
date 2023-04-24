@@ -65,8 +65,8 @@ use crate::structs::ConState::{
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
     CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
-    NOWHERE, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP,
-    POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING,
+    POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
     CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -3173,19 +3173,25 @@ fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
         }
     }
 
-    // TODO implement special in objects
-    // /* special in equipment list? */
-    // for (j = 0; j < NUM_WEARS; j++)
-    // if (GET_EQ(ch, j) && GET_OBJ_SPEC(GET_EQ(ch, j)) != NULL)
-    // if (GET_OBJ_SPEC(GET_EQ(ch, j)) (ch, GET_EQ(ch, j), cmd, arg))
-    // return (1);
+    /* special in equipment list? */
+    for j in 0..NUM_WEARS {
+        if ch.get_eq(j).is_some() && db.get_obj_spec(ch.get_eq(j).as_ref().unwrap()).is_some() {
+            let eq = ch.get_eq(j);
+            let obj = eq.as_ref().unwrap();
+            if db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, obj, cmd, arg) {
+                return true;
+            }
+        }
+    }
 
-    //     // TODO implement special in inventory
-    // /* special in inventory? */
-    // for (i = ch->carrying; i; i = i->next_content)
-    // if (GET_OBJ_SPEC(i) != NULL)
-    // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
-    // return (1);
+    /* special in inventory? */
+    for i in ch.carrying.borrow().iter() {
+        if db.get_obj_spec(i).is_some() {
+            if db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+                return true;
+            }
+        }
+    }
 
     /* special in mobile present? */
     for k in db.world.borrow()[ch.in_room() as usize]
@@ -3202,12 +3208,17 @@ fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
         }
     }
 
-    // TODO /* special in object present? */
-    // for (i = world[IN_ROOM(ch)].contents; i; i = i->next_content)
-    // if (GET_OBJ_SPEC(i) != NULL)
-    // if (GET_OBJ_SPEC(i) (ch, i, cmd, arg))
-    // return (1);
-
+    for i in db.world.borrow()[ch.in_room() as usize]
+        .contents
+        .borrow()
+        .iter()
+    {
+        if db.get_obj_spec(i).is_some() {
+            if db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+                return true;
+            }
+        }
+    }
     false
 }
 
@@ -3927,10 +3938,17 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
                         game.db.look_at_room(och.as_ref().unwrap(), false);
                     }
-                    // TODO implement mail
-                    // if has_mail(GET_IDNUM(d->character)) {
-                    //     send_to_char(d->character, "You have mail waiting.\r\n");
-                    // }
+                    if game
+                        .db
+                        .mails
+                        .borrow_mut()
+                        .has_mail(d.character.borrow().as_ref().unwrap().get_idnum())
+                    {
+                        send_to_char(
+                            d.character.borrow().as_ref().unwrap(),
+                            "You have mail waiting.\r\n",
+                        );
+                    }
                     if load_result == 2 {
                         /* rented items lost */
                         send_to_char(d.character.borrow().as_ref().unwrap(), "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");

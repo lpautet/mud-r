@@ -901,7 +901,7 @@ pub struct RoomData {
     /* DEATH,DARK ... etc */
     pub light: Cell<u8>,
     /* Number of lightsources in room     */
-    pub func: Option<Special>,
+    pub func: RefCell<Option<Special>>,
     pub contents: RefCell<Vec<Rc<ObjData>>>,
     /* List of items in room              */
     pub peoples: RefCell<Vec<Rc<CharData>>>,

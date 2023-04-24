@@ -16,6 +16,7 @@ use std::rc::Rc;
 
 use log::{error, info};
 
+use crate::act_wizard::do_return;
 use crate::class::invalid_class;
 use crate::config::MENU;
 use crate::db::DB;
@@ -1019,7 +1020,7 @@ impl DB {
     }
 
     /* Extract a ch completely from the world, and leave his stuff behind */
-    pub(crate) fn extract_char_final(&self, ch: &Rc<CharData>, main_globals: &Game) {
+    pub(crate) fn extract_char_final(&self, ch: &Rc<CharData>, game: &Game) {
         if ch.in_room() == NOWHERE {
             error!(
                 "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
@@ -1034,12 +1035,14 @@ impl DB {
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.borrow().is_none() {
-            // TODO implement do_return
-            // for (d = descriptor_list; d; d = d.next)
-            // if (d . original == ch) {
-            //     do_return(d.character, NULL, 0, 0);
-            //     break;
-            // }
+            for d in game.descriptor_list.borrow().iter() {
+                if d.original.borrow().is_some()
+                    && Rc::ptr_eq(d.original.borrow().as_ref().unwrap(), ch)
+                {
+                    do_return(game, d.character.borrow().as_ref().unwrap(), "", 0, 0);
+                    break;
+                }
+            }
         }
 
         if ch.desc.borrow().is_some() {
@@ -1060,8 +1063,7 @@ impl DB {
                 .borrow()
                 .is_some()
             {
-                // TODO implement do_return
-                //do_return(ch, NULL, 0, 0);
+                do_return(game, ch, "", 0, 0);
             } else {
                 /*
                  * Now we boot anybody trying to log in with the same character, to
@@ -1070,7 +1072,7 @@ impl DB {
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
-                for d in main_globals.descriptor_list.borrow().iter() {
+                for d in game.descriptor_list.borrow().iter() {
                     if Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap()) {
                         continue;
                     }
@@ -1120,11 +1122,13 @@ impl DB {
             }
         }
         /* we can't forget the hunters either... */
-        // TODO implement hunting
-        // for (temp = character_list; temp; temp = temp.next)
-        // if (HUNTING(temp) == ch)
-        // HUNTING(temp) = NULL;
-
+        for temp in self.character_list.borrow().iter() {
+            if temp.char_specials.borrow().hunting.is_some()
+                && Rc::ptr_eq(temp.char_specials.borrow().hunting.as_ref().unwrap(), ch)
+            {
+                temp.char_specials.borrow_mut().hunting = None;
+            }
+        }
         self.char_from_room(ch);
 
         if ch.is_npc() {

@@ -17,7 +17,7 @@ use crate::config::{
 };
 use crate::db::DB;
 use crate::fight::update_pos;
-use crate::objsave::{crash_idlesave, crash_rentsave};
+use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
@@ -388,8 +388,7 @@ impl DB {
                 );
                 send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
                 self.save_char(ch);
-                // TODO implement crashsave
-                // Crash_crashsave(ch);
+                crash_crashsave(self, ch);
                 self.char_from_room(ch);
                 self.char_to_room(Some(ch), 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {

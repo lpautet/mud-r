@@ -35,7 +35,7 @@ use crate::mail::MailSystem;
 use crate::modify::paginate_string;
 use crate::objsave::update_obj_file;
 use crate::shops::{assign_the_shopkeepers, ShopData};
-use crate::spec_assign::{assign_mobiles, assign_objects};
+use crate::spec_assign::{assign_mobiles, assign_objects, assign_rooms};
 use crate::spec_procs::sort_spells;
 use crate::spell_parser::mag_assign_spells;
 use crate::spells::{SpellInfoType, TOP_SPELL_DEFINE};
@@ -634,8 +634,8 @@ impl DB {
             assign_the_shopkeepers(&mut ret);
             info!("   Objects.");
             assign_objects(&mut ret);
-            // info!("   Rooms.");
-            // assign_rooms();
+            info!("   Rooms.");
+            assign_rooms(&mut ret);
         }
 
         info!("Assigning spell and skill levels.");
@@ -1277,7 +1277,7 @@ impl DB {
             dir_option: [None, None, None, None, None, None],
             room_flags: Cell::new(0),
             light: Cell::new(0),
-            func: None,
+            func: RefCell::new(None),
             contents: RefCell::new(vec![]),
             peoples: RefCell::new(vec![]),
         };

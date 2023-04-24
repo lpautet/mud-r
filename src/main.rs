@@ -38,7 +38,7 @@ use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{clone_vec, hmhr, hshr, hssh, sana, CMP, NRM, SECS_PER_MUD_HOUR};
+use crate::util::{clone_vec, hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
 
 mod act_comm;
 mod act_informative;
@@ -350,7 +350,7 @@ impl Game {
     /* Init sockets, run game, and cleanup sockets */
     fn init_game(&mut self, _port: u16) {
         /* We don't want to restart if we crash before we get up. */
-        util::touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
+        touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
 
         info!("Finding player limit.");
         self.max_players = get_max_players();
@@ -368,23 +368,22 @@ impl Game {
 
         self.game_loop();
 
-        //Crash_save_all();
+        crash_save_all(self);
 
         info!("Closing all sockets.");
         clone_vec(&self.descriptor_list)
             .iter()
             .for_each(|d| self.close_socket(d));
-        //
-        // CLOSE_SOCKET(mother_desc);
-        // fclose(player_fl);
+
+        // self.mother_desc.as_ref().unwrap().borrow_mut(). // CLOSE ?
 
         info!("Saving current MUD time.");
         save_mud_time(&self.db.time_info.borrow());
 
-        // if (circle_reboot) {
-        //     log("Rebooting.");
-        //     exit(52);            /* what's so great about HHGTTG, anyhow? */
-        // }
+        if self.circle_reboot.get() {
+            info!("Rebooting.");
+            process::exit(52); /* what's so great about HHGTTG, anyhow? */
+        }
         info!("Normal termination of game.");
     }
 }
@@ -540,7 +539,7 @@ fn get_max_players() -> i32 {
  * such as mobile_activity().
  */
 impl Game {
-    fn game_loop(&self) {
+    fn game_loop(&mut self) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
         // let mut temp_time;

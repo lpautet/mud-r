@@ -24,18 +24,22 @@ use crate::config::{
 };
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
-use crate::handler::{affect_remove, object_list_new_owner};
+use crate::handler::{affect_from_char, affect_remove, affected_by_spell, object_list_new_owner};
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
 use crate::shops::ok_damage_shopkeeper;
-use crate::spells::{AttackHitType, SKILL_BACKSTAB, TYPE_HIT, TYPE_SUFFERING, TYPE_UNDEFINED};
+use crate::spells::{
+    AttackHitType, SKILL_BACKSTAB, SPELL_INVISIBLE, SPELL_SLEEP, TYPE_HIT, TYPE_SUFFERING,
+    TYPE_UNDEFINED,
+};
 use crate::structs::{
     CharData, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE,
-    AFF_SANCTUARY, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON, ITEM_WEAR_TAKE, LVL_IMMORT,
-    MOB_MEMORY, MOB_NOTDEADYET, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER,
-    PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING,
-    POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE, ROOM_PEACEFUL, WEAR_WIELD,
+    AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON, ITEM_WEAR_TAKE,
+    LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS,
+    NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP,
+    POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE,
+    ROOM_PEACEFUL, WEAR_WIELD,
 };
 use crate::util::{dice, rand_number, BRF};
 use crate::{
@@ -116,10 +120,9 @@ macro_rules! is_weapon {
 /* The Fight related routines */
 impl DB {
     pub fn appear(&self, ch: &Rc<CharData>) {
-        // TODO implement spell
-        // if affected_by_spell(ch, SPELL_INVISIBLE) {
-        //     affect_from_char(ch, SPELL_INVISIBLE);
-        // }
+        if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
+            affect_from_char(ch, SPELL_INVISIBLE as i16);
+        }
 
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
 
@@ -333,9 +336,9 @@ impl DB {
         //combat_list = ch;
         self.combat_list.borrow_mut().push(ch.clone());
 
-        // TODO implement spell
-        // if (AFF_FLAGGED(ch, AFF_SLEEP))
-        // affect_from_char(ch, SPELL_SLEEP);
+        if ch.aff_flagged(AFF_SLEEP) {
+            affect_from_char(ch, SPELL_SLEEP as i16);
+        }
 
         ch.set_fighting(Some(vict.clone()));
         ch.set_pos(POS_FIGHTING);
@@ -1354,12 +1357,13 @@ impl DB {
             }
 
             self.hit(ch, ch.fighting().as_ref().unwrap(), TYPE_UNDEFINED, game);
-            // TODO implement spec proc
-            // if (MOB_FLAGGED(ch, MOB_SPEC) && GET_MOB_SPEC(ch) && !MOB_FLAGGED(ch, MOB_NOTDEADYET)) {
-            //     char
-            //     actbuf[MAX_INPUT_LENGTH] = "";
-            //     (GET_MOB_SPEC(ch))(ch, ch, 0, actbuf);
-            // }
+            if ch.mob_flagged(MOB_SPEC)
+                && self.get_mob_spec(ch).is_some()
+                && !ch.mob_flagged(MOB_NOTDEADYET)
+            {
+                let actbuf = String::new();
+                self.get_mob_spec(ch).as_ref().unwrap()(game, ch, ch, 0, actbuf.as_str());
+            }
         }
     }
 }

@@ -72,7 +72,7 @@ pub const IDLE_RENT_TIME: i32 = 48;
 pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
 
 /* should items in death traps automatically be junked? */
-// int dts_are_dumps = YES;
+pub const DTS_ARE_DUMPS: bool = true;
 
 /*
 * Whether you want items that immortals load to appear on the ground or not.

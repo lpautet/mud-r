@@ -390,7 +390,7 @@ impl MailSystem {
      *
      * A simple little function which tells you if the guy has mail or not.
      */
-    fn has_mail(&mut self, recipient: i64) -> bool {
+    pub fn has_mail(&mut self, recipient: i64) -> bool {
         self.find_char_in_index(recipient).is_some()
     }
 

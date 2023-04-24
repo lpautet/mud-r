@@ -13,11 +13,13 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use crate::act_comm::do_say;
+use crate::act_item::do_drop;
 use crate::act_social::do_action;
 use crate::class::{GUILD_INFO, PRAC_PARAMS};
 use crate::constants::INT_APP;
 use crate::db::DB;
-use crate::interpreter::{cmd_is, find_command, is_move};
+use crate::interpreter::{cmd_is, find_command, is_move, SCMD_DROP};
+use crate::limits::gain_exp;
 use crate::modify::page_string;
 use crate::spell_parser::{call_magic, cast_spell, find_skill_num};
 use crate::spells::{
@@ -184,40 +186,60 @@ pub fn guild(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &
     true
 }
 
-// SPECIAL(dump)
-// {
-// struct obj_data *k;
-// int value = 0;
-//
-// for (k = world[IN_ROOM(ch)].contents; k; k = world[IN_ROOM(ch)].contents) {
-// act("$p vanishes in a puff of smoke!", false, 0, k, 0, TO_ROOM);
-// extract_obj(k);
-// }
-//
-// if (!CMD_IS("drop"))
-// return (false);
-//
-// do_drop(ch, argument, cmd, SCMD_DROP);
-//
-// for (k = world[IN_ROOM(ch)].contents; k; k = world[IN_ROOM(ch)].contents) {
-// act("$p vanishes in a puff of smoke!", false, 0, k, 0, TO_ROOM);
-// value += MAX(1, MIN(50, GET_OBJ_COST(k) / 10));
-// extract_obj(k);
-// }
-//
-// if (value) {
-// send_to_char(ch, "You are awarded for outstanding performance.\r\n");
-// act("$n has been awarded for being a good citizen.", true, ch, 0, 0, TO_ROOM);
-//
-// if (GET_LEVEL(ch) < 3)
-// gain_exp(ch, value);
-// else
-// GET_GOLD(ch) += value;
-// }
-// return (true);
-// }
-//
-//
+#[allow(unused_variables)]
+pub fn dump(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    let db = &game.db;
+    for k in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents) {
+        db.act(
+            "$p vanishes in a puff of smoke!",
+            false,
+            None,
+            Some(&k),
+            None,
+            TO_ROOM,
+        );
+        game.db.extract_obj(&k);
+    }
+
+    if !cmd_is(cmd, "drop") {
+        return false;
+    }
+
+    do_drop(game, ch, argument, cmd as usize, SCMD_DROP as i32);
+    let mut value = 0;
+    for k in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents) {
+        db.act(
+            "$p vanishes in a puff of smoke!",
+            false,
+            None,
+            Some(&k),
+            None,
+            TO_ROOM,
+        );
+        value += max(1, min(50, k.get_obj_cost() / 10));
+        game.db.extract_obj(&k);
+    }
+
+    if value != 0 {
+        send_to_char(ch, "You are awarded for outstanding performance.\r\n");
+        db.act(
+            "$n has been awarded for being a good citizen.",
+            true,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+
+        if ch.get_level() < 3 {
+            gain_exp(ch, value, game);
+        } else {
+            ch.set_gold(ch.get_gold() + value);
+        }
+    }
+    true
+}
+
 // pub fn mayor(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
 //
 // const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";

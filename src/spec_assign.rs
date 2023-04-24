@@ -10,14 +10,18 @@
 
 /* functions to perform assignments */
 
+use log::error;
+
 use crate::boards::gen_board;
+use crate::config::DTS_ARE_DUMPS;
 use crate::db::DB;
 use crate::mail::postmaster;
 use crate::objsave::{cryogenicist, receptionist};
-use crate::spec_procs::{cityguard, fido, guild_guard, janitor, magic_user, snake, thief};
+use crate::spec_procs::{cityguard, dump, fido, guild_guard, janitor, magic_user, snake, thief};
 use crate::spec_procs::{guild, puff};
-use crate::structs::{MobVnum, ObjVnum, Special, NOBODY, NOTHING};
-use log::error;
+use crate::structs::{
+    MobVnum, ObjVnum, RoomRnum, RoomVnum, Special, NOBODY, NOTHING, NOWHERE, ROOM_DEATH,
+};
 
 fn assignmob(db: &mut DB, mob: MobVnum, fname: Special) {
     let rnum = db.real_mobile(mob);
@@ -44,15 +48,18 @@ pub fn assignobj(db: &mut DB, obj: ObjVnum, fname: Special) {
     }
 }
 
-// void ASSIGNROOM(room_vnum room, SPECIAL(fname))
-// {
-// room_rnum rnum;
-//
-// if ((rnum = real_room(room)) != NOWHERE)
-// world[rnum].func = fname;
-// else if (!mini_mud)
-// log("SYSERR: Attempt to assign spec to non-existant room #%d", room);
-// }
+pub fn assignroom(db: &mut DB, room: RoomVnum, fname: Special) {
+    let rnum = db.real_room(room);
+
+    if rnum != NOWHERE {
+        *db.world.borrow()[rnum as usize].func.borrow_mut() = Some(fname);
+    } else if !db.mini_mud {
+        error!(
+            "SYSERR: Attempt to assign spec to non-existant room #{}",
+            room
+        );
+    }
+}
 
 /* ********************************************************************
 *  Assignments                                                        *
@@ -258,16 +265,16 @@ pub fn assign_objects(db: &mut DB) {
     // assignobj(db, 3036, bank);	/* cashcard */
 }
 
-// /* assign special procedures to rooms */
-// void assign_rooms(void)
-// {
-// room_rnum i;
-//
-// ASSIGNROOM(3030, dump);
-// ASSIGNROOM(3031, pet_shops);
-//
-// if (dts_are_dumps)
-// for (i = 0; i <= top_of_world; i++)
-// if (ROOM_FLAGGED(i, ROOM_DEATH))
-// world[i].func = dump;
-// }
+/* assign special procedures to rooms */
+pub fn assign_rooms(db: &mut DB) {
+    assignroom(db, 3030, dump);
+    // assignroom(db, 3031, pet_shops);
+
+    if DTS_ARE_DUMPS {
+        for i in 0..db.world.borrow().len() {
+            if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
+                *db.world.borrow_mut()[i].func.borrow_mut() = Some(dump);
+            }
+        }
+    }
+}
