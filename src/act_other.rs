@@ -24,6 +24,7 @@ use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, DB, IDEA_FILE, TYPO_FILE};
 use crate::fight::die;
 use crate::handler::{affect_from_char, affect_to_char, isname, obj_from_char, FIND_CHAR_ROOM};
+use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
     SCMD_AUTOEXIT, SCMD_BRIEF, SCMD_BUG, SCMD_COMPACT, SCMD_DEAF, SCMD_HOLYLIGHT, SCMD_IDEA,
@@ -39,10 +40,11 @@ use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
     AffectedType, CharData, AFF_CHARM, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE, AFF_SNEAK, APPLY_NONE,
     ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS,
-    PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT,
-    PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT,
-    PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST,
-    PRF_ROOMFLAGS, PRF_SUMMONABLE, ROOM_PEACEFUL, WEAR_HOLD,
+    PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF,
+    PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
+    PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ,
+    PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PEACEFUL,
+    WEAR_HOLD,
 };
 use crate::util::{clone_vec, rand_number, CMP, NRM};
 use crate::{an, send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -81,10 +83,10 @@ pub fn do_quit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
             crash_rentsave(&game.db, ch, 0);
         }
 
-        // TODO implement houses
         /* If someone is quitting in their house, let them load back here. */
-        // if (!PLR_FLAGGED(ch, PLR_LOADROOM) && ROOM_FLAGGED(IN_ROOM(ch), ROOM_HOUSE))
-        // GET_LOADROOM(ch) = GET_ROOM_VNUM(IN_ROOM(ch));
+        if !ch.plr_flagged(PLR_LOADROOM) && game.db.room_flagged(ch.in_room(), ROOM_HOUSE) {
+            ch.set_loadroom(game.db.get_room_vnum(ch.in_room()));
+        }
 
         game.db.extract_char(ch); /* Char is saved before extracting. */
     }
@@ -119,9 +121,10 @@ pub fn do_save(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     write_aliases(ch);
     game.db.save_char(ch);
     crash_crashsave(&game.db, ch);
-    // TODO implement houses
-    // if (ROOM_FLAGGED(IN_ROOM(ch), ROOM_HOUSE_CRASH))
-    // House_crashsave(GET_ROOM_VNUM(IN_ROOM(ch)));
+
+    if game.db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
+        house_crashsave(&game.db, game.db.get_room_vnum(ch.in_room()));
+    }
 }
 
 /* generic function for commands which are normally overridden by

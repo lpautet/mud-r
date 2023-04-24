@@ -24,35 +24,14 @@ use crate::act_social::SocialMessg;
 use crate::ban::{load_banned, read_invalid_list};
 use crate::boards::BoardSystem;
 use crate::class::init_spell_levels;
-use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
-// long get_id_by_name(const char *name)
-// {
-// int i;
-//
-// for (i = 0; i <= top_of_p_table; i++)
-// if (!str_cmp(player_table[i].name, name))
-// return (player_table[i].id);
-//
-// return (-1);
-// }
-//
-//
-// char *get_name_by_id(long id)
-// {
-// int i;
-//
-// for (i = 0; i <= top_of_p_table; i++)
-// if (player_table[i].id == id)
-// return (player_table[i].name);
-//
-// return (NULL);
-// }
 use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
 use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
 use crate::handler::{fname, isname};
+use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::one_word;
+use crate::mail::MailSystem;
 use crate::modify::paginate_string;
 use crate::shops::{assign_the_shopkeepers, ShopData};
 use crate::spec_assign::{assign_mobiles, assign_objects};
@@ -77,6 +56,7 @@ use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
     CMP, NRM, SECS_PER_REAL_HOUR,
 };
+use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -153,7 +133,7 @@ pub struct DB {
     /* file desc of player file	 */
     top_idnum: Cell<i32>,
     /* highest idnum in use		 */
-    pub no_mail: bool,
+    pub no_mail: Cell<bool>,
     /* mail disabled?		 */
     pub mini_mud: bool,
     /* mini-mud mode?		 */
@@ -213,6 +193,9 @@ pub struct DB {
     pub ban_list: RefCell<Vec<BanListElement>>,
     pub invalid_list: RefCell<Vec<Rc<str>>>,
     pub boards: RefCell<BoardSystem>,
+    pub house_control: RefCell<[HouseControlRec; MAX_HOUSES]>,
+    pub num_of_houses: Cell<usize>,
+    pub mails: RefCell<MailSystem>,
 }
 
 pub const REAL: i32 = 0;
@@ -285,6 +268,26 @@ pub struct BanListElement {
     pub type_: i32,
     pub date: u64,
     pub name: Rc<str>,
+}
+
+pub fn get_name_by_id(db: &DB, id: i64) -> Option<String> {
+    let pt = db.player_table.borrow();
+    let p = pt.iter().find(|p| p.id == id);
+    return if p.is_some() {
+        Some(p.unwrap().name.clone())
+    } else {
+        None
+    };
+}
+
+pub fn get_id_by_name(db: &DB, name: &str) -> i64 {
+    let pt = db.player_table.borrow();
+    let r = pt.iter().find(|p| p.name == name);
+    if r.is_some() {
+        r.unwrap().id
+    } else {
+        -1
+    }
 }
 
 /*************************************************************************
@@ -528,7 +531,7 @@ impl DB {
             player_table: RefCell::new(vec![]),
             player_fl: RefCell::new(None),
             top_idnum: Cell::new(0),
-            no_mail: false,
+            no_mail: Cell::new(false),
             mini_mud: false,
             no_rent_check: false,
             boot_time: Cell::new(0),
@@ -574,6 +577,9 @@ impl DB {
             ban_list: RefCell::new(vec![]),
             invalid_list: RefCell::new(vec![]),
             boards: RefCell::new(BoardSystem::new()),
+            house_control: RefCell::new([HouseControlRec::new(); MAX_HOUSES]),
+            num_of_houses: Cell::new(0),
+            mails: RefCell::new(MailSystem::new()),
         }
     }
 
@@ -637,12 +643,12 @@ impl DB {
         info!("Sorting command list and spells.");
         ret.sort_commands();
         sort_spells(&mut ret);
-        //
-        // log("Booting mail system.");
-        // if (!scan_file()) {
-        // log("    Mail boot failed -- Mail system disabled");
-        // no_mail = 1;
-        // }
+
+        info!("Booting mail system.");
+        if !ret.mails.borrow_mut().scan_file() {
+            info!("    Mail boot failed -- Mail system disabled");
+            ret.no_mail.set(true);
+        }
         info!("Reading banned site and invalid-name list.");
         load_banned(&mut ret);
         read_invalid_list(&mut ret);
@@ -655,8 +661,8 @@ impl DB {
         //
         // /* Moved here so the object limit code works. -gg 6/24/98 */
         if !ret.mini_mud {
-            // log("Booting houses.");
-            // House_boot();
+            info!("Booting houses.");
+            house_boot(&ret);
         }
 
         for (i, zone) in ret.zone_table.borrow().iter().enumerate() {
@@ -2533,14 +2539,35 @@ impl DB {
     }
 
     /* create an object, and add it to the object list */
-    // pub fn create_obj(&self) -> Rc<ObjData> {
-    //     let mut obj = ObjData::new();
-    //
-    //     clear_object(&mut obj);
-    //     let ret = Rc::from(obj);
-    //     self.object_list.borrow_mut().push(ret.clone());
-    //     ret
-    // }
+    pub fn create_obj(
+        &self,
+        num: ObjVnum,
+        name: &str,
+        short_description: &str,
+        description: &str,
+        obj_type: u8,
+        obj_wear: i32,
+        weight: i32,
+        cost: i32,
+        rent: i32,
+    ) -> Rc<ObjData> {
+        let mut obj = ObjData::new();
+
+        clear_object(&mut obj);
+        obj.item_number = num;
+        obj.name = RefCell::from(name.to_string());
+        obj.description = description.to_string();
+        obj.short_description = short_description.to_string();
+        obj.set_obj_type(obj_type);
+        obj.set_obj_wear(obj_wear);
+        obj.set_obj_weight(weight);
+        obj.set_obj_cost(cost);
+        obj.set_obj_rent(rent);
+        let ret = Rc::from(obj);
+        self.object_list.borrow_mut().push(ret.clone());
+
+        ret
+    }
 
     /* create a new object from a prototype */
     pub fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
@@ -3272,13 +3299,14 @@ pub fn char_to_store(ch: &CharData, st: &mut CharFileU) {
     /*   affect_total(ch); unnecessary, I think !?! */
 } /* Char to store */
 
-pub fn copy_to_stored(to: &mut [u8], from: &str) {
+pub fn copy_to_stored(to: &mut [u8], from: &str) -> usize {
     let bytes = from.as_bytes();
     let bytes_copied = min(to.len(), from.len());
     to[0..bytes_copied].copy_from_slice(&bytes[0..bytes_copied]);
     if bytes_copied != to.len() {
         to[bytes_copied] = 0;
     }
+    bytes_copied
 }
 
 // void save_etext(struct char_data *ch)

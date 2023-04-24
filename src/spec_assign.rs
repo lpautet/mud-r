@@ -12,6 +12,7 @@
 
 use crate::boards::gen_board;
 use crate::db::DB;
+use crate::mail::postmaster;
 use crate::spec_procs::{cityguard, fido, guild_guard, janitor, magic_user, snake, thief};
 use crate::spec_procs::{guild, puff};
 use crate::structs::{MobVnum, ObjVnum, Special, NOBODY, NOTHING};
@@ -64,12 +65,12 @@ pub fn assign_mobiles(db: &mut DB) {
     //
     /* Immortal Zone */
     // assignmob(db, 1200, receptionist);
-    // assignmob(db, 1201, postmaster);
+    assignmob(db, 1201, postmaster);
     assignmob(db, 1202, janitor);
     //
     /* Midgaard */
     // assignmob(db, 3005, receptionist);
-    // assignmob(db, 3010, postmaster);
+    assignmob(db, 3010, postmaster);
     assignmob(db, 3020, guild);
     assignmob(db, 3021, guild);
     assignmob(db, 3022, guild);

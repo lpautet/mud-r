@@ -33,6 +33,7 @@ use crate::db::{
 };
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
 use crate::handler::{affect_remove, affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::house::house_can_enter;
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
     search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_FREEZE, SCMD_NOTITLE, SCMD_PARDON,
@@ -235,9 +236,10 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
             ch,
             "There's a private conversation going on in that room.\r\n",
         );
-        // TODO implement house
-        // } else if db.room_flagged(location, ROOM_HOUSE) && !House_can_enter(ch, GET_ROOM_VNUM(location)) {
-        //     send_to_char(ch, "That's private property -- no trespassing!\r\n");
+    } else if db.room_flagged(location, ROOM_HOUSE)
+        && !house_can_enter(db, ch, db.get_room_vnum(location))
+    {
+        send_to_char(ch, "That's private property -- no trespassing!\r\n");
     } else {
         return location;
     }

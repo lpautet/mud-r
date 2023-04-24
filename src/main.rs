@@ -30,6 +30,7 @@ use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
+use crate::house::house_save_all;
 use crate::interpreter::{command_interpreter, nanny, perform_alias};
 use crate::magic::affect_update;
 use crate::modify::{show_string, string_add};
@@ -57,9 +58,11 @@ mod db;
 mod fight;
 mod graph;
 mod handler;
+mod house;
 mod interpreter;
 mod limits;
 mod magic;
+mod mail;
 mod mobact;
 mod modify;
 mod objsave;
@@ -110,7 +113,7 @@ pub struct DescriptorData {
     /* for the modify-str system		*/
     pub max_str: Cell<usize>,
     /*		-			*/
-    mail_to: Cell<u64>,
+    mail_to: Cell<i64>,
     /* name for mail system			*/
     has_prompt: Cell<bool>,
     /* is the user at a prompt?             */
@@ -824,8 +827,7 @@ impl Game {
             if self.mins_since_crashsave.get() >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave.set(0);
                 crash_save_all(self);
-                // TODO implement houses
-                // House_save_all();
+                house_save_all(&self.db);
             }
         }
 

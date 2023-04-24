@@ -2891,8 +2891,6 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
  *      have been placed at the front of the character's input queue.
  */
 pub fn perform_alias(d: &Rc<DescriptorData>, orig: &mut String) -> bool {
-    let first_arg = String::new();
-
     /* Mobs don't have aliases. */
     if d.character.borrow().as_ref().unwrap().is_npc() {
         return false;
@@ -3445,7 +3443,6 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
             } else {
                 let tmp_name = _parse_name(arg);
 
-                let desc_list = game.descriptor_list.borrow();
                 if tmp_name.is_none()
                     || tmp_name.unwrap().len() < 2
                     || tmp_name.unwrap().len() > MAX_NAME_LENGTH

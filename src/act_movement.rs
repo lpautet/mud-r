@@ -16,6 +16,7 @@ use crate::config::{NOPERSON, OK, TUNNEL_SIZE};
 use crate::constants::{DEX_APP_SKILL, DIRS, MOVEMENT_LOSS, REV_DIR};
 use crate::db::DB;
 use crate::handler::{fname, isname, FIND_CHAR_ROOM, FIND_OBJ_INV, FIND_OBJ_ROOM};
+use crate::house::house_can_enter;
 use crate::interpreter::{
     one_argument, search_block, two_arguments, SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_PICK,
     SCMD_UNLOCK,
@@ -26,8 +27,8 @@ use crate::structs::{
     AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, EX_CLOSED,
     EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
     NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STANDING, ROOM_DEATH, ROOM_GODROOM, ROOM_INDOORS, ROOM_TUNNEL, SECT_WATER_NOSWIM,
-    WEAR_HOLD,
+    POS_STANDING, ROOM_ATRIUM, ROOM_DEATH, ROOM_GODROOM, ROOM_INDOORS, ROOM_TUNNEL,
+    SECT_WATER_NOSWIM, WEAR_HOLD,
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number};
 use crate::{an, is_set, send_to_char, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -192,13 +193,17 @@ pub fn do_simple_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_ch
 
         return false;
     }
-    // TODO implement houses
-    // if db.room_flagged(ch.in_room(), ROOM_ATRIUM) {
-    //     if (!House_can_enter(ch, GET_ROOM_VNUM(EXIT(ch, dir)->to_room))) {
-    //         send_to_char(ch, "That's private property -- no trespassing!\r\n");
-    //         return (0);
-    //     }
-    // }
+
+    if db.room_flagged(ch.in_room(), ROOM_ATRIUM) {
+        if !house_can_enter(
+            db,
+            ch,
+            db.get_room_vnum(db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()),
+        ) {
+            send_to_char(ch, "That's private property -- no trespassing!\r\n");
+            return false;
+        }
+    }
     if db.room_flagged(
         db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
         ROOM_TUNNEL,

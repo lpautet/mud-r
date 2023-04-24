@@ -71,7 +71,7 @@ const MAX_MESSAGE_LENGTH: usize = 4096; /* arbitrary -- change if needed */
 
 const INDEX_SIZE: usize = ((NUM_OF_BOARDS * MAX_BOARD_MESSAGES) + 5) as usize;
 
-pub const BOARD_MAGIC: i32 = 1048575; /* arbitrary number - see modify.c */
+pub const BOARD_MAGIC: i64 = 1048575; /* arbitrary number - see modify.c */
 
 struct BoardMsginfo {
     slot_num: Option<usize>,
@@ -391,7 +391,7 @@ fn board_write_message(db: &DB, board_type: usize, ch: &Rc<CharData>, arg: &str)
         .unwrap()
         .clone(),
         MAX_MESSAGE_LENGTH,
-        (board_type as i32 + BOARD_MAGIC) as u64,
+        board_type as i64 + BOARD_MAGIC,
     );
 
     b.num_of_msgs[board_type] += 1;

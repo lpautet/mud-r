@@ -56,9 +56,9 @@ pub const ETEXT_FILE: i32 = 1;
 pub const ALIAS_FILE: i32 = 2;
 
 /* breadth-first searching */
-pub const BFS_ERROR: i32 = (-1);
-pub const BFS_ALREADY_THERE: i32 = (-2);
-pub const BFS_NO_PATH: i32 = (-3);
+pub const BFS_ERROR: i32 = -1;
+pub const BFS_ALREADY_THERE: i32 = -2;
+pub const BFS_NO_PATH: i32 = -3;
 
 #[macro_export]
 macro_rules! is_set {

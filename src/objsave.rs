@@ -41,7 +41,7 @@ use crate::{send_to_char, Game};
 pub const LOC_INVENTORY: i32 = 0;
 pub const MAX_BAG_ROWS: i32 = 5;
 
-fn obj_from_store(db: &DB, object: &ObjFileElem, location: &mut i32) -> Option<Rc<ObjData>> {
+pub fn obj_from_store(db: &DB, object: &ObjFileElem, location: &mut i32) -> Option<Rc<ObjData>> {
     *location = 0;
     let itemnum = db.real_object(object.item_number);
     if itemnum == NOTHING {
@@ -65,7 +65,7 @@ fn obj_from_store(db: &DB, object: &ObjFileElem, location: &mut i32) -> Option<R
     Some(obj)
 }
 
-fn obj_to_store(db: &DB, obj: &Rc<ObjData>, fl: &mut File, location: i32) -> bool {
+pub fn obj_to_store(db: &DB, obj: &Rc<ObjData>, fl: &mut File, location: i32) -> bool {
     let mut object = ObjFileElem {
         item_number: db.get_obj_vnum(obj),
         location: location as i16,
@@ -468,7 +468,7 @@ impl RentInfo {
 }
 
 impl ObjFileElem {
-    fn new() -> ObjFileElem {
+    pub fn new() -> ObjFileElem {
         ObjFileElem {
             item_number: 0,
             location: 0,

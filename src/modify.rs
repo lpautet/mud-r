@@ -75,7 +75,7 @@ use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{PLR_MAILING, PLR_WRITING};
 use crate::{send_to_char, write_to_output, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
 
-pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: u64) {
+pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
     if d.character.borrow().is_some() && !d.character.borrow().as_ref().unwrap().is_npc() {
         d.character
             .borrow()
@@ -106,7 +106,7 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
     // smash_tilde(str_);
     let mut the_stro = d.str.borrow_mut();
     let the_str = the_stro.as_ref().unwrap();
-    if the_str.borrow().is_empty() {
+    if RefCell::borrow(the_str).is_empty() {
         if str_.len() + 3 > d.max_str.get() {
             send_to_char(
                 d.character.borrow().as_ref().unwrap(),
@@ -120,7 +120,7 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
             *RefCell::borrow_mut(the_str) = str_;
         }
     } else {
-        if str_.len() + the_str.borrow().len() + 3 > d.max_str.get() {
+        if str_.len() + RefCell::borrow(the_str).len() + 3 > d.max_str.get() {
             send_to_char(
                 d.character.borrow().as_ref().unwrap(),
                 "String too long.  Last line skipped.\r\n",
@@ -132,23 +132,37 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
     }
 
     if terminator {
-        // TODO implement mail
-        // if d.state() == ConPlaying && d.character.borrow().as_ref().unwrap().plr_flagged     ( PLR_MAILING) {
-        // store_mail(d->mail_to, GET_IDNUM(d->character), *d->str);
-        // d->mail_to = 0;
-        // free(*d->str);
-        // free(d->str);
-        // write_to_output(d, "Message sent!\r\n");
-        // if (!IS_NPC(d->character))
-        // REMOVE_BIT(PLR_FLAGS(d->character), PLR_MAILING | PLR_WRITING);
-        // }
+        if d.state() == ConPlaying
+            && d.character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .plr_flagged(PLR_MAILING)
+        {
+            db.mails.borrow_mut().store_mail(
+                db,
+                d.mail_to.get(),
+                d.character.borrow().as_ref().unwrap().get_idnum(),
+                RefCell::borrow(d.str.borrow().as_ref().unwrap()).as_str(),
+            );
+            d.mail_to.set(0);
+            *d.str.borrow_mut() = None;
+            write_to_output(d, "Message sent!\r\n");
+            if !d.character.borrow().as_ref().unwrap().is_npc() {
+                d.character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
+            }
+        }
 
         *the_stro = None;
 
-        if d.mail_to.get() >= BOARD_MAGIC as u64 {
+        if d.mail_to.get() >= BOARD_MAGIC {
             board_save_board(
                 &mut db.boards.borrow_mut(),
-                (d.mail_to.get() - BOARD_MAGIC as u64) as usize,
+                (d.mail_to.get() - BOARD_MAGIC) as usize,
             );
             d.mail_to.set(0);
         }
