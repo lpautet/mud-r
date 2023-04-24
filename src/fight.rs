@@ -28,6 +28,7 @@ use crate::handler::{affect_remove, object_list_new_owner};
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
+use crate::shops::ok_damage_shopkeeper;
 use crate::spells::{AttackHitType, SKILL_BACKSTAB, TYPE_HIT, TYPE_SUFFERING, TYPE_UNDEFINED};
 use crate::structs::{
     CharData, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE,
@@ -932,9 +933,9 @@ impl DB {
         }
 
         /* shopkeeper protection */
-        // TODO implements shop
-        // if (!ok_damage_shopkeeper(ch, victim))
-        // return (0);
+        if !ok_damage_shopkeeper(game, ch, victim) {
+            return 0;
+        }
 
         /* You can't damage an immortal! */
         if !victim.is_npc() && victim.get_level() >= LVL_IMMORT as u8 {

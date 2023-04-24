@@ -68,12 +68,16 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use crate::boards::{board_save_board, BOARD_MAGIC};
-use crate::config::MENU;
+use crate::config::{MENU, NOPERSON};
 use crate::db::DB;
-use crate::interpreter::{any_one_arg, delete_doubledollar};
+use crate::handler::FIND_CHAR_WORLD;
+use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
+use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
+use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
-use crate::structs::{PLR_MAILING, PLR_WRITING};
-use crate::{send_to_char, write_to_output, DescriptorData, PAGE_LENGTH, PAGE_WIDTH};
+use crate::structs::{CharData, LVL_IMMORT, PLR_MAILING, PLR_WRITING};
+use crate::util::BRF;
+use crate::{send_to_char, write_to_output, DescriptorData, Game, PAGE_LENGTH, PAGE_WIDTH};
 
 pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
     if d.character.borrow().is_some() && !d.character.borrow().as_ref().unwrap().is_npc() {
@@ -188,90 +192,140 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
-//
-// ACMD(do_skillset)
-// {
-// struct char_data *vict;
-// char name[MAX_INPUT_LENGTH];
-// char buf[MAX_INPUT_LENGTH], help[MAX_STRING_LENGTH];
-// int skill, value, i, qend;
-//
-// argument = one_argument(argument, name);
-//
-// if (!*name) {			/* no arguments. print an informative text */
-// send_to_char(ch, "Syntax: skillset <name> '<skill>' <value>\r\n"
-// "Skill being one of the following:\r\n");
-// for (qend = 0, i = 0; i <= TOP_SPELL_DEFINE; i++) {
-// if (spell_info[i].name == unused_spellname)	/* This is valid. */
-// continue;
-// send_to_char(ch, "%18s", spell_info[i].name);
-// if (qend++ % 4 == 3)
-// send_to_char(ch, "\r\n");
-// }
-// if (qend % 4 != 0)
-// send_to_char(ch, "\r\n");
-// return;
-// }
-//
-// if (!(vict = get_char_vis(ch, name, NULL, FIND_CHAR_WORLD))) {
-// send_to_char(ch, "%s", NOPERSON);
-// return;
-// }
-// skip_spaces(&argument);
-//
-// /* If there is no chars in argument */
-// if (!*argument) {
-// send_to_char(ch, "Skill name expected.\r\n");
-// return;
-// }
-// if (*argument != '\'') {
-// send_to_char(ch, "Skill must be enclosed in: ''\r\n");
-// return;
-// }
-// /* Locate the last quote and lowercase the magic words (if any) */
-//
-// for (qend = 1; argument[qend] && argument[qend] != '\''; qend++)
-// argument[qend] = LOWER(argument[qend]);
-//
-// if (argument[qend] != '\'') {
-// send_to_char(ch, "Skill must be enclosed in: ''\r\n");
-// return;
-// }
-// strcpy(help, (argument + 1));	/* strcpy: OK (MAX_INPUT_LENGTH <= MAX_STRING_LENGTH) */
-// help[qend - 1] = '\0';
-// if ((skill = find_skill_num(help)) <= 0) {
-// send_to_char(ch, "Unrecognized skill.\r\n");
-// return;
-// }
-// argument += qend + 1;		/* skip to next parameter */
-// argument = one_argument(argument, buf);
-//
-// if (!*buf) {
-// send_to_char(ch, "Learned value expected.\r\n");
-// return;
-// }
-// value = atoi(buf);
-// if (value < 0) {
-// send_to_char(ch, "Minimum value for learned is 0.\r\n");
-// return;
-// }
-// if (value > 100) {
-// send_to_char(ch, "Max value for learned is 100.\r\n");
-// return;
-// }
-// if (IS_NPC(vict)) {
-// send_to_char(ch, "You can't set NPC skills.\r\n");
-// return;
-// }
-//
-// /*
-//  * find_skill_num() guarantees a valid spell_info[] index, or -1, and we
-//  * checked for the -1 above so we are safe here.
-//  */
-// SET_SKILL(vict, skill, value);
-// mudlog(BRF, LVL_IMMORT, TRUE, "%s changed %s's %s to %d.", GET_NAME(ch), GET_NAME(vict), spell_info[skill].name, value);
-// send_to_char(ch, "You change %s's %s to %d.\r\n", GET_NAME(vict), spell_info[skill].name, value);
-// }
+#[allow(unused_variables)]
+pub fn do_skillset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let db = &game.db;
+    let mut name = String::new();
+
+    let argument2 = one_argument(argument, &mut name);
+    let argument = argument2;
+
+    if name.is_empty() {
+        /* no arguments. print an informative text */
+        send_to_char(
+            ch,
+            "Syntax: skillset <name> '<skill>' <value>\r\n\
+Skill being one of the following:\r\n",
+        );
+        let mut qend = 0;
+        for i in 0..TOP_SPELL_DEFINE + 1 {
+            if db.spell_info[i].name == UNUSED_SPELLNAME {
+                /* This is valid. */
+                continue;
+            }
+            send_to_char(ch, format!("{:18}", db.spell_info[i].name).as_str());
+            qend += 1;
+            if qend % 4 == 3 {
+                send_to_char(ch, "\r\n");
+            }
+        }
+        if qend % 4 != 0 {
+            send_to_char(ch, "\r\n");
+        }
+
+        return;
+    }
+    let vict = db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+    if vict.is_none() {
+        send_to_char(ch, NOPERSON);
+        return;
+    }
+    let vict = vict.unwrap();
+    let mut argument = argument.trim_start().to_string();
+
+    /* If there is no chars in argument */
+    if argument.is_empty() {
+        send_to_char(ch, "Skill name expected.\r\n");
+        return;
+    }
+    if !argument.starts_with('\'') {
+        send_to_char(ch, "Skill must be enclosed in: ''\r\n");
+        return;
+    }
+    /* Locate the last quote and lowercase the magic words (if any) */
+
+    argument.remove(0);
+    let mut last_c;
+    let mut qend = 0;
+    for c in argument.chars() {
+        last_c = c;
+        if last_c == '\'' {
+            break;
+        }
+        qend += 1;
+    }
+
+    if &argument[qend..qend] != "\'" {
+        send_to_char(ch, "Skill must be enclosed in: ''\r\n");
+        return;
+    }
+    let help = argument.to_lowercase();
+    let help = &help.as_str()[0..qend];
+
+    let skill = find_skill_num(db, help);
+    if skill.is_none() {
+        send_to_char(ch, "Unrecognized skill.\r\n");
+        return;
+    }
+    let mut buf = String::new();
+    let skill = skill.unwrap();
+    let argument = &argument[qend + 1..]; /* skip to next parameter */
+    let argument2 = one_argument(argument, &mut buf);
+    let argument = argument2;
+
+    if buf.is_empty() {
+        send_to_char(ch, "Learned value expected.\r\n");
+        return;
+    }
+    let value = buf.parse::<i8>();
+    if value.is_err() {
+        send_to_char(ch, "Invalid value.\r\n");
+        return;
+    }
+
+    let value = value.unwrap();
+    if value < 0 {
+        send_to_char(ch, "Minimum value for learned is 0.\r\n");
+        return;
+    }
+    if value > 100 {
+        send_to_char(ch, "Max value for learned is 100.\r\n");
+        return;
+    }
+    if vict.is_npc() {
+        send_to_char(ch, "You can't set NPC skills.\r\n");
+        return;
+    }
+
+    /*
+     * find_skill_num() guarantees a valid spell_info[] index, or -1, and we
+     * checked for the -1 above so we are safe here.
+     */
+    vict.set_skill(skill, value);
+    game.mudlog(
+        BRF,
+        LVL_IMMORT as i32,
+        true,
+        format!(
+            "{} changed {}'s {} to {}.",
+            ch.get_name(),
+            vict.get_name(),
+            db.spell_info[skill as usize].name,
+            value
+        )
+        .as_str(),
+    );
+    send_to_char(
+        ch,
+        format!(
+            "You change {}'s {} to {}.\r\n",
+            vict.get_name(),
+            db.spell_info[skill as usize].name,
+            value
+        )
+        .as_str(),
+    );
+}
 
 /*********************************************************************
 * New Pagination Code

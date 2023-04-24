@@ -54,7 +54,7 @@ use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
 use crate::graph::do_track;
-use crate::modify::page_string;
+use crate::modify::{do_skillset, page_string};
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::spell_parser::do_cast;
@@ -263,7 +263,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 294] = [
+pub const CMD_INFO: [CommandInfo; 295] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -1963,6 +1963,13 @@ pub const CMD_INFO: [CommandInfo; 294] = [
         subcmd: 0,
     },
     // { "skillset" , POS_SLEEPING, do_skillset , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "skillset",
+        minimum_position: POS_SLEEPING,
+        command_pointer: do_skillset,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     // { "sleep"    , POS_SLEEPING, do_sleep    , 0, 0 },
     CommandInfo {
         command: "sleep",

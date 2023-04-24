@@ -114,7 +114,7 @@ pub const FREE_RENT: bool = true;
 pub const MAX_OBJ_SAVE: i32 = 30;
 
 /* receptionist's surcharge on top of item costs */
-// int min_rent_cost = 100;
+pub const MIN_RENT_COST: i32 = 100;
 
 /*
 * Should the game automatically save people?  (i.e., save player data
@@ -133,10 +133,10 @@ pub const AUTO_SAVE: bool = true;
 pub const AUTOSAVE_TIME: i32 = 5;
 
 /* Lifetime of crashfiles and forced-rent (idlesave) files in days */
-// int crash_file_timeout = 10;
+pub const CRASH_FILE_TIMEOUT: i32 = 10;
 
 /* Lifetime of normal rent files in days */
-// int rent_file_timeout = 30;
+pub const RENT_FILE_TIMEOUT: i32 = 30;
 
 /****************************************************************************/
 /****************************************************************************/

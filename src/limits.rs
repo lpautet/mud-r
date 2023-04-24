@@ -12,10 +12,12 @@ use std::rc::Rc;
 
 use crate::class::{advance_level, level_exp, title_female, title_male};
 use crate::config::{
-    IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN, MAX_EXP_LOSS,
+    FREE_RENT, IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN,
+    MAX_EXP_LOSS,
 };
 use crate::db::DB;
 use crate::fight::update_pos;
+use crate::objsave::{crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
@@ -405,10 +407,11 @@ impl DB {
                     *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = None;
                     *ch.desc.borrow_mut() = None;
                 }
-                // if (free_rent)
-                // Crash_rentsave(ch, 0);
-                // else
-                // Crash_idlesave(ch);
+                if FREE_RENT {
+                    crash_rentsave(self, ch, 0);
+                } else {
+                    crash_idlesave(self, ch);
+                }
                 main_globals.mudlog(
                     CMP,
                     LVL_GOD as i32,

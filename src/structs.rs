@@ -754,7 +754,7 @@ pub struct ObjFileElem {
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RentInfo {
-    pub time: i32,
+    pub time: i64,
     pub rentcode: i32,
     pub net_cost_per_diem: i32,
     pub gold: i32,

@@ -20,6 +20,7 @@ use crate::class::invalid_class;
 use crate::config::MENU;
 use crate::db::DB;
 use crate::interpreter::one_argument;
+use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
@@ -1135,8 +1136,7 @@ impl DB {
             ch.clear_memory()
         } else {
             self.save_char(ch);
-            // TODO implement crash delete
-            // Crash_delete_crashfile(ch);
+            crash_delete_crashfile(ch);
         }
 
         /* If there's a descriptor, they're in the menu now. */

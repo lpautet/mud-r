@@ -33,6 +33,7 @@ use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::one_word;
 use crate::mail::MailSystem;
 use crate::modify::paginate_string;
+use crate::objsave::update_obj_file;
 use crate::shops::{assign_the_shopkeepers, ShopData};
 use crate::spec_assign::{assign_mobiles, assign_objects};
 use crate::spec_procs::sort_spells;
@@ -98,7 +99,7 @@ pub const SUF_TEXT: &str = "text";
 pub const SUF_ALIAS: &str = "alias";
 
 pub struct PlayerIndexElement {
-    name: String,
+    pub(crate) name: String,
     id: i64,
 }
 
@@ -652,13 +653,13 @@ impl DB {
         info!("Reading banned site and invalid-name list.");
         load_banned(&mut ret);
         read_invalid_list(&mut ret);
-        //
-        // if (!no_rent_check) {
-        // log("Deleting timed-out crash and rent files:");
-        // update_obj_file();
-        // log("   Done.");
-        // }
-        //
+
+        if !ret.no_rent_check {
+            info!("Deleting timed-out crash and rent files:");
+            update_obj_file(&ret);
+            info!("   Done.");
+        }
+
         // /* Moved here so the object limit code works. -gg 6/24/98 */
         if !ret.mini_mud {
             info!("Booting houses.");

@@ -13,6 +13,7 @@
 use crate::boards::gen_board;
 use crate::db::DB;
 use crate::mail::postmaster;
+use crate::objsave::{cryogenicist, receptionist};
 use crate::spec_procs::{cityguard, fido, guild_guard, janitor, magic_user, snake, thief};
 use crate::spec_procs::{guild, puff};
 use crate::structs::{MobVnum, ObjVnum, Special, NOBODY, NOTHING};
@@ -64,12 +65,12 @@ pub fn assign_mobiles(db: &mut DB) {
     assignmob(db, 1, puff);
     //
     /* Immortal Zone */
-    // assignmob(db, 1200, receptionist);
+    assignmob(db, 1200, receptionist);
     assignmob(db, 1201, postmaster);
     assignmob(db, 1202, janitor);
     //
     /* Midgaard */
-    // assignmob(db, 3005, receptionist);
+    assignmob(db, 3005, receptionist);
     assignmob(db, 3010, postmaster);
     assignmob(db, 3020, guild);
     assignmob(db, 3021, guild);
@@ -86,7 +87,7 @@ pub fn assign_mobiles(db: &mut DB) {
     assignmob(db, 3066, fido);
     assignmob(db, 3067, cityguard);
     assignmob(db, 3068, janitor);
-    // assignmob(db, 3095, cryogenicist);
+    assignmob(db, 3095, cryogenicist);
     // assignmob(db, 3105, mayor);
 
     /* MORIA */
@@ -198,7 +199,7 @@ pub fn assign_mobiles(db: &mut DB) {
 
     /* New Thalos */
     /* 5481 - Cleric (or Mage... but he IS a high priest... *shrug*) */
-    // assignmob(db, 5404, receptionist);
+    assignmob(db, 5404, receptionist);
     assignmob(db, 5421, magic_user);
     assignmob(db, 5422, magic_user);
     assignmob(db, 5423, magic_user);
