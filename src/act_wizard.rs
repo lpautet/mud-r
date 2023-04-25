@@ -59,7 +59,7 @@ use crate::structs::{
     ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR,
+    clone_vec, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR,
 };
 use crate::{
     _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
@@ -67,7 +67,7 @@ use crate::{
 };
 
 #[allow(unused_variables)]
-pub fn do_echo(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let argument = argument.trim_start();
 
@@ -92,7 +92,7 @@ pub fn do_echo(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_send(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut argument = argument.to_string();
     let mut arg = String::new();
@@ -248,8 +248,7 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
 }
 
 #[allow(unused_variables)]
-pub fn do_at(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut argument = argument.to_string();
     let mut buf = String::new();
     let mut command = String::new();
@@ -266,7 +265,7 @@ pub fn do_at(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd:
     }
     let location;
     if {
-        location = find_target_room(db, ch, &buf);
+        location = find_target_room(&game.db, ch, &buf);
         location == NOWHERE
     } {
         return;
@@ -274,19 +273,19 @@ pub fn do_at(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd:
 
     /* a location has been found. */
     let original_loc = ch.in_room();
-    db.char_from_room(ch);
-    db.char_to_room(Some(ch), location);
+    game.db.char_from_room(ch);
+    game.db.char_to_room(Some(ch), location);
     command_interpreter(game, ch, &command);
 
     /* check if the char is still there */
     if ch.in_room() == location {
-        db.char_from_room(ch);
-        db.char_to_room(Some(ch), original_loc);
+        game.db.char_from_room(ch);
+        game.db.char_to_room(Some(ch), original_loc);
     }
 }
 
 #[allow(unused_variables)]
-pub fn do_goto(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let location;
 
@@ -326,7 +325,7 @@ pub fn do_goto(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_trans(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
 
@@ -427,7 +426,7 @@ pub fn do_trans(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_teleport(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -485,7 +484,7 @@ pub fn do_teleport(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 }
 
 #[allow(unused_variables)]
-pub fn do_vnum(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -1427,8 +1426,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 }
 
 #[allow(unused_variables)]
-pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf1 = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -1439,17 +1437,17 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         send_to_char(ch, "Stats on who or what?\r\n");
         return;
     } else if is_abbrev(&buf1, "room") {
-        do_stat_room(db, ch);
+        do_stat_room(&game.db, ch);
     } else if is_abbrev(&buf1, "mob") {
         if buf2.is_empty() {
             send_to_char(ch, "Stats on which mobile?\r\n");
         } else {
             let victim;
             if {
-                victim = db.get_char_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = game.db.get_char_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(db, ch, victim.as_ref().unwrap());
+                do_stat_character(&game.db, ch, victim.as_ref().unwrap());
             } else {
                 send_to_char(ch, "No such mobile around.\r\n");
             }
@@ -1460,10 +1458,10 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         } else {
             let victim;
             if {
-                victim = db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = game.db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(db, ch, victim.as_ref().unwrap());
+                do_stat_character(&game.db, ch, victim.as_ref().unwrap());
             } else {
                 send_to_char(ch, "No such player around.\r\n");
             }
@@ -1473,25 +1471,25 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         if buf2.is_empty() {
             send_to_char(ch, "Stats on which player?\r\n");
         } else if {
-            victim = db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+            victim = game.db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(db, ch, victim.as_ref().unwrap());
+            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
         } else {
             let mut victim = CharData::new();
             let mut tmp_store = CharFileU::new();
             clear_char(&mut victim);
-            if db.load_char(&buf2, &mut tmp_store).is_some() {
+            if game.db.load_char(&buf2, &mut tmp_store).is_some() {
                 store_to_char(&tmp_store, &mut victim);
                 victim.player.borrow_mut().time.logon = tmp_store.last_logon;
                 let victim = Rc::new(victim);
-                db.char_to_room(Some(&victim), 0);
+                game.db.char_to_room(Some(&victim), 0);
                 if victim.get_level() > ch.get_level() {
                     send_to_char(ch, "Sorry, you can't do that.\r\n");
                 } else {
-                    do_stat_character(db, ch, &victim);
+                    do_stat_character(&game.db, ch, &victim);
                 }
-                db.extract_char_final(&victim, game);
+                game.extract_char_final(&victim);
             } else {
                 send_to_char(ch, "There is no such player.\r\n");
             }
@@ -1502,10 +1500,10 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         } else {
             let object;
             if {
-                object = db.get_obj_vis(ch, &mut buf2, None);
+                object = game.db.get_obj_vis(ch, &mut buf2, None);
                 object.is_some()
             } {
-                do_stat_object(db, ch, object.as_ref().unwrap());
+                do_stat_object(&game.db, ch, object.as_ref().unwrap());
             } else {
                 send_to_char(ch, "No such object around.\r\n");
             }
@@ -1516,40 +1514,50 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
         let mut object;
         let mut victim;
         if {
-            object = db.get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
+            object = game
+                .db
+                .get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
             object.is_some()
         } {
-            do_stat_object(db, ch, object.as_ref().unwrap());
+            do_stat_object(&game.db, ch, object.as_ref().unwrap());
         } else if {
-            object = db.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
+            object =
+                game.db
+                    .get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
             object.is_some()
         } {
-            do_stat_object(db, ch, object.as_ref().unwrap());
+            do_stat_object(&game.db, ch, object.as_ref().unwrap());
         } else if {
-            victim = db.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
+            victim = game
+                .db
+                .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
         } {
-            do_stat_character(db, ch, victim.as_ref().unwrap());
+            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
         } else if {
-            object = db.get_obj_in_list_vis(
+            object = game.db.get_obj_in_list_vis(
                 ch,
                 &mut name,
                 Some(&mut number),
-                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                game.db.world.borrow()[ch.in_room() as usize]
+                    .contents
+                    .borrow(),
             );
             object.is_some()
         } {
-            do_stat_object(db, ch, object.as_ref().unwrap());
+            do_stat_object(&game.db, ch, object.as_ref().unwrap());
         } else if {
-            victim = db.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
+            victim = game
+                .db
+                .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(db, ch, victim.as_ref().unwrap());
+            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
         } else if {
-            object = db.get_obj_vis(ch, &mut name, Some(&mut number));
+            object = game.db.get_obj_vis(ch, &mut name, Some(&mut number));
             object.is_some()
         } {
-            do_stat_object(db, ch, object.as_ref().unwrap());
+            do_stat_object(&game.db, ch, object.as_ref().unwrap());
         } else {
             send_to_char(ch, "Nothing around by that name.\r\n");
         }
@@ -1557,7 +1565,7 @@ pub fn do_stat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_shutdown(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     if subcmd != SCMD_SHUTDOWN {
         send_to_char(ch, "If you want to shut something down, say so!\r\n");
@@ -1676,7 +1684,7 @@ fn stop_snooping(ch: &Rc<CharData>) {
 }
 
 #[allow(unused_variables)]
-pub fn do_snoop(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -1777,7 +1785,7 @@ pub fn do_snoop(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_switch(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -1827,7 +1835,7 @@ pub fn do_switch(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_return(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_return(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     if ch.desc.borrow().is_some()
         && ch
@@ -1913,7 +1921,7 @@ pub fn do_return(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_load(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -2012,7 +2020,7 @@ pub fn do_load(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_vstat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -2061,7 +2069,7 @@ pub fn do_vstat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_purge(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /* clean a room of all mobiles and objects */
     let db = &game.db;
     let mut buf = String::new();
@@ -2181,7 +2189,7 @@ pub fn do_purge(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
 #[allow(unused_variables)]
-pub fn do_syslog(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_syslog(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2217,7 +2225,7 @@ pub fn do_syslog(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_advance(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut name = String::new();
     let mut level = String::new();
     let victim;
@@ -2340,7 +2348,7 @@ You feel slightly different.",
 }
 
 #[allow(unused_variables)]
-pub fn do_restore(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
 
@@ -2446,7 +2454,7 @@ fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
 }
 
 #[allow(unused_variables)]
-pub fn do_invis(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_invis(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2476,7 +2484,7 @@ pub fn do_invis(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_gecho(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
 
     let mut argument = argument.trim_start().to_string();
@@ -2505,7 +2513,7 @@ pub fn do_gecho(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_poofset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_poofset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let msg;
     let mut cps = ch.player_specials.borrow_mut();
@@ -2529,7 +2537,7 @@ pub fn do_poofset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
 }
 
 #[allow(unused_variables)]
-pub fn do_dc(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2603,7 +2611,7 @@ pub fn do_dc(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd:
 }
 
 #[allow(unused_variables)]
-pub fn do_wizlock(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     let value;
@@ -2650,7 +2658,7 @@ pub fn do_wizlock(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
 }
 
 #[allow(unused_variables)]
-pub fn do_date(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_date(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mytime;
     if subcmd == SCMD_DATE {
         mytime = time_now();
@@ -2685,7 +2693,7 @@ pub fn do_date(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_last(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2720,8 +2728,7 @@ pub fn do_last(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut argument = argument.to_string();
     let mut arg = String::new();
     let mut to_force = String::new();
@@ -2734,7 +2741,7 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
         send_to_char(ch, "Whom do you wish to force do what?\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
         if {
-            vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
             vict.is_none()
         } {
             send_to_char(ch, NOPERSON);
@@ -2745,7 +2752,8 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
         } else {
             let vict = vict.as_ref().unwrap();
             send_to_char(ch, OK);
-            db.act(&buf1, true, Some(ch), None, Some(vict.as_ref()), TO_VICT);
+            game.db
+                .act(&buf1, true, Some(ch), None, Some(vict.as_ref()), TO_VICT);
             game.mudlog(
                 NRM,
                 max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -2769,20 +2777,18 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
             format!(
                 "(GC) {} forced room {} to {}",
                 ch.get_name(),
-                db.get_room_vnum(ch.in_room()),
+                game.db.get_room_vnum(ch.in_room()),
                 to_force
             )
             .as_str(),
         );
-        for vict in db.world.borrow()[ch.in_room() as usize]
-            .peoples
-            .borrow()
-            .iter()
-        {
+        let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+        for vict in peoples_in_room.iter() {
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
                 continue;
             }
-            db.act(&buf1, true, Some(ch), None, Some(vict), TO_VICT);
+            game.db
+                .act(&buf1, true, Some(ch), None, Some(vict), TO_VICT);
             command_interpreter(game, vict, &to_force);
         }
     } else {
@@ -2794,8 +2800,8 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
             true,
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
         );
-        let gdl = game.descriptor_list.borrow();
-        for i in gdl.iter() {
+        let descriptors = clone_vec(&game.descriptor_list);
+        for i in descriptors.iter() {
             let mut vict = None;
             let ic = i.character.borrow();
             if i.state() != ConPlaying
@@ -2808,7 +2814,7 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
             {
                 continue;
             }
-            db.act(
+            game.db.act(
                 &buf1,
                 true,
                 Some(ch),
@@ -2822,7 +2828,7 @@ pub fn do_force(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_wiznet(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut emote = false;
     let any = false;
@@ -2984,7 +2990,7 @@ pub fn do_wiznet(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_zreset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -3054,7 +3060,7 @@ pub fn do_zreset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
  *  General fn for wizcommands of the sort: cmd <player>
  */
 #[allow(unused_variables)]
-pub fn do_wizutil(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -3266,7 +3272,7 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
 }
 
 #[allow(unused_variables)]
-pub fn do_show(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut self_ = false;
 
@@ -4452,7 +4458,7 @@ fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_a
 }
 
 #[allow(unused_variables)]
-pub fn do_set(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut player_i = None;
     let mut is_file = false;

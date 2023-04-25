@@ -737,31 +737,41 @@ impl DB {
         }
         None
     }
-}
 
-// /* search a room for a char, and return a pointer if found..  */
-// struct char_data *get_char_room(char *name, int *number, RoomRnum room)
-// {
-// struct char_data *i;
-// int num;
-//
-// if (!number) {
-// number = &num;
-// num = get_number(&name);
-// }
-//
-// if (*number == 0)
-// return (NULL);
-//
-// for (i = world[room].people; i && *number; i = i.next_in_room)
-// if (isname(name, i.player.name))
-// if (--(*number) == 0)
-// return (i);
-//
-// return (NULL);
-// }
+    /* search a room for a char, and return a pointer if found..  */
+    pub fn get_char_room(
+        &self,
+        name: &str,
+        number: Option<&mut i32>,
+        room: RoomRnum,
+    ) -> Option<Rc<CharData>> {
+        let mut name = name.to_string();
+        let mut number = number;
 
-impl DB {
+        let mut num;
+
+        if number.is_none() {
+            num = get_number(&mut name);
+            number = Some(&mut num);
+        }
+
+        let number = number.unwrap();
+        if *number == 0 {
+            return None;
+        }
+
+        for i in self.world.borrow()[room as usize].peoples.borrow().iter() {
+            if isname(&name, &i.player.borrow().name) {
+                *number -= 1;
+                if *number == 0 {
+                    return Some(i.clone());
+                }
+            }
+        }
+
+        None
+    }
+
     /* search all over the world for a char num, and return a pointer if found */
     pub fn get_char_num(&self, nr: MobRnum) -> Option<Rc<CharData>> {
         for i in self.character_list.borrow().iter() {
@@ -1018,9 +1028,10 @@ impl DB {
             update_object_list(ch.carrying.borrow().as_ref(), 2);
         }
     }
-
+}
+impl Game {
     /* Extract a ch completely from the world, and leave his stuff behind */
-    pub(crate) fn extract_char_final(&self, ch: &Rc<CharData>, game: &Game) {
+    pub fn extract_char_final(&mut self, ch: &Rc<CharData>) {
         if ch.in_room() == NOWHERE {
             error!(
                 "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
@@ -1035,11 +1046,12 @@ impl DB {
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.borrow().is_none() {
-            for d in game.descriptor_list.borrow().iter() {
+            let descriptors = clone_vec(&self.descriptor_list);
+            for d in descriptors.iter() {
                 if d.original.borrow().is_some()
                     && Rc::ptr_eq(d.original.borrow().as_ref().unwrap(), ch)
                 {
-                    do_return(game, d.character.borrow().as_ref().unwrap(), "", 0, 0);
+                    do_return(self, d.character.borrow().as_ref().unwrap(), "", 0, 0);
                     break;
                 }
             }
@@ -1063,7 +1075,7 @@ impl DB {
                 .borrow()
                 .is_some()
             {
-                do_return(game, ch, "", 0, 0);
+                do_return(self, ch, "", 0, 0);
             } else {
                 /*
                  * Now we boot anybody trying to log in with the same character, to
@@ -1072,7 +1084,7 @@ impl DB {
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
-                for d in game.descriptor_list.borrow().iter() {
+                for d in self.descriptor_list.borrow().iter() {
                     if Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap()) {
                         continue;
                     }
@@ -1092,54 +1104,55 @@ impl DB {
         /* On with the character's assets... */
 
         if ch.followers.borrow().len() != 0 || ch.master.borrow().is_some() {
-            self.die_follower(ch);
+            self.db.die_follower(ch);
         }
 
         /* transfer objects to room, if any */
         for obj in clone_vec(&ch.carrying) {
             obj_from_char(Some(&obj));
-            self.obj_to_room(Some(&obj), ch.in_room());
+            self.db.obj_to_room(Some(&obj), ch.in_room());
         }
 
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                self.obj_to_room(self.unequip_char(ch, i).as_ref(), ch.in_room())
+                self.db
+                    .obj_to_room(self.db.unequip_char(ch, i).as_ref(), ch.in_room())
             }
         }
 
         if ch.fighting().is_some() {
-            self.stop_fighting(ch);
+            self.db.stop_fighting(ch);
         }
 
         let mut old_combat_list = vec![];
-        for c in self.combat_list.borrow().iter() {
+        for c in self.db.combat_list.borrow().iter() {
             old_combat_list.push(c.clone());
         }
         for k in old_combat_list.iter() {
             if Rc::ptr_eq(k.fighting().as_ref().unwrap(), ch) {
-                self.stop_fighting(k);
+                self.db.stop_fighting(k);
             }
         }
         /* we can't forget the hunters either... */
-        for temp in self.character_list.borrow().iter() {
+        for temp in self.db.character_list.borrow().iter() {
             if temp.char_specials.borrow().hunting.is_some()
                 && Rc::ptr_eq(temp.char_specials.borrow().hunting.as_ref().unwrap(), ch)
             {
                 temp.char_specials.borrow_mut().hunting = None;
             }
         }
-        self.char_from_room(ch);
+        self.db.char_from_room(ch);
 
         if ch.is_npc() {
             if ch.get_mob_rnum() != NOTHING {
-                self.mob_index[ch.get_mob_rnum() as usize]
+                self.db.mob_index[ch.get_mob_rnum() as usize]
                     .number
-                    .set(self.mob_index[ch.get_mob_rnum() as usize].number.get() - 1);
+                    .set(self.db.mob_index[ch.get_mob_rnum() as usize].number.get() - 1);
             }
             ch.clear_memory()
         } else {
-            self.save_char(ch);
+            self.db.save_char(ch);
             crash_delete_crashfile(ch);
         }
 
@@ -1147,7 +1160,8 @@ impl DB {
         // if (IS_NPC(ch) || !ch . desc)
         // free_char(ch);
     }
-
+}
+impl DB {
     /*
      * Q: Why do we do this?
      * A: Because trying to iterate over the character
@@ -1183,18 +1197,19 @@ impl DB {
  *
  * NOTE: This doesn't handle recursive extractions.
  */
-impl DB {
-    pub fn extract_pending_chars(&self, main_globals: &Game) {
+impl Game {
+    pub fn extract_pending_chars(&mut self) {
         // struct char_data * vict, * next_vict, * prev_vict;
 
-        if self.extractions_pending.get() < 0 {
+        if self.db.extractions_pending.get() < 0 {
             error!(
                 "SYSERR: Negative ({}) extractions pending.",
-                self.extractions_pending.get()
+                self.db.extractions_pending.get()
             );
         }
 
-        for vict in self.character_list.borrow().iter() {
+        let characters = clone_vec(&self.db.character_list);
+        for vict in characters.iter() {
             if vict.mob_flagged(MOB_NOTDEADYET) {
                 vict.remove_mob_flags_bit(MOB_NOTDEADYET);
             } else if vict.plr_flagged(PLR_NOTDEADYET) {
@@ -1204,19 +1219,20 @@ impl DB {
                 continue;
             }
 
-            self.extract_char_final(vict, main_globals);
-            self.extractions_pending
-                .set(self.extractions_pending.get() - 1);
+            self.extract_char_final(vict);
+            self.db
+                .extractions_pending
+                .set(self.db.extractions_pending.get() - 1);
         }
 
-        if self.extractions_pending.get() > 0 {
+        if self.db.extractions_pending.get() > 0 {
             error!(
                 "SYSERR: Couldn't find {} extractions as counted.",
-                self.extractions_pending.get()
+                self.db.extractions_pending.get()
             );
         }
 
-        self.extractions_pending.set(0);
+        self.db.extractions_pending.set(0);
     }
 }
 
@@ -1232,15 +1248,15 @@ impl DB {
         number: Option<&mut i32>,
         inroom: i32,
     ) -> Option<Rc<CharData>> {
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         if number.is_none() {
             num = get_number(name);
             t = &mut num;
         } else {
             t = number.unwrap();
         }
-        let mut number = t;
+        let number = t;
 
         for i in self.character_list.borrow().iter() {
             if i.is_npc() {
@@ -1270,15 +1286,15 @@ impl DB {
         name: &mut String,
         number: Option<&mut i32>,
     ) -> Option<Rc<CharData>> {
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         if number.is_none() {
             num = get_number(name);
             t = &mut num;
         } else {
             t = number.unwrap();
         }
-        let mut number = t;
+        let number = t;
 
         /* JE 7/18/94 :-) :-) */
         if name == "self" || name == "me" {
@@ -1313,15 +1329,15 @@ impl DB {
         name: &mut String,
         number: Option<&mut i32>,
     ) -> Option<Rc<CharData>> {
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         if number.is_none() {
             num = get_number(name);
             t = &mut num;
         } else {
             t = number.unwrap();
         }
-        let mut number: &mut i32 = t;
+        let number: &mut i32 = t;
 
         let i = self.get_char_room_vis(ch, name, Some(number));
         if i.is_some() {
@@ -1375,9 +1391,8 @@ impl DB {
         number: Option<&mut i32>,
         list: Ref<Vec<Rc<ObjData>>>,
     ) -> Option<Rc<ObjData>> {
-        let mut i: Option<&Rc<ObjData>> = None;
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         let mut name = name.to_string();
         if number.is_none() {
             num = get_number(&mut name);
@@ -1385,7 +1400,7 @@ impl DB {
         } else {
             t = number.unwrap();
         }
-        let mut number: &mut i32 = t;
+        let number: &mut i32 = t;
         if *number == 0 {
             return None;
         }
@@ -1411,8 +1426,8 @@ impl DB {
         name: &str,
         number: Option<&mut i32>,
     ) -> Option<Rc<ObjData>> {
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         let mut name = name.to_string();
         if number.is_none() {
             num = get_number(&mut name);
@@ -1420,7 +1435,7 @@ impl DB {
         } else {
             t = number.unwrap();
         }
-        let mut number: &mut i32 = t;
+        let number: &mut i32 = t;
         if *number == 0 {
             return None;
         }
@@ -1464,8 +1479,8 @@ impl DB {
         number: Option<&mut i32>,
         equipment: &RefCell<[Option<Rc<ObjData>>]>,
     ) -> Option<Rc<ObjData>> {
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         let mut name = arg.to_string();
         if number.is_none() {
             num = get_number(&mut name);
@@ -1473,7 +1488,7 @@ impl DB {
         } else {
             t = number.unwrap();
         }
-        let mut number: &mut i32 = t;
+        let number: &mut i32 = t;
         if *number == 0 {
             return None;
         }
@@ -1501,8 +1516,8 @@ impl DB {
         equipment: &RefCell<[Option<Rc<ObjData>>]>,
     ) -> Option<i8> {
         let equipment = equipment.borrow();
-        let mut num = 0;
-        let mut t: &mut i32;
+        let mut num;
+        let t: &mut i32;
         let mut name = arg.to_string();
         if number.is_none() {
             num = get_number(&mut name);
@@ -1510,7 +1525,7 @@ impl DB {
         } else {
             t = number.unwrap();
         }
-        let mut number: &mut i32 = t;
+        let number: &mut i32 = t;
         if *number == 0 {
             return None;
         }

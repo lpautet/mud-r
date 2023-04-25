@@ -284,7 +284,13 @@ fn init_boards(db: &DB) {
 }
 
 #[allow(unused_variables)]
-pub fn gen_board(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn gen_board(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    me: &dyn Any,
+    cmd: i32,
+    argument: &str,
+) -> bool {
     let cmd = cmd as usize;
     let db = &game.db;
     let board = me.downcast_ref::<Rc<ObjData>>().unwrap();

@@ -73,7 +73,7 @@ use crate::structs::{
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
     SEX_MALE,
 };
-use crate::util::{BRF, NRM};
+use crate::util::{clone_vec, BRF, NRM};
 use crate::{
     _clrlevel, clr, send_to_char, write_to_q, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED,
     TO_ROOM,
@@ -250,7 +250,7 @@ pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-type Command = fn(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
+type Command = fn(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
 
 pub struct CommandInfo {
     pub(crate) command: &'static str,
@@ -261,7 +261,7 @@ pub struct CommandInfo {
 }
 
 #[allow(unused_variables)]
-pub fn do_nothing(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
+pub fn do_nothing(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
 pub const CMD_INFO: [CommandInfo; 295] = [
     CommandInfo {
@@ -2678,7 +2678,7 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(game: &Game, ch: &Rc<CharData>, argument: &str) {
+pub fn command_interpreter(game: &mut Game, ch: &Rc<CharData>, argument: &str) {
     let line: &str;
     let mut arg = String::new();
 
@@ -2766,7 +2766,7 @@ fn find_alias<'a, 'b>(alias_list: &'a Vec<AliasData>, alias: &'b str) -> Option<
 
 /* The interface to the outside world: do_alias */
 #[allow(unused_variables)]
-pub fn do_alias(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -3154,31 +3154,28 @@ pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
 }
 
-fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
-    // struct obj_data *i;
-    // struct char_data *k;
-    // int j;
-    let db = &game.db;
-
+fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     /* special in room? */
-    if db.get_room_spec(ch.in_room()).is_some() {
-        if db.get_room_spec(ch.in_room()).unwrap()(
-            game,
-            ch,
-            &game.db.world.borrow()[ch.in_room() as usize],
-            cmd,
-            arg,
-        ) {
+    let room_data = game.db.world.borrow()[ch.in_room() as usize].clone();
+    if game.db.get_room_spec(ch.in_room()).is_some() {
+        let f = game.db.get_room_spec(ch.in_room()).unwrap();
+        if f(game, ch, &room_data, cmd, arg) {
             return true;
         }
     }
 
     /* special in equipment list? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some() && db.get_obj_spec(ch.get_eq(j).as_ref().unwrap()).is_some() {
+        if ch.get_eq(j).is_some()
+            && game
+                .db
+                .get_obj_spec(ch.get_eq(j).as_ref().unwrap())
+                .is_some()
+        {
             let eq = ch.get_eq(j);
             let obj = eq.as_ref().unwrap();
-            if db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, obj, cmd, arg) {
+            if game.db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, obj, cmd, arg)
+            {
                 return true;
             }
         }
@@ -3186,35 +3183,30 @@ fn special(game: &Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
 
     /* special in inventory? */
     for i in ch.carrying.borrow().iter() {
-        if db.get_obj_spec(i).is_some() {
-            if db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+        if game.db.get_obj_spec(i).is_some() {
+            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
                 return true;
             }
         }
     }
 
     /* special in mobile present? */
-    for k in db.world.borrow()[ch.in_room() as usize]
-        .peoples
-        .borrow()
-        .iter()
-    {
+
+    let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+    for k in peoples_in_room.iter() {
         if !k.mob_flagged(MOB_NOTDEADYET) {
-            if db.get_mob_spec(k).is_some()
-                && db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
+            if game.db.get_mob_spec(k).is_some()
+                && game.db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
             {
                 return true;
             }
         }
     }
 
-    for i in db.world.borrow()[ch.in_room() as usize]
-        .contents
-        .borrow()
-        .iter()
-    {
-        if db.get_obj_spec(i).is_some() {
-            if db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+    let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents);
+    for i in peoples_in_room.iter() {
+        if game.db.get_obj_spec(i).is_some() {
+            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
                 return true;
             }
         }
@@ -3248,11 +3240,10 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
+fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
-    let db = &game.db;
 
     id = d.character.borrow().as_ref().unwrap().get_idnum();
 
@@ -3260,7 +3251,8 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
      * Now that this descriptor has successfully logged in, disconnect all
      * other descriptors controlling a character with the same ID number.
      */
-    for k in game.descriptor_list.borrow().iter() {
+    let descriptors = clone_vec(&game.descriptor_list);
+    for k in descriptors.iter() {
         if Rc::ptr_eq(k, &d) {
             continue;
         }
@@ -3319,7 +3311,7 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
      * duplicates, though theoretically none should be able to exist).
      */
 
-    for ch in db.character_list.borrow().iter() {
+    for ch in game.db.character_list.borrow().iter() {
         if ch.is_npc() {
             continue;
         }
@@ -3346,10 +3338,10 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
 
         /* we've found a duplicate - blow him away, dumping his eq in limbo. */
         if ch.in_room != Cell::from(NOWHERE) {
-            db.char_from_room(ch);
+            game.db.char_from_room(ch);
         }
-        db.char_to_room(Some(ch), 1);
-        db.extract_char(ch);
+        game.db.char_to_room(Some(ch), 1);
+        game.db.extract_char(ch);
     }
 
     /* no target for switching into was found - allow login to continue */
@@ -3376,7 +3368,7 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
     match mode {
         RECON => {
             write_to_output(d.as_ref(), "Reconnecting.\r\n");
-            db.act(
+            game.db.act(
                 "$n has reconnected.",
                 true,
                 d.character.borrow().as_ref(),
@@ -3404,7 +3396,7 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
                 d.as_ref(),
                 "You take over your own body, already in use!\r\n",
             );
-            db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().as_ref(), None, None, TO_ROOM);
+            game.db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().as_ref(), None, None, TO_ROOM);
             game.mudlog(
                 NRM,
                 max(
@@ -3442,9 +3434,8 @@ fn perform_dupe_check(game: &Game, d: Rc<DescriptorData>) -> bool {
 }
 
 /* deal with newcomers and other non-playing sockets */
-pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
+pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
-    let db = &game.db;
 
     match d.state() {
         ConGetName => {
@@ -3474,8 +3465,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                 let och = d.character.borrow();
                 let character = och.as_ref().unwrap();
                 let mut tmp_store = CharFileU::new();
-                let db = &game.db;
-                let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
+                let player_i = game.db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
                     store_to_char(&tmp_store, character.as_ref());
                     character.set_pfilepos(player_i.unwrap() as i32);
@@ -3530,7 +3520,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
         ConNameCnfrm => {
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
-                if isbanned(db, &mut d.host.borrow_mut()) >= BAN_NEW {
+                if isbanned(&game.db, &mut d.host.borrow_mut()) >= BAN_NEW {
                     game.mudlog(
                         NRM,
                         LVL_GOD as i32,
@@ -3549,7 +3539,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     d.set_state(ConClose);
                     return;
                 }
-                if db.circle_restrict.get() != 0 {
+                if game.db.circle_restrict.get() != 0 {
                     write_to_output(&d, "Sorry, new players can't be created at the moment.\r\n");
                     game.mudlog(
                         NRM,
@@ -3628,7 +3618,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                         );
 
                         character.incr_bad_pws();
-                        db.save_char(d.character.borrow().as_ref().unwrap());
+                        game.db.save_char(d.character.borrow().as_ref().unwrap());
                         d.bad_pws.set(d.bad_pws.get() + 1);
                         if d.bad_pws.get() >= MAX_BAD_PWS {
                             /* 3 strikes and you're out. */
@@ -3645,7 +3635,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     load_result = character.get_bad_pws() as i32;
                     character.reset_bad_pws();
                     d.bad_pws.set(0);
-                    if isbanned(db, &mut d.host.borrow_mut()) == BAN_SELECT
+                    if isbanned(&game.db, &mut d.host.borrow_mut()) == BAN_SELECT
                         && !d
                             .character
                             .borrow()
@@ -3671,7 +3661,8 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                         );
                         return;
                     }
-                    if d.character.borrow().as_ref().unwrap().get_level() < db.circle_restrict.get()
+                    if d.character.borrow().as_ref().unwrap().get_level()
+                        < game.db.circle_restrict.get()
                     {
                         write_to_output(
                             &d,
@@ -3693,7 +3684,7 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     }
                 }
                 /* check and make sure no other copies of this player are logged in */
-                if perform_dupe_check(&game, d.clone()) {
+                if perform_dupe_check(game, d.clone()) {
                     return;
                 }
                 let och = d.character.borrow();
@@ -3704,9 +3695,9 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                     level = character.get_level();
                 }
                 if level >= LVL_IMMORT as u8 {
-                    write_to_output(d.as_ref(), &db.imotd);
+                    write_to_output(d.as_ref(), &game.db.imotd);
                 } else {
-                    write_to_output(d.as_ref(), &db.motd);
+                    write_to_output(d.as_ref(), &game.db.motd);
                 }
 
                 {
@@ -3833,16 +3824,16 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
             {
                 if character.get_pfilepos() < 0 {
                     character
-                        .set_pfilepos(db.create_entry(character.get_pc_name().as_ref()) as i32);
+                        .set_pfilepos(game.db.create_entry(character.get_pc_name().as_ref()) as i32);
                 }
 
                 /* Now GET_NAME() will work properly. */
-                db.init_char(character.as_ref());
-                db.save_char(character.as_ref());
+                game.db.init_char(character.as_ref());
+                game.db.save_char(character.as_ref());
             }
             write_to_output(
                 d.as_ref(),
-                format!("{}\r\n*** PRESS RETURN: ", db.motd).as_str(),
+                format!("{}\r\n*** PRESS RETURN: ", game.db.motd).as_str(),
             );
             d.set_state(ConRmotd);
 
@@ -3896,34 +3887,34 @@ pub fn nanny(game: &Game, d: Rc<DescriptorData>, arg: &str) {
                          */
                         let mut load_room = character.get_loadroom();
                         if load_room != NOWHERE {
-                            load_room = db.real_room(load_room);
+                            load_room = game.db.real_room(load_room);
                         }
 
                         /* If char was saved with NOWHERE, or real_room above failed... */
                         if load_room == NOWHERE {
                             if character.get_level() >= LVL_IMMORT as u8 {
-                                load_room = *db.r_immort_start_room.borrow();
+                                load_room = *game.db.r_immort_start_room.borrow();
                             } else {
-                                load_room = *db.r_mortal_start_room.borrow();
+                                load_room = *game.db.r_mortal_start_room.borrow();
                             }
                         }
 
                         if character.plr_flagged(PLR_FROZEN) {
-                            load_room = *db.r_frozen_start_room.borrow();
+                            load_room = *game.db.r_frozen_start_room.borrow();
                         }
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
-                        db.character_list.borrow_mut().push(character.clone());
-                        db.char_to_room(Some(character), load_room);
+                        game.db.character_list.borrow_mut().push(character.clone());
+                        game.db.char_to_room(Some(character), load_room);
                         load_result = crash_load(game, d.character.borrow().as_ref().unwrap());
 
                         /* Clear their load room if it's not persistant. */
                         if !character.plr_flagged(PLR_LOADROOM) {
                             character.set_loadroom(NOWHERE);
                         }
-                        db.save_char(character.as_ref());
+                        game.db.save_char(character.as_ref());
 
-                        db.act(
+                        game.db.act(
                             "$n has entered the game.",
                             true,
                             Some(character),

@@ -118,7 +118,7 @@ macro_rules! ban_list_format {
 }
 
 #[allow(unused_variables)]
-pub fn do_ban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     if argument.is_empty() {
         if db.ban_list.borrow().is_empty() {
@@ -218,7 +218,7 @@ pub fn do_ban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
 }
 
 #[allow(unused_variables)]
-pub fn do_unban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut site = String::new();
     one_argument(argument, &mut site);
@@ -260,7 +260,7 @@ pub fn do_unban(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name<'a>(game: &Game, newname: &str) -> bool {
+pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login

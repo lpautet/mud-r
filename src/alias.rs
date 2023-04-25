@@ -113,7 +113,7 @@ pub fn read_aliases(ch: &Rc<CharData>) {
 
         /* Figure out the alias type. */
         let mut buf = String::new();
-        let mut line = reader.read_line(&mut buf);
+        let line = reader.read_line(&mut buf);
         if line.is_err() {
             break;
         }

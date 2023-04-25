@@ -53,7 +53,7 @@ use crate::structs::{
     PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
-use crate::util::{has_spell_routine, rand_number};
+use crate::util::{clone_vec, has_spell_routine, rand_number};
 use crate::{is_set, send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 /*
@@ -333,7 +333,6 @@ fn say_spell(
             ofs += 1;
         }
     }
-    let format;
     let mut buf1 = String::new();
     let mut buf2 = String::new();
     if tch.is_some() && tch.as_ref().unwrap().in_room() == ch.in_room() {
@@ -347,7 +346,6 @@ fn say_spell(
             );
             buf2.push_str(format!("$n closes $s eyes and utters the words, '{}'.", buf).as_str());
         } else {
-            format = "$n stares at $N and utters the words, '%s'.";
             buf1.push_str(
                 format!(
                     "$n stares at $N and utters the words, '{}'.",
@@ -473,7 +471,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
 pub fn call_magic(
-    game: &Game,
+    game: &mut Game,
     caster: &Rc<CharData>,
     cvict: Option<&Rc<CharData>>,
     ovict: Option<&Rc<ObjData>>,
@@ -481,14 +479,19 @@ pub fn call_magic(
     level: i32,
     casttype: i32,
 ) -> i32 {
-    let db = &game.db;
     if spellnum < 1 || spellnum > TOP_SPELL_DEFINE as i32 {
         return 0;
     }
-    let sinfo = &db.spell_info[spellnum as usize];
-    if db.room_flagged(caster.in_room(), ROOM_NOMAGIC) {
+    let sinfo_routines;
+    let sinfo_violent;
+    {
+        let sinfo = &game.db.spell_info[spellnum as usize];
+        sinfo_routines = sinfo.routines;
+        sinfo_violent = sinfo.violent;
+    }
+    if game.db.room_flagged(caster.in_room(), ROOM_NOMAGIC) {
         send_to_char(caster, "Your magic fizzles out and dies.\r\n");
-        db.act(
+        game.db.act(
             "$n's magic fizzles out and dies.",
             false,
             Some(caster),
@@ -498,14 +501,14 @@ pub fn call_magic(
         );
         return 0;
     }
-    if db.room_flagged(caster.in_room(), ROOM_PEACEFUL)
-        && (sinfo.violent || is_set!(sinfo.routines, MAG_DAMAGE))
+    if game.db.room_flagged(caster.in_room(), ROOM_PEACEFUL)
+        && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
         send_to_char(
             caster,
             "A flash of white light fills the room, dispelling your violent magic!\r\n",
         );
-        db.act(
+        game.db.act(
             "White light from no particular source suddenly fills the room, then vanishes.",
             false,
             Some(caster),
@@ -515,7 +518,7 @@ pub fn call_magic(
         );
         return 0;
     }
-    let mut savetype;
+    let savetype;
     /* determine the type of saving throw */
     match casttype {
         CAST_STAFF | CAST_SCROLL | CAST_POTION | CAST_WAND => {
@@ -529,7 +532,7 @@ pub fn call_magic(
         }
     }
 
-    if is_set!(sinfo.routines, MAG_DAMAGE) {
+    if is_set!(sinfo_routines, MAG_DAMAGE) {
         if mag_damage(
             game,
             level,
@@ -542,13 +545,13 @@ pub fn call_magic(
             return -1; /* Successful and target died, don't cast again. */
         }
     }
-    if is_set!(sinfo.routines, MAG_AFFECTS) {
-        mag_affects(db, level, caster, cvict, spellnum, savetype);
+    if is_set!(sinfo_routines, MAG_AFFECTS) {
+        mag_affects(&game.db, level, caster, cvict, spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_UNAFFECTS) {
+    if is_set!(sinfo_routines, MAG_UNAFFECTS) {
         mag_unaffects(
-            db,
+            &game.db,
             level,
             caster,
             cvict.as_ref().unwrap(),
@@ -557,47 +560,49 @@ pub fn call_magic(
         );
     }
 
-    if is_set!(sinfo.routines, MAG_POINTS) {
+    if is_set!(sinfo_routines, MAG_POINTS) {
         mag_points(level, caster, cvict, spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_ALTER_OBJS) {
-        mag_alter_objs(db, level, caster, ovict, spellnum, savetype);
+    if is_set!(sinfo_routines, MAG_ALTER_OBJS) {
+        mag_alter_objs(&game.db, level, caster, ovict, spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_GROUPS) {
-        mag_groups(db, level, Some(caster), spellnum, savetype);
+    if is_set!(sinfo_routines, MAG_GROUPS) {
+        mag_groups(&game.db, level, Some(caster), spellnum, savetype);
     }
-    if is_set!(sinfo.routines, MAG_MASSES) {
-        mag_masses(db, level, caster, spellnum, savetype);
+    if is_set!(sinfo_routines, MAG_MASSES) {
+        mag_masses(&game.db, level, caster, spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_AREAS) {
+    if is_set!(sinfo_routines, MAG_AREAS) {
         mag_areas(game, level, Some(caster), spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_SUMMONS) {
-        mag_summons(db, level, Some(caster), ovict, spellnum, savetype);
+    if is_set!(sinfo_routines, MAG_SUMMONS) {
+        mag_summons(&game.db, level, Some(caster), ovict, spellnum, savetype);
     }
 
-    if is_set!(sinfo.routines, MAG_CREATIONS) {
-        mag_creations(db, level, Some(caster), spellnum);
+    if is_set!(sinfo_routines, MAG_CREATIONS) {
+        mag_creations(&game.db, level, Some(caster), spellnum);
     }
 
-    if is_set!(sinfo.routines, MAG_MANUAL) {
+    if is_set!(sinfo_routines, MAG_MANUAL) {
         match spellnum {
-            SPELL_CHARM => spell_charm(db, level, Some(caster), cvict, ovict),
-            SPELL_CREATE_WATER => spell_create_water(db, level, Some(caster), cvict, ovict),
-            SPELL_DETECT_POISON => spell_detect_poison(db, level, Some(caster), cvict, ovict),
-            SPELL_ENCHANT_WEAPON => spell_enchant_weapon(db, level, Some(caster), cvict, ovict),
-            SPELL_IDENTIFY => spell_identify(db, level, Some(caster), cvict, ovict),
-            SPELL_LOCATE_OBJECT => spell_locate_object(db, level, Some(caster), cvict, ovict),
+            SPELL_CHARM => spell_charm(&game.db, level, Some(caster), cvict, ovict),
+            SPELL_CREATE_WATER => spell_create_water(&game.db, level, Some(caster), cvict, ovict),
+            SPELL_DETECT_POISON => spell_detect_poison(&game.db, level, Some(caster), cvict, ovict),
+            SPELL_ENCHANT_WEAPON => {
+                spell_enchant_weapon(&game.db, level, Some(caster), cvict, ovict)
+            }
+            SPELL_IDENTIFY => spell_identify(&game.db, level, Some(caster), cvict, ovict),
+            SPELL_LOCATE_OBJECT => spell_locate_object(&game.db, level, Some(caster), cvict, ovict),
             SPELL_SUMMON => spell_summon(game, level, Some(caster), cvict, ovict),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(db, level, Some(caster), cvict, ovict);
+                spell_recall(&game.db, level, Some(caster), cvict, ovict);
             }
             SPELL_TELEPORT => {
-                spell_teleport(db, level, Some(caster), cvict, ovict);
+                spell_teleport(&game.db, level, Some(caster), cvict, ovict);
             }
             _ => {}
         }
@@ -620,14 +625,13 @@ pub fn call_magic(
  * the DikuMUD format did not specify staff and wand levels in the world
  * files (this is a CircleMUD enhancement).
  */
-pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argument: &str) {
-    let db = &game.db;
+pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argument: &str) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
     let mut tch = None;
     let mut tobj = None;
-    let k = db.generic_find(
+    let k = game.db.generic_find(
         &arg,
         (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -637,7 +641,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
 
     match obj.get_obj_type() {
         ITEM_STAFF => {
-            db.act(
+            game.db.act(
                 "You tap $p three times on the ground.",
                 false,
                 Some(ch),
@@ -646,7 +650,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                 TO_CHAR,
             );
             if !RefCell::borrow(&obj.action_description).is_empty() {
-                db.act(
+                game.db.act(
                     &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
@@ -655,7 +659,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     TO_ROOM,
                 );
             } else {
-                db.act(
+                game.db.act(
                     "$n taps $p three times on the ground.",
                     false,
                     Some(ch),
@@ -667,7 +671,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
 
             if obj.get_obj_val(2) <= 0 {
                 send_to_char(ch, "It seems powerless.\r\n");
-                db.act(
+                game.db.act(
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -691,8 +695,8 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                  * Problem : People like that behavior.
                  * Solution: We special case the area/mass spells here.
                  */
-                if has_spell_routine(db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
-                    let mut i = db.world.borrow()[ch.in_room() as usize]
+                if has_spell_routine(&game.db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
+                    let mut i = game.db.world.borrow()[ch.in_room() as usize]
                         .peoples
                         .borrow()
                         .len();
@@ -701,11 +705,9 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         call_magic(game, ch, None, None, obj.get_obj_val(3), k, CAST_STAFF);
                     }
                 } else {
-                    for tch in db.world.borrow()[ch.in_room() as usize]
-                        .peoples
-                        .borrow()
-                        .iter()
-                    {
+                    let peoples_in_room =
+                        clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+                    for tch in peoples_in_room.iter() {
                         if !Rc::ptr_eq(ch, tch) {
                             call_magic(
                                 game,
@@ -724,7 +726,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
         ITEM_WAND => {
             if k == FIND_CHAR_ROOM {
                 if Rc::ptr_eq(tch.as_ref().unwrap(), ch) {
-                    db.act(
+                    game.db.act(
                         "You point $p at yourself.",
                         false,
                         Some(ch),
@@ -732,7 +734,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         None,
                         TO_CHAR,
                     );
-                    db.act(
+                    game.db.act(
                         "$n points $p at $mself.",
                         false,
                         Some(ch),
@@ -741,7 +743,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         TO_ROOM,
                     );
                 } else {
-                    db.act(
+                    game.db.act(
                         "You point $p at $N.",
                         false,
                         Some(ch),
@@ -750,7 +752,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         TO_CHAR,
                     );
                     if !RefCell::borrow(&obj.action_description).is_empty() {
-                        db.act(
+                        game.db.act(
                             &RefCell::borrow(&obj.action_description),
                             false,
                             Some(ch),
@@ -759,7 +761,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                             TO_ROOM,
                         );
                     } else {
-                        db.act(
+                        game.db.act(
                             "$n points $p at $N.",
                             true,
                             Some(ch),
@@ -770,7 +772,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     }
                 }
             } else if tobj.is_some() {
-                db.act(
+                game.db.act(
                     "You point $p at $P.",
                     false,
                     Some(ch),
@@ -779,7 +781,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     TO_CHAR,
                 );
                 if !RefCell::borrow(&obj.action_description).is_empty() {
-                    db.act(
+                    game.db.act(
                         &RefCell::borrow(&obj.action_description),
                         false,
                         Some(ch),
@@ -788,7 +790,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                         TO_ROOM,
                     );
                 } else {
-                    db.act(
+                    game.db.act(
                         "$n points $p at $P.",
                         true,
                         Some(ch),
@@ -798,11 +800,11 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     );
                 }
             } else if is_set!(
-                db.spell_info[obj.get_obj_val(3) as usize].routines,
+                game.db.spell_info[obj.get_obj_val(3) as usize].routines,
                 MAG_AREAS | MAG_MASSES
             ) {
                 /* Wands with area spells don't need to be pointed. */
-                db.act(
+                game.db.act(
                     "You point $p outward.",
                     false,
                     Some(ch),
@@ -810,7 +812,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     None,
                     TO_CHAR,
                 );
-                db.act(
+                game.db.act(
                     "$n points $p outward.",
                     true,
                     Some(ch),
@@ -819,7 +821,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     TO_ROOM,
                 );
             } else {
-                db.act(
+                game.db.act(
                     "At what should $p be pointed?",
                     false,
                     Some(ch),
@@ -832,7 +834,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
 
             if obj.get_obj_val(2) <= 0 {
                 send_to_char(ch, "It seems powerless.\r\n");
-                db.act(
+                game.db.act(
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -870,7 +872,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
         ITEM_SCROLL => {
             if !arg.is_empty() {
                 if k == 0 {
-                    db.act(
+                    game.db.act(
                         "There is nothing to here to affect with $p.",
                         false,
                         Some(ch),
@@ -884,7 +886,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                 tch = Some(ch.clone());
             }
 
-            db.act(
+            game.db.act(
                 "You recite $p which dissolves.",
                 true,
                 Some(ch),
@@ -893,7 +895,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                 TO_CHAR,
             );
             if !RefCell::borrow(&obj.action_description).is_empty() {
-                db.act(
+                game.db.act(
                     &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
@@ -902,7 +904,8 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     TO_ROOM,
                 );
             } else {
-                db.act("$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
+                game.db
+                    .act("$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
             }
 
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -922,14 +925,15 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
             }
 
             // if obj.is_some() {
-            db.extract_obj(obj);
+            game.db.extract_obj(obj);
             // }
         }
         ITEM_POTION => {
             tch = Some(ch.clone());
-            db.act("You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
+            game.db
+                .act("You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
             if !RefCell::borrow(&obj.action_description).is_empty() {
-                db.act(
+                game.db.act(
                     &RefCell::borrow(&obj.action_description),
                     false,
                     Some(ch),
@@ -938,7 +942,8 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
                     TO_ROOM,
                 );
             } else {
-                db.act("$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
+                game.db
+                    .act("$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
             }
 
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -958,7 +963,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
             }
 
             // if obj.is_some() {
-            db.extract_obj(obj);
+            game.db.extract_obj(obj);
             // }
         }
         _ => {
@@ -979,7 +984,7 @@ pub fn mag_objectmagic(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, argume
  * by NPCs via specprocs.
  */
 pub fn cast_spell(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     tch: Option<&Rc<CharData>>,
     tobj: Option<&Rc<ObjData>>,
@@ -1057,7 +1062,7 @@ pub fn cast_spell(
  * passes control to cast_spell().
  */
 #[allow(unused_variables)]
-pub fn do_cast(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // struct char_data *tch = None;
     // struct obj_data *tobj = None;
     // char *s, *t;
@@ -1247,7 +1252,7 @@ pub fn do_cast(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
             ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));
         }
         if sinfo.violent && tch.is_some() && tch.as_ref().unwrap().is_npc() {
-            db.hit(tch.as_ref().unwrap(), ch, TYPE_UNDEFINED, game);
+            game.hit(tch.as_ref().unwrap(), ch, TYPE_UNDEFINED);
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */

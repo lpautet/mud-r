@@ -170,7 +170,7 @@ pub fn affect_update(db: &DB) {
  * -1 = dead, otherwise the amount of damage done.
  */
 pub fn mag_damage(
-    game: &Game,
+    game: &mut Game,
     level: i32,
     ch: &Rc<CharData>,
     victim: &Rc<CharData>,
@@ -295,7 +295,7 @@ pub fn mag_damage(
     }
 
     /* and finally, inflict the damage */
-    return db.damage(ch, victim, dam, spellnum, game);
+    return game.damage(ch, victim, dam, spellnum);
 }
 
 /*
@@ -680,8 +680,13 @@ pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetyp
  *  area spells have limited targets within the room.
  */
 #[allow(unused_variables)]
-pub fn mag_areas(game: &Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
-    let db = &game.db;
+pub fn mag_areas(
+    game: &mut Game,
+    level: i32,
+    ch: Option<&Rc<CharData>>,
+    spellnum: i32,
+    savetype: i32,
+) {
     let mut to_char = "";
     let mut to_room = "";
 
@@ -702,16 +707,13 @@ pub fn mag_areas(game: &Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i
     }
 
     if !to_char.is_empty() {
-        db.act(to_char, false, Some(ch), None, None, TO_CHAR);
+        game.db.act(to_char, false, Some(ch), None, None, TO_CHAR);
     }
     if !to_room.is_empty() {
-        db.act(to_room, false, Some(ch), None, None, TO_ROOM);
+        game.db.act(to_room, false, Some(ch), None, None, TO_ROOM);
     }
-    for tch in db.world.borrow()[ch.in_room() as usize]
-        .peoples
-        .borrow()
-        .iter()
-    {
+    let peoples = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+    for tch in peoples.iter() {
         /*
          * The skips: 1: the caster
          *            2: immortals
@@ -802,11 +804,11 @@ pub fn mag_summons(
     spellnum: i32,
     savetype: i32,
 ) {
-    let mut pfail;
-    let mut msg;
-    let mut num = 1;
+    let pfail;
+    let msg;
+    let num = 1;
     let mut handle_corpse = false;
-    let mut fmsg;
+    let fmsg;
     let mob_num: MobVnum;
 
     if ch.is_none() {
@@ -903,8 +905,8 @@ pub fn mag_points(
     spellnum: i32,
     savetype: i32,
 ) {
-    let mut healing;
-    let mut move_ = 0;
+    let healing;
+    let move_ = 0;
 
     if victim.is_none() {
         return;
@@ -942,9 +944,9 @@ pub fn mag_unaffects(
     spellnum: i32,
     type_: i32,
 ) {
-    let mut spell;
+    let spell;
     let mut msg_not_affected = true;
-    let mut to_vict;
+    let to_vict;
     let mut to_room = "";
 
     match spellnum {
@@ -1008,7 +1010,7 @@ pub fn mag_alter_objs(
     savetype: i32,
 ) {
     let mut to_char = "";
-    let mut to_room = "";
+    let to_room = "";
 
     if obj.is_none() {
         return;
@@ -1082,7 +1084,7 @@ pub fn mag_alter_objs(
     }
 }
 
-pub fn mag_creations(db: &DB, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32) {
+pub fn mag_creations(db: &DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: i32) {
     if ch.is_none() {
         return;
     }

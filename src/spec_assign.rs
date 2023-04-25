@@ -17,7 +17,9 @@ use crate::config::DTS_ARE_DUMPS;
 use crate::db::DB;
 use crate::mail::postmaster;
 use crate::objsave::{cryogenicist, receptionist};
-use crate::spec_procs::{cityguard, dump, fido, guild_guard, janitor, magic_user, snake, thief};
+use crate::spec_procs::{
+    bank, cityguard, dump, fido, guild_guard, janitor, magic_user, mayor, pet_shops, snake, thief,
+};
 use crate::spec_procs::{guild, puff};
 use crate::structs::{
     MobVnum, ObjVnum, RoomRnum, RoomVnum, Special, NOBODY, NOTHING, NOWHERE, ROOM_DEATH,
@@ -95,7 +97,7 @@ pub fn assign_mobiles(db: &mut DB) {
     assignmob(db, 3067, cityguard);
     assignmob(db, 3068, janitor);
     assignmob(db, 3095, cryogenicist);
-    // assignmob(db, 3105, mayor);
+    assignmob(db, 3105, mayor);
 
     /* MORIA */
     assignmob(db, 4000, snake);
@@ -261,17 +263,18 @@ pub fn assign_objects(db: &mut DB) {
     assignobj(db, 3098, gen_board); /* immortal board */
     assignobj(db, 3099, gen_board); /* mortal board */
 
-    // assignobj(db, 3034, bank);	/* atm */
-    // assignobj(db, 3036, bank);	/* cashcard */
+    assignobj(db, 3034, bank); /* atm */
+    assignobj(db, 3036, bank); /* cashcard */
 }
 
 /* assign special procedures to rooms */
 pub fn assign_rooms(db: &mut DB) {
     assignroom(db, 3030, dump);
-    // assignroom(db, 3031, pet_shops);
+    assignroom(db, 3031, pet_shops);
 
     if DTS_ARE_DUMPS {
-        for i in 0..db.world.borrow().len() {
+        let l = db.world.borrow().len();
+        for i in 0..l {
             if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
                 *db.world.borrow_mut()[i].func.borrow_mut() = Some(dump);
             }

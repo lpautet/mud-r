@@ -31,7 +31,7 @@ use crate::{
 };
 
 #[allow(unused_variables)]
-pub fn do_say(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_say(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut argument = argument.trim_start().to_string();
 
     if argument.is_empty() {
@@ -51,7 +51,7 @@ pub fn do_say(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
 }
 
 #[allow(unused_variables)]
-pub fn do_gsay(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let argument = argument.trim_start();
 
     if !ch.aff_flagged(AFF_GROUP) {
@@ -168,7 +168,7 @@ fn is_tell_ok(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>) -> bool {
  * called frequently, and should IMHO be kept as tight as possible.
  */
 #[allow(unused_variables)]
-pub fn do_tell(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_tell(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -193,7 +193,7 @@ pub fn do_tell(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_reply(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_reply(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -232,7 +232,7 @@ pub fn do_reply(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_spec_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let action_sing;
     let action_plur;
     let action_others;
@@ -298,7 +298,7 @@ pub fn do_spec_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
 }
 
 #[allow(unused_variables)]
-pub fn do_write(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
 
     let mut paper;
@@ -424,7 +424,7 @@ pub fn do_write(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_page(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     let mut buf2 = String::new();
@@ -481,7 +481,7 @@ pub fn do_page(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
  *********************************************************************/
 
 #[allow(unused_variables)]
-pub fn do_gen_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     // char color_on[24];
 
@@ -645,7 +645,7 @@ pub fn do_gen_comm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 }
 
 #[allow(unused_variables)]
-pub fn do_qcomm(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     if ch.prf_flagged(PRF_QUEST) {
         send_to_char(ch, "You aren't even part of the quest!\r\n");

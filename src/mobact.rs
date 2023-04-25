@@ -10,27 +10,31 @@
 // #define MOB_AGGR_TO_ALIGN (MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD)
 
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::act_movement::perform_move;
+use crate::act_social::do_action;
 use crate::db::DB;
+use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
     CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
     MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS,
     POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::{num_followers_charmed, rand_number};
+use crate::util::{clone_vec, num_followers_charmed, rand_number};
 use crate::{Game, TO_ROOM};
 
-impl DB {
-    pub fn mobile_activity(&self, game: &Game) {
+impl Game {
+    pub fn mobile_activity(&mut self) {
         // struct char_data *ch, *next_ch, *vict;
         // struct obj_data *obj, *best_obj;
         // int door, found, max;
         // memory_rec *names;
 
-        for ch in self.character_list.borrow().iter() {
-            if !self.is_mob(ch) {
+        let characters = clone_vec(&self.db.character_list);
+        for ch in characters.iter() {
+            if !self.db.is_mob(ch) {
                 continue;
             }
             // TODO implement spec proc
@@ -53,7 +57,7 @@ impl DB {
 
             /* Scavenger (picking up objects) */
             if ch.mob_flagged(MOB_SCAVENGER) {
-                if self.world.borrow()[ch.in_room() as usize]
+                if self.db.world.borrow()[ch.in_room() as usize]
                     .contents
                     .borrow()
                     .len()
@@ -63,19 +67,19 @@ impl DB {
                     let mut max = 1;
                     let mut best_obj = None;
                     {
-                        let world = self.world.borrow();
+                        let world = self.db.world.borrow();
                         let contents = world[ch.in_room() as usize].contents.borrow();
                         for obj in contents.iter() {
-                            if self.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
+                            if self.db.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
                                 best_obj = Some(obj.clone());
                                 max = obj.get_obj_cost();
                             }
                         }
                     }
                     if best_obj.is_some() {
-                        self.obj_from_room(Some(best_obj.as_ref().unwrap()));
+                        self.db.obj_from_room(Some(best_obj.as_ref().unwrap()));
                         DB::obj_to_char(Some(best_obj.as_ref().unwrap()), Some(ch));
-                        self.act(
+                        self.db.act(
                             "$n gets $p.",
                             false,
                             Some(ch),
@@ -92,32 +96,31 @@ impl DB {
             if !ch.mob_flagged(MOB_SENTINEL)
                 && ch.get_pos() == POS_STANDING
                 && door < NUM_OF_DIRS as u32
-                && self.can_go(ch, door as usize)
-                && !self.room_flagged(
-                    self.exit(ch, door as usize).unwrap().to_room.get(),
+                && self.db.can_go(ch, door as usize)
+                && !self.db.room_flagged(
+                    self.db.exit(ch, door as usize).unwrap().to_room.get(),
                     ROOM_NOMOB | ROOM_DEATH,
                 )
                 && (!ch.mob_flagged(MOB_STAY_ZONE)
-                    || self.world.borrow()
-                        [self.exit(ch, door as usize).unwrap().to_room.get() as usize]
+                    || self.db.world.borrow()
+                        [self.db.exit(ch, door as usize).unwrap().to_room.get() as usize]
                         .zone
-                        == self.world.borrow()[ch.in_room() as usize].zone)
+                        == self.db.world.borrow()[ch.in_room() as usize].zone)
             {
-                perform_move(game, ch, door as i32, 1);
+                perform_move(self, ch, door as i32, 1);
             }
 
             /* Aggressive Mobs */
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
-                for vict in self.world.borrow()[ch.in_room() as usize]
-                    .peoples
-                    .borrow()
-                    .iter()
-                {
+                let peoples_in_room =
+                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                for vict in peoples_in_room.iter() {
                     if found {
                         break;
                     }
-                    if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE) {
+                    if vict.is_npc() || !self.db.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    {
                         continue;
                     }
 
@@ -134,7 +137,7 @@ impl DB {
                         if self.aggressive_mob_on_a_leash(ch, ch.master.borrow().as_ref(), vict) {
                             continue;
                         }
-                        self.hit(ch, vict, TYPE_UNDEFINED, game);
+                        self.hit(ch, vict, TYPE_UNDEFINED);
                         found = true;
                     }
                 }
@@ -143,15 +146,14 @@ impl DB {
             /* Mob Memory */
             if ch.mob_flagged(MOB_MEMORY) && ch.memory().borrow().len() != 0 {
                 let mut found = false;
-                for vict in self.world.borrow()[ch.in_room() as usize]
-                    .peoples
-                    .borrow()
-                    .iter()
-                {
+                let peoples_in_room =
+                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                for vict in peoples_in_room.iter() {
                     if found {
                         break;
                     }
-                    if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE) {
+                    if vict.is_npc() || !self.db.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    {
                         continue;
                     }
                     for id in ch.memory().borrow().iter() {
@@ -165,7 +167,7 @@ impl DB {
                         }
 
                         found = true;
-                        self.act(
+                        self.db.act(
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
                             Some(ch),
@@ -173,7 +175,7 @@ impl DB {
                             None,
                             TO_ROOM,
                         );
-                        self.hit(ch, vict, TYPE_UNDEFINED, game);
+                        self.hit(ch, vict, TYPE_UNDEFINED);
                     }
                 }
             }
@@ -197,7 +199,7 @@ impl DB {
                     Some(ch.master.borrow().as_ref().unwrap()),
                     ch.master.borrow().as_ref().unwrap(),
                 ) {
-                    if self.can_see(ch, ch.master.borrow().as_ref().unwrap())
+                    if self.db.can_see(ch, ch.master.borrow().as_ref().unwrap())
                         && !ch
                             .master
                             .borrow()
@@ -205,13 +207,8 @@ impl DB {
                             .unwrap()
                             .prf_flagged(PRF_NOHASSLE)
                     {
-                        self.hit(
-                            ch,
-                            ch.master.borrow().as_ref().unwrap(),
-                            TYPE_UNDEFINED,
-                            game,
-                        );
-                        self.stop_follower(ch);
+                        self.hit(ch, ch.master.borrow().as_ref().unwrap(), TYPE_UNDEFINED);
+                        self.db.stop_follower(ch);
                     }
                 }
             }
@@ -219,11 +216,9 @@ impl DB {
             /* Helper Mobs */
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
-                for vict in self.world.borrow()[ch.in_room() as usize]
-                    .peoples
-                    .borrow()
-                    .iter()
-                {
+                let peoples_in_room =
+                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                for vict in peoples_in_room.iter() {
                     if found {
                         break;
                     }
@@ -236,7 +231,7 @@ impl DB {
                         continue;
                     }
 
-                    self.act(
+                    self.db.act(
                         "$n jumps to the aid of $N!",
                         false,
                         Some(ch),
@@ -244,7 +239,7 @@ impl DB {
                         Some(vict),
                         TO_ROOM,
                     );
-                    self.hit(ch, vict.fighting().as_ref().unwrap(), TYPE_UNDEFINED, game);
+                    self.hit(ch, vict.fighting().as_ref().unwrap(), TYPE_UNDEFINED);
                     found = true;
                 }
             }
@@ -287,36 +282,42 @@ impl CharData {
  * see if their master can talk them out of it, eye them
  * down, or otherwise intimidate the slave.
  */
-impl DB {
+const SNARL_CMD: AtomicUsize = AtomicUsize::new(0);
+impl Game {
     fn aggressive_mob_on_a_leash(
-        &self,
-        slave: &CharData,
+        &mut self,
+        slave: &Rc<CharData>,
         master: Option<&Rc<CharData>>,
-        attack: &CharData,
+        attack: &Rc<CharData>,
     ) -> bool {
         if master.is_none() || slave.aff_flagged(AFF_CHARM) {
             return false;
         }
-        // let master = master.unwrap();
-        // TODO implement snarl
-        // if (!self.snarl_cmd)
-        // self.snarl_cmd = find_command("snarl");
+        if SNARL_CMD.load(Ordering::Acquire) == 0 {
+            SNARL_CMD.store(find_command("snarl").unwrap(), Ordering::Release)
+        }
 
+        let master = master.unwrap();
         /* Sit. Down boy! HEEEEeeeel! */
-        // let dieroll = rand_number(1, 20);
-        // if dieroll != 1 && (dieroll == 20 || dieroll > (10 - master.get_cha() + slave.get_int()) as u32) {
-        // if snarl_cmd > 0 && attack && rand_number(0, 3) != 0 {
-        // char victbuf[MAX_NAME_LENGTH + 1];
-        //
-        // strncpy(victbuf, GET_NAME(attack), sizeof(victbuf));	/* strncpy: OK */
-        // victbuf[sizeof(victbuf) - 1] = '\0';
-        //
-        // do_action(slave, victbuf, snarl_cmd, 0);
-        // }
+        let dieroll = rand_number(1, 20);
+        if dieroll != 1
+            && (dieroll == 20 || dieroll > (10 - master.get_cha() + slave.get_int()) as u32)
+        {
+            if rand_number(0, 3) != 0 {
+                let victbuf = attack.get_name();
 
-        //     /* Success! But for how long? Hehe. */
-        //     return true
-        // }
+                do_action(
+                    self,
+                    slave,
+                    victbuf.as_ref(),
+                    SNARL_CMD.load(Ordering::Relaxed),
+                    0,
+                );
+            }
+
+            /* Success! But for how long? Hehe. */
+            return true;
+        }
 
         /* So sorry, now you're a player killer... Tsk tsk. */
         return false;

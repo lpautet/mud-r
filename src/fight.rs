@@ -893,7 +893,8 @@ impl DB {
         }
         return 0;
     }
-
+}
+impl Game {
     /*
      * Alert: As of bpl14, this function returns the following codes:
      *	< 0	Victim died.
@@ -901,12 +902,11 @@ impl DB {
      *	> 0	How much damage done.
      */
     pub fn damage(
-        &self,
+        &mut self,
         ch: &Rc<CharData>,
         victim: &Rc<CharData>,
         dam: i32,
         attacktype: i32,
-        game: &Game,
     ) -> i32 {
         let mut dam = dam;
 
@@ -919,15 +919,15 @@ impl DB {
             error!(
                 "SYSERR: Attempt to damage corpse '{}' in room #{} by '{}'.",
                 victim.get_name(),
-                self.get_room_vnum(victim.in_room()),
+                self.db.get_room_vnum(victim.in_room()),
                 ch.get_name()
             );
-            die(victim, game);
+            die(victim, self);
             return -1; /* -je, 7/7/92 */
         }
 
         /* peaceful rooms */
-        if !Rc::ptr_eq(ch, victim) && self.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+        if !Rc::ptr_eq(ch, victim) && self.db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
             send_to_char(
                 ch,
                 "This room just has such a peaceful, easy feeling...\r\n",
@@ -936,7 +936,7 @@ impl DB {
         }
 
         /* shopkeeper protection */
-        if !ok_damage_shopkeeper(game, ch, victim) {
+        if !ok_damage_shopkeeper(self, ch, victim) {
             return 0;
         }
 
@@ -948,12 +948,12 @@ impl DB {
         if !Rc::ptr_eq(victim, ch) {
             /* Start the attacker fighting the victim */
             if ch.get_pos() > POS_STUNNED && ch.fighting().is_none() {
-                self.set_fighting(ch, victim, game);
+                self.db.set_fighting(ch, victim, self);
             }
 
             /* Start the victim fighting the attacker */
             if victim.get_pos() > POS_STUNNED && victim.fighting().is_none() {
-                self.set_fighting(victim, ch, game);
+                self.db.set_fighting(victim, ch, self);
                 if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
                     remember(victim, ch);
                 }
@@ -964,12 +964,12 @@ impl DB {
         if victim.master.borrow().is_some()
             && Rc::ptr_eq(victim.master.borrow().as_ref().unwrap(), ch)
         {
-            self.stop_follower(victim);
+            self.db.stop_follower(victim);
         }
 
         /* If the attacker is invisible, he becomes visible */
         if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
-            self.appear(ch);
+            self.db.appear(ch);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
@@ -979,7 +979,7 @@ impl DB {
 
         /* Check for PK if this is not a PK MUD */
         if PK_ALLOWED {
-            check_killer(ch, victim, game);
+            check_killer(ch, victim, self);
             if ch.plr_flagged(PLR_KILLER) && !Rc::ptr_eq(ch, victim) {
                 dam = 0;
             }
@@ -991,7 +991,7 @@ impl DB {
 
         /* Gain exp for the hit */
         if !Rc::ptr_eq(ch, victim) {
-            gain_exp(ch, (victim.get_level() as i32 * dam) as i32, game);
+            gain_exp(ch, (victim.get_level() as i32 * dam) as i32, self);
         }
 
         update_pos(victim);
@@ -1008,21 +1008,21 @@ impl DB {
          * dam_message. Otherwise, always send a dam_message.
          */
         if !is_weapon!(attacktype) {
-            self.skill_message(dam, ch, victim, attacktype);
+            self.db.skill_message(dam, ch, victim, attacktype);
         } else {
             if victim.get_pos() == POS_DEAD || dam == 0 {
-                if self.skill_message(dam, ch, victim, attacktype) == 0 {
-                    self.dam_message(dam, ch, victim, attacktype);
+                if self.db.skill_message(dam, ch, victim, attacktype) == 0 {
+                    self.db.dam_message(dam, ch, victim, attacktype);
                 }
             } else {
-                self.dam_message(dam, ch, victim, attacktype);
+                self.db.dam_message(dam, ch, victim, attacktype);
             }
         }
 
         /* Use send_to_char -- act() doesn't send message if you are DEAD. */
         match victim.get_pos() {
             POS_MORTALLYW => {
-                self.act(
+                self.db.act(
                     "$n is mortally wounded, and will die soon, if not aided.",
                     true,
                     Some(victim),
@@ -1037,7 +1037,7 @@ impl DB {
             }
 
             POS_INCAP => {
-                self.act(
+                self.db.act(
                     "$n is incapacitated and will slowly die, if not aided.",
                     true,
                     Some(victim),
@@ -1051,7 +1051,7 @@ impl DB {
                 );
             }
             POS_STUNNED => {
-                self.act(
+                self.db.act(
                     "$n is stunned, but will probably regain consciousness again.",
                     true,
                     Some(victim),
@@ -1065,7 +1065,7 @@ impl DB {
                 );
             }
             POS_DEAD => {
-                self.act(
+                self.db.act(
                     "$n is dead!  R.I.P.",
                     false,
                     Some(victim),
@@ -1093,7 +1093,7 @@ impl DB {
                         .as_str(),
                     );
                     if !Rc::ptr_eq(ch, victim) && victim.mob_flagged(MOB_WIMPY) {
-                        do_flee(game, victim, "", 0, 0);
+                        do_flee(self, victim, "", 0, 0);
                     }
                 }
                 if !victim.is_npc()
@@ -1103,16 +1103,16 @@ impl DB {
                     && victim.get_hit() > 0
                 {
                     send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
-                    do_flee(game, victim, "", 0, 0);
+                    do_flee(self, victim, "", 0, 0);
                 }
             }
         }
 
         /* Help out poor linkless people who are attacked */
         if !victim.is_npc() && victim.desc.borrow().is_none() && victim.get_pos() > POS_STUNNED {
-            do_flee(game, victim, "", 0, 0);
+            do_flee(self, victim, "", 0, 0);
             if victim.fighting().is_none() {
-                self.act(
+                self.db.act(
                     "$n is rescued by divine forces.",
                     false,
                     Some(victim),
@@ -1121,27 +1121,27 @@ impl DB {
                     TO_ROOM,
                 );
                 victim.set_was_in(victim.in_room());
-                self.char_from_room(victim);
-                self.char_to_room(Some(victim), 0);
+                self.db.char_from_room(victim);
+                self.db.char_to_room(Some(victim), 0);
             }
         }
 
         /* stop someone from fighting if they're stunned or worse */
         if victim.get_pos() <= POS_STUNNED && victim.fighting().is_some() {
-            self.stop_fighting(victim);
+            self.db.stop_fighting(victim);
         }
 
         /* Uh oh.  Victim died. */
         if victim.get_pos() == POS_DEAD {
             if !Rc::ptr_eq(ch, victim) && (victim.is_npc() || victim.desc.borrow().is_some()) {
                 if ch.aff_flagged(AFF_GROUP) {
-                    group_gain(ch, victim, game);
+                    group_gain(ch, victim, self);
                 } else {
-                    solo_gain(ch, victim, game);
+                    solo_gain(ch, victim, self);
                 }
 
                 if !victim.is_npc() {
-                    game.mudlog(
+                    self.mudlog(
                         BRF,
                         LVL_IMMORT as i32,
                         true,
@@ -1149,7 +1149,7 @@ impl DB {
                             "{} killed by {} at {}",
                             victim.get_name(),
                             ch.get_name(),
-                            self.world.borrow()[victim.in_room() as usize].name
+                            self.db.world.borrow()[victim.in_room() as usize].name
                         )
                         .as_str(),
                     );
@@ -1157,7 +1157,7 @@ impl DB {
                         forget(ch, victim);
                     }
                 }
-                die(victim, game);
+                die(victim, self);
                 return -1;
             }
         }
@@ -1171,7 +1171,7 @@ impl DB {
  * weapons that hit evil creatures easier or a weapon that always misses
  * attacking an animal.
  */
-pub fn compute_thaco(ch: &Rc<CharData>, victim: &Rc<CharData>) -> i32 {
+pub fn compute_thaco(ch: &Rc<CharData>, _victim: &Rc<CharData>) -> i32 {
     let mut calc_thaco;
 
     if !ch.is_npc() {
@@ -1188,14 +1188,14 @@ pub fn compute_thaco(ch: &Rc<CharData>, victim: &Rc<CharData>) -> i32 {
     return calc_thaco;
 }
 
-impl DB {
-    pub fn hit(&self, ch: &Rc<CharData>, victim: &Rc<CharData>, _type: i32, game: &Game) {
+impl Game {
+    pub fn hit(&mut self, ch: &Rc<CharData>, victim: &Rc<CharData>, _type: i32) {
         let wielded = ch.get_eq(WEAR_WIELD as i8);
 
         /* Do some sanity checking, in case someone flees, etc. */
         if ch.in_room() != victim.in_room() {
             if ch.fighting().is_some() && Rc::ptr_eq(ch.fighting().as_ref().unwrap(), victim) {
-                self.stop_fighting(ch);
+                self.db.stop_fighting(ch);
                 return;
             }
         }
@@ -1253,7 +1253,6 @@ impl DB {
                 } else {
                     w_type
                 },
-                game,
             );
         } else {
             /* okay, we know the guy has been hit.  now calculate damage. */
@@ -1307,18 +1306,17 @@ impl DB {
                     victim,
                     dam * backstab_mult(ch.get_level()),
                     SKILL_BACKSTAB,
-                    game,
                 );
             } else {
-                self.damage(ch, victim, dam, w_type, game);
+                self.damage(ch, victim, dam, w_type);
             }
         }
     }
 
     /* control the fights going on.  Called every 2 seconds from comm.c. */
-    pub fn perform_violence(&self, game: &Game) {
+    pub fn perform_violence(&mut self) {
         let mut old_combat_list = vec![];
-        for c in self.combat_list.borrow().iter() {
+        for c in self.db.combat_list.borrow().iter() {
             old_combat_list.push(c.clone());
         }
 
@@ -1327,7 +1325,7 @@ impl DB {
 
             if ch.fighting().is_none() || ch.in_room() != ch.fighting().as_ref().unwrap().in_room()
             {
-                self.stop_fighting(ch);
+                self.db.stop_fighting(ch);
                 continue;
             }
 
@@ -1340,7 +1338,7 @@ impl DB {
 
                 if ch.get_pos() < POS_FIGHTING {
                     ch.set_pos(POS_FIGHTING);
-                    self.act(
+                    self.db.act(
                         "$n scrambles to $s feet!",
                         true,
                         Some(ch),
@@ -1356,13 +1354,13 @@ impl DB {
                 continue;
             }
 
-            self.hit(ch, ch.fighting().as_ref().unwrap(), TYPE_UNDEFINED, game);
+            self.hit(ch, ch.fighting().as_ref().unwrap(), TYPE_UNDEFINED);
             if ch.mob_flagged(MOB_SPEC)
-                && self.get_mob_spec(ch).is_some()
+                && self.db.get_mob_spec(ch).is_some()
                 && !ch.mob_flagged(MOB_NOTDEADYET)
             {
                 let actbuf = String::new();
-                self.get_mob_spec(ch).as_ref().unwrap()(game, ch, ch, 0, actbuf.as_str());
+                self.db.get_mob_spec(ch).as_ref().unwrap()(self, ch, ch, 0, actbuf.as_str());
             }
         }
     }

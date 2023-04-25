@@ -193,7 +193,7 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
 // *  Modification of character skills                                     *
 // ********************************************************************** */
 #[allow(unused_variables)]
-pub fn do_skillset(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_skillset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut name = String::new();
 

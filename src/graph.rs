@@ -61,7 +61,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         != 0
 }
 
-fn valid_edge(game: &Game, x: RoomRnum, y: usize) -> bool {
+fn valid_edge(game: &mut Game, x: RoomRnum, y: usize) -> bool {
     let db = &game.db;
     if db.world.borrow()[x as usize].dir_option[y as usize].is_none() || toroom(db, x, y) == NOWHERE
     {
@@ -136,12 +136,11 @@ impl BfsTracker {
 //  * Intended usage: in mobile_activity, give a mob a dir to go if they're
 //  * tracking another mob or a PC.  Or, a 'track' skill for PCs.
 //  */
-fn find_first_step(game: &Game, src: RoomRnum, target: RoomRnum) -> i32 {
-    let db = &game.db;
+fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
     if src == NOWHERE
         || target == NOWHERE
-        || src >= db.world.borrow().len() as i16
-        || target > db.world.borrow().len() as i16
+        || src >= game.db.world.borrow().len() as i16
+        || target > game.db.world.borrow().len() as i16
     {
         error!(
             "SYSERR: Illegal value {} or {} passed to find_first_step.",
@@ -154,11 +153,11 @@ fn find_first_step(game: &Game, src: RoomRnum, target: RoomRnum) -> i32 {
     }
 
     /* clear marks first, some OLC systems will save the mark. */
-    for curr_room in 0..db.world.borrow().len() {
-        unmark(db, curr_room as RoomRnum);
+    for curr_room in 0..game.db.world.borrow().len() {
+        unmark(&game.db, curr_room as RoomRnum);
     }
 
-    mark(db, src);
+    mark(&game.db, src);
 
     /* first, enqueue the first steps, saving which direction we're going. */
 
@@ -166,8 +165,8 @@ fn find_first_step(game: &Game, src: RoomRnum, target: RoomRnum) -> i32 {
 
     for curr_dir in 0..NUM_OF_DIRS {
         if valid_edge(game, src, curr_dir) {
-            mark(db, toroom(db, src, curr_dir));
-            tracker.bfs_enqueue(toroom(db, src, curr_dir), curr_dir);
+            mark(&game.db, toroom(&game.db, src, curr_dir));
+            tracker.bfs_enqueue(toroom(&game.db, src, curr_dir), curr_dir);
         }
     }
 
@@ -179,9 +178,9 @@ fn find_first_step(game: &Game, src: RoomRnum, target: RoomRnum) -> i32 {
         } else {
             for curr_dir in 0..NUM_OF_DIRS {
                 if valid_edge(game, tracker.queue[0].room, curr_dir) {
-                    mark(db, toroom(db, tracker.queue[0].room, curr_dir));
+                    mark(&game.db, toroom(&game.db, tracker.queue[0].room, curr_dir));
                     tracker.bfs_enqueue(
-                        toroom(db, tracker.queue[0].room, curr_dir),
+                        toroom(&game.db, tracker.queue[0].room, curr_dir),
                         tracker.queue[0].dir,
                     );
                 }
@@ -198,7 +197,7 @@ fn find_first_step(game: &Game, src: RoomRnum, target: RoomRnum) -> i32 {
 ********************************************************/
 
 #[allow(unused_variables)]
-pub fn do_track(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {

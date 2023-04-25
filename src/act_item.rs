@@ -107,7 +107,7 @@ fn perform_put(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<ObjData>
     all objects to be put into container must be in inventory.
 */
 #[allow(unused_variables)]
-pub fn do_put(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_put(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut found = false;
     let mut howmany = 1;
     let mut arg1 = String::new();
@@ -449,7 +449,7 @@ fn get_from_room(db: &DB, ch: &Rc<CharData>, arg: &str, howmany: i32) {
 }
 
 #[allow(unused_variables)]
-pub fn do_get(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut arg3 = String::new();
@@ -688,7 +688,7 @@ fn perform_drop(
 }
 
 #[allow(unused_variables)]
-pub fn do_drop(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_drop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // char arg[MAX_INPUT_LENGTH];
     // struct obj_data *obj, *next_obj;
     // room_rnum RDR = 0;
@@ -957,7 +957,7 @@ fn perform_give_gold(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, amount: i3
 }
 
 #[allow(unused_variables)]
-pub fn do_give(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_give(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
     let mut argument = one_argument(argument, &mut arg);
@@ -1151,7 +1151,7 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
 }
 
 #[allow(unused_variables)]
-pub fn do_drink(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -1328,7 +1328,7 @@ pub fn do_drink(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_eat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let db = &game.db;
@@ -1439,7 +1439,7 @@ pub fn do_eat(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
 }
 
 #[allow(unused_variables)]
-pub fn do_pour(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut from_obj = None;
@@ -1906,7 +1906,7 @@ pub fn find_eq_pos(ch: &Rc<CharData>, obj: &Rc<ObjData>, arg: &str) -> i16 {
 }
 
 #[allow(unused_variables)]
-pub fn do_wear(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wear(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
 
@@ -2006,7 +2006,7 @@ pub fn do_wear(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_wield(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wield(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
     let obj;
@@ -2036,7 +2036,7 @@ pub fn do_wield(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_grab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_grab(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let obj;
     let db = &game.db;
@@ -2121,7 +2121,7 @@ fn perform_remove(db: &DB, ch: &Rc<CharData>, pos: i8) {
 }
 
 #[allow(unused_variables)]
-pub fn do_remove(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_remove(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
     one_argument(argument, &mut arg);

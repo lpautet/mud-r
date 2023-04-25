@@ -36,7 +36,7 @@ use crate::modify::paginate_string;
 use crate::objsave::update_obj_file;
 use crate::shops::{assign_the_shopkeepers, ShopData};
 use crate::spec_assign::{assign_mobiles, assign_objects, assign_rooms};
-use crate::spec_procs::sort_spells;
+use crate::spec_procs::{sort_spells, Mayor};
 use crate::spell_parser::mag_assign_spells;
 use crate::spells::{SpellInfoType, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
@@ -197,6 +197,7 @@ pub struct DB {
     pub house_control: RefCell<[HouseControlRec; MAX_HOUSES]>,
     pub num_of_houses: Cell<usize>,
     pub mails: RefCell<MailSystem>,
+    pub(crate) mayor: RefCell<Mayor>,
 }
 
 pub const REAL: i32 = 0;
@@ -581,11 +582,12 @@ impl DB {
             house_control: RefCell::new([HouseControlRec::new(); MAX_HOUSES]),
             num_of_houses: Cell::new(0),
             mails: RefCell::new(MailSystem::new()),
+            mayor: RefCell::new(Mayor::new()),
         }
     }
 
     /* body of the booting system */
-    pub fn boot_db(main_globals: &Game) -> DB {
+    pub fn boot_db(game: &mut Game) -> DB {
         let mut ret = DB::new();
 
         info!("Boot db -- BEGIN.");
@@ -594,18 +596,18 @@ impl DB {
         ret.reset_time();
 
         info!("Reading news, credits, help, bground, info & motds.");
-        main_globals.file_to_string_alloc(NEWS_FILE, &mut ret.news);
-        main_globals.file_to_string_alloc(CREDITS_FILE, &mut ret.credits);
-        main_globals.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
-        main_globals.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
-        main_globals.file_to_string_alloc(HELP_PAGE_FILE, &mut ret.help);
-        main_globals.file_to_string_alloc(INFO_FILE, &mut ret.info);
-        main_globals.file_to_string_alloc(WIZLIST_FILE, &mut ret.wizlist);
-        main_globals.file_to_string_alloc(IMMLIST_FILE, &mut ret.immlist);
-        main_globals.file_to_string_alloc(POLICIES_FILE, &mut ret.policies);
-        main_globals.file_to_string_alloc(HANDBOOK_FILE, &mut ret.handbook);
-        main_globals.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
-        main_globals.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings);
+        game.file_to_string_alloc(NEWS_FILE, &mut ret.news);
+        game.file_to_string_alloc(CREDITS_FILE, &mut ret.credits);
+        game.file_to_string_alloc(MOTD_FILE, &mut ret.motd);
+        game.file_to_string_alloc(IMOTD_FILE, &mut ret.imotd);
+        game.file_to_string_alloc(HELP_PAGE_FILE, &mut ret.help);
+        game.file_to_string_alloc(INFO_FILE, &mut ret.info);
+        game.file_to_string_alloc(WIZLIST_FILE, &mut ret.wizlist);
+        game.file_to_string_alloc(IMMLIST_FILE, &mut ret.immlist);
+        game.file_to_string_alloc(POLICIES_FILE, &mut ret.policies);
+        game.file_to_string_alloc(HANDBOOK_FILE, &mut ret.handbook);
+        game.file_to_string_alloc(BACKGROUND_FILE, &mut ret.background);
+        game.file_to_string_alloc(GREETINGS_FILE, &mut ret.greetings);
         prune_crlf(&mut ret.greetings);
 
         info!("Loading spell definitions.");
@@ -671,7 +673,7 @@ impl DB {
                 "Resetting #{}: {} (rooms {}-{}).",
                 zone.number, zone.name, zone.bot, zone.top
             );
-            ret.reset_zone(main_globals, i);
+            ret.reset_zone(game, i);
         }
 
         // reset_q.head = reset_q.tail = NULL;
@@ -2667,7 +2669,6 @@ impl DB {
         &self,
         main_globals: &Game,
         zone: usize,
-        cmd_no: i32,
         zcmd: &ResetCom,
         message: &str,
         last_cmd: &mut i32,
@@ -2758,7 +2759,6 @@ impl DB {
                             self.log_zone_error(
                                 main_globals,
                                 zone,
-                                cmd_no as i32,
                                 zcmd,
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
@@ -2779,7 +2779,6 @@ impl DB {
                         self.log_zone_error(
                             main_globals,
                             zone,
-                            cmd_no as i32,
                             zcmd,
                             "attempt to give obj to non-existant mob, command disabled",
                             &mut last_cmd,
@@ -2803,7 +2802,6 @@ impl DB {
                         self.log_zone_error(
                             main_globals,
                             zone,
-                            cmd_no as i32,
                             zcmd,
                             "trying to equip non-existant mob, command disabled",
                             &mut last_cmd,
@@ -2817,7 +2815,6 @@ impl DB {
                             self.log_zone_error(
                                 main_globals,
                                 zone,
-                                cmd_no as i32,
                                 zcmd,
                                 "invalid equipment pos number",
                                 &mut last_cmd,
@@ -2857,7 +2854,6 @@ impl DB {
                         self.log_zone_error(
                             main_globals,
                             zone,
-                            cmd_no as i32,
                             zcmd,
                             "door does not exist, command disabled",
                             &mut last_cmd,
@@ -2913,7 +2909,6 @@ impl DB {
                     self.log_zone_error(
                         main_globals,
                         zone,
-                        cmd_no as i32,
                         zcmd,
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,

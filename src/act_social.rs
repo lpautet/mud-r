@@ -55,7 +55,7 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
 }
 
 #[allow(unused_variables)]
-pub fn do_action(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let act_nr;
 
@@ -143,7 +143,7 @@ pub fn do_action(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_insult(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     one_argument(argument, &mut arg);

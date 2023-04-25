@@ -75,23 +75,36 @@ fn has_boat(ch: &Rc<CharData>) -> bool {
  *   1 : If succes.
  *   0 : If fail
  */
-pub fn perform_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_check: i32) -> bool {
-    let db = &game.db;
+pub fn perform_move(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    dir: i32,
+    need_specials_check: i32,
+) -> bool {
     if
     /* ch == NULL || */
     dir < 0 || dir >= NUM_OF_DIRS as i32 || ch.fighting().is_some() {
         return false;
-    } else if db.exit(ch, dir as usize).is_none()
-        || db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() == NOWHERE
+    } else if game.db.exit(ch, dir as usize).is_none()
+        || game
+            .db
+            .exit(ch, dir as usize)
+            .as_ref()
+            .unwrap()
+            .to_room
+            .get()
+            == NOWHERE
     {
         send_to_char(ch, "Alas, you cannot go that way...\r\n");
-    } else if db
+    } else if game
+        .db
         .exit(ch, dir as usize)
         .as_ref()
         .unwrap()
         .exit_flagged(EX_CLOSED)
     {
-        if !db
+        if !game
+            .db
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
@@ -102,7 +115,14 @@ pub fn perform_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_chec
                 ch,
                 format!(
                     "The {} seems to be closed.\r\n",
-                    fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
+                    fname(
+                        game.db
+                            .exit(ch, dir as usize)
+                            .as_ref()
+                            .unwrap()
+                            .keyword
+                            .as_str()
+                    )
                 )
                 .as_str(),
             );
@@ -121,7 +141,7 @@ pub fn perform_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_chec
 
         for k in ch.followers.borrow().iter() {
             if k.follower.in_room() == was_in && k.follower.get_pos() >= POS_STANDING {
-                db.act(
+                game.db.act(
                     "You follow $N.\r\n",
                     false,
                     Some(&k.follower),
@@ -137,7 +157,12 @@ pub fn perform_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_chec
     return false;
 }
 
-pub fn do_simple_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_check: i32) -> bool {
+pub fn do_simple_move(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    dir: i32,
+    need_specials_check: i32,
+) -> bool {
     //char throwaway[MAX_INPUT_LENGTH] = ""; /* Functions assume writable. */
     let was_in;
     let need_movement;
@@ -270,7 +295,7 @@ pub fn do_simple_move(game: &Game, ch: &Rc<CharData>, dir: i32, need_specials_ch
 }
 
 #[allow(unused_variables)]
-pub fn do_move(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_move(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.
      * It cannot be done in perform_move because perform_move is called
@@ -728,7 +753,7 @@ fn door_key(db: &DB, ch: &Rc<CharData>, obj: Option<&Rc<ObjData>>, door: Option<
 }
 
 #[allow(unused_variables)]
-pub fn do_gen_door(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut dooro: Option<usize> = None;
     let argument = argument.trim_start();
     let db = &game.db;
@@ -810,7 +835,7 @@ pub fn do_gen_door(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 }
 
 #[allow(unused_variables)]
-pub fn do_enter(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_enter(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
     let db = &game.db;
     one_argument(argument, &mut buf);
@@ -852,7 +877,7 @@ pub fn do_enter(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_leave(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_leave(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     if db.outside(ch) {
         send_to_char(ch, "You are outside.. where do you want to go?\r\n");
@@ -877,7 +902,7 @@ pub fn do_leave(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_stand(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_stand(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     match ch.get_pos() {
         POS_STANDING => {
@@ -937,7 +962,7 @@ pub fn do_stand(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_sit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_sit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     match ch.get_pos() {
         POS_STANDING => {
@@ -975,7 +1000,7 @@ pub fn do_sit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
 }
 
 #[allow(unused_variables)]
-pub fn do_rest(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_rest(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     match ch.get_pos() {
         POS_STANDING => {
@@ -1023,7 +1048,7 @@ pub fn do_rest(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_sleep(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_sleep(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     match ch.get_pos() {
         POS_STANDING | POS_SITTING | POS_RESTING => {
@@ -1060,7 +1085,7 @@ pub fn do_sleep(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_wake(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     let vict;
@@ -1139,7 +1164,7 @@ pub fn do_wake(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_follow(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_follow(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
 

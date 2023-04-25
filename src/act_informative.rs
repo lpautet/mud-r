@@ -445,7 +445,7 @@ fn do_auto_exits(db: &DB, ch: &CharData) {
 }
 
 #[allow(unused_variables)]
-pub fn do_exits(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.aff_flagged(AFF_BLIND) {
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
         return;
@@ -892,7 +892,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
 }
 
 #[allow(unused_variables)]
-pub fn do_look(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.desc.borrow().is_none() {
         return;
     }
@@ -946,7 +946,7 @@ pub fn do_look(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_examine(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // struct char_data *tmp_char;
     // struct obj_data *tmp_object;
     // char tempsave[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
@@ -984,7 +984,7 @@ pub fn do_examine(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
 }
 
 #[allow(unused_variables)]
-pub fn do_gold(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gold(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_gold() == 0 {
         send_to_char(ch, "You're broke!\r\n");
     } else if ch.get_gold() == 1 {
@@ -998,7 +998,7 @@ pub fn do_gold(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_score(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_score(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -1175,7 +1175,7 @@ pub fn do_score(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_inventory(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_inventory(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     send_to_char(ch, "You are carrying:\r\n");
     list_obj_to_char(
         &game.db,
@@ -1187,7 +1187,7 @@ pub fn do_inventory(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
 }
 
 #[allow(unused_variables)]
-pub fn do_equipment(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_equipment(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut found = false;
     send_to_char(ch, "You are using:\r\n");
     for i in 0..NUM_WEARS {
@@ -1209,7 +1209,7 @@ pub fn do_equipment(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
 }
 
 #[allow(unused_variables)]
-pub fn do_time(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_time(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     /* day in [1..35] */
     let day = game.db.time_info.borrow().day + 1;
 
@@ -1274,7 +1274,7 @@ pub fn do_time(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_weather(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     const SKY_LOOK: [&str; 4] = [
         "cloudless",
         "cloudy",
@@ -1315,7 +1315,7 @@ pub fn do_weather(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
 }
 
 #[allow(unused_variables)]
-pub fn do_help(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // int chk, bot, top, mid, minlen;
 
     if ch.desc.borrow().is_none() {
@@ -1368,7 +1368,7 @@ const WHO_FORMAT: &str =
 
 /* FIXME: This whole thing just needs rewritten. */
 #[allow(unused_variables)]
-pub fn do_who(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let argument = argument.trim_start();
     let mut buf = argument.to_string();
     let name_search = String::new();
@@ -1599,7 +1599,7 @@ const USERS_FORMAT: &str =
 
 /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
 #[allow(unused_variables)]
-pub fn do_users(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // char line[200], line2[220], idletime[10], classname[20];
     // char state[30], *timeptr, mode;
     // char name_search[MAX_INPUT_LENGTH], host_search[MAX_INPUT_LENGTH];
@@ -1850,7 +1850,7 @@ pub fn do_users(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 
 /* Generic page_string function for displaying text */
 #[allow(unused_variables)]
-pub fn do_gen_ps(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     match subcmd {
         SCMD_CREDITS => {
             page_string(ch.desc.borrow().as_ref(), &game.db.credits, false);
@@ -1895,7 +1895,7 @@ pub fn do_gen_ps(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     }
 }
 
-fn perform_mortal_where(game: &Game, ch: &Rc<CharData>, arg: &str) {
+fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     // struct char_data *i;
     // struct descriptor_data *d;
 
@@ -2024,7 +2024,7 @@ fn print_object_location(db: &DB, num: i32, obj: &Rc<ObjData>, ch: &Rc<CharData>
     }
 }
 
-fn perform_immort_where(game: &Game, ch: &Rc<CharData>, arg: &str) {
+fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     // struct char_data *i;
     // struct obj_data *k;
     // struct descriptor_data *d;
@@ -2124,7 +2124,7 @@ fn perform_immort_where(game: &Game, ch: &Rc<CharData>, arg: &str) {
 }
 
 #[allow(unused_variables)]
-pub fn do_where(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_where(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
@@ -2136,7 +2136,7 @@ pub fn do_where(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_levels(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_levels(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.is_npc() {
         send_to_char(ch, "You ain't nothin' but a hound-dog.\r\n");
         return;
@@ -2178,7 +2178,7 @@ pub fn do_levels(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_consider(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
@@ -2224,7 +2224,7 @@ pub fn do_consider(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 }
 
 #[allow(unused_variables)]
-pub fn do_diagnose(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
@@ -2250,7 +2250,7 @@ pub fn do_diagnose(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
 #[allow(unused_variables)]
-pub fn do_color(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     if ch.is_npc() {
         return;
@@ -2321,7 +2321,7 @@ macro_rules! yesno {
 }
 
 #[allow(unused_variables)]
-pub fn do_toggle(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // char buf2[4];
     let mut buf2 = String::new();
     if ch.is_npc() {
@@ -2391,7 +2391,7 @@ impl DB {
 }
 
 #[allow(unused_variables)]
-pub fn do_commands(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     // int no, i, cmd_num;
     // int wizhelp = 0, socials = 0;
     // struct char_data *vict;

@@ -9,7 +9,6 @@
 ************************************************************************ */
 
 use std::any::Any;
-use std::borrow::BorrowMut;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -188,6 +187,13 @@ impl ShopData {
 // #define SHOP_SELLPROFIT(i)	(shop_index[(i)].profit_sell)
 // #define SHOP_FUNC(i)		(shop_index[(i)].func)
 //
+
+macro_rules! get_shop {
+    ($game:expr, $shop_nr:expr) => {
+        $game.db.shop_index.borrow_mut()[$shop_nr]
+    };
+}
+
 impl ShopData {
     fn notrade_good(&self) -> bool {
         is_set!(self.with_who, TRADE_NOGOOD)
@@ -259,7 +265,7 @@ const TRADE_LETTERS: [&str; 8] = [
 
 const SHOP_BITS: [&str; 3] = ["WILL_FIGHT", "USES_BANK", "\n"];
 
-fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
+fn is_ok_char(game: &mut Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop_nr: usize) -> bool {
     // char buf[MAX_INPUT_LENGTH];
     let db = &game.db;
     if !db.can_see(keeper, ch) {
@@ -276,9 +282,9 @@ fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &Shop
         return true;
     }
 
-    if ch.is_good() && shop.notrade_good()
-        || ch.is_evil() && shop.notrade_evil()
-        || ch.is_neutral() && shop.notrade_neutral()
+    if ch.is_good() && get_shop!(game, shop_nr).notrade_good()
+        || ch.is_evil() && get_shop!(game, shop_nr).notrade_evil()
+        || ch.is_neutral() && get_shop!(game, shop_nr).notrade_neutral()
     {
         let buf = format!("{} {}", ch.get_name(), MSG_NO_SELL_ALIGN);
         do_tell(game, keeper, &buf, CMD_TELL.load(Ordering::Relaxed), 0);
@@ -288,10 +294,10 @@ fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &Shop
         return true;
     }
 
-    if ch.is_magic_user() && shop.notrade_magic_user()
-        || ch.is_cleric() && shop.notrade_cleric()
-        || ch.is_thief() && shop.notrade_thief()
-        || ch.is_warrior() && shop.notrade_warrior()
+    if ch.is_magic_user() && get_shop!(game, shop_nr).notrade_magic_user()
+        || ch.is_cleric() && get_shop!(game, shop_nr).notrade_cleric()
+        || ch.is_thief() && get_shop!(game, shop_nr).notrade_thief()
+        || ch.is_warrior() && get_shop!(game, shop_nr).notrade_warrior()
     {
         let buf = format!("{} {}", ch.get_name(), MSG_NO_SELL_CLASS);
         do_tell(game, keeper, &buf, CMD_TELL.load(Ordering::Relaxed), 0);
@@ -300,15 +306,15 @@ fn is_ok_char(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &Shop
     true
 }
 
-fn is_open(game: &Game, keeper: &Rc<CharData>, shop: &ShopData, msg: bool) -> bool {
+fn is_open(game: &mut Game, keeper: &Rc<CharData>, shop_nr: usize, msg: bool) -> bool {
     let db = &game.db;
     let mut buf = String::new();
-    if shop.open1 > db.time_info.borrow().hours {
+    if get_shop!(game, shop_nr).open1 > db.time_info.borrow().hours {
         buf.push_str(MSG_NOT_OPEN_YET);
-    } else if shop.close1 < db.time_info.borrow().hours {
-        if shop.open2 > db.time_info.borrow().hours {
+    } else if get_shop!(game, shop_nr).close1 < db.time_info.borrow().hours {
+        if get_shop!(game, shop_nr).open2 > db.time_info.borrow().hours {
             buf.push_str(MSG_NOT_REOPEN_YET);
-        } else if shop.close2 < db.time_info.borrow().hours {
+        } else if get_shop!(game, shop_nr).close2 < db.time_info.borrow().hours {
             buf.push_str(MSG_CLOSED_FOR_DAY);
         }
     }
@@ -322,9 +328,9 @@ fn is_open(game: &Game, keeper: &Rc<CharData>, shop: &ShopData, msg: bool) -> bo
     false
 }
 
-fn is_ok(game: &Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop: &ShopData) -> bool {
-    if is_open(game, keeper, shop, true) {
-        return is_ok_char(game, keeper, ch, shop);
+fn is_ok(game: &mut Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop_nr: usize) -> bool {
+    if is_open(game, keeper, shop_nr, true) {
+        return is_ok_char(game, keeper, ch, shop_nr);
     }
     false
 }
@@ -630,11 +636,11 @@ fn get_hash_obj_vis(
 }
 
 fn get_purchase_obj(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     arg: &str,
     keeper: &Rc<CharData>,
-    shop: &ShopData,
+    shop_nr: usize,
     msg: bool,
 ) -> Option<Rc<ObjData>> {
     let db = &game.db;
@@ -649,7 +655,9 @@ fn get_purchase_obj(
         }
         if obj.is_none() {
             if msg {
-                let buf = shop.no_such_item1.replace("%s", &ch.get_name());
+                let buf = get_shop!(game, shop_nr)
+                    .no_such_item1
+                    .replace("%s", &ch.get_name());
                 do_tell(game, keeper, &buf, CMD_TELL.load(Ordering::Relaxed), 0);
             }
             return None;
@@ -721,23 +729,22 @@ fn sell_price(
 }
 
 fn shopping_buy(
-    game: &Game,
+    game: &mut Game,
     arg: &str,
     ch: &Rc<CharData>,
     keeper: &Rc<CharData>,
-    shop: &mut ShopData,
+    shop_nr: usize,
 ) {
-    let db = &game.db;
     // char tempstr[MAX_INPUT_LENGTH], tempbuf[MAX_INPUT_LENGTH];
     // obj: &Rc<ObjData>, *last_obj = NULL;
     // int goldamt = 0, buynum, bought = 0;
 
-    if !is_ok(game, keeper, ch, shop) {
+    if !is_ok(game, keeper, ch, shop_nr) {
         return;
     }
 
-    if shop.lastsort < keeper.is_carrying_n() as i32 {
-        sort_keeper_objs(db, keeper, shop);
+    if get_shop!(game, shop_nr).lastsort < keeper.is_carrying_n() as i32 {
+        sort_keeper_objs(&game.db, keeper, &mut get_shop!(game, shop_nr));
     }
 
     let mut arg = arg.to_string();
@@ -760,16 +767,26 @@ fn shopping_buy(
     }
     let mut obj: Option<Rc<ObjData>>;
     if {
-        obj = get_purchase_obj(game, ch, &arg, keeper, shop, true);
+        obj = get_purchase_obj(game, ch, &arg, keeper, shop_nr, true);
         obj.is_none()
     } {
         return;
     }
-    if buy_price(obj.as_ref().unwrap(), shop, keeper, ch) > ch.get_gold() && !ch.is_god() {
-        let actbuf = shop.missing_cash2.replace("%s", &ch.get_name());
+    if buy_price(
+        obj.as_ref().unwrap(),
+        &mut get_shop!(game, shop_nr),
+        keeper,
+        ch,
+    ) > ch.get_gold()
+        && !ch.is_god()
+    {
+        let actbuf = get_shop!(game, shop_nr)
+            .missing_cash2
+            .replace("%s", &ch.get_name());
         do_tell(game, keeper, &actbuf, CMD_TELL.load(Ordering::Relaxed), 0);
 
-        match shop.temper1 {
+        let temper1 = get_shop!(game, shop_nr).temper1;
+        match temper1 {
             0 => {
                 do_action(
                     game,
@@ -821,7 +838,14 @@ fn shopping_buy(
     let mut goldamt = 0;
     let mut last_obj: Option<Rc<ObjData>> = None;
     while obj.is_some()
-        && (ch.get_gold() >= buy_price(obj.as_ref().unwrap(), shop, keeper, ch) || ch.is_god())
+        && (ch.get_gold()
+            >= buy_price(
+                obj.as_ref().unwrap(),
+                &mut get_shop!(game, shop_nr),
+                keeper,
+                ch,
+            )
+            || ch.is_god())
         && ch.is_carrying_n() < ch.can_carry_n() as u8
         && bought < buynum
         && ch.is_carrying_w() + obj.as_ref().unwrap().get_obj_weight() <= ch.can_carry_w() as i32
@@ -829,22 +853,33 @@ fn shopping_buy(
         bought += 1;
 
         /* Test if producing shop ! */
-        if shop_producing(db, obj.as_ref().unwrap(), shop) {
-            obj = db.read_object(obj.as_ref().unwrap().get_obj_rnum(), REAL);
+        if shop_producing(
+            &game.db,
+            obj.as_ref().unwrap(),
+            &mut get_shop!(game, shop_nr),
+        ) {
+            obj = game
+                .db
+                .read_object(obj.as_ref().unwrap().get_obj_rnum(), REAL);
         } else {
             obj_from_char(Some(obj.as_ref().unwrap()));
-            shop.lastsort -= 1;
+            get_shop!(game, shop_nr).lastsort -= 1;
         }
         DB::obj_to_char(Some(obj.as_ref().unwrap()), Some(ch));
 
-        let charged = buy_price(obj.as_ref().unwrap(), shop, keeper, ch);
+        let charged = buy_price(
+            obj.as_ref().unwrap(),
+            &mut get_shop!(game, shop_nr),
+            keeper,
+            ch,
+        );
         goldamt += charged;
         if !ch.is_god() {
             ch.set_gold(ch.get_gold() - charged);
         }
 
         last_obj = Some(obj.as_ref().unwrap().clone());
-        obj = get_purchase_obj(game, ch, &arg, keeper, shop, false);
+        obj = get_purchase_obj(game, ch, &arg, keeper, shop_nr, false);
         if obj.is_some() && !same_obj(obj.as_ref().unwrap(), last_obj.as_ref().unwrap()) {
             break;
         }
@@ -853,7 +888,14 @@ fn shopping_buy(
     if bought < buynum {
         if obj.is_none() || !same_obj(last_obj.as_ref().unwrap(), obj.as_ref().unwrap()) {
             buf = format!("{} I only have {} to sell you.", ch.get_name(), bought);
-        } else if ch.get_gold() < buy_price(obj.as_ref().unwrap(), shop, keeper, ch) {
+        } else if ch.get_gold()
+            < buy_price(
+                obj.as_ref().unwrap(),
+                &mut get_shop!(game, shop_nr),
+                keeper,
+                ch,
+            )
+        {
             buf = format!("{} You can only afford {}.", ch.get_name(), bought);
         } else if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
             buf = format!("{} You can only hold {}.", ch.get_name(), bought);
@@ -877,9 +919,10 @@ fn shopping_buy(
     let tempstr = times_message(Some(&ch.carrying.borrow()[0]), "", bought);
 
     let tempbuf = format!("$n buys {}.", tempstr);
-    db.act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
+    game.db
+        .act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
 
-    let tmpbuf = db.shop_index.borrow()[0]
+    let tmpbuf = game.db.shop_index.borrow()[0]
         .message_buy
         .replace("%s", &ch.get_name())
         .replace("%d", &goldamt.to_string());
@@ -887,20 +930,20 @@ fn shopping_buy(
 
     send_to_char(ch, format!("You now have {}.\r\n", tempstr).as_str());
 
-    if shop.shop_uses_bank() {
+    if get_shop!(game, shop_nr).shop_uses_bank() {
         if keeper.get_gold() > MAX_OUTSIDE_BANK {
-            shop.bank_account += keeper.get_gold() - MAX_OUTSIDE_BANK;
+            get_shop!(game, shop_nr).bank_account += keeper.get_gold() - MAX_OUTSIDE_BANK;
             keeper.set_gold(MAX_OUTSIDE_BANK);
         }
     }
 }
 
 fn get_selling_obj(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     name: &str,
     keeper: &Rc<CharData>,
-    shop: &ShopData,
+    shop_nr: usize,
     msg: i32,
 ) -> Option<Rc<ObjData>> {
     let db = &game.db;
@@ -916,7 +959,7 @@ fn get_selling_obj(
         return None;
     }
     let obj = obj.as_ref().unwrap();
-    let result = trade_with(obj, shop);
+    let result = trade_with(obj, &mut get_shop!(game, shop_nr));
     if result == OBJECT_OK {
         return Some(obj.clone());
     }
@@ -933,7 +976,9 @@ fn get_selling_obj(
             );
         }
         OBJECT_NOTOK => {
-            buf = shop.do_not_buy.replace("%s", &ch.get_name());
+            buf = get_shop!(game, shop_nr)
+                .do_not_buy
+                .replace("%s", &ch.get_name());
         }
         OBJECT_DEAD => {
             buf = format!("{} {}", ch.get_name(), MSG_NO_USED_WANDSTAFF);
@@ -1022,17 +1067,16 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
 }
 
 fn shopping_sell(
-    game: &Game,
+    game: &mut Game,
     arg: &str,
     ch: &Rc<CharData>,
     keeper: &Rc<CharData>,
-    shop: &mut ShopData,
+    shop_nr: usize,
 ) {
-    let db = &game.db;
     let mut sold = 0;
     let mut goldamt = 0;
 
-    if !(is_ok(game, keeper, ch, shop)) {
+    if !(is_ok(game, keeper, ch, shop_nr)) {
         return;
     }
     let mut arg = arg.to_string();
@@ -1052,40 +1096,64 @@ fn shopping_sell(
     }
     let mut name = String::new();
     one_argument(&arg, &mut name);
-    let obj = get_selling_obj(game, ch, &name, keeper, shop, 1);
+    let obj = get_selling_obj(game, ch, &name, keeper, shop_nr, 1);
     if obj.is_none() {
         return;
     }
     let obj = obj.as_ref().unwrap();
 
-    if keeper.get_gold() + shop.bank_account < sell_price(obj, shop, keeper, ch) {
-        let buf = shop.missing_cash1.replace("%s", &ch.get_name());
+    if keeper.get_gold() + get_shop!(game, shop_nr).bank_account
+        < sell_price(obj, &mut get_shop!(game, shop_nr), keeper, ch)
+    {
+        let buf = get_shop!(game, shop_nr)
+            .missing_cash1
+            .replace("%s", &ch.get_name());
         do_tell(game, keeper, &buf, CMD_TELL.load(Ordering::Relaxed), 0);
         return;
     }
     let mut obj = Some(obj.clone());
     while obj.is_some()
-        && keeper.get_gold() + shop.bank_account
-            >= sell_price(obj.as_ref().unwrap(), shop, keeper, ch)
+        && keeper.get_gold() + get_shop!(game, shop_nr).bank_account
+            >= sell_price(
+                obj.as_ref().unwrap(),
+                &mut get_shop!(game, shop_nr),
+                keeper,
+                ch,
+            )
         && sold < sellnum
     {
-        let charged = sell_price(obj.as_ref().unwrap(), shop, keeper, ch);
+        let charged = sell_price(
+            obj.as_ref().unwrap(),
+            &mut get_shop!(game, shop_nr),
+            keeper,
+            ch,
+        );
 
         goldamt += charged;
         keeper.set_gold(keeper.get_gold() - charged);
 
         sold += 1;
         obj_from_char(obj.as_ref());
-        slide_obj(db, obj.as_ref().unwrap(), keeper, shop); /* Seems we don't use return value. */
-        obj = get_selling_obj(game, ch, &name, keeper, shop, 0).clone();
+        slide_obj(
+            &game.db,
+            obj.as_ref().unwrap(),
+            keeper,
+            &mut get_shop!(game, shop_nr),
+        ); /* Seems we don't use return value. */
+        obj = get_selling_obj(game, ch, &name, keeper, shop_nr, 0).clone();
     }
 
     if sold < sellnum {
         let buf;
         if obj.is_none() {
             buf = format!("{} You only have {} of those.", ch.get_name(), sold);
-        } else if keeper.get_gold() + shop.bank_account
-            < sell_price(obj.as_ref().unwrap(), shop, keeper, ch)
+        } else if keeper.get_gold() + get_shop!(game, shop_nr).bank_account
+            < sell_price(
+                obj.as_ref().unwrap(),
+                &mut get_shop!(game, shop_nr),
+                keeper,
+                ch,
+            )
         {
             buf = format!(
                 "{} I can only afford to buy {} of those.",
@@ -1106,9 +1174,10 @@ fn shopping_sell(
 
     let tempstr = times_message(None, &name, sold);
     let tempbuf = format!("$n sells {}.", tempstr);
-    db.act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
+    game.db
+        .act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
 
-    let tempbuf = shop
+    let tempbuf = get_shop!(game, shop_nr)
         .message_sell
         .replace("%s", &ch.get_name())
         .replace("%d", &goldamt.to_string());
@@ -1120,20 +1189,23 @@ fn shopping_sell(
     );
 
     if keeper.get_gold() < MIN_OUTSIDE_BANK {
-        let goldamt = min(MAX_OUTSIDE_BANK - keeper.get_gold(), shop.bank_account);
-        shop.bank_account -= goldamt;
+        let goldamt = min(
+            MAX_OUTSIDE_BANK - keeper.get_gold(),
+            get_shop!(game, shop_nr).bank_account,
+        );
+        get_shop!(game, shop_nr).bank_account -= goldamt;
         keeper.set_gold(keeper.get_gold() + goldamt);
     }
 }
 
 fn shopping_value(
-    game: &Game,
+    game: &mut Game,
     arg: &str,
     ch: &Rc<CharData>,
     keeper: &Rc<CharData>,
-    shop: &ShopData,
+    shop_nr: usize,
 ) {
-    if !is_ok(game, keeper, ch, shop) {
+    if !is_ok(game, keeper, ch, shop_nr) {
         return;
     }
 
@@ -1144,7 +1216,7 @@ fn shopping_value(
     }
     let mut name = String::new();
     one_argument(arg, &mut name);
-    let obj = get_selling_obj(game, ch, &name, keeper, shop, 1);
+    let obj = get_selling_obj(game, ch, &name, keeper, shop_nr, 1);
     if obj.is_none() {
         return;
     }
@@ -1152,7 +1224,12 @@ fn shopping_value(
     let buf = format!(
         "{} I'll give you {} gold coins for that!",
         ch.get_name(),
-        sell_price(obj.as_ref().unwrap(), shop, keeper, ch)
+        sell_price(
+            obj.as_ref().unwrap(),
+            &mut get_shop!(game, shop_nr),
+            keeper,
+            ch
+        )
     );
     do_tell(game, keeper, &buf, CMD_TELL.load(Ordering::Relaxed), 0);
 }
@@ -1218,13 +1295,12 @@ fn list_object(
 }
 
 pub fn shopping_list(
-    game: &Game,
+    game: &mut Game,
     arg: &str,
     ch: &Rc<CharData>,
     keeper: &Rc<CharData>,
-    shop: &mut ShopData,
+    shop_nr: usize,
 ) {
-    let db = &game.db;
     let mut cnt = 0;
     let mut lindex = 0;
     let mut found = false;
@@ -1232,12 +1308,12 @@ pub fn shopping_list(
 
     /* cnt is the number of that particular object available */
 
-    if !is_ok(game, keeper, ch, shop) {
+    if !is_ok(game, keeper, ch, shop_nr) {
         return;
     }
 
-    if shop.lastsort < keeper.is_carrying_n() as i32 {
-        sort_keeper_objs(db, keeper, shop);
+    if get_shop!(game, shop_nr).lastsort < keeper.is_carrying_n() as i32 {
+        sort_keeper_objs(&game.db, keeper, &mut get_shop!(game, shop_nr));
     }
 
     one_argument(arg, &mut name);
@@ -1248,7 +1324,7 @@ pub fn shopping_list(
     if keeper.carrying.borrow().len() != 0 {
         let cl = keeper.carrying.borrow();
         for obj in cl.iter() {
-            if db.can_see_obj(ch, obj) && obj.get_obj_cost() > 0 {
+            if game.db.can_see_obj(ch, obj) && obj.get_obj_cost() > 0 {
                 if last_obj.is_none() {
                     last_obj = Some(obj.clone());
                     cnt = 1;
@@ -1258,11 +1334,11 @@ pub fn shopping_list(
                     lindex += 1;
                     if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) {
                         buf.push_str(&list_object(
-                            db,
+                            &game.db,
                             last_obj.as_ref().unwrap(),
                             cnt,
                             lindex,
-                            shop,
+                            &mut get_shop!(game, shop_nr),
                             keeper,
                             ch,
                         ));
@@ -1285,11 +1361,11 @@ pub fn shopping_list(
         if name.is_empty() || isname(&name, &last_obj.as_ref().unwrap().name.borrow()) {
             /* show last obj */
             buf.push_str(&list_object(
-                db,
+                &game.db,
                 last_obj.as_ref().unwrap(),
                 cnt,
                 lindex,
-                shop,
+                &mut get_shop!(game, shop_nr),
                 keeper,
                 ch,
             ));
@@ -1307,19 +1383,31 @@ fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
     false
 }
 
-pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
-    let db = &game.db;
-    let mut b = db.shop_index.borrow_mut();
+// pub fn get_shop(game: &Game, shop_nr: usize) -> &mut ShopData {
+//     &mut game.db.shop_index.borrow_mut()[shop_nr]
+// }
+
+pub fn shop_keeper(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    me: &dyn Any,
+    cmd: i32,
+    argument: &str,
+) -> bool {
     let keeper = me
         .downcast_ref::<Rc<CharData>>()
         .expect("Unexpected type for Rc<CharData> in shop_keeper");
-    let shop = b.iter_mut().find(|s| s.keeper == keeper.nr);
+    let shop_nr;
+    {
+        let mut shops = game.db.shop_index.borrow_mut();
+        let shopo = shops.iter_mut().position(|s| s.keeper == keeper.nr);
 
-    if shop.is_none() {
-        return false;
+        if shopo.is_none() {
+            return false;
+        }
+
+        shop_nr = shopo.unwrap();
     }
-
-    let mut shop = shop.unwrap().borrow_mut();
 
     // TODO implement spec for spec
     // if (SHOP_FUNC(shop_nr))	/* Check secondary function */
@@ -1328,12 +1416,15 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 
     if Rc::ptr_eq(keeper, ch) {
         if cmd != 0 {
-            shop.lastsort = 0;
+            get_shop!(game, shop_nr).lastsort = 0;
         }
         return false;
     }
 
-    if !ok_shop_room(shop, db.get_room_vnum(ch.in_room())) {
+    if !ok_shop_room(
+        &mut get_shop!(game, shop_nr),
+        game.db.get_room_vnum(ch.in_room()),
+    ) {
         return false;
     }
 
@@ -1343,7 +1434,8 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
 
     if cmd_is(cmd, "steal") {
         let argm = format!("$N shouts '{}'", MSG_NO_STEAL_HERE);
-        db.act(&argm, false, Some(ch), None, Some(keeper), TO_CHAR);
+        game.db
+            .act(&argm, false, Some(ch), None, Some(keeper), TO_CHAR);
         do_action(
             game,
             keeper,
@@ -1355,26 +1447,29 @@ pub fn shop_keeper(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
     }
 
     if cmd_is(cmd, "buy") {
-        shopping_buy(game, argument, ch, keeper, shop);
+        shopping_buy(game, argument, ch, keeper, shop_nr);
         return true;
     } else if cmd_is(cmd, "sell") {
-        shopping_sell(game, argument, ch, keeper, shop);
+        shopping_sell(game, argument, ch, keeper, shop_nr);
         return true;
     } else if cmd_is(cmd, "value") {
-        shopping_value(game, argument, ch, keeper, shop);
+        shopping_value(game, argument, ch, keeper, shop_nr);
         return true;
     } else if cmd_is(cmd, "list") {
-        shopping_list(game, argument, ch, keeper, shop);
+        shopping_list(game, argument, ch, keeper, shop_nr);
         return true;
     }
     return false;
 }
 
-pub fn ok_damage_shopkeeper(game: &Game, ch: &Rc<CharData>, victim: &Rc<CharData>) -> bool {
-    let db = &game.db;
-    if !db.is_mob(victim)
-        || db.mob_index[victim.get_mob_rnum() as usize].func.is_some()
-            && db.mob_index[victim.get_mob_rnum() as usize].func.unwrap() as usize
+pub fn ok_damage_shopkeeper(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) -> bool {
+    if !game.db.is_mob(victim)
+        || game.db.mob_index[victim.get_mob_rnum() as usize]
+            .func
+            .is_some()
+            && game.db.mob_index[victim.get_mob_rnum() as usize]
+                .func
+                .unwrap() as usize
                 != shop_keeper as usize
     {
         return true;
@@ -1385,9 +1480,10 @@ pub fn ok_damage_shopkeeper(game: &Game, ch: &Rc<CharData>, victim: &Rc<CharData
         return true;
     }
 
-    for sindex in 0..db.shop_index.borrow().len() {
-        if victim.get_mob_rnum() == db.shop_index.borrow()[sindex].keeper
-            && !db.shop_index.borrow()[sindex].shop_kill_chars()
+    let l = game.db.shop_index.borrow().len();
+    for sindex in 0..l {
+        if victim.get_mob_rnum() == game.db.shop_index.borrow()[sindex].keeper
+            && !game.db.shop_index.borrow()[sindex].shop_kill_chars()
         {
             let buf = format!("{} {}", ch.get_name(), MSG_CANT_KILL_KEEPER);
             do_tell(game, victim, &buf, CMD_TELL.load(Ordering::Relaxed), 0);

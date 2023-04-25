@@ -642,7 +642,8 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            for d in self.descriptor_list.borrow().iter() {
+            let descriptors = clone_vec(&self.descriptor_list);
+            for d in descriptors.iter() {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
@@ -794,7 +795,7 @@ impl Game {
 }
 
 impl Game {
-    fn heartbeat(&self, pulse: u128) {
+    fn heartbeat(&mut self, pulse: u128) {
         if pulse % PULSE_ZONE == 0 {
             self.db.zone_update(self);
         }
@@ -805,17 +806,17 @@ impl Game {
         }
 
         if pulse % PULSE_MOBILE == 0 {
-            self.db.mobile_activity(self);
+            self.mobile_activity();
         }
 
         if pulse % PULSE_VIOLENCE == 0 {
-            self.db.perform_violence(self);
+            self.perform_violence();
         }
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(1);
             affect_update(&self.db);
-            self.db.point_update(self);
+            self.point_update();
             //fflush(player_fl);
         }
 
@@ -839,7 +840,7 @@ impl Game {
         }
 
         /* Every pulse! Don't want them to stink the place up... */
-        self.db.extract_pending_chars(self);
+        self.extract_pending_chars();
     }
 }
 

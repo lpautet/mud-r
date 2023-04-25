@@ -27,7 +27,7 @@ use crate::structs::{
 use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
-use crate::util::{age, BRF, CMP};
+use crate::util::{age, clone_vec, BRF, CMP};
 use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
@@ -421,24 +421,26 @@ impl DB {
             }
         }
     }
-
+}
+impl Game {
     /* Update PCs, NPCs, and objects */
-    pub fn point_update(&self, main_globals: &Game) {
+    pub fn point_update(&mut self) {
         // struct char_data * i, * next_char;
         // struct obj_data * j, * next_thing, * jj, *next_thing2;
 
         /* characters */
-        for i in self.character_list.borrow().iter() {
-            self.gain_condition(i, FULL, -1);
-            self.gain_condition(i, DRUNK, -1);
-            self.gain_condition(i, THIRST, -1);
+        let characters = clone_vec(&self.db.character_list);
+        for i in characters.iter() {
+            self.db.gain_condition(i, FULL, -1);
+            self.db.gain_condition(i, DRUNK, -1);
+            self.db.gain_condition(i, THIRST, -1);
 
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
                 if i.aff_flagged(AFF_POISON) {
-                    if self.damage(i, i, 2, SPELL_POISON, main_globals) == -1 {
+                    if self.damage(i, i, 2, SPELL_POISON) == -1 {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }
                 }
@@ -446,25 +448,25 @@ impl DB {
                     update_pos(i);
                 }
             } else if i.get_pos() == POS_INCAP {
-                if self.damage(i, i, 1, TYPE_SUFFERING, main_globals) == -1 {
+                if self.damage(i, i, 1, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             } else if i.get_pos() == POS_MORTALLYW {
-                if self.damage(i, i, 2, TYPE_SUFFERING, main_globals) == -1 {
+                if self.damage(i, i, 2, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             }
             if !i.is_npc() {
-                self.update_char_objects(i);
+                self.db.update_char_objects(i);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
-                    self.check_idling(main_globals, i);
+                    self.db.check_idling(self, i);
                 }
             }
         }
 
         /* objects */
         let mut old_object_list = vec![];
-        for o in self.object_list.borrow().iter() {
+        for o in self.db.object_list.borrow().iter() {
             old_object_list.push(o.clone());
         }
         for j in old_object_list.iter() {
@@ -477,7 +479,7 @@ impl DB {
 
                 if j.get_obj_timer() == 0 {
                     if j.carried_by.borrow().is_some() {
-                        self.act(
+                        self.db.act(
                             "$p decays in your hands.",
                             false,
                             j.carried_by.borrow().as_ref(),
@@ -486,24 +488,32 @@ impl DB {
                             TO_CHAR,
                         );
                     } else if j.in_room() != NOWHERE
-                        && self.world.borrow()[j.in_room() as usize]
+                        && self.db.world.borrow()[j.in_room() as usize]
                             .peoples
                             .borrow()
                             .len()
                             != 0
                     {
-                        self.act(
+                        self.db.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(&self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]),
+                            Some(
+                                &self.db.world.borrow()[j.in_room() as usize]
+                                    .peoples
+                                    .borrow()[0],
+                            ),
                             Some(j),
                             None,
                             TO_ROOM,
                         );
-                        self.act(
+                        self.db.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(&self.world.borrow()[j.in_room() as usize].peoples.borrow()[0]),
+                            Some(
+                                &self.db.world.borrow()[j.in_room() as usize]
+                                    .peoples
+                                    .borrow()[0],
+                            ),
                             Some(j),
                             None,
                             TO_CHAR,
@@ -518,19 +528,19 @@ impl DB {
                         DB::obj_from_obj(jj);
 
                         if j.in_obj.borrow().is_some() {
-                            self.obj_to_obj(Some(jj), j.in_obj.borrow().as_ref());
+                            self.db.obj_to_obj(Some(jj), j.in_obj.borrow().as_ref());
                         } else if j.carried_by.borrow().is_some() {
-                            self.obj_to_room(
+                            self.db.obj_to_room(
                                 Some(jj),
                                 j.carried_by.borrow().as_ref().unwrap().in_room(),
                             );
                         } else if j.in_room() != NOWHERE {
-                            self.obj_to_room(Some(jj), j.in_room());
+                            self.db.obj_to_room(Some(jj), j.in_room());
                         } else {
                             //   core_dump();
                         }
                     }
-                    self.extract_obj(j);
+                    self.db.extract_obj(j);
                 }
             }
         }

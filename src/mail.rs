@@ -136,7 +136,7 @@ impl MailSystem {
 
 /* -------------------------------------------------------------------------- */
 
-fn mail_recip_ok(game: &Game, name: &str) -> bool {
+fn mail_recip_ok(game: &mut Game, name: &str) -> bool {
     let db = &game.db;
     let mut ret = false;
     let mut tmp_store = CharFileU::new();
@@ -149,7 +149,7 @@ fn mail_recip_ok(game: &Game, name: &str) -> bool {
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
-        db.extract_char_final(victim, game);
+        game.extract_char_final(victim);
     }
     ret
 }
@@ -311,7 +311,6 @@ impl MailSystem {
             self.mail_index.insert(0, new);
             new_index = Some(0);
         }
-        let new_index = new_index.unwrap();
         /* now, add this position to front of position list */
         self.mail_index[0].position_list.insert(0, pos);
     }
@@ -687,7 +686,13 @@ From: {}\r\n\
 ****************************************************************/
 
 #[allow(unused_variables)]
-pub fn postmaster(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn postmaster(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    me: &dyn Any,
+    cmd: i32,
+    argument: &str,
+) -> bool {
     if ch.desc.borrow().is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
     }
@@ -737,19 +742,19 @@ pub fn postmaster(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argume
 }
 
 fn postmaster_send_mail(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
-    cmd: i32,
+    _cmd: i32,
     arg: &str,
 ) {
-    let db = &game.db;
     if ch.get_level() < MIN_MAIL_LEVEL as u8 {
         let buf = format!(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        db.act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.db
+            .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
     let mut buf = String::new();
@@ -757,7 +762,7 @@ fn postmaster_send_mail(
 
     if buf.is_empty() {
         /* you'll get no argument from me! */
-        db.act(
+        game.db.act(
             "$n tells you, 'You need to specify an addressee!'",
             false,
             Some(mailman),
@@ -774,12 +779,13 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        db.act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.db
+            .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
-    let recipient = get_id_by_name(db, &buf);
+    let recipient = get_id_by_name(&game.db, &buf);
     if recipient < 0 || !mail_recip_ok(game, &buf) {
-        db.act(
+        game.db.act(
             "$n tells you, 'No one by that name is registered here!'",
             false,
             Some(mailman),
@@ -789,7 +795,7 @@ $n tells you, '...which I see you can't afford.'",
         );
         return;
     }
-    db.act(
+    game.db.act(
         "$n starts to write some mail.",
         true,
         Some(ch),
@@ -803,7 +809,8 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
 
-    db.act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+    game.db
+        .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
@@ -816,7 +823,13 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     );
 }
 
-fn postmaster_check_mail(db: &DB, ch: &Rc<CharData>, mailman: &Rc<CharData>, cmd: i32, arg: &str) {
+fn postmaster_check_mail(
+    db: &DB,
+    ch: &Rc<CharData>,
+    mailman: &Rc<CharData>,
+    _cmd: i32,
+    _arg: &str,
+) {
     let m = &mut db.mails.borrow_mut();
     if m.has_mail(ch.get_idnum()) {
         db.act(
@@ -843,8 +856,8 @@ fn postmaster_receive_mail(
     db: &DB,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
-    cmd: i32,
-    arg: &str,
+    _cmd: i32,
+    _arg: &str,
 ) {
     let m = &mut db.mails.borrow_mut();
     if !m.has_mail(ch.get_idnum()) {

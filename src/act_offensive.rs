@@ -28,9 +28,8 @@ use crate::util::rand_number;
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 #[allow(unused_variables)]
-pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
-    let db = &game.db;
 
     if ch.fighting().is_some() {
         send_to_char(
@@ -44,7 +43,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     if arg.is_empty() {
         send_to_char(ch, "Whom do you wish to assist?\r\n");
     } else if {
-        helpee = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         helpee.is_none()
     } {
         send_to_char(ch, NOPERSON);
@@ -59,7 +58,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
         if helpee.fighting().is_some() {
             opponent = helpee.fighting();
         } else {
-            for p in db.world.borrow()[ch.in_room() as usize]
+            for p in game.db.world.borrow()[ch.in_room() as usize]
                 .peoples
                 .borrow()
                 .iter()
@@ -74,7 +73,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
         }
 
         if opponent.is_none() {
-            db.act(
+            game.db.act(
                 "But nobody is fighting $M!",
                 false,
                 Some(ch),
@@ -82,8 +81,8 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
                 Some(helpee),
                 TO_CHAR,
             );
-        } else if db.can_see(ch, opponent.as_ref().unwrap()) {
-            db.act(
+        } else if game.db.can_see(ch, opponent.as_ref().unwrap()) {
+            game.db.act(
                 "You can't see who is fighting $M!",
                 false,
                 Some(ch),
@@ -93,7 +92,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
             );
         } else if !PK_ALLOWED && !opponent.as_ref().unwrap().is_npc() {
             /* prevent accidental pkill */
-            db.act(
+            game.db.act(
                 "Use 'murder' if you really want to attack $N.",
                 false,
                 Some(ch),
@@ -103,7 +102,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
             );
         } else {
             send_to_char(ch, "You join the fight!\r\n");
-            db.act(
+            game.db.act(
                 "$N assists you!",
                 false,
                 Some(helpee),
@@ -111,7 +110,7 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
                 Some(ch),
                 TO_CHAR,
             );
-            db.act(
+            game.db.act(
                 "$n assists $N.",
                 false,
                 Some(ch),
@@ -119,13 +118,13 @@ pub fn do_assist(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
                 Some(helpee),
                 TO_NOTVICT,
             );
-            db.hit(ch, opponent.as_ref().unwrap(), TYPE_UNDEFINED, game);
+            game.hit(ch, opponent.as_ref().unwrap(), TYPE_UNDEFINED);
         }
     }
 }
 
 #[allow(unused_variables)]
-pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let vict: Option<Rc<CharData>>;
 
@@ -181,7 +180,7 @@ pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
         if ch.get_pos() == POS_STANDING
             && (ch.fighting().is_none() || !Rc::ptr_eq(vict, ch.fighting().as_ref().unwrap()))
         {
-            db.hit(ch, vict, TYPE_UNDEFINED, game);
+            game.hit(ch, vict, TYPE_UNDEFINED);
             ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
         } else {
             send_to_char(ch, "You do the best you can!\r\n");
@@ -190,7 +189,7 @@ pub fn do_hit(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd
 }
 
 #[allow(unused_variables)]
-pub fn do_kill(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -241,9 +240,8 @@ pub fn do_kill(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut buf = String::new();
-    let db = &game.db;
 
     if ch.is_npc() || ch.get_skill(SKILL_BACKSTAB) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
@@ -253,7 +251,7 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     one_argument(argument, &mut buf);
     let vict;
     if {
-        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(ch, "Backstab who?\r\n");
@@ -284,7 +282,7 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 
     if vict.mob_flagged(MOB_AWARE) && vict.awake() {
-        db.act(
+        game.db.act(
             "You notice $N lunging at you!",
             false,
             Some(vict),
@@ -292,7 +290,7 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
             Some(ch),
             TO_CHAR,
         );
-        db.act(
+        game.db.act(
             "$e notices you lunging at $m!",
             false,
             Some(vict),
@@ -300,7 +298,7 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
             Some(ch),
             TO_VICT,
         );
-        db.act(
+        game.db.act(
             "$n notices $N lunging at $m!",
             false,
             Some(vict),
@@ -308,7 +306,7 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
             Some(ch),
             TO_NOTVICT,
         );
-        db.hit(vict, ch, TYPE_UNDEFINED, game);
+        game.hit(vict, ch, TYPE_UNDEFINED);
         return;
     }
 
@@ -316,15 +314,15 @@ pub fn do_backstab(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     let prob = ch.get_skill(SKILL_BACKSTAB);
 
     if vict.awake() && percent > prob as u32 {
-        db.damage(ch, vict, 0, SKILL_BACKSTAB, game);
+        game.damage(ch, vict, 0, SKILL_BACKSTAB);
     } else {
-        db.hit(ch, vict, SKILL_BACKSTAB, game);
+        game.hit(ch, vict, SKILL_BACKSTAB);
     }
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
 #[allow(unused_variables)]
-pub fn do_order(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let buf = String::new();
     let db = &game.db;
     let mut name = String::new();
@@ -404,18 +402,18 @@ pub fn do_order(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subc
 }
 
 #[allow(unused_variables)]
-pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
         send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;
     }
-    let db = &game.db;
     let was_fighting;
     for _ in 0..6 {
         let attempt = rand_number(0, (NUM_OF_DIRS - 1) as u32); /* Select a random direction */
-        if db.can_go(ch, attempt as usize)
-            && !db.room_flagged(
-                db.exit(ch, attempt as usize)
+        if game.db.can_go(ch, attempt as usize)
+            && !game.db.room_flagged(
+                game.db
+                    .exit(ch, attempt as usize)
                     .as_ref()
                     .unwrap()
                     .to_room
@@ -423,7 +421,7 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
                 ROOM_DEATH,
             )
         {
-            db.act(
+            game.db.act(
                 "$n panics, and attempts to flee!",
                 true,
                 Some(ch),
@@ -432,7 +430,8 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
                 TO_ROOM,
             );
             was_fighting = ch.fighting();
-            if do_simple_move(game, ch, attempt as i32, 1) {
+            let r = do_simple_move(game, ch, attempt as i32, 1);
+            if r {
                 send_to_char(ch, "You flee head over heels.\r\n");
                 if was_fighting.is_some() && !ch.is_npc() {
                     let mut loss = was_fighting.as_ref().unwrap().get_max_hit()
@@ -441,7 +440,7 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
                     gain_exp(ch, -loss as i32, game);
                 }
             } else {
-                db.act(
+                game.db.act(
                     "$n tries to flee, but can't!",
                     true,
                     Some(ch),
@@ -457,7 +456,7 @@ pub fn do_flee(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_bash(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -504,7 +503,7 @@ pub fn do_bash(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     }
 
     if percent > prob as u32 {
-        db.damage(ch, vict, 0, SKILL_BASH, game);
+        game.damage(ch, vict, 0, SKILL_BASH);
         ch.set_pos(POS_SITTING);
     } else {
         /*
@@ -513,7 +512,7 @@ pub fn do_bash(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
          * first to make sure they don't flee, then we can't bash them!  So now
          * we only set them sitting if they didn't flee. -gg 9/21/98
          */
-        if db.damage(ch, vict, 1, SKILL_BASH, game) > 0 {
+        if game.damage(ch, vict, 1, SKILL_BASH) > 0 {
             /* -1 = dead, 0 = miss */
             vict.set_wait_state(PULSE_VIOLENCE as i32);
             if ch.in_room() == vict.in_room() {
@@ -525,7 +524,7 @@ pub fn do_bash(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
 }
 
 #[allow(unused_variables)]
-pub fn do_rescue(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -617,7 +616,7 @@ pub fn do_rescue(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
 }
 
 #[allow(unused_variables)]
-pub fn do_kick(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_kick(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -648,9 +647,9 @@ pub fn do_kick(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcm
     let prob = ch.get_skill(SKILL_KICK);
 
     if percent > prob as i16 {
-        db.damage(ch, vict, 0, SKILL_KICK, game);
+        game.damage(ch, vict, 0, SKILL_KICK);
     } else {
-        db.damage(ch, vict, (ch.get_level() / 2) as i32, SKILL_KICK, game);
+        game.damage(ch, vict, (ch.get_level() / 2) as i32, SKILL_KICK);
     }
     ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);
 }

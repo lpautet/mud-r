@@ -1392,7 +1392,7 @@ fn crash_offer_rent(
 }
 
 fn gen_receptionist(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     recep: &Rc<CharData>,
     cmd: i32,
@@ -1560,7 +1560,7 @@ You begin to lose consciousness...",
 
 #[allow(unused_variables)]
 pub fn receptionist(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     me: &dyn Any,
     cmd: i32,
@@ -1578,7 +1578,7 @@ pub fn receptionist(
 
 #[allow(unused_variables)]
 pub fn cryogenicist(
-    game: &Game,
+    game: &mut Game,
     ch: &Rc<CharData>,
     me: &dyn Any,
     cmd: i32,

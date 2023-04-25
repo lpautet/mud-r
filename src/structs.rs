@@ -6,7 +6,7 @@ use crate::interpreter::AliasData;
 use crate::{DescriptorData, Game};
 
 pub type Special =
-    fn(game: &Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
+    fn(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
