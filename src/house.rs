@@ -52,14 +52,14 @@ pub struct HouseControlRec {
     /* idnums of house's guests	*/
     last_payment: u64,
     /* date of last house payment   */
-    spare0: i64,
-    spare1: i64,
-    spare2: i64,
-    spare3: i64,
-    spare4: i64,
-    spare5: i64,
-    spare6: i64,
-    spare7: i64,
+    _spare0: i64,
+    _spare1: i64,
+    _spare2: i64,
+    _spare3: i64,
+    _spare4: i64,
+    _spare5: i64,
+    _spare6: i64,
+    _spare7: i64,
 }
 
 impl HouseControlRec {
@@ -74,14 +74,14 @@ impl HouseControlRec {
             num_of_guests: 0,
             guests: [0; MAX_GUESTS],
             last_payment: 0,
-            spare0: 0,
-            spare1: 0,
-            spare2: 0,
-            spare3: 0,
-            spare4: 0,
-            spare5: 0,
-            spare6: 0,
-            spare7: 0,
+            _spare0: 0,
+            _spare1: 0,
+            _spare2: 0,
+            _spare3: 0,
+            _spare4: 0,
+            _spare5: 0,
+            _spare6: 0,
+            _spare7: 0,
         }
     }
 }
@@ -258,58 +258,58 @@ fn house_delete_file(vnum: RoomVnum) {
 }
 
 /* List all objects in a house file */
-fn house_listrent(db: &DB, ch: &Rc<CharData>, vnum: RoomVnum) {
-    let mut filename = String::new();
-    if !house_get_filename(vnum, &mut filename) {
-        return;
-    }
-    let fl;
-    if {
-        fl = OpenOptions::new().read(true).open(&filename);
-        fl.is_err()
-    } {
-        send_to_char(
-            ch,
-            format!("No objects on file for house #{}.\r\n", vnum).as_str(),
-        );
-        return;
-    }
-    let mut fl = fl.unwrap();
-
-    loop {
-        let mut object = ObjFileElem::new();
-        unsafe {
-            let object_slice = slice::from_raw_parts_mut(
-                &mut object as *mut _ as *mut u8,
-                mem::size_of::<ObjFileElem>(),
-            );
-            // `read_exact()` comes from `Read` impl for `&[u8]`
-            let r = fl.read_exact(object_slice);
-            if r.is_err() {
-                let err = r.err().unwrap();
-                if err.kind() == ErrorKind::UnexpectedEof {
-                    break;
-                }
-                return;
-            }
-        }
-        let mut i = -1;
-        let obj = obj_from_store(db, &object, &mut i);
-        if obj.is_some() {
-            let obj = obj.as_ref().unwrap();
-            send_to_char(
-                ch,
-                format!(
-                    " [{:5}] ({:5}au) {}\r\n",
-                    obj.item_number,
-                    obj.get_obj_rent(),
-                    obj.short_description
-                )
-                .as_str(),
-            );
-        }
-    }
-}
+// fn house_listrent(db: &DB, ch: &Rc<CharData>, vnum: RoomVnum) {
+//     let mut filename = String::new();
+//     if !house_get_filename(vnum, &mut filename) {
+//         return;
+//     }
+//     let fl;
+//     if {
+//         fl = OpenOptions::new().read(true).open(&filename);
+//         fl.is_err()
+//     } {
+//         send_to_char(
+//             ch,
+//             format!("No objects on file for house #{}.\r\n", vnum).as_str(),
+//         );
+//         return;
+//     }
+//     let mut fl = fl.unwrap();
+//
+//     loop {
+//         let mut object = ObjFileElem::new();
+//         unsafe {
+//             let object_slice = slice::from_raw_parts_mut(
+//                 &mut object as *mut _ as *mut u8,
+//                 mem::size_of::<ObjFileElem>(),
+//             );
+//             // `read_exact()` comes from `Read` impl for `&[u8]`
+//             let r = fl.read_exact(object_slice);
+//             if r.is_err() {
+//                 let err = r.err().unwrap();
+//                 if err.kind() == ErrorKind::UnexpectedEof {
+//                     break;
+//                 }
+//                 return;
+//             }
+//         }
+//         let mut i = -1;
+//         let obj = obj_from_store(db, &object, &mut i);
+//         if obj.is_some() {
+//             let obj = obj.as_ref().unwrap();
+//             send_to_char(
+//                 ch,
+//                 format!(
+//                     " [{:5}] ({:5}au) {}\r\n",
+//                     obj.item_number,
+//                     obj.get_obj_rent(),
+//                     obj.short_description
+//                 )
+//                 .as_str(),
+//             );
+//         }
+//     }
+// }
 
 /******************************************************************
  *  Functions for house administration (creation, deletion, etc.  *
@@ -591,14 +591,14 @@ fn hcontrol_build_house(db: &DB, ch: &Rc<CharData>, arg: &mut str) {
         num_of_guests: 0,
         guests: [0; MAX_GUESTS],
         last_payment: 0,
-        spare0: 0,
-        spare1: 0,
-        spare2: 0,
-        spare3: 0,
-        spare4: 0,
-        spare5: 0,
-        spare6: 0,
-        spare7: 0,
+        _spare0: 0,
+        _spare1: 0,
+        _spare2: 0,
+        _spare3: 0,
+        _spare4: 0,
+        _spare5: 0,
+        _spare6: 0,
+        _spare7: 0,
     };
 
     db.house_control.borrow_mut()[db.num_of_houses.get()] = temp_house;
@@ -710,7 +710,7 @@ fn hcontrol_pay_house(game: &Game, ch: &Rc<CharData>, arg: &str) {
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
 #[allow(unused_variables)]
-pub fn do_hcontrol(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -733,7 +733,7 @@ pub fn do_hcontrol(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 
 /* The house command, used by mortal house owners to assign guests */
 #[allow(unused_variables)]
-pub fn do_house(game: &Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let db = &game.db;

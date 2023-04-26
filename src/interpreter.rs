@@ -52,8 +52,9 @@ use crate::alias::read_aliases;
 use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{clear_char, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
+use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
 use crate::graph::do_track;
+use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
 use crate::objsave::crash_load;
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
@@ -263,7 +264,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 295] = [
+pub const CMD_INFO: [CommandInfo; 307] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -413,6 +414,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "balance"  , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "balance",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "bash"     , POS_FIGHTING, do_bash     , 1, 0 },
     CommandInfo {
         command: "bash",
@@ -511,6 +519,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "check"    , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "check",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "chuckle"  , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "chuckle",
@@ -689,6 +704,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "deposit"  , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "deposit",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "diagnose" , POS_RESTING , do_diagnose , 0, 0 },
     CommandInfo {
         command: "diagnose",
@@ -1079,6 +1101,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: SCMD_HANDBOOK,
     },
     // { "hcontrol" , POS_DEAD    , do_hcontrol , LVL_GRGOD, 0 },
+    CommandInfo {
+        command: "hcontrol",
+        minimum_position: POS_DEAD,
+        command_pointer: do_hcontrol,
+        minimum_level: LVL_GRGOD,
+        subcmd: 0,
+    },
     // { "hiccup"   , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "hiccup",
@@ -1129,6 +1158,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "house"    , POS_RESTING , do_house    , 0, 0 },
+    CommandInfo {
+        command: "house",
+        minimum_position: POS_RESTING,
+        command_pointer: do_house,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "hug"      , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "hug",
@@ -1326,6 +1362,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: SCMD_MOTD,
     },
     // { "mail"     , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "mail",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "massage"  , POS_RESTING , do_action   , 0, 0 },
     CommandInfo {
         command: "massage",
@@ -1482,6 +1525,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "offer"    , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "offer",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "open"     , POS_SITTING , do_gen_door , 0, SCMD_OPEN },
     CommandInfo {
         command: "open",
@@ -1690,7 +1740,7 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         minimum_position: POS_DEAD,
         command_pointer: do_quit,
         minimum_level: 0,
-        subcmd: 0,
+        subcmd: SCMD_QUI,
     },
     // { "quit"     , POS_DEAD    , do_quit     , 0, SCMD_QUIT },
     CommandInfo {
@@ -1734,6 +1784,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: SCMD_READ,
     },
     // { "reload"   , POS_DEAD    , do_reboot   , LVL_IMPL, 0 },
+    CommandInfo {
+        command: "reload",
+        minimum_position: POS_DEAD,
+        command_pointer: do_reboot,
+        minimum_level: LVL_IMPL,
+        subcmd: SCMD_READ,
+    },
     // { "recite"   , POS_RESTING , do_use      , 0, SCMD_RECITE },
     CommandInfo {
         command: "recite",
@@ -1752,6 +1809,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "rent"     , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "rent",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "report"   , POS_RESTING , do_report   , 0, 0 },
     CommandInfo {
         command: "report",
@@ -1858,6 +1922,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "sell"     , POS_STANDING, do_not_here , 0, 0 },
+    CommandInfo {
+        command: "sell",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "send"     , POS_SLEEPING, do_send     , LVL_GOD, 0 },
     CommandInfo {
         command: "send",
@@ -1920,7 +1991,7 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         minimum_position: POS_DEAD,
         command_pointer: do_shutdown,
         minimum_level: LVL_IMPL,
-        subcmd: 0,
+        subcmd: SCMD_SHUTDOW,
     },
     // { "shutdown" , POS_DEAD    , do_shutdown , LVL_IMPL, SCMD_SHUTDOWN },
     CommandInfo {
@@ -2422,6 +2493,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
     },
     //
     // { "value"    , POS_STANDING, do_not_here , 0, 0 },
+    CommandInfo {
+        command: "value",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 0,
+        subcmd: 0,
+    },
     // { "version"  , POS_DEAD    , do_gen_ps   , 0, SCMD_VERSION },
     CommandInfo {
         command: "version",
@@ -2567,6 +2645,13 @@ pub const CMD_INFO: [CommandInfo; 295] = [
         subcmd: 0,
     },
     // { "withdraw" , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "withdraw",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "wiznet"   , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
     CommandInfo {
         command: "wiznet",
@@ -2867,7 +2952,7 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
             temp = &temp[1..];
             if {
                 num = temp.chars().next().unwrap() as u32 - '1' as u32;
-                num < num_of_tokens as u32 && num >= 0
+                num < num_of_tokens as u32 /*&& num >= 0*/
             } {
                 buf.push_str(&buf2[tokens[num as usize]..]);
             } else if temp.starts_with(ALIAS_GLOB_CHAR) {

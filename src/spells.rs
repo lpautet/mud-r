@@ -32,14 +32,13 @@ use crate::{send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
 pub const DEFAULT_STAFF_LVL: i32 = 12;
 pub const DEFAULT_WAND_LVL: i32 = 12;
 
-pub const CAST_UNDEFINED: i32 = -1;
+// pub const CAST_UNDEFINED: i32 = -1;
 pub const CAST_SPELL: i32 = 0;
 pub const CAST_POTION: i32 = 1;
 pub const CAST_WAND: i32 = 2;
 pub const CAST_STAFF: i32 = 3;
 pub const CAST_SCROLL: i32 = 4;
 
-pub const MAG_NONE: i32 = 0;
 pub const MAG_DAMAGE: i32 = 1 << 0;
 pub const MAG_AFFECTS: i32 = 1 << 1;
 pub const MAG_UNAFFECTS: i32 = 1 << 2;
@@ -97,7 +96,7 @@ pub const SPELL_SHOCKING_GRASP: i32 = 37; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_SLEEP: i32 = 38; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_STRENGTH: i32 = 39; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_SUMMON: i32 = 40; /* Reserved Skill[] DO NOT CHANGE */
-pub const SPELL_VENTRILOQUATE: i32 = 41; /* Reserved Skill[] DO NOT CHANGE */
+// pub const SPELL_VENTRILOQUATE: i32 = 41; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_WORD_OF_RECALL: i32 = 42; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_REMOVE_POISON: i32 = 43; /* Reserved Skill[] DO NOT CHANGE */
 pub const SPELL_SENSE_LIFE: i32 = 44; /* Reserved Skill[] DO NOT CHANGE */
@@ -144,20 +143,20 @@ pub const TOP_SPELL_DEFINE: usize = 299;
 /* WEAPON ATTACK TYPES */
 
 pub const TYPE_HIT: i32 = 300;
-pub const TYPE_STING: i32 = 301;
-pub const TYPE_WHIP: i32 = 302;
-pub const TYPE_SLASH: i32 = 303;
-pub const TYPE_BITE: i32 = 304;
-pub const TYPE_BLUDGEON: i32 = 305;
-pub const TYPE_CRUSH: i32 = 306;
-pub const TYPE_POUND: i32 = 307;
-pub const TYPE_CLAW: i32 = 308;
-pub const TYPE_MAUL: i32 = 309;
-pub const TYPE_THRASH: i32 = 310;
+// pub const TYPE_STING: i32 = 301;
+// pub const TYPE_WHIP: i32 = 302;
+// pub const TYPE_SLASH: i32 = 303;
+// pub const TYPE_BITE: i32 = 304;
+// pub const TYPE_BLUDGEON: i32 = 305;
+// pub const TYPE_CRUSH: i32 = 306;
+// pub const TYPE_POUND: i32 = 307;
+// pub const TYPE_CLAW: i32 = 308;
+// pub const TYPE_MAUL: i32 = 309;
+// pub const TYPE_THRASH: i32 = 310;
 pub const TYPE_PIERCE: i32 = 311;
-pub const TYPE_BLAST: i32 = 312;
-pub const TYPE_PUNCH: i32 = 313;
-pub const TYPE_STAB: i32 = 314;
+// pub const TYPE_BLAST: i32 = 312;
+// pub const TYPE_PUNCH: i32 = 313;
+// pub const TYPE_STAB: i32 = 314;
 
 // /* new attack types can be added here - up to TYPE_SUFFERING */
 pub const TYPE_SUFFERING: i32 = 399;
@@ -168,7 +167,6 @@ pub const SAVING_PETRI: i32 = 2;
 pub const SAVING_BREATH: i32 = 3;
 pub const SAVING_SPELL: i32 = 4;
 
-pub const TAR_NONE: i32 = 0;
 pub const TAR_IGNORE: i32 = 1 << 0;
 pub const TAR_CHAR_ROOM: i32 = 1 << 1;
 pub const TAR_CHAR_WORLD: i32 = 1 << 2;

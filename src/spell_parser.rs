@@ -929,7 +929,6 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
             // }
         }
         ITEM_POTION => {
-            tch = Some(ch.clone());
             game.db
                 .act("You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
             if !RefCell::borrow(&obj.action_description).is_empty() {
@@ -1335,19 +1334,19 @@ fn spello(
     };
 }
 
-fn unused_spell(db: &mut DB, spl: usize) {
-    for i in 0..NUM_CLASSES as usize {
-        db.spell_info[spl].min_level[i] = (LVL_IMPL + 1) as i32;
-        db.spell_info[spl].mana_max = 0;
-        db.spell_info[spl].mana_min = 0;
-        db.spell_info[spl].mana_change = 0;
-        db.spell_info[spl].min_position = 0;
-        db.spell_info[spl].targets = 0;
-        db.spell_info[spl].violent = false;
-        db.spell_info[spl].routines = 0;
-        db.spell_info[spl].name = UNUSED_SPELLNAME;
-    }
-}
+// fn unused_spell(db: &mut DB, spl: usize) {
+//     for i in 0..NUM_CLASSES as usize {
+//         db.spell_info[spl].min_level[i] = (LVL_IMPL + 1) as i32;
+//         db.spell_info[spl].mana_max = 0;
+//         db.spell_info[spl].mana_min = 0;
+//         db.spell_info[spl].mana_change = 0;
+//         db.spell_info[spl].min_position = 0;
+//         db.spell_info[spl].targets = 0;
+//         db.spell_info[spl].violent = false;
+//         db.spell_info[spl].routines = 0;
+//         db.spell_info[spl].name = UNUSED_SPELLNAME;
+//     }
+// }
 
 fn skillo(db: &mut DB, skill: i32, name: &'static str) {
     spello(db, skill, name, 0, 0, 0, 0, 0, false, 0, "");

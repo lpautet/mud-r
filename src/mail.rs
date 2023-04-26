@@ -184,11 +184,11 @@ impl MailSystem {
         return self.free_list.remove(0);
     }
 
-    fn clear_free_list(&mut self) {
-        while !self.free_list.is_empty() {
-            self.pop_free_list();
-        }
-    }
+    // fn clear_free_list(&mut self) {
+    //     while !self.free_list.is_empty() {
+    //         self.pop_free_list();
+    //     }
+    // }
 
     /*
      * main_index_type *find_char_in_index(long #1)
@@ -299,7 +299,7 @@ impl MailSystem {
             );
             return;
         }
-        let mut new_index = self.find_char_in_index(id_to_index);
+        let new_index = self.find_char_in_index(id_to_index);
         if new_index.is_none() {
             /* name not already in index.. add it */
 
@@ -309,7 +309,6 @@ impl MailSystem {
             };
             /* add to front of list */
             self.mail_index.insert(0, new);
-            new_index = Some(0);
         }
         /* now, add this position to front of position list */
         self.mail_index[0].position_list.insert(0, pos);

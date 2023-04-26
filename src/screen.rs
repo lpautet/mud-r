@@ -2,10 +2,10 @@ pub const KNRM: &str = "\x1B[0m";
 pub const KRED: &str = "\x1B[31m";
 pub const KGRN: &str = "\x1B[32m";
 pub const KYEL: &str = "\x1B[33m";
-pub const KBLU: &str = "\x1B[34m";
+// pub const KBLU: &str = "\x1B[34m";
 pub const KMAG: &str = "\x1B[35m";
 pub const KCYN: &str = "\x1B[36m";
-pub const KWHT: &str = "\x1B[37m";
+// pub const KWHT: &str = "\x1B[37m";
 pub const KNUL: &str = "";
 
 /* conditional color.  pass it a pointer to a char_data and a color level. */

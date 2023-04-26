@@ -16,7 +16,7 @@ pub const PULSE_MOBILE: u128 = 10 * PASSES_PER_SEC;
 pub const PULSE_VIOLENCE: u128 = 2 * PASSES_PER_SEC;
 pub const PULSE_AUTOSAVE: u128 = 60 * PASSES_PER_SEC;
 pub const PULSE_IDLEPWD: u128 = 15 * PASSES_PER_SEC;
-pub const PULSE_SANITY: u128 = 30 * PASSES_PER_SEC;
+// pub const PULSE_SANITY: u128 = 30 * PASSES_PER_SEC;
 pub const PULSE_USAGE: u128 = 5 * 60 * PASSES_PER_SEC; /* 5 mins */
 pub const PULSE_TIMESAVE: u128 = 30 * 60 * PASSES_PER_SEC; /* should be >= SECS_PER_MUD_HOUR */
 
@@ -48,15 +48,14 @@ pub const EX_PICKPROOF: i16 = 1 << 3; /* Lock can't be picked	*/
 /* Sector types: used in room_data.sector_type */
 pub const SECT_INSIDE: i32 = 0; /* Indoors			*/
 pub const SECT_CITY: i32 = 1; /* In a city			*/
-pub const SECT_FIELD: i32 = 2; /* In a field		*/
-pub const SECT_FOREST: i32 = 3; /* In a forest		*/
-pub const SECT_HILLS: i32 = 4; /* In the hills		*/
-pub const SECT_MOUNTAIN: i32 = 5; /* On a mountain		*/
-pub const SECT_WATER_SWIM: i32 = 6; /* Swimmable water		*/
+// pub const SECT_FIELD: i32 = 2; /* In a field		*/
+// pub const SECT_FOREST: i32 = 3; /* In a forest		*/
+// pub const SECT_HILLS: i32 = 4; /* In the hills		*/
+// pub const SECT_MOUNTAIN: i32 = 5; /* On a mountain		*/
+// pub const SECT_WATER_SWIM: i32 = 6; /* Swimmable water		*/
 pub const SECT_WATER_NOSWIM: i32 = 7; /* Water - need a boat	*/
-pub const SECT_FLYING: i32 = 8; /* Wheee!			*/
-pub const SECT_UNDERWATER: i32 = 9; /* Underwater		*/
-
+// pub const SECT_FLYING: i32 = 8; /* Wheee!			*/
+// pub const SECT_UNDERWATER: i32 = 9; /* Underwater		*/
 /* Player conditions */
 pub const DRUNK: i32 = 0;
 pub const FULL: i32 = 1;
@@ -75,7 +74,7 @@ pub const SKY_RAINING: i32 = 2;
 pub const SKY_LIGHTNING: i32 = 3;
 
 /* Rent codes */
-pub const RENT_UNDEF: i32 = 0;
+// pub const RENT_UNDEF: i32 = 0;
 pub const RENT_CRASH: i32 = 1;
 pub const RENT_RENTED: i32 = 2;
 pub const RENT_CRYO: i32 = 3;
@@ -90,14 +89,14 @@ pub const ITEM_SCROLL: u8 = 2; /* Item is a scroll		*/
 pub const ITEM_WAND: u8 = 3; /* Item is a wand		*/
 pub const ITEM_STAFF: u8 = 4; /* Item is a staff		*/
 pub const ITEM_WEAPON: u8 = 5; /* Item is a weapon		*/
-pub const ITEM_FIREWEAPON: u8 = 6; /* Unimplemented		*/
-pub const ITEM_MISSILE: u8 = 7; /* Unimplemented		*/
-pub const ITEM_TREASURE: u8 = 8; /* Item is a treasure, not gold	*/
+// pub const ITEM_FIREWEAPON: u8 = 6; /* Unimplemented		*/
+// pub const ITEM_MISSILE: u8 = 7; /* Unimplemented		*/
+// pub const ITEM_TREASURE: u8 = 8; /* Item is a treasure, not gold	*/
 pub const ITEM_ARMOR: u8 = 9; /* Item is armor		*/
 pub const ITEM_POTION: u8 = 10; /* Item is a potion		*/
-pub const ITEM_WORN: u8 = 11; /* Unimplemented		*/
-pub const ITEM_OTHER: u8 = 12; /* Misc object			*/
-pub const ITEM_TRASH: u8 = 13; /* Trash - shopkeeps won't buy	*/
+// pub const ITEM_WORN: u8 = 11; /* Unimplemented		*/
+// pub const ITEM_OTHER: u8 = 12; /* Misc object			*/
+// pub const ITEM_TRASH: u8 = 13; /* Trash - shopkeeps won't buy	*/
 pub const ITEM_TRAP: u8 = 14; /* Unimplemented		*/
 pub const ITEM_CONTAINER: u8 = 15; /* Item is a container		*/
 pub const ITEM_NOTE: u8 = 16; /* Item is note 		*/
@@ -289,17 +288,17 @@ pub const PRF_ROOMFLAGS: i64 = 1 << 21; /* Can see room flags (ROOM_x)	*/
 pub const PRF_DISPAUTO: i64 = 1 << 22; /* Show prompt HP, MP, MV when < 30%.	*/
 
 /* Variables for the output buffering system */
-pub const MAX_SOCK_BUF: i32 = 12 * 1024; /* Size of kernel's sock buf   */
+// pub const MAX_SOCK_BUF: i32 = 12 * 1024; /* Size of kernel's sock buf   */
 pub const MAX_PROMPT_LENGTH: i32 = 96; /* Max length of prompt        */
-pub const GARBAGE_SPACE: i32 = 32; /* Space for **OVERFLOW** etc  */
-pub const SMALL_BUFSIZE: i32 = 1024; /* Static output buffer size   */
+// pub const GARBAGE_SPACE: i32 = 32; /* Space for **OVERFLOW** etc  */
+// pub const SMALL_BUFSIZE: i32 = 1024; /* Static output buffer size   */
 /* Max amount of output that can be buffered */
-pub const LARGE_BUFSIZE: i32 = MAX_SOCK_BUF - GARBAGE_SPACE - MAX_PROMPT_LENGTH;
-pub const HISTORY_SIZE: i32 = 5; /* Keep last 5 commands. */
-pub const MAX_STRING_LENGTH: i32 = 8192;
+// pub const LARGE_BUFSIZE: i32 = MAX_SOCK_BUF - GARBAGE_SPACE - MAX_PROMPT_LENGTH;
+pub const HISTORY_SIZE: usize = 5; /* Keep last 5 commands. */
+// pub const MAX_STRING_LENGTH: i32 = 8192;
 pub const MAX_INPUT_LENGTH: usize = 256; /* Max length per *line* of input */
 pub const MAX_RAW_INPUT_LENGTH: usize = 512; /* Max size of *raw* input */
-pub const MAX_MESSAGES: i32 = 60;
+// pub const MAX_MESSAGES: i32 = 60;
 pub const MAX_NAME_LENGTH: usize = 20; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_PWD_LENGTH: usize = 16; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_TITLE_LENGTH: usize = 80; /* Used in char_file_u *DO*NOT*CHANGE* */
@@ -777,14 +776,14 @@ pub type RoomVnum = IDXTYPE;
 pub type ObjVnum = IDXTYPE;
 pub type MobVnum = IDXTYPE;
 pub type ZoneVnum = IDXTYPE;
-pub type ShopVnum = IDXTYPE;
+// pub type ShopVnum = IDXTYPE;
 
 /* Various real (array-reference) number types. */
 pub type RoomRnum = IDXTYPE;
 pub type ObjRnum = IDXTYPE;
 pub type MobRnum = IDXTYPE;
 pub type ZoneRnum = IDXTYPE;
-pub type ShopRnum = IDXTYPE;
+// pub type ShopRnum = IDXTYPE;
 
 pub const SEX_NEUTRAL: u8 = 0;
 pub const SEX_MALE: u8 = 1;
@@ -809,8 +808,7 @@ pub const LVL_IMMORT: i16 = 31;
 pub const LVL_FREEZE: u8 = LVL_GRGOD as u8;
 
 pub const NUM_OF_DIRS: usize = 6; /* number of directions in a room (nsewud) */
-pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */
-
+// pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */
 /* Affect bits: used in char_data.char_specials.saved.affected_by */
 /* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
 pub const AFF_BLIND: i64 = 1 << 0; /* (R) Char is blind		*/
@@ -826,21 +824,21 @@ pub const AFF_CURSE: i64 = 1 << 9; /* Char is cursed		*/
 pub const AFF_INFRAVISION: i64 = 1 << 10; /* Char can see in dark	*/
 pub const AFF_POISON: i64 = 1 << 11; /* (R) Char is poisoned	*/
 pub const AFF_PROTECT_EVIL: i64 = 1 << 12; /* Char protected from evil  */
-pub const AFF_PROTECT_GOOD: i64 = 1 << 13; /* Char protected from good  */
+// pub const AFF_PROTECT_GOOD: i64 = 1 << 13; /* Char protected from good  */
 pub const AFF_SLEEP: i64 = 1 << 14; /* (R) Char magically asleep	*/
 pub const AFF_NOTRACK: i64 = 1 << 15; /* Char can't be tracked	*/
-pub const AFF_UNUSED16: i64 = 1 << 16; /* Room for future expansion	*/
-pub const AFF_UNUSED17: i64 = 1 << 17; /* Room for future expansion	*/
+// pub const AFF_UNUSED16: i64 = 1 << 16; /* Room for future expansion	*/
+// pub const AFF_UNUSED17: i64 = 1 << 17; /* Room for future expansion	*/
 pub const AFF_SNEAK: i64 = 1 << 18; /* Char can move quietly	*/
 pub const AFF_HIDE: i64 = 1 << 19; /* Char is hidden		*/
-pub const AFF_UNUSED20: i64 = 1 << 20; /* Room for future expansion	*/
+// pub const AFF_UNUSED20: i64 = 1 << 20; /* Room for future expansion	*/
 pub const AFF_CHARM: i64 = 1 << 21; /* Char is charmed		*/
 
 /* Player flags: used by char_data.char_specials.act */
 pub const PLR_KILLER: i64 = 1 << 0; /* Player is a player-killer		*/
 pub const PLR_THIEF: i64 = 1 << 1; /* Player is a player-thief		*/
 pub const PLR_FROZEN: i64 = 1 << 2; /* Player is frozen			*/
-pub const PLR_DONTSET: i64 = 1 << 3; /* Don't EVER set (ISNPC bit)	*/
+// pub const PLR_DONTSET: i64 = 1 << 3; /* Don't EVER set (ISNPC bit)	*/
 pub const PLR_WRITING: i64 = 1 << 4; /* Player writing (board/mail/olc)	*/
 pub const PLR_MAILING: i64 = 1 << 5; /* Player is writing mail		*/
 pub const PLR_CRASH: i64 = 1 << 6; /* Player needs to be crash-saved	*/
@@ -1028,18 +1026,18 @@ pub struct GuildInfoType {
 
 /* Some different kind of liquids for use in values of drink containers */
 pub const LIQ_WATER: i32 = 0;
-pub const LIQ_BEER: i32 = 1;
-pub const LIQ_WINE: i32 = 2;
-pub const LIQ_ALE: i32 = 3;
-pub const LIQ_DARKALE: i32 = 4;
-pub const LIQ_WHISKY: i32 = 5;
-pub const LIQ_LEMONADE: i32 = 6;
-pub const LIQ_FIREBRT: i32 = 7;
-pub const LIQ_LOCALSPC: i32 = 8;
+// pub const LIQ_BEER: i32 = 1;
+// pub const LIQ_WINE: i32 = 2;
+// pub const LIQ_ALE: i32 = 3;
+// pub const LIQ_DARKALE: i32 = 4;
+// pub const LIQ_WHISKY: i32 = 5;
+// pub const LIQ_LEMONADE: i32 = 6;
+// pub const LIQ_FIREBRT: i32 = 7;
+// pub const LIQ_LOCALSPC: i32 = 8;
 pub const LIQ_SLIME: i32 = 9;
-pub const LIQ_MILK: i32 = 10;
-pub const LIQ_TEA: i32 = 11;
-pub const LIQ_COFFE: i32 = 12;
-pub const LIQ_BLOOD: i32 = 13;
-pub const LIQ_SALTWATER: i32 = 14;
-pub const LIQ_CLEARWATER: i32 = 15;
+// pub const LIQ_MILK: i32 = 10;
+// pub const LIQ_TEA: i32 = 11;
+// pub const LIQ_COFFE: i32 = 12;
+// pub const LIQ_BLOOD: i32 = 13;
+// pub const LIQ_SALTWATER: i32 = 14;
+// pub const LIQ_CLEARWATER: i32 = 15;

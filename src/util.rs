@@ -45,7 +45,7 @@ use crate::{
     _clrlevel, clr, send_to_char, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT,
 };
 
-pub const OFF: u8 = 0;
+// pub const OFF: u8 = 0;
 pub const BRF: u8 = 1;
 pub const NRM: u8 = 2;
 pub const CMP: u8 = 3;
@@ -1168,13 +1168,13 @@ pub fn hssh(ch: &CharData) -> &str {
     }
 }
 
-pub fn ana(obj: &ObjData) -> &str {
-    if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
-        "An"
-    } else {
-        "A"
-    }
-}
+// pub fn ana(obj: &ObjData) -> &str {
+//     if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
+//         "An"
+//     } else {
+//         "A"
+//     }
+// }
 
 pub fn sana(obj: &ObjData) -> &str {
     if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
@@ -1233,7 +1233,7 @@ pub const SECS_PER_MUD_YEAR: u64 = 17 * SECS_PER_MUD_MONTH;
 pub const SECS_PER_REAL_MIN: u64 = 60;
 pub const SECS_PER_REAL_HOUR: u64 = 60 * SECS_PER_REAL_MIN;
 pub const SECS_PER_REAL_DAY: u64 = 24 * SECS_PER_REAL_HOUR;
-pub const SECS_PER_REAL_YEAR: u64 = 365 * SECS_PER_REAL_DAY;
+// pub const SECS_PER_REAL_YEAR: u64 = 365 * SECS_PER_REAL_DAY;
 
 pub fn ctime(t: u64) -> String {
     let date_time = Utc.timestamp_millis_opt(t as i64).unwrap();

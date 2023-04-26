@@ -24,13 +24,13 @@ use crate::act_social::SocialMessg;
 use crate::ban::{load_banned, read_invalid_list};
 use crate::boards::BoardSystem;
 use crate::class::init_spell_levels;
-use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM};
+use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM, OK};
 use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
 use crate::handler::{fname, isname};
 use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
-use crate::interpreter::one_word;
+use crate::interpreter::{one_argument, one_word};
 use crate::mail::MailSystem;
 use crate::modify::paginate_string;
 use crate::objsave::update_obj_file;
@@ -319,70 +319,94 @@ pub fn get_id_by_name(db: &DB, name: &str) -> i64 {
 // *textfiles[rf] = NULL;
 // }
 // }
-//
-//
-// /*
-//  * Too bad it doesn't check the return values to let the user
-//  * know about -1 values.  This will result in an 'Okay.' to a
-//  * 'reload' command even when the string was not replaced.
-//  * To fix later, if desired. -gg 6/24/99
-//  */
-// ACMD(do_reboot)
-// {
-// char arg[MAX_INPUT_LENGTH];
-//
-// one_argument(argument, arg);
-//
-// if (!str_cmp(arg, "all") || *arg == '*') {
-// if (file_to_string_alloc(GREETINGS_FILE, &greetings) == 0)
-// prune_crlf(greetings);
-// file_to_string_alloc(WIZLIST_FILE, &wizlist);
-// file_to_string_alloc(IMMLIST_FILE, &immlist);
-// file_to_string_alloc(NEWS_FILE, &news);
-// file_to_string_alloc(CREDITS_FILE, &credits);
-// file_to_string_alloc(MOTD_FILE, &motd);
-// file_to_string_alloc(IMOTD_FILE, &imotd);
-// file_to_string_alloc(HELP_PAGE_FILE, &help);
-// file_to_string_alloc(INFO_FILE, &info);
-// file_to_string_alloc(POLICIES_FILE, &policies);
-// file_to_string_alloc(HANDBOOK_FILE, &handbook);
-// file_to_string_alloc(BACKGROUND_FILE, &background);
-// } else if (!str_cmp(arg, "wizlist"))
-// file_to_string_alloc(WIZLIST_FILE, &wizlist);
-// else if (!str_cmp(arg, "immlist"))
-// file_to_string_alloc(IMMLIST_FILE, &immlist);
-// else if (!str_cmp(arg, "news"))
-// file_to_string_alloc(NEWS_FILE, &news);
-// else if (!str_cmp(arg, "credits"))
-// file_to_string_alloc(CREDITS_FILE, &credits);
-// else if (!str_cmp(arg, "motd"))
-// file_to_string_alloc(MOTD_FILE, &motd);
-// else if (!str_cmp(arg, "imotd"))
-// file_to_string_alloc(IMOTD_FILE, &imotd);
-// else if (!str_cmp(arg, "help"))
-// file_to_string_alloc(HELP_PAGE_FILE, &help);
-// else if (!str_cmp(arg, "info"))
-// file_to_string_alloc(INFO_FILE, &info);
-// else if (!str_cmp(arg, "policy"))
-// file_to_string_alloc(POLICIES_FILE, &policies);
-// else if (!str_cmp(arg, "handbook"))
-// file_to_string_alloc(HANDBOOK_FILE, &handbook);
-// else if (!str_cmp(arg, "background"))
-// file_to_string_alloc(BACKGROUND_FILE, &background);
-// else if (!str_cmp(arg, "greetings")) {
-// if (file_to_string_alloc(GREETINGS_FILE, &greetings) == 0)
-// prune_crlf(greetings);
-// } else if (!str_cmp(arg, "xhelp")) {
-// if (help_table)
-// free_help();
-// index_boot(DB_BOOT_HLP);
-// } else {
-// send_to_char(ch, "Unknown reload option.\r\n");
-// return;
-// }
-//
-// send_to_char(ch, "%s", OK);
-// }
+
+/*
+ * Too bad it doesn't check the return values to let the user
+ * know about -1 values.  This will result in an 'Okay.' to a
+ * 'reload' command even when the string was not replaced.
+ * To fix later, if desired. -gg 6/24/99
+ */
+#[allow(unused_variables)]
+pub fn do_reboot(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+    let mut arg = String::new();
+
+    one_argument(argument, &mut arg);
+    let mut n = Rc::from("");
+    if arg == "all" || arg == "*" {
+        if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
+            game.db.greetings = n.clone();
+            prune_crlf(&mut game.db.greetings);
+        }
+        game.file_to_string_alloc(WIZLIST_FILE, &mut n);
+        game.db.wizlist = n.clone();
+        game.file_to_string_alloc(IMMLIST_FILE, &mut n);
+        game.db.immlist = n.clone();
+        game.file_to_string_alloc(NEWS_FILE, &mut n);
+        game.db.news = n.clone();
+        game.file_to_string_alloc(CREDITS_FILE, &mut n);
+        game.db.credits = n.clone();
+        game.file_to_string_alloc(MOTD_FILE, &mut n);
+        game.db.motd = n.clone();
+        game.file_to_string_alloc(IMOTD_FILE, &mut n);
+        game.db.imotd = n.clone();
+        game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
+        game.db.help = n.clone();
+        game.file_to_string_alloc(INFO_FILE, &mut n);
+        game.db.info = n.clone();
+        game.file_to_string_alloc(POLICIES_FILE, &mut n);
+        game.db.policies = n.clone();
+        game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
+        game.db.handbook = n.clone();
+        game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
+        game.db.background = n.clone();
+    } else if arg == "wizlist" {
+        game.file_to_string_alloc(WIZLIST_FILE, &mut n);
+        game.db.wizlist = n.clone();
+    } else if arg == "immlist" {
+        game.file_to_string_alloc(IMMLIST_FILE, &mut n);
+        game.db.immlist = n.clone();
+    } else if arg == "news" {
+        game.file_to_string_alloc(NEWS_FILE, &mut n);
+        game.db.news = n.clone();
+    } else if arg == "credits" {
+        game.file_to_string_alloc(CREDITS_FILE, &mut n);
+        game.db.credits = n.clone();
+    } else if arg == "motd" {
+        game.file_to_string_alloc(MOTD_FILE, &mut n);
+        game.db.motd = n.clone();
+    } else if arg == "imotd" {
+        game.file_to_string_alloc(IMOTD_FILE, &mut n);
+        game.db.imotd = n.clone();
+    } else if arg == "help" {
+        game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
+        game.db.help = n.clone();
+    } else if arg == "info" {
+        game.file_to_string_alloc(INFO_FILE, &mut n);
+        game.db.info = n.clone();
+    } else if arg == "policy" {
+        game.file_to_string_alloc(POLICIES_FILE, &mut n);
+        game.db.policies = n.clone();
+    } else if arg == "handbook" {
+        game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
+        game.db.handbook = n.clone();
+    } else if arg == "background" {
+        game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
+        game.db.background = n.clone();
+    } else if arg == "greetings" {
+        if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
+            game.db.greetings = n.clone();
+            prune_crlf(&mut game.db.greetings);
+        }
+    } else if arg == "xhelp" {
+        game.db.help_table.clear();
+        game.db.index_boot(DB_BOOT_HLP);
+    } else {
+        send_to_char(ch, "Unknown reload option.\r\n");
+        return;
+    }
+
+    send_to_char(ch, OK);
+}
 
 impl DB {
     pub(crate) fn boot_world(&mut self) {
@@ -2719,7 +2743,6 @@ impl DB {
                 '*' => {
                     /* ignore command */
                     last_cmd = 0;
-                    break;
                 }
 
                 'M' => {
@@ -2764,7 +2787,7 @@ impl DB {
                                 &mut last_cmd,
                             );
                             zcmd.command.set('*');
-                            break;
+                            continue;
                         }
                         self.obj_to_obj(obj.as_ref(), obj_to.as_ref());
                         last_cmd = 1;
@@ -2785,7 +2808,7 @@ impl DB {
                         );
 
                         zcmd.command.set('*');
-                        break;
+                        continue;
                     }
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
@@ -2808,7 +2831,7 @@ impl DB {
                         );
 
                         zcmd.command.set('*');
-                        break;
+                        continue;
                     }
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         if zcmd.arg3 < 0 || zcmd.arg3 >= NUM_WEARS as i32 {

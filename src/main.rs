@@ -31,7 +31,7 @@ use crate::constants::*;
 use crate::db::*;
 use crate::handler::fname;
 use crate::house::house_save_all;
-use crate::interpreter::{command_interpreter, nanny, perform_alias};
+use crate::interpreter::{command_interpreter, is_abbrev, nanny, perform_alias};
 use crate::magic::affect_update;
 use crate::modify::{show_string, string_add};
 use crate::objsave::crash_save_all;
@@ -119,14 +119,11 @@ pub struct DescriptorData {
     /* is the user at a prompt?             */
     inbuf: RefCell<String>,
     /* buffer for raw input		*/
-    // char	last_input[MAX_INPUT_LENGTH]; /* the last input			*/
+    last_input: RefCell<String>, /* the last input			*/
     history: RefCell<Vec<String>>,
     /* History of commands, for ! mostly.	*/
-    // int	history_pos;		/* Circular array position.		*/
+    history_pos: Cell<usize>, /* Circular array position.		*/
     output: RefCell<String>,
-    // int  bufptr;			/* ptr to end of current output		*/
-    // int	bufspace;		/* space left in the output buffer	*/
-    // struct txt_block *large_outbuf; /* ptr to large buffer, if we need it */
     input: RefCell<LinkedList<TxtBlock>>,
     character: RefCell<Option<Rc<CharData>>>,
     /* linked to char			*/
@@ -147,8 +144,6 @@ pub struct Game {
     /* clean shutdown */
     circle_reboot: Cell<bool>,
     /* reboot the game after a shutdown */
-    no_specials: bool,
-    /* Suppress ass. of special routines */
     max_players: i32,
     /* max descriptors available */
     tics: i32,
@@ -177,7 +172,6 @@ fn main() -> ExitCode {
         last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
         circle_reboot: Cell::new(false),
-        no_specials: false,
         db: DB::new(),
         mother_desc: None,
         tics: 0,
@@ -637,7 +631,7 @@ impl Game {
             for d in self.descriptor_list.borrow().iter() {
                 let res = RefCell::borrow(&d.stream).peek(&mut buf);
                 if res.is_ok() && res.unwrap() != 0 {
-                    process_input(d.as_ref());
+                    process_input(d);
                 }
             }
 
@@ -1177,7 +1171,9 @@ impl Game {
             mail_to: Cell::new(0),
             has_prompt: Cell::new(false),
             inbuf: RefCell::from(String::new()),
+            last_input: RefCell::new("".to_string()),
             history: RefCell::new(vec![]),
+            history_pos: Cell::new(0),
             output: RefCell::new(String::new()),
             input: RefCell::new(LinkedList::new()),
             character: RefCell::new(None),
@@ -1589,7 +1585,7 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(t: &DescriptorData) -> i32 {
+fn process_input(t: &Rc<DescriptorData>) -> i32 {
     let buf_length;
     let mut failed_subst;
     let mut bytes_read;
@@ -1686,49 +1682,59 @@ fn process_input(t: &DescriptorData) -> i32 {
             }
         }
 
-        // if (t -> snoop_by)
-        // write_to_output(t ->snoop_by, "%% %s\r\n", tmp);
-        failed_subst = 0;
+        if t.snoop_by.borrow().is_some() {
+            write_to_output(
+                t.snoop_by.borrow().as_ref().unwrap(),
+                format!("% {}\r\n", tmp).as_str(),
+            );
+        }
+        failed_subst = false;
 
         if tmp == "!" {
             /* Redo last command. */
-            //strcpy(tmp, t -> last_input); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
+            tmp = t.last_input.borrow().clone();
         } else if tmp.starts_with('!') && tmp.len() > 1 {
-            // char * commandln = (tmp + 1);
-            // int
-            // starting_pos = t -> history_pos,
-            // cnt = (t -> history_pos == 0?
-            // HISTORY_SIZE - 1: t -> history_pos - 1);
-            //
-            // skip_spaces(&commandln);
-            // for (; cnt != starting_pos; cnt - -) {
-            //     if (t -> history[cnt] & &is_abbrev(commandln, t -> history[cnt])) {
-            //         strcpy(tmp, t -> history[cnt]); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
-            //         strcpy(t -> last_input, tmp); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
-            //         write_to_output(t, "%s\r\n", tmp);
-            //         break;
-            //     }
-            //     if (cnt == 0) {
-            //         /* At top, loop to bottom. */
-            //         cnt = HISTORY_SIZE;
-            //     }
-            // }
+            let mut commandln = &tmp[1..];
+            let starting_pos = t.history_pos.get();
+            let mut cnt = if t.history_pos.get() == 0 {
+                HISTORY_SIZE - 1
+            } else {
+                t.history_pos.get() - 1
+            } as usize;
+
+            commandln = commandln.trim_start();
+            while cnt != starting_pos {
+                if !t.history.borrow()[cnt].is_empty()
+                    && is_abbrev(commandln, t.history.borrow()[cnt].as_str())
+                {
+                    tmp = t.history.borrow()[cnt].clone();
+                    *t.last_input.borrow_mut() = tmp.clone();
+                    write_to_output(t, format!("{}\r\n", tmp).as_str());
+                    break;
+                }
+                if cnt == 0 {
+                    /* At top, loop to bottom. */
+                    cnt = HISTORY_SIZE;
+                }
+                cnt -= 1;
+            }
         } else if tmp.starts_with('^') {
-            // if (!(failed_subst = perform_subst(t, t -> last_input, tmp)))
-            // strcpy(t -> last_input, tmp);    /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
+            failed_subst = perform_subst(t, t.last_input.borrow().as_ref(), &mut tmp);
+            if !failed_subst {
+                *t.last_input.borrow_mut() = tmp.to_string();
+            }
         } else {
-            // strcpy(t -> last_input, tmp); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
-            // if (t -> history
-            // [t -> history_pos])
-            // free(t -> history[t -> history_pos]); /* Clear the old line. */
-            // t -> history
-            // [t -> history_pos] = strdup(tmp); /* Save the new. */
-            // if ( + + t -> history_pos > = HISTORY_SIZE)    /* Wrap to top. */
-            // t -> history_pos = 0;
+            *t.last_input.borrow_mut() = tmp.to_string();
+            t.history.borrow_mut()[t.history_pos.get()] = tmp.to_string();
+            t.history_pos.set(t.history_pos.get() + 1);
+            if t.history_pos.get() >= HISTORY_SIZE {
+                t.history_pos.set(0);
+            }
         }
 
-        // if (!failed_subst)
-        write_to_q(tmp.as_str(), &mut t.input.borrow_mut(), false);
+        if !failed_subst {
+            write_to_q(tmp.as_str(), &mut t.input.borrow_mut(), false);
+        }
 
         /* find the end of this line */
         while nl_pos.unwrap() < t.inbuf.borrow().len()
@@ -1756,52 +1762,50 @@ fn process_input(t: &DescriptorData) -> i32 {
  * orig string, i.e. the one being modified.  subst contains the
  * substition string, i.e. "^telm^tell"
  */
-// int perform_subst(struct descriptor_data * t, char *orig, char *subst)
-// {
-// char newsub[MAX_INPUT_LENGTH + 5];
-//
-// char *first, * second, * strpos;
-//
-// /*
-//  * first is the position of the beginning of the first string (the one
-//  * to be replaced
-//  */
-// first = subst + 1;
-//
-// /* now find the second '^' */
-// if ( ! (second = strchr(first, '^'))) {
-// write_to_output(t, "Invalid substitution.\r\n");
-// return (1);
-// }
-// /* terminate "first" at the position of the '^' and make 'second' point
-//  * to the beginning of the second string */
-// * (second + + ) = '\0';
-//
-// /* now, see if the contents of the first string appear in the original */
-// if ( ! (strpos = strstr(orig, first))) {
-// write_to_output(t, "Invalid substitution.\r\n");
-// return (1);
-// }
-// /* now, we construct the new string for output. */
-//
-// /* first, everything in the original, up to the string to be replaced */
-// strncpy(newsub, orig, strpos - orig); /* strncpy: OK (newsub:MAX_INPUT_LENGTH+5 > orig:MAX_INPUT_LENGTH) */
-// newsub[strpos - orig] = '\0';
-//
-// /* now, the replacement string */
-// strncat(newsub, second, MAX_INPUT_LENGTH - strlen(newsub) - 1); /* strncpy: OK */
-//
-// /* now, if there's anything left in the original after the string to
-//  * replaced, copy that too. */
-// if (((strpos - orig) + strlen(first)) < strlen(orig))
-// strncat(newsub, strpos + strlen(first), MAX_INPUT_LENGTH - strlen(newsub) - 1); /* strncpy: OK */
-//
-// /* terminate the string in case of an overflow from strncat */
-// newsub[MAX_INPUT_LENGTH - 1] = '\0';
-// strcpy(subst, newsub); /* strcpy: OK (by mutual MAX_INPUT_LENGTH) */
-//
-// return (0);
-// }
+fn perform_subst(t: &Rc<DescriptorData>, orig: &str, subst: &mut String) -> bool {
+    /*
+     * first is the position of the beginning of the first string (the one
+     * to be replaced
+     */
+    let first = subst.as_str()[1..].to_string();
+    let second = first.find('^');
+    /* now find the second '^' */
+
+    if second.is_none() {
+        write_to_output(t, "Invalid substitution.\r\n");
+        return true;
+    }
+    /* terminate "first" at the position of the '^' and make 'second' point
+     * to the beginning of the second string */
+    let (first, mut second) = first.split_at(second.unwrap());
+    second = &second[1..];
+
+    /* now, see if the contents of the first string appear in the original */
+    let strpos = orig.find(first);
+    if strpos.is_none() {
+        write_to_output(t, "Invalid substitution.\r\n");
+        return true;
+    }
+    let strpos = strpos.unwrap();
+    /* now, we construct the new string for output. */
+
+    /* first, everything in the original, up to the string to be replaced */
+    let mut newsub = String::new();
+    newsub.push_str(&orig[0..strpos]);
+
+    /* now, the replacement string */
+    newsub.push_str(second);
+    /* now, if there's anything left in the original after the string to
+     * replaced, copy that too. */
+
+    if strpos + first.len() < orig.len() {
+        newsub.push_str(&orig[orig.len() - strpos - first.len()..]);
+    }
+
+    *subst = newsub;
+
+    return false;
+}
 
 impl Game {
     pub fn close_socket(&self, d: &Rc<DescriptorData>) {
