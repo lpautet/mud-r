@@ -246,9 +246,8 @@ fn find_board(db: &DB, ch: &Rc<CharData>) -> Option<usize> {
     None
 }
 
-fn init_boards(db: &DB) {
+fn init_boards(b: &mut BoardSystem, db: &DB) {
     let mut fatal_error = 0;
-    let mut b: &mut BoardSystem = &mut db.boards.borrow_mut();
     for i in 0..INDEX_SIZE {
         b.msg_storage[i] = None;
         b.msg_storage_taken[i] = false;
@@ -296,7 +295,7 @@ pub fn gen_board(
     let board = me.downcast_ref::<Rc<ObjData>>().unwrap();
     let b: &mut BoardSystem = &mut db.boards.borrow_mut();
     if !b.loaded {
-        init_boards(db);
+        init_boards(b, db);
         b.loaded = true;
     }
     if ch.desc.borrow().is_none() {
@@ -323,20 +322,25 @@ pub fn gen_board(
     let board_type = board_type.unwrap();
 
     return if cmd == b.acmd_write {
-        board_write_message(db, board_type, ch, argument)
+        board_write_message(b, db, board_type, ch, argument)
     } else if cmd == b.acmd_look || cmd == b.acmd_examine {
-        board_show_board(db, board_type, ch, argument, board)
+        board_show_board(b, db, board_type, ch, argument, board)
     } else if cmd == b.acmd_read {
-        board_display_msg(game, board_type, ch, argument, board)
+        board_display_msg(b, game, board_type, ch, argument, board)
     } else if cmd == b.acmd_remove {
-        board_remove_msg(game, board_type, ch, argument)
+        board_remove_msg(b, game, board_type, ch, argument)
     } else {
         false
     };
 }
 
-fn board_write_message(db: &DB, board_type: usize, ch: &Rc<CharData>, arg: &str) -> bool {
-    let b: &mut BoardSystem = &mut db.boards.borrow_mut();
+fn board_write_message(
+    b: &mut BoardSystem,
+    db: &DB,
+    board_type: usize,
+    ch: &Rc<CharData>,
+    arg: &str,
+) -> bool {
     if ch.get_level() < BOARD_INFO[board_type].write_lvl as u8 {
         send_to_char(ch, "You are not holy enough to write on this board.\r\n");
         return true;
@@ -405,13 +409,13 @@ fn board_write_message(db: &DB, board_type: usize, ch: &Rc<CharData>, arg: &str)
 }
 
 fn board_show_board(
+    b: &mut BoardSystem,
     db: &DB,
     board_type: usize,
     ch: &Rc<CharData>,
     arg: &str,
     board: &Rc<ObjData>,
 ) -> bool {
-    let b: &mut BoardSystem = &mut db.boards.borrow_mut();
     if ch.desc.borrow().is_none() {
         return false;
     }
@@ -478,6 +482,7 @@ There are {} messages on the board.\r\n",
 }
 
 fn board_display_msg(
+    b: &mut BoardSystem,
     game: &Game,
     board_type: usize,
     ch: &Rc<CharData>,
@@ -485,7 +490,6 @@ fn board_display_msg(
     board: &Rc<ObjData>,
 ) -> bool {
     let db = &game.db;
-    let b: &mut BoardSystem = &mut db.boards.borrow_mut();
     let mut number = String::new();
     one_argument(arg, &mut number);
     if number.is_empty() {
@@ -493,7 +497,7 @@ fn board_display_msg(
     }
     if isname(&number, &board.name.borrow()) {
         /* so "read board" works */
-        return board_show_board(db, board_type, ch, arg, board);
+        return board_show_board(b, db, board_type, ch, arg, board);
     }
     if !is_number(&number) {
         /* read 2.mail, look 2.sword */
@@ -557,9 +561,14 @@ fn board_display_msg(
     true
 }
 
-fn board_remove_msg(game: &Game, board_type: usize, ch: &Rc<CharData>, arg: &str) -> bool {
+fn board_remove_msg(
+    b: &mut BoardSystem,
+    game: &Game,
+    board_type: usize,
+    ch: &Rc<CharData>,
+    arg: &str,
+) -> bool {
     let db = &game.db;
-    let b: &mut BoardSystem = &mut db.boards.borrow_mut();
     let mut number = String::new();
     one_argument(arg, &mut number);
 

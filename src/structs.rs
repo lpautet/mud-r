@@ -36,7 +36,7 @@ pub const ROOM_GODROOM: i64 = 1 << 10; /* LVL_GOD+ only allowed	*/
 pub const ROOM_HOUSE: i64 = 1 << 11; /* (R) Room is a house	*/
 pub const ROOM_HOUSE_CRASH: i64 = 1 << 12; /* (R) House needs saving	*/
 pub const ROOM_ATRIUM: i64 = 1 << 13; /* (R) The door to a house	*/
-pub const ROOM_OLC: i64 = 1 << 14; /* (R) Modifyable/!compress	*/
+// pub const ROOM_OLC: i64 = 1 << 14; /* (R) Modifyable/!compress	*/
 pub const ROOM_BFS_MARK: i64 = 1 << 15; /* (R) breath-first srch mrk	*/
 
 /* Exit info: used in room_data.dir_option.exit_info */

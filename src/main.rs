@@ -120,7 +120,7 @@ pub struct DescriptorData {
     inbuf: RefCell<String>,
     /* buffer for raw input		*/
     last_input: RefCell<String>, /* the last input			*/
-    history: RefCell<Vec<String>>,
+    history: RefCell<[String; HISTORY_SIZE]>,
     /* History of commands, for ! mostly.	*/
     history_pos: Cell<usize>, /* Circular array position.		*/
     output: RefCell<String>,
@@ -1172,7 +1172,7 @@ impl Game {
             has_prompt: Cell::new(false),
             inbuf: RefCell::from(String::new()),
             last_input: RefCell::new("".to_string()),
-            history: RefCell::new(vec![]),
+            history: RefCell::new([(); HISTORY_SIZE].map(|_| String::new())),
             history_pos: Cell::new(0),
             output: RefCell::new(String::new()),
             input: RefCell::new(LinkedList::new()),
