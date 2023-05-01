@@ -346,10 +346,10 @@ impl CharData {
         self.player.borrow_mut().chclass = val;
     }
     pub fn get_pfilepos(&self) -> i32 {
-        *self.pfilepos.borrow()
+        self.pfilepos.get()
     }
     pub fn set_pfilepos(&self, val: i32) {
-        *self.pfilepos.borrow_mut() = val;
+        self.pfilepos.set(val);
     }
     pub fn get_level(&self) -> u8 {
         self.player.borrow().level

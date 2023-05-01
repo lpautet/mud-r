@@ -4010,7 +4010,7 @@ const NONE_OBJDATA: Option<Rc<ObjData>> = None;
 impl CharData {
     pub fn new() -> CharData {
         CharData {
-            pfilepos: RefCell::new(0),
+            pfilepos: Cell::new(0),
             nr: 0,
             in_room: Cell::new(0),
             was_in_room: Cell::new(0),
@@ -4141,7 +4141,7 @@ impl CharData {
     }
     fn make_copy(&self) -> CharData {
         CharData {
-            pfilepos: RefCell::new(self.get_pfilepos()),
+            pfilepos: Cell::new(self.get_pfilepos()),
             nr: self.nr,
             in_room: Cell::new(self.in_room()),
             was_in_room: Cell::new(self.was_in_room.get()),

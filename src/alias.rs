@@ -9,6 +9,7 @@
 * CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.		 *
 *********************************************************************** */
 
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::rc::Rc;
@@ -126,14 +127,19 @@ pub fn read_aliases(ch: &Rc<CharData>) {
     }
 }
 
-// void delete_aliases(const char *charname)
-// {
-// char filename[PATH_MAX];
-//
-// if (!get_filename(filename, sizeof(filename), ALIAS_FILE, charname))
-// return;
-//
-// if (remove(filename) < 0 && errno != ENOENT)
-// log("SYSERR: deleting alias file {}: {}", filename, strerror(errno));
-// }
-//
+pub fn delete_aliases(charname: &str) {
+    let mut filename = String::new();
+
+    if !get_filename(&mut filename, ALIAS_FILE, charname) {
+        return;
+    }
+
+    let r = fs::remove_file(&filename);
+
+    if r.is_err() {
+        let err = r.err().unwrap();
+        if err.kind() != ErrorKind::NotFound {
+            error!("SYSERR: deleting alias file {}: {}", filename, err);
+        }
+    }
+}

@@ -312,7 +312,7 @@ pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData {
-    pub(crate) pfilepos: RefCell<i32>,
+    pub(crate) pfilepos: Cell<i32>,
     /* playerfile pos		  */
     pub nr: MobRnum,
     /* Mob's rnum			  */

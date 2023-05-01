@@ -240,7 +240,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
     }
 }
 
-fn crash_delete_file(name: &str) -> bool {
+pub fn crash_delete_file(name: &str) -> bool {
     let mut filename = String::new();
 
     if !get_filename(&mut filename, CRASH_FILE, name) {

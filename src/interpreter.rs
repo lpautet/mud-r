@@ -48,7 +48,7 @@ use crate::act_wizard::{
     do_snoop, do_stat, do_switch, do_syslog, do_teleport, do_trans, do_vnum, do_vstat, do_wizlock,
     do_wiznet, do_wizutil, do_zreset,
 };
-use crate::alias::read_aliases;
+use crate::alias::{delete_aliases, read_aliases};
 use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
@@ -56,12 +56,13 @@ use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_S
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
-use crate::objsave::crash_load;
+use crate::objsave::{crash_delete_file, crash_load};
 use crate::screen::{C_SPR, KNRM, KNUL, KRED};
 use crate::spell_parser::do_cast;
 use crate::structs::ConState::{
-    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDisconnect,
-    ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass, ConQsex, ConRmotd,
+    ConChpwdGetnew, ConChpwdGetold, ConChpwdVrfy, ConClose, ConCnfpasswd, ConDelcnf2,
+    ConDisconnect, ConGetName, ConMenu, ConNameCnfrm, ConNewpasswd, ConPassword, ConQclass,
+    ConQsex, ConRmotd,
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
@@ -264,7 +265,7 @@ pub struct CommandInfo {
 #[allow(unused_variables)]
 pub fn do_nothing(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
 
-pub const CMD_INFO: [CommandInfo; 307] = [
+pub const CMD_INFO: [CommandInfo; 308] = [
     CommandInfo {
         command: "",
         minimum_position: 0,
@@ -1800,6 +1801,13 @@ pub const CMD_INFO: [CommandInfo; 307] = [
         subcmd: SCMD_RECITE,
     },
     // { "receive"  , POS_STANDING, do_not_here , 1, 0 },
+    CommandInfo {
+        command: "receive",
+        minimum_position: POS_STANDING,
+        command_pointer: do_not_here,
+        minimum_level: 1,
+        subcmd: 0,
+    },
     // { "remove"   , POS_RESTING , do_remove   , 0, 0 },
     CommandInfo {
         command: "remove",
@@ -3556,23 +3564,25 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     character.set_pfilepos(player_i.unwrap() as i32);
 
                     if character.prf_flagged(PLR_DELETED) {
-                        // TODO: support deleted players
-                        // /* We get a false positive from the original deleted character. */
-                        // free_char(d->character);
-                        // /* Check for multiple creations... */
-                        // if (!Valid_Name(tmp_name)) {
-                        //     write_to_output(d, "Invalid name, please try another.\r\nName: ");
-                        //     return;
-                        // }
-                        // CREATE(d->character, struct char_data, 1);
-                        // clear_char(d->character);
-                        // CREATE(d->character->player_specials, struct player_special_data, 1);
-                        // d -> character -> desc = d;
-                        // CREATE(d->character->player.name, char, strlen(tmp_name) + 1);
-                        // strcpy(d->character->player.name, CAP(tmp_name));    /* strcpy: OK (size checked above) */
-                        // GET_PFILEPOS(d->character) = player_i;
-                        // write_to_output(&mut mut_d, format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str());
-                        // mut_d.state() = ConNameCnfrm;
+                        /* We get a false positive from the original deleted character. */
+                        *d.character.borrow_mut() = None;
+                        //free_char(d->character);
+                        /* Check for multiple creations... */
+                        if !valid_name(game, tmp_name.unwrap()) {
+                            write_to_output(&d, "Invalid name, please try another.\r\nName: ");
+                            return;
+                        }
+                        let mut new_char = CharData::new();
+                        clear_char(&mut new_char);
+                        new_char.desc = RefCell::new(Some(d.clone()));
+                        new_char.player.borrow_mut().name = tmp_name.unwrap().to_string();
+                        new_char.pfilepos.set(player_i.unwrap() as i32);
+                        *d.character.borrow_mut() = Some(Rc::new(CharData::new()));
+                        write_to_output(
+                            &d,
+                            format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
+                        );
+                        d.set_state(ConNameCnfrm);
                     } else {
                         /* undo it just in case they are set */
                         character.remove_plr_flag(PLR_WRITING | PLR_MAILING | PLR_CRYO);
@@ -4071,55 +4081,114 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
             }
         }
 
-        // ConChpwdGetold => {
-        //     if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
-        //         echo_on(d);
-        //         write_to_output(d, "\r\nIncorrect password.\r\n{}", MENU);
-        //         STATE(d) = CON_MENU;
-        //     } else {
-        //         write_to_output(d, "\r\nEnter a new password: ");
-        //         STATE(d) = CON_CHPWD_GETNEW;
-        //     }
-        //     return;
-        // }
+        ConChpwdGetold => {
+            let matching_pwd: bool;
+            {
+                let och = d.character.borrow();
+                let character = och.as_ref().unwrap();
+                let mut passwd2 = [0 as u8; 16];
+                let salt = character.get_pc_name();
+                let passwd = character.get_passwd();
+                pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
+                    .expect("Error while encrypting password");
+                matching_pwd = passwd == passwd2;
+            }
+
+            if !matching_pwd {
+                echo_on(&d);
+                write_to_output(&d, format!("\r\nIncorrect password.\r\n{}", MENU).as_str());
+                d.set_state(ConMenu);
+            } else {
+                write_to_output(&d, "\r\nEnter a new password: ");
+                d.set_state(ConChpwdGetnew);
+            }
+            return;
+        }
+
+        ConDelcnf1 => {
+            echo_on(&d);
+            let matching_pwd: bool;
+            {
+                let och = d.character.borrow();
+                let character = och.as_ref().unwrap();
+                let mut passwd2 = [0 as u8; 16];
+                let salt = character.get_pc_name();
+                let passwd = character.get_passwd();
+                pbkdf2::pbkdf2::<Hmac<Sha256>>(arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
+                    .expect("Error while encrypting password");
+                matching_pwd = passwd == passwd2;
+            }
+            if !matching_pwd {
+                write_to_output(&d, format!("\r\nIncorrect password.\r\n{}", MENU).as_str());
+                d.set_state(ConMenu);
+            } else {
+                write_to_output(
+                    &d,
+                    "\r\nYOU ARE ABOUT TO DELETE THIS CHARACTER PERMANENTLY.\r\n\
+                                ARE YOU ABSOLUTELY SURE?\r\n\r\n\
+                                Please type \"yes\" to confirm: ",
+                );
+                d.set_state(ConDelcnf2);
+            }
+        }
         //
-        // ConDelcnf1 => {
-        //     echo_on(d);
-        //     if (strncmp(CRYPT(arg, GET_PASSWD(d->character)), GET_PASSWD(d->character), MAX_PWD_LENGTH)) {
-        //         write_to_output(d, "\r\nIncorrect password.\r\n{}", MENU);
-        //         STATE(d) = CON_MENU;
-        //     } else {
-        //         write_to_output(d, "\r\nYOU ARE ABOUT TO DELETE THIS CHARACTER PERMANENTLY.\r\n"
-        //                         "ARE YOU ABSOLUTELY SURE?\r\n\r\n"
-        //                         "Please type \"yes\" to confirm: ");
-        //         STATE(d) = CON_DELCNF2;
-        //     }
-        // }
-        //
-        // ConDelcnf2 => {
-        //     if (!strcmp(arg, "yes") || !strcmp(arg, "YES")) {
-        //         if (PLR_FLAGGED(d -> character, PLR_FROZEN)) {
-        //             write_to_output(d, "You try to kill yourself, but the ice stops you.\r\n"
-        //                             "Character not deleted.\r\n\r\n");
-        //             STATE(d) = CON_CLOSE;
-        //             return;
-        //         }
-        //         if (GET_LEVEL(d -> character) < LVL_GRGOD) {
-        //             SET_BIT(PLR_FLAGS(d -> character), PLR_DELETED);
-        //         }
-        //         save_char(d -> character);
-        //         Crash_delete_file(GET_NAME(d -> character));
-        //         delete_aliases(GET_NAME(d -> character));
-        //         write_to_output(d, "Character '{}' deleted!\r\n"
-        //                         "Goodbye.\r\n", GET_NAME(d -> character));
-        //         mudlog(NRM, LVL_GOD, true, "{} (lev %d) has self-deleted.", GET_NAME(d -> character), GET_LEVEL(d -> character));
-        //         STATE(d) = CON_CLOSE;
-        //         return;
-        //     } else {
-        //         write_to_output(d, "\r\nCharacter not deleted.\r\n{}", MENU);
-        //         STATE(d) = CON_MENU;
-        //     }
-        // }
+        ConDelcnf2 => {
+            if arg == "yes" || arg == "YES" {
+                if d.character
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .plr_flagged(PLR_FROZEN)
+                {
+                    write_to_output(
+                        &d,
+                        "You try to kill yourself, but the ice stops you.\r\n\
+                                    Character not deleted.\r\n\r\n",
+                    );
+                    d.set_state(ConClose);
+                    return;
+                }
+                if d.character.borrow().as_ref().unwrap().get_level() < LVL_GRGOD as u8 {
+                    d.character
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .set_plr_flag_bit(PLR_DELETED);
+                }
+
+                game.db.save_char(d.character.borrow().as_ref().unwrap());
+                crash_delete_file(&d.character.borrow().as_ref().unwrap().get_name());
+                delete_aliases(&d.character.borrow().as_ref().unwrap().get_name());
+                write_to_output(
+                    &d,
+                    format!(
+                        "Character '{}' deleted!\r\n\
+                                Goodbye.\r\n",
+                        d.character.borrow().as_ref().unwrap().get_name()
+                    )
+                    .as_str(),
+                );
+                game.mudlog(
+                    NRM,
+                    LVL_GOD as i32,
+                    true,
+                    format!(
+                        "{} (lev {}) has self-deleted.",
+                        d.character.borrow().as_ref().unwrap().get_name(),
+                        d.character.borrow().as_ref().unwrap().get_level()
+                    )
+                    .as_str(),
+                );
+                d.set_state(ConClose);
+                return;
+            } else {
+                write_to_output(
+                    &d,
+                    format!("\r\nCharacter not deleted.\r\n{}", MENU).as_str(),
+                );
+                d.set_state(ConMenu);
+            }
+        }
 
         /*
          * It's possible, if enough pulses are missed, to kick someone off
