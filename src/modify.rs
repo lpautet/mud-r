@@ -100,7 +100,8 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
 
     let mut str_ = str_.to_string();
     delete_doubledollar(&mut str_);
-    let t = str_.chars().next().unwrap();
+    let t = str_.chars().next();
+    let t = if t.is_some() { t.unwrap() } else { '\0' };
     let mut terminator = false;
     if t == '@' {
         terminator = true;

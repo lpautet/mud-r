@@ -1849,21 +1849,21 @@ impl Game {
             if d.state() == ConPlaying || d.state() == ConDisconnect {
                 let original = d.original.borrow();
                 let link_challenged = if original.is_some() {
-                    original.as_ref().unwrap()
+                    original.as_ref().unwrap().clone()
                 } else {
-                    original.as_ref().unwrap()
+                    d.character.borrow().as_ref().unwrap().clone()
                 };
 
                 /* We are guaranteed to have a person. */
                 self.db.act(
                     "$n has lost $s link.",
                     true,
-                    Some(link_challenged),
+                    Some(&link_challenged),
                     None,
                     None,
                     TO_ROOM,
                 );
-                self.db.save_char(link_challenged);
+                self.db.save_char(&link_challenged);
                 self.mudlog(
                     NRM,
                     max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),

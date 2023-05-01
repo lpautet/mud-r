@@ -3795,7 +3795,7 @@ impl DB {
     pub fn real_object(&self, vnum: ObjVnum) -> ObjRnum {
         let r = self.obj_index.binary_search_by_key(&vnum, |idx| idx.vnum);
         if r.is_err() {
-            return NOBODY;
+            return NOTHING;
         }
         r.unwrap() as ObjRnum
     }

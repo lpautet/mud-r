@@ -1236,7 +1236,7 @@ pub const SECS_PER_REAL_DAY: u64 = 24 * SECS_PER_REAL_HOUR;
 // pub const SECS_PER_REAL_YEAR: u64 = 365 * SECS_PER_REAL_DAY;
 
 pub fn ctime(t: u64) -> String {
-    let date_time = Utc.timestamp_millis_opt(t as i64).unwrap();
+    let date_time = Utc.timestamp_millis_opt(t as i64 * 1000).unwrap();
     date_time.to_rfc2822()
 }
 
