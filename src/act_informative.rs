@@ -15,6 +15,7 @@ use std::rc::Rc;
 use log::{error, info};
 use regex::Regex;
 
+use crate::act_social::{do_action, do_insult};
 use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
 use crate::config::NOPERSON;
 use crate::constants::{
@@ -418,7 +419,6 @@ fn list_char_to_char(db: &DB, list: &Vec<Rc<CharData>>, ch: &Rc<CharData>) {
 }
 
 fn do_auto_exits(db: &DB, ch: &CharData) {
-    //int door, slen = 0;
     let mut slen = 0;
     send_to_char(ch, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
     for door in 0..NUM_OF_DIRS {
@@ -444,8 +444,7 @@ fn do_auto_exits(db: &DB, ch: &CharData) {
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.aff_flagged(AFF_BLIND) {
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
         return;
@@ -500,81 +499,79 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-impl DB {
-    pub fn look_at_room(&self, ch: &Rc<CharData>, ignore_brief: bool) {
-        if ch.desc.borrow().is_none() {
-            return;
-        }
-
-        if self.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
-            send_to_char(ch, "It is pitch black...\r\n");
-            return;
-        } else if ch.aff_flagged(AFF_BLIND) {
-            send_to_char(ch, "You see nothing but infinite darkness...\r\n");
-            return;
-        }
-        send_to_char(ch, format!("{}", CCCYN!(ch, C_NRM)).as_str());
-
-        if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
-            let mut buf = String::new();
-            sprintbit(self.room_flags(ch.in_room()) as i64, &ROOM_BITS, &mut buf);
-            send_to_char(
-                ch,
-                format!(
-                    "[{}] {} [{}]",
-                    self.get_room_vnum(ch.in_room()),
-                    self.world.borrow()[ch.in_room() as usize].name,
-                    buf
-                )
-                .as_str(),
-            );
-        } else {
-            send_to_char(
-                ch,
-                format!("{}", self.world.borrow()[ch.in_room() as usize].name).as_str(),
-            );
-        }
-
-        send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
-
-        if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
-            || ignore_brief
-            || self.room_flagged(ch.in_room(), ROOM_DEATH)
-        {
-            send_to_char(
-                ch,
-                format!("{}", self.world.borrow()[ch.in_room() as usize].description).as_str(),
-            );
-        }
-
-        /* autoexits */
-        if !ch.is_npc() && ch.prf_flagged(PRF_AUTOEXIT) {
-            do_auto_exits(self, ch);
-        }
-
-        /* now list characters & objects */
-        send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
-        list_obj_to_char(
-            self,
-            self.world.borrow()[ch.in_room() as usize]
-                .contents
-                .borrow()
-                .as_ref(),
-            ch,
-            SHOW_OBJ_LONG,
-            false,
-        );
-        send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
-        list_char_to_char(
-            self,
-            self.world.borrow()[ch.in_room() as usize]
-                .peoples
-                .borrow()
-                .as_ref(),
-            ch,
-        );
-        send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
+    if ch.desc.borrow().is_none() {
+        return;
     }
+
+    if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
+        send_to_char(ch, "It is pitch black...\r\n");
+        return;
+    } else if ch.aff_flagged(AFF_BLIND) {
+        send_to_char(ch, "You see nothing but infinite darkness...\r\n");
+        return;
+    }
+    send_to_char(ch, format!("{}", CCCYN!(ch, C_NRM)).as_str());
+
+    if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
+        let mut buf = String::new();
+        sprintbit(db.room_flags(ch.in_room()) as i64, &ROOM_BITS, &mut buf);
+        send_to_char(
+            ch,
+            format!(
+                "[{}] {} [{}]",
+                db.get_room_vnum(ch.in_room()),
+                db.world.borrow()[ch.in_room() as usize].name,
+                buf
+            )
+            .as_str(),
+        );
+    } else {
+        send_to_char(
+            ch,
+            format!("{}", db.world.borrow()[ch.in_room() as usize].name).as_str(),
+        );
+    }
+
+    send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+
+    if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
+        || ignore_brief
+        || db.room_flagged(ch.in_room(), ROOM_DEATH)
+    {
+        send_to_char(
+            ch,
+            format!("{}", db.world.borrow()[ch.in_room() as usize].description).as_str(),
+        );
+    }
+
+    /* autoexits */
+    if !ch.is_npc() && ch.prf_flagged(PRF_AUTOEXIT) {
+        do_auto_exits(db, ch);
+    }
+
+    /* now list characters & objects */
+    send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+    list_obj_to_char(
+        db,
+        db.world.borrow()[ch.in_room() as usize]
+            .contents
+            .borrow()
+            .as_ref(),
+        ch,
+        SHOW_OBJ_LONG,
+        false,
+    );
+    send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
+    list_char_to_char(
+        db,
+        db.world.borrow()[ch.in_room() as usize]
+            .peoples
+            .borrow()
+            .as_ref(),
+        ch,
+    );
+    send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
 }
 
 fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
@@ -647,9 +644,6 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
 }
 
 fn look_in_obj(db: &DB, ch: &Rc<CharData>, arg: &str) {
-    // struct obj_data *obj = NULL;
-    // struct char_data *dummy = NULL;
-    // int amt, bits;
     let mut dummy: Option<Rc<CharData>> = None;
     let mut obj: Option<Rc<ObjData>> = None;
     let bits;
@@ -756,10 +750,6 @@ fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<String> {
  * suggested fix to this problem.
  */
 fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
-    // int bits, found = FALSE, j, fnum, i = 0;
-    // struct char_data *found_char = NULL;
-    // struct obj_data *obj, *found_obj = NULL;
-    // char *desc;
     let mut i = 0;
     let mut found = false;
     let mut found_char: Option<Rc<CharData>> = None;
@@ -891,8 +881,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     if ch.desc.borrow().is_none() {
         return;
     }
@@ -927,7 +916,7 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         let look_type;
         if arg.is_empty() {
             /* "look" alone, without an argument at all */
-            game.db.look_at_room(ch, true);
+            look_at_room(db, ch, true);
         } else if is_abbrev(arg.as_ref(), "in") {
             look_in_obj(&game.db, ch, arg2.as_str());
             /* did the char type 'look <direction>?' */
@@ -945,8 +934,7 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     // struct char_data *tmp_char;
     // struct obj_data *tmp_object;
     // char tempsave[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
@@ -983,8 +971,7 @@ pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_gold(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gold(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.get_gold() == 0 {
         send_to_char(ch, "You're broke!\r\n");
     } else if ch.get_gold() == 1 {
@@ -997,8 +984,7 @@ pub fn do_gold(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_score(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -1174,8 +1160,13 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_inventory(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_inventory(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     send_to_char(ch, "You are carrying:\r\n");
     list_obj_to_char(
         &game.db,
@@ -1186,8 +1177,13 @@ pub fn do_inventory(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usi
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_equipment(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_equipment(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let mut found = false;
     send_to_char(ch, "You are using:\r\n");
     for i in 0..NUM_WEARS {
@@ -1208,8 +1204,7 @@ pub fn do_equipment(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usi
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_time(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     /* day in [1..35] */
     let day = game.db.time_info.borrow().day + 1;
 
@@ -1273,8 +1268,7 @@ pub fn do_time(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     const SKY_LOOK: [&str; 4] = [
         "cloudless",
         "cloudy",
@@ -1314,10 +1308,7 @@ pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // int chk, bot, top, mid, minlen;
-
+pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.desc.borrow().is_none() {
         return;
     }
@@ -1335,7 +1326,6 @@ pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 
     let mut bot = 0;
     let mut top = game.db.help_table.len() - 1;
-    let minlen = argument.len();
 
     loop {
         let mut mid = (bot + top) / 2;
@@ -1367,11 +1357,9 @@ const WHO_FORMAT: &str =
     "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n";
 
 /* FIXME: This whole thing just needs rewritten. */
-#[allow(unused_variables)]
-pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let argument = argument.trim_start();
     let mut buf = argument.to_string();
-    let name_search = String::new();
     let mut low = 0 as i16;
     let mut high = LVL_IMPL;
     let mut outlaws = false;
@@ -1598,19 +1586,7 @@ const USERS_FORMAT: &str =
     "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n";
 
 /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
-#[allow(unused_variables)]
-pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // char line[200], line2[220], idletime[10], classname[20];
-    // char state[30], *timeptr, mode;
-    // char name_search[MAX_INPUT_LENGTH], host_search[MAX_INPUT_LENGTH];
-    // struct char_data *tch;
-    // struct descriptor_data *d;
-    // int low = 0, high = LVL_IMPL, num_can_see = 0;
-    // int showclass = 0, outlaws = 0, playing = 0, deadweight = 0;
-    // char buf[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
-    //
-    // host_search[0] = name_search[0] = '\0';
-
+pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = argument.to_string();
     let mut arg = String::new();
     let mut outlaws = false;
@@ -1849,8 +1825,7 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
 }
 
 /* Generic page_string function for displaying text */
-#[allow(unused_variables)]
-pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
     match subcmd {
         SCMD_CREDITS => {
             page_string(ch.desc.borrow().as_ref(), &game.db.credits, false);
@@ -1896,9 +1871,6 @@ pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
 }
 
 fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
-    // struct char_data *i;
-    // struct descriptor_data *d;
-
     if arg.is_empty() {
         send_to_char(ch, "Players in your Zone\r\n--------------------\r\n");
         for d in game.descriptor_list.borrow().iter() {
@@ -2025,11 +1997,6 @@ fn print_object_location(db: &DB, num: i32, obj: &Rc<ObjData>, ch: &Rc<CharData>
 }
 
 fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
-    // struct char_data *i;
-    // struct obj_data *k;
-    // struct descriptor_data *d;
-    // int num = 0, found = 0;
-
     if arg.is_empty() {
         send_to_char(ch, "Players\r\n-------\r\n");
         for d in game.descriptor_list.borrow().iter() {
@@ -2123,8 +2090,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_where(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_where(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
@@ -2135,8 +2101,7 @@ pub fn do_where(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_levels(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_levels(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         send_to_char(ch, "You ain't nothin' but a hound-dog.\r\n");
         return;
@@ -2177,8 +2142,7 @@ pub fn do_levels(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     page_string(ch.desc.borrow().as_ref(), buf.as_str(), true);
 }
 
-#[allow(unused_variables)]
-pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
@@ -2223,8 +2187,7 @@ pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
@@ -2249,8 +2212,7 @@ pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
 
 const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
-#[allow(unused_variables)]
-pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_color(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     if ch.is_npc() {
         return;
@@ -2320,8 +2282,7 @@ macro_rules! yesno {
     };
 }
 
-#[allow(unused_variables)]
-pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_toggle(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     // char buf2[4];
     let mut buf2 = String::new();
     if ch.is_npc() {
@@ -2377,25 +2338,18 @@ pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     );
 }
 
-impl DB {
-    pub fn sort_commands(&mut self) {
-        self.cmd_sort_info.reserve_exact(CMD_INFO.len());
+pub fn sort_commands(db: &mut DB) {
+    db.cmd_sort_info.reserve_exact(CMD_INFO.len());
 
-        for a in 0..CMD_INFO.len() {
-            self.cmd_sort_info.push(a);
-        }
-
-        self.cmd_sort_info
-            .sort_by(|a, b| str::cmp(CMD_INFO[*a].command, CMD_INFO[*b].command));
+    for a in 0..CMD_INFO.len() {
+        db.cmd_sort_info.push(a);
     }
+
+    db.cmd_sort_info
+        .sort_by(|a, b| str::cmp(CMD_INFO[*a].command, CMD_INFO[*b].command));
 }
 
-#[allow(unused_variables)]
-pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // int no, i, cmd_num;
-    // int wizhelp = 0, socials = 0;
-    // struct char_data *vict;
-    // char arg[MAX_INPUT_LENGTH];
+pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let vict;
@@ -2452,10 +2406,13 @@ pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
         if (CMD_INFO[i].minimum_level >= LVL_IMMORT) != wizhelp {
             continue;
         }
-        // TODO implement do_action and do_insult
-        // if !wizhelp && socials != (CMD_INFO[i].command_pointer == do_action || CMD_INFO[i].command_pointer == do_insult) {
-        //     continue;
-        // }
+        if !wizhelp
+            && socials
+                != (CMD_INFO[i].command_pointer as usize == do_action as usize
+                    || CMD_INFO[i].command_pointer as usize == do_insult as usize)
+        {
+            continue;
+        }
         send_to_char(
             ch,
             format!(

@@ -106,8 +106,7 @@ fn perform_put(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<ObjData>
     <container> must be in inventory or on ground.
     all objects to be put into container must be in inventory.
 */
-#[allow(unused_variables)]
-pub fn do_put(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_put(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut found = false;
     let mut howmany = 1;
     let mut arg1 = String::new();
@@ -390,8 +389,6 @@ fn perform_get_from_room(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>) -> bool 
 }
 
 fn get_from_room(db: &DB, ch: &Rc<CharData>, arg: &str, howmany: i32) {
-    // struct obj_data *obj, *next_obj;
-    // int dotmode, found = 0;
     let mut found = false;
     let mut howmany = howmany;
     let dotmode = find_all_dots(arg);
@@ -448,17 +445,13 @@ fn get_from_room(db: &DB, ch: &Rc<CharData>, arg: &str, howmany: i32) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut arg3 = String::new();
     let mut tmp_char: Option<Rc<CharData>> = None;
     let mut cont: Option<Rc<ObjData>> = None;
 
-    // int cont_dotmode, found = 0, mode;
-    // struct obj_data *cont;
-    // struct char_data *tmp_char;
     let db = &game.db;
     let mut found = false;
     one_argument(two_arguments(argument, &mut arg1, &mut arg2), &mut arg3); /* three_arguments */
@@ -565,57 +558,58 @@ pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
 }
 
-impl DB {
-    pub fn perform_drop_gold(&self, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: RoomRnum) {
-        if amount <= 0 {
-            send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
-        } else if ch.get_gold() < amount {
-            send_to_char(ch, "You don't have that many coins!\r\n");
-        } else {
-            if mode != SCMD_JUNK as u8 {
-                ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
+fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: RoomRnum) {
+    if amount <= 0 {
+        send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
+    } else if ch.get_gold() < amount {
+        send_to_char(ch, "You don't have that many coins!\r\n");
+    } else {
+        if mode != SCMD_JUNK as u8 {
+            ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
 
-                let obj = self.create_money(amount);
-                if mode == SCMD_DONATE as u8 {
-                    send_to_char(ch, "You throw some gold into the air where it disappears in a puff of smoke!\r\n");
-                    self.act(
-                        "$n throws some gold into the air where it disappears in a puff of smoke!",
-                        false,
-                        Some(ch),
-                        None,
-                        None,
-                        TO_ROOM,
-                    );
-                    self.obj_to_room(obj.as_ref(), rdr);
-                    self.act(
-                        "$p suddenly appears in a puff of orange smoke!",
-                        false,
-                        None,
-                        obj.as_ref(),
-                        None,
-                        TO_ROOM,
-                    );
-                } else {
-                    let buf = format!("$n drops {}.", money_desc(amount));
-                    self.act(&buf, true, Some(ch), None, None, TO_ROOM);
-
-                    send_to_char(ch, "You drop some gold.\r\n");
-                    self.obj_to_room(obj.as_ref(), ch.in_room());
-                }
-            } else {
-                let buf = format!(
-                    "$n drops {} which disappears in a puff of smoke!",
-                    money_desc(amount)
-                );
-                self.act(&buf, false, Some(ch), None, None, TO_ROOM);
-
+            let obj = db.create_money(amount);
+            if mode == SCMD_DONATE as u8 {
                 send_to_char(
                     ch,
-                    "You drop some gold which disappears in a puff of smoke!\r\n",
+                    "You throw some gold into the air where it disappears in a puff of smoke!\r\n",
                 );
+                db.act(
+                    "$n throws some gold into the air where it disappears in a puff of smoke!",
+                    false,
+                    Some(ch),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                db.obj_to_room(obj.as_ref(), rdr);
+                db.act(
+                    "$p suddenly appears in a puff of orange smoke!",
+                    false,
+                    None,
+                    obj.as_ref(),
+                    None,
+                    TO_ROOM,
+                );
+            } else {
+                let buf = format!("$n drops {}.", money_desc(amount));
+                db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+
+                send_to_char(ch, "You drop some gold.\r\n");
+                db.obj_to_room(obj.as_ref(), ch.in_room());
             }
-            ch.set_gold(ch.get_gold() - amount);
+        } else {
+            let buf = format!(
+                "$n drops {} which disappears in a puff of smoke!",
+                money_desc(amount)
+            );
+            db.act(&buf, false, Some(ch), None, None, TO_ROOM);
+
+            send_to_char(
+                ch,
+                "You drop some gold which disappears in a puff of smoke!\r\n",
+            );
         }
+        ch.set_gold(ch.get_gold() - amount);
     }
 }
 
@@ -687,15 +681,7 @@ fn perform_drop(
     0
 }
 
-#[allow(unused_variables)]
-pub fn do_drop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // char arg[MAX_INPUT_LENGTH];
-    // struct obj_data *obj, *next_obj;
-    // room_rnum RDR = 0;
-    // byte mode = SCMD_DROP;
-    // int dotmode, amount = 0, multi;
-    // const char *sname;
-
+pub fn do_drop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let db = &game.db;
     let sname;
     let mut mode = SCMD_DROP;
@@ -744,7 +730,7 @@ pub fn do_drop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         let mut multi = arg.parse::<i32>().unwrap();
         one_argument(argument, &mut arg);
         if arg == "coins" || arg == "coin" {
-            db.perform_drop_gold(ch, multi, mode, rdr);
+            perform_drop_gold(db, ch, multi, mode, rdr);
         } else if multi <= 0 {
             send_to_char(ch, "Yeah, that makes sense.\r\n");
         } else if arg.is_empty() {
@@ -956,8 +942,7 @@ fn perform_give_gold(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, amount: i3
     vict.set_gold(vict.get_gold() + amount);
 }
 
-#[allow(unused_variables)]
-pub fn do_give(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_give(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     let mut argument = one_argument(argument, &mut arg);
@@ -1075,10 +1060,6 @@ pub fn weight_change_object(db: &DB, obj: &Rc<ObjData>, weight: i32) {
 }
 
 pub fn name_from_drinkcon(obj: Option<&Rc<ObjData>>) {
-    // char *new_name, *cur_name, *next;
-    // const char *liqname;
-    // int liqlen, cpylen;
-
     if obj.is_none()
         || obj.unwrap().get_obj_type() != ITEM_DRINKCON
             && obj.unwrap().get_obj_type() != ITEM_FOUNTAIN
@@ -1150,8 +1131,7 @@ pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {
     *obj.unwrap().name.borrow_mut() = new_name;
 }
 
-#[allow(unused_variables)]
-pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -1327,8 +1307,7 @@ pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     return;
 }
 
-#[allow(unused_variables)]
-pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let db = &game.db;
@@ -1438,8 +1417,7 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut from_obj = None;
@@ -1905,8 +1883,7 @@ pub fn find_eq_pos(ch: &Rc<CharData>, obj: &Rc<ObjData>, arg: &str) -> i16 {
     _where
 }
 
-#[allow(unused_variables)]
-pub fn do_wear(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wear(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
 
@@ -2005,8 +1982,7 @@ pub fn do_wear(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_wield(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wield(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     let obj;
@@ -2035,8 +2011,7 @@ pub fn do_wield(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_grab(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_grab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let obj;
     let db = &game.db;
@@ -2120,8 +2095,7 @@ fn perform_remove(db: &DB, ch: &Rc<CharData>, pos: i8) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_remove(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_remove(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
     one_argument(argument, &mut arg);

@@ -6,6 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::borrow::Borrow;
@@ -20,6 +21,7 @@ use hmac::Hmac;
 use log::{error, info};
 use sha2::Sha256;
 
+use crate::act_informative::look_at_room;
 use crate::class::{level_exp, parse_class, roll_real_abils, CLASS_ABBREVS, PC_CLASS_TYPES};
 use crate::config::{LOAD_INTO_INVENTORY, NOPERSON, OK};
 use crate::constants::{
@@ -33,7 +35,7 @@ use crate::db::{
 };
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
 use crate::handler::{affect_remove, affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
-use crate::house::house_can_enter;
+use crate::house::{hcontrol_list_houses, house_can_enter};
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
     search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_FREEZE, SCMD_NOTITLE, SCMD_PARDON,
@@ -59,15 +61,15 @@ use crate::structs::{
     ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    clone_vec, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR,
+    age, clone_vec, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
+    SECS_PER_MUD_YEAR,
 };
 use crate::{
     _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
     TO_NOTVICT, TO_ROOM, TO_VICT,
 };
 
-#[allow(unused_variables)]
-pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let db = &game.db;
     let argument = argument.trim_start();
 
@@ -91,8 +93,7 @@ pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut argument = argument.to_string();
     let mut arg = String::new();
@@ -247,8 +248,7 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
     return NOWHERE;
 }
 
-#[allow(unused_variables)]
-pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut argument = argument.to_string();
     let mut buf = String::new();
     let mut command = String::new();
@@ -284,8 +284,7 @@ pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let location;
 
@@ -321,11 +320,10 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     );
     db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
-    db.look_at_room(ch, false);
+    look_at_room(db, ch, false);
 }
 
-#[allow(unused_variables)]
-pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
 
@@ -373,7 +371,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                 Some(victim),
                 TO_VICT,
             );
-            db.look_at_room(victim, false);
+            look_at_room(db, victim, false);
         }
     } else {
         /* Trans All */
@@ -418,15 +416,14 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                     Some(victim),
                     TO_VICT,
                 );
-                db.look_at_room(victim, false);
+                look_at_room(db, victim, false);
             }
         }
     }
     send_to_char(ch, OK);
 }
 
-#[allow(unused_variables)]
-pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -479,12 +476,11 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
             Some(victim),
             TO_VICT,
         );
-        db.look_at_room(victim, false);
+        look_at_room(db, victim, false);
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -539,8 +535,19 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
     );
 
     sprintbit(rm.room_flags.get() as i64, &ROOM_BITS, &mut buf2);
-    // TODO spec proc for rooms
-    // send_to_char(ch, format!("SpecProc: {}, Flags: {}\r\n", rm.func.is_none() "None" : "Exists", buf2).as_str());
+    send_to_char(
+        ch,
+        format!(
+            "SpecProc: {}, Flags: {}\r\n",
+            if rm.func.borrow().is_none() {
+                "None"
+            } else {
+                "Exists"
+            },
+            buf2
+        )
+        .as_str(),
+    );
 
     send_to_char(
         ch,
@@ -728,7 +735,11 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             CCNRM!(ch, C_NRM),
             j.get_obj_rnum(),
             buf,
-            /* TODO implement GET_OBJ_SPEC(j) ? "Exists" :*/ "None"
+            if db.get_obj_spec(j).is_some() {
+                "Exists"
+            } else {
+                "none"
+            }
         )
         .as_str(),
     );
@@ -1101,14 +1112,20 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
     );
 
     if !k.is_npc() {
-        //TODO figure out time issue
-        // strlcpy(buf1, asctime(localtime(&(k->player.time.birth))), sizeof(buf1));
-        // strlcpy(buf2, asctime(localtime(&(k->player.time.logon))), sizeof(buf2));
-        // buf1[10] = buf2[10] = '\0';
-        //
-        // send_to_char(ch, "Created: [{}], Last Logon: [{}], Played [{}h {}m], Age [{}]\r\n",
-        // buf1, buf2, k->player.time.played / 3600,
-        // ((k->player.time.played % 3600) / 60), age(k)->year);
+        let buf1 = ctime(k.player.borrow().time.birth);
+        let buf2 = ctime(k.player.borrow().time.logon);
+        send_to_char(
+            ch,
+            format!(
+                "Created: [{}], Last Logon: [{}], Played [{}h {}m], Age [{}]\r\n",
+                buf1,
+                buf2,
+                k.player.borrow().time.played / 3600,
+                ((k.player.borrow().time.played % 3600) / 60),
+                age(k).year
+            )
+            .as_str(),
+        );
 
         send_to_char(
             ch,
@@ -1425,8 +1442,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf1 = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -1564,8 +1580,7 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     if subcmd != SCMD_SHUTDOWN {
         send_to_char(ch, "If you want to shut something down, say so!\r\n");
@@ -1683,8 +1698,7 @@ fn stop_snooping(ch: &Rc<CharData>) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -1784,8 +1798,7 @@ pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -1818,13 +1831,12 @@ pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
         && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
     {
         send_to_char(ch, "You are not godly enough to use that room!\r\n");
-    }
-    // TODO implement house
-    // else if (ch.get_level() < LVL_GRGOD && ROOM_FLAGGED(IN_ROOM(victim), ROOM_HOUSE)
-    // && !House_can_enter(ch, GET_ROOM_VNUM(IN_ROOM(victim)))) {
-    //         send_to_char(ch, "That's private property -- no trespassing!\r\n");
-    //     }
-    else {
+    } else if ch.get_level() < LVL_GRGOD as u8
+        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
+        && !house_can_enter(db, ch, db.get_room_vnum(victim.as_ref().unwrap().in_room()))
+    {
+        send_to_char(ch, "That's private property -- no trespassing!\r\n");
+    } else {
         send_to_char(ch, OK);
         *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = victim.clone();
         *ch.desc.borrow().as_ref().unwrap().original.borrow_mut() = Some(ch.clone());
@@ -1834,9 +1846,7 @@ pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_return(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_return(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.desc.borrow().is_some()
         && ch
             .desc
@@ -1920,8 +1930,7 @@ pub fn do_return(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -2019,8 +2028,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
@@ -2068,8 +2076,7 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     /* clean a room of all mobiles and objects */
     let db = &game.db;
     let mut buf = String::new();
@@ -2188,9 +2195,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
 
 const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
-#[allow(unused_variables)]
-pub fn do_syslog(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_syslog(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -2224,8 +2229,7 @@ pub fn do_syslog(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut name = String::new();
     let mut level = String::new();
     let victim;
@@ -2347,8 +2351,7 @@ You feel slightly different.",
     db.save_char(&victim);
 }
 
-#[allow(unused_variables)]
-pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
 
@@ -2453,8 +2456,7 @@ fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_invis(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_invis(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2483,10 +2485,7 @@ pub fn do_invis(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
-
+pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut argument = argument.trim_start().to_string();
     delete_doubledollar(&mut argument);
 
@@ -2512,9 +2511,7 @@ pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_poofset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_poofset(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let msg;
     let mut cps = ch.player_specials.borrow_mut();
     match subcmd {
@@ -2536,8 +2533,7 @@ pub fn do_poofset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     send_to_char(ch, OK);
 }
 
-#[allow(unused_variables)]
-pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2610,9 +2606,7 @@ pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, sub
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let value;
     one_argument(argument, &mut arg);
@@ -2657,8 +2651,7 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_date(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_date(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
     let mytime;
     if subcmd == SCMD_DATE {
         mytime = time_now();
@@ -2666,7 +2659,7 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         mytime = game.db.boot_time.get() as u64;
     }
 
-    let date_time = Utc.timestamp_millis_opt(mytime as i64).unwrap();
+    let date_time = Utc.timestamp_millis_opt(mytime as i64 * 1000).unwrap();
     let tmstr = date_time.to_rfc2822();
 
     if subcmd == SCMD_DATE {
@@ -2692,8 +2685,7 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2727,8 +2719,7 @@ pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut argument = argument.to_string();
     let mut arg = String::new();
     let mut to_force = String::new();
@@ -2827,11 +2818,9 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut emote = false;
-    let any = false;
     let mut level = LVL_IMMORT;
     let mut buf1 = String::new();
     let mut argument = argument.trim_start().to_string();
@@ -2861,7 +2850,6 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
 
         '@' => {
             send_to_char(ch, "God channel status:\r\n");
-            let any = 0;
             for d in game.descriptor_list.borrow().iter() {
                 if d.state() != ConPlaying
                     || d.character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
@@ -2989,8 +2977,7 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -3059,8 +3046,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
 /*
  *  General fn for wizcommands of the sort: cmd <player>
  */
-#[allow(unused_variables)]
-pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -3259,20 +3245,22 @@ code 3 times ... -je, 4/6/93 */
 fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
     let zt = db.zone_table.borrow();
     let zone = &zt[zone as usize];
-    *buf = format!(
-        "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
-        zone.number,
-        zone.name,
-        zone.age.get(),
-        zone.lifespan,
-        zone.reset_mode,
-        zone.bot,
-        zone.top
+    buf.push_str(
+        format!(
+            "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
+            zone.number,
+            zone.name,
+            zone.age.get(),
+            zone.lifespan,
+            zone.reset_mode,
+            zone.bot,
+            zone.top
+        )
+        .as_str(),
     );
 }
 
-#[allow(unused_variables)]
-pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut self_ = false;
 
@@ -3356,14 +3344,14 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                     .as_str(),
                 );
             }
-            send_to_char(ch, "\r\n");
-            return;
         }
+        send_to_char(ch, "\r\n");
+        return;
     }
 
     let mut field = String::new();
     let mut value = String::new();
-    let arg = two_arguments(argument, &mut field, &mut value);
+    two_arguments(argument, &mut field, &mut value);
 
     let l = FIELDS.iter().position(|f| f.cmd == field);
     let l = if l.is_some() { l.unwrap() } else { 0 };
@@ -3480,7 +3468,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                     }
                 }
             }
-            for obj in db.object_list.borrow().iter() {
+            for _ in db.object_list.borrow().iter() {
                 k += 1;
             }
             send_to_char(
@@ -3585,11 +3573,9 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         }
 
         /* show houses */
-        // TODO implement houses
-        // case
-        //     9:
-        //         hcontrol_list_houses(ch);
-        // break;
+        9 => {
+            hcontrol_list_houses(db, ch);
+        }
 
         /* show snoop */
         10 => {
@@ -3650,19 +3636,13 @@ const BOTH: u8 = 3;
 const MISC: u8 = 0;
 const BINARY: u8 = 1;
 const NUMBER: u8 = 2;
-//
-// #define SET_OR_REMOVE(flagset, flags) { \
-// if (on) SET_BIT(flagset, flags); \
-// else if (off) REMOVE_BIT(flagset, flags); }
-//
-// #define RANGE(low, high) (value = max((low), MIN((high), (value))))
+
 macro_rules! range {
     ($value:expr, $low:expr, $high:expr) => {
         max($low as i32, min($high as i32, $value))
     };
 }
-//
-//
+
 /* The set options available */
 struct SetStruct {
     cmd: &'static str,
@@ -4457,8 +4437,7 @@ fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_a
     true
 }
 
-#[allow(unused_variables)]
-pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut player_i = None;
     let mut is_file = false;
@@ -4536,7 +4515,6 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
 
     /* find the command in the list */
-    let len = field.len();
     let mode = SET_FIELDS.iter().position(|e| e.cmd.starts_with(&field));
     let mode = if mode.is_some() {
         mode.unwrap()

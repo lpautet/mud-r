@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: act.offensive.c                               Part of CircleMUD *
+*   File: act.offensive.rs                              Part of CircleMUD *
 *  Usage: player-level commands of an offensive nature                    *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::borrow::Borrow;
@@ -27,8 +28,7 @@ use crate::structs::{
 use crate::util::rand_number;
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-#[allow(unused_variables)]
-pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     if ch.fighting().is_some() {
@@ -123,8 +123,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let vict: Option<Rc<CharData>>;
 
@@ -188,7 +187,6 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
 }
 
-#[allow(unused_variables)]
 pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
@@ -239,8 +237,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_BACKSTAB) == 0 {
@@ -321,9 +318,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-#[allow(unused_variables)]
-pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let buf = String::new();
+pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut name = String::new();
     let mut message = String::new();
@@ -401,8 +396,7 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
         send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;
@@ -430,7 +424,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 TO_ROOM,
             );
             was_fighting = ch.fighting();
-            let r = do_simple_move(game, ch, attempt as i32, 1);
+            let r = do_simple_move(game, ch, attempt as i32, true);
             if r {
                 send_to_char(ch, "You flee head over heels.\r\n");
                 if was_fighting.is_some() && !ch.is_npc() {
@@ -455,8 +449,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
 }
 
-#[allow(unused_variables)]
-pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -482,7 +475,6 @@ pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         victo = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         victo.is_some()
     } {
-        let vict = victo.as_ref().unwrap();
         if ch.fighting().is_some() && ch.in_room() == ch.fighting().as_ref().unwrap().in_room() {
             victo = ch.fighting();
         } else {
@@ -523,8 +515,7 @@ pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
 }
 
-#[allow(unused_variables)]
-pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 
@@ -615,8 +606,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-#[allow(unused_variables)]
-pub fn do_kick(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_kick(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     let db = &game.db;
 

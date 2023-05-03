@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: act.other.c                                   Part of CircleMUD *
+*   File: act.other.rs                                  Part of CircleMUD *
 *  Usage: Miscellaneous player-level commands                             *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use chrono::Utc;
@@ -49,8 +50,7 @@ use crate::structs::{
 use crate::util::{clone_vec, rand_number, CMP, NRM};
 use crate::{an, send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-#[allow(unused_variables)]
-pub fn do_quit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_quit(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
     if ch.is_npc() || ch.desc.borrow().is_none() {
         return;
     }
@@ -92,8 +92,7 @@ pub fn do_quit(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_save(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_save(game: &mut Game, ch: &Rc<CharData>, _argument: &str, cmd: usize, _subcmd: i32) {
     if ch.is_npc() || ch.desc.borrow().is_none() {
         return;
     }
@@ -129,13 +128,17 @@ pub fn do_save(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
 
 /* generic function for commands which are normally overridden by
 special procedures - i.e., shop commands, mail commands, etc. */
-#[allow(unused_variables)]
-pub fn do_not_here(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_not_here(
+    _game: &mut Game,
+    ch: &Rc<CharData>,
+    _argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     send_to_char(ch, "Sorry, but you cannot do that here!\r\n");
 }
 
-#[allow(unused_variables)]
-pub fn do_sneak(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_sneak(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() || ch.get_skill(SKILL_SNEAK) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
@@ -164,8 +167,7 @@ pub fn do_sneak(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     affect_to_char(ch, &af);
 }
 
-#[allow(unused_variables)]
-pub fn do_hide(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hide(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() || ch.get_skill(SKILL_HIDE) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
@@ -187,8 +189,7 @@ pub fn do_hide(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     ch.set_aff_flags_bits(AFF_HIDE);
 }
 
-#[allow(unused_variables)]
-pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     if ch.is_npc() || ch.get_skill(SKILL_STEAL) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
@@ -384,8 +385,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_practice(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_practice(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -399,8 +399,7 @@ pub fn do_practice(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_visible(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_visible(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.get_level() >= LVL_IMMORT as u8 {
         perform_immort_vis(&game.db, ch);
         return;
@@ -414,8 +413,7 @@ pub fn do_visible(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_title(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_title(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut argument = argument.trim_start().to_string();
     delete_doubledollar(&mut argument);
 
@@ -532,8 +530,7 @@ fn print_group(db: &DB, ch: &Rc<CharData>) {
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
     let db = &game.db;
 
@@ -623,8 +620,7 @@ pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
     let db = &game.db;
     one_argument(argument, &mut buf);
@@ -708,8 +704,7 @@ pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_report(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_report(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     if !ch.aff_flagged(AFF_GROUP) {
         send_to_char(ch, "But you are not a member of any group!\r\n");
@@ -744,10 +739,7 @@ pub fn do_report(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     send_to_char(ch, "You report to the group.\r\n");
 }
 
-#[allow(unused_variables)]
-pub fn do_split(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
-
+pub fn do_split(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -867,7 +859,6 @@ pub fn do_split(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
 pub fn do_use(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let mut buf = String::new();
@@ -937,9 +928,7 @@ pub fn do_use(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     mag_objectmagic(game, ch, mag_item, &buf);
 }
 
-#[allow(unused_variables)]
-pub fn do_wimpy(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    let db = &game.db;
+pub fn do_wimpy(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     /* 'wimp_level' is a player_special. -gg 2/25/98 */
@@ -1006,8 +995,7 @@ pub fn do_wimpy(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_display(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_display(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         send_to_char(ch, "Monsters don't need displays.  Go away.\r\n");
         return;
@@ -1071,7 +1059,6 @@ pub fn do_display(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize
     send_to_char(ch, OK);
 }
 
-#[allow(unused_variables)]
 pub fn do_gen_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     let filename;
@@ -1176,8 +1163,7 @@ macro_rules! prf_tog_chk {
     };
 }
 
-#[allow(unused_variables)]
-pub fn do_gen_tog(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_tog(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
     const TOG_MESSAGES: [[&str; 2]; 17] = [
         [
             "You are now safe from summoning by other players.\r\n",

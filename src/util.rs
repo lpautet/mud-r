@@ -1459,19 +1459,21 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
     // int nlen;
     // long nr;
 
-    let nr = 0;
+    let mut nr = 0;
     let mut bitvector = bitvector;
     loop {
         if bitvector == 0 {
             break;
         }
         if is_set!(bitvector, 1) {
-            result.push_str(if nr < (names.len() - 1) {
-                names[nr]
+            let s = if nr < (names.len() - 1) {
+                format!("{} ", names[nr])
             } else {
-                "UNDEFINED"
-            });
+                "UNDEFINED ".to_string()
+            };
+            result.push_str(s.as_str());
         }
+        nr += 1;
         bitvector >>= 1;
     }
     if result.len() == 0 {

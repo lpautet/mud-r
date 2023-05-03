@@ -14,7 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::cmp::max;
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::ExitCode;
 use std::rc::Rc;
@@ -22,13 +22,21 @@ use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
-use crate::ban::isbanned;
-use env_logger::Env;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, warn, LevelFilter};
 
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::file::FileAppender;
+use log4rs::config::Appender;
+use log4rs::config::Root;
+use log4rs::encode::pattern::PatternEncoder;
+
+use crate::act_social::free_social_messages;
+use crate::ban::{free_invalid_list, isbanned};
+use crate::boards::board_clear_all;
 use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
+use crate::fight::free_messages;
 use crate::handler::fname;
 use crate::house::house_save_all;
 use crate::interpreter::{command_interpreter, is_abbrev, nanny, perform_alias};
@@ -119,10 +127,12 @@ pub struct DescriptorData {
     /* is the user at a prompt?             */
     inbuf: RefCell<String>,
     /* buffer for raw input		*/
-    last_input: RefCell<String>, /* the last input			*/
+    last_input: RefCell<String>,
+    /* the last input			*/
     history: RefCell<[String; HISTORY_SIZE]>,
     /* History of commands, for ! mostly.	*/
-    history_pos: Cell<usize>, /* Circular array position.		*/
+    history_pos: Cell<usize>,
+    /* Circular array position.		*/
     output: RefCell<String>,
     input: RefCell<LinkedList<TxtBlock>>,
     character: RefCell<Option<Rc<CharData>>>,
@@ -137,7 +147,7 @@ pub struct DescriptorData {
 
 pub struct Game {
     db: DB,
-    mother_desc: Option<RefCell<TcpListener>>,
+    mother_desc: Option<TcpListener>,
     descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
     last_desc: Cell<usize>,
     circle_shutdown: Cell<bool>,
@@ -146,13 +156,10 @@ pub struct Game {
     /* reboot the game after a shutdown */
     max_players: i32,
     /* max descriptors available */
-    tics: i32,
+    // tics: i32,
     /* for extern checkpointing */
-    // struct timeval null_time;	/* zero-valued time structure */
     // byte reread_wizlist;		/* signal: SIGUSR1 */
     // byte emergency_unban;		/* signal: SIGUSR2 */
-    /* Where to send the log messages. */
-    // const char *text_overflow = "**OVERFLOW**\r\n";
     mins_since_crashsave: Cell<u32>,
     config: Config,
 }
@@ -162,7 +169,7 @@ pub struct Game {
 ***********************************************************************/
 
 fn main() -> ExitCode {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    // env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let mut dir = DFLT_DIR.to_string();
     let mut port = DFLT_PORT;
@@ -174,7 +181,7 @@ fn main() -> ExitCode {
         circle_reboot: Cell::new(false),
         db: DB::new(),
         mother_desc: None,
-        tics: 0,
+        // tics: 0,
         mins_since_crashsave: Cell::new(0),
         config: Config {
             nameserver_is_slow: Cell::new(false),
@@ -182,12 +189,13 @@ fn main() -> ExitCode {
         },
         max_players: 0,
     };
-    let mut logname: Option<&str> = None;
+    let mut logname: Option<&str> = LOGNAME;
     let mut scheck: bool = false; /* for syntax checking mode */
 
     let mut pos = 1;
     let args: Vec<String> = env::args().collect();
     let mut arg;
+    let mut custom_logfile;
     loop {
         if pos >= args.len() {
             break;
@@ -202,12 +210,14 @@ fn main() -> ExitCode {
             'o' => {
                 arg.remove(0);
                 if arg.len() != 0 {
-                    logname = Some(&arg.clone());
+                    custom_logfile = arg.to_string();
+                    logname = Some(&custom_logfile);
                 } else if {
                     pos += 1;
                     pos < args.len()
                 } {
-                    logname = Some(&args[pos]);
+                    custom_logfile = args[pos].to_string();
+                    logname = Some(&custom_logfile);
                 } else {
                     error!("SYSERR: File name to log to expected after option -o.");
                     process::exit(1);
@@ -291,7 +301,7 @@ fn main() -> ExitCode {
     }
 
     /* All arguments have been parsed, try to open log file. */
-    // setup_log(LOGNAME);
+    setup_log(logname);
 
     /*
      * Moved here to distinguish command line options and to show up
@@ -316,25 +326,25 @@ fn main() -> ExitCode {
         db.boot_world();
     } else {
         info!("Running game on port {}.", port);
-        game.mother_desc = Some(RefCell::new(init_socket(port)));
+        game.mother_desc = Some(init_socket(port));
         game.init_game(port);
     }
 
     info!("Clearing game world.");
-    // destroy_db();
+    game.db.destroy_db();
 
-    // if !scheck {
-    //     log("Clearing other memory.");
-    //     free_player_index();    /* db.c */
-    //     free_messages();        /* fight.c */
-    //     clear_free_list();        /* mail.c */
-    //     free_text_files();        /* db.c */
-    //     Board_clear_all();        /* boards.c */
-    //     free(cmd_sort_info);    /* act.informative.c */
-    //     free_social_messages();    /* act.social.c */
-    //     free_help();        /* db.c */
-    //     Free_Invalid_List();    /* ban.c */
-    // }
+    if !scheck {
+        info!("Clearing other memory.");
+        free_player_index(&mut game.db); /* db.rs */
+        free_messages(&mut game.db); /* fight.rs */
+        game.db.mails.borrow_mut().clear_free_list(); /* mail.rs */
+        free_text_files(&mut game.db); /* db.rs */
+        board_clear_all(&mut game.db.boards.borrow_mut()); /* boards.rs */
+        game.db.cmd_sort_info.clear(); /* act.informative.rs */
+        free_social_messages(&mut game.db); /* act.social.rs */
+        free_help(&mut game.db); /* db.rs */
+        free_invalid_list(&mut game.db); /* ban.rs */
+    }
 
     info!("Done.");
     ExitCode::SUCCESS
@@ -369,7 +379,7 @@ impl Game {
             .iter()
             .for_each(|d| self.close_socket(d));
 
-        // self.mother_desc.as_ref().unwrap().borrow_mut(). // CLOSE ?
+        self.mother_desc = None;
 
         info!("Saving current MUD time.");
         save_mud_time(&self.db.time_info.borrow());
@@ -387,7 +397,7 @@ impl Game {
  * its options up, binds it, and listens.
  */
 fn init_socket(port: u16) -> TcpListener {
-    let socket_addr = SocketAddr::new(("127.0.0.1".parse()).unwrap(), port);
+    let socket_addr = SocketAddr::new(get_bind_addr(), port);
     let listener = TcpListener::bind(socket_addr).unwrap_or_else(|error| {
         error!("SYSERR: Error creating socket {}", error);
         process::exit(1);
@@ -396,133 +406,10 @@ fn init_socket(port: u16) -> TcpListener {
         .set_nonblocking(true)
         .expect("Non blocking has issue");
     listener
-    //
-    // if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-    // perror("");
-    // exit(1);
-    // }
-    //
-    // # if defined(SO_REUSEADDR) & & ! defined(CIRCLE_MACINTOSH)
-    // opt = 1;
-    // if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char * ) & opt, sizeof(opt)) < 0){
-    // perror("SYSERR: setsockopt REUSEADDR");
-    // exit(1);
-    // }
-    // # endif
-    //
-    // set_sendbuf(s);
-    //
-    // /*
-    //  * The GUSI sockets library is derived from BSD, so it defines
-    //  * SO_LINGER, even though setsockopt() is unimplimented.
-    //  *	(from Dean Takemori <dean@UHHEPH.PHYS.HAWAII.EDU>)
-    //  */
-    // # if defined(SO_LINGER) & & ! defined(CIRCLE_MACINTOSH)
-    // {
-    // struct linger ld;
-    //
-    // ld.l_onoff = 0;
-    // ld.l_linger = 0;
-    // if (setsockopt(s, SOL_SOCKET, SO_LINGER, (char * ) & ld, sizeof(ld)) < 0)
-    // perror("SYSERR: setsockopt SO_LINGER");    /* Not fatal I suppose. */
-    // }
-    // # endif
-    //
-    // /* Clear the structure */
-    // memset((char * ) & sa, 0, sizeof(sa));
-    //
-    // sa.sin_family = AF_INET;
-    // sa.sin_port = htons(port);
-    // sa.sin_addr = * (get_bind_addr());
-    //
-    // if (bind(s, ( struct sockaddr * ) & sa, sizeof(sa)) < 0) {
-    // perror("SYSERR: bind");
-    // CLOSE_SOCKET(s);
-    // exit(1);
-    // }
-    // nonblock(s);
-    // listen(s, 5);
-    // return (s);
 }
 
 fn get_max_players() -> i32 {
     return MAX_PLAYING;
-
-    //
-    // int max_descs = 0;
-    // const char * method;
-    //
-    // /*
-    //  * First, we'll try using getrlimit/setrlimit.  This will probably work
-    //  * on most systems.  HAS_RLIMIT is defined in sysdep.h.
-    //  */
-    // # ifdef HAS_RLIMIT
-    // {
-    // struct rlimit limit;
-    //
-    // /* find the limit of file descs */
-    // method = "rlimit";
-    // if (getrlimit(RLIMIT_NOFILE, & limit) < 0) {
-    // perror("SYSERR: calling getrlimit");
-    // exit(1);
-    // }
-    //
-    // /* set the current to the maximum */
-    // limit.rlim_cur = limit.rlim_max;
-    // if (setrlimit(RLIMIT_NOFILE, & limit) < 0) {
-    // perror("SYSERR: calling setrlimit");
-    // exit(1);
-    // }
-    // # ifdef RLIM_INFINITY
-    // if (limit.rlim_max == RLIM_INFINITY)
-    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
-    // else
-    // max_descs = MIN(MAX_PLAYING + NUM_RESERVED_DESCS, limit.rlim_max);
-    // # else
-    // max_descs = MIN(MAX_PLAYING + NUM_RESERVED_DESCS, limit.rlim_max);
-    // # endif
-    // }
-    //
-    // # elif defined (OPEN_MAX) | | defined(FOPEN_MAX)
-    // # if ! defined(OPEN_MAX)
-    // #define OPEN_MAX FOPEN_MAX
-    // # endif
-    // method = "OPEN_MAX";
-    // max_descs = OPEN_MAX; /* Uh oh.. rlimit didn't work, but we have
-    // 				 * OPEN_MAX */
-    // # elif defined (_SC_OPEN_MAX)
-    // /*
-    //  * Okay, you don't have getrlimit() and you don't have OPEN_MAX.  Time to
-    //  * try the POSIX sysconf() function.  (See Stevens' _Advanced Programming
-    //  * in the UNIX Environment_).
-    //  */
-    // method = "POSIX sysconf";
-    // errno = 0;
-    // if ((max_descs = sysconf(_SC_OPEN_MAX)) < 0) {
-    // if (errno == 0)
-    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
-    // else {
-    // perror("SYSERR: Error calling sysconf");
-    // exit(1);
-    // }
-    // }
-    // # else
-    // /* if everything has failed, we'll just take a guess */
-    // method = "random guess";
-    // max_descs = MAX_PLAYING + NUM_RESERVED_DESCS;
-    // # endif
-    //
-    // /* now calculate max _players_ based on max descs */
-    // max_descs = MIN(MAX_PLAYING, max_descs - NUM_RESERVED_DESCS);
-    //
-    // if (max_descs < = 0) {
-    // log("SYSERR: Non-positive max player limit!  (Set at %d using %s).",
-    // max_descs, method);
-    // exit(1);
-    // }
-    // log("   Setting player limit to %d using %s.", max_descs, method);
-    // return (max_descs);
-    // # endif /* CIRCLE_UNIX */
 }
 
 /*
@@ -536,21 +423,12 @@ impl Game {
     fn game_loop(&mut self) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
-        // let mut temp_time;
         let mut before_sleep;
-        // let mut now;
         let mut timeout;
         let mut comm = String::new();
-        // struct descriptor_data * d, * next_d;
         let mut pulse: u128 = 0;
         let mut missed_pulses;
-        //        let mut maxdesc;
         let mut aliased = false;
-
-        /* initialize various time values */
-        // null_time.tv_sec = 0;
-        // null_time.tv_usec = 0;
-        // FD_ZERO( & null_set);
 
         let mut last_time = Instant::now();
 
@@ -559,25 +437,7 @@ impl Game {
             /* Sleep if we don't have any connections */
             if self.descriptor_list.borrow().is_empty() {
                 debug!("No connections.  Going to sleep.");
-                // match listener.accept() {
-                //     Ok((_socket, addr)) => {
-                //         log("New connection.  Waking up.");
-                //         last_time = Local::now();
-                //     },
-                //     Err(e) => { log("SYSERR: Could not get client {e:?}") }
-                // }
-                // FD_ZERO(&input_set);
-                // FD_SET(mother_desc, &input_set);
-                // if (select(mother_desc + 1, &input_set, (fd_set *) 0, (fd_set *) 0, NULL) < 0) {
-                //     if (errno == EINTR)
-                //     log("Waking up to process signal.");
-                //     else
-                //     perror("SYSERR: Select coma");
-                // } else
-                // log("New connection.  Waking up.");
-                // last_time = Local::now();
-                // gettimeofday(&last_time, ( struct timezone
-                // * ) 0);
+                last_time = Instant::now();
             }
 
             /*
@@ -593,7 +453,6 @@ impl Game {
              * If we were asleep for more than one pass, count missed pulses and sleep
              * until we're resynchronized with the next upcoming pulse.
              */
-            //missed_pulses;
             if process_time.as_micros() < OPT_USEC {
                 missed_pulses = 0;
             } else {
@@ -614,7 +473,7 @@ impl Game {
             last_time = now;
 
             /* If there are new connections waiting, accept them. */
-            let accept_result = self.mother_desc.as_ref().unwrap().borrow().accept();
+            let accept_result = self.mother_desc.as_ref().unwrap().accept();
             match accept_result {
                 Ok((stream, addr)) => {
                     info!("New connection {}.  Waking up.", addr);
@@ -636,8 +495,7 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            let descriptors = clone_vec(&self.descriptor_list);
-            for d in descriptors.iter() {
+            for d in clone_vec(&self.descriptor_list).iter() {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
@@ -713,7 +571,7 @@ impl Game {
             for d in self.descriptor_list.borrow().iter() {
                 if !d.output.borrow().is_empty() {
                     process_output(d);
-                    if !d.output.borrow().is_empty() {
+                    if d.output.borrow().is_empty() {
                         d.has_prompt.set(true);
                     }
                 }
@@ -721,7 +579,7 @@ impl Game {
 
             /* Print prompts for other descriptors who had no other output */
             for d in self.descriptor_list.borrow().iter() {
-                if !d.has_prompt.get() && !d.output.borrow().is_empty() {
+                if !d.has_prompt.get() && d.output.borrow().is_empty() {
                     let text = &make_prompt(d);
                     write_to_descriptor(&mut d.stream.borrow_mut(), text);
                     d.has_prompt.set(true);
@@ -740,7 +598,7 @@ impl Game {
              * missed any pulses, or make up for lost time if we missed a few
              * pulses by sleeping for too long.
              */
-            let mut missed_pulses = missed_pulses + 1;
+            missed_pulses += 1;
 
             if missed_pulses <= 0 {
                 error!(
@@ -863,20 +721,6 @@ impl Game {
             "nusage: {} sockets connected, {} sockets playing",
             sockets_connected, sockets_playing
         );
-
-        // # ifdef
-        // RUSAGE    /* Not RUSAGE_SELF because it doesn't guarantee prototype. */
-        // {
-        //     struct rusage ru;
-        //
-        //     getrusage(RUSAGE_SELF,
-        //     & ru);
-        //     log("rusage: user time: %ld sec, system time: %ld sec, max res size: %ld",
-        //     ru.ru_utime.tv_sec,
-        //     ru.ru_stime.tv_sec,
-        //     ru.ru_maxrss);
-        // }
-        // # endif
     }
 }
 /*
@@ -976,83 +820,16 @@ fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut
 }
 
 /* Empty the queues before closing connection */
-// void flush_queues(struct descriptor_data * d)
-// {
-// if (d -> large_outbuf) {
-// d -> large_outbuf -> next = bufpool;
-// bufpool = d -> large_outbuf;
-// }
-// while (d -> input.head) {
-// struct txt_block * tmp = d -> input.head;
-// d -> input.head = d -> input.head -> next;
-// free(tmp -> text);
-// free(tmp);
-// }
-// }
+fn flush_queues(d: &Rc<DescriptorData>) {
+    d.output.borrow_mut().clear();
+    d.inbuf.borrow_mut().clear();
+    d.input.borrow_mut().clear();
+}
 
 /* Add a new string to a player's output queue. */
 fn write_to_output(t: &DescriptorData, txt: &str) -> usize {
-    // static char txt[MAX_STRING_LENGTH];
-    // size_t wantsize;
-    // int size;
-
-    /* if we're in the overflow state already, ignore this new output */
-    // if (t -> bufspace == 0)
-    // return (0);
-
-    // wantsize = size = vsnprintf(txt, sizeof(txt), format, args);
-    /* If exceeding the size of the buffer, truncate it for the overflow message */
-    // if (size < 0 || wantsize > = sizeof(txt)) {
-    // size = sizeof(txt) - 1;
-    // strcpy(txt + size - strlen(text_overflow), text_overflow);    /* strcpy: OK */
-    // }
-
-    /*
-     * If the text is too big to fit into even a large buffer, truncate
-     * the new text to make it fit.  (This will switch to the overflow
-     * state automatically because t->bufspace will end up 0.)
-     */
-    // if (size + t -> bufptr + 1 > LARGE_BUFSIZE) {
-    // size = LARGE_BUFSIZE - t -> bufptr - 1;
-    // txt[size] = '\0';
-    // buf_overflows + +;
-    // }
-
-    /*
-     * If we have enough space, just write to buffer and that's it! If the
-     * text just barely fits, then it's switched to a large buffer instead.
-     */
-    // if (t -> bufspace > size) {
-    // strcpy(t -> output + t -> bufptr, txt); /* strcpy: OK (size checked above) */
-    // t -> bufspace -= size;
-    // t-> bufptr += size;
-    // return (t -> bufspace);
-    // }
-
-    // buf_switches + +;
-
-    /* if the pool has a buffer in it, grab it */
-    // if (bufpool != NULL) {
-    // t -> large_outbuf = bufpool;
-    // bufpool = bufpool ->next;
-    // } else {            /* else create a new one */
-    // CREATE(t -> large_outbuf, struct txt_block, 1);
-    // CREATE(t -> large_outbuf -> text, char, LARGE_BUFSIZE);
-    // buf_largecount + +;
-    // }
-
-    // strcpy(t -> large_outbuf -> text, t ->output); /* strcpy: OK (size checked previously) */
-    // t -> output = t -> large_outbuf-> text; /* make big buffer primary */
-    // strcat(t -> output, txt); /* strcat: OK (size checked) */
-    // /* set the pointer for the next write */
-    // t -> bufptr = strlen(t ->output);
-    //
-    // /* calculate how much space is left in the buffer */
-    // t -> bufspace = LARGE_BUFSIZE - 1 - t -> bufptr;
-    //
-    // return (t -> bufspace);
     t.output.borrow_mut().push_str(txt);
-    txt.len()
+    txt.as_bytes().len()
 }
 
 /* ******************************************************************
@@ -1067,82 +844,41 @@ fn write_to_output(t: &DescriptorData, txt: &str) -> usize {
  * we can.  If neither is available, we always bind to INADDR_ANY.
  */
 
-// struct in_addr * get_bind_addr()
-// {
-// static struct in_addr bind_addr;
-//
-// /* Clear the structure */
-// memset((char *) & bind_addr, 0, sizeof(bind_addr));
-//
-// /* If DLFT_IP is unspecified, use INADDR_ANY */
-// if (DFLT_IP == NULL) {
-// bind_addr.s_addr = htonl(INADDR_ANY);
-// } else {
-// /* If the parsing fails, use INADDR_ANY */
-// if ( ! parse_ip(DFLT_IP, & bind_addr)) {
-// log("SYSERR: DFLT_IP of %s appears to be an invalid IP address", DFLT_IP);
-// bind_addr.s_addr = htonl(INADDR_ANY);
-// }
-// }
-//
-// /* Put the address that we've finally decided on into the logs */
-// if (bind_addr.s_addr == htonl(INADDR_ANY))
-// log("Binding to all IP interfaces on this host.");
-// else
-// log("Binding only to IP address %s", inet_ntoa(bind_addr));
-//
-// return ( &bind_addr);
-// }
+fn get_bind_addr() -> IpAddr {
+    let bind_addr;
+    let mut use_any = true;
+    /* If DLFT_IP is unspecified, use INADDR_ANY */
+    if DFLT_IP.is_none() {
+        bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
+    } else {
+        let r = DFLT_IP.unwrap().parse::<IpAddr>();
+        if r.is_err() {
+            error!(
+                "SYSERR: DFLT_IP of {} appears to be an invalid IP address",
+                DFLT_IP.unwrap()
+            );
+            /* If the parsing fails, use INADDR_ANY */
+            bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
+        } else {
+            use_any = false;
+            bind_addr = r.unwrap();
+        }
+    }
 
-/* Sets the kernel's send buffer size for the descriptor */
-// int set_sendbuf(socket_t s)
-// {
-// # if defined(SO_SNDBUF) & & ! defined(CIRCLE_MACINTOSH)
-// int opt = MAX_SOCK_BUF;
-//
-// if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, (char * ) & opt, sizeof(opt)) < 0) {
-// perror("SYSERR: setsockopt SNDBUF");
-// return ( - 1);
-// }
-//
-// # if 0
-// if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char * ) & opt, sizeof(opt)) < 0) {
-// perror("SYSERR: setsockopt RCVBUF");
-// return ( - 1);
-// }
-// # endif
-//
-// # endif
-//
-// return (0);
-// }
+    /* Put the address that we've finally decided on into the logs */
+    if use_any {
+        info!("Binding to all IP interfaces on this host.");
+    } else {
+        info!("Binding only to IP address {}", bind_addr);
+    }
+    bind_addr
+}
+
 impl Game {
     fn new_descriptor(&self, mut stream: TcpStream, addr: SocketAddr) {
-        // socket_t
-        // desc;
-        // sockets_connected = 0;
-        // socklen_t
-        // i;
-        // static last_desc = 0; /* last descriptor number */
-        // struct descriptor_data *newd;
-        // struct sockaddr_in peer;
-        // struct hostent * from;
-
-        /* accept the new connection */
-        //     i = sizeof(peer);
-        // if ((desc = accept(s, ( struct sockaddr * ) & peer, & i)) == INVALID_SOCKET) {
-        // perror("SYSERR: accept");
-        // return ( - 1);
-        // }
-        /* keep it from blocking */
         stream
             .set_nonblocking(true)
             .expect("Error with setting nonblocking");
-        /* set the send buffer size */
-        // if (set_sendbuf(desc) < 0) {
-        // CLOSE_SOCKET(desc);
-        // return (0);
-        // }
 
         /* make sure we have room for it */
         if self.descriptor_list.borrow().len() >= self.max_players as usize {
@@ -1154,7 +890,8 @@ impl Game {
             return;
         }
         /* create a new descriptor */
-        let mut newd = DescriptorData {
+        /* initialize descriptor data */
+        let newd = DescriptorData {
             stream: RefCell::new(stream),
             host: RefCell::new(String::new()),
             bad_pws: Cell::new(0),
@@ -1209,23 +946,12 @@ impl Game {
             );
         }
 
-        /* initialize descriptor data */
-        //newd -> descriptor = desc;
-        newd.idle_tics.set(0);
-        //newd -> output = newd -> small_outbuf;
-        //newd -> bufspace = SMALL_BUFSIZE - 1;
-        newd.login_time = Instant::now();
-        //*newd -> output = '\0';
-        //newd -> bufptr = 0;
-        newd.has_prompt.set(true); /* prompt is part of greetings */
-        newd.connected.set(ConState::ConGetName);
-
         /*
          * This isn't exactly optimal but allows us to make a design choice.
          * Do we embed the history in descriptor_data or keep it dynamically
          * allocated and allow a user defined history size?
          */
-        //CREATE(newd -> history, char *, HISTORY_SIZE);
+        // TODO CREATE(newd -> history, char *, HISTORY_SIZE);
         self.last_desc.set(self.last_desc.get() + 1);
         if self.last_desc.get() == 1000 {
             self.last_desc.set(1);
@@ -1251,17 +977,11 @@ impl Game {
  *      14 bytes: unused
  */
 fn process_output(t: &DescriptorData) -> i32 {
-    //char i[MAX_SOCK_BUF], * osb = i + 2;
-
     /* we may need this \r\n for later -- see below */
     let mut i = "\r\n".to_string();
-    //strcpy(i, "\r\n"); /* strcpy: OK (for 'MAX_SOCK_BUF >= 3') */
     /* now, append the 'real' output */
     i.push_str(&RefCell::borrow(&t.output));
 
-    /* if we're in the overflow state, notify the user */
-    // if (t -> bufspace == 0)
-    // strcat(osb, "**OVERFLOW**\r\n"); /* strcpy: OK (osb:MAX_SOCK_BUF-2 reserves space) */
     /* add the extra CRLF if the person isn't in compact mode */
     if t.connected.get() == ConPlaying
         && t.character.borrow().is_some()
@@ -1310,143 +1030,16 @@ fn process_output(t: &DescriptorData) -> i32 {
         );
     }
 
-    // /* The common case: all saved output was handed off to the kernel buffer. */
-    // if (result > = t ->bufptr) {
-    // /*
-    //  * if we were using a large buffer, put the large buffer on the buffer pool
-    //  * and switch back to the small one
-    //  */
-    // if (t -> large_outbuf) {
-    // t -> large_outbuf -> next = bufpool;
-    // bufpool = t -> large_outbuf;
-    // t -> large_outbuf = NULL;
-    // t -> output = t -> small_outbuf;
-    // }
-    // /* reset total bufspace back to that of a small buffer */
-    // t -> bufspace = SMALL_BUFSIZE - 1;
-    // t ->bufptr = 0;
-    // * (t -> output) = '\0';
-
-    RefCell::borrow_mut(&t.output).clear();
-    /*
-     * If the overflow message or prompt were partially written, try to save
-     * them. There will be enough space for them if this is true.  'result'
-     * is effectively unsigned here anyway.
-     */
-    // if ((unsigned int)result < strlen(osb)) {
-    // size_t savetextlen = strlen(osb + result);
-    //
-    // strcat(t -> output, osb + result);
-    // t -> bufptr -= savetextlen;
-    // t -> bufspace += savetextlen;
-    // }
-    //}
-    // else {
-    // /* Not all data in buffer sent.  result < output buffersize. */
-    //
-    // strcpy(t -> output, t -> output + result); /* strcpy: OK (overlap) */
-    // t -> bufptr -= result;
-    // t-> bufspace += result;
-    // }
+    /* The common case: all saved output was handed off to the kernel buffer. */
+    if result >= i.len() as i32 {
+        RefCell::borrow_mut(&t.output).clear();
+    } else {
+        /* Not all data in buffer sent.  result < output buffersize. */
+        let _ = t.output.borrow_mut().split_off(result as usize);
+    }
     result
 }
 
-/*
- * perform_socket_write: takes a descriptor, a pointer to text, and a
- * text length, and tries once to send that text to the OS.  This is
- * where we stuff all the platform-dependent stuff that used to be
- * ugly #ifdef's in write_to_descriptor().
- *
- * This function must return:
- *
- * -1  If a fatal error was encountered in writing to the descriptor.
- *  0  If a transient failure was encountered (e.g. socket buffer full).
- * >0  To indicate the number of bytes successfully written, possibly
- *     fewer than the number the caller requested be written.
- *
- * Right now there are two versions of this function: one for Windows,
- * and one for all other platforms.
- */
-
-// # if defined(CIRCLE_WINDOWS)
-//
-// ssize_t perform_socket_write(socket_t desc, const char * txt, size_t length)
-// {
-// ssize_t result;
-//
-// result = send(desc, txt, length, 0);
-//
-// if (result > 0) {
-// /* Write was sucessful */
-// return (result);
-// }
-//
-// if (result == 0) {
-// /* This should never happen! */
-// log("SYSERR: Huh??  write() returned 0???  Please report this!");
-// return ( - 1);
-// }
-//
-// /* result < 0: An error was encountered. */
-//
-// /* Transient error? */
-// if (WSAGetLastError() == WSAEWOULDBLOCK | | WSAGetLastError() == WSAEINTR)
-// return (0);
-//
-// /* Must be a fatal error. */
-// return ( - 1);
-// }
-//
-// # else
-//
-// # if defined(CIRCLE_ACORN)
-// # define write    socketwrite
-// # endif
-//
-// /* perform_socket_write for all Non-Windows platforms */
-// ssize_t perform_socket_write(socket_t desc, const char * txt, size_t length)
-// {
-// ssize_t result;
-//
-// result = write(desc, txt, length);
-//
-// if (result > 0) {
-// /* Write was successful. */
-// return (result);
-// }
-//
-// if (result == 0) {
-// /* This should never happen! */
-// log("SYSERR: Huh??  write() returned 0???  Please report this!");
-// return ( - 1);
-// }
-//
-// /*
-//  * result < 0, so an error was encountered - is it transient?
-//  * Unfortunately, different systems use different constants to
-//  * indicate this.
-//  */
-//
-// # ifdef EAGAIN        /* POSIX */
-// if (errno == EAGAIN)
-// return (0);
-// # endif
-//
-// # ifdef EWOULDBLOCK    /* BSD */
-// if (errno == EWOULDBLOCK)
-// return (0);
-// # endif
-//
-// # ifdef EDEADLK        /* Macintosh */
-// if (errno == EDEADLK)
-// return (0);
-// # endif
-//
-// /* Looks like the error was fatal.  Too bad. */
-// return (- 1);
-// }
-//
-// # endif /* CIRCLE_WINDOWS */
 /*
  * write_to_descriptor takes a descriptor, and text to write to the
  * descriptor.  It keeps calling the system-level write() until all
@@ -1459,7 +1052,7 @@ fn process_output(t: &DescriptorData) -> i32 {
  */
 fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
     let mut txt = text;
-    let mut total = txt.len();
+    let mut total = txt.as_bytes().len();
     let mut write_total = 0;
 
     while total > 0 {
@@ -1509,67 +1102,6 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
     }
     input.push_str(s.unwrap());
     return Ok(r);
-    //
-    // # if defined(CIRCLE_ACORN)
-    // ret = recv(desc, read_point, space_left, MSG_DONTWAIT);
-    // # elif defined(CIRCLE_WINDOWS)
-    // ret = recv(desc, read_point, space_left, 0);
-    // # else
-    // ret = read(desc, read_point, space_left);
-    // # endif
-    //
-    // /* Read was successful. */
-    // if (ret > 0)
-    // return (ret);
-    //
-    // /* read() returned 0, meaning we got an EOF. */
-    // if (ret == 0) {
-    // log("WARNING: EOF on socket read (connection broken by peer)");
-    // return ( - 1);
-    // }
-    //
-    // /*
-    //  * read returned a value < 0: there was an error
-    //  */
-    //
-    // # if defined(CIRCLE_WINDOWS)    /* Windows */
-    // if (WSAGetLastError() == WSAEWOULDBLOCK | | WSAGetLastError() == WSAEINTR)
-    // return (0);
-    // # else
-    //
-    // # ifdef EINTR        /* Interrupted system call - various platforms */
-    // if (errno == EINTR)
-    // return (0);
-    // # endif
-    //
-    // # ifdef EAGAIN        /* POSIX */
-    // if (errno == EAGAIN)
-    // return (0);
-    // # endif
-    //
-    // # ifdef EWOULDBLOCK    /* BSD */
-    // if (errno == EWOULDBLOCK)
-    // return (0);
-    // # endif /* EWOULDBLOCK */
-    //
-    // # ifdef EDEADLK        /* Macintosh */
-    // if (errno == EDEADLK)
-    // return (0);
-    // # endif
-    //
-    // # ifdef ECONNRESET
-    // if (errno == ECONNRESET)
-    // return ( - 1);
-    // # endif
-    //
-    // #endif /* CIRCLE_WINDOWS */
-    //
-    // /*
-    //  * We don't know what happened, cut them off. This qualifies for
-    //  * a SYSERR because we have no idea what happened at this point.
-    //  */
-    // perror("SYSERR: perform_socket_read: about to lose connection");
-    // return ( - 1);
 }
 
 /*
@@ -1817,8 +1349,7 @@ impl Game {
             .borrow_mut()
             .shutdown(Shutdown::Both)
             .expect("SYSERR while closing socket");
-        //CLOSE_SOCKET(d -> descriptor);
-        // flush_queues(d);
+        flush_queues(d);
 
         /* Forget snooping */
         if d.snooping.borrow().is_some() {
@@ -1836,15 +1367,6 @@ impl Game {
         if d.character.borrow().is_some() {
             /* If we're switched, this resets the mobile taken. */
             *d.character.borrow().as_ref().unwrap().desc.borrow_mut() = None;
-
-            /* Plug memory leak, from Eric Green. */
-            //     if !d.character.borrow().as_ref().unwrap().is_npc() &&
-            //         d.character.borrow().as_ref().unwrap().plr_flagged( PLR_MAILING)
-            // if (! IS_NPC(d -> character) & & PLR_FLAGGED(d -> character, PLR_MAILING) & & d-> str) {
-            // if ( * (d -> str))
-            // free( * (d -> str));
-            // free(d -> str);
-            // }
 
             if d.state() == ConPlaying || d.state() == ConDisconnect {
                 let original = d.original.borrow();
@@ -1886,7 +1408,7 @@ impl Game {
                     )
                     .as_str(),
                 );
-                // free_char(d-> character);
+                free_char(d.character.borrow().as_ref().unwrap());
             }
         } else {
             self.mudlog(
@@ -1909,24 +1431,6 @@ impl Game {
         {
             *d.original.borrow().as_ref().unwrap().desc.borrow_mut() = None;
         }
-
-        /* Clear the command history. */
-        // TODO implement command history
-        // if (d -> history) {
-        //     int
-        //     cnt;
-        //     for (cnt = 0; cnt < HISTORY_SIZE; cnt + +)
-        //     if (d -> history[cnt])
-        //     free(d ->history[cnt]);
-        //     free(d ->history);
-        // }
-
-        // if (d -> showstr_head)
-        // free(d ->showstr_head);
-        // if (d -> showstr_count)
-        // free(d -> showstr_vector);
-        //
-        // free(d);
     }
 
     fn check_idle_passwords(&self) {
@@ -1945,69 +1449,6 @@ impl Game {
         }
     }
 }
-/*
- * I tried to universally convert Circle over to POSIX compliance, but
- * alas, some systems are still straggling behind and don't have all the
- * appropriate defines.  In particular, NeXT 2.x defines O_NDELAY but not
- * O_NONBLOCK.  Krusty old NeXT machines!  (Thanks to Michael Jones for
- * this and various other NeXT fixes.)
- */
-
-// # if defined(CIRCLE_WINDOWS)
-//
-// void nonblock(socket_t s)
-// {
-// unsigned long val = 1;
-// ioctlsocket(s, FIONBIO, & val);
-// }
-//
-// # elif defined(CIRCLE_AMIGA)
-//
-// void nonblock(socket_t s)
-// {
-// long val = 1;
-// IoctlSocket(s, FIONBIO, & val);
-// }
-//
-// # elif defined(CIRCLE_ACORN)
-//
-// void nonblock(socket_t s)
-// {
-// int val = 1;
-// socket_ioctl(s, FIONBIO, & val);
-// }
-//
-// # elif defined(CIRCLE_VMS)
-//
-// void nonblock(socket_t s)
-// {
-// int val = 1;
-//
-// if (ioctl(s, FIONBIO, & val) < 0) {
-// perror("SYSERR: Fatal error executing nonblock (comm.c)");
-// exit(1);
-// }
-// }
-//
-// # elif defined(CIRCLE_UNIX) | | defined(CIRCLE_OS2) | | defined(CIRCLE_MACINTOSH)
-//
-// # ifndef O_NONBLOCK
-// # define O_NONBLOCK O_NDELAY
-// # endif
-//
-// void nonblock(socket_t s)
-// {
-// int flags;
-//
-// flags = fcntl(s, F_GETFL, 0);
-// flags |= O_NONBLOCK;
-// if (fcntl(s, F_SETFL, flags) < 0) {
-// perror("SYSERR: Fatal error executing nonblock (comm.c)");
-// exit(1);
-// }
-// }
-//
-// # endif  /* CIRCLE_UNIX || CIRCLE_OS2 || CIRCLE_MACINTOSH */
 /* ******************************************************************
  *  signal-handling functions (formerly signals.c).  UNIX only.      *
  ****************************************************************** */
@@ -2185,9 +1626,6 @@ impl DB {
 }
 
 const ACTNULL: &str = "<NULL>";
-//
-// # define CHECK_NULL(pointer, expression) \
-// if ((pointer) == NULL) i = ACTNULL; else i = (expression);
 
 impl DB {
     /* higher-level communication: the act() function */
@@ -2199,13 +1637,9 @@ impl DB {
         vict_obj: Option<&dyn Any>,
         to: &Rc<CharData>,
     ) {
-        //const char * i = NULL;
-        //char lbuf[MAX_STRING_LENGTH], * buf, * j;
         let mut uppercasenext = false;
         let mut orig = orig.to_string();
-        //buf = lbuf;
         let mut i: Rc<str>;
-        // let lbuf = String::new();
         let mut buf = String::new();
 
         loop {
@@ -2408,7 +1842,7 @@ impl DB {
             }
         }
 
-        //orig.pop();
+        // TODO orig.pop();
         buf.push_str("\r\n");
 
         write_to_output(
@@ -2436,9 +1870,6 @@ impl DB {
         vict_obj: Option<&dyn Any>,
         _type: i32,
     ) {
-        // const struct char_data * to;
-        // int to_sleeping;
-
         if str.is_empty() {
             return;
         }
@@ -2522,4 +1953,25 @@ impl DB {
             self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), obj, vict_obj, to);
         }
     }
+}
+
+fn setup_log(logfile: Option<&str>) {
+    let stdout = ConsoleAppender::builder().build();
+
+    let mut config_builder = log4rs::config::Config::builder()
+        .appender(Appender::builder().build("stdout", Box::new(stdout)));
+
+    if logfile.is_some() {
+        let file = FileAppender::builder()
+            .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
+            .build(logfile.unwrap())
+            .unwrap();
+
+        config_builder = config_builder.appender(Appender::builder().build("file", Box::new(file)));
+    }
+    let config = config_builder
+        .build(Root::builder().appender("stdout").build(LevelFilter::Info))
+        .unwrap();
+
+    log4rs::init_config(config).unwrap();
 }

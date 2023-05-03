@@ -441,7 +441,7 @@ const HCONTROL_FORMAT: &str =
        hcontrol pay <house vnum>\r\n\
        hcontrol show\r\n";
 
-fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
+pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
     if db.num_of_houses.get() == 0 {
         send_to_char(ch, "No houses have been defined.\r\n");
         return;

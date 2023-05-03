@@ -296,7 +296,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
                 [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index]
                 .parse::<u8>()
                 .unwrap();
-            perform_move(game, ch, dir as i32, 1);
+            perform_move(game, ch, dir as i32, true);
         }
 
         'W' => {
@@ -944,7 +944,7 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument
         }
         return true;
     } else if cmd_is(cmd, "deposit") {
-        let amount = argument.parse::<i32>();
+        let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
             send_to_char(ch, "How much do you want to deposit?\r\n");
@@ -967,7 +967,7 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument
         );
         return true;
     } else if cmd_is(cmd, "withdraw") {
-        let amount = argument.parse::<i32>();
+        let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
             send_to_char(ch, "How much do you want to withdraw?\r\n");

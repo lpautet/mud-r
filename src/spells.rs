@@ -10,6 +10,7 @@
 use std::cmp::{max, min};
 use std::rc::Rc;
 
+use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
 use crate::config::PK_ALLOWED;
 use crate::constants::{AFFECTED_BITS, APPLY_TYPES, EXTRA_BITS, ITEM_TYPES};
@@ -426,7 +427,7 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    db.look_at_room(victim, false);
+    look_at_room(db, victim, false);
 }
 
 #[allow(unused_variables)]
@@ -472,7 +473,7 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    db.look_at_room(victim, false);
+    look_at_room(db, victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
@@ -569,7 +570,7 @@ pub fn spell_summon(
         Some(victim),
         TO_VICT,
     );
-    db.look_at_room(victim, false);
+    look_at_room(db, victim, false);
 }
 
 #[allow(unused_variables)]

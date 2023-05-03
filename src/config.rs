@@ -184,8 +184,8 @@ pub const DFLT_PORT: u16 = 4000;
 * course, that IP address must be one of your host's interfaces, or it
 * won't work.)
 */
-// const char *DFLT_IP = NULL; /* bind to all interfaces */
-/* const char *DFLT_IP = "192.168.1.1";  -- bind only to one interface */
+pub const DFLT_IP: Option<&str> = None; /* bind to all interfaces */
+/* pub const DFLT_IP :Option<&str> = Some("192.168.1.1");  -- bind only to one interface */
 
 /* default directory to use as data directory */
 pub const DFLT_DIR: &str = "lib";
@@ -196,7 +196,7 @@ pub const DFLT_DIR: &str = "lib";
 * versions of Circle.  If you specify a file, you don't get messages to
 * the screen. (Hint: Try 'tail -f' if you have a UNIX machine.)
 */
-// pub const LOGNAME: Option<&str> = None;
+pub const LOGNAME: Option<&str> = None;
 /* const char *LOGNAME = "log/syslog";  -- useful for Windows users */
 
 /* maximum number of players allowed before game starts to turn people away */

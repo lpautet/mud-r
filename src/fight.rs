@@ -158,33 +158,10 @@ pub fn compute_armor_class(ch: &CharData) -> i16 {
     return max(-100, armorclass); /* -100 is lowest */
 }
 
-// void free_messages_type(struct msg_type *msg)
-// {
-// if (msg->attacker_msg)	free(msg->attacker_msg);
-// if (msg->victim_msg)		free(msg->victim_msg);
-// if (msg->room_msg)		free(msg->room_msg);
-// }
-//
-//
-// void free_messages(void)
-// {
-// int i;
-//
-// for (i = 0; i < MAX_MESSAGES; i++)
-// while (fight_messages[i].msg) {
-// struct message_type *former = fight_messages[i].msg;
-//
-// free_messages_type(&former->die_msg);
-// free_messages_type(&former->miss_msg);
-// free_messages_type(&former->hit_msg);
-// free_messages_type(&former->god_msg);
-//
-// fight_messages[i].msg = fight_messages[i].msg->next;
-// free(former);
-// }
-// }
-//
-//
+pub fn free_messages(db: &mut DB) {
+    db.fight_messages.clear();
+}
+
 impl DB {
     pub fn load_messages(&mut self) {
         // FILE *fl;

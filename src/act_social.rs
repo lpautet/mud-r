@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: act.social.c                                  Part of CircleMUD *
+*   File: act.social.rs                                 Part of CircleMUD *
 *  Usage: Functions to handle socials                                     *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::fs::{File, OpenOptions};
@@ -22,9 +23,6 @@ use crate::interpreter::{find_command, one_argument, CMD_INFO};
 use crate::structs::{CharData, SEX_MALE};
 use crate::util::rand_number;
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT};
-
-// /* local globals */
-// static int list_top = -1;
 
 pub struct SocialMessg {
     act_nr: usize,
@@ -54,8 +52,7 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
-#[allow(unused_variables)]
-pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let act_nr;
 
@@ -142,8 +139,7 @@ pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -259,141 +255,123 @@ pub fn fread_action(reader: &mut BufReader<File>, nr: i32) -> Rc<str> {
     Rc::from(buf)
 }
 
-// void free_social_messages(void)
-// {
-// int ac;
-// struct SocialMessg *soc;
-//
-// for (ac = 0; ac <= list_top; ac++) {
-// soc = &soc_mess_list[ac];
-//
-// if (soc->char_no_arg)	free(soc->char_no_arg);
-// if (soc->others_no_arg)	free(soc->others_no_arg);
-// if (soc->char_found)	free(soc->char_found);
-// if (soc->others_found)	free(soc->others_found);
-// if (soc->vict_found)	free(soc->vict_found);
-// if (soc->not_found)		free(soc->not_found);
-// if (soc->char_auto)		free(soc->char_auto);
-// if (soc->others_auto)	free(soc->others_auto);
-// }
-// free(soc_mess_list);
-// }
+pub fn free_social_messages(db: &mut DB) {
+    db.soc_mess_list.clear();
+}
 
-impl DB {
-    pub fn boot_social_messages(&mut self) {
-        /* open social file */
-        let fl;
-        if {
-            fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
-            fl.is_err()
-        } {
-            error!(
-                "SYSERR: can't open socials file '{}': {}",
-                SOCMESS_FILE,
-                fl.err().unwrap()
-            );
+pub fn boot_social_messages(db: &mut DB) {
+    /* open social file */
+    let fl;
+    if {
+        fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
+        fl.is_err()
+    } {
+        error!(
+            "SYSERR: can't open socials file '{}': {}",
+            SOCMESS_FILE,
+            fl.err().unwrap()
+        );
+        process::exit(1);
+    }
+    let fl = fl.unwrap();
+    let mut list_top = 0;
+    /* count socials & allocate space */
+    for nr in 0..CMD_INFO.len() - 1 {
+        if CMD_INFO[nr].command_pointer as usize == do_action as usize {
+            list_top += 1;
+        }
+    }
+
+    db.soc_mess_list.reserve_exact(list_top + 1);
+    let mut cur_soc = 0;
+    let mut reader = BufReader::new(fl);
+    /* now read 'em */
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("Reading socials file");
+        if line.starts_with('$') {
+            break;
+        }
+
+        let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
+        let f = regex.captures(line.as_str());
+        if f.is_none() {
+            error!("SYSERR: format error in social file near social '{}'", line);
             process::exit(1);
         }
-        let fl = fl.unwrap();
-        let mut list_top = 0;
-        /* count socials & allocate space */
-        for nr in 0..CMD_INFO.len() - 1 {
-            if CMD_INFO[nr].command_pointer as usize == do_action as usize {
-                list_top += 1;
-            }
+        let f = f.unwrap();
+        let next_soc = &f[1];
+        let hide = f[2].parse::<i32>().unwrap();
+        let min_victim_position = f[2].parse::<i32>().unwrap();
+
+        if {
+            cur_soc += 1;
+            cur_soc > list_top
+        } {
+            error!(
+                "SYSERR: Ran out of slots in social array. ({} > {})",
+                cur_soc, list_top
+            );
+            break;
         }
+        let hide = if hide == 0 { false } else { true };
+        let mut sm = SocialMessg {
+            act_nr: 0,
+            hide,
+            min_victim_position,
+            char_no_arg: Rc::from(""),
+            others_no_arg: Rc::from(""),
+            char_found: Rc::from(""),
+            others_found: Rc::from(""),
+            vict_found: Rc::from(""),
+            not_found: Rc::from(""),
+            char_auto: Rc::from(""),
+            others_auto: Rc::from(""),
+        };
 
-        self.soc_mess_list.reserve_exact(list_top + 1);
-        let mut cur_soc = 0;
-        let mut reader = BufReader::new(fl);
-        /* now read 'em */
-        loop {
-            let mut line = String::new();
-            reader.read_line(&mut line).expect("Reading socials file");
-            if line.starts_with('$') {
-                break;
-            }
+        /* read the stuff */
+        sm.act_nr =
+            find_command(next_soc).expect(format!("Cannot find command {next_soc}").as_str());
+        let nr = sm.act_nr as i32;
+        sm.char_no_arg = fread_action(&mut reader, nr);
+        sm.others_no_arg = fread_action(&mut reader, nr);
+        sm.char_found = fread_action(&mut reader, nr);
 
-            let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
-            let f = regex.captures(line.as_str());
-            if f.is_none() {
-                error!("SYSERR: format error in social file near social '{}'", line);
-                process::exit(1);
-            }
-            let f = f.unwrap();
-            let next_soc = &f[1];
-            let hide = f[2].parse::<i32>().unwrap();
-            let min_victim_position = f[2].parse::<i32>().unwrap();
-
-            if {
-                cur_soc += 1;
-                cur_soc > list_top
-            } {
-                error!(
-                    "SYSERR: Ran out of slots in social array. ({} > {})",
-                    cur_soc, list_top
-                );
-                break;
-            }
-            let hide = if hide == 0 { false } else { true };
-            let mut sm = SocialMessg {
-                act_nr: 0,
-                hide,
-                min_victim_position,
-                char_no_arg: Rc::from(""),
-                others_no_arg: Rc::from(""),
-                char_found: Rc::from(""),
-                others_found: Rc::from(""),
-                vict_found: Rc::from(""),
-                not_found: Rc::from(""),
-                char_auto: Rc::from(""),
-                others_auto: Rc::from(""),
-            };
-
-            /* read the stuff */
-            sm.act_nr =
-                find_command(next_soc).expect(format!("Cannot find command {next_soc}").as_str());
-            let nr = sm.act_nr as i32;
-            sm.char_no_arg = fread_action(&mut reader, nr);
-            sm.others_no_arg = fread_action(&mut reader, nr);
-            sm.char_found = fread_action(&mut reader, nr);
-
-            /* if no char_found, the rest is to be ignored */
-            if sm.char_found.is_empty() {
-                self.soc_mess_list.push(sm);
-                line.clear();
-                reader.read_line(&mut line).expect("reading social file");
-                continue;
-            }
-
-            sm.others_found = fread_action(&mut reader, nr);
-            sm.vict_found = fread_action(&mut reader, nr);
-            sm.not_found = fread_action(&mut reader, nr);
-            sm.char_auto = fread_action(&mut reader, nr);
-            sm.others_auto = fread_action(&mut reader, nr);
-
-            /* If social not found, re-use this slot.  'curr_soc' will be reincremented. */
-            if nr < 0 {
-                error!("SYSERR: Unknown social '{}' in social file.", next_soc);
-                cur_soc -= 1;
-                continue;
-            }
-
-            /* If the command we found isn't do_action, we didn't count it for the CREATE(). */
-            if CMD_INFO[nr as usize].command_pointer as usize != do_action as usize {
-                error!(
-                    "SYSERR: Social '{}' already assigned to a command.",
-                    next_soc
-                );
-                cur_soc -= 1;
-                continue;
-            }
-            self.soc_mess_list.push(sm);
+        /* if no char_found, the rest is to be ignored */
+        if sm.char_found.is_empty() {
+            db.soc_mess_list.push(sm);
             line.clear();
             reader.read_line(&mut line).expect("reading social file");
+            continue;
         }
 
-        /* now, sort 'em */
-        self.soc_mess_list.sort_by_key(|e| e.act_nr);
+        sm.others_found = fread_action(&mut reader, nr);
+        sm.vict_found = fread_action(&mut reader, nr);
+        sm.not_found = fread_action(&mut reader, nr);
+        sm.char_auto = fread_action(&mut reader, nr);
+        sm.others_auto = fread_action(&mut reader, nr);
+
+        /* If social not found, re-use this slot.  'curr_soc' will be reincremented. */
+        if nr < 0 {
+            error!("SYSERR: Unknown social '{}' in social file.", next_soc);
+            cur_soc -= 1;
+            continue;
+        }
+
+        /* If the command we found isn't do_action, we didn't count it for the CREATE(). */
+        if CMD_INFO[nr as usize].command_pointer as usize != do_action as usize {
+            error!(
+                "SYSERR: Social '{}' already assigned to a command.",
+                next_soc
+            );
+            cur_soc -= 1;
+            continue;
+        }
+        db.soc_mess_list.push(sm);
+        line.clear();
+        reader.read_line(&mut line).expect("reading social file");
     }
+
+    /* now, sort 'em */
+    db.soc_mess_list.sort_by_key(|e| e.act_nr);
 }

@@ -1,12 +1,13 @@
 /* ***********************************************************************
-*  File: alias.c				A utility to CircleMUD	 *
-* Usage: writing/reading player's aliases.				 *
-*									 *
-* Code done by Jeremy Hess and Chad Thompson				 *
-* Modifed by George Greer for inclusion into CircleMUD bpl15.		 *
-*									 *
+*  File: alias.rs                				A utility to CircleMUD	 *
+* Usage: writing/reading player's aliases.              				 *
+*	                                    								 *
+* Code done by Jeremy Hess and Chad Thompson             				 *
+* Modifed by George Greer for inclusion into CircleMUD bpl15.	    	 *
+*								                                     	 *
 * Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
-* CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.		 *
+* CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.		         *
+*  Rust port Copyright (C) 2023 Laurent Pautet                           *
 *********************************************************************** */
 
 use std::fs;
@@ -23,7 +24,7 @@ use crate::util::{get_filename, ALIAS_FILE};
 pub fn write_aliases(ch: &Rc<CharData>) {
     let mut fname = String::new();
     get_filename(&mut fname, ALIAS_FILE, &ch.get_name());
-    // remove(fname);
+    fs::remove_file(&fname).expect("Error removing alias file");
 
     if ch.player_specials.borrow().aliases.len() == 0 {
         return;

@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: ban.c                                         Part of CircleMUD *
+*   File: ban.rs                                        Part of CircleMUD *
 *  Usage: banning/unbanning/checking sites and player names               *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -117,8 +118,7 @@ macro_rules! ban_list_format {
     };
 }
 
-#[allow(unused_variables)]
-pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     if argument.is_empty() {
         if db.ban_list.borrow().is_empty() {
@@ -217,8 +217,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     write_ban_list(db);
 }
 
-#[allow(unused_variables)]
-pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut site = String::new();
     one_argument(argument, &mut site);
@@ -298,6 +297,11 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
     }
 
     return true;
+}
+
+/* What's with the wacky capitalization in here? */
+pub fn free_invalid_list(db: &mut DB) {
+    db.invalid_list.borrow_mut().clear();
 }
 
 pub fn read_invalid_list(db: &mut DB) {

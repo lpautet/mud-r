@@ -2138,42 +2138,6 @@ pub fn show_shops(db: &DB, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-// void destroy_shops(void)
-// {
-// ssize_t cnt, itr;
-//
-// if (!shop_index)
-// return;
-//
-// for (cnt = 0; cnt <= top_shop; cnt++) {
-// if (shop_index[cnt].no_such_item1)
-// free(shop_index[cnt].no_such_item1);
-// if (shop_index[cnt].no_such_item2)
-// free(shop_index[cnt].no_such_item2);
-// if (shop_index[cnt].missing_cash1)
-// free(shop_index[cnt].missing_cash1);
-// if (shop_index[cnt].missing_cash2)
-// free(shop_index[cnt].missing_cash2);
-// if (shop_index[cnt].do_not_buy)
-// free(shop_index[cnt].do_not_buy);
-// if (shop_index[cnt].message_buy)
-// free(shop_index[cnt].message_buy);
-// if (shop_index[cnt].message_sell)
-// free(shop_index[cnt].message_sell);
-// if (shop_index[cnt].in_room)
-// free(shop_index[cnt].in_room);
-// if (shop_index[cnt].producing)
-// free(shop_index[cnt].producing);
-//
-// if (shop_index[cnt].type) {
-// for (itr = 0; BUY_TYPE(shop_index[cnt].type[itr]) != NOTHING; itr++)
-// if (BUY_WORD(shop_index[cnt].type[itr]))
-// free(BUY_WORD(shop_index[cnt].type[itr]));
-// free(shop_index[cnt].type);
-// }
-// }
-//
-// free(shop_index);
-// shop_index = NULL;
-// top_shop = -1;
-// }
+pub fn destroy_shops(db: &mut DB) {
+    db.shop_index.borrow_mut().clear();
+}

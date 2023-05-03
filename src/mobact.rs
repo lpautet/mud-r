@@ -107,7 +107,7 @@ impl Game {
                         .zone
                         == self.db.world.borrow()[ch.in_room() as usize].zone)
             {
-                perform_move(self, ch, door as i32, 1);
+                perform_move(self, ch, door as i32, true);
             }
 
             /* Aggressive Mobs */

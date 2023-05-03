@@ -23,7 +23,7 @@ use crate::act_comm::{
 use crate::act_informative::{
     do_color, do_commands, do_consider, do_diagnose, do_equipment, do_examine, do_exits, do_gen_ps,
     do_gold, do_help, do_inventory, do_levels, do_look, do_score, do_time, do_toggle, do_users,
-    do_weather, do_where, do_who,
+    do_weather, do_where, do_who, look_at_room,
 };
 use crate::act_item::{
     do_drink, do_drop, do_eat, do_get, do_give, do_grab, do_pour, do_put, do_remove, do_wear,
@@ -2670,7 +2670,7 @@ pub const CMD_INFO: [CommandInfo; 308] = [
     },
     // { ";"        , POS_DEAD    , do_wiznet   , LVL_IMMORT, 0 },
     CommandInfo {
-        command: "wiznet",
+        command: ";",
         minimum_position: POS_DEAD,
         command_pointer: do_wiznet,
         minimum_level: LVL_IMMORT,
@@ -3129,9 +3129,9 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
     // *first_arg = '\0';
     // return (NULL);
     // }
-    let mut ret;
+    let mut argument = argument;
     loop {
-        let argument = argument.trim_start();
+        argument = argument.trim_start();
         first_arg.clear();
 
         let mut i = 0;
@@ -3143,13 +3143,13 @@ pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
             i += 1;
         }
 
-        ret = &argument[i..];
+        argument = &argument[i..];
         if !fill_word(first_arg.as_str()) {
             break;
         }
     }
 
-    ret
+    argument
 }
 
 /*
@@ -3247,7 +3247,7 @@ pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
 }
 
-fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
+pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     /* special in room? */
     let room_data = game.db.world.borrow()[ch.in_room() as usize].clone();
     if game.db.get_room_spec(ch.in_room()).is_some() {
@@ -4022,7 +4022,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     if character.get_level() == 0 {
                         game.do_start(character);
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
-                        game.db.look_at_room(och.as_ref().unwrap(), false);
+                        look_at_room(&game.db, och.as_ref().unwrap(), false);
                     }
                     if game
                         .db
@@ -4131,7 +4131,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                 d.set_state(ConDelcnf2);
             }
         }
-        //
+
         ConDelcnf2 => {
             if arg == "yes" || arg == "YES" {
                 if d.character

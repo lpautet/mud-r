@@ -20,7 +20,8 @@ use std::{fs, io, mem, process, slice};
 use log::{error, info, warn};
 use regex::Regex;
 
-use crate::act_social::SocialMessg;
+use crate::act_informative::sort_commands;
+use crate::act_social::{boot_social_messages, SocialMessg};
 use crate::ban::{load_banned, read_invalid_list};
 use crate::boards::BoardSystem;
 use crate::class::init_spell_levels;
@@ -28,13 +29,13 @@ use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM, OK}
 use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, EXTRA_BITS_COUNT, ROOM_BITS_COUNT, WEAR_BITS_COUNT,
 };
-use crate::handler::{fname, isname};
+use crate::handler::{affect_remove, fname, isname};
 use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::{one_argument, one_word};
 use crate::mail::MailSystem;
 use crate::modify::paginate_string;
 use crate::objsave::update_obj_file;
-use crate::shops::{assign_the_shopkeepers, ShopData};
+use crate::shops::{assign_the_shopkeepers, destroy_shops, ShopData};
 use crate::spec_assign::{assign_mobiles, assign_objects, assign_rooms};
 use crate::spec_procs::{sort_spells, Mayor};
 use crate::spell_parser::mag_assign_spells;
@@ -140,7 +141,7 @@ pub struct DB {
     /* mini-mud mode?		 */
     pub no_rent_check: bool,
     /* skip rent check on boot?	 */
-    pub boot_time: Cell<u128>,
+    pub boot_time: Cell<u64>,
     pub no_specials: bool,
     /* time of mud boot		 */
     pub circle_restrict: Cell<u8>,
@@ -304,21 +305,27 @@ pub fn get_id_by_name(db: &DB, name: &str) -> i64 {
 // }
 //
 //
-// /* Wipe out all the loaded text files, for shutting down. */
-// void free_text_files(void)
-// {
-// char **textfiles[] = {
-// &wizlist, &immlist, &news, &credits, &motd, &imotd, &help, &info,
-// &policies, &handbook, &background, &greetings, NULL
-// };
-// int rf;
-//
-// for (rf = 0; textfiles[rf]; rf++)
-// if (*textfiles[rf]) {
-// free(*textfiles[rf]);
-// *textfiles[rf] = NULL;
-// }
-// }
+/* Wipe out all the loaded text files, for shutting down. */
+pub fn free_text_files(db: &mut DB) {
+    let textfiles = [
+        &mut db.wizlist,
+        &mut db.immlist,
+        &mut db.news,
+        &mut db.credits,
+        &mut db.motd,
+        &mut db.imotd,
+        &mut db.help,
+        &mut db.info,
+        &mut db.policies,
+        &mut db.handbook,
+        &mut db.background,
+        &mut db.greetings,
+    ];
+
+    for rf in textfiles {
+        *rf = Rc::from("");
+    }
+}
 
 /*
  * Too bad it doesn't check the return values to let the user
@@ -438,111 +445,54 @@ impl DB {
     }
 }
 
-// void free_extra_descriptions(struct extra_descr_data *edesc)
-// {
-// struct extra_descr_data *enext;
-//
-// for (; edesc; edesc = enext) {
-// enext = edesc->next;
-//
-// free(edesc->keyword);
-// free(edesc->description);
-// free(edesc);
-// }
-// }
-//
-//
-// /* Free the world, in a memory allocation sense. */
-// void destroy_db(void)
-// {
-// ssize_t cnt, itr;
-// struct char_data *chtmp;
-// struct obj_data *objtmp;
-//
-// /* Active Mobiles & Players */
-// while (character_list) {
-// chtmp = character_list;
-// character_list = character_list->next;
-// free_char(chtmp);
-// }
-//
-// /* Active Objects */
-// while (object_list) {
-// objtmp = object_list;
-// object_list = object_list->next;
-// free_obj(objtmp);
-// }
-//
-// /* Rooms */
-// for (cnt = 0; cnt <= top_of_world; cnt++) {
-// if (world[cnt].name)
-// free(world[cnt].name);
-// if (world[cnt].description)
-// free(world[cnt].description);
-// free_extra_descriptions(world[cnt].ex_description);
-//
-// for (itr = 0; itr < NUM_OF_DIRS; itr++) {
-// if (!world[cnt].dir_option[itr])
-// continue;
-//
-// if (world[cnt].dir_option[itr]->general_description)
-// free(world[cnt].dir_option[itr]->general_description);
-// if (world[cnt].dir_option[itr]->keyword)
-// free(world[cnt].dir_option[itr]->keyword);
-// free(world[cnt].dir_option[itr]);
-// }
-// }
-// free(world);
-//
-// /* Objects */
-// for (cnt = 0; cnt <= top_of_objt; cnt++) {
-// if (obj_proto[cnt].name)
-// free(obj_proto[cnt].name);
-// if (obj_proto[cnt].description)
-// free(obj_proto[cnt].description);
-// if (obj_proto[cnt].short_description)
-// free(obj_proto[cnt].short_description);
-// if (obj_proto[cnt].action_description)
-// free(obj_proto[cnt].action_description);
-// free_extra_descriptions(obj_proto[cnt].ex_description);
-// }
-// free(obj_proto);
-// free(obj_index);
-//
-// /* Mobiles */
-// for (cnt = 0; cnt <= top_of_mobt; cnt++) {
-// if (mob_proto[cnt].player.name)
-// free(mob_proto[cnt].player.name);
-// if (mob_proto[cnt].player.title)
-// free(mob_proto[cnt].player.title);
-// if (mob_proto[cnt].player.short_descr)
-// free(mob_proto[cnt].player.short_descr);
-// if (mob_proto[cnt].player.long_descr)
-// free(mob_proto[cnt].player.long_descr);
-// if (mob_proto[cnt].player.description)
-// free(mob_proto[cnt].player.description);
-//
-// while (mob_proto[cnt].affected)
-// affect_remove(&mob_proto[cnt], mob_proto[cnt].affected);
-// }
-// free(mob_proto);
-// free(mob_index);
-//
-// /* Shops */
-// destroy_shops();
-//
-// /* Zones */
-// for (cnt = 0; cnt <= top_of_zone_table; cnt++) {
-// if (zone_table[cnt].name)
-// free(zone_table[cnt].name);
-// if (zone_table[cnt].cmd)
-// free(zone_table[cnt].cmd);
-// }
-// free(zone_table);
-// }
-//
-//
+/* Free the world, in a memory allocation sense. */
 impl DB {
+    pub fn destroy_db(&mut self) {
+        /* Active Mobiles & Players */
+        for chtmp in self.character_list.borrow_mut().iter() {
+            free_char(chtmp);
+        }
+        self.character_list.borrow_mut().clear();
+
+        /* Active Objects */
+        self.object_list.borrow_mut().clear();
+
+        /* Rooms */
+        for cnt in 0..self.world.borrow().len() {
+            // self.world.borrow_mut()[cnt].ex_descriptions.clear();
+
+            for itr in 0..NUM_OF_DIRS {
+                if self.world.borrow()[cnt].dir_option[itr].is_none() {
+                    continue;
+                }
+                // self.world.borrow_mut()[cnt].dir_option[itr] = None;
+            }
+        }
+        self.world.borrow_mut().clear();
+
+        /* Objects */
+        self.obj_proto.clear();
+        self.obj_index.clear();
+
+        /* Mobiles */
+        for cnt in 0..self.mob_protos.len() {
+            while !self.mob_protos[cnt].affected.borrow().is_empty() {
+                affect_remove(
+                    &self.mob_protos[cnt],
+                    &self.mob_protos[cnt].affected.borrow()[0],
+                );
+            }
+        }
+        self.mob_protos.clear();
+        self.mob_index.clear();
+
+        /* Shops */
+        destroy_shops(self);
+
+        /* Zones */
+        self.zone_table.borrow_mut().clear();
+    }
+
     pub fn new() -> DB {
         DB {
             world: RefCell::new(vec![]),
@@ -560,7 +510,7 @@ impl DB {
             no_mail: Cell::new(false),
             mini_mud: false,
             no_rent_check: false,
-            boot_time: Cell::new(0),
+            boot_time: Cell::new(time_now()),
             no_specials: false,
             circle_restrict: Cell::new(0),
             r_mortal_start_room: RefCell::new(0),
@@ -649,7 +599,7 @@ impl DB {
         ret.load_messages();
 
         info!("Loading social messages.");
-        ret.boot_social_messages();
+        boot_social_messages(&mut ret);
 
         info!("Assigning function pointers:");
 
@@ -668,7 +618,7 @@ impl DB {
         init_spell_levels(&mut ret);
         //
         info!("Sorting command list and spells.");
-        ret.sort_commands();
+        sort_commands(&mut ret);
         sort_spells(&mut ret);
 
         info!("Booting mail system.");
@@ -789,21 +739,9 @@ pub fn save_mud_time(when: &TimeInfoData) {
         .expect(format!("SYSERR: Cannot write to time file: {}", TIME_FILE).as_str());
 }
 
-// void free_player_index(void)
-// {
-// int tp;
-//
-// if (!player_table)
-// return;
-//
-// for (tp = 0; tp <= top_of_p_table; tp++)
-// if (player_table[tp].name)
-// free(player_table[tp].name);
-//
-// free(player_table);
-// player_table = NULL;
-// top_of_p_table = 0;
-// }
+pub fn free_player_index(db: &mut DB) {
+    db.player_table.borrow_mut().clear();
+}
 
 pub fn parse_c_string(cstr: &[u8]) -> String {
     let mut ret: String = std::str::from_utf8(cstr)
@@ -2359,24 +2297,9 @@ fn get_one_line(reader: &mut BufReader<File>, buf: &mut String) {
     *buf = buf.trim_end().to_string();
 }
 
-// void free_help(void)
-// {
-// int hp;
-//
-// if (!help_table)
-// return;
-//
-// for (hp = 0; hp <= top_of_helpt; hp++) {
-// if (help_table[hp].keyword)
-// free(help_table[hp].keyword);
-// if (help_table[hp].entry && !help_table[hp].duplicate)
-// free(help_table[hp].entry);
-// }
-//
-// free(help_table);
-// help_table = NULL;
-// top_of_helpt = 0;
-// }
+pub fn free_help(db: &mut DB) {
+    db.help_table.clear();
+}
 
 impl DB {
     pub fn load_help(&mut self, fl: File) {
@@ -3419,95 +3342,18 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
     //strdup(buf): NULL);
 }
 
-// /* release memory allocated for a char struct */
-// void free_char(struct char_data *ch)
-// {
-// int i;
-// struct alias_data *a;
-//
-// if (ch->player_specials != NULL && ch->player_specials != &dummy_mob) {
-// while ((a = GET_ALIASES(ch)) != NULL) {
-// GET_ALIASES(ch) = (GET_ALIASES(ch))->next;
-// free_alias(a);
-// }
-// if (ch->player_specials->poofin)
-// free(ch->player_specials->poofin);
-// if (ch->player_specials->poofout)
-// free(ch->player_specials->poofout);
-// free(ch->player_specials);
-// if (IS_NPC(ch))
-// log("SYSERR: Mob %s (#%d) had player_specials allocated!", GET_NAME(ch), GET_MOB_VNUM(ch));
-// }
-// if (!IS_NPC(ch) || (IS_NPC(ch) && GET_MOB_RNUM(ch) == NOBODY)) {
-// /* if this is a player, or a non-prototyped non-player, free all */
-// if (GET_NAME(ch))
-// free(GET_NAME(ch));
-// if (ch->player.title)
-// free(ch->player.title);
-// if (ch->player.short_descr)
-// free(ch->player.short_descr);
-// if (ch->player.long_descr)
-// free(ch->player.long_descr);
-// if (ch->player.description)
-// free(ch->player.description);
-// } else if ((i = GET_MOB_RNUM(ch)) != NOBODY) {
-// /* otherwise, free strings only if the string is not pointing at proto */
-// if (ch->player.name && ch->player.name != mob_proto[i].player.name)
-// free(ch->player.name);
-// if (ch->player.title && ch->player.title != mob_proto[i].player.title)
-// free(ch->player.title);
-// if (ch->player.short_descr && ch->player.short_descr != mob_proto[i].player.short_descr)
-// free(ch->player.short_descr);
-// if (ch->player.long_descr && ch->player.long_descr != mob_proto[i].player.long_descr)
-// free(ch->player.long_descr);
-// if (ch->player.description && ch->player.description != mob_proto[i].player.description)
-// free(ch->player.description);
-// }
-// while (ch->affected)
-// affect_remove(ch, ch->affected);
-//
-// if (ch->desc)
-// ch->desc->character = NULL;
-//
-// free(ch);
-// }
-//
-//
-//
-//
-// /* release memory allocated for an obj struct */
-// void free_obj(struct obj_data *obj)
-// {
-// int nr;
-//
-// if ((nr = GET_OBJ_RNUM(obj)) == NOTHING) {
-// if (obj->name)
-// free(obj->name);
-// if (obj->description)
-// free(obj->description);
-// if (obj->short_description)
-// free(obj->short_description);
-// if (obj->action_description)
-// free(obj->action_description);
-// if (obj->ex_description)
-// free_extra_descriptions(obj->ex_description);
-// } else {
-// if (obj->name && obj->name != obj_proto[nr].name)
-// free(obj->name);
-// if (obj->description && obj->description != obj_proto[nr].description)
-// free(obj->description);
-// if (obj->short_description && obj->short_description != obj_proto[nr].short_description)
-// free(obj->short_description);
-// if (obj->action_description && obj->action_description != obj_proto[nr].action_description)
-// free(obj->action_description);
-// if (obj->ex_description && obj->ex_description != obj_proto[nr].ex_description)
-// free_extra_descriptions(obj->ex_description);
-// }
-//
-// free(obj);
-// }
-//
-//
+/* release memory allocated for a char struct */
+pub fn free_char(ch: &Rc<CharData>) {
+    ch.player_specials.borrow_mut().aliases.clear();
+
+    while !ch.affected.borrow().is_empty() {
+        affect_remove(ch, &ch.affected.borrow()[0]);
+    }
+
+    if ch.desc.borrow().is_some() {
+        *ch.desc.borrow_mut() = None;
+    }
+}
 
 /*
  * Steps:

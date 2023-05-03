@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: boards.c                                      Part of CircleMUD *
+*   File: boards.rs                                     Part of CircleMUD *
 *  Usage: handling of multiple bulletin boards                            *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 /* FEATURES & INSTALLATION INSTRUCTIONS ***********************************
@@ -98,18 +99,6 @@ struct BoardInfoType {
     rnum: Cell<ObjRnum>,
     /* rnum of this board */
 }
-
-// #define BOARD_VNUM(i) (b.boardinfo[i].vnum)
-// #define READ_LVL(i) (b.boardinfo[i].read_lvl)
-// #define WRITE_LVL(i) (b.boardinfo[i].write_lvl)
-// #define REMOVE_LVL(i) (b.boardinfo[i].remove_lvl)
-// #define FILENAME(i) (b.boardinfo[i].filename)
-// #define BOARD_RNUM(i) (b.boardinfo[i].rnum)
-//
-// #define NEW_MSG_INDEX(i) (msg_index[i][num_of_msgs[i]])
-// #define MSG_HEADING(i, j) (msg_index[i][j].heading)
-// #define MSG_SLOTNUM(i, j) (msg_index[i][j].slot_num)
-// #define MSG_LEVEL(i, j) (msg_index[i][j].level)
 
 /* Board appearance order. */
 const NEWEST_AT_TOP: bool = false;
@@ -262,7 +251,6 @@ fn init_boards(b: &mut BoardSystem, db: &DB) {
     }
 }
 
-#[allow(unused_variables)]
 pub fn gen_board(
     game: &mut Game,
     ch: &Rc<CharData>,
@@ -812,14 +800,12 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
     }
 }
 
-// /* When shutting down, clear all boards. */
-// void Board_clear_all(void)
-// {
-// int i;
-//
-// for (i = 0; i < NUM_OF_BOARDS; i++)
-// Board_clear_board(i);
-// }
+/* When shutting down, clear all boards. */
+pub fn board_clear_all(b: &mut BoardSystem) {
+    for i in 0..NUM_OF_BOARDS {
+        board_clear_board(b, i);
+    }
+}
 
 /* Clear the in-memory structures. */
 fn board_clear_board(b: &mut BoardSystem, board_type: usize) {

@@ -184,11 +184,11 @@ impl MailSystem {
         return self.free_list.remove(0);
     }
 
-    // fn clear_free_list(&mut self) {
-    //     while !self.free_list.is_empty() {
-    //         self.pop_free_list();
-    //     }
-    // }
+    pub(crate) fn clear_free_list(&mut self) {
+        while !self.free_list.is_empty() {
+            self.pop_free_list();
+        }
+    }
 
     /*
      * main_index_type *find_char_in_index(long #1)

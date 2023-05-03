@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: act.comm.c                                    Part of CircleMUD *
+*   File: act.comm.rs                                   Part of CircleMUD *
 *  Usage: Player-level communication commands                             *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::rc::Rc;
@@ -30,8 +31,7 @@ use crate::{
     TO_SLEEP, TO_VICT,
 };
 
-#[allow(unused_variables)]
-pub fn do_say(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_say(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut argument = argument.trim_start().to_string();
 
     if argument.is_empty() {
@@ -50,8 +50,7 @@ pub fn do_say(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let argument = argument.trim_start();
 
     if !ch.aff_flagged(AFF_GROUP) {
@@ -167,8 +166,7 @@ fn is_tell_ok(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>) -> bool {
  * Yes, do_tell probably could be combined with whisper and ask, but
  * called frequently, and should IMHO be kept as tight as possible.
  */
-#[allow(unused_variables)]
-pub fn do_tell(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_tell(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -192,8 +190,7 @@ pub fn do_tell(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_reply(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_reply(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -231,8 +228,7 @@ pub fn do_reply(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let action_sing;
     let action_plur;
     let action_others;
@@ -297,8 +293,7 @@ pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usi
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
 
     let mut paper;
@@ -423,8 +418,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     }
 }
 
-#[allow(unused_variables)]
-pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
     let mut buf2 = String::new();
@@ -480,8 +474,7 @@ pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
  * generalized communication func, originally by Fred C. Merkel (Torg) *
  *********************************************************************/
 
-#[allow(unused_variables)]
-pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let db = &game.db;
     // char color_on[24];
 
@@ -644,7 +637,6 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
     }
 }
 
-#[allow(unused_variables)]
 pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let db = &game.db;
     if ch.prf_flagged(PRF_QUEST) {
