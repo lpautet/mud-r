@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: fight.c                                       Part of CircleMUD *
+*   File: fight.rs                                      Part of CircleMUD *
 *  Usage: Combat system                                                   *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use log::error;
@@ -164,22 +165,11 @@ pub fn free_messages(db: &mut DB) {
 
 impl DB {
     pub fn load_messages(&mut self) {
-        // FILE *fl;
-        // int i, type;
-        // struct message_type *messages;
-        // char chk[128];
-
         let fl = OpenOptions::new()
             .read(true)
             .open(MESS_FILE)
             .expect(format!("SYSERR: Error #1 reading combat message file{}", MESS_FILE).as_str());
         let mut reader = BufReader::new(fl);
-        //     for i in 0..MAX_MESSAGES as usize{
-        //
-        // self.fight_messages[i].a_type = 0;
-        // self.fight_messages[i].number_of_attacks = 0;
-        // self.fight_messages[i].msg = NULL;
-        // }
         let mut buf = String::new();
         let mut r = reader
             .read_line(&mut buf)
@@ -304,13 +294,11 @@ impl DB {
             return;
         }
 
-        // if (FIGHTING(ch)) {
-        // core_dump();
-        // return;
-        // }
+        if ch.fighting().is_some() {
+            error!("Unexpected error in set_fighting!");
+            return;
+        }
 
-        //ch->next_fighting = combat_list;
-        //combat_list = ch;
         self.combat_list.borrow_mut().push(ch.clone());
 
         if ch.aff_flagged(AFF_SLEEP) {
@@ -327,7 +315,6 @@ impl DB {
     /* remove a char from the list of fighting chars */
     pub fn stop_fighting(&self, ch: &Rc<CharData>) {
         self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
-        // *ch.next_fighting.borrow_mut() = None;
         ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
 
@@ -335,11 +322,6 @@ impl DB {
     }
 
     pub fn make_corpse(&self, ch: &Rc<CharData>) {
-        // char buf2[MAX_NAME_LENGTH + 64];
-        // struct obj_data * corpse, * o;
-        // struct obj_data * money;
-        // int i;
-
         let mut corpse = ObjData::new();
 
         corpse.item_number = NOTHING;
@@ -383,7 +365,6 @@ impl DB {
             }
         }
         /* transfer gold */
-
         if ch.get_gold() > 0 {
             /*
              * following 'if' clause added to fix gold duplication loophole
@@ -487,10 +468,6 @@ pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, g
 }
 
 pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
-    // int tot_members, base, tot_gain;
-    // struct char_data *k;
-    // struct follow_type *f;
-
     let k;
     if ch.master.borrow().is_none() {
         k = ch.clone();
@@ -722,9 +699,6 @@ impl DB {
         vict: &Rc<CharData>,
         attacktype: i32,
     ) -> i32 {
-        // int i, j, nr;
-        // struct message_type *msg;
-
         let weap_b = ch.get_eq(WEAR_WIELD as i8).clone();
         let weap = weap_b.as_ref();
 

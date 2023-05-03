@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: constants.c                                   Part of CircleMUD *
+*   File: constants.rs                                  Part of CircleMUD *
 *  Usage: Numeric and string contants used by the MUD                     *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use crate::structs::{ConAppType, DexAppType, DexSkillType, IntAppType, StrAppType, WisAppType};
@@ -191,29 +192,6 @@ pub const WEAR_WHERE: [&str; 18] = [
     "<wielded>            ",
     "<held>               ",
 ];
-
-// /* WEAR_x - for stat */
-// const char *equipment_types[] = {
-// "Used as light",
-// "Worn on right finger",
-// "Worn on left finger",
-// "First worn around Neck",
-// "Second worn around Neck",
-// "Worn on body",
-// "Worn on head",
-// "Worn on legs",
-// "Worn on feet",
-// "Worn on hands",
-// "Worn on arms",
-// "Worn as shield",
-// "Worn about body",
-// "Worn around waist",
-// "Worn around right wrist",
-// "Worn around left wrist",
-// "Wielded",
-// "Held",
-// "\n"
-// };
 
 /* ITEM_x (ordinal object types) */
 pub const ITEM_TYPES: [&str; 25] = [

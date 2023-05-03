@@ -25,6 +25,7 @@ use std::rc::Rc;
 use log::{error, info};
 
 use crate::act_wizard::snoop_check;
+use crate::config::SITEOK_EVERYONE;
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
@@ -46,7 +47,7 @@ use crate::spells::{
 use crate::structs::{
     CharData, GuildInfoType, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED,
     CLASS_WARRIOR, DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF,
-    ITEM_ANTI_WARRIOR, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES,
+    ITEM_ANTI_WARRIOR, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK,
     PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
@@ -121,11 +122,6 @@ pub fn find_class_bitvector(arg: &str) -> i32 {
 
 const SPELL: i32 = 0;
 const SKILL: i32 = 1;
-
-/* #define LEARNED_LEVEL	0  % known which is considered "learned" */
-/* #define MAX_PER_PRAC		1  max percent gain in skill per practice */
-/* #define min_PER_PRAC		2  min percent gain in skill per practice */
-/* #define PRAC_TYPE		3  should it say 'spell' or 'skill'?	*/
 
 pub const PRAC_PARAMS: [[i32; 4]; NUM_CLASSES as usize] = [
     /* MAG	CLE	THE	WAR */
@@ -3458,7 +3454,6 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
  * which priority will be given for the best to worst stats.
  */
 pub fn roll_real_abils(ch: &CharData) {
-    //int i, j, k, temp;
     let mut table: [u8; 6] = [0; 6];
     let mut rolls: [u8; 4] = [0; 4];
 
@@ -3523,55 +3518,54 @@ pub fn roll_real_abils(ch: &CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-impl Game {
-    pub fn do_start(&self, ch: &Rc<CharData>) {
-        ch.set_level(1);
-        ch.set_exp(1);
+pub fn do_start(game: &Game, ch: &Rc<CharData>) {
+    ch.set_level(1);
+    ch.set_exp(1);
 
-        ch.set_title(Some("".to_string()));
-        roll_real_abils(ch);
+    ch.set_title(Some("".to_string()));
+    roll_real_abils(ch);
 
-        ch.set_max_hit(10);
-        ch.set_max_mana(100);
-        ch.set_max_move(82);
+    ch.set_max_hit(10);
+    ch.set_max_mana(100);
+    ch.set_max_move(82);
 
-        match ch.get_class() {
-            CLASS_MAGIC_USER => {}
+    match ch.get_class() {
+        CLASS_MAGIC_USER => {}
 
-            CLASS_CLERIC => {}
+        CLASS_CLERIC => {}
 
-            CLASS_THIEF => {
-                set_skill!(ch, SKILL_SNEAK, 10);
-                set_skill!(ch, SKILL_HIDE, 5);
-                set_skill!(ch, SKILL_STEAL, 15);
-                set_skill!(ch, SKILL_BACKSTAB, 10);
-                set_skill!(ch, SKILL_PICK_LOCK, 10);
-                set_skill!(ch, SKILL_TRACK, 10);
-            }
-
-            CLASS_WARRIOR => {}
-            _ => {}
+        CLASS_THIEF => {
+            set_skill!(ch, SKILL_SNEAK, 10);
+            set_skill!(ch, SKILL_HIDE, 5);
+            set_skill!(ch, SKILL_STEAL, 15);
+            set_skill!(ch, SKILL_BACKSTAB, 10);
+            set_skill!(ch, SKILL_PICK_LOCK, 10);
+            set_skill!(ch, SKILL_TRACK, 10);
         }
 
-        advance_level(ch, &self.db);
+        CLASS_WARRIOR => {}
+        _ => {}
+    }
 
-        self.mudlog(
-            BRF,
-            max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
-            true,
-            format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
-        );
+    advance_level(ch, &game.db);
 
-        ch.set_hit(ch.get_max_hit());
-        ch.set_mana(ch.get_max_mana());
-        ch.set_move(ch.get_max_move());
+    game.mudlog(
+        BRF,
+        max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
+        true,
+        format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
+    );
 
-        ch.set_cond(THIRST, 24);
-        ch.set_cond(FULL, 24);
-        ch.set_cond(DRUNK, 0);
+    ch.set_hit(ch.get_max_hit());
+    ch.set_mana(ch.get_max_mana());
+    ch.set_move(ch.get_max_move());
 
-        // if (siteok_everyone)
-        // SET_BIT(PLR_FLAGS(ch), PLR_SITEOK);
+    ch.set_cond(THIRST, 24);
+    ch.set_cond(FULL, 24);
+    ch.set_cond(DRUNK, 0);
+
+    if SITEOK_EVERYONE {
+        ch.set_plr_flag_bit(PLR_SITEOK);
     }
 }
 
@@ -3580,8 +3574,6 @@ impl Game {
  * each class every time they gain a level.
  */
 pub fn advance_level(ch: &Rc<CharData>, db: &DB) {
-    //int add_hp, add_mana = 0, add_move = 0, i;
-
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;

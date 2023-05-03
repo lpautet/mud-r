@@ -17,7 +17,7 @@ use std::{fs, mem, slice};
 use log::{error, info};
 
 use crate::constants::{DIRS, REV_DIR};
-use crate::db::{get_id_by_name, get_name_by_id, DB, HCONTROL_FILE};
+use crate::db::{DB, HCONTROL_FILE};
 use crate::interpreter::{half_chop, is_abbrev, one_argument, search_block};
 use crate::objsave::{obj_from_store, obj_to_store};
 use crate::structs::{
@@ -391,7 +391,7 @@ pub fn house_boot(db: &DB) {
                 return;
             }
 
-            if get_name_by_id(db, (&temp_house).owner).is_none() {
+            if db.get_name_by_id((&temp_house).owner).is_none() {
                 continue; /* owner no longer exists -- skip */
             }
             let real_house;
@@ -456,7 +456,7 @@ pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
         /* Avoid seeing <UNDEF> entries from self-deleted people. -gg 6/21/98 */
         let temp;
         if {
-            temp = get_name_by_id(db, house_control[i].owner);
+            temp = db.get_name_by_id(house_control[i].owner);
             temp.is_none()
         } {
             continue;
@@ -575,7 +575,7 @@ fn hcontrol_build_house(db: &DB, ch: &Rc<CharData>, arg: &mut str) {
     }
     let owner;
     if {
-        owner = get_id_by_name(db, &arg1);
+        owner = db.get_id_by_name(&arg1);
         owner < 0
     } {
         send_to_char(ch, format!("Unknown player '{}'.\r\n", arg1).as_str());
@@ -751,7 +751,7 @@ pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
     } else if arg.is_empty() {
         house_list_guests(db, ch, i.unwrap(), false);
     } else if {
-        id = get_id_by_name(db, &arg);
+        id = db.get_id_by_name(&arg);
         id < 0
     } {
         send_to_char(ch, "No such player.\r\n");
@@ -840,7 +840,7 @@ fn house_list_guests(db: &DB, ch: &Rc<CharData>, i: usize, quiet: bool) {
         /* Avoid <UNDEF>. -gg 6/21/98 */
         let temp;
         if {
-            temp = get_name_by_id(db, house_control[i].guests[j]);
+            temp = db.get_name_by_id(house_control[i].guests[j]);
             temp.is_none()
         } {
             continue;

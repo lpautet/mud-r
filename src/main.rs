@@ -190,7 +190,6 @@ fn main() -> ExitCode {
         max_players: 0,
     };
     let mut logname: Option<&str> = LOGNAME;
-    let mut scheck: bool = false; /* for syntax checking mode */
 
     let mut pos = 1;
     let args: Vec<String> = env::args().collect();
@@ -243,7 +242,7 @@ fn main() -> ExitCode {
                 info!("Running in minimized mode & with no rent check.");
             }
             'c' => {
-                scheck = true;
+                game.db.scheck = true;
                 info!("Syntax check mode enabled.");
             }
             'q' => {
@@ -321,9 +320,8 @@ fn main() -> ExitCode {
 
     info!("Using {} as data directory.", dir);
 
-    if scheck {
-        let mut db = DB::new();
-        db.boot_world();
+    if game.db.scheck {
+        boot_world(&mut game);
     } else {
         info!("Running game on port {}.", port);
         game.mother_desc = Some(init_socket(port));
@@ -333,16 +331,16 @@ fn main() -> ExitCode {
     info!("Clearing game world.");
     game.db.destroy_db();
 
-    if !scheck {
+    if !game.db.scheck {
         info!("Clearing other memory.");
-        free_player_index(&mut game.db); /* db.rs */
+        game.db.free_player_index(); /* db.rs */
         free_messages(&mut game.db); /* fight.rs */
         game.db.mails.borrow_mut().clear_free_list(); /* mail.rs */
-        free_text_files(&mut game.db); /* db.rs */
+        game.db.free_text_files(); /* db.rs */
         board_clear_all(&mut game.db.boards.borrow_mut()); /* boards.rs */
         game.db.cmd_sort_info.clear(); /* act.informative.rs */
         free_social_messages(&mut game.db); /* act.social.rs */
-        free_help(&mut game.db); /* db.rs */
+        game.db.free_help(); /* db.rs */
         free_invalid_list(&mut game.db); /* ban.rs */
     }
 
@@ -360,7 +358,7 @@ impl Game {
         self.max_players = get_max_players();
 
         info!("Opening mother connection.");
-        self.db = DB::boot_db(self);
+        DB::boot_db(self);
 
         // info!("Signal trapping.");
         // signal_setup();
@@ -1031,7 +1029,8 @@ fn process_output(t: &DescriptorData) -> i32 {
     }
 
     /* The common case: all saved output was handed off to the kernel buffer. */
-    if result >= i.len() as i32 {
+    let exp_len = (i.as_bytes().len() - 2) as i32;
+    if result >= exp_len {
         RefCell::borrow_mut(&t.output).clear();
     } else {
         /* Not all data in buffer sent.  result < output buffersize. */
@@ -1925,7 +1924,9 @@ impl DB {
         }
 
         for to in char_list.borrow().iter() {
-            if !sendok!(to.as_ref(), to_sleeping) || Rc::ptr_eq(to, ch.as_ref().unwrap()) {
+            if !sendok!(to.as_ref(), to_sleeping)
+                || (ch.is_some() && Rc::ptr_eq(to, ch.as_ref().unwrap()))
+            {
                 continue;
             }
             if hide_invisible && ch.is_some() && !self.can_see(to.as_ref(), ch.as_ref().unwrap()) {

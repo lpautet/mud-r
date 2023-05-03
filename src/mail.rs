@@ -26,10 +26,7 @@ use std::{mem, process, slice};
 
 use log::{error, info};
 
-use crate::db::{
-    clear_char, copy_to_stored, get_id_by_name, get_name_by_id, parse_c_string, store_to_char, DB,
-    MAIL_FILE,
-};
+use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
 use crate::modify::string_write;
 use crate::structs::{
@@ -608,8 +605,8 @@ impl MailSystem {
         }
         let tmstr = ctime(header.header_data.mail_time);
 
-        let from = get_name_by_id(db, header.header_data.from);
-        let to = get_name_by_id(db, recipient);
+        let from = db.get_name_by_id(header.header_data.from);
+        let to = db.get_name_by_id(recipient);
 
         let mut buf = format!(
             " * * * * Midgaard Mail System * * * *\r\n\
@@ -782,7 +779,7 @@ $n tells you, '...which I see you can't afford.'",
             .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
-    let recipient = get_id_by_name(&game.db, &buf);
+    let recipient = game.db.get_id_by_name(&buf);
     if recipient < 0 || !mail_recip_ok(game, &buf) {
         game.db.act(
             "$n tells you, 'No one by that name is registered here!'",

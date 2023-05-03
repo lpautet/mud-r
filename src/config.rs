@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: config.c                                      Part of CircleMUD *
+*   File: config.rs                                     Part of CircleMUD *
 *  Usage: Configuration of various aspects of CircleMUD operation         *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 /*
@@ -158,8 +159,7 @@ pub const FROZEN_START_ROOM: RoomRnum = 1202;
 * donation rooms.
 */
 pub const DONATION_ROOM_1: RoomRnum = 3063;
-// RoomRnum donation_room_2 = NOWHERE;	/* unused - room for expansion */
-// RoomRnum donation_room_3 = NOWHERE;	/* unused - room for expansion */
+
 /****************************************************************************/
 /****************************************************************************/
 
@@ -219,7 +219,7 @@ pub const MAX_BAD_PWS: u8 = 3;
 * to just have to remove the SITEOK flags from those people I want to ban
 * rather than what is currently done?
 */
-// int siteok_everyone = TRUE;
+pub const SITEOK_EVERYONE: bool = true;
 
 pub struct Config {
     /*

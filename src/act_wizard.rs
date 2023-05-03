@@ -22,7 +22,9 @@ use log::{error, info};
 use sha2::Sha256;
 
 use crate::act_informative::look_at_room;
-use crate::class::{level_exp, parse_class, roll_real_abils, CLASS_ABBREVS, PC_CLASS_TYPES};
+use crate::class::{
+    do_start, level_exp, parse_class, roll_real_abils, CLASS_ABBREVS, PC_CLASS_TYPES,
+};
 use crate::config::{LOAD_INTO_INVENTORY, NOPERSON, OK};
 use crate::constants::{
     ACTION_BITS, AFFECTED_BITS, APPLY_TYPES, CONNECTED_TYPES, CONTAINER_BITS, DEX_APP, DIRS,
@@ -30,8 +32,7 @@ use crate::constants::{
     POSITION_TYPES, PREFERENCE_BITS, ROOM_BITS, SECTOR_TYPES, WEAR_BITS, WIS_APP,
 };
 use crate::db::{
-    char_to_store, clear_char, parse_c_string, store_to_char, vnum_mobile, vnum_object, DB,
-    FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
+    clear_char, parse_c_string, store_to_char, DB, FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
 };
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
 use crate::handler::{affect_remove, affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
@@ -493,13 +494,13 @@ pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         return;
     }
     if is_abbrev(&buf, "mob") {
-        if vnum_mobile(db, &buf2, ch) == 0 {
+        if db.vnum_mobile(&buf2, ch) == 0 {
             send_to_char(ch, "No mobiles by that name.\r\n");
         }
     }
 
     if is_abbrev(&buf, "obj") {
-        if vnum_object(db, &buf2, ch) == 0 {
+        if db.vnum_object(&buf2, ch) == 0 {
             send_to_char(ch, "No objects by that name.\r\n");
         }
     }
@@ -2285,7 +2286,7 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     }
     let oldlevel = victim.get_level();
     if newlevel < oldlevel {
-        game.do_start(&victim);
+        do_start(game, &victim);
         victim.set_level(newlevel);
 
         send_to_char(
@@ -4531,7 +4532,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             db.save_char(vict.as_ref().unwrap());
         }
         if is_file {
-            char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
+            db.char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
 
             unsafe {
                 let player_slice = slice::from_raw_parts(

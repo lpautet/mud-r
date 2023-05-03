@@ -50,7 +50,7 @@ use crate::act_wizard::{
 };
 use crate::alias::{delete_aliases, read_aliases};
 use crate::ban::{do_ban, do_unban, isbanned, valid_name};
-use crate::class::{parse_class, CLASS_MENU};
+use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
 use crate::graph::do_track;
@@ -3924,7 +3924,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
 
                 /* Now GET_NAME() will work properly. */
                 game.db.init_char(character.as_ref());
-                game.db.save_char(character.as_ref());
+                game.db.save_char(character);
             }
             write_to_output(
                 d.as_ref(),
@@ -4007,7 +4007,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         if !character.plr_flagged(PLR_LOADROOM) {
                             character.set_loadroom(NOWHERE);
                         }
-                        game.db.save_char(character.as_ref());
+                        game.db.save_char(character);
 
                         game.db.act(
                             "$n has entered the game.",
@@ -4020,7 +4020,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     }
                     d.set_state(ConPlaying);
                     if character.get_level() == 0 {
-                        game.do_start(character);
+                        do_start(game, character);
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
                         look_at_room(&game.db, och.as_ref().unwrap(), false);
                     }
