@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: house.c                                       Part of CircleMUD *
+*   File: house.rs                                      Part of CircleMUD *
 *  Usage: Handling of player houses                                       *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -709,8 +710,7 @@ fn hcontrol_pay_house(game: &Game, ch: &Rc<CharData>, arg: &str) {
 }
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
-#[allow(unused_variables)]
-pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -732,8 +732,7 @@ pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usiz
 }
 
 /* The house command, used by mortal house owners to assign guests */
-#[allow(unused_variables)]
-pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let db = &game.db;

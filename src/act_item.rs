@@ -1041,7 +1041,7 @@ pub fn weight_change_object(db: &DB, obj: &Rc<ObjData>, weight: i32) {
     if obj.in_room() != NOWHERE {
         obj.incr_obj_weight(weight);
     } else if {
-        tmp_ch = obj.carried_by.borrow();
+        tmp_ch = obj.carried_by.borrow().clone();
         tmp_ch.is_some()
     } {
         obj_from_char(Some(obj));
@@ -1081,7 +1081,7 @@ pub fn name_from_drinkcon(obj: Option<&Rc<ObjData>>) {
 
     let mut new_name = String::new();
     let next = "";
-    let bname = obj.name.borrow();
+    let mut bname = obj.name.borrow_mut();
     let mut cur_name = bname.as_str();
     while cur_name.len() != 0 {
         if cur_name.starts_with(' ') {
@@ -1108,7 +1108,7 @@ pub fn name_from_drinkcon(obj: Option<&Rc<ObjData>>) {
         cur_name = next;
     }
 
-    *obj.name.borrow_mut() = new_name;
+    *bname = new_name;
 }
 
 pub fn name_to_drinkcon(obj: Option<&Rc<ObjData>>, type_: i32) {

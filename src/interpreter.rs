@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: interpreter.c                                 Part of CircleMUD *
+*   File: interpreter.rs                                Part of CircleMUD *
 *  Usage: parse user commands, search for specials, call ACMD functions   *
 *                                                                         *
 *  All rights RESERVED.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::cell::{Cell, RefCell};
@@ -262,8 +263,14 @@ pub struct CommandInfo {
     subcmd: i32,
 }
 
-#[allow(unused_variables)]
-pub fn do_nothing(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {}
+pub fn do_nothing(
+    _game: &mut Game,
+    _ch: &Rc<CharData>,
+    _argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
+}
 
 pub const CMD_INFO: [CommandInfo; 308] = [
     CommandInfo {
@@ -2812,8 +2819,8 @@ pub fn command_interpreter(game: &mut Game, ch: &Rc<CharData>, argument: &str) {
         send_to_char(ch, "Huh?!?\r\n");
     } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
         send_to_char(ch, "You try, but the mind-numbing cold prevents you...\r\n");
-        // } else if cmd.command_pointer == do_nothing {
-        //     send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
+    } else if cmd.command_pointer as usize == do_nothing as usize {
+        send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
     } else if ch.is_npc() && cmd.minimum_level >= LVL_IMMORT {
         send_to_char(ch, "You can't use immortal commands while switched.\r\n");
     } else if ch.get_pos() < cmd.minimum_position {
@@ -2858,8 +2865,7 @@ fn find_alias<'a, 'b>(alias_list: &'a Vec<AliasData>, alias: &'b str) -> Option<
 }
 
 /* The interface to the outside world: do_alias */
-#[allow(unused_variables)]
-pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut arg = String::new();
 
@@ -2947,8 +2953,6 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
     }
 
     /* initialize */
-    // write_point = buf;
-    // temp_queue.head = temp_queue.tail = NULL;
     let mut num;
     /* now parse the alias */
     let mut temp = a.replacement.as_ref();
@@ -3071,10 +3075,6 @@ pub fn is_number(txt: &str) -> bool {
 /*
  * Function to skip over the leading spaces of a string.
  */
-// fn skip_spaces(char **string)
-// {
-// for (; **string && isspace(**string); (*string)++);
-// }
 
 /*
  * Given a string, change all instances of double dollar signs ($$) to
@@ -3090,24 +3090,6 @@ pub fn is_number(txt: &str) -> bool {
 pub fn delete_doubledollar(text: &mut String) -> &String {
     *text = text.replace("$$", "$");
     text
-    // char *ddread, *ddwrite;
-    //
-    // /* If the string has no dollar signs, return immediately */
-    // if ((ddwrite = strchr(string, '$')) == NULL)
-    // return (string);
-    //
-    // /* Start from the location of the first dollar sign */
-    // ddread = ddwrite;
-    //
-    //
-    // while (*ddread)   /* Until we reach the end of the string... */
-    // if ((*(ddwrite++) = *(ddread++)) == '$') /* copy one char */
-    // if (*ddread == '$')
-    // ddread++; /* skip if we saw 2 $'s in a row */
-    //
-    // *ddwrite = '\0';
-    //
-    // return (string);
 }
 
 fn fill_word(argument: &str) -> bool {
@@ -3123,12 +3105,6 @@ fn reserved_word(argument: &str) -> bool {
  * to 'first_arg'; return a pointer to the remainder of the string.
  */
 pub fn one_argument<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
-    //char * begin = first_arg;
-    // if (!argument) {
-    // log("SYSERR: one_argument received a NULL pointer!");
-    // *first_arg = '\0';
-    // return (NULL);
-    // }
     let mut argument = argument;
     loop {
         argument = argument.trim_start();
@@ -3445,7 +3421,6 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
     let target = target.unwrap();
 
     /* Okay, we've found a target.  Connect d to target. */
-    //free_char(d->character); /* get rid of the old char */
     *d.character.borrow_mut() = Some(target);
     {
         let c = d.character.borrow();
@@ -3954,8 +3929,6 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
         ConMenu => {
             let load_result;
             /* get selection from main menu  */
-            // room_vnum
-            // load_room;
             let och = d.character.borrow();
             let character = och.as_ref().unwrap();
             match if arg.chars().last().is_some() {

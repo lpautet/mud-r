@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: graph.c                                       Part of CircleMUD *
+*   File: graph.rs                                      Part of CircleMUD *
 *  Usage: various graph algorithms                                        *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::rc::Rc;
@@ -28,9 +29,7 @@ struct BfsQueueStruct {
     dir: usize,
 }
 
-// static struct BfsQueueStruct *queue_head = 0, *queue_tail = 0;
-//
-// /* Utility macros */
+/* Utility functions */
 fn mark(db: &DB, room: RoomRnum) {
     db.set_room_flags_bit(room, ROOM_BFS_MARK);
 }
@@ -93,49 +92,13 @@ impl BfsTracker {
     }
 }
 
-// void bfs_enqueue(room_rnum room, int dir)
-// {
-// struct BfsQueueStruct *curr;
-//
-// CREATE(curr, struct BfsQueueStruct, 1);
-// curr->room = room;
-// curr->dir = dir;
-// curr->next = 0;
-//
-// if (queue_tail) {
-// queue_tail->next = curr;
-// queue_tail = curr;
-// } else
-// queue_head = queue_tail = curr;
-// }
-//
-//
-// void bfs_dequeue(void)
-// {
-// struct BfsQueueStruct *curr;
-//
-// curr = queue_head;
-//
-// if (!(queue_head = queue_head->next))
-// queue_tail = 0;
-// free(curr);
-// }
-//
-//
-// void bfs_clear_queue(void)
-// {
-// while (queue_head)
-// bfs_dequeue();
-// }
-//
-//
-// /*
-//  * find_first_step: given a source room and a target room, find the first
-//  * step on the shortest path from the source to the target.
-//  *
-//  * Intended usage: in mobile_activity, give a mob a dir to go if they're
-//  * tracking another mob or a PC.  Or, a 'track' skill for PCs.
-//  */
+/*
+ * find_first_step: given a source room and a target room, find the first
+ * step on the shortest path from the source to the target.
+ *
+ * Intended usage: in mobile_activity, give a mob a dir to go if they're
+ * tracking another mob or a PC.  Or, a 'track' skill for PCs.
+ */
 fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
     if src == NOWHERE
         || target == NOWHERE
@@ -196,8 +159,7 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
 * Functions and Commands which use the above functions. *
 ********************************************************/
 
-#[allow(unused_variables)]
-pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {

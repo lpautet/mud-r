@@ -813,14 +813,15 @@ fn board_clear_board(b: &mut BoardSystem, board_type: usize) {
         if !b.msg_index[board_type][i].heading.is_none() {
             b.msg_index[board_type][i].heading = None;
         }
-        if !RefCell::borrow(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]).is_empty()
+        if b.msg_index[board_type][i].slot_num.is_some()
+            && !RefCell::borrow(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()])
+                .is_empty()
         {
             *RefCell::borrow_mut(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]) =
                 String::new();
         }
 
         b.msg_storage_taken[b.msg_index[board_type][i].slot_num.unwrap()] = false;
-        // memset((char *)&(msg_index[board_type][i]),0,sizeof(struct BoardMsginfo));
         b.msg_index[board_type][i].slot_num = None;
     }
     b.num_of_msgs[board_type] = 0;

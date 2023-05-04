@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: limits.c                                      Part of CircleMUD *
+*   File: limits.rs                                     Part of CircleMUD *
 *  Usage: limits & gain funcs for HMV, exp, hunger/thirst, idle time      *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -329,8 +330,6 @@ pub fn gain_exp_regardless(game: &Game, ch: &Rc<CharData>, gain: i32) {
 
 impl DB {
     pub(crate) fn gain_condition(&self, ch: &CharData, condition: i32, value: i32) {
-        //bool intoxicated;
-
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
             return;
@@ -425,9 +424,6 @@ impl DB {
 impl Game {
     /* Update PCs, NPCs, and objects */
     pub fn point_update(&mut self) {
-        // struct char_data * i, * next_char;
-        // struct obj_data * j, * next_thing, * jj, *next_thing2;
-
         /* characters */
         let characters = clone_vec(&self.db.character_list);
         for i in characters.iter() {

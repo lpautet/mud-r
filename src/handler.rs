@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: handler.c                                     Part of CircleMUD *
+*   File: handler.rs                                    Part of CircleMUD *
 *  Usage: internal funcs: moving and finding chars/objs                   *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::borrow::Borrow;
@@ -43,24 +44,6 @@ pub const FIND_OBJ_INV: i32 = 1 << 2;
 pub const FIND_OBJ_ROOM: i32 = 1 << 3;
 pub const FIND_OBJ_WORLD: i32 = 1 << 4;
 pub const FIND_OBJ_EQUIP: i32 = 1 << 5;
-
-// /* local vars */
-// int extractions_pending = 0;
-//
-// /* external vars */
-// extern struct char_data *combat_list;
-// extern const char *MENU;
-//
-// /* local functions */
-// int apply_ac(struct char_data *ch, int eq_pos);
-// void update_object(struct obj_data *obj, int use);
-// void update_char_objects(struct char_data *ch);
-//
-// /* external functions */
-// int invalid_class(struct char_data *ch, struct obj_data *obj);
-// void remove_follower(struct char_data *ch);
-// void clear_memory(struct char_data *ch);
-// ACMD(do_return);
 
 pub fn fname(namelist: &str) -> Rc<str> {
     let mut holder = String::new();
@@ -228,9 +211,6 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
 /* This updates a character by subtracting everything he is affected by */
 /* restoring original abilities, and then affecting all again           */
 pub fn affect_total(ch: &CharData) {
-    //struct affected_type *af;
-    //int i, j;
-
     for i in 0..NUM_WEARS {
         if ch.get_eq(i).is_some() {
             let eq = ch.get_eq(i).unwrap();
@@ -441,9 +421,6 @@ impl DB {
                 .peoples
                 .borrow_mut()
                 .push(ch.clone());
-            // *ch.next_in_room.borrow_mut() =
-            //     self.world.borrow()[room as usize].people.borrow().clone();
-            // *self.world.borrow_mut()[room as usize].people.borrow_mut() = Some(ch.clone());
             ch.set_in_room(room);
 
             if ch.get_eq(WEAR_LIGHT as i8).is_some() {
@@ -808,8 +785,6 @@ impl DB {
 
     /* Take an object from a room */
     pub fn obj_from_room(&self, object: Option<&Rc<ObjData>>) {
-        // struct obj_data *temp;
-
         if object.is_none() {
             error!("SYSERR: NULL object  passed to obj_from_room");
             return;
@@ -963,7 +938,6 @@ impl DB {
                 .number
                 .set(self.obj_index[obj.get_obj_rnum() as usize].number.get() - 1);
         }
-        //free_obj(obj);
     }
 }
 
@@ -1703,12 +1677,6 @@ impl DB {
         tar_ch: &mut Option<Rc<CharData>>,
         tar_obj: &mut Option<Rc<ObjData>>,
     ) -> i32 {
-        // int i, found, number;
-        // char name_val[MAX_INPUT_LENGTH];
-        // char * name = name_val;
-        //
-        // *tar_ch = NULL;
-        // * tar_obj = NULL;
         let mut name = String::new();
         let mut found = false;
 
