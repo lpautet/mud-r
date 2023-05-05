@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: mail.h                                        Part of CircleMUD *
+*   File: mail.rs                                       Part of CircleMUD *
 *  Usage: header file for mail system                                     *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 /******* MUD MAIL SYSTEM HEADER FILE **********************
@@ -431,9 +432,6 @@ impl MailSystem {
 
         copy_to_stored(&mut header.txt, msg_txt);
 
-        // strncpy(header.txt, msg_txt, HEADER_BLOCK_DATASIZE);	/* strncpy: OK (h.txt:HEADER_BLOCK_DATASIZE+1) */
-        // header.txt[HEADER_BLOCK_DATASIZE] = '\0';
-
         let mut target_address = self.pop_free_list(); /* find next free block */
         self.index_mail(to, target_address); /* add it to mail index in memory */
         let slice;
@@ -474,7 +472,6 @@ impl MailSystem {
             txt: [0; DATA_BLOCK_DATASIZE + 1],
         };
 
-        // strncpy(data.txt, msg_txt, DATA_BLOCK_DATASIZE);    /* strncpy: OK (d.txt:DATA_BLOCK_DATASIZE+1) */
         let copied = copy_to_stored(&mut data.txt, msg_txt);
         data.txt[DATA_BLOCK_DATASIZE] = 0;
         let slice;
@@ -518,7 +515,6 @@ impl MailSystem {
             /* now write the next block, assuming it's the last.  */
             data.block_type = LAST_BLOCK;
             let copied = copy_to_stored(&mut data.txt, msg_txt);
-            // strncpy(data.txt, msg_txt, DATA_BLOCK_DATASIZE);    /* strncpy: OK (d.txt:DATA_BLOCK_DATASIZE+1) */
             data.txt[DATA_BLOCK_DATASIZE] = 0;
             let slice;
             unsafe {
@@ -681,7 +677,6 @@ From: {}\r\n\
 * routines.  Written by Jeremy Elson (jelson@circlemud.org) *
 ****************************************************************/
 
-#[allow(unused_variables)]
 pub fn postmaster(
     game: &mut Game,
     ch: &Rc<CharData>,

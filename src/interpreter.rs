@@ -2865,8 +2865,7 @@ fn find_alias<'a, 'b>(alias_list: &'a Vec<AliasData>, alias: &'b str) -> Option<
 }
 
 /* The interface to the outside world: do_alias */
-pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
+pub fn do_alias(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     if ch.is_npc() {

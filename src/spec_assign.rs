@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: spec_assign.c                                 Part of CircleMUD *
+*   File: spec_assign.rs                                Part of CircleMUD *
 *  Usage: Functions to assign function pointers to objs/mobs/rooms        *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 /* functions to perform assignments */
@@ -70,7 +71,7 @@ pub fn assignroom(db: &mut DB, room: RoomVnum, fname: Special) {
 /* assign special procedures to mobiles */
 pub fn assign_mobiles(db: &mut DB) {
     // assign_kings_castle();
-    //
+
     assignmob(db, 1, puff);
     //
     /* Immortal Zone */

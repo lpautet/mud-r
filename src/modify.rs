@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: modify.c                                      Part of CircleMUD *
+*   File: modify.rs                                     Part of CircleMUD *
 *  Usage: Run-time modification of game variables                         *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 //
 // const char *string_fields[] =
@@ -29,32 +30,6 @@
 // 240,
 // 60
 // };
-//
-//
-// /* ************************************************************************
-// *  modification of malloc'ed strings                                      *
-// ************************************************************************ */
-//
-// /*
-//  * Put '#if 1' here to erase ~, or roll your own method.  A common idea
-//  * is smash/show tilde to convert the tilde to another innocuous character
-//  * to save and then back to display it. Whatever you do, at least keep the
-//  * function around because other MUD packages use it, like mudFTP.
-//  *   -gg 9/9/98
-//  */
-// void smash_tilde(char *str)
-// {
-// #if 0
-// /*
-//  * Erase any ~'s inserted by people in the editor.  This prevents anyone
-//  * using online creation from causing parse errors in the world files.
-//  * Derived from an idea by Sammy <samedi@dhc.net> (who happens to like
-//  * his tildes thank you very much.), -gg 2/20/98
-//  */
-// while ((str = strchr(str, '~')) != NULL)
-// *str = ' ';
-// #endif
-// }
 
 /*
  * Basic API function to start writing somewhere.
@@ -193,8 +168,7 @@ pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
-#[allow(unused_variables)]
-pub fn do_skillset(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_skillset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let db = &game.db;
     let mut name = String::new();
 
@@ -268,11 +242,8 @@ Skill being one of the following:\r\n",
         send_to_char(ch, "Unrecognized skill.\r\n");
         return;
     }
-    let mut buf = String::new();
+    let buf = String::new();
     let skill = skill.unwrap();
-    let argument = &argument[qend + 1..]; /* skip to next parameter */
-    let argument2 = one_argument(argument, &mut buf);
-    let argument = argument2;
 
     if buf.is_empty() {
         send_to_char(ch, "Learned value expected.\r\n");
@@ -450,9 +421,6 @@ pub fn page_string(d: Option<&Rc<DescriptorData>>, msg: &str, keep_internal: boo
 
 /* The call that displays the next page. */
 pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
-    // char buffer[MAX_STRING_LENGTH], buf[MAX_INPUT_LENGTH];
-    // int diff;
-
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
@@ -460,15 +428,8 @@ pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
         /* Q is for quit. :) */
         let cmd = buf.chars().next().unwrap().to_ascii_lowercase();
         if cmd == 'q' {
-            // free(d->showstr_vector);
             d.showstr_vector.borrow_mut().clear();
             d.showstr_count.set(0);
-            //     if d.showstr_head
-            //
-            // if (d->showstr_head) {
-            // free(d->showstr_head);
-            // d->showstr_head = NULL;
-            //}
             return;
         }
         /* R is for refresh, so back up one page internally so we can display
@@ -524,21 +485,6 @@ pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
         let diff =
             sv[d.showstr_page.get() as usize].len() - sv[(d.showstr_page.get() + 1) as usize].len();
         let buffer = &sv[d.showstr_page.get() as usize].as_ref()[..diff];
-        /*
-         * Fix for prompt overwriting last line in compact mode submitted by
-         * Peter Ajamian <peter@pajamian.dhs.org> on 04/21/2001
-         */
-        // if (buffer[diff - 2] == '\r' && buffer[diff - 1]=='\n')
-        // buffer[diff] = '\0';
-        // else if (buffer[diff - 2] == '\n' && buffer[diff - 1] == '\r')
-        // /* This is backwards.  Fix it. */
-        // strcpy(buffer + diff - 2, "\r\n");	/* strcpy: OK (size checked) */
-        // else if (buffer[diff - 1] == '\r' || buffer[diff - 1] == '\n')
-        // /* Just one of \r\n.  Overwrite it. */
-        // strcpy(buffer + diff - 1, "\r\n");	/* strcpy: OK (size checked) */
-        // else
-        // /* Tack \r\n onto the end to fix bug with prompt overwriting last line. */
-        // strcpy(buffer + diff, "\r\n");	/* strcpy: OK (size checked) */
         send_to_char(d.character.borrow().as_ref().unwrap(), buffer);
         d.showstr_page.set(d.showstr_page.get() + 1);
     }

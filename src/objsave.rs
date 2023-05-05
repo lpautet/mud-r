@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: objsave.c                                     Part of CircleMUD *
+*   File: objsave.rs                                    Part of CircleMUD *
 *  Usage: loading/saving player objects for rent and crash-save           *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::any::Any;
@@ -527,11 +528,7 @@ impl ObjFileElem {
  */
 pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
     let db = &game.db;
-    //int cost, orig_rent_code, num_objs = 0, j;
-    //float num_of_days;
     /* AutoEQ addition. */
-    // obj: &Rc<ObjData>, *obj2, *cont_row[MAX_BAG_ROWS];
-    // int location;
     let mut location = 0;
     let mut j;
     let mut cont_row: [Vec<Rc<ObjData>>; MAX_BAG_ROWS as usize] =
@@ -774,7 +771,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
             }
             if location < 0 && location >= -MAX_BAG_ROWS {
                 /*
-                 * Let the object be part of the content list but put it at the
+                 * TODO Let the object be part of the content list but put it at the
                  * list's end.  Thus having the items in the same order as before
                  * the character rented.
                  */
@@ -1558,7 +1555,6 @@ You begin to lose consciousness...",
     true
 }
 
-#[allow(unused_variables)]
 pub fn receptionist(
     game: &mut Game,
     ch: &Rc<CharData>,
@@ -1576,7 +1572,6 @@ pub fn receptionist(
     );
 }
 
-#[allow(unused_variables)]
 pub fn cryogenicist(
     game: &mut Game,
     ch: &Rc<CharData>,

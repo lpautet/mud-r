@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: spell_parser.c                                Part of CircleMUD *
+*   File: spell_parser.rs                               Part of CircleMUD *
 *  Usage: top-level magic routines; outside points of entry to magic sys. *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::cell::RefCell;
@@ -307,12 +308,6 @@ fn say_spell(
     tch: Option<&Rc<CharData>>,
     tobj: Option<&Rc<ObjData>>,
 ) {
-    // char lbuf[256], buf[256], buf1[256], buf2[256];	/* FIXME */
-    // const char *format;
-    //
-    // struct char_data *i;
-    // int j, ofs = 0;
-
     let mut lbuf = String::new();
     let mut buf = String::new();
     lbuf.push_str(skill_name(db, spellnum));
@@ -924,9 +919,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                 }
             }
 
-            // if obj.is_some() {
             game.db.extract_obj(obj);
-            // }
         }
         ITEM_POTION => {
             game.db
@@ -961,9 +954,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                 }
             }
 
-            // if obj.is_some() {
             game.db.extract_obj(obj);
-            // }
         }
         _ => {
             error!(
@@ -1060,13 +1051,7 @@ pub fn cast_spell(
  * the spell can be cast, checks for sufficient mana and subtracts it, and
  * passes control to cast_spell().
  */
-#[allow(unused_variables)]
-pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
-    // struct char_data *tch = None;
-    // struct obj_data *tobj = None;
-    // char *s, *t;
-    // int mana, spellnum, i, target = 0;
-
+pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.is_npc() {
         return;
     }
@@ -1111,11 +1096,6 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     let mut nt;
     if t.is_some() {
         arg = t.unwrap();
-
-        // char
-        // arg[MAX_INPUT_LENGTH];
-        //
-        // strlcpy(arg, t, sizeof(arg));
         nt = String::new();
         one_argument(arg, &mut nt);
         t = Some(&nt);
@@ -1129,7 +1109,6 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                let nt = String::new();
                 tch = db.get_char_vis(ch, &mut t, None, FIND_CHAR_ROOM);
                 tch.is_some()
             } {
@@ -1397,7 +1376,7 @@ fn skillo(db: &mut DB, skill: i32, name: &'static str) {
  */
 
 pub fn mag_assign_spells(db: &mut DB) {
-    /* Do not change the loop below. */
+    /* TODO Do not change the loop below. */
     // for i in 0..(TOP_SPELL_DEFINE as usize + 1) {
     //     unused_spell(i);
     // }

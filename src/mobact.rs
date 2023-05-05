@@ -1,14 +1,15 @@
 /* ************************************************************************
-*   File: mobact.c                                      Part of CircleMUD *
+*   File: mobact.rs                                     Part of CircleMUD *
 *  Usage: Functions for generating intelligent (?) behavior in mobiles    *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
-// #define MOB_AGGR_TO_ALIGN (MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD)
 
+use log::error;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -19,36 +20,36 @@ use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
     CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
-    MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS,
-    POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
+    MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY,
+    NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
 use crate::util::{clone_vec, num_followers_charmed, rand_number};
 use crate::{Game, TO_ROOM};
 
 impl Game {
     pub fn mobile_activity(&mut self) {
-        // struct char_data *ch, *next_ch, *vict;
-        // struct obj_data *obj, *best_obj;
-        // int door, found, max;
-        // memory_rec *names;
-
         let characters = clone_vec(&self.db.character_list);
         for ch in characters.iter() {
             if !self.db.is_mob(ch) {
                 continue;
             }
-            // TODO implement spec proc
             /* Examine call for special procedure */
-            //     if ch.mob_flagged(MOB_SPEC) && !no_specials {
-            //         if self.mob_index[ch.get_mob_rnum() as usize].func.isNone() {
-            //             error!("SYSERR: {} (#{}): Attempting to call non-existing mob function.", ch.get_name(), ch.get_mob_vnum());
-            //             REMOVE_BIT(MOB_FLAGS(ch), MOB_SPEC);
-            //         } else {
-            //             char actbuf[MAX_INPUT_LENGTH] = "";
-            //             if ((mob_index[GET_MOB_RNUM(ch)].func) (ch, ch, 0, actbuf))
-            // continue;		/* go to next char */
-            //         }
-            //     }
+            if ch.mob_flagged(MOB_SPEC) && !self.db.no_specials {
+                if self.db.mob_index[ch.get_mob_rnum() as usize].func.is_none() {
+                    ch.remove_mob_flags_bit(MOB_SPEC);
+                    error!(
+                        "SYSERR: {} (#{}): Attempting to call non-existing mob function.",
+                        ch.get_name(),
+                        self.db.get_mob_vnum(ch)
+                    );
+                } else {
+                    if self.db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
+                        self, ch, ch, 0, "",
+                    ) {
+                        continue; /* go to next char */
+                    }
+                }
+            }
 
             /* If the mob has no specproc, do the default actions */
             if ch.fighting().is_some() || !ch.awake() {

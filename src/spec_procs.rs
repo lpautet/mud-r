@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: spec_procs.c                                  Part of CircleMUD *
+*   File: spec_procs.rs                                 Part of CircleMUD *
 *  Usage: implementation of special procedures for mobiles/objects/rooms  *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::any::Any;
@@ -138,8 +139,7 @@ pub fn list_skills(db: &DB, ch: &Rc<CharData>) {
     page_string(ch.desc.borrow().as_ref(), &buf, true);
 }
 
-#[allow(unused_variables)]
-pub fn guild(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     if ch.is_npc() || !cmd_is(cmd, "practice") {
         return false;
@@ -191,8 +191,7 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argumen
     true
 }
 
-#[allow(unused_variables)]
-pub fn dump(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
     for k in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents) {
         game.db.act(
             "$p vanishes in a puff of smoke!",
@@ -456,8 +455,7 @@ fn npc_steal(db: &DB, ch: &Rc<CharData>, victim: &Rc<CharData>) {
 /*
  * Quite lethal to low-level characters.
  */
-#[allow(unused_variables)]
-pub fn snake(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || ch.get_pos() != POS_FIGHTING || ch.fighting().is_none() {
         return false;
     }
@@ -496,8 +494,7 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argumen
     return true;
 }
 
-#[allow(unused_variables)]
-pub fn thief(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || ch.get_pos() != POS_STANDING {
         return false;
     }
@@ -515,13 +512,12 @@ pub fn thief(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argumen
     return false;
 }
 
-#[allow(unused_variables)]
 pub fn magic_user(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    _me: &dyn Any,
     cmd: i32,
-    argument: &str,
+    _argument: &str,
 ) -> bool {
     if cmd != 0 || ch.get_pos() != POS_FIGHTING {
         return false;
@@ -605,13 +601,12 @@ pub fn magic_user(
 /* ********************************************************************
 *  Special procedures for mobiles                                      *
 ******************************************************************** */
-#[allow(unused_variables)]
 pub fn guild_guard(
     game: &mut Game,
     ch: &Rc<CharData>,
     me: &dyn Any,
     cmd: i32,
-    argument: &str,
+    _argument: &str,
 ) -> bool {
     let guard = me.downcast_ref::<Rc<CharData>>().unwrap();
     let buf = "The guard humiliates you, and blocks your way.\r\n";
@@ -645,8 +640,7 @@ pub fn guild_guard(
     false
 }
 
-#[allow(unused_variables)]
-pub fn puff(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn puff(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 {
         return false;
     }
@@ -672,8 +666,7 @@ pub fn puff(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument
     };
 }
 
-#[allow(unused_variables)]
-pub fn fido(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || !ch.awake() {
         return false;
     }
@@ -706,8 +699,13 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument
     return false;
 }
 
-#[allow(unused_variables)]
-pub fn janitor(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn janitor(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _me: &dyn Any,
+    cmd: i32,
+    _argument: &str,
+) -> bool {
     if cmd != 0 || !ch.awake() {
         return false;
     }
@@ -735,13 +733,12 @@ pub fn janitor(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argum
     return false;
 }
 
-#[allow(unused_variables)]
 pub fn cityguard(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    _me: &dyn Any,
     cmd: i32,
-    argument: &str,
+    _argument: &str,
 ) -> bool {
     if cmd != 0 || !ch.awake() || ch.fighting().is_some() {
         return false;
@@ -844,11 +841,10 @@ fn pet_price(pet: &Rc<CharData>) -> i32 {
     pet.get_level() as i32 * 300
 }
 
-#[allow(unused_variables)]
 pub fn pet_shops(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    _me: &dyn Any,
     cmd: i32,
     argument: &str,
 ) -> bool {
@@ -930,8 +926,7 @@ pub fn pet_shops(
 *  Special procedures for objects                                     *
 ******************************************************************** */
 
-#[allow(unused_variables)]
-pub fn bank(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {

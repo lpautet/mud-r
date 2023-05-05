@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: spells.h                                      Part of CircleMUD *
+*   File: spells.rs                                     Part of CircleMUD *
 *  Usage: header file: constants and fn prototypes for spell system       *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -264,114 +265,14 @@ pub struct AttackHitType {
     pub plural: &'static str,
 }
 
-// #define ASPELL(spellname) \
-// void	spellname(int level, struct char_data *ch, \
-// struct char_data *victim, struct obj_data *obj)
-//
-// #define MANUAL_SPELL(spellname)	spellname(level, caster, cvict, ovict);
-//
-// ASPELL(spell_create_water);
-// ASPELL(spell_recall);
-// ASPELL(spell_teleport);
-// ASPELL(spell_summon);
-// ASPELL(spell_locate_object);
-// ASPELL(spell_charm);
-// ASPELL(spell_information);
-// ASPELL(spell_identify);
-// ASPELL(spell_enchant_weapon);
-// ASPELL(spell_detect_poison);
-//
-// /* basic magic calling functions */
-//
-// int find_skill_num(char *name);
-//
-// int mag_damage(int level, struct char_data *ch, struct char_data *victim,
-// int spellnum, int savetype);
-//
-// void mag_affects(int level, struct char_data *ch, struct char_data *victim,
-// int spellnum, int savetype);
-//
-// void mag_groups(int level, struct char_data *ch, int spellnum, int savetype);
-//
-// void mag_masses(int level, struct char_data *ch, int spellnum, int savetype);
-//
-// void mag_areas(int level, struct char_data *ch, int spellnum, int savetype);
-//
-// void mag_summons(int level, struct char_data *ch, struct obj_data *obj,
-// int spellnum, int savetype);
-//
-// void mag_points(int level, struct char_data *ch, struct char_data *victim,
-// int spellnum, int savetype);
-//
-// void mag_unaffects(int level, struct char_data *ch, struct char_data *victim,
-// int spellnum, int type);
-//
-// void mag_alter_objs(int level, struct char_data *ch, struct obj_data *obj,
-// int spellnum, int type);
-//
-// void mag_creations(int level, struct char_data *ch, int spellnum);
-//
-// int	call_magic(struct char_data *caster, struct char_data *cvict,
-// struct obj_data *ovict, int spellnum, int level, int casttype);
-//
-// void	mag_objectmagic(struct char_data *ch, struct obj_data *obj,
-// char *argument);
-//
-// int	cast_spell(struct char_data *ch, struct char_data *tch,
-// struct obj_data *tobj, int spellnum);
-//
-//
-// /* other prototypes */
-// void spell_level(int spell, int chclass, int level);
-// void init_spell_levels(void);
-// const char *skill_name(int num);
-//
-// /* ************************************************************************
-// *   File: spells.c                                      Part of CircleMUD *
-// *  Usage: Implementation of "manual spells".  Circle 2.2 spell compat.    *
-// *                                                                         *
-// *  All rights reserved.  See license.doc for complete information.        *
-// *                                                                         *
-// *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
-// *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-// ************************************************************************ */
-//
-//
-// #include "conf.h"
-// #include "sysdep.h"
-//
-// #include "structs.h"
-// #include "utils.h"
-// #include "comm.h"
-// #include "spells.h"
-// #include "handler.h"
-// #include "db.h"
-// #include "constants.h"
-// #include "interpreter.h"
-//
-//
-// /* external variables */
-// extern room_rnum r_mortal_start_room;
-// extern int mini_mud;
-// extern int pk_allowed;
-//
-// /* external functions */
-// void clearMemory(struct char_data *ch);
-// void weight_change_object(struct obj_data *obj, int weight);
-// int mag_savingthrow(struct char_data *ch, int type, int modifier);
-// void name_to_drinkcon(struct obj_data *obj, int type);
-// void name_from_drinkcon(struct obj_data *obj);
-// int compute_armor_class(struct char_data *ch);
-
 /*
  * Special spells appear below.
  */
-#[allow(unused_variables)]
 pub fn spell_create_water(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: Option<&Rc<CharData>>,
-    victim: Option<&Rc<CharData>>,
+    _victim: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
 ) {
     if ch.is_none() || obj.is_none() {
@@ -402,13 +303,12 @@ pub fn spell_create_water(
     }
 }
 
-#[allow(unused_variables)]
 pub fn spell_recall(
     db: &DB,
-    level: i32,
-    ch: Option<&Rc<CharData>>,
+    _level: i32,
+    _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    _obj: Option<&Rc<ObjData>>,
 ) {
     if victim.is_none() || victim.unwrap().is_npc() {
         return;
@@ -430,13 +330,12 @@ pub fn spell_recall(
     look_at_room(db, victim, false);
 }
 
-#[allow(unused_variables)]
 pub fn spell_teleport(
     db: &DB,
-    level: i32,
-    ch: Option<&Rc<CharData>>,
+    _level: i32,
+    _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    _obj: Option<&Rc<ObjData>>,
 ) {
     let mut to_room;
 
@@ -478,13 +377,12 @@ pub fn spell_teleport(
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
-#[allow(unused_variables)]
 pub fn spell_summon(
     game: &Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    _obj: Option<&Rc<ObjData>>,
 ) {
     let db = &game.db;
     if ch.is_none() || victim.is_none() {
@@ -573,18 +471,13 @@ pub fn spell_summon(
     look_at_room(db, victim, false);
 }
 
-#[allow(unused_variables)]
 pub fn spell_locate_object(
     db: &DB,
     level: i32,
     ch: Option<&Rc<CharData>>,
-    victim: Option<&Rc<CharData>>,
+    _victim: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
 ) {
-    // struct obj_data *i;
-    // char name[MAX_INPUT_LENGTH];
-    // int j;
-
     /*
      * FIXME: This is broken.  The spell parser routines took the argument
      * the player gave to the spell and located an object with that keyword.
@@ -659,13 +552,12 @@ pub fn spell_locate_object(
     }
 }
 
-#[allow(unused_variables)]
 pub fn spell_charm(
     db: &DB,
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    _obj: Option<&Rc<ObjData>>,
 ) {
     if victim.is_none() || ch.is_none() {
         return;
@@ -727,17 +619,13 @@ pub fn spell_charm(
     }
 }
 
-#[allow(unused_variables)]
 pub fn spell_identify(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
 ) {
-    // int i, found;
-    // size_t len;
-
     if obj.is_some() {
         let obj = obj.unwrap();
         let mut bitbuf = String::new();
@@ -928,12 +816,11 @@ pub fn spell_identify(
  * Cannot use this spell on an equipped object or it will mess up the
  * wielding character's hit/dam totals.
  */
-#[allow(unused_variables)]
 pub fn spell_enchant_weapon(
     db: &DB,
     level: i32,
     ch: Option<&Rc<CharData>>,
-    victim: Option<&Rc<CharData>>,
+    _victim: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
 ) {
     if ch.is_none() || obj.is_none() {
@@ -984,10 +871,9 @@ pub fn spell_enchant_weapon(
     }
 }
 
-#[allow(unused_variables)]
 pub fn spell_detect_poison(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,

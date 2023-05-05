@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: shop.h                                        Part of CircleMUD *
+*   File: shop.rs                                       Part of CircleMUD *
 *  Usage: shop file definitions, structures, constants                    *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::any::Any;
@@ -28,8 +29,9 @@ use crate::handler::{fname, get_number, isname, obj_from_char};
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
 use crate::structs::{
-    CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, AFF_CHARM, ITEM_DRINKCON,
-    ITEM_NOSELL, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING, NOWHERE,
+    CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, AFF_CHARM,
+    ITEM_DRINKCON, ITEM_NOSELL, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
+    NOWHERE,
 };
 use crate::util::{get_line, sprintbit};
 use crate::{an, is_set, send_to_char, yesno, Game, PAGE_LENGTH, TO_CHAR, TO_ROOM};
@@ -43,9 +45,6 @@ impl ShopBuyData {
     pub fn buy_type(&self) -> i32 {
         self.type_
     }
-    // pub fn buy_word(&self) -> &str {
-    //     self.keywords.as_ref()
-    // }
 }
 
 pub struct ShopData {
@@ -93,21 +92,13 @@ pub struct ShopData {
     /* Store all gold over 15000 (disabled)	*/
     pub lastsort: i32,
     /* How many items are sorted in inven?	*/
-    //SPECIAL (*func);		/* Secondary spec_proc for shopkeeper	*/
+    pub func: Option<Special>, /* Secondary spec_proc for shopkeeper	*/
 }
 
-//
-//
 const MAX_TRADE: i32 = 5; /* List maximums for compatibility	*/
 const MAX_PROD: i32 = 5; /*	with shops before v3.0		*/
 const VERSION3_TAG: &str = "v3.0"; /* The file has v3.0 shops in it!	*/
 // const MAX_SHOP_OBJ: i32 = 100; /* "Soft" maximum for list maximums	*/
-//
-//
-// /* Pretty general macros that could be used elsewhere */
-// #define IS_GOD(ch)		(!IS_NPC(ch) && (GET_LEVEL(ch) >= LVL_GOD))
-// #define END_OF(buffer)		((buffer) + strlen((buffer)))
-
 /* Possible states for objects trying to be sold */
 const OBJECT_DEAD: i32 = 0;
 const OBJECT_NOTOK: i32 = 1;
@@ -148,10 +139,6 @@ impl StackData {
     }
 }
 
-// #define S_DATA(stack, index)	((stack)->data[(index)])
-// #define S_LEN(stack)		((stack)->len)
-//
-//
 /* Which expression type we are now parsing */
 const OPER_OPEN_PAREN: i32 = 0;
 const OPER_CLOSE_PAREN: i32 = 1;
@@ -160,33 +147,11 @@ const OPER_AND: i32 = 3;
 const OPER_NOT: i32 = 4;
 // const MAX_OPER: i32 = 4;
 
-//
-//
-// #define SHOP_NUM(i)		(shop_index[(i)].vnum)
-// #define SHOP_KEEPER(i)		(shop_index[(i)].keeper)
-// #define SHOP_OPEN1(i)		(shop_index[(i)].open1)
-// #define SHOP_CLOSE1(i)		(shop_index[(i)].close1)
-// #define SHOP_OPEN2(i)		(shop_index[(i)].open2)
-// #define SHOP_CLOSE2(i)		(shop_index[(i)].close2)
-// #define SHOP_ROOM(i, num)	(shop_index[(i)].in_room[(num)])
-// #define SHOP_BUYTYPE(i, num)	(BUY_TYPE(shop_index[(i)].type[(num)]))
-// #define SHOP_BUYWORD(i, num)	(BUY_WORD(shop_index[(i)].type[(num)]))
-// #define SHOP_PRODUCT(i, num)	(shop_index[(i)].producing[(num)])
 impl ShopData {
     fn shop_product(&self, num: i32) -> ObjVnum {
         self.producing[num as usize]
     }
 }
-
-// #define SHOP_BANK(i)		(shop_index[(i)].bank_account)
-// #define SHOP_BROKE_TEMPER(i)	(shop_index[(i)].temper1)
-// #define SHOP_BITVECTOR(i)	(shop_index[(i)].bitvector)
-// #define SHOP_TRADE_WITH(i)	(shop_index[(i)].with_who)
-// #define SHOP_SORT(i)		(shop_index[(i)].lastsort)
-// #define SHOP_BUYPROFIT(i)	(shop_index[(i)].profit_buy)
-// #define SHOP_SELLPROFIT(i)	(shop_index[(i)].profit_sell)
-// #define SHOP_FUNC(i)		(shop_index[(i)].func)
-//
 
 macro_rules! get_shop {
     ($game:expr, $shop_nr:expr) => {
@@ -230,10 +195,9 @@ impl ShopData {
     }
 }
 
-//
 pub const MIN_OUTSIDE_BANK: i32 = 5000;
 pub const MAX_OUTSIDE_BANK: i32 = 15000;
-//
+
 pub const MSG_NOT_OPEN_YET: &str = "Come back later!";
 pub const MSG_NOT_REOPEN_YET: &str = "Sorry, we have closed, but come back later.";
 pub const MSG_CLOSED_FOR_DAY: &str = "Sorry, come back tomorrow.";
@@ -387,8 +351,6 @@ fn find_oper_num(token: &str) -> Option<usize> {
 fn evaluate_expression(obj: &Rc<ObjData>, expr: &str) -> i32 {
     let mut ops = StackData::new();
     let mut vals = StackData::new();
-    // char *ptr, *end, name[MAX_STRING_LENGTH];
-    // int temp, eindex;
 
     if expr.is_empty() {
         /* Allows opening ( first. */
@@ -491,9 +453,6 @@ fn trade_with(item: &Rc<ObjData>, shop: &ShopData) -> i32 {
 }
 
 fn same_obj(obj1: &Rc<ObjData>, obj2: &Rc<ObjData>) -> bool {
-    // if (!obj1 || !obj2)
-    // return (obj1 == obj2);
-
     if obj1.get_obj_rnum() != obj2.get_obj_rnum() {
         return false;
     }
@@ -608,8 +567,6 @@ fn get_hash_obj_vis(
     name: &str,
     list: &Vec<Rc<ObjData>>,
 ) -> Option<Rc<ObjData>> {
-    // struct obj_data *loop, *last_obj = NULL;
-    // int qindex;
     let mut qindex;
     if is_number(name) {
         qindex = name.parse::<i32>().unwrap();
@@ -735,10 +692,6 @@ fn shopping_buy(
     keeper: &Rc<CharData>,
     shop_nr: usize,
 ) {
-    // char tempstr[MAX_INPUT_LENGTH], tempbuf[MAX_INPUT_LENGTH];
-    // obj: &Rc<ObjData>, *last_obj = NULL;
-    // int goldamt = 0, buynum, bought = 0;
-
     if !is_ok(game, keeper, ch, shop_nr) {
         return;
     }
@@ -1383,10 +1336,6 @@ fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
     false
 }
 
-// pub fn get_shop(game: &Game, shop_nr: usize) -> &mut ShopData {
-//     &mut game.db.shop_index.borrow_mut()[shop_nr]
-// }
-
 pub fn shop_keeper(
     game: &mut Game,
     ch: &Rc<CharData>,
@@ -1409,10 +1358,12 @@ pub fn shop_keeper(
         shop_nr = shopo.unwrap();
     }
 
-    // TODO implement spec for spec
-    // if (SHOP_FUNC(shop_nr))	/* Check secondary function */
-    // if ((SHOP_FUNC(shop_nr)) (ch, me, cmd, argument))
-    // return (true);
+    if game.db.shop_index.borrow()[shop_nr].func.is_some() {
+        let func = game.db.shop_index.borrow()[shop_nr].func.unwrap();
+        if func(game, ch, me, cmd, argument) {
+            return true;
+        }
+    }
 
     if Rc::ptr_eq(keeper, ch) {
         if cmd != 0 {
@@ -1604,9 +1555,6 @@ fn read_type_list(
     new_format: bool,
     max: i32,
 ) -> usize {
-    // int tindex, num, len = 0, error = 0;
-    // char *ptr;
-    // char buf[MAX_STRING_LENGTH];
     let mut error = 0;
 
     if !new_format {
@@ -1643,6 +1591,7 @@ fn read_type_list(
             }
         }
 
+        // TODO ??
         // ptr = buf;
         // if num == NOTHING {
         //     sscanf(buf, "{}", &num);
@@ -1666,8 +1615,6 @@ fn read_type_list(
 }
 
 fn read_shop_message(mnum: i32, shr: RoomRnum, reader: &mut BufReader<File>, why: &str) -> Rc<str> {
-    // int cht, ss = 0, ds = 0, err = 0;
-    // char *tbuf;
     let mut err = 0;
     let mut ds = 0;
     let mut ss = 0;
@@ -1714,114 +1661,110 @@ fn read_shop_message(mnum: i32, shr: RoomRnum, reader: &mut BufReader<File>, why
     return Rc::from(tbuf);
 }
 
-impl DB {
-    pub fn boot_the_shops(&mut self, shop_f: File, filename: &str, _rec_count: i32) {
-        // char *buf, buf2[256];
-        // int temp, count, new_format = FALSE;
-        // struct ShopBuyData list[MAX_SHOP_OBJ + 1];
-        let mut new_format = false;
-        let mut reader = BufReader::new(shop_f);
-        let mut done = false;
-        let mut buf2 = format!("beginning of shop file {}", filename);
+pub fn boot_the_shops(db: &mut DB, shop_f: File, filename: &str, _rec_count: i32) {
+    let mut new_format = false;
+    let mut reader = BufReader::new(shop_f);
+    let mut done = false;
+    let mut buf2 = format!("beginning of shop file {}", filename);
 
-        while !done {
-            let buf = fread_string(&mut reader, &buf2);
-            if buf.starts_with('#') {
-                /* New shop */
+    while !done {
+        let buf = fread_string(&mut reader, &buf2);
+        if buf.starts_with('#') {
+            /* New shop */
 
-                let regex = Regex::new(r"^#(-?\+?\d{1,9})").unwrap();
-                let f = regex.captures(&buf).unwrap();
-                let mut temp = f[1].parse::<i32>().unwrap();
-                buf2 = format!("shop #{} in shop file {}", temp, filename);
+            let regex = Regex::new(r"^#(-?\+?\d{1,9})").unwrap();
+            let f = regex.captures(&buf).unwrap();
+            let mut temp = f[1].parse::<i32>().unwrap();
+            buf2 = format!("shop #{} in shop file {}", temp, filename);
 
-                let mut shop = ShopData {
-                    vnum: temp as RoomVnum,
-                    producing: vec![],
-                    profit_buy: 0.0,
-                    profit_sell: 0.0,
-                    type_: vec![],
-                    no_such_item1: Rc::from(""),
-                    no_such_item2: Rc::from(""),
-                    missing_cash1: Rc::from(""),
-                    missing_cash2: Rc::from(""),
-                    do_not_buy: Rc::from(""),
-                    message_buy: Rc::from(""),
-                    message_sell: Rc::from(""),
-                    temper1: 0,
-                    bitvector: 0,
-                    keeper: 0,
-                    with_who: 0,
-                    in_room: vec![],
-                    open1: 0,
-                    open2: 0,
-                    close1: 0,
-                    close2: 0,
-                    bank_account: 0,
-                    lastsort: 0,
-                };
+            let mut shop = ShopData {
+                vnum: temp as RoomVnum,
+                producing: vec![],
+                profit_buy: 0.0,
+                profit_sell: 0.0,
+                type_: vec![],
+                no_such_item1: Rc::from(""),
+                no_such_item2: Rc::from(""),
+                missing_cash1: Rc::from(""),
+                missing_cash2: Rc::from(""),
+                do_not_buy: Rc::from(""),
+                message_buy: Rc::from(""),
+                message_sell: Rc::from(""),
+                temper1: 0,
+                bitvector: 0,
+                keeper: 0,
+                with_who: 0,
+                in_room: vec![],
+                open1: 0,
+                open2: 0,
+                close1: 0,
+                close2: 0,
+                bank_account: 0,
+                lastsort: 0,
+                func: None,
+            };
 
-                let mut list: Vec<ShopBuyData> = vec![];
-                temp = read_list(
-                    self,
-                    &mut reader,
-                    &mut list,
-                    new_format,
-                    MAX_PROD,
-                    LIST_PRODUCE,
-                ) as i32;
-                for count in 0..temp {
-                    shop.producing
-                        .push(list[count as usize].buy_type() as ObjVnum);
-                }
+            let mut list: Vec<ShopBuyData> = vec![];
+            temp = read_list(
+                db,
+                &mut reader,
+                &mut list,
+                new_format,
+                MAX_PROD,
+                LIST_PRODUCE,
+            ) as i32;
+            for count in 0..temp {
+                shop.producing
+                    .push(list[count as usize].buy_type() as ObjVnum);
+            }
 
-                read_line_float(self, &mut reader, &mut shop.profit_buy);
-                read_line_float(self, &mut reader, &mut shop.profit_sell);
+            read_line_float(db, &mut reader, &mut shop.profit_buy);
+            read_line_float(db, &mut reader, &mut shop.profit_sell);
 
-                list.clear();
-                temp = read_type_list(self, &mut reader, &mut list, new_format, MAX_TRADE) as i32;
+            list.clear();
+            temp = read_type_list(db, &mut reader, &mut list, new_format, MAX_TRADE) as i32;
 
-                for count in 0..temp as usize {
-                    shop.type_.push({
-                        ShopBuyData {
-                            type_: list[count].type_,
-                            keywords: list[count].keywords.clone(),
-                        }
-                    })
-                }
+            for count in 0..temp as usize {
+                shop.type_.push({
+                    ShopBuyData {
+                        type_: list[count].type_,
+                        keywords: list[count].keywords.clone(),
+                    }
+                })
+            }
 
-                shop.no_such_item1 = read_shop_message(0, shop.vnum, &mut reader, &buf2);
-                shop.no_such_item2 = read_shop_message(1, shop.vnum, &mut reader, &buf2);
-                shop.do_not_buy = read_shop_message(2, shop.vnum, &mut reader, &buf2);
-                shop.missing_cash1 = read_shop_message(3, shop.vnum, &mut reader, &buf2);
-                shop.missing_cash2 = read_shop_message(4, shop.vnum, &mut reader, &buf2);
-                shop.message_buy = read_shop_message(5, shop.vnum, &mut reader, &buf2);
-                shop.message_sell = read_shop_message(6, shop.vnum, &mut reader, &buf2);
-                read_line_int(self, &mut reader, &mut shop.temper1);
-                read_line_int(self, &mut reader, &mut shop.bitvector);
-                let mut shop_keeper = NOBODY as i32;
-                read_line_int(self, &mut reader, &mut shop_keeper);
-                shop.keeper = self.real_mobile(shop_keeper as MobVnum);
-                read_line_int(self, &mut reader, &mut shop.with_who);
-                let mut list: Vec<ShopBuyData> = vec![];
-                temp = read_list(self, &mut reader, &mut list, new_format, 1, LIST_ROOM) as i32;
-                for count in 0..temp as usize {
-                    shop.in_room.push(list[count].type_ as RoomVnum);
-                }
+            shop.no_such_item1 = read_shop_message(0, shop.vnum, &mut reader, &buf2);
+            shop.no_such_item2 = read_shop_message(1, shop.vnum, &mut reader, &buf2);
+            shop.do_not_buy = read_shop_message(2, shop.vnum, &mut reader, &buf2);
+            shop.missing_cash1 = read_shop_message(3, shop.vnum, &mut reader, &buf2);
+            shop.missing_cash2 = read_shop_message(4, shop.vnum, &mut reader, &buf2);
+            shop.message_buy = read_shop_message(5, shop.vnum, &mut reader, &buf2);
+            shop.message_sell = read_shop_message(6, shop.vnum, &mut reader, &buf2);
+            read_line_int(db, &mut reader, &mut shop.temper1);
+            read_line_int(db, &mut reader, &mut shop.bitvector);
+            let mut shop_keeper = NOBODY as i32;
+            read_line_int(db, &mut reader, &mut shop_keeper);
+            shop.keeper = db.real_mobile(shop_keeper as MobVnum);
+            read_line_int(db, &mut reader, &mut shop.with_who);
+            let mut list: Vec<ShopBuyData> = vec![];
+            temp = read_list(db, &mut reader, &mut list, new_format, 1, LIST_ROOM) as i32;
+            for count in 0..temp as usize {
+                shop.in_room.push(list[count].type_ as RoomVnum);
+            }
 
-                read_line_int(self, &mut reader, &mut shop.open1);
-                read_line_int(self, &mut reader, &mut shop.close1);
-                read_line_int(self, &mut reader, &mut shop.open2);
-                read_line_int(self, &mut reader, &mut shop.close2);
+            read_line_int(db, &mut reader, &mut shop.open1);
+            read_line_int(db, &mut reader, &mut shop.close1);
+            read_line_int(db, &mut reader, &mut shop.open2);
+            read_line_int(db, &mut reader, &mut shop.close2);
 
-                self.shop_index.borrow_mut().push(shop);
-            } else {
-                if buf.starts_with('$') {
-                    /* EOF */
-                    done = true;
-                } else if buf.contains(VERSION3_TAG) {
-                    /* New format marker */
-                    new_format = true;
-                }
+            db.shop_index.borrow_mut().push(shop);
+        } else {
+            if buf.starts_with('$') {
+                /* EOF */
+                done = true;
+            } else if buf.contains(VERSION3_TAG) {
+                /* New format marker */
+                new_format = true;
             }
         }
     }
@@ -1845,12 +1788,13 @@ pub fn assign_the_shopkeepers(db: &mut DB) {
             continue;
         }
         db.mob_index[shop.keeper as usize].func = Some(shop_keeper);
-        // TODO func in func
         /* Having SHOP_FUNC() as 'shop_keeper' will cause infinite recursion. */
-        // if (mob_index[SHOP_KEEPER(cindex)].func & & mob_index[SHOP_KEEPER(cindex)].func != shop_keeper)
-        // SHOP_FUNC(cindex) = mob_index[SHOP_KEEPER(cindex)].func;
+        if db.mob_index[shop.keeper as usize].func.is_some()
+            && db.mob_index[shop.keeper as usize].func.unwrap() as usize != shop_keeper as usize
+        {
+            db.mob_index[shop.keeper as usize].func = db.mob_index[shop.keeper as usize].func;
+        }
     }
-    // TODO implement shopkeeper spec proc
 }
 
 fn customer_string(shop: &ShopData, detailed: bool) -> String {
@@ -1975,8 +1919,7 @@ fn list_detailed_shop(db: &DB, ch: &Rc<CharData>, shop_nr: i32) {
                 "{} (#{}), Special Function: {}\r\n",
                 db.mob_protos[shop.keeper as usize].get_name(),
                 db.mob_index[shop.keeper as usize].vnum,
-                // TODO implement shop spec proc function
-                yesno!(/*shop.function*/ false)
+                yesno!(shop.func.is_some())
             )
             .as_str(),
         );

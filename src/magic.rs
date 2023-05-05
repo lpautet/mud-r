@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: magic.c                                       Part of CircleMUD *
+*   File: magic.rs                                      Part of CircleMUD *
 *  Usage: low-level functions for magic; spell template code              *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use std::cmp::{max, min};
@@ -181,9 +182,6 @@ pub fn mag_damage(
     let mut dam = 0;
     let mut victim = victim;
 
-    // if (victim == NULL || ch == NULL)
-    // return (0);
-
     match spellnum {
         /* Mostly mages */
         SPELL_MAGIC_MISSILE | SPELL_CHILL_TOUCH => {
@@ -316,10 +314,6 @@ pub fn mag_affects(
     spellnum: i32,
     savetype: i32,
 ) {
-    // struct affected_type af[MAX_SPELL_AFFECTS];
-    // bool accum_affect = FALSE, accum_duration = FALSE;
-    // const char *to_vict = NULL, *to_room = NULL;
-    // int i;
     let mut victim = victim;
     let mut af = [AffectedType {
         _type: 0,
@@ -654,8 +648,7 @@ pub fn mag_groups(db: &DB, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32,
  *
  * No spells of this class currently implemented.
  */
-#[allow(unused_variables)]
-pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetype: i32) {
+pub fn mag_masses(db: &DB, _level: i32, ch: &Rc<CharData>, spellnum: i32, _savetype: i32) {
     for tch in db.world.borrow()[ch.in_room() as usize]
         .peoples
         .borrow()
@@ -679,13 +672,12 @@ pub fn mag_masses(db: &DB, level: i32, ch: &Rc<CharData>, spellnum: i32, savetyp
  *
  *  area spells have limited targets within the room.
  */
-#[allow(unused_variables)]
 pub fn mag_areas(
     game: &mut Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     spellnum: i32,
-    savetype: i32,
+    _savetype: i32,
 ) {
     let mut to_char = "";
     let mut to_room = "";
@@ -782,27 +774,17 @@ const MAG_SUMMON_FAIL_MSGS: [&str; 8] = [
     "There is no corpse!\r\n",
 ];
 
-// /* These mobiles do not exist. */
-// #define MOB_MONSUM_I		130
-// #define MOB_MONSUM_II		140
-// #define MOB_MONSUM_III		150
-// #define MOB_GATE_I		160
-// #define MOB_GATE_II		170
-// #define MOB_GATE_III		180
-//
 // /* Defined mobiles. */
-// #define MOB_ELEMENTAL_BASE	20	/* Only one for now. */
 const MOB_CLONE: i32 = 10;
 const MOB_ZOMBIE: i32 = 11;
-// #define MOB_AERIALSERVANT	19
-#[allow(unused_variables)]
+
 pub fn mag_summons(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
     spellnum: i32,
-    savetype: i32,
+    _savetype: i32,
 ) {
     let pfail;
     let msg;
@@ -897,13 +879,12 @@ pub fn mag_summons(
     }
 }
 
-#[allow(unused_variables)]
 pub fn mag_points(
     level: i32,
-    ch: &Rc<CharData>,
+    _ch: &Rc<CharData>,
     victim: Option<&Rc<CharData>>,
     spellnum: i32,
-    savetype: i32,
+    _savetype: i32,
 ) {
     let healing;
     let move_ = 0;
@@ -935,14 +916,13 @@ pub fn mag_points(
     update_pos(victim);
 }
 
-#[allow(unused_variables)]
 pub fn mag_unaffects(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: &Rc<CharData>,
     victim: &Rc<CharData>,
     spellnum: i32,
-    type_: i32,
+    _type_: i32,
 ) {
     let spell;
     let mut msg_not_affected = true;
@@ -1000,14 +980,13 @@ pub fn mag_unaffects(
     }
 }
 
-#[allow(unused_variables)]
 pub fn mag_alter_objs(
     db: &DB,
-    level: i32,
+    _level: i32,
     ch: &Rc<CharData>,
     obj: Option<&Rc<ObjData>>,
     spellnum: i32,
-    savetype: i32,
+    _savetype: i32,
 ) {
     let mut to_char = "";
     let to_room = "";

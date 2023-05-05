@@ -1,11 +1,12 @@
 /* ************************************************************************
-*   File: weather.c                                     Part of CircleMUD *
+*   File: weather.rs                                    Part of CircleMUD *
 *  Usage: functions handling time and the weather                         *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 use crate::structs::{

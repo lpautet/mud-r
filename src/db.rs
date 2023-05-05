@@ -37,7 +37,7 @@ use crate::interpreter::{one_argument, one_word, search_block};
 use crate::mail::MailSystem;
 use crate::modify::paginate_string;
 use crate::objsave::update_obj_file;
-use crate::shops::{assign_the_shopkeepers, destroy_shops, ShopData};
+use crate::shops::{assign_the_shopkeepers, boot_the_shops, destroy_shops, ShopData};
 use crate::spec_assign::{assign_mobiles, assign_objects, assign_rooms};
 use crate::spec_procs::{sort_spells, Mayor};
 use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
@@ -1093,7 +1093,7 @@ impl DB {
                     self.load_help(db_file.unwrap());
                 }
                 DB_BOOT_SHP => {
-                    self.boot_the_shops(db_file.unwrap(), &buf2, rec_count);
+                    boot_the_shops(self, db_file.unwrap(), &buf2, rec_count);
                 }
                 _ => {}
             }

@@ -1,15 +1,15 @@
 /* ************************************************************************
-*   File: utils.c                                       Part of CircleMUD *
+*   File: utils.rs                                      Part of CircleMUD *
 *  Usage: various internal functions of a utility nature                  *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
 /* defines for mudlog() */
-use chrono::{TimeZone, Utc};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -19,23 +19,26 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::{TimeZone, Utc};
 use log::{error, info};
 // struct time_info_data *real_time_passed(time_t t2, time_t t1);
 // struct time_info_data *mud_time_passed(time_t t2, time_t t1);
 // void prune_crlf(char *txt);
 use rand::Rng;
 
+use crate::class::CLASS_ABBREVS;
 use crate::constants::STR_APP;
 use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
 use crate::handler::{affect_from_char, affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
+use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, Special,
     AFF_BLIND, AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE,
     CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE,
     PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
-    ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE,
+    ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET,
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
@@ -88,12 +91,6 @@ macro_rules! toggle_bit {
     };
 }
 
-// #[macro_export]
-// macro_rules! is_npc {
-//     ($ch:expr) => {{
-//         (is_set!(mob_flags!($ch), MOB_ISNPC))
-//     }};
-// }
 impl CharData {
     pub fn is_npc(&self) -> bool {
         return is_set!(self.char_specials.borrow().saved.act, MOB_ISNPC);
@@ -118,12 +115,6 @@ impl DB {
     }
 }
 
-// #[macro_export]
-// macro_rules! prf_flagged {
-//     ($ch:expr,$flag:expr) => {
-//         (is_set!(prf_flags!($ch), ($flag)))
-//     };
-// }
 impl CharData {
     pub fn prf_flagged(&self, flag: i64) -> bool {
         return is_set!(self.prf_flags(), flag);
@@ -153,14 +144,7 @@ impl CharData {
     }
 }
 
-// #[macro_export]
-// macro_rules! prf_flags {
-//     ($ch:expr) => {
-//         (check_player_special!(($ch), RefCell::borrow(&(($ch).player_specials)).saved.pref))
-//     };
-// }
-
-/* TODO:
+/* TOO
  * Accessing player specific data structures on a mobile is a very bad thing
  * to do.  Consider that changing these variables for a single mob will change
  * it for every other single mob in the game.  If we didn't specifically check
@@ -173,8 +157,6 @@ macro_rules! check_player_special {
         ($var)
     };
 }
-use crate::class::CLASS_ABBREVS;
-use crate::spells::SPELL_CHARM;
 pub use check_player_special;
 
 impl CharData {
@@ -249,31 +231,10 @@ macro_rules! get_room_spec {
     };
 }
 
-// #[macro_export]
-// macro_rules! get_pc_name {
-//     ($ch:expr) => {
-//         (($ch).player.name.as_str())
-//     };
-// }
-
 impl CharData {
     pub fn get_pc_name(&self) -> Rc<str> {
         return Rc::from(self.player.borrow().name.as_str());
     }
-}
-
-// #[macro_export]
-// macro_rules! get_name {
-//     ($ch:expr) => {
-//         (if is_npc!($ch) {
-//             ($ch).player.short_descr.as_str()
-//         } else {
-//             get_pc_name!($ch)
-//         })
-//     };
-// }
-
-impl CharData {
     pub fn get_name(&self) -> Rc<str> {
         if self.is_npc() {
             Rc::from(self.player.borrow().short_descr.as_str())
@@ -314,12 +275,6 @@ macro_rules! isnewl {
     };
 }
 
-// #[macro_export]
-// macro_rules! get_wait_state {
-//     ($ch:expr) => {
-//         (($ch).wait)
-//     };
-// }
 impl DescriptorData {
     pub fn state(&self) -> ConState {
         self.connected.get()
@@ -465,16 +420,6 @@ macro_rules! get_talk {
         ))
     };
 }
-
-// #[macro_export]
-// macro_rules! get_talk_mut {
-//     ($ch:expr, $i:expr) => {
-//         (check_player_special!(
-//             ($ch),
-//             RefCell::borrow_mut(&($ch).player_specials).saved.talks[($i)]
-//         ))
-//     };
-// }
 
 impl CharData {
     pub fn get_talk_mut(&self, i: usize) -> bool {
@@ -1247,19 +1192,17 @@ pub fn time_now() -> u64 {
         .as_secs();
 }
 
-/* external globals */
-// extern struct time_data time_info;
-
-/* local functions */
 /* creates a random number in interval [from;to] */
 pub fn rand_number(from: u32, to: u32) -> u32 {
     /* error checking in case people call this incorrectly */
-    // if from > to {
-    // let  tmp = from;
-    // from = to;
-    // to = tmp;
-    // log("SYSERR: rand_number() should be called with lowest, then highest. (%d, %d), not (%d, %d).", from, to, to, from);
-    // }
+    let mut from = from;
+    let mut to = to;
+    if from > to {
+        let tmp = from;
+        from = to;
+        to = tmp;
+        error!("SYSERR: rand_number() should be called with lowest, then highest. ({}, {}), not ({}, {}).", from, to, to, from);
+    }
 
     /*
      * This should always be of the form:
@@ -1272,7 +1215,6 @@ pub fn rand_number(from: u32, to: u32) -> u32 {
      * deviation of both are identical (within the realm of statistical
      * identity) if the rand() implementation is non-broken.
      */
-    //return (circle_random() % (to - from + 1)) + from;
     return rand::thread_rng().gen_range(from..to + 1);
 }
 
@@ -1291,24 +1233,6 @@ pub fn dice(num: i32, size: i32) -> i32 {
 
     return sum;
 }
-
-/* Be wary of sign issues with this. */
-// int MIN(int a, int b)
-// {
-// return (a < b ? a : b);
-// }
-
-/* Be wary of sign issues with this. */
-// int MAX(int a, int b)
-// {
-// return (a > b ? a : b);
-// }
-
-// char *CAP(char *txt)
-// {
-// *txt = UPPER(*txt);
-// return (txt);
-// }
 
 /*
  * Strips \r\n from end of string.
@@ -1455,10 +1379,6 @@ impl Game {
  * Doesn't really matter since this function doesn't change the array though.
  */
 pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
-    // size_t len = 0;
-    // int nlen;
-    // long nr;
-
     let mut nr = 0;
     let mut bitvector = bitvector;
     loop {
@@ -1746,9 +1666,7 @@ pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
  * be at least READ_SIZE (256) characters large.
  */
 pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
-    //char temp[READ_SIZE];
     let mut lines = 0;
-    //let sl: i32;
     let mut temp = String::new();
 
     loop {
@@ -1772,9 +1690,6 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
 }
 
 pub fn get_filename(filename: &mut String, mode: i32, orig_name: &str) -> bool {
-    // const char *prefix, *middle, *suffix;
-    // char name[PATH_MAX], *ptr;
-
     if orig_name.is_empty() {
         error!(
             "SYSERR:  empty string passed to get_filename(), {} .",
@@ -1907,8 +1822,11 @@ impl DB {
             return false;
         }
 
-        // if (weather_info.sunlight == SUN_SET | | weather_info.sunlight == SUN_DARK)
-        // return (TRUE);
+        if self.weather_info.borrow().sunlight == SUN_SET
+            || self.weather_info.borrow().sunlight == SUN_DARK
+        {
+            return true;
+        }
 
         return false;
     }
