@@ -47,10 +47,10 @@ use crate::structs::{
     AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData,
     CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MessageList, MobRnum,
     MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum,
-    PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomRnum, TimeData,
-    TimeInfoData, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR,
-    EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL,
-    ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH,
+    PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomRnum, RoomVnum,
+    TimeData, TimeInfoData, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED,
+    EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION,
+    ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH,
     MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE,
     MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING,
     NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE,
@@ -3457,28 +3457,10 @@ impl DB {
     }
 }
 
-// /* returns the real number of the zone with given virtual number */
-// RoomRnum real_zone(RoomRnum vnum)
-// {
-// RoomRnum bot, top, mid;
-//
-// bot = 0;
-// top = top_of_zone_table;
-//
-// /* perform binary search on zone-table */
-// for (;;) {
-// mid = (bot + top) / 2;
-//
-// if ((zone_table + mid)->number == vnum)
-// return (mid);
-// if (bot >= top)
-// return (NOWHERE);
-// if ((zone_table + mid)->number > vnum)
-// top = mid - 1;
-// else
-// bot = mid + 1;
-// }
-// }
+/* returns the real number of the zone with given virtual number */
+pub fn real_zone(db: &DB, vnum: RoomVnum) -> Option<usize> {
+    db.zone_table.borrow().iter().position(|z| z.number == vnum)
+}
 
 /*
  * Extend later to include more checks.

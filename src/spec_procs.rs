@@ -285,14 +285,14 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
     }
 
     let a = &game.db.mayor.borrow().path
-        [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index]
+        [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index + 1]
         .chars()
         .next()
         .unwrap();
     match a {
         '0' | '1' | '2' | '3' => {
             let dir = game.db.mayor.borrow().path
-                [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index]
+                [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index + 1]
                 .parse::<u8>()
                 .unwrap();
             perform_move(game, ch, dir as i32, true);

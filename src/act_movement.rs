@@ -662,7 +662,7 @@ fn door_is_open(
     obj: Option<&Rc<ObjData>>,
     door: Option<usize>,
 ) -> bool {
-    if !obj.is_some() {
+    if obj.is_some() {
         !obj.as_ref().unwrap().objval_flagged(CONT_CLOSED)
     } else {
         !db.exit(ch, door.unwrap())
@@ -678,7 +678,7 @@ fn door_is_unlocked(
     obj: Option<&Rc<ObjData>>,
     door: Option<usize>,
 ) -> bool {
-    if !obj.is_some() {
+    if obj.is_some() {
         !obj.as_ref().unwrap().objval_flagged(CONT_LOCKED)
     } else {
         !db.exit(ch, door.unwrap())
@@ -694,7 +694,7 @@ fn door_is_pickproof(
     obj: Option<&Rc<ObjData>>,
     door: Option<usize>,
 ) -> bool {
-    if !obj.is_some() {
+    if obj.is_some() {
         !obj.as_ref().unwrap().objval_flagged(CONT_PICKPROOF)
     } else {
         !db.exit(ch, door.unwrap())

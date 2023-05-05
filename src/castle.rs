@@ -1,0 +1,1429 @@
+/* ************************************************************************
+*   File: castle.c                                      Part of CircleMUD *
+*  Usage: Special procedures for King's Castle area                       *
+*                                                                         *
+*  All rights reserved.  See license.doc for complete information.        *
+*                                                                         *
+*  Special procedures for Kings Castle by Pjotr (d90-pem@nada.kth.se)     *
+*  Coded by Sapowox (d90-jkr@nada.kth.se)                                 *
+*  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+************************************************************************ */
+
+/* IMPORTANT!
+The below defined number is the zone number of the Kings Castle.
+Change it to apply to your chosen zone number. The default zone
+number (On Alex and Alfa) is 80 (That is rooms and mobs have numbers
+in the 8000 series... */
+
+use std::any::Any;
+use std::rc::Rc;
+
+use log::error;
+
+use crate::act_movement::do_follow;
+use crate::db::{real_zone, DB};
+use crate::spell_parser::cast_spell;
+use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
+use crate::structs::{
+    CharData, MobVnum, ObjData, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
+    POS_FIGHTING,
+};
+use crate::util::{clone_vec, rand_number};
+use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
+
+const Z_KINGS_C: i32 = 150;
+
+/**********************************************************************\
+|* Special procedures for Kings Castle by Pjotr (d90-pem@nada.kth.se) *|
+|* Coded by Sapowox (d90-jkr@nada.kth.se)                             *|
+\**********************************************************************/
+
+/*
+ * Assign castle special procedures.
+ *
+ * NOTE: The mobile number isn't fully specified. It's only an offset
+ *	from the zone's base.
+ */
+fn castle_mob_spec(db: &mut DB, mobnum: MobVnum, specproc: Special) {
+    let vmv = castle_virtual(db, mobnum);
+    let mut rmr = NOBODY;
+
+    if vmv != NOBODY {
+        rmr = db.real_mobile(vmv);
+    }
+
+    if rmr == NOBODY {
+        if !db.mini_mud {
+            error!("SYSERR: assign_kings_castle(): can't find mob #{}.", vmv);
+        }
+    } else {
+        db.mob_index[rmr as usize].func = Some(specproc);
+    }
+}
+
+fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
+    let zon = real_zone(db, Z_KINGS_C as RoomVnum);
+
+    if zon.is_none() {
+        return NOBODY;
+    }
+
+    return db.zone_table.borrow()[zon.unwrap()].bot + offset;
+}
+
+// room_rnum castle_real_room(room_vnum roomoffset)
+// {
+// zone_rnum zon;
+//
+// if ((zon = real_zone(Z_KINGS_C)) == NOWHERE)
+// return NOWHERE;
+//
+// return real_room(zone_table[zon].bot + roomoffset);
+// }
+
+/*
+ * Routine: assign_kings_castle
+ *
+ * Used to assign function pointers to all mobiles in the Kings Castle.
+ * Called from spec_assign.c.
+ */
+pub fn assign_kings_castle(db: &mut DB) {
+    castle_mob_spec(db, 0, CastleGuard); /* Gwydion */
+    /* Added the previous line -- Furry */
+    // castle_mob_spec(db, 1, king_welmar); /* Our dear friend, the King */
+    castle_mob_spec(db, 3, CastleGuard); /* Jim */
+    castle_mob_spec(db, 4, CastleGuard); /* Brian */
+    castle_mob_spec(db, 5, CastleGuard); /* Mick */
+    castle_mob_spec(db, 6, CastleGuard); /* Matt */
+    castle_mob_spec(db, 7, CastleGuard); /* Jochem */
+    castle_mob_spec(db, 8, CastleGuard); /* Anne */
+    castle_mob_spec(db, 9, CastleGuard); /* Andrew */
+    castle_mob_spec(db, 10, CastleGuard); /* Bertram */
+    castle_mob_spec(db, 11, CastleGuard); /* Jeanette */
+    castle_mob_spec(db, 12, peter); /* Peter */
+    castle_mob_spec(db, 13, training_master); /* The training master */
+    castle_mob_spec(db, 16, James); /* James the Butler */
+    castle_mob_spec(db, 17, cleaning); /* Ze Cleaning Fomen */
+    castle_mob_spec(db, 20, tim); /* Tim, Tom's twin */
+    castle_mob_spec(db, 21, tom); /* Tom, Tim's twin */
+    castle_mob_spec(db, 24, DicknDavid); /* Dick, guard of the
+                                          * Treasury */
+    castle_mob_spec(db, 25, DicknDavid); /* David, Dicks brother */
+    castle_mob_spec(db, 26, jerry); /* Jerry, the Gambler */
+    castle_mob_spec(db, 27, CastleGuard); /* Michael */
+    castle_mob_spec(db, 28, CastleGuard); /* Hans */
+    castle_mob_spec(db, 29, CastleGuard); /* Boris */
+}
+
+/*
+ * Routine: member_of_staff
+ *
+ * Used to see if a character is a member of the castle staff.
+ * Used mainly by BANZAI:ng NPC:s.
+ */
+fn member_of_staff(db: &DB, chChar: &Rc<CharData>) -> bool {
+    if !chChar.is_npc() {
+        return false;
+    }
+
+    let ch_num = db.get_mob_vnum(chChar);
+
+    if ch_num == castle_virtual(db, 1) {
+        return true;
+    }
+
+    if ch_num > castle_virtual(db, 2) && ch_num < castle_virtual(db, 15) {
+        return true;
+    }
+
+    if ch_num > castle_virtual(db, 15) && ch_num < castle_virtual(db, 18) {
+        return true;
+    }
+
+    if ch_num > castle_virtual(db, 18) && ch_num < castle_virtual(db, 30) {
+        return true;
+    }
+
+    return false;
+}
+
+/*
+ * Function: member_of_royal_guard
+ *
+ * Returns true if the character is a guard on duty, otherwise false.
+ * Used by Peter the captain of the royal guard.
+ */
+fn member_of_royal_guard(db: &DB, chChar: &Rc<CharData>) -> bool {
+    if !chChar.is_npc() {
+        return false;
+    }
+
+    let ch_num = db.get_mob_vnum(chChar);
+
+    if ch_num == castle_virtual(db, 3) || ch_num == castle_virtual(db, 6) {
+        return true;
+    }
+
+    if ch_num > castle_virtual(db, 7) && ch_num < castle_virtual(db, 12) {
+        return true;
+    }
+
+    if ch_num > castle_virtual(db, 23) && ch_num < castle_virtual(db, 26) {
+        return true;
+    }
+
+    return false;
+}
+
+/*
+ * Function: find_npc_by_name
+ *
+ * Returns a pointer to an npc by the given name.
+ * Used by Tim and Tom
+ */
+fn find_npc_by_name(db: &DB, chAtChar: &Rc<CharData>, pszName: &str) -> Option<Rc<CharData>> {
+    db.world.borrow()[chAtChar.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+        .find(|e| e.is_npc() && e.player.borrow().short_descr.starts_with(pszName))
+        .cloned()
+}
+
+/*
+ * Function: find_guard
+ *
+ * Returns the pointer to a guard on duty.
+ * Used by Peter the Captain of the Royal Guard
+ */
+fn find_guard(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
+    db.world.borrow()[chAtChar.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+        .find(|c| c.fighting().is_none() && member_of_royal_guard(db, c))
+        .cloned()
+}
+
+/*
+ * Function: get_victim
+ *
+ * Returns a pointer to a randomly chosen character in the same room,
+ * fighting someone in the castle staff...
+ * Used by BANZAII-ing characters and King Welmar...
+ */
+fn get_victim(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
+    let mut iNum_bad_guys = 0;
+
+    for ch in db.world.borrow()[chAtChar.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if ch.fighting().is_some() && member_of_staff(db, ch.fighting().as_ref().unwrap()) {
+            iNum_bad_guys += 1;
+        }
+    }
+
+    if iNum_bad_guys == 0 {
+        return None;
+    }
+
+    let iVictim = rand_number(0, iNum_bad_guys); /* How nice, we give them a chance */
+    if iVictim == 0 {
+        return None;
+    }
+
+    iNum_bad_guys = 0;
+
+    for ch in db.world.borrow()[chAtChar.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+    {
+        if ch.fighting().is_none() {
+            continue;
+        }
+
+        if !member_of_staff(db, ch.fighting().as_ref().unwrap()) {
+            continue;
+        }
+
+        iNum_bad_guys += 1;
+
+        if iNum_bad_guys != iVictim {
+            continue;
+        }
+
+        return Some(ch.clone());
+    }
+    return None;
+}
+
+/*
+ * Function: banzaii
+ *
+ * Makes a character banzaii on attackers of the castle staff.
+ * Used by Guards, Tim, Tom, Dick, David, Peter, Master, King and Guards.
+ */
+fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
+    let chOpponent = get_victim(&game.db, ch);
+    if !ch.awake() || ch.get_pos() == POS_FIGHTING || chOpponent.is_none() {
+        return false;
+    }
+
+    game.db.act(
+        "$n roars: 'Protect the Kingdom of Great King Welmar!  BANZAIIII!!!'",
+        false,
+        Some(ch),
+        None,
+        None,
+        TO_ROOM,
+    );
+    game.hit(ch, chOpponent.as_ref().unwrap(), TYPE_UNDEFINED);
+    return true;
+}
+
+/*
+ * Function: do_npc_rescue
+ *
+ * Makes ch_hero rescue ch_victim.
+ * Used by Tim and Tom
+ */
+fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharData>) -> bool {
+    let db = &game.db;
+    let ch_bad_guy = db.world.borrow()[ch_hero.in_room() as usize]
+        .peoples
+        .borrow()
+        .iter()
+        .find(|c| c.fighting().is_some() && !Rc::ptr_eq(c.fighting().as_ref().unwrap(), ch_victim))
+        .cloned();
+
+    /* NO WAY I'll rescue the one I'm fighting! */
+    if ch_bad_guy.is_none() || Rc::ptr_eq(ch_bad_guy.as_ref().unwrap(), ch_hero) {
+        return false;
+    }
+
+    db.act(
+        "You bravely rescue $N.\r\n",
+        false,
+        Some(ch_hero),
+        None,
+        Some(ch_victim),
+        TO_CHAR,
+    );
+    db.act(
+        "You are rescued by $N, your loyal friend!\r\n",
+        false,
+        Some(ch_victim),
+        None,
+        Some(ch_hero),
+        TO_CHAR,
+    );
+    db.act(
+        "$n heroically rescues $N.",
+        false,
+        Some(ch_hero),
+        None,
+        Some(ch_victim),
+        TO_NOTVICT,
+    );
+    let ch_bad_guy = ch_bad_guy.as_ref().unwrap();
+    if ch_bad_guy.fighting().is_some() {
+        db.stop_fighting(ch_bad_guy);
+    }
+    if ch_hero.fighting().is_some() {
+        db.stop_fighting(ch_hero);
+    }
+
+    db.set_fighting(ch_hero, ch_bad_guy, game);
+    db.set_fighting(ch_bad_guy, ch_hero, game);
+    return true;
+}
+
+/*
+ * Procedure to block a person trying to enter a room.
+ * Used by Tim/Tom at Kings bedroom and Dick/David at treasury.
+ */
+fn block_way(
+    db: &DB,
+    ch: &Rc<CharData>,
+    cmd: i32,
+    _arg: &str,
+    iIn_room: RoomVnum,
+    iProhibited_direction: i32,
+) -> bool {
+    let iProhibited_direction = iProhibited_direction + 1;
+    if cmd != iProhibited_direction {
+        return false;
+    }
+
+    if ch.player.borrow().short_descr.starts_with("King Welmar") {
+        return false;
+    }
+
+    if ch.in_room() != db.real_room(iIn_room) {
+        return false;
+    }
+
+    if !member_of_staff(db, ch) {
+        db.act(
+            "The guard roars at $n and pushes $m back.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+    }
+
+    send_to_char(
+        ch,
+        "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
+    );
+    return true;
+}
+
+/*
+ * Routine to check if an object is trash...
+ * Used by James the Butler and the Cleaning Lady.
+ */
+fn is_trash(i: &Rc<ObjData>) -> bool {
+    if !i.objwear_flagged(ITEM_WEAR_TAKE) {
+        return false;
+    }
+
+    if i.get_obj_type() == ITEM_DRINKCON || i.get_obj_cost() <= 10 {
+        return true;
+    }
+
+    false
+}
+
+/*
+ * Function: fry_victim
+ *
+ * Finds a suitabe victim, and cast some _NASTY_ spell on him.
+ * Used by King Welmar
+ */
+fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
+    let db = &game.db;
+    if ch.points.borrow().mana < 10 {
+        return;
+    }
+    let tch = get_victim(db, ch);
+    /* Find someone suitable to fry ! */
+    if tch.is_none() {
+        return;
+    }
+    let tch = tch.as_ref().unwrap();
+
+    match rand_number(0, 8) {
+        1 | 2 | 3 => {
+            send_to_char(ch, "You raise your hand in a dramatical gesture.\r\n");
+            db.act(
+                "$n raises $s hand in a dramatical gesture.",
+                true,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            cast_spell(game, ch, Some(tch), None, SPELL_COLOR_SPRAY);
+        }
+        4 | 5 => {
+            send_to_char(ch, "You concentrate and mumble to yourself.\r\n");
+            db.act(
+                "$n concentrates, and mumbles to $mself.",
+                true,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            cast_spell(game, ch, Some(tch), None, SPELL_HARM);
+        }
+        6 | 7 => {
+            db.act(
+                "You look deeply into the eyes of $N.",
+                true,
+                Some(ch),
+                None,
+                Some(tch),
+                TO_CHAR,
+            );
+            db.act(
+                "$n looks deeply into the eyes of $N.",
+                true,
+                Some(ch),
+                None,
+                Some(tch),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You see an ill-boding flame in the eye of $n.",
+                true,
+                Some(ch),
+                None,
+                Some(tch),
+                TO_VICT,
+            );
+            cast_spell(game, ch, Some(tch), None, SPELL_FIREBALL);
+        }
+        _ => {
+            if !rand_number(0, 1) == 0 {
+                cast_spell(game, ch, Some(ch), None, SPELL_HEAL);
+            }
+        }
+    }
+
+    ch.points.borrow_mut().mana -= 10;
+
+    return;
+}
+
+// /*
+//  * Function: king_welmar
+//  *
+//  * Control the actions and movements of the King.
+//  * Used by King Welmar.
+//  */
+// SPECIAL(king_welmar)
+// {
+// char actbuf[MAX_INPUT_LENGTH];
+//
+// const char *monolog[] = {
+// "$n proclaims 'Primus in regnis Geticis coronam'.",
+// "$n proclaims 'regiam gessi, subiique regis'.",
+// "$n proclaims 'munus et mores colui sereno'.",
+// "$n proclaims 'principe dignos'."
+// };
+//
+// const char bedroom_path[] = "s33004o1c1S.";
+// const char throne_path[] = "W3o3cG52211rg.";
+// const char monolog_path[] = "ABCDPPPP.";
+//
+// static const char *path;
+// static int path_index;
+// static bool move = false;
+//
+// if (!move) {
+// if (time_info.hours == 8 && IN_ROOM(ch) == castle_real_room(51)) {
+// move = true;
+// path = throne_path;
+// path_index = 0;
+// } else if (time_info.hours == 21 && IN_ROOM(ch) == castle_real_room(17)) {
+// move = true;
+// path = bedroom_path;
+// path_index = 0;
+// } else if (time_info.hours == 12 && IN_ROOM(ch) == castle_real_room(17)) {
+// move = true;
+// path = monolog_path;
+// path_index = 0;
+// }
+// }
+// if (cmd || (ch.get_pos() < POS_SLEEPING) ||
+// (ch.get_pos() == POS_SLEEPING && !move))
+// return (false);
+//
+// if (ch.get_pos() == POS_FIGHTING) {
+// fry_victim(ch);
+// return (false);
+// } else if (banzaii(ch))
+// return (false);
+//
+// if (!move)
+// return (false);
+//
+// switch (path[path_index]) {
+// case '0':
+// case '1':
+// case '2':
+// case '3':
+// case '4':
+// case '5':
+// perform_move(ch, path[path_index] - '0', 1);
+// break;
+//
+// case 'A':
+// case 'B':
+// case 'C':
+// case 'D':
+// act(monolog[path[path_index] - 'A'], false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'P':
+// break;
+//
+// case 'W':
+// ch.get_pos() = POS_STANDING;
+// act("$n awakens and stands up.", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'S':
+// ch.get_pos() = POS_SLEEPING;
+// act("$n lies down on $s beautiful bed and instantly falls asleep.", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'r':
+// ch.get_pos() = POS_SITTING;
+// act("$n sits down on $s great throne.", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 's':
+// ch.get_pos() = POS_STANDING;
+// act("$n stands up.", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'G':
+// act("$n says 'Good morning, trusted friends.'", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'g':
+// act("$n says 'Good morning, dear subjects.'", false, ch, 0, 0, TO_ROOM);
+// break;
+//
+// case 'o':
+// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_UNLOCK);	/* strcpy: OK */
+// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_OPEN);	/* strcpy: OK */
+// break;
+//
+// case 'c':
+// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_CLOSE);	/* strcpy: OK */
+// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_LOCK);	/* strcpy: OK */
+// break;
+//
+// case '.':
+// move = false;
+// break;
+// }
+//
+// path_index++;
+// return (false);
+// }
+
+/*
+ * Function: training_master
+ *
+ * Acts actions to the training room, if his students are present.
+ * Also allowes warrior-class to practice.
+ * Used by the Training Master.
+ */
+pub fn training_master(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _me: &dyn Any,
+    cmd: i32,
+    _argument: &str,
+) -> bool {
+    if !ch.awake() || ch.get_pos() == POS_FIGHTING {
+        return false;
+    }
+
+    if cmd != 0 {
+        return false;
+    }
+
+    if banzaii(game, ch) || rand_number(0, 2) != 0 {
+        return false;
+    }
+
+    let db = &game.db;
+
+    let pupil1 = find_npc_by_name(db, ch, "Brian");
+    if pupil1.is_none() {
+        return false;
+    }
+    let mut pupil1 = pupil1.as_ref().unwrap();
+    let pupil2 = find_npc_by_name(db, ch, "Mick");
+    if pupil2.is_none() {
+        return false;
+    }
+    let mut pupil2 = pupil2.as_ref().unwrap();
+    if pupil1.fighting().is_some() || pupil2.fighting().is_some() {
+        return false;
+    }
+    let tch;
+    if rand_number(0, 1) != 0 {
+        tch = pupil1;
+        pupil1 = pupil2;
+        pupil2 = tch;
+    }
+
+    match rand_number(0, 7) {
+        0 => {
+            db.act(
+                "$n hits $N on $s head with a powerful blow.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You hit $N on $s head with a powerful blow.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n hits you on your head with a powerful blow.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        1 => {
+            db.act(
+                "$n hits $N in $s chest with a thrust.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You manage to thrust $N in the chest.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n manages to thrust you in your chest.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        2 => {
+            send_to_char(ch, "You command your pupils to bow.\r\n");
+            db.act(
+                "$n commands $s pupils to bow.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.act(
+                "$n bows before $N.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "$N bows before $n.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You bow before $N, who returns your gesture.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "You bow before $n, who returns your gesture.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        3 => {
+            db.act(
+                "$N yells at $n, as he fumbles and drops $s sword.",
+                false,
+                Some(pupil1),
+                None,
+                Some(ch),
+                TO_NOTVICT,
+            );
+            db.act(
+                "$n quickly picks up $s weapon.",
+                false,
+                Some(pupil1),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.act(
+                "$N yells at you, as you fumble, losing your weapon.",
+                false,
+                Some(pupil1),
+                None,
+                Some(ch),
+                TO_CHAR,
+            );
+            send_to_char(pupil1, "You quickly pick up your weapon again.\r\n");
+            db.act(
+                "You yell at $n, as he fumbles, losing $s weapon.",
+                false,
+                Some(pupil1),
+                None,
+                Some(ch),
+                TO_VICT,
+            );
+        }
+
+        4 => {
+            db.act(
+                "$N tricks $n, and slashes him across the back.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "$N tricks you, and slashes you across your back.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "You trick $n, and quickly slash him across $s back.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        5 => {
+            db.act(
+                "$n lunges a blow at $N but $N parries skillfully.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You lunge a blow at $N but $E parries skillfully.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n lunges a blow at you, but you skillfully parry it.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        6 => {
+            db.act(
+                "$n clumsily tries to kick $N, but misses.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You clumsily miss $N with your poor excuse for a kick.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n fails an unusually clumsy attempt at kicking you.",
+                false,
+                Some(pupil1),
+                None,
+                Some(pupil2),
+                TO_VICT,
+            );
+        }
+
+        _ => {
+            send_to_char(ch, "You show your pupils an advanced technique.\r\n");
+            db.act(
+                "$n shows $s pupils an advanced technique.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+    }
+
+    false
+}
+pub fn tom(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    return castle_twin_proc(game, ch, cmd, argument, 48, "Tim");
+}
+
+pub fn tim(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    return castle_twin_proc(game, ch, cmd, argument, 49, "Tom");
+}
+
+/*
+ * Common routine for the Castle Twins.
+ */
+fn castle_twin_proc(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    cmd: i32,
+    arg: &str,
+    ctlnum: MobVnum,
+    twinname: &str,
+) -> bool {
+    if !ch.awake() {
+        return false;
+    }
+
+    if cmd != 0 {
+        return block_way(&game.db, ch, cmd, arg, castle_virtual(&game.db, ctlnum), 1);
+    }
+
+    let king = find_npc_by_name(&game.db, ch, "King Welmar");
+
+    if king.is_some() {
+        let king = king.as_ref().unwrap();
+        if ch.master.borrow().is_none() {
+            do_follow(game, ch, "King Welmar", 0, 0); /* strcpy: OK */
+            if king.fighting().is_some() {
+                do_npc_rescue(game, ch, king);
+            }
+        }
+    }
+
+    let twin = find_npc_by_name(&game.db, ch, twinname);
+    if twin.is_some() {
+        let twin = twin.as_ref().unwrap();
+        if twin.fighting().is_some() && 2 & twin.get_hit() < ch.get_hit() {
+            do_npc_rescue(game, ch, twin);
+        }
+    }
+
+    if ch.get_pos() != POS_FIGHTING {
+        banzaii(game, ch);
+    }
+
+    false
+}
+
+/*
+ * Routine for James the Butler.
+ * Complains if he finds any trash...
+ *
+ * This doesn't make sure he _can_ carry it...
+ */
+fn James(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+    return castle_cleaner(&game.db, ch, cmd, true);
+}
+
+/*
+ * Common code for James and the Cleaning Woman.
+ */
+fn castle_cleaner(db: &DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
+    if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
+        return false;
+    }
+
+    for i in clone_vec(&db.world.borrow()[ch.in_room() as usize].contents).iter() {
+        if !is_trash(i) {
+            continue;
+        }
+
+        if gripe {
+            db.act(
+                "$n says: 'My oh my!  I ought to fire that lazy cleaning woman!'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            db.act(
+                "$n picks up a piece of trash.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+        db.obj_from_room(Some(i));
+        DB::obj_to_char(Some(i), Some(ch));
+        return true;
+    }
+
+    false
+}
+
+/*
+ * Routine for the Cleaning Woman.
+ * Picks up any trash she finds...
+ */
+fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+    return castle_cleaner(&game.db, ch, cmd, false);
+}
+
+/*
+ * Routine: CastleGuard
+ *
+ * Standard routine for ordinary castle guards.
+ */
+fn CastleGuard(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _me: &dyn Any,
+    cmd: i32,
+    _argument: &str,
+) -> bool {
+    if cmd != 0 || !ch.awake() || (ch.get_pos() == POS_FIGHTING) {
+        return false;
+    }
+
+    banzaii(game, ch)
+}
+
+/*
+ * Routine: DicknDave
+ *
+ * Routine for the guards Dick and David.
+ */
+fn DicknDavid(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+    if !ch.awake() {
+        return false;
+    }
+
+    if cmd == 0 && ch.get_pos() != POS_FIGHTING {
+        banzaii(game, ch);
+    }
+
+    block_way(&game.db, ch, cmd, argument, castle_virtual(&game.db, 36), 1)
+}
+
+/*
+ * Routine: peter
+ * Routine for Captain of the Guards.
+ */
+fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+    if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
+        return false;
+    }
+
+    if banzaii(game, ch) {
+        return false;
+    }
+    let db = &game.db;
+
+    let ch_guard = find_guard(db, ch);
+    if rand_number(0, 3) == 0 && ch_guard.is_some() {
+        let ch_guard = ch_guard.as_ref().unwrap();
+        match rand_number(0, 5) {
+            0 => {
+                db.act(
+                    "$N comes sharply into attention as $n inspects $M.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "$N comes sharply into attention as you inspect $M.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+                db.act(
+                    "You go sharply into attention as $n inspects you.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+            }
+            1 => {
+                db.act(
+                    "$N looks very small, as $n roars at $M.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "$N looks very small as you roar at $M.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+                db.act(
+                    "You feel very small as $N roars at you.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+            }
+            2 => {
+                db.act(
+                    "$n gives $N some Royal directions.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "You give $N some Royal directions.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+                db.act(
+                    "$n gives you some Royal directions.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+            }
+            3 => {
+                db.act(
+                    "$n looks at you.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+                db.act(
+                    "$n looks at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "$n growls: 'Those boots need polishing!'",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_ROOM,
+                );
+                db.act(
+                    "You growl at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+            }
+            4 => {
+                db.act(
+                    "$n looks at you.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+                db.act(
+                    "$n looks at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "$n growls: 'Straighten that collar!'",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_ROOM,
+                );
+                db.act(
+                    "You growl at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+            }
+            _ => {
+                db.act(
+                    "$n looks at you.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_VICT,
+                );
+                db.act(
+                    "$n looks at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_NOTVICT,
+                );
+                db.act(
+                    "$n growls: 'That chain mail looks rusty!  CLEAN IT !!!'",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_ROOM,
+                );
+                db.act(
+                    "You growl at $N.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(ch_guard),
+                    TO_CHAR,
+                );
+            }
+        }
+    }
+
+    false
+}
+
+/*
+ * Procedure for Jerry and Michael in x08 of King's Castle.
+ * Code by Sapowox modified by Pjotr.(Original code from Master)
+ */
+fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+    if !ch.awake() || ch.get_pos() == POS_FIGHTING {
+        return false;
+    }
+    if cmd != 0 {
+        return false;
+    }
+
+    if banzaii(game, ch) || rand_number(0, 2) != 0 {
+        return false;
+    }
+    let db = &game.db;
+
+    let mut gambler1 = ch;
+    let gambler2 = find_npc_by_name(db, ch, "Michael");
+
+    if gambler2.is_none() {
+        return false;
+    }
+    let mut gambler2 = gambler2.as_ref().unwrap();
+
+    if gambler1.fighting().is_some() || gambler2.fighting().is_some() {
+        return false;
+    }
+    let tch;
+    if rand_number(0, 1) != 0 {
+        tch = gambler1;
+        gambler1 = gambler2;
+        gambler2 = tch;
+    }
+
+    match rand_number(0, 5) {
+        0 => {
+            db.act(
+                "$n rolls the dice and cheers loudly at the result.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You roll the dice and cheer. GREAT!",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n cheers loudly as $e rolls the dice.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+        1 => {
+            db.act(
+                "$n curses the Goddess of Luck roundly as he sees $N's roll.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You curse the Goddess of Luck as $N rolls.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n swears angrily. You are in luck!",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+        2 => {
+            db.act(
+                "$n sighs loudly and gives $N some gold.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You sigh loudly at the pain of having to give $N some gold.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n sighs loudly as $e gives you your rightful win.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+        3 => {
+            db.act(
+                "$n smiles remorsefully as $N's roll tops $s.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You smile sadly as you see that $N beats you. Again.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n smiles remorsefully as your roll tops $s.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+        4 => {
+            db.act(
+                "$n excitedly follows the dice with $s eyes.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You excitedly follow the dice with your eyes.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n excitedly follows the dice with $s eyes.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+        _ => {
+            db.act(
+                "$n says 'Well, my luck has to change soon', as he shakes the dice.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_NOTVICT,
+            );
+            db.act(
+                "You say 'Well, my luck has to change soon' and shake the dice.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_CHAR,
+            );
+            db.act(
+                "$n says 'Well, my luck has to change soon', as he shakes the dice.",
+                false,
+                Some(gambler1),
+                None,
+                Some(gambler2),
+                TO_VICT,
+            );
+        }
+    }
+    false
+}

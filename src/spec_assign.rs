@@ -14,6 +14,7 @@
 use log::error;
 
 use crate::boards::gen_board;
+use crate::castle::assign_kings_castle;
 use crate::config::DTS_ARE_DUMPS;
 use crate::db::DB;
 use crate::mail::postmaster;
@@ -70,7 +71,7 @@ pub fn assignroom(db: &mut DB, room: RoomVnum, fname: Special) {
 
 /* assign special procedures to mobiles */
 pub fn assign_mobiles(db: &mut DB) {
-    // assign_kings_castle();
+    assign_kings_castle(db);
 
     assignmob(db, 1, puff);
     //

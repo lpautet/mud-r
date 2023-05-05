@@ -59,6 +59,7 @@ mod act_wizard;
 mod alias;
 mod ban;
 mod boards;
+mod castle;
 mod class;
 mod config;
 mod constants;
