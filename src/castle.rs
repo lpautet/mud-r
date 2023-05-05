@@ -88,31 +88,31 @@ fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
  * Called from spec_assign.c.
  */
 pub fn assign_kings_castle(db: &mut DB) {
-    castle_mob_spec(db, 0, CastleGuard); /* Gwydion */
+    castle_mob_spec(db, 0, castle_guard); /* Gwydion */
     /* Added the previous line -- Furry */
-    // castle_mob_spec(db, 1, king_welmar); /* Our dear friend, the King */
-    castle_mob_spec(db, 3, CastleGuard); /* Jim */
-    castle_mob_spec(db, 4, CastleGuard); /* Brian */
-    castle_mob_spec(db, 5, CastleGuard); /* Mick */
-    castle_mob_spec(db, 6, CastleGuard); /* Matt */
-    castle_mob_spec(db, 7, CastleGuard); /* Jochem */
-    castle_mob_spec(db, 8, CastleGuard); /* Anne */
-    castle_mob_spec(db, 9, CastleGuard); /* Andrew */
-    castle_mob_spec(db, 10, CastleGuard); /* Bertram */
-    castle_mob_spec(db, 11, CastleGuard); /* Jeanette */
+    castle_mob_spec(db, 1, king_welmar); /* Our dear friend, the King */
+    castle_mob_spec(db, 3, castle_guard); /* Jim */
+    castle_mob_spec(db, 4, castle_guard); /* Brian */
+    castle_mob_spec(db, 5, castle_guard); /* Mick */
+    castle_mob_spec(db, 6, castle_guard); /* Matt */
+    castle_mob_spec(db, 7, castle_guard); /* Jochem */
+    castle_mob_spec(db, 8, castle_guard); /* Anne */
+    castle_mob_spec(db, 9, castle_guard); /* Andrew */
+    castle_mob_spec(db, 10, castle_guard); /* Bertram */
+    castle_mob_spec(db, 11, castle_guard); /* Jeanette */
     castle_mob_spec(db, 12, peter); /* Peter */
     castle_mob_spec(db, 13, training_master); /* The training master */
-    castle_mob_spec(db, 16, James); /* James the Butler */
+    castle_mob_spec(db, 16, james); /* James the Butler */
     castle_mob_spec(db, 17, cleaning); /* Ze Cleaning Fomen */
     castle_mob_spec(db, 20, tim); /* Tim, Tom's twin */
     castle_mob_spec(db, 21, tom); /* Tom, Tim's twin */
-    castle_mob_spec(db, 24, DicknDavid); /* Dick, guard of the
-                                          * Treasury */
-    castle_mob_spec(db, 25, DicknDavid); /* David, Dicks brother */
+    castle_mob_spec(db, 24, dick_n_david); /* Dick, guard of the
+                                            * Treasury */
+    castle_mob_spec(db, 25, dick_n_david); /* David, Dicks brother */
     castle_mob_spec(db, 26, jerry); /* Jerry, the Gambler */
-    castle_mob_spec(db, 27, CastleGuard); /* Michael */
-    castle_mob_spec(db, 28, CastleGuard); /* Hans */
-    castle_mob_spec(db, 29, CastleGuard); /* Boris */
+    castle_mob_spec(db, 27, castle_guard); /* Michael */
+    castle_mob_spec(db, 28, castle_guard); /* Hans */
+    castle_mob_spec(db, 29, castle_guard); /* Boris */
 }
 
 /*
@@ -121,12 +121,12 @@ pub fn assign_kings_castle(db: &mut DB) {
  * Used to see if a character is a member of the castle staff.
  * Used mainly by BANZAI:ng NPC:s.
  */
-fn member_of_staff(db: &DB, chChar: &Rc<CharData>) -> bool {
-    if !chChar.is_npc() {
+fn member_of_staff(db: &DB, ch: &Rc<CharData>) -> bool {
+    if !ch.is_npc() {
         return false;
     }
 
-    let ch_num = db.get_mob_vnum(chChar);
+    let ch_num = db.get_mob_vnum(ch);
 
     if ch_num == castle_virtual(db, 1) {
         return true;
@@ -153,12 +153,12 @@ fn member_of_staff(db: &DB, chChar: &Rc<CharData>) -> bool {
  * Returns true if the character is a guard on duty, otherwise false.
  * Used by Peter the captain of the royal guard.
  */
-fn member_of_royal_guard(db: &DB, chChar: &Rc<CharData>) -> bool {
-    if !chChar.is_npc() {
+fn member_of_royal_guard(db: &DB, ch: &Rc<CharData>) -> bool {
+    if !ch.is_npc() {
         return false;
     }
 
-    let ch_num = db.get_mob_vnum(chChar);
+    let ch_num = db.get_mob_vnum(ch);
 
     if ch_num == castle_virtual(db, 3) || ch_num == castle_virtual(db, 6) {
         return true;
@@ -181,12 +181,12 @@ fn member_of_royal_guard(db: &DB, chChar: &Rc<CharData>) -> bool {
  * Returns a pointer to an npc by the given name.
  * Used by Tim and Tom
  */
-fn find_npc_by_name(db: &DB, chAtChar: &Rc<CharData>, pszName: &str) -> Option<Rc<CharData>> {
-    db.world.borrow()[chAtChar.in_room() as usize]
+fn find_npc_by_name(db: &DB, ch_at: &Rc<CharData>, name: &str) -> Option<Rc<CharData>> {
+    db.world.borrow()[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
-        .find(|e| e.is_npc() && e.player.borrow().short_descr.starts_with(pszName))
+        .find(|e| e.is_npc() && e.player.borrow().short_descr.starts_with(name))
         .cloned()
 }
 
@@ -196,8 +196,8 @@ fn find_npc_by_name(db: &DB, chAtChar: &Rc<CharData>, pszName: &str) -> Option<R
  * Returns the pointer to a guard on duty.
  * Used by Peter the Captain of the Royal Guard
  */
-fn find_guard(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
-    db.world.borrow()[chAtChar.in_room() as usize]
+fn find_guard(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
+    db.world.borrow()[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -212,31 +212,31 @@ fn find_guard(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
  * fighting someone in the castle staff...
  * Used by BANZAII-ing characters and King Welmar...
  */
-fn get_victim(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
-    let mut iNum_bad_guys = 0;
+fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
+    let mut num_bad_guys = 0;
 
-    for ch in db.world.borrow()[chAtChar.in_room() as usize]
+    for ch in db.world.borrow()[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
     {
         if ch.fighting().is_some() && member_of_staff(db, ch.fighting().as_ref().unwrap()) {
-            iNum_bad_guys += 1;
+            num_bad_guys += 1;
         }
     }
 
-    if iNum_bad_guys == 0 {
+    if num_bad_guys == 0 {
         return None;
     }
 
-    let iVictim = rand_number(0, iNum_bad_guys); /* How nice, we give them a chance */
-    if iVictim == 0 {
+    let victim = rand_number(0, num_bad_guys); /* How nice, we give them a chance */
+    if victim == 0 {
         return None;
     }
 
-    iNum_bad_guys = 0;
+    num_bad_guys = 0;
 
-    for ch in db.world.borrow()[chAtChar.in_room() as usize]
+    for ch in db.world.borrow()[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -249,9 +249,9 @@ fn get_victim(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
             continue;
         }
 
-        iNum_bad_guys += 1;
+        num_bad_guys += 1;
 
-        if iNum_bad_guys != iVictim {
+        if num_bad_guys != victim {
             continue;
         }
 
@@ -267,8 +267,8 @@ fn get_victim(db: &DB, chAtChar: &Rc<CharData>) -> Option<Rc<CharData>> {
  * Used by Guards, Tim, Tom, Dick, David, Peter, Master, King and Guards.
  */
 fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
-    let chOpponent = get_victim(&game.db, ch);
-    if !ch.awake() || ch.get_pos() == POS_FIGHTING || chOpponent.is_none() {
+    let opponent = get_victim(&game.db, ch);
+    if !ch.awake() || ch.get_pos() == POS_FIGHTING || opponent.is_none() {
         return false;
     }
 
@@ -280,7 +280,7 @@ fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
         None,
         TO_ROOM,
     );
-    game.hit(ch, chOpponent.as_ref().unwrap(), TYPE_UNDEFINED);
+    game.hit(ch, opponent.as_ref().unwrap(), TYPE_UNDEFINED);
     return true;
 }
 
@@ -350,11 +350,11 @@ fn block_way(
     ch: &Rc<CharData>,
     cmd: i32,
     _arg: &str,
-    iIn_room: RoomVnum,
-    iProhibited_direction: i32,
+    in_room: RoomVnum,
+    prohibited_direction: i32,
 ) -> bool {
-    let iProhibited_direction = iProhibited_direction + 1;
-    if cmd != iProhibited_direction {
+    let prohibited_direction = prohibited_direction + 1;
+    if cmd != prohibited_direction {
         return false;
     }
 
@@ -362,7 +362,7 @@ fn block_way(
         return false;
     }
 
-    if ch.in_room() != db.real_room(iIn_room) {
+    if ch.in_room() != db.real_room(in_room) {
         return false;
     }
 
@@ -482,125 +482,130 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
     return;
 }
 
-// /*
-//  * Function: king_welmar
-//  *
-//  * Control the actions and movements of the King.
-//  * Used by King Welmar.
-//  */
-// SPECIAL(king_welmar)
-// {
-// char actbuf[MAX_INPUT_LENGTH];
-//
-// const char *monolog[] = {
-// "$n proclaims 'Primus in regnis Geticis coronam'.",
-// "$n proclaims 'regiam gessi, subiique regis'.",
-// "$n proclaims 'munus et mores colui sereno'.",
-// "$n proclaims 'principe dignos'."
-// };
-//
-// const char bedroom_path[] = "s33004o1c1S.";
-// const char throne_path[] = "W3o3cG52211rg.";
-// const char monolog_path[] = "ABCDPPPP.";
-//
-// static const char *path;
-// static int path_index;
-// static bool move = false;
-//
-// if (!move) {
-// if (time_info.hours == 8 && IN_ROOM(ch) == castle_real_room(51)) {
-// move = true;
-// path = throne_path;
-// path_index = 0;
-// } else if (time_info.hours == 21 && IN_ROOM(ch) == castle_real_room(17)) {
-// move = true;
-// path = bedroom_path;
-// path_index = 0;
-// } else if (time_info.hours == 12 && IN_ROOM(ch) == castle_real_room(17)) {
-// move = true;
-// path = monolog_path;
-// path_index = 0;
-// }
-// }
-// if (cmd || (ch.get_pos() < POS_SLEEPING) ||
-// (ch.get_pos() == POS_SLEEPING && !move))
-// return (false);
-//
-// if (ch.get_pos() == POS_FIGHTING) {
-// fry_victim(ch);
-// return (false);
-// } else if (banzaii(ch))
-// return (false);
-//
-// if (!move)
-// return (false);
-//
-// switch (path[path_index]) {
-// case '0':
-// case '1':
-// case '2':
-// case '3':
-// case '4':
-// case '5':
-// perform_move(ch, path[path_index] - '0', 1);
-// break;
-//
-// case 'A':
-// case 'B':
-// case 'C':
-// case 'D':
-// act(monolog[path[path_index] - 'A'], false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'P':
-// break;
-//
-// case 'W':
-// ch.get_pos() = POS_STANDING;
-// act("$n awakens and stands up.", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'S':
-// ch.get_pos() = POS_SLEEPING;
-// act("$n lies down on $s beautiful bed and instantly falls asleep.", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'r':
-// ch.get_pos() = POS_SITTING;
-// act("$n sits down on $s great throne.", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 's':
-// ch.get_pos() = POS_STANDING;
-// act("$n stands up.", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'G':
-// act("$n says 'Good morning, trusted friends.'", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'g':
-// act("$n says 'Good morning, dear subjects.'", false, ch, 0, 0, TO_ROOM);
-// break;
-//
-// case 'o':
-// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_UNLOCK);	/* strcpy: OK */
-// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_OPEN);	/* strcpy: OK */
-// break;
-//
-// case 'c':
-// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_CLOSE);	/* strcpy: OK */
-// do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_LOCK);	/* strcpy: OK */
-// break;
-//
-// case '.':
-// move = false;
-// break;
-// }
-//
-// path_index++;
-// return (false);
-// }
+/*
+ * Function: king_welmar
+ *
+ * Control the actions and movements of the King.
+ * Used by King Welmar.
+ */
+pub fn king_welmar(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _me: &dyn Any,
+    cmd: i32,
+    _argument: &str,
+) -> bool {
+    // char actbuf[MAX_INPUT_LENGTH];
+    //
+    // const char *monolog[] = {
+    // "$n proclaims 'Primus in regnis Geticis coronam'.",
+    // "$n proclaims 'regiam gessi, subiique regis'.",
+    // "$n proclaims 'munus et mores colui sereno'.",
+    // "$n proclaims 'principe dignos'."
+    // };
+    //
+    // const char bedroom_path[] = "s33004o1c1S.";
+    // const char throne_path[] = "W3o3cG52211rg.";
+    // const char monolog_path[] = "ABCDPPPP.";
+    //
+    // static const char *path;
+    // static int path_index;
+    // static bool move = false;
+    //
+    // if (!move) {
+    // if (time_info.hours == 8 && IN_ROOM(ch) == castle_real_room(51)) {
+    // move = true;
+    // path = throne_path;
+    // path_index = 0;
+    // } else if (time_info.hours == 21 && IN_ROOM(ch) == castle_real_room(17)) {
+    // move = true;
+    // path = bedroom_path;
+    // path_index = 0;
+    // } else if (time_info.hours == 12 && IN_ROOM(ch) == castle_real_room(17)) {
+    // move = true;
+    // path = monolog_path;
+    // path_index = 0;
+    // }
+    // }
+    // if (cmd || (ch.get_pos() < POS_SLEEPING) ||
+    // (ch.get_pos() == POS_SLEEPING && !move))
+    // return (false);
+    //
+    // if (ch.get_pos() == POS_FIGHTING) {
+    // fry_victim(ch);
+    // return (false);
+    // } else if (banzaii(ch))
+    // return (false);
+    //
+    // if (!move)
+    // return (false);
+    //
+    // switch (path[path_index]) {
+    // case '0':
+    // case '1':
+    // case '2':
+    // case '3':
+    // case '4':
+    // case '5':
+    // perform_move(ch, path[path_index] - '0', 1);
+    // break;
+    //
+    // case 'A':
+    // case 'B':
+    // case 'C':
+    // case 'D':
+    // act(monolog[path[path_index] - 'A'], false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'P':
+    // break;
+    //
+    // case 'W':
+    // ch.get_pos() = POS_STANDING;
+    // act("$n awakens and stands up.", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'S':
+    // ch.get_pos() = POS_SLEEPING;
+    // act("$n lies down on $s beautiful bed and instantly falls asleep.", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'r':
+    // ch.get_pos() = POS_SITTING;
+    // act("$n sits down on $s great throne.", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 's':
+    // ch.get_pos() = POS_STANDING;
+    // act("$n stands up.", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'G':
+    // act("$n says 'Good morning, trusted friends.'", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'g':
+    // act("$n says 'Good morning, dear subjects.'", false, ch, 0, 0, TO_ROOM);
+    // break;
+    //
+    // case 'o':
+    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_UNLOCK);	/* strcpy: OK */
+    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_OPEN);	/* strcpy: OK */
+    // break;
+    //
+    // case 'c':
+    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_CLOSE);	/* strcpy: OK */
+    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_LOCK);	/* strcpy: OK */
+    // break;
+    //
+    // case '.':
+    // move = false;
+    // break;
+    // }
+    //
+    // path_index++;
+    false
+}
 
 /*
  * Function: training_master
@@ -941,7 +946,7 @@ fn castle_twin_proc(
  *
  * This doesn't make sure he _can_ carry it...
  */
-fn James(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+fn james(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
     return castle_cleaner(&game.db, ch, cmd, true);
 }
 
@@ -997,7 +1002,7 @@ fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
  *
  * Standard routine for ordinary castle guards.
  */
-fn CastleGuard(
+fn castle_guard(
     game: &mut Game,
     ch: &Rc<CharData>,
     _me: &dyn Any,
@@ -1016,7 +1021,13 @@ fn CastleGuard(
  *
  * Routine for the guards Dick and David.
  */
-fn DicknDavid(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+fn dick_n_david(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    _me: &dyn Any,
+    cmd: i32,
+    argument: &str,
+) -> bool {
     if !ch.awake() {
         return false;
     }
