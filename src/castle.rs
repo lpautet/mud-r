@@ -16,17 +16,19 @@ number (On Alex and Alfa) is 80 (That is rooms and mobs have numbers
 in the 8000 series... */
 
 use std::any::Any;
+use std::iter::Iterator;
 use std::rc::Rc;
 
 use log::error;
 
-use crate::act_movement::do_follow;
+use crate::act_movement::{do_follow, do_gen_door, perform_move};
 use crate::db::{real_zone, DB};
+use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, MobVnum, ObjData, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
-    POS_FIGHTING,
+    CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
+    NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::{clone_vec, rand_number};
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -71,15 +73,15 @@ fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
     return db.zone_table.borrow()[zon.unwrap()].bot + offset;
 }
 
-// room_rnum castle_real_room(room_vnum roomoffset)
-// {
-// zone_rnum zon;
-//
-// if ((zon = real_zone(Z_KINGS_C)) == NOWHERE)
-// return NOWHERE;
-//
-// return real_room(zone_table[zon].bot + roomoffset);
-// }
+fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
+    let zon = real_zone(db, Z_KINGS_C as RoomVnum);
+
+    if zon.is_none() {
+        return NOWHERE;
+    }
+
+    return db.real_room(db.zone_table.borrow()[zon.unwrap()].bot + roomoffset);
+}
 
 /*
  * Routine: assign_kings_castle
@@ -482,6 +484,33 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
     return;
 }
 
+pub struct KingWelmar {
+    pub path: &'static [u8],
+    pub path_index: usize,
+    pub move_: bool,
+}
+
+impl KingWelmar {
+    pub fn new() -> KingWelmar {
+        KingWelmar {
+            path: BEDROOM_PATH,
+            path_index: 0,
+            move_: false,
+        }
+    }
+}
+
+const BEDROOM_PATH: &[u8; 12] = b"s33004o1c1S.";
+const THRONE_PATH: &[u8; 14] = b"W3o3cG52211rg.";
+const MONOLOG_PATH: &[u8; 9] = b"ABCDPPPP.";
+
+const MONOLOG: [&str; 4] = [
+    "$n proclaims 'Primus in regnis Geticis coronam'.",
+    "$n proclaims 'regiam gessi, subiique regis'.",
+    "$n proclaims 'munus et mores colui sereno'.",
+    "$n proclaims 'principe dignos'.",
+];
+
 /*
  * Function: king_welmar
  *
@@ -495,115 +524,147 @@ pub fn king_welmar(
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    // char actbuf[MAX_INPUT_LENGTH];
-    //
-    // const char *monolog[] = {
-    // "$n proclaims 'Primus in regnis Geticis coronam'.",
-    // "$n proclaims 'regiam gessi, subiique regis'.",
-    // "$n proclaims 'munus et mores colui sereno'.",
-    // "$n proclaims 'principe dignos'."
-    // };
-    //
-    // const char bedroom_path[] = "s33004o1c1S.";
-    // const char throne_path[] = "W3o3cG52211rg.";
-    // const char monolog_path[] = "ABCDPPPP.";
-    //
-    // static const char *path;
-    // static int path_index;
-    // static bool move = false;
-    //
-    // if (!move) {
-    // if (time_info.hours == 8 && IN_ROOM(ch) == castle_real_room(51)) {
-    // move = true;
-    // path = throne_path;
-    // path_index = 0;
-    // } else if (time_info.hours == 21 && IN_ROOM(ch) == castle_real_room(17)) {
-    // move = true;
-    // path = bedroom_path;
-    // path_index = 0;
-    // } else if (time_info.hours == 12 && IN_ROOM(ch) == castle_real_room(17)) {
-    // move = true;
-    // path = monolog_path;
-    // path_index = 0;
-    // }
-    // }
-    // if (cmd || (ch.get_pos() < POS_SLEEPING) ||
-    // (ch.get_pos() == POS_SLEEPING && !move))
-    // return (false);
-    //
-    // if (ch.get_pos() == POS_FIGHTING) {
-    // fry_victim(ch);
-    // return (false);
-    // } else if (banzaii(ch))
-    // return (false);
-    //
-    // if (!move)
-    // return (false);
-    //
-    // switch (path[path_index]) {
-    // case '0':
-    // case '1':
-    // case '2':
-    // case '3':
-    // case '4':
-    // case '5':
-    // perform_move(ch, path[path_index] - '0', 1);
-    // break;
-    //
-    // case 'A':
-    // case 'B':
-    // case 'C':
-    // case 'D':
-    // act(monolog[path[path_index] - 'A'], false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'P':
-    // break;
-    //
-    // case 'W':
-    // ch.get_pos() = POS_STANDING;
-    // act("$n awakens and stands up.", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'S':
-    // ch.get_pos() = POS_SLEEPING;
-    // act("$n lies down on $s beautiful bed and instantly falls asleep.", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'r':
-    // ch.get_pos() = POS_SITTING;
-    // act("$n sits down on $s great throne.", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 's':
-    // ch.get_pos() = POS_STANDING;
-    // act("$n stands up.", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'G':
-    // act("$n says 'Good morning, trusted friends.'", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'g':
-    // act("$n says 'Good morning, dear subjects.'", false, ch, 0, 0, TO_ROOM);
-    // break;
-    //
-    // case 'o':
-    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_UNLOCK);	/* strcpy: OK */
-    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_OPEN);	/* strcpy: OK */
-    // break;
-    //
-    // case 'c':
-    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_CLOSE);	/* strcpy: OK */
-    // do_gen_door(ch, strcpy(actbuf, "door"), 0, SCMD_LOCK);	/* strcpy: OK */
-    // break;
-    //
-    // case '.':
-    // move = false;
-    // break;
-    // }
-    //
-    // path_index++;
+    if !game.db.king_welmar.move_ {
+        if game.db.time_info.borrow().hours == 8 && ch.in_room() == castle_real_room(&game.db, 51) {
+            game.db.king_welmar.move_ = true;
+            game.db.king_welmar.path = THRONE_PATH;
+            game.db.king_welmar.path_index = 0;
+        } else if game.db.time_info.borrow().hours == 21
+            && ch.in_room() == castle_real_room(&game.db, 17)
+        {
+            game.db.king_welmar.move_ = true;
+            game.db.king_welmar.path = BEDROOM_PATH;
+            game.db.king_welmar.path_index = 0;
+        } else if game.db.time_info.borrow().hours == 12
+            && ch.in_room() == castle_real_room(&game.db, 17)
+        {
+            game.db.king_welmar.move_ = true;
+            game.db.king_welmar.path = MONOLOG_PATH;
+            game.db.king_welmar.path_index = 0;
+        }
+    }
+    if cmd != 0
+        || ch.get_pos() < POS_SLEEPING
+        || (ch.get_pos() == POS_SLEEPING && !game.db.king_welmar.move_)
+    {
+        return false;
+    }
+
+    if ch.get_pos() == POS_FIGHTING {
+        fry_victim(game, ch);
+        return false;
+    } else if banzaii(game, ch) {
+        return false;
+    }
+
+    if !game.db.king_welmar.move_ {
+        return false;
+    }
+
+    match game.db.king_welmar.path[game.db.king_welmar.path_index] as char {
+        '0' | '1' | '2' | '3' | '4' | '5' => {
+            perform_move(
+                game,
+                ch,
+                (game.db.king_welmar.path[game.db.king_welmar.path_index] - b'0') as i32,
+                true,
+            );
+        }
+
+        'A' | 'B' | 'C' | 'D' => {
+            game.db.act(
+                MONOLOG[(game.db.king_welmar.path[game.db.king_welmar.path_index] - b'A') as usize],
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        'P' => {}
+
+        'W' => {
+            ch.set_pos(POS_STANDING);
+            game.db.act(
+                "$n awakens and stands up.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        'S' => {
+            ch.set_pos(POS_SLEEPING);
+            game.db.act(
+                "$n lies down on $s beautiful bed and instantly falls asleep.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        'r' => {
+            ch.set_pos(POS_SITTING);
+            game.db.act(
+                "$n sits down on $s great throne.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        's' => {
+            ch.set_pos(POS_STANDING);
+            game.db
+                .act("$n stands up.", false, Some(ch), None, None, TO_ROOM);
+        }
+
+        'G' => {
+            game.db.act(
+                "$n says 'Good morning, trusted friends.'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        'g' => {
+            game.db.act(
+                "$n says 'Good morning, dear subjects.'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+        }
+
+        'o' => {
+            do_gen_door(game, ch, "door", 0, SCMD_UNLOCK); /* strcpy: OK */
+            do_gen_door(game, ch, "door", 0, SCMD_OPEN); /* strcpy: OK */
+        }
+
+        'c' => {
+            do_gen_door(game, ch, "door", 0, SCMD_CLOSE); /* strcpy: OK */
+            do_gen_door(game, ch, "door", 0, SCMD_LOCK); /* strcpy: OK */
+        }
+
+        '.' => {
+            game.db.king_welmar.move_ = false;
+        }
+        _ => {}
+    }
+
+    game.db.king_welmar.path_index += 1;
     false
 }
 
@@ -886,6 +947,7 @@ pub fn training_master(
 
     false
 }
+
 pub fn tom(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
     return castle_twin_proc(game, ch, cmd, argument, 48, "Tim");
 }

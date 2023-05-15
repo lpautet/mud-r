@@ -25,6 +25,7 @@ use crate::act_informative::sort_commands;
 use crate::act_social::{boot_social_messages, SocialMessg};
 use crate::ban::{load_banned, read_invalid_list};
 use crate::boards::BoardSystem;
+use crate::castle::KingWelmar;
 use crate::class::init_spell_levels;
 use crate::config::{FROZEN_START_ROOM, IMMORT_START_ROOM, MORTAL_START_ROOM, OK};
 use crate::constants::{
@@ -200,6 +201,7 @@ pub struct DB {
     pub num_of_houses: Cell<usize>,
     pub mails: RefCell<MailSystem>,
     pub(crate) mayor: RefCell<Mayor>,
+    pub(crate) king_welmar: KingWelmar,
     pub scheck: bool,
 }
 
@@ -556,6 +558,7 @@ impl DB {
             num_of_houses: Cell::new(0),
             mails: RefCell::new(MailSystem::new()),
             mayor: RefCell::new(Mayor::new()),
+            king_welmar: KingWelmar::new(),
             scheck: false,
         }
     }
