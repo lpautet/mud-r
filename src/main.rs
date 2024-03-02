@@ -485,7 +485,7 @@ impl Game {
             }
 
             /* Process descriptors with input pending */
-            let mut buf = [0 as u8];
+            let mut buf = [0u8];
             for d in self.descriptor_list.borrow().iter() {
                 let res = RefCell::borrow(&d.stream).peek(&mut buf);
                 if res.is_ok() && res.unwrap() != 0 {
@@ -895,7 +895,7 @@ impl Game {
             host: RefCell::new(String::new()),
             bad_pws: Cell::new(0),
             idle_tics: Cell::new(0),
-            connected: Cell::new(ConState::ConGetName),
+            connected: Cell::new(ConGetName),
             desc_num: Cell::new(0),
             login_time: Instant::now(),
             showstr_head: RefCell::new(None),
@@ -1086,7 +1086,7 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
     let mut stream = d.stream.borrow_mut();
     let mut input = d.inbuf.borrow_mut();
 
-    let mut buf = [0 as u8; 4096];
+    let mut buf = [0u8; 4096];
 
     let r = stream.read(&mut buf);
     if r.is_err() {
@@ -1175,7 +1175,7 @@ fn process_input(t: &Rc<DescriptorData>) -> i32 {
 
     let mut read_point = 0;
 
-    let ptr = 0 as usize;
+    let ptr = 0usize;
     while nl_pos.is_some() {
         tmp.truncate(0);
         space_left = MAX_INPUT_LENGTH - 1;
@@ -1232,7 +1232,7 @@ fn process_input(t: &Rc<DescriptorData>) -> i32 {
                 HISTORY_SIZE - 1
             } else {
                 t.history_pos.get() - 1
-            } as usize;
+            };
 
             commandln = commandln.trim_start();
             while cnt != starting_pos {

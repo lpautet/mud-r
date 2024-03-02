@@ -122,7 +122,7 @@ pub fn list_skills(db: &DB, ch: &Rc<CharData>) {
         splskl(ch)
     );
 
-    for sortpos in 1..(MAX_SKILLS + 1) as usize {
+    for sortpos in 1..(MAX_SKILLS + 1) {
         let i = db.spell_sort_info[sortpos] as usize;
         if ch.get_level() >= db.spell_info[i].min_level[ch.get_class() as usize] as u8 {
             buf.push_str(
@@ -928,7 +928,7 @@ pub fn pet_shops(
 
 pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
-    if cmd_is(cmd, "balance") {
+    return if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {
             send_to_char(
                 ch,
@@ -937,7 +937,7 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argumen
         } else {
             send_to_char(ch, "You currently have no money deposited.\r\n");
         }
-        return true;
+        true
     } else if cmd_is(cmd, "deposit") {
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
@@ -960,7 +960,7 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argumen
             None,
             TO_ROOM,
         );
-        return true;
+        true
     } else if cmd_is(cmd, "withdraw") {
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
@@ -983,8 +983,8 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argumen
             None,
             TO_ROOM,
         );
-        return true;
+        true
     } else {
-        return false;
+        false
     }
 }

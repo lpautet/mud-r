@@ -43,7 +43,7 @@ fn is_marked(db: &DB, room: RoomRnum) -> bool {
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
-    db.world.borrow()[x as usize].dir_option[y as usize]
+    db.world.borrow()[x as usize].dir_option[y]
         .as_ref()
         .unwrap()
         .to_room
@@ -51,7 +51,7 @@ fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
-    db.world.borrow()[x as usize].dir_option[y as usize]
+    db.world.borrow()[x as usize].dir_option[y]
         .as_ref()
         .unwrap()
         .exit_info
@@ -62,7 +62,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
 
 fn valid_edge(game: &mut Game, x: RoomRnum, y: usize) -> bool {
     let db = &game.db;
-    if db.world.borrow()[x as usize].dir_option[y as usize].is_none() || toroom(db, x, y) == NOWHERE
+    if db.world.borrow()[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
     {
         return false;
     }
@@ -202,7 +202,7 @@ pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         }
         send_to_char(
             ch,
-            format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_ref(),
+            format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
         return;
     }

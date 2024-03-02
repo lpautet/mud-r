@@ -541,7 +541,7 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         return;
     }
     /* make sure the char is on the channel */
-    if ch.prf_flagged(CHANNELS[subcmd as usize] as i64) {
+    if ch.prf_flagged(CHANNELS[subcmd as usize]) {
         send_to_char(ch, COM_MSGS[subcmd as usize][2]);
         return;
     }
@@ -604,7 +604,7 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
                 .borrow()
                 .as_ref()
                 .unwrap()
-                .prf_flagged(CHANNELS[subcmd as usize] as i64)
+                .prf_flagged(CHANNELS[subcmd as usize])
             && !i
                 .character
                 .borrow()

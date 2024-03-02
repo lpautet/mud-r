@@ -364,7 +364,7 @@ fn crash_clean_file(name: &str) -> bool {
         /* Must retrieve rented items w/in 30 days */
     } else if rent.rentcode == RENT_RENTED {
         if rent.time
-            < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64)) as i64
+            < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64))
         {
             crash_delete_file(name);
             info!("    Deleting {}'s rent file.", name);
@@ -1270,7 +1270,7 @@ fn crash_report_rent(
 ) {
     if obj.is_some() {
         if !crash_is_unrentable(obj) {
-            (*nitems) += 1;
+            *nitems += 1;
             *cost += max(0, obj.as_ref().unwrap().get_obj_rent() * factor);
             if display {
                 let buf = format!(
@@ -1495,7 +1495,7 @@ fn gen_receptionist(
                 Some(ch),
                 TO_VICT,
             );
-            crash_rentsave(db, ch, cost as i32);
+            crash_rentsave(db, ch, cost);
             game.mudlog(
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
@@ -1520,7 +1520,7 @@ You begin to lose consciousness...",
                 Some(ch),
                 TO_VICT,
             );
-            crash_cryosave(db, ch, cost as i32);
+            crash_cryosave(db, ch, cost);
             game.mudlog(
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),

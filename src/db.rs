@@ -191,8 +191,8 @@ pub struct DB {
     pub cmd_sort_info: Vec<usize>,
     pub combat_list: RefCell<Vec<Rc<CharData>>>,
     pub shop_index: RefCell<Vec<ShopData>>,
-    pub spell_sort_info: [i32; MAX_SKILLS as usize + 1],
-    pub spell_info: [SpellInfoType; (TOP_SPELL_DEFINE + 1) as usize],
+    pub spell_sort_info: [i32; MAX_SKILLS + 1],
+    pub spell_info: [SpellInfoType; TOP_SPELL_DEFINE + 1],
     pub soc_mess_list: Vec<SocialMessg>,
     pub ban_list: RefCell<Vec<BanListElement>>,
     pub invalid_list: RefCell<Vec<Rc<str>>>,
@@ -1976,7 +1976,7 @@ impl DB {
         obj.set_obj_rent(f[3].parse::<i32>().unwrap());
 
         /* check to make sure that weight of containers exceeds curr. quantity */
-        if obj.get_obj_type() == ITEM_DRINKCON as u8 || obj.get_obj_type() == ITEM_FOUNTAIN as u8 {
+        if obj.get_obj_type() == ITEM_DRINKCON || obj.get_obj_type() == ITEM_FOUNTAIN {
             if obj.get_obj_weight() < obj.get_obj_val(1) {
                 obj.set_obj_weight(obj.get_obj_val(1) + 5);
             }
@@ -2369,7 +2369,7 @@ impl DB {
                 mob.points.borrow().hit as i32,
                 mob.points.borrow().mana as i32,
             ) + mob.points.borrow().movem as i32;
-            mob.points.borrow_mut().max_hit = (max_hit) as i16;
+            mob.points.borrow_mut().max_hit = max_hit as i16;
         } else {
             let max_hit = rand_number(
                 mob.points.borrow().hit as u32,
@@ -2548,8 +2548,8 @@ impl DB {
         let mut last_cmd = 0;
         let mut obj;
         let mut mob = None;
-        for cmd_no in 0..self.zone_table.borrow()[zone as usize].cmd.len() {
-            let zcmd = &self.zone_table.borrow()[zone as usize].cmd[cmd_no as usize];
+        for cmd_no in 0..self.zone_table.borrow()[zone].cmd.len() {
+            let zcmd = &self.zone_table.borrow()[zone].cmd[cmd_no];
             if zcmd.command.get() == 'S' {
                 break;
             }
@@ -2764,7 +2764,7 @@ impl DB {
             }
         }
 
-        self.zone_table.borrow()[zone as usize].age.set(0);
+        self.zone_table.borrow()[zone].age.set(0);
     }
 }
 
@@ -3147,21 +3147,21 @@ impl DB {
         let i: usize;
         let pos = self.get_ptable_by_name(name);
 
-        if pos.is_none() {
+        return if pos.is_none() {
             /* new name */
             i = self.player_table.borrow().len();
             self.player_table.borrow_mut().push(PlayerIndexElement {
                 name: name.to_lowercase(),
                 id: i as i64,
             });
-            return i;
+            i
         } else {
             let pos = pos.unwrap();
 
             let mut pt = self.player_table.borrow_mut();
             let mut pie = pt.get_mut(pos);
             pie.as_mut().unwrap().name = name.to_lowercase();
-            return pos;
+            pos
         }
     }
 }
@@ -3668,7 +3668,7 @@ fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &
     let mut error = false;
 
     /* See if any bits are set above the ones we know about. */
-    if bits <= (!0 as i64 >> (64 - namecount)) {
+    if bits <= (!0 >> (64 - namecount)) {
         return false;
     }
 

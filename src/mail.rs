@@ -700,7 +700,7 @@ pub fn postmaster(
         return false;
     }
 
-    if cmd_is(cmd, "mail") {
+    return if cmd_is(cmd, "mail") {
         postmaster_send_mail(
             game,
             ch,
@@ -708,7 +708,7 @@ pub fn postmaster(
             cmd,
             argument,
         );
-        return true;
+        true
     } else if cmd_is(cmd, "check") {
         postmaster_check_mail(
             db,
@@ -717,7 +717,7 @@ pub fn postmaster(
             cmd,
             argument,
         );
-        return true;
+        true
     } else if cmd_is(cmd, "receive") {
         postmaster_receive_mail(
             db,
@@ -726,9 +726,9 @@ pub fn postmaster(
             cmd,
             argument,
         );
-        return true;
+        true
     } else {
-        return false;
+        false
     }
 }
 

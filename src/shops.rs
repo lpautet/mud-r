@@ -313,15 +313,15 @@ fn top(stack: &StackData) -> i32 {
 }
 
 fn pop(stack: &mut StackData) -> i32 {
-    if stack.len > 0 {
+    return if stack.len > 0 {
         stack.len -= 1;
-        return stack.data[stack.len];
+        stack.data[stack.len]
     } else {
         error!(
             "SYSERR: Illegal expression {} in shop keyword list.",
             stack.len
         );
-        return 0;
+        0
     }
 }
 
@@ -435,10 +435,10 @@ fn trade_with(item: &Rc<ObjData>, shop: &ShopData) -> i32 {
         return OBJECT_NOTOK;
     }
 
-    let mut counter = 0 as usize;
+    let mut counter = 0usize;
 
     while shop.type_[counter].type_ != NOTHING as i32 {
-        if shop.type_[counter as usize].type_ == item.get_obj_type() as i32 {
+        if shop.type_[counter].type_ == item.get_obj_type() as i32 {
             if item.get_obj_val(2) == 0
                 && (item.get_obj_type() == ITEM_WAND || item.get_obj_type() == ITEM_STAFF)
             {
@@ -479,7 +479,7 @@ fn shop_producing(db: &DB, item: &Rc<ObjData>, shop: &ShopData) -> bool {
     if item.get_obj_rnum() == NOTHING {
         return false;
     }
-    for counter in 0..shop.producing.len() as usize {
+    for counter in 0..shop.producing.len() {
         if shop.producing[counter] == NOTHING {
             break;
         }
@@ -659,8 +659,8 @@ fn buy_price(
 ) -> i32 {
     return (obj.get_obj_cost() as f32
         * shop.profit_buy
-        * (1 as f32 + keeper.get_cha() as f32 - buyer.get_cha() as f32)
-        / 70 as f32) as i32;
+        * (1f32 + keeper.get_cha() as f32 - buyer.get_cha() as f32)
+        / 70f32) as i32;
 }
 
 /*
@@ -674,9 +674,9 @@ fn sell_price(
     seller: &Rc<CharData>,
 ) -> i32 {
     let mut sell_cost_modifier =
-        shop.profit_sell * (1 as f32 - (keeper.get_cha() - seller.get_cha()) as f32 / 70.0);
+        shop.profit_sell * (1f32 - (keeper.get_cha() - seller.get_cha()) as f32 / 70.0);
     let buy_cost_modifier =
-        shop.profit_buy * (1 as f32 + (keeper.get_cha() - seller.get_cha()) as f32 / 70.0);
+        shop.profit_buy * (1f32 + (keeper.get_cha() - seller.get_cha()) as f32 / 70.0);
 
     if sell_cost_modifier > buy_cost_modifier {
         sell_cost_modifier = buy_cost_modifier;
@@ -1029,7 +1029,7 @@ fn shopping_sell(
     let mut sold = 0;
     let mut goldamt = 0;
 
-    if !(is_ok(game, keeper, ch, shop_nr)) {
+    if !is_ok(game, keeper, ch, shop_nr) {
         return;
     }
     let mut arg = arg.to_string();

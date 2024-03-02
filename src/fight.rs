@@ -339,7 +339,7 @@ impl DB {
         corpse.set_obj_extra(ITEM_NODONATE);
         corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
         corpse.set_obj_val(3, 1); /* corpse identifier */
-        corpse.set_obj_weight((ch.get_weight() as i32 + ch.is_carrying_w()) as i32);
+        corpse.set_obj_weight(ch.get_weight() as i32 + ch.is_carrying_w() );
         corpse.set_obj_rent(100000);
         if ch.is_npc() {
             corpse.set_obj_timer(MAX_NPC_CORPSE_TIME);
@@ -409,7 +409,7 @@ impl DB {
         for door in 0..NUM_OF_DIRS {
             if self.can_go(ch, door) {
                 self.send_to_room(
-                    self.world.borrow()[ch.in_room() as usize].dir_option[door as usize]
+                    self.world.borrow()[ch.in_room() as usize].dir_option[door]
                         .as_ref()
                         .unwrap()
                         .to_room
@@ -942,7 +942,7 @@ impl Game {
 
         /* Gain exp for the hit */
         if !Rc::ptr_eq(ch, victim) {
-            gain_exp(ch, (victim.get_level() as i32 * dam) as i32, self);
+            gain_exp(ch, victim.get_level() as i32 * dam, self);
         }
 
         update_pos(victim);
@@ -1133,8 +1133,8 @@ pub fn compute_thaco(ch: &Rc<CharData>, _victim: &Rc<CharData>) -> i32 {
     }
     calc_thaco -= STR_APP[ch.strength_apply_index()].tohit as i32;
     calc_thaco -= ch.get_hitroll() as i32;
-    calc_thaco -= ((ch.get_int() as f32 - 13 as f32) / 1.5) as i32; /* Intelligence helps! */
-    calc_thaco -= ((ch.get_wis() as f32 - 13 as f32) / 1.5) as i32; /* So does wisdom */
+    calc_thaco -= ((ch.get_int() as f32 - 13f32) / 1.5) as i32; /* Intelligence helps! */
+    calc_thaco -= ((ch.get_wis() as f32 - 13f32) / 1.5) as i32; /* So does wisdom */
 
     return calc_thaco;
 }
@@ -1157,7 +1157,7 @@ impl Game {
             w_type = wielded.as_ref().unwrap().get_obj_val(3) + TYPE_HIT;
         } else {
             if ch.is_npc() && ch.mob_specials.borrow().attack_type != 0 {
-                w_type = (ch.mob_specials.borrow().attack_type as i32 + TYPE_HIT) as i32;
+                w_type = ch.mob_specials.borrow().attack_type as i32 + TYPE_HIT;
             } else {
                 w_type = TYPE_HIT;
             }

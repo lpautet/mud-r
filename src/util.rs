@@ -920,7 +920,7 @@ impl CharData {
             && (self.is_carrying_n() + 1) <= self.can_carry_n() as u8
     }
     pub fn can_carry_w(&self) -> i16 {
-        STR_APP[self.strength_apply_index() as usize].carry_w
+        STR_APP[self.strength_apply_index()].carry_w
     }
     pub fn can_carry_n(&self) -> i32 {
         (5 + self.get_dex() as i32 >> 1) + (self.get_level() as i32 >> 1)
@@ -1147,7 +1147,7 @@ impl RoomDirectionData {
 
 impl DB {
     pub fn exit(&self, ch: &CharData, door: usize) -> Option<Rc<RoomDirectionData>> {
-        self.world.borrow()[ch.in_room() as usize].dir_option[door as usize].clone()
+        self.world.borrow()[ch.in_room() as usize].dir_option[door].clone()
     }
     pub fn room_flags(&self, loc: RoomRnum) -> i32 {
         self.world.borrow()[loc as usize].room_flags.get()
@@ -1459,13 +1459,13 @@ pub fn mud_time_passed(t2: u64, t1: u64) -> TimeInfoData {
     let mut secs = t2 - t1;
 
     now.hours = ((secs / SECS_PER_MUD_HOUR) % 24) as i32; /* 0..23 hours */
-    secs -= SECS_PER_MUD_HOUR as u64 * now.hours as u64;
+    secs -= SECS_PER_MUD_HOUR * now.hours as u64;
 
     now.day = ((secs / SECS_PER_MUD_DAY) % 35) as i32; /* 0..34 days  */
-    secs -= SECS_PER_MUD_DAY as u64 * now.day as u64;
+    secs -= SECS_PER_MUD_DAY * now.day as u64;
 
     now.month = ((secs / SECS_PER_MUD_MONTH) % 17) as i32; /* 0..16 months */
-    secs -= SECS_PER_MUD_MONTH as u64 * now.month as u64;
+    secs -= SECS_PER_MUD_MONTH * now.month as u64;
 
     now.year = (secs / SECS_PER_MUD_YEAR) as i16; /* 0..XX? years */
 
