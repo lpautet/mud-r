@@ -242,6 +242,10 @@ impl CharData {
             self.get_pc_name()
         }
     }
+
+    pub fn has_title(&self) -> bool {
+        self.player.borrow().title.is_some()
+    }
     pub fn get_title(&self) -> Rc<str> {
         Rc::from(self.player.borrow().title.as_ref().unwrap().as_str())
     }

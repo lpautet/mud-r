@@ -3084,7 +3084,7 @@ impl DB {
         st.points.hitroll = 0;
         st.points.damroll = 0;
 
-        if !ch.get_title().is_empty() {
+        if  ch.has_title() && !ch.get_title().is_empty() {
             copy_to_stored(&mut st.title, &ch.get_title());
         } else {
             st.title[0] = 0;
