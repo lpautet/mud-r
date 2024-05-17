@@ -231,7 +231,7 @@ impl Clone for SpellInfoType {
             routines: self.routines,
             violent: self.violent,
             targets: self.targets,
-            name: self.name.clone(),
+            name: self.name,
             wear_off_msg: self.wear_off_msg.clone(),
         }
     }

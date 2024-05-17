@@ -3570,7 +3570,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     /* player unknown -- make new character */
 
                     /* Check for multiple creations of a character. */
-                    if !valid_name(game, tmp_name.unwrap().clone()) {
+                    if !valid_name(game, tmp_name.unwrap()) {
                         write_to_output(d.as_ref(), "Invalid name, please try another.\r\nName: ");
                         return;
                     }

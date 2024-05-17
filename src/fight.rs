@@ -1156,8 +1156,8 @@ impl Game {
         if wielded.is_some() && wielded.as_ref().unwrap().get_obj_type() == ITEM_WEAPON {
             w_type = wielded.as_ref().unwrap().get_obj_val(3) + TYPE_HIT;
         } else {
-            if ch.is_npc() && ch.mob_specials.borrow().attack_type != 0 {
-                w_type = ch.mob_specials.borrow().attack_type as i32 + TYPE_HIT;
+            if ch.is_npc() && ch.mob_specials.attack_type != 0 {
+                w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
             } else {
                 w_type = TYPE_HIT;
             }
@@ -1223,8 +1223,8 @@ impl Game {
                 /* If no weapon, add bare hand damage instead */
                 if ch.is_npc() {
                     dam += dice(
-                        ch.mob_specials.borrow().damnodice as i32,
-                        ch.mob_specials.borrow().damsizedice as i32,
+                        ch.mob_specials.damnodice as i32,
+                        ch.mob_specials.damsizedice as i32,
                     );
                 } else {
                     dam += rand_number(0, 2) as i32; /* Max 2 bare hand damage for players */

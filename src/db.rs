@@ -2056,7 +2056,7 @@ impl DB {
             cmd: vec![],
         };
 
-        let zname = zonename.clone();
+        let zname = zonename;
 
         let mut buf = String::new();
         let mut reader = BufReader::new(fl);

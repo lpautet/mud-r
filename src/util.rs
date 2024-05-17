@@ -247,6 +247,9 @@ impl CharData {
         self.player.borrow().title.is_some()
     }
     pub fn get_title(&self) -> Rc<str> {
+        if self.player.borrow().title.is_none() {
+            return Rc::from("");
+        }
         Rc::from(self.player.borrow().title.as_ref().unwrap().as_str())
     }
     pub fn set_title(&self, val: Option<String>) {

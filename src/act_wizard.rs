@@ -2529,7 +2529,7 @@ pub fn do_poofset(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 
     let argument = argument.trim_start();
 
-    *msg = Rc::from(argument.clone());
+    *msg = Rc::from(argument);
 
     send_to_char(ch, OK);
 }
