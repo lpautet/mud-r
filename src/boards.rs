@@ -50,7 +50,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 use std::{fs, mem, process, slice};
 
-use log::error;
+use log::{error, info};
 
 use crate::db::{parse_c_string, DB};
 use crate::handler::isname;
@@ -71,6 +71,15 @@ const MAX_MESSAGE_LENGTH: usize = 4096; /* arbitrary -- change if needed */
 const INDEX_SIZE: usize = ((NUM_OF_BOARDS * MAX_BOARD_MESSAGES) + 5) as usize;
 
 pub const BOARD_MAGIC: i64 = 1048575; /* arbitrary number - see modify.c */
+
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+struct BoardMsgInfoRecord {
+    slot_num: usize,
+    level: i32,
+    heading_len: usize,
+    message_len: usize,
+}
 
 struct BoardMsginfo {
     slot_num: Option<usize>,
@@ -666,8 +675,8 @@ pub fn board_save_board(b: &mut BoardSystem, board_type: usize) {
             b.msg_index[board_type][i].heading_len = 0;
         }
 
-        let msg_slotnum = b.msg_index[board_type][i].slot_num;
-        let tmp2 = &b.msg_storage[msg_slotnum.unwrap()];
+        let msg_slotnum = b.msg_index[board_type][i].slot_num.unwrap();
+        let tmp2 = &b.msg_storage[msg_slotnum];
 
         if !RefCell::borrow(tmp2).is_empty() {
             b.msg_index[board_type][i].message_len = RefCell::borrow(tmp2).as_bytes().len();
@@ -675,10 +684,17 @@ pub fn board_save_board(b: &mut BoardSystem, board_type: usize) {
             b.msg_index[board_type][i].message_len = 0;
         }
 
+        let mut record = BoardMsgInfoRecord {
+            slot_num: msg_slotnum,
+            level: b.msg_index[board_type][i].level,
+            heading_len: b.msg_index[board_type][i].heading_len,
+            message_len: b.msg_index[board_type][i].message_len,
+        };
+
         unsafe {
             let msginfo_slice = slice::from_raw_parts(
-                &mut b.msg_index[board_type][i] as *mut _ as *mut u8,
-                mem::size_of::<BoardMsginfo>(),
+                &mut record as *mut _ as *mut u8,
+                mem::size_of::<BoardMsgInfoRecord>(),
             );
             fl.write_all(msginfo_slice)
                 .expect("Error while number of messages in board");
@@ -739,10 +755,16 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
     }
 
     for i in 0..b.num_of_msgs[board_type] {
+        let mut record = BoardMsgInfoRecord {
+            slot_num: 0,
+            level: 0,
+            heading_len: 0,
+            message_len: 0,
+        };
         unsafe {
             let config_slice = slice::from_raw_parts_mut(
-                &mut b.msg_index[board_type][i] as *mut _ as *mut u8,
-                mem::size_of::<BoardMsginfo>(),
+                &mut record as *mut _ as *mut u8,
+                mem::size_of::<BoardMsgInfoRecord>(),
             );
             let r = fl.read_exact(config_slice);
             if r.is_err() {
@@ -755,6 +777,11 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
                 return;
             }
         }
+
+        b.msg_index[board_type][i].slot_num = Some(record.slot_num);
+        b.msg_index[board_type][i].level = record.level;
+        b.msg_index[board_type][i].heading_len = record.heading_len;
+        b.msg_index[board_type][i].message_len = record.message_len;
 
         let len1;
         if {
@@ -769,7 +796,8 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
         let tmp1 = tmp1.as_mut_slice();
         fl.read_exact(tmp1)
             .expect("Error reading board file message");
-        b.msg_index[board_type][i].heading = Some(Rc::from(parse_c_string(tmp1).as_str()));
+        let heading: Option<Rc<str>> = Some(Rc::from(parse_c_string(tmp1).as_str()));
+        b.msg_index[board_type][i].heading = heading;
         let sn;
         if {
             sn = find_slot(b);
