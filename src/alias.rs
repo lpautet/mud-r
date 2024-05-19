@@ -24,7 +24,14 @@ use crate::util::{get_filename, ALIAS_FILE};
 pub fn write_aliases(ch: &Rc<CharData>) {
     let mut fname = String::new();
     get_filename(&mut fname, ALIAS_FILE, &ch.get_name());
-    fs::remove_file(&fname).expect("Error removing alias file");
+    let res = fs::remove_file(&fname);
+    match res  {
+        Err(e) if e.kind() != ErrorKind::NotFound => { 
+            error!("Cannot remove alias file {}\n", e);
+            return;
+        }
+        _ => (),
+    }
 
     if ch.player_specials.borrow().aliases.len() == 0 {
         return;
