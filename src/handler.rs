@@ -265,7 +265,7 @@ pub fn affect_total(ch: &CharData) {
 
     /* Make certain values are between 0..25, not < 0 and not > 25! */
 
-    let mut i = if ch.is_npc() || ch.get_level() >= LVL_GRGOD as u8 {
+    let i = if ch.is_npc() || ch.get_level() >= LVL_GRGOD as u8 {
         25
     } else {
         18
@@ -282,8 +282,8 @@ pub fn affect_total(ch: &CharData) {
         ch.set_str(min(ch.get_str(), i));
     } else {
         if ch.get_str() > 18 {
-            i = ch.get_add() + ((ch.get_str() - 18) * 10);
-            ch.set_add(min(i, 100));
+            let i = ch.get_add() as i16+ ((ch.get_str() as i16 - 18) * 10);
+            ch.set_add(min(i, 100) as i8);
             ch.set_str(18);
         }
     }
