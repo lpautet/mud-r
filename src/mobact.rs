@@ -78,8 +78,8 @@ impl Game {
                         }
                     }
                     if best_obj.is_some() {
-                        self.db.obj_from_room(Some(best_obj.as_ref().unwrap()));
-                        DB::obj_to_char(Some(best_obj.as_ref().unwrap()), Some(ch));
+                        self.db.obj_from_room(best_obj.as_ref().unwrap());
+                        DB::obj_to_char(best_obj.as_ref().unwrap(), ch);
                         self.db.act(
                             "$n gets $p.",
                             false,

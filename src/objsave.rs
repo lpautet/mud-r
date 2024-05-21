@@ -216,7 +216,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
             if invalid_align(ch, obj) || invalid_class(ch, obj) {
                 location = LOC_INVENTORY;
             } else {
-                db.equip_char(Some(ch), Some(obj), j as i8);
+                db.equip_char(ch, obj, j as i8);
             }
         } else {
             /* Oops, saved a player with double equipment? */
@@ -237,7 +237,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
 
     if location <= 0 {
         /* Inventory */
-        DB::obj_to_char(Some(obj), Some(ch));
+        DB::obj_to_char(obj, ch);
     }
 }
 
@@ -363,9 +363,7 @@ fn crash_clean_file(name: &str) -> bool {
         }
         /* Must retrieve rented items w/in 30 days */
     } else if rent.rentcode == RENT_RENTED {
-        if rent.time
-            < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64))
-        {
+        if rent.time < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64)) {
             crash_delete_file(name);
             info!("    Deleting {}'s rent file.", name);
             return true;
@@ -711,7 +709,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        DB::obj_to_char(Some(obj2), Some(ch));
+                        DB::obj_to_char(obj2, ch);
                     }
                     cont_row[j].clear();
                 }
@@ -724,13 +722,13 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
                     obj = db.unequip_char(ch, (location - 1) as i8);
                     obj.as_ref().unwrap().contains.borrow_mut().clear(); /* Should be empty anyway, but just in case. */
                     for obj2 in cont_row[0].iter() {
-                        db.obj_to_obj(Some(&obj2), obj.as_ref());
+                        db.obj_to_obj(&obj2, obj.as_ref().unwrap());
                     }
-                    db.equip_char(Some(ch), obj.as_ref(), (location - 1) as i8);
+                    db.equip_char(ch, obj.as_ref().unwrap(), (location - 1) as i8);
                 } else {
                     /* Object isn't container, empty the list. */
                     for obj2 in cont_row[0].iter() {
-                        DB::obj_to_char(Some(&obj2), Some(ch));
+                        DB::obj_to_char(&obj2, ch);
                     }
                     cont_row[0].clear();
                 }
@@ -745,7 +743,7 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        DB::obj_to_char(Some(&obj2), Some(ch));
+                        DB::obj_to_char(&obj2, ch);
                     }
                     cont_row[j].clear();
                 }
@@ -755,16 +753,16 @@ pub fn crash_load(game: &Game, ch: &Rc<CharData>) -> i32 {
                 /* Content list exists. */
                 if obj.as_ref().unwrap().get_obj_type() == ITEM_CONTAINER {
                     /* Take the item, fill it, and give it back. */
-                    obj_from_char(obj.as_ref());
+                    obj_from_char(obj.as_ref().unwrap());
                     obj.as_ref().unwrap().contains.borrow_mut().clear();
                     for obj2 in cont_row[j].iter() {
-                        db.obj_to_obj(Some(&obj2), obj.as_ref());
+                        db.obj_to_obj(&obj2, obj.as_ref().unwrap());
                     }
-                    DB::obj_to_char(obj.as_ref(), Some(ch)); /* Add to inventory first. */
+                    DB::obj_to_char(obj.as_ref().unwrap(), ch); /* Add to inventory first. */
                 } else {
                     /* Object isn't container, empty content list. */
                     for obj2 in cont_row[j].iter() {
-                        DB::obj_to_char(Some(&obj2), Some(ch));
+                        DB::obj_to_char(&obj2, ch);
                     }
                     cont_row[j].clear();
                 }
@@ -873,10 +871,10 @@ fn crash_extract_norent_eq(db: &DB, ch: &Rc<CharData>) {
         if ch.get_eq(j).is_none() {
             continue;
         }
-        if crash_is_unrentable(ch.get_eq(j).as_ref()) {
-            DB::obj_to_char(db.unequip_char(ch, j).as_ref(), Some(ch));
+        if crash_is_unrentable(&ch.get_eq(j).unwrap()) {
+            DB::obj_to_char(db.unequip_char(ch, j).as_ref().unwrap(), ch);
         } else {
-            crash_extract_norents(db, ch.get_eq(j).as_ref());
+            crash_extract_norents(db, &ch.get_eq(j).unwrap());
         }
     }
 }
@@ -889,12 +887,7 @@ fn crash_extract_objs(db: &DB, obj: Option<&Rc<ObjData>>) {
     db.extract_obj(obj);
 }
 
-fn crash_is_unrentable(obj: Option<&Rc<ObjData>>) -> bool {
-    if obj.is_none() {
-        return false;
-    }
-
-    let obj = obj.as_ref().unwrap();
+fn crash_is_unrentable(obj: &Rc<ObjData>) -> bool {
     if obj.obj_flagged(ITEM_NORENT)
         || obj.get_obj_rent() < 0
         || obj.get_obj_rnum() == NOTHING
@@ -905,15 +898,13 @@ fn crash_is_unrentable(obj: Option<&Rc<ObjData>>) -> bool {
     false
 }
 
-fn crash_extract_norents(db: &DB, obj: Option<&Rc<ObjData>>) {
-    if obj.is_some() {
-        for o in obj.as_ref().unwrap().contains.borrow().iter() {
-            crash_extract_norents(db, Some(o));
-        }
+fn crash_extract_norents(db: &DB, obj: &Rc<ObjData>) {
+    for o in clone_vec(&obj.contains) {
+        crash_extract_norents(db, &o);
+    }
 
-        if crash_is_unrentable(obj) {
-            db.extract_obj(obj.as_ref().unwrap());
-        }
+    if crash_is_unrentable(obj) {
+        db.extract_obj(obj);
     }
 }
 
@@ -1017,7 +1008,7 @@ pub fn crash_idlesave(db: &DB, ch: &Rc<CharData>) {
 
     crash_extract_norent_eq(db, ch);
     for o in ch.carrying.borrow().iter() {
-        crash_extract_norents(db, Some(o));
+        crash_extract_norents(db, o);
     }
 
     let mut cost = 0;
@@ -1037,7 +1028,7 @@ pub fn crash_idlesave(db: &DB, ch: &Rc<CharData>) {
         for j in 0..NUM_WEARS {
             /* Unequip players with low gold. */
             if ch.get_eq(j).is_some() {
-                DB::obj_to_char(db.unequip_char(ch, j).as_ref(), Some(ch));
+                DB::obj_to_char(db.unequip_char(ch, j).as_ref().unwrap(), ch);
             }
         }
 
@@ -1114,8 +1105,8 @@ pub fn crash_rentsave(db: &DB, ch: &Rc<CharData>, cost: i32) {
     let mut fp = fpo.unwrap();
 
     crash_extract_norent_eq(db, ch);
-    for o in ch.carrying.borrow().iter() {
-        crash_extract_norents(db, Some(o));
+    for o in clone_vec(&ch.carrying) {
+        crash_extract_norents(db, &o);
     }
 
     let mut rent = RentInfo {
@@ -1179,7 +1170,7 @@ fn crash_cryosave(db: &DB, ch: &Rc<CharData>, cost: i32) {
 
     crash_extract_norent_eq(db, ch);
     for o in ch.carrying.borrow().iter() {
-        crash_extract_norents(db, Some(o));
+        crash_extract_norents(db, o);
     }
 
     ch.set_gold(max(0, ch.get_gold() - cost));
@@ -1238,23 +1229,19 @@ fn crash_report_unrentables(
     db: &DB,
     ch: &Rc<CharData>,
     recep: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: &Rc<ObjData>,
 ) -> i32 {
     let mut has_norents = 0;
 
-    if obj.is_some() {
-        if crash_is_unrentable(obj) {
-            let obj = obj.unwrap();
-
-            has_norents = 1;
-            let buf = format!("$n tells you, 'You cannot store {}.'", db.objs(obj, ch));
-            db.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
-        }
-        let obj = obj.unwrap();
-        for o in obj.contains.borrow().iter() {
-            has_norents += crash_report_unrentables(db, ch, recep, Some(o));
-        }
+    if crash_is_unrentable(obj) {
+        has_norents = 1;
+        let buf = format!("$n tells you, 'You cannot store {}.'", db.objs(obj, ch));
+        db.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
     }
+    for o in obj.contains.borrow().iter() {
+        has_norents += crash_report_unrentables(db, ch, recep, o);
+    }
+
     has_norents
 }
 
@@ -1262,28 +1249,26 @@ fn crash_report_rent(
     db: &DB,
     ch: &Rc<CharData>,
     recep: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: &Rc<ObjData>,
     cost: &mut i32,
     nitems: &mut i64,
     display: bool,
     factor: i32,
 ) {
-    if obj.is_some() {
-        if !crash_is_unrentable(obj) {
-            *nitems += 1;
-            *cost += max(0, obj.as_ref().unwrap().get_obj_rent() * factor);
-            if display {
-                let buf = format!(
-                    "$n tells you, '{:5} coins for {}..'",
-                    obj.as_ref().unwrap().get_obj_rent() * factor,
-                    db.objs(obj.as_ref().unwrap(), ch)
-                );
-                db.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
-            }
+    if !crash_is_unrentable(obj) {
+        *nitems += 1;
+        *cost += max(0, obj.get_obj_rent() * factor);
+        if display {
+            let buf = format!(
+                "$n tells you, '{:5} coins for {}..'",
+                obj.get_obj_rent() * factor,
+                db.objs(obj, ch)
+            );
+            db.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
         }
-        for o in obj.as_ref().unwrap().contains.borrow().iter() {
-            crash_report_rent(db, ch, recep, Some(o), cost, nitems, display, factor);
-        }
+    }
+    for o in obj.contains.borrow().iter() {
+        crash_report_rent(db, ch, recep, o, cost, nitems, display, factor);
     }
 }
 
@@ -1298,10 +1283,14 @@ fn crash_offer_rent(
 
     let mut norent = 0;
     for o in ch.carrying.borrow().iter() {
-        norent += crash_report_unrentables(db, ch, recep, Some(o));
+        norent += crash_report_unrentables(db, ch, recep, o);
     }
     for i in 0..NUM_WEARS {
-        norent += crash_report_unrentables(db, ch, recep, ch.get_eq(i).as_ref());
+        let eqi: Option<Rc<ObjData>> = ch.get_eq(i);
+        if eqi.is_none() {
+            continue;
+        }
+        norent += crash_report_unrentables(db, ch, recep, &eqi.unwrap());
     }
     if norent != 0 {
         return 0;
@@ -1314,7 +1303,7 @@ fn crash_offer_rent(
             db,
             ch,
             recep,
-            Some(o),
+            o,
             &mut totalcost,
             &mut numitems,
             display,
@@ -1322,11 +1311,15 @@ fn crash_offer_rent(
         );
     }
     for i in 0..NUM_WEARS {
+        let eqi: Option<Rc<ObjData>> = ch.get_eq(i);
+        if eqi.is_none() {
+            continue;
+        }
         crash_report_rent(
             db,
             ch,
             recep,
-            ch.get_eq(i).as_ref(),
+            &ch.get_eq(i).unwrap(),
             &mut totalcost,
             &mut numitems,
             display,

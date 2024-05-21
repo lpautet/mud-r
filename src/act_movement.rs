@@ -264,7 +264,7 @@ pub fn do_simple_move(
     was_in = ch.in_room();
     db.char_from_room(ch);
     db.char_to_room(
-        Some(ch),
+        ch,
         db.world.borrow()[was_in as usize].dir_option[dir as usize]
             .as_ref()
             .unwrap()

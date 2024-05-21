@@ -152,7 +152,7 @@ fn house_load(db: &DB, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            db.obj_to_room(obj_from_store(db, &object, &mut i).as_ref(), rnum);
+            db.obj_to_room(obj_from_store(db, &object, &mut i).as_ref().unwrap(), rnum);
         }
     }
 

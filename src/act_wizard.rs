@@ -275,13 +275,13 @@ pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
     /* a location has been found. */
     let original_loc = ch.in_room();
     game.db.char_from_room(ch);
-    game.db.char_to_room(Some(ch), location);
+    game.db.char_to_room(ch, location);
     command_interpreter(game, ch, &command);
 
     /* check if the char is still there */
     if ch.in_room() == location {
         game.db.char_from_room(ch);
-        game.db.char_to_room(Some(ch), original_loc);
+        game.db.char_to_room(ch, original_loc);
     }
 }
 
@@ -308,7 +308,7 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
     db.char_from_room(ch);
-    db.char_to_room(Some(ch), location);
+    db.char_to_room(ch, location);
 
     let x = ch.poofin();
     let buf = format!(
@@ -355,7 +355,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 TO_ROOM,
             );
             db.char_from_room(victim);
-            db.char_to_room(Some(victim), ch.in_room());
+            db.char_to_room(victim, ch.in_room());
             db.act(
                 "$n arrives from a puff of smoke.",
                 false,
@@ -400,7 +400,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     TO_ROOM,
                 );
                 db.char_from_room(victim);
-                db.char_to_room(Some(victim), ch.in_room());
+                db.char_to_room(victim, ch.in_room());
                 db.act(
                     "$n arrives from a puff of smoke.",
                     false,
@@ -460,7 +460,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             TO_ROOM,
         );
         db.char_from_room(victim);
-        db.char_to_room(Some(victim), target);
+        db.char_to_room(victim, target);
         db.act(
             "$n arrives from a puff of smoke.",
             false,
@@ -1500,7 +1500,7 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 store_to_char(&tmp_store, &mut victim);
                 victim.player.borrow_mut().time.logon = tmp_store.last_logon;
                 let victim = Rc::new(victim);
-                game.db.char_to_room(Some(&victim), 0);
+                game.db.char_to_room(&victim, 0);
                 if victim.get_level() > ch.get_level() {
                     send_to_char(ch, "Sorry, you can't do that.\r\n");
                 } else {
@@ -1958,7 +1958,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             return;
         }
         let mob = db.read_mobile(r_num, REAL);
-        db.char_to_room(mob.as_ref(), ch.in_room());
+        db.char_to_room(mob.as_ref().unwrap(), ch.in_room());
 
         db.act(
             "$n makes a quaint, magical gesture with one hand.",
@@ -1996,9 +1996,9 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         }
         let obj = db.read_object(r_num, REAL);
         if LOAD_INTO_INVENTORY {
-            DB::obj_to_char(obj.as_ref(), Some(ch));
+            DB::obj_to_char(obj.as_ref().unwrap(), ch);
         } else {
-            db.obj_to_room(obj.as_ref(), ch.in_room());
+            db.obj_to_room(obj.as_ref().unwrap(), ch.in_room());
         }
         db.act(
             "$n makes a strange magical gesture.",
@@ -2056,7 +2056,7 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             return;
         }
         let mob = db.read_mobile(r_num, REAL);
-        db.char_to_room(mob.as_ref(), 0);
+        db.char_to_room(mob.as_ref().unwrap(), 0);
         do_stat_character(db, ch, mob.as_ref().unwrap());
         db.extract_char(mob.as_ref().unwrap());
     } else if is_abbrev(&buf, "obj") {
@@ -4278,7 +4278,7 @@ fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_a
                 /* Another Eric Green special. */
                 db.char_from_room(vict);
             }
-            db.char_to_room(Some(vict), rnum);
+            db.char_to_room(vict, rnum);
         }
         36 => {
             if on {

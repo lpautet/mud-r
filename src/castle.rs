@@ -1043,8 +1043,8 @@ fn castle_cleaner(db: &DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
                 TO_ROOM,
             );
         }
-        db.obj_from_room(Some(i));
-        DB::obj_to_char(Some(i), Some(ch));
+        db.obj_from_room(i);
+        DB::obj_to_char(i, ch);
         return true;
     }
 

@@ -50,7 +50,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 use std::{fs, mem, process, slice};
 
-use log::{error, info};
+use log::{error};
 
 use crate::db::{parse_c_string, DB};
 use crate::handler::isname;

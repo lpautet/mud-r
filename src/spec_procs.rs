@@ -690,7 +690,7 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
         );
         for temp in clone_vec(&i.contains).iter() {
             DB::obj_from_obj(temp);
-            game.db.obj_to_room(Some(temp), ch.in_room());
+            game.db.obj_to_room(temp, ch.in_room());
         }
         game.db.extract_obj(i);
         return true;
@@ -725,8 +725,8 @@ pub fn janitor(
             None,
             TO_ROOM,
         );
-        db.obj_from_room(Some(i));
-        DB::obj_to_char(Some(i), Some(ch));
+        db.obj_from_room(i);
+        DB::obj_to_char(i, ch);
         return true;
     }
 
@@ -898,7 +898,7 @@ pub fn pet_shops(
             /* free(pet->player.description); don't free the prototype! */
             *RefCell::borrow_mut(&pet.player.borrow().description) = buf;
         }
-        db.char_to_room(Some(&pet), ch.in_room());
+        db.char_to_room(&pet, ch.in_room());
         add_follower(db, &pet, ch);
 
         /* Be certain that pets can't get/carry/use/wield/wear items */

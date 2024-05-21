@@ -389,12 +389,12 @@ impl DB {
                 self.save_char(ch);
                 crash_crashsave(self, ch);
                 self.char_from_room(ch);
-                self.char_to_room(Some(ch), 1);
+                self.char_to_room(ch, 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
                 if ch.in_room() != NOWHERE {
                     self.char_from_room(ch);
                 }
-                self.char_to_room(Some(ch), 3);
+                self.char_to_room(ch, 3);
                 if ch.desc.borrow().is_some() {
                     ch.desc.borrow().as_ref().unwrap().set_state(ConDisconnect);
 
@@ -524,14 +524,14 @@ impl Game {
                         DB::obj_from_obj(jj);
 
                         if j.in_obj.borrow().is_some() {
-                            self.db.obj_to_obj(Some(jj), j.in_obj.borrow().as_ref());
+                            self.db.obj_to_obj(jj, j.in_obj.borrow().as_ref().unwrap());
                         } else if j.carried_by.borrow().is_some() {
                             self.db.obj_to_room(
-                                Some(jj),
+                                jj,
                                 j.carried_by.borrow().as_ref().unwrap().in_room(),
                             );
                         } else if j.in_room() != NOWHERE {
-                            self.db.obj_to_room(Some(jj), j.in_room());
+                            self.db.obj_to_room(jj, j.in_room());
                         } else {
                             //   core_dump();
                         }

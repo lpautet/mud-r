@@ -3408,7 +3408,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
         if ch.in_room != Cell::from(NOWHERE) {
             game.db.char_from_room(ch);
         }
-        game.db.char_to_room(Some(ch), 1);
+        game.db.char_to_room(ch, 1);
         game.db.extract_char(ch);
     }
 
@@ -3972,7 +3972,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
                         game.db.character_list.borrow_mut().push(character.clone());
-                        game.db.char_to_room(Some(character), load_room);
+                        game.db.char_to_room(character, load_room);
                         load_result = crash_load(game, d.character.borrow().as_ref().unwrap());
 
                         /* Clear their load room if it's not persistant. */

@@ -282,7 +282,7 @@ pub fn affect_total(ch: &CharData) {
         ch.set_str(min(ch.get_str(), i));
     } else {
         if ch.get_str() > 18 {
-            let i = ch.get_add() as i16+ ((ch.get_str() as i16 - 18) * 10);
+            let i = ch.get_add() as i16 + ((ch.get_str() as i16 - 18) * 10);
             ch.set_add(min(i, 100) as i8);
             ch.set_str(18);
         }
@@ -407,70 +407,57 @@ impl DB {
     }
 
     /* place a character in a room */
-    pub(crate) fn char_to_room(&self, ch: Option<&Rc<CharData>>, room: RoomRnum) {
-        if ch.is_none() && room == NOWHERE || room >= self.world.borrow().len() as i16 {
+    pub(crate) fn char_to_room(&self, ch: &Rc<CharData>, room: RoomRnum) {
+        if room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
                 room,
                 self.world.borrow().len(),
                 'x'
             );
-        } else {
-            let ch = ch.unwrap();
-            self.world.borrow()[room as usize]
-                .peoples
-                .borrow_mut()
-                .push(ch.clone());
-            ch.set_in_room(room);
+            return;
+        }
+        self.world.borrow()[room as usize]
+            .peoples
+            .borrow_mut()
+            .push(ch.clone());
+        ch.set_in_room(room);
 
-            if ch.get_eq(WEAR_LIGHT as i8).is_some() {
-                if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
-                    if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
-                        self.world.borrow()[ch.in_room() as usize]
-                            .light
-                            .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
-                        /* Light ON */
-                    }
+        if ch.get_eq(WEAR_LIGHT as i8).is_some() {
+            if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
+                if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
+                    self.world.borrow()[ch.in_room() as usize]
+                        .light
+                        .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
+                    /* Light ON */
                 }
             }
+        }
 
-            /* Stop fighting now, if we left. */
-            if ch.fighting().is_some() && ch.in_room() != ch.fighting().as_ref().unwrap().in_room()
-            {
-                self.stop_fighting(ch.fighting().as_ref().unwrap());
-                self.stop_fighting(ch);
-            }
+        /* Stop fighting now, if we left. */
+        if ch.fighting().is_some() && ch.in_room() != ch.fighting().as_ref().unwrap().in_room() {
+            self.stop_fighting(ch.fighting().as_ref().unwrap());
+            self.stop_fighting(ch);
         }
     }
 
     /* give an object to a char   */
-    pub fn obj_to_char(object: Option<&Rc<ObjData>>, ch: Option<&Rc<CharData>>) {
-        if object.is_some() && ch.is_some() {
-            let object = object.unwrap();
-            let ch = ch.unwrap();
-            ch.carrying.borrow_mut().push(object.clone());
-            *object.carried_by.borrow_mut() = Some(ch.clone());
-            object.as_ref().set_in_room(NOWHERE);
+    pub fn obj_to_char(object: &Rc<ObjData>, ch: &Rc<CharData>) {
+        ch.carrying.borrow_mut().push(object.clone());
+        *object.carried_by.borrow_mut() = Some(ch.clone());
+        object.as_ref().set_in_room(NOWHERE);
 
-            ch.incr_is_carrying_w(object.get_obj_weight());
-            ch.incr_is_carrying_n();
+        ch.incr_is_carrying_w(object.get_obj_weight());
+        ch.incr_is_carrying_n();
 
-            /* set flag for crash-save system, but not on mobs! */
-            if !ch.is_npc() {
-                ch.set_plr_flag_bit(PLR_CRASH)
-            }
-        } else {
-            error!("SYSERR: NULL obj  or char passed to obj_to_char.");
+        /* set flag for crash-save system, but not on mobs! */
+        if !ch.is_npc() {
+            ch.set_plr_flag_bit(PLR_CRASH)
         }
     }
 }
 /* take an object from a char */
-pub fn obj_from_char(object: Option<&Rc<ObjData>>) {
-    if object.is_none() {
-        error!("SYSERR: NULL object passed to obj_from_char.");
-        return;
-    }
-    let object = object.unwrap();
+pub fn obj_from_char(object: &Rc<ObjData>) {
     object
         .carried_by
         .borrow()
@@ -548,15 +535,13 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
 }
 
 impl DB {
-    pub(crate) fn equip_char(&self, ch: Option<&Rc<CharData>>, obj: Option<&Rc<ObjData>>, pos: i8) {
+    pub(crate) fn equip_char(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>, pos: i8) {
         //int j;
 
         if pos < 0 || pos >= NUM_WEARS {
             //core_dump();
             return;
         }
-        let ch = ch.unwrap();
-        let obj = obj.unwrap();
 
         if ch.get_eq(pos).is_some() {
             error!(
@@ -592,7 +577,7 @@ impl DB {
                 TO_ROOM,
             );
             /* Changed to drop in inventory instead of the ground. */
-            DB::obj_to_char(Some(obj), Some(ch));
+            DB::obj_to_char(obj, ch);
             return;
         }
 
@@ -761,36 +746,28 @@ impl DB {
     }
 
     /* put an object in a room */
-    pub fn obj_to_room(&self, object: Option<&Rc<ObjData>>, room: RoomRnum) {
-        if object.is_none() || room == NOWHERE || room >= self.world.borrow().len() as i16 {
+    pub fn obj_to_room(&self, object: &Rc<ObjData>, room: RoomRnum) {
+        if room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
-                "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{}, {})",
+                "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{})",
                 room,
-                self.world.borrow().len(),
-                object.is_some()
+                self.world.borrow().len()
             );
-        } else {
-            let object = object.unwrap();
-            object.as_ref().set_in_room(room);
-            *object.carried_by.borrow_mut() = None;
-            if self.room_flagged(room, ROOM_HOUSE) {
-                self.set_room_flags_bit(room, ROOM_HOUSE_CRASH)
-            }
-            self.world.borrow()[room as usize]
-                .contents
-                .borrow_mut()
-                .push(object.clone());
+            return;
         }
+        object.as_ref().set_in_room(room);
+        *object.carried_by.borrow_mut() = None;
+        if self.room_flagged(room, ROOM_HOUSE) {
+            self.set_room_flags_bit(room, ROOM_HOUSE_CRASH)
+        }
+        self.world.borrow()[room as usize]
+            .contents
+            .borrow_mut()
+            .push(object.clone());
     }
 
     /* Take an object from a room */
-    pub fn obj_from_room(&self, object: Option<&Rc<ObjData>>) {
-        if object.is_none() {
-            error!("SYSERR: NULL object  passed to obj_from_room");
-            return;
-        }
-        let object = object.unwrap();
-
+    pub fn obj_from_room(&self, object: &Rc<ObjData>) {
         if object.in_room() == NOWHERE {
             error!(
                 "SYSERR: obj not in a room ({}) passed to obj_from_room",
@@ -810,13 +787,9 @@ impl DB {
     }
 
     /* put an object in an object (quaint)  */
-    pub fn obj_to_obj(&self, obj: Option<&Rc<ObjData>>, obj_to: Option<&Rc<ObjData>>) {
-        if obj.is_none() || obj_to.is_none() {
-            error!("SYSERR: None obj passed to obj_to_obj.");
-            return;
-        }
-        let obj = obj.unwrap();
-        let obj_to = obj_to.unwrap();
+    pub fn obj_to_obj(&self, obj: &Rc<ObjData>, obj_to: &Rc<ObjData>) {
+        let obj = obj;
+        let obj_to = obj_to;
         if Rc::ptr_eq(&obj, &obj_to) {
             error!("SYSERR: same source and target  obj passed to obj_to_obj.");
             return;
@@ -914,9 +887,9 @@ impl DB {
         }
 
         if obj.in_room() != NOWHERE {
-            self.obj_from_room(Some(obj));
+            self.obj_from_room(obj);
         } else if obj.carried_by.borrow().is_some() {
-            obj_from_char(Some(obj));
+            obj_from_char(obj);
         } else if obj.in_obj.borrow().is_some() {
             DB::obj_from_obj(&obj);
         }
@@ -1083,15 +1056,15 @@ impl Game {
 
         /* transfer objects to room, if any */
         for obj in clone_vec(&ch.carrying) {
-            obj_from_char(Some(&obj));
-            self.db.obj_to_room(Some(&obj), ch.in_room());
+            obj_from_char(&obj);
+            self.db.obj_to_room(&obj, ch.in_room());
         }
 
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
                 self.db
-                    .obj_to_room(self.db.unequip_char(ch, i).as_ref(), ch.in_room())
+                    .obj_to_room(self.db.unequip_char(ch, i).as_ref().unwrap(), ch.in_room())
             }
         }
 

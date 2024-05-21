@@ -850,7 +850,7 @@ pub fn mag_summons(
             return;
         }
         let mob = mob.as_ref().unwrap();
-        db.char_to_room(Some(mob), ch.in_room());
+        db.char_to_room(mob, ch.in_room());
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
         mob.set_aff_flags_bits(AFF_CHARM);
@@ -872,7 +872,7 @@ pub fn mag_summons(
         if handle_corpse {
             for tobj in clone_vec(&obj.as_ref().unwrap().contains) {
                 DB::obj_from_obj(&tobj);
-                DB::obj_to_char(Some(&tobj), Some(mob));
+                DB::obj_to_char(&tobj, mob);
             }
             db.extract_obj(obj.as_ref().unwrap());
         }
@@ -1088,7 +1088,7 @@ pub fn mag_creations(db: &DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: 
         );
         return;
     }
-    DB::obj_to_char(tobj.as_ref(), Some(ch));
+    DB::obj_to_char(tobj.as_ref().unwrap(), ch);
     db.act(
         "$n creates $p.",
         false,

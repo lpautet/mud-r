@@ -143,7 +143,7 @@ fn mail_recip_ok(game: &mut Game, name: &str) -> bool {
     if db.load_char(name, &mut tmp_store).is_some() {
         store_to_char(&tmp_store, &mut victim);
         let victim = &Rc::from(victim);
-        db.char_to_room(Some(victim), 0);
+        db.char_to_room(&victim, 0);
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
@@ -877,7 +877,7 @@ fn postmaster_receive_mail(
         };
         *RefCell::borrow_mut(&obj.action_description) = mail_content;
 
-        DB::obj_to_char(Some(&obj), Some(ch));
+        DB::obj_to_char(&obj, ch);
 
         db.act(
             "$n gives you a piece of mail.",

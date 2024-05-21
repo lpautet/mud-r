@@ -815,10 +815,10 @@ fn shopping_buy(
                 .db
                 .read_object(obj.as_ref().unwrap().get_obj_rnum(), REAL);
         } else {
-            obj_from_char(Some(obj.as_ref().unwrap()));
+            obj_from_char(obj.as_ref().unwrap());
             get_shop!(game, shop_nr).lastsort -= 1;
         }
-        DB::obj_to_char(Some(obj.as_ref().unwrap()), Some(ch));
+        DB::obj_to_char(obj.as_ref().unwrap(), ch);
 
         let charged = buy_price(
             obj.as_ref().unwrap(),
@@ -974,7 +974,7 @@ fn slide_obj(
         return db.obj_proto[temp as usize].clone();
     }
     shop.lastsort += 1;
-    DB::obj_to_char(Some(obj), Some(keeper));
+    DB::obj_to_char(obj, keeper);
 
     let len = keeper.carrying.borrow().len();
     let obj = keeper.carrying.borrow_mut().remove(len - 1);
@@ -1000,7 +1000,7 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
     let mut list: Vec<Rc<ObjData>> = vec![];
     while shop.lastsort < keeper.is_carrying_n() as i32 {
         let obj = keeper.carrying.borrow()[0].clone();
-        obj_from_char(Some(&obj));
+        obj_from_char(&obj);
         list.push(obj);
     }
 
@@ -1011,7 +1011,7 @@ fn sort_keeper_objs(db: &DB, keeper: &Rc<CharData>, shop: &mut ShopData) {
                 .get_obj_in_list_num(temp.get_obj_rnum(), &keeper.carrying.borrow())
                 .is_none()
         {
-            DB::obj_to_char(Some(&temp), Some(keeper));
+            DB::obj_to_char(&temp, keeper);
             shop.lastsort += 1;
         } else {
             slide_obj(db, &temp, keeper, shop);
@@ -1086,7 +1086,7 @@ fn shopping_sell(
         keeper.set_gold(keeper.get_gold() - charged);
 
         sold += 1;
-        obj_from_char(obj.as_ref());
+        obj_from_char(&obj.as_ref().unwrap());
         slide_obj(
             &game.db,
             obj.as_ref().unwrap(),

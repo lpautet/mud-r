@@ -318,7 +318,7 @@ pub fn spell_recall(
 
     db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
     db.char_from_room(victim);
-    db.char_to_room(Some(victim), *db.r_mortal_start_room.borrow());
+    db.char_to_room(victim, *db.r_mortal_start_room.borrow());
     db.act(
         "$n appears in the middle of the room.",
         true,
@@ -363,7 +363,7 @@ pub fn spell_teleport(
         TO_ROOM,
     );
     db.char_from_room(victim);
-    db.char_to_room(Some(victim), to_room as RoomRnum);
+    db.char_to_room(victim, to_room as RoomRnum);
     db.act(
         "$n slowly fades into existence.",
         false,
@@ -450,7 +450,7 @@ pub fn spell_summon(
     );
 
     db.char_from_room(victim);
-    db.char_to_room(Some(victim), ch.in_room());
+    db.char_to_room(victim, ch.in_room());
 
     db.act(
         "$n arrives suddenly.",

@@ -10,7 +10,6 @@
 ************************************************************************ */
 
 use log::error;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::fs::OpenOptions;
@@ -361,7 +360,7 @@ impl DB {
         /* transfer character's equipment to the corpse */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                self.obj_to_obj(self.unequip_char(ch, i).as_ref(), Some(&corpse));
+                self.obj_to_obj(self.unequip_char(ch, i).as_ref().unwrap(), &corpse);
             }
         }
         /* transfer gold */
@@ -375,7 +374,7 @@ impl DB {
              */
             if ch.is_npc() || ch.desc.borrow().is_some() {
                 let money = self.create_money(ch.get_gold());
-                self.obj_to_obj(money.as_ref(), Some(&corpse));
+                self.obj_to_obj(money.as_ref().unwrap(), &corpse);
             }
             ch.set_gold(0);
         }
@@ -383,7 +382,7 @@ impl DB {
         ch.set_is_carrying_w(0);
         ch.set_is_carrying_n(0);
 
-        self.obj_to_room(Some(&corpse), ch.in_room());
+        self.obj_to_room(&corpse, ch.in_room());
     }
 }
 
@@ -1073,7 +1072,7 @@ impl Game {
                 );
                 victim.set_was_in(victim.in_room());
                 self.db.char_from_room(victim);
-                self.db.char_to_room(Some(victim), 0);
+                self.db.char_to_room(victim, 0);
             }
         }
 

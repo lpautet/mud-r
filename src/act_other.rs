@@ -297,7 +297,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         Some(vict),
                         TO_NOTVICT,
                     );
-                    DB::obj_to_char(db.unequip_char(vict, the_eq_pos).as_ref(), Some(ch));
+                    DB::obj_to_char(db.unequip_char(vict, the_eq_pos).as_ref().unwrap(), ch);
                 }
             }
         } else {
@@ -328,8 +328,8 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 /* Steal the item */
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
                     if ch.is_carrying_w() + obj.get_obj_weight() < ch.can_carry_w() as i32 {
-                        obj_from_char(Some(obj));
-                        DB::obj_to_char(Some(obj), Some(ch));
+                        obj_from_char(obj);
+                        DB::obj_to_char(obj, ch);
                         send_to_char(ch, "Got it!\r\n");
                     }
                 } else {

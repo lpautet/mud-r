@@ -175,7 +175,7 @@ fn main() -> ExitCode {
     let mut dir = DFLT_DIR.to_string();
     let mut port = DFLT_PORT;
 
-    let mut game = Game {
+    let mut game = Box::new(Game {
         descriptor_list: RefCell::new(Vec::new()),
         last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
@@ -189,7 +189,7 @@ fn main() -> ExitCode {
             track_through_doors: Cell::new(true),
         },
         max_players: 0,
-    };
+    });
     let mut logname: Option<&str> = LOGNAME;
 
     let mut pos = 1;
@@ -528,7 +528,7 @@ impl Game {
                             self.db.char_from_room(character);
                         }
                         self.db
-                            .char_to_room(Some(character), character.get_was_in());
+                            .char_to_room(character, character.get_was_in());
                         character.set_was_in(NOWHERE);
                         self.db.act(
                             "$n has returned.",

@@ -2572,7 +2572,7 @@ impl DB {
                     /* read a mobile */
                     if self.mob_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         mob = self.read_mobile(zcmd.arg1 as MobVnum, REAL);
-                        self.char_to_room(mob.as_ref(), zcmd.arg3 as RoomRnum);
+                        self.char_to_room(mob.as_ref().unwrap(), zcmd.arg3 as RoomRnum);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2584,7 +2584,7 @@ impl DB {
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         if zcmd.arg3 != NOWHERE as i32 {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.obj_to_room(obj.as_ref(), zcmd.arg3 as RoomRnum);
+                            self.obj_to_room(obj.as_ref().unwrap(), zcmd.arg3 as RoomRnum);
                             last_cmd = 1;
                         } else {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
@@ -2612,7 +2612,7 @@ impl DB {
                             zcmd.command.set('*');
                             continue;
                         }
-                        self.obj_to_obj(obj.as_ref(), obj_to.as_ref());
+                        self.obj_to_obj(obj.as_ref().unwrap(), obj_to.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2635,7 +2635,7 @@ impl DB {
                     }
                     if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
                         obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                        DB::obj_to_char(obj.as_ref(), mob.as_ref());
+                        DB::obj_to_char(obj.as_ref().unwrap(), mob.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2667,7 +2667,7 @@ impl DB {
                             );
                         } else {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.equip_char(mob.as_ref(), obj.as_ref(), zcmd.arg3 as i8);
+                            self.equip_char(mob.as_ref().unwrap(), obj.as_ref().unwrap(), zcmd.arg3 as i8);
                             last_cmd = 1;
                         }
                     } else {
@@ -3120,7 +3120,7 @@ impl DB {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(Some(ch), char_eq[i as usize].as_ref(), i);
+                self.equip_char(ch, char_eq[i as usize].as_ref().unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */

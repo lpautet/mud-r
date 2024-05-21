@@ -60,8 +60,8 @@ fn perform_put(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<ObjData>
             TO_CHAR,
         );
     } else {
-        obj_from_char(Some(obj));
-        db.obj_to_obj(Some(obj), Some(cont));
+        obj_from_char(obj);
+        db.obj_to_obj(obj, cont);
 
         db.act(
             "$n puts $p in $P.",
@@ -295,7 +295,7 @@ fn perform_get_from_container(
             );
         } else {
             DB::obj_from_obj(obj);
-            DB::obj_to_char(Some(obj), Some(ch));
+            DB::obj_to_char(obj, ch);
             db.act(
                 "You get $p from $P.",
                 false,
@@ -378,8 +378,8 @@ fn get_from_container(
 
 fn perform_get_from_room(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>) -> bool {
     if can_take_obj(db, ch, obj) {
-        db.obj_from_room(Some(obj));
-        DB::obj_to_char(Some(obj), Some(ch));
+        db.obj_from_room(obj);
+        DB::obj_to_char(obj, ch);
         db.act("You get $p.", false, Some(ch), Some(obj), None, TO_CHAR);
         db.act("$n gets $p.", true, Some(ch), Some(obj), None, TO_ROOM);
         get_check_money(db, ch, obj);
@@ -581,7 +581,7 @@ fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: Roo
                     None,
                     TO_ROOM,
                 );
-                db.obj_to_room(obj.as_ref(), rdr);
+                db.obj_to_room(obj.as_ref().unwrap(), rdr);
                 db.act(
                     "$p suddenly appears in a puff of orange smoke!",
                     false,
@@ -595,7 +595,7 @@ fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: Roo
                 db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
                 send_to_char(ch, "You drop some gold.\r\n");
-                db.obj_to_room(obj.as_ref(), ch.in_room());
+                db.obj_to_room(obj.as_ref().unwrap(), ch.in_room());
             }
         } else {
             let buf = format!(
@@ -643,7 +643,7 @@ fn perform_drop(
     let buf = format!("$n {}s $p.{}", sname, vanish!(mode));
     db.act(&buf, true, Some(ch), Some(obj), None, TO_ROOM);
 
-    obj_from_char(Some(obj));
+    obj_from_char(obj);
 
     if (mode == SCMD_DONATE as u8) && obj.obj_flagged(ITEM_NODONATE) {
         mode = SCMD_JUNK as u8;
@@ -651,11 +651,11 @@ fn perform_drop(
 
     match mode {
         SCMD_DROP => {
-            db.obj_to_room(Some(obj), ch.in_room());
+            db.obj_to_room(obj, ch.in_room());
         }
 
         SCMD_DONATE => {
-            db.obj_to_room(Some(obj), rdr);
+            db.obj_to_room(obj, rdr);
             db.act(
                 "$p suddenly appears in a puff a smoke!",
                 false,
@@ -864,8 +864,8 @@ fn perform_give(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &Rc<ObjDat
         );
         return;
     }
-    obj_from_char(Some(obj));
-    DB::obj_to_char(Some(obj), Some(vict));
+    obj_from_char(obj);
+    DB::obj_to_char(obj, vict);
     db.act(
         "You give $p to $N.",
         false,
@@ -1044,16 +1044,16 @@ pub fn weight_change_object(db: &DB, obj: &Rc<ObjData>, weight: i32) {
         tmp_ch = obj.carried_by.borrow().clone();
         tmp_ch.is_some()
     } {
-        obj_from_char(Some(obj));
+        obj_from_char(obj);
         obj.incr_obj_weight(weight);
-        DB::obj_to_char(Some(obj), tmp_ch.as_ref());
+        DB::obj_to_char(obj, tmp_ch.as_ref().unwrap());
     } else if {
         tmp_obj = obj.in_obj.borrow();
         tmp_obj.is_some()
     } {
         DB::obj_from_obj(obj);
         obj.incr_obj_weight(weight);
-        db.obj_to_obj(Some(obj), tmp_obj.as_ref());
+        db.obj_to_obj(obj, tmp_obj.as_ref().unwrap());
     } else {
         error!("SYSERR: Unknown attempt to subtract weight from an object.");
     }
@@ -1802,8 +1802,8 @@ fn perform_wear(db: &DB, ch: &Rc<CharData>, obj: &Rc<ObjData>, _where: i32) {
         return;
     }
     wear_message(db, ch, obj, _where);
-    obj_from_char(Some(obj));
-    db.equip_char(Some(ch), Some(obj), _where as i8);
+    obj_from_char(obj);
+    db.equip_char(ch, obj, _where as i8);
 }
 
 pub fn find_eq_pos(ch: &Rc<CharData>, obj: &Rc<ObjData>, arg: &str) -> i16 {
@@ -2075,7 +2075,7 @@ fn perform_remove(db: &DB, ch: &Rc<CharData>, pos: i8) {
         );
     } else {
         let obj = obj.as_ref().unwrap();
-        DB::obj_to_char(db.unequip_char(ch, pos).as_ref(), Some(ch));
+        DB::obj_to_char(db.unequip_char(ch, pos).as_ref().unwrap(), ch);
         db.act(
             "You stop using $p.",
             false,
