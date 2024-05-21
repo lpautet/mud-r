@@ -671,10 +671,7 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
         return false;
     }
 
-    for i in game.db.world.borrow()[ch.in_room() as usize]
-        .contents
-        .borrow()
-        .iter()
+    for i in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents)
     {
         if !i.is_corpse() {
             continue;
@@ -692,7 +689,7 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
             DB::obj_from_obj(temp);
             game.db.obj_to_room(temp, ch.in_room());
         }
-        game.db.extract_obj(i);
+        game.db.extract_obj(&i);
         return true;
     }
 
