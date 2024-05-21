@@ -1933,7 +1933,7 @@ impl DB {
             if hide_invisible && ch.is_some() && !self.can_see(to.as_ref(), ch.as_ref().unwrap()) {
                 continue;
             }
-            if vict_obj.is_none() {
+            if _type != TO_ROOM && vict_obj.is_none() {
                 continue;
             }
             let same_chr;

@@ -37,7 +37,7 @@ pub fn write_aliases(ch: &Rc<CharData>) {
         return;
     }
 
-    let file = OpenOptions::new().write(true).open(&fname);
+    let file = OpenOptions::new().write(true).create(true).open(&fname);
 
     if file.is_err() {
         error!(

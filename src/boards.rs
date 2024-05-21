@@ -50,7 +50,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 use std::{fs, mem, process, slice};
 
-use log::{error};
+use log::error;
 
 use crate::db::{parse_c_string, DB};
 use crate::handler::isname;
@@ -847,9 +847,9 @@ fn board_clear_board(b: &mut BoardSystem, board_type: usize) {
         {
             *RefCell::borrow_mut(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]) =
                 String::new();
+                b.msg_storage_taken[b.msg_index[board_type][i].slot_num.unwrap()] = false;
         }
 
-        b.msg_storage_taken[b.msg_index[board_type][i].slot_num.unwrap()] = false;
         b.msg_index[board_type][i].slot_num = None;
     }
     b.num_of_msgs[board_type] = 0;
