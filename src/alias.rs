@@ -15,7 +15,7 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::rc::Rc;
 
-use log::error;
+use log::{error, info};
 
 use crate::interpreter::AliasData;
 use crate::structs::CharData;
@@ -104,7 +104,7 @@ pub fn read_aliases(ch: &Rc<CharData>) {
         if line.is_err() {
             break;
         }
-        t2.alias = Rc::from(buf);
+        t2.alias = Rc::from(buf.trim_end());
 
         /* Build the replacement. */
         let mut buf = String::new();
@@ -118,7 +118,7 @@ pub fn read_aliases(ch: &Rc<CharData>) {
         if line.is_err() {
             break;
         }
-        t2.replacement = Rc::from(buf);
+        t2.replacement = Rc::from(buf.trim_end());
 
         /* Figure out the alias type. */
         let mut buf = String::new();
@@ -126,11 +126,13 @@ pub fn read_aliases(ch: &Rc<CharData>) {
         if line.is_err() {
             break;
         }
-        let r = buf.parse::<i32>();
+        let r = buf.trim_end().parse::<i32>();
         if r.is_err() {
+            error!("Error with alias type: {}", buf.trim_end());
             break;
         }
         t2.type_ = r.unwrap();
+        info!("adding alias");
         ch.player_specials.borrow_mut().aliases.push(t2);
     }
 }

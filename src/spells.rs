@@ -318,7 +318,7 @@ pub fn spell_recall(
 
     db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
     db.char_from_room(victim);
-    db.char_to_room(victim, *db.r_mortal_start_room.borrow());
+    db.char_to_room(victim, db.r_mortal_start_room.get());
     db.act(
         "$n appears in the middle of the room.",
         true,

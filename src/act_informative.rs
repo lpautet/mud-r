@@ -1683,7 +1683,7 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             }
             let tch = character.as_ref().unwrap();
 
-            if !host_search.is_empty() && !d.host.borrow().contains(&host_search) {
+            if !host_search.is_empty() && !d.host.contains(&host_search) {
                 continue;
             }
             if !name_search.is_empty() && tch.get_name().as_ref() != &name_search {
@@ -1800,15 +1800,14 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             timeptr
         );
 
-        if !d.host.borrow().is_empty() {
-            line.push_str(format!("[{}]\r\n", d.host.borrow()).as_str());
+        if !d.host.is_empty() {
+            line.push_str(&format!("[{}]\r\n", d.host));
         } else {
             line.push_str("[Hostname unknown]\r\n");
         }
 
         if d.state() != ConPlaying {
-            let line2 = format!("{}{}{}", CCGRN!(ch, C_SPR), line, CCNRM!(ch, C_SPR));
-            line.push_str(&line2);
+            line.push_str(&format!("{}{}{}", CCGRN!(ch, C_SPR), line, CCNRM!(ch, C_SPR)));
         }
         if d.state() != ConPlaying
             || (d.state() == ConPlaying && db.can_see(ch, d.character.borrow().as_ref().unwrap()))

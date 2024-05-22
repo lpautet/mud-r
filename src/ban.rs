@@ -72,11 +72,11 @@ pub fn load_banned(db: &mut DB) {
     }
 }
 
-pub fn isbanned(db: &DB, hostname: &mut String) -> i32 {
+pub fn isbanned(db: &DB, hostname: &str) -> i32 {
     if hostname.is_empty() {
         return 0;
     }
-    *hostname = hostname.to_lowercase();
+    let hostname = hostname.to_lowercase();
     let mut i = 0;
     db.ban_list
         .borrow()

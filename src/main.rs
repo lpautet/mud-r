@@ -98,7 +98,7 @@ pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 pub struct DescriptorData {
     stream: RefCell<TcpStream>,
     // file descriptor for socket
-    host: RefCell<String>,
+    host: String,
     // hostname
     bad_pws: Cell<u8>,
     /* number of bad pw attemps this login	*/
@@ -890,9 +890,9 @@ impl Game {
         }
         /* create a new descriptor */
         /* initialize descriptor data */
-        let newd = DescriptorData {
+        let mut newd = DescriptorData {
             stream: RefCell::new(stream),
-            host: RefCell::new(String::new()),
+            host: String::new(),
             bad_pws: Cell::new(0),
             idle_tics: Cell::new(0),
             connected: Cell::new(ConGetName),
@@ -923,16 +923,16 @@ impl Game {
             let r = dns_lookup::lookup_addr(&addr.ip());
             if r.is_err() {
                 error!("Error resolving address: {}", r.err().unwrap());
-                *RefCell::borrow_mut(&newd.host) = addr.ip().to_string();
+                newd.host = addr.ip().to_string();
             } else {
-                *RefCell::borrow_mut(&newd.host) = r.unwrap();
+                newd.host = r.unwrap();
             }
         } else {
-            *RefCell::borrow_mut(&newd.host) = addr.ip().to_string();
+            newd.host = addr.ip().to_string();
         }
 
         /* determine if the site is banned */
-        if isbanned(&self.db, &mut newd.host.borrow_mut()) == BAN_ALL {
+        if isbanned(&self.db,  &newd.host) == BAN_ALL {
             newd.stream
                 .borrow_mut()
                 .shutdown(Shutdown::Both)
@@ -941,7 +941,7 @@ impl Game {
                 CMP,
                 LVL_GOD as i32,
                 true,
-                format!("Connection attempt denied from [{}]", newd.host.borrow()).as_str(),
+                format!("Connection attempt denied from [{}]", newd.host).as_str(),
             );
         }
 

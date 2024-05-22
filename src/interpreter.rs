@@ -3453,7 +3453,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
                 format!(
                     "{} [{}] has reconnected.",
                     d.character.borrow().as_ref().unwrap().get_name(),
-                    d.host.borrow()
+                    d.host
                 )
                 .as_str(),
             );
@@ -3490,7 +3490,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
                 format!(
                     "{} [{}] has reconnected.",
                     d.character.borrow().as_ref().unwrap().get_name(),
-                    d.host.borrow()
+                    d.host
                 )
                 .as_str(),
             );
@@ -3589,7 +3589,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
         ConNameCnfrm => {
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
-                if isbanned(&game.db, &mut d.host.borrow_mut()) >= BAN_NEW {
+                if isbanned(&game.db, &d.host) >= BAN_NEW {
                     game.mudlog(
                         NRM,
                         LVL_GOD as i32,
@@ -3597,7 +3597,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         format!(
                             "Request for new char {} denied from [{}] (siteban)",
                             d.character.borrow().as_ref().unwrap().get_pc_name(),
-                            d.host.borrow()
+                            d.host
                         )
                         .as_str(),
                     );
@@ -3617,7 +3617,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         format!(
                             "Request for new char {} denied from [{}] (wizlock)",
                             d.character.borrow().as_ref().unwrap().get_pc_name(),
-                            d.host.borrow()
+                            d.host
                         )
                         .as_str(),
                     );
@@ -3682,7 +3682,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                             BRF,
                             LVL_GOD as i32,
                             true,
-                            format!("Bad PW: {} [{}]", character.get_name(), d.host.borrow())
+                            format!("Bad PW: {} [{}]", character.get_name(), d.host)
                                 .as_str(),
                         );
 
@@ -3704,7 +3704,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     load_result = character.get_bad_pws() as i32;
                     character.reset_bad_pws();
                     d.bad_pws.set(0);
-                    if isbanned(&game.db, &mut d.host.borrow_mut()) == BAN_SELECT
+                    if isbanned(&game.db, &d.host) == BAN_SELECT
                         && !d
                             .character
                             .borrow()
@@ -3724,7 +3724,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                             format!(
                                 "Connection attempt for {} denied from {}",
                                 d.character.borrow().as_ref().unwrap().get_name(),
-                                d.host.borrow()
+                                d.host
                             )
                             .as_str(),
                         );
@@ -3745,7 +3745,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                             format!(
                                 "Request for login denied for {} [{}] (wizlock)",
                                 d.character.borrow().as_ref().unwrap().get_name(),
-                                d.host.borrow()
+                                d.host
                             )
                             .as_str(),
                         );
@@ -3777,7 +3777,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         format!(
                             "{} [{}] has connected.",
                             character.get_name(),
-                            d.host.borrow()
+                            d.host
                         )
                         .as_str(),
                     );
@@ -3914,7 +3914,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     format!(
                         "{} [{}] new player.",
                         character.get_pc_name(),
-                        d.host.borrow()
+                        d.host
                     )
                     .as_str(),
                 );
@@ -3960,14 +3960,14 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         /* If char was saved with NOWHERE, or real_room above failed... */
                         if load_room == NOWHERE {
                             if character.get_level() >= LVL_IMMORT as u8 {
-                                load_room = *game.db.r_immort_start_room.borrow();
+                                load_room = game.db.r_immort_start_room.get();
                             } else {
-                                load_room = *game.db.r_mortal_start_room.borrow();
+                                load_room = game.db.r_mortal_start_room.get();
                             }
                         }
 
                         if character.plr_flagged(PLR_FROZEN) {
-                            load_room = *game.db.r_frozen_start_room.borrow();
+                            load_room = game.db.r_frozen_start_room.get();
                         }
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());

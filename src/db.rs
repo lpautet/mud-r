@@ -148,11 +148,11 @@ pub struct DB {
     /* time of mud boot		 */
     pub circle_restrict: Cell<u8>,
     /* level of game restriction	 */
-    pub r_mortal_start_room: RefCell<RoomRnum>,
+    pub r_mortal_start_room: Cell<RoomRnum>,
     /* rnum of mortal start room	 */
-    pub r_immort_start_room: RefCell<RoomRnum>,
+    pub r_immort_start_room: Cell<RoomRnum>,
     /* rnum of immort start room	 */
-    pub r_frozen_start_room: RefCell<RoomRnum>,
+    pub r_frozen_start_room: Cell<RoomRnum>,
     /* rnum of frozen start room	 */
     pub credits: Rc<str>,
     /* game credits			 */
@@ -514,9 +514,9 @@ impl DB {
             boot_time: Cell::new(time_now()),
             no_specials: false,
             circle_restrict: Cell::new(0),
-            r_mortal_start_room: RefCell::new(0),
-            r_immort_start_room: RefCell::new(0),
-            r_frozen_start_room: RefCell::new(0),
+            r_mortal_start_room: Cell::new(NOWHERE),
+            r_immort_start_room: Cell::new(NOWHERE),
+            r_frozen_start_room: Cell::new(NOWHERE),
             credits: Rc::from("CREDITS placeholder"),
             news: Rc::from("NEWS placeholder"),
             motd: Rc::from("MOTD placeholder"),
@@ -1363,23 +1363,23 @@ impl DB {
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
     fn check_start_rooms(&self) {
-        *self.r_mortal_start_room.borrow_mut() = self.real_room(MORTAL_START_ROOM);
-        if *self.r_mortal_start_room.borrow() == NOWHERE {
+        self.r_mortal_start_room.set(self.real_room(MORTAL_START_ROOM));
+        if self.r_mortal_start_room.get() == NOWHERE {
             error!("SYSERR:  Mortal start room does not exist.  Change in config.c.");
             process::exit(1);
         }
-        *self.r_immort_start_room.borrow_mut() = self.real_room(IMMORT_START_ROOM);
-        if *self.r_immort_start_room.borrow() == NOWHERE {
+        self.r_immort_start_room.set( self.real_room(IMMORT_START_ROOM));
+        if self.r_immort_start_room.get() == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
-                *self.r_immort_start_room.borrow_mut() = *self.r_mortal_start_room.borrow();
+                self.r_immort_start_room.set( self.r_mortal_start_room.get());
             }
         }
-        *self.r_frozen_start_room.borrow_mut() = self.real_room(FROZEN_START_ROOM);
-        if *self.r_frozen_start_room.borrow() == NOWHERE {
+        self.r_frozen_start_room.set(self.real_room(FROZEN_START_ROOM));
+        if self.r_frozen_start_room.get() == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
-                *self.r_frozen_start_room.borrow_mut() = *self.r_mortal_start_room.borrow();
+                self.r_frozen_start_room.set(self.r_mortal_start_room.get());
             }
         }
     }
@@ -2846,7 +2846,7 @@ impl DB {
 
         copy_to_stored(
             &mut st.host,
-            ch.desc.borrow().as_ref().unwrap().host.borrow().as_str(),
+            ch.desc.borrow().as_ref().unwrap().host.as_str(),
         );
 
         unsafe {
