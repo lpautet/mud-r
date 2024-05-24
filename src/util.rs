@@ -970,9 +970,7 @@ impl DB {
                 EX_CLOSED
             )
     }
-}
 
-impl DB {
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
         obj.get_obj_rnum() < self.obj_index.len() as i16 && obj.get_obj_rnum() != NOTHING
     }
@@ -983,7 +981,7 @@ impl DB {
             NOTHING
         }
     }
-    pub fn get_mob_vnum(&self, mob: &Rc<CharData>) -> MobVnum {
+    pub fn get_mob_vnum(&self, mob: &CharData) -> MobVnum {
         if self.is_mob(mob) {
             self.mob_index[mob.get_mob_rnum() as usize].vnum
         } else {
@@ -1253,7 +1251,7 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &Game, ch: &Rc<CharData>) {
+pub fn log_death_trap(game: &Game, ch: &CharData) {
     game.mudlog(
         BRF,
         LVL_IMMORT as i32,

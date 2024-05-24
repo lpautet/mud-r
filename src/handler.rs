@@ -291,7 +291,7 @@ pub fn affect_total(ch: &CharData) {
 
 /* Insert an affect_type in a char_data structure
 Automatically sets apropriate bits and apply's */
-pub fn affect_to_char(ch: &Rc<CharData>, af: &AffectedType) {
+pub fn affect_to_char(ch: &CharData, af: &AffectedType) {
     ch.affected.borrow_mut().push(af.clone());
 
     affect_modify(
@@ -309,7 +309,7 @@ pub fn affect_to_char(ch: &Rc<CharData>, af: &AffectedType) {
  * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
  * affect_location_apply
  */
-pub fn affect_remove(ch: &Rc<CharData>, af: &AffectedType) {
+pub fn affect_remove(ch: &CharData, af: &AffectedType) {
     affect_modify(
         ch,
         af.location as i8,
@@ -321,7 +321,7 @@ pub fn affect_remove(ch: &Rc<CharData>, af: &AffectedType) {
 }
 
 /* Call affect_remove with every spell of spelltype "skill" */
-pub fn affect_from_char(ch: &Rc<CharData>, type_: i16) {
+pub fn affect_from_char(ch: &CharData, type_: i16) {
     ch.affected.borrow_mut().retain(|hjp| {
         if hjp._type == type_ {
             affect_remove(ch, hjp);
@@ -336,7 +336,7 @@ pub fn affect_from_char(ch: &Rc<CharData>, type_: i16) {
  * Return TRUE if a char is affected by a spell (SPELL_XXX),
  * FALSE indicates not affected.
  */
-pub fn affected_by_spell(ch: &Rc<CharData>, type_: i16) -> bool {
+pub fn affected_by_spell(ch: &CharData, type_: i16) -> bool {
     for hjp in ch.affected.borrow().iter() {
         if hjp._type == type_ {
             return true;
@@ -347,7 +347,7 @@ pub fn affected_by_spell(ch: &Rc<CharData>, type_: i16) -> bool {
 }
 
 pub fn affect_join(
-    ch: &Rc<CharData>,
+    ch: &CharData,
     af: &mut AffectedType,
     add_dur: bool,
     avg_dur: bool,
@@ -559,7 +559,7 @@ impl DB {
             error!("SYSERR: EQUIP: Obj is in_room when equip.");
             return;
         }
-        if invalid_align(ch.as_ref(), obj.as_ref()) || invalid_class(ch.as_ref(), obj.as_ref()) {
+        if invalid_align(ch, obj) || invalid_class(ch, obj) {
             self.act(
                 "You are zapped by $p and instantly let go of it.",
                 false,
@@ -659,7 +659,7 @@ impl DB {
             );
         }
 
-        affect_total(ch.as_ref());
+        affect_total(ch);
 
         Some(obj.clone())
     }
@@ -788,8 +788,6 @@ impl DB {
 
     /* put an object in an object (quaint)  */
     pub fn obj_to_obj(&self, obj: &Rc<ObjData>, obj_to: &Rc<ObjData>) {
-        let obj = obj;
-        let obj_to = obj_to;
         if Rc::ptr_eq(&obj, &obj_to) {
             error!("SYSERR: same source and target  obj passed to obj_to_obj.");
             return;
@@ -864,7 +862,7 @@ impl DB {
     }
 }
 /* Set all carried_by to point to new owner */
-pub fn object_list_new_owner(obj: &Rc<ObjData>, ch: Option<Rc<CharData>>) {
+pub fn object_list_new_owner(obj: &ObjData, ch: Option<Rc<CharData>>) {
     for o in obj.contains.borrow().iter() {
         object_list_new_owner(o, ch.clone());
         *o.carried_by.borrow_mut() = ch.clone();
@@ -876,7 +874,7 @@ impl DB {
     pub fn extract_obj(&self, obj: &Rc<ObjData>) {
         let tch = obj.worn_by.borrow().clone();
         if tch.is_some() {
-            if Rc::ptr_eq(
+            if !Rc::ptr_eq(
                 self.unequip_char(tch.as_ref().unwrap(), obj.worn_on.get() as i8)
                     .as_ref()
                     .unwrap(),
@@ -1190,7 +1188,7 @@ impl Game {
 impl DB {
     pub fn get_player_vis(
         &self,
-        ch: &Rc<CharData>,
+        ch: &CharData,
         name: &mut String,
         number: Option<&mut i32>,
         inroom: i32,
@@ -1417,8 +1415,7 @@ impl DB {
         }
         None
     }
-}
-impl DB {
+
     pub fn get_obj_in_equip_vis(
         &self,
         ch: &Rc<CharData>,
@@ -1457,7 +1454,7 @@ impl DB {
 
     pub fn get_obj_pos_in_equip_vis(
         &self,
-        ch: &Rc<CharData>,
+        ch: &CharData,
         arg: &str,
         number: Option<&mut i32>,
         equipment: &RefCell<[Option<Rc<ObjData>>]>,
