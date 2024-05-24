@@ -588,7 +588,11 @@ fn do_doorcmd(
             &buf,
             false,
             Some(ch),
-            obj,
+            if obj.is_none() {
+                None
+            } else {
+                Some(obj.unwrap())
+            },
             if obj.is_some() {
                 None
             } else {

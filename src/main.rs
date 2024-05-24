@@ -381,7 +381,7 @@ impl Game {
         self.mother_desc = None;
 
         info!("Saving current MUD time.");
-        save_mud_time(&self.db.time_info.borrow());
+        save_mud_time(&self.db.time_info.get());
 
         if self.circle_reboot.get() {
             info!("Rebooting.");
@@ -533,7 +533,7 @@ impl Game {
                         self.db.act(
                             "$n has returned.",
                             true,
-                            d.character.borrow().as_ref(),
+                            Some(character.as_ref()),
                             None,
                             None,
                             TO_ROOM,
@@ -687,7 +687,7 @@ impl Game {
         }
 
         if pulse % PULSE_TIMESAVE == 0 {
-            save_mud_time(&self.db.time_info.borrow());
+            save_mud_time(&self.db.time_info.get());
         }
 
         /* Every pulse! Don't want them to stink the place up... */
@@ -1581,7 +1581,7 @@ pub fn send_to_char(ch: &CharData, messg: &str) -> usize {
 }
 
 impl Game {
-    pub fn send_to_all(&self, messg: &str) {
+    pub fn send_to_all(&mut self, messg: &str) {
         if messg.is_empty() {
             return;
         }
@@ -1594,7 +1594,7 @@ impl Game {
         }
     }
 
-    fn send_to_outdoor(&self, messg: &str) {
+    fn send_to_outdoor(&mut self, messg: &str) {
         if messg.is_empty() {
             return;
         }
@@ -1632,10 +1632,10 @@ impl DB {
     fn perform_act(
         &self,
         orig: &str,
-        ch: Option<&Rc<CharData>>,
-        obj: Option<&Rc<ObjData>>,
+        ch: Option<&CharData>,
+        obj: Option<&ObjData>,
         vict_obj: Option<&dyn Any>,
-        to: &Rc<CharData>,
+        to: &CharData,
     ) {
         let mut uppercasenext = false;
         let mut orig = orig.to_string();
@@ -1865,8 +1865,8 @@ impl DB {
         &self,
         str: &str,
         hide_invisible: bool,
-        ch: Option<&Rc<CharData>>,
-        obj: Option<&Rc<ObjData>>,
+        ch: Option<&CharData>,
+        obj: Option<&ObjData>,
         vict_obj: Option<&dyn Any>,
         _type: i32,
     ) {
@@ -1926,7 +1926,7 @@ impl DB {
 
         for to in char_list.borrow().iter() {
             if !sendok!(to.as_ref(), to_sleeping)
-                || (ch.is_some() && Rc::ptr_eq(to, ch.as_ref().unwrap()))
+                || (ch.is_some() && std::ptr::eq( to.as_ref(), ch.unwrap()))
             {
                 continue;
             }

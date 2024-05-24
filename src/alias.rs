@@ -21,7 +21,7 @@ use crate::interpreter::AliasData;
 use crate::structs::CharData;
 use crate::util::{get_filename, ALIAS_FILE};
 
-pub fn write_aliases(ch: &Rc<CharData>) {
+pub fn write_aliases(ch: &CharData) {
     let mut fname = String::new();
     get_filename(&mut fname, ALIAS_FILE, &ch.get_name());
     let res = fs::remove_file(&fname);
@@ -67,7 +67,7 @@ pub fn write_aliases(ch: &Rc<CharData>) {
     }
 }
 
-pub fn read_aliases(ch: &Rc<CharData>) {
+pub fn read_aliases(ch: &CharData) {
     let mut xbuf = String::new();
     get_filename(&mut xbuf, ALIAS_FILE, &ch.get_name());
 

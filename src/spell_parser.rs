@@ -387,9 +387,9 @@ fn say_spell(
             None
         };
         if ch.get_class() == i.get_class() {
-            db.perform_act(&buf1, Some(ch), tobj, Some(&tch2), i);
+            db.perform_act(&buf1, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(&tch2), i);
         } else {
-            db.perform_act(&buf2, Some(ch), tobj, Some(&tch2), i);
+            db.perform_act(&buf2, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(&tch2), i);
         }
     }
 

@@ -478,7 +478,7 @@ impl Game {
                         self.db.act(
                             "$p decays in your hands.",
                             false,
-                            j.carried_by.borrow().as_ref(),
+                            Some(j.carried_by.borrow().as_ref().unwrap().as_ref()),
                             Some(j),
                             None,
                             TO_CHAR,

@@ -17,16 +17,16 @@ use crate::Game;
 use std::cmp::{max, min};
 
 impl Game {
-    pub(crate) fn weather_and_time(&self, mode: i32) {
+    pub(crate) fn weather_and_time(&mut self, mode: i32) {
         self.another_hour(mode);
         if mode != 0 {
             self.weather_change();
         }
     }
 
-    fn another_hour(&self, mode: i32) {
-        let mut time_info = self.db.time_info.borrow_mut();
-        let mut weather_info = self.db.weather_info.borrow_mut();
+    fn another_hour(&mut self, mode: i32) {
+        let mut time_info = self.db.time_info.get();
+        let mut weather_info = self.db.weather_info.get();
         time_info.hours += 1;
 
         if mode != 0 {
@@ -50,6 +50,7 @@ impl Game {
                 _ => {}
             }
         }
+
         if time_info.hours > 23 {
             /* Changed by HHS due to bug ??? */
             time_info.hours -= 24;
@@ -65,11 +66,13 @@ impl Game {
                 }
             }
         }
+        self.db.time_info.set(time_info);
+        self.db.weather_info.set(weather_info);
     }
 
-    fn weather_change(&self) {
-        let time_info = self.db.time_info.borrow_mut();
-        let mut weather_info = self.db.weather_info.borrow_mut();
+    fn weather_change(&mut self) {
+        let time_info = self.db.time_info.get();
+        let mut weather_info = self.db.weather_info.get();
 
         let diff;
         if (time_info.month >= 9) && (time_info.month <= 16) {
@@ -145,6 +148,7 @@ impl Game {
                 weather_info.sky = SKY_CLOUDLESS;
             }
         }
+        self.db.weather_info.set(weather_info);
 
         match change {
             0 => {}

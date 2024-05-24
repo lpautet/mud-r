@@ -525,17 +525,17 @@ pub fn king_welmar(
     _argument: &str,
 ) -> bool {
     if !game.db.king_welmar.move_ {
-        if game.db.time_info.borrow().hours == 8 && ch.in_room() == castle_real_room(&game.db, 51) {
+        if game.db.time_info.get().hours == 8 && ch.in_room() == castle_real_room(&game.db, 51) {
             game.db.king_welmar.move_ = true;
             game.db.king_welmar.path = THRONE_PATH;
             game.db.king_welmar.path_index = 0;
-        } else if game.db.time_info.borrow().hours == 21
+        } else if game.db.time_info.get().hours == 21
             && ch.in_room() == castle_real_room(&game.db, 17)
         {
             game.db.king_welmar.move_ = true;
             game.db.king_welmar.path = BEDROOM_PATH;
             game.db.king_welmar.path_index = 0;
-        } else if game.db.time_info.borrow().hours == 12
+        } else if game.db.time_info.get().hours == 12
             && ch.in_room() == castle_real_room(&game.db, 17)
         {
             game.db.king_welmar.move_ = true;

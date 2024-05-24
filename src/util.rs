@@ -1827,8 +1827,8 @@ impl DB {
             return false;
         }
 
-        if self.weather_info.borrow().sunlight == SUN_SET
-            || self.weather_info.borrow().sunlight == SUN_DARK
+        if self.weather_info.get().sunlight == SUN_SET
+            || self.weather_info.get().sunlight == SUN_DARK
         {
             return true;
         }

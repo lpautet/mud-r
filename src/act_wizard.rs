@@ -1614,7 +1614,7 @@ pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     }
 }
 
-pub fn snoop_check(ch: &Rc<CharData>) {
+pub fn snoop_check(ch: &CharData) {
     /*  This short routine is to ensure that characters that happen
      *  to be snooping (or snooped) and get advanced/demoted will
      *  not be snooping/snooped someone of a higher/lower level (and
@@ -1994,11 +1994,11 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let obj = db.read_object(r_num, REAL);
+        let obj = db.read_object(r_num, REAL).unwrap();
         if LOAD_INTO_INVENTORY {
-            DB::obj_to_char(obj.as_ref().unwrap(), ch);
+            DB::obj_to_char(&obj, ch);
         } else {
-            db.obj_to_room(obj.as_ref().unwrap(), ch.in_room());
+            db.obj_to_room(&obj, ch.in_room());
         }
         db.act(
             "$n makes a strange magical gesture.",
@@ -2012,7 +2012,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "$n has created $p!",
             false,
             Some(ch),
-            obj.as_ref(),
+            Some(obj.as_ref()),
             None,
             TO_ROOM,
         );
@@ -2020,7 +2020,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "You create $p.",
             false,
             Some(ch),
-            obj.as_ref(),
+            Some(obj.as_ref()),
             None,
             TO_CHAR,
         );
@@ -2128,15 +2128,16 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             );
             obj.is_some()
         } {
+            let obj = obj.unwrap();
             db.act(
                 "$n destroys $p.",
                 false,
                 Some(ch),
-                obj.as_ref(),
+                Some(obj.as_ref()),
                 None,
                 TO_ROOM,
             );
-            db.extract_obj(obj.as_ref().unwrap());
+            db.extract_obj(&obj);
         } else {
             send_to_char(ch, "Nothing here by that name.\r\n");
             return;

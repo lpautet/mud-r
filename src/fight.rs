@@ -119,7 +119,7 @@ macro_rules! is_weapon {
 
 /* The Fight related routines */
 impl DB {
-    pub fn appear(&self, ch: &Rc<CharData>) {
+    pub fn appear(&self, ch: &CharData) {
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
             affect_from_char(ch, SPELL_INVISIBLE as i16);
         }
@@ -245,7 +245,7 @@ impl DB {
     }
 }
 
-pub fn update_pos(victim: &Rc<CharData>) {
+pub fn update_pos(victim: &CharData) {
     if victim.get_hit() > 0 && victim.get_pos() > POS_STUNNED {
         return;
     } else if victim.get_hit() > 0 {
@@ -261,11 +261,11 @@ pub fn update_pos(victim: &Rc<CharData>) {
     }
 }
 
-pub fn check_killer(ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
+pub fn check_killer(ch: &CharData, vict: &CharData, game: &Game) {
     if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
         return;
     }
-    if ch.plr_flagged(PLR_KILLER) || ch.is_npc() || vict.is_npc() || Rc::ptr_eq(ch, vict) {
+    if ch.plr_flagged(PLR_KILLER) || ch.is_npc() || vict.is_npc() || std::ptr::eq(ch, vict) {
         return;
     }
 
@@ -311,6 +311,7 @@ impl DB {
             check_killer(ch, vict, game);
         }
     }
+    
     /* remove a char from the list of fighting chars */
     pub fn stop_fighting(&self, ch: &Rc<CharData>) {
         self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
@@ -387,7 +388,7 @@ impl DB {
 }
 
 /* When ch kills victim */
-pub fn change_alignment(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+pub fn change_alignment(ch: &CharData, victim: &CharData) {
     /*
      * new alignment change algorithm: if you kill a monster with alignment A,
      * you move 1/16th of the way to having alignment -A.  Simple and fast.
@@ -396,7 +397,7 @@ pub fn change_alignment(ch: &Rc<CharData>, victim: &Rc<CharData>) {
 }
 
 impl DB {
-    pub fn death_cry(&self, ch: &Rc<CharData>) {
+    pub fn death_cry(&self, ch: &CharData) {
         self.act(
             "Your blood freezes as you hear $n's death cry.",
             false,
@@ -573,7 +574,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 
 impl DB {
     /* message for doing damage with a weapon */
-    pub fn dam_message(&self, dam: i32, ch: &Rc<CharData>, victim: &Rc<CharData>, mut w_type: i32) {
+    pub fn dam_message(&self, dam: i32, ch: &CharData, victim: &CharData, mut w_type: i32) {
         struct DamWeaponType {
             to_room: &'static str,
             to_char: &'static str,
@@ -694,12 +695,13 @@ impl DB {
     pub fn skill_message(
         &self,
         dam: i32,
-        ch: &Rc<CharData>,
-        vict: &Rc<CharData>,
+        ch: &CharData,
+        vict: &CharData,
         attacktype: i32,
     ) -> i32 {
         let weap_b = ch.get_eq(WEAR_WIELD as i8).clone();
         let weap = weap_b.as_ref();
+        let weapref = if weap.is_none() { None } else { Some(weap.unwrap().as_ref())};
 
         for i in 0..self.fight_messages.len() {
             if self.fight_messages[i].a_type == attacktype {
@@ -711,7 +713,7 @@ impl DB {
                         &msg.god_msg.attacker_msg,
                         false,
                         Some(ch),
-                        weap,
+                        weapref,
                         Some(vict),
                         TO_CHAR,
                     );
@@ -719,7 +721,7 @@ impl DB {
                         &msg.god_msg.victim_msg,
                         false,
                         Some(ch),
-                        weap,
+                        weapref,
                         Some(vict),
                         TO_VICT,
                     );
@@ -727,7 +729,7 @@ impl DB {
                         &msg.god_msg.room_msg,
                         false,
                         Some(ch),
-                        weap,
+                        weapref,
                         Some(vict),
                         TO_NOTVICT,
                     );
@@ -743,7 +745,7 @@ impl DB {
                                 &msg.die_msg.attacker_msg,
                                 false,
                                 Some(ch),
-                                weap,
+                                weapref,
                                 Some(vict),
                                 TO_CHAR,
                             );
@@ -755,7 +757,7 @@ impl DB {
                             &msg.die_msg.victim_msg,
                             false,
                             Some(ch),
-                            weap,
+                            weapref,
                             Some(vict),
                             TO_VICT | TO_SLEEP,
                         );
@@ -765,7 +767,7 @@ impl DB {
                             &msg.die_msg.room_msg,
                             false,
                             Some(ch),
-                            weap,
+                            weapref,
                             Some(vict),
                             TO_NOTVICT,
                         );
@@ -776,7 +778,7 @@ impl DB {
                                 &msg.hit_msg.attacker_msg,
                                 false,
                                 Some(ch),
-                                weap,
+                                weapref,
                                 Some(vict),
                                 TO_CHAR,
                             );
@@ -788,7 +790,7 @@ impl DB {
                             &msg.hit_msg.victim_msg,
                             false,
                             Some(ch),
-                            weap,
+                            weapref,
                             Some(vict),
                             TO_VICT | TO_SLEEP,
                         );
@@ -798,12 +800,12 @@ impl DB {
                             &msg.hit_msg.room_msg,
                             false,
                             Some(ch),
-                            weap,
+                            weapref,
                             Some(vict),
                             TO_NOTVICT,
                         );
                     }
-                } else if !Rc::ptr_eq(ch, vict) {
+                } else if !std::ptr::eq(ch, vict) {
                     /* Dam == 0 */
                     if !msg.miss_msg.attacker_msg.is_empty() {
                         send_to_char(ch, CCYEL!(ch, C_CMP));
@@ -811,7 +813,7 @@ impl DB {
                             &msg.miss_msg.attacker_msg,
                             false,
                             Some(ch),
-                            weap,
+                            weapref,
                             Some(vict),
                             TO_CHAR,
                         );
@@ -823,7 +825,7 @@ impl DB {
                         &msg.miss_msg.victim_msg,
                         false,
                         Some(ch),
-                        weap,
+                        weapref,
                         Some(vict),
                         TO_VICT | TO_SLEEP,
                     );
@@ -833,7 +835,7 @@ impl DB {
                         &msg.miss_msg.room_msg,
                         false,
                         Some(ch),
-                        weap,
+                        weapref,
                         Some(vict),
                         TO_NOTVICT,
                     );
@@ -1121,7 +1123,7 @@ impl Game {
  * weapons that hit evil creatures easier or a weapon that always misses
  * attacking an animal.
  */
-pub fn compute_thaco(ch: &Rc<CharData>, _victim: &Rc<CharData>) -> i32 {
+pub fn compute_thaco(ch: &CharData, _victim: &CharData) -> i32 {
     let mut calc_thaco;
 
     if !ch.is_npc() {

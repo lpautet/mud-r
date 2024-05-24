@@ -169,7 +169,7 @@ pub fn do_put(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                 "$p is not a container.",
                 false,
                 Some(ch),
-                cont.as_ref(),
+                Some(cont.as_ref().unwrap()),
                 None,
                 TO_CHAR,
             );
@@ -567,7 +567,7 @@ fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: Roo
         if mode != SCMD_JUNK as u8 {
             ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
 
-            let obj = db.create_money(amount);
+            let obj = db.create_money(amount).unwrap();
             if mode == SCMD_DONATE as u8 {
                 send_to_char(
                     ch,
@@ -581,12 +581,12 @@ fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: Roo
                     None,
                     TO_ROOM,
                 );
-                db.obj_to_room(obj.as_ref().unwrap(), rdr);
+                db.obj_to_room(&obj, rdr);
                 db.act(
                     "$p suddenly appears in a puff of orange smoke!",
                     false,
                     None,
-                    obj.as_ref(),
+                    Some(obj.as_ref()),
                     None,
                     TO_ROOM,
                 );
@@ -595,7 +595,7 @@ fn perform_drop_gold(db: &DB, ch: &Rc<CharData>, amount: i32, mode: u8, rdr: Roo
                 db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
                 send_to_char(ch, "You drop some gold.\r\n");
-                db.obj_to_room(obj.as_ref().unwrap(), ch.in_room());
+                db.obj_to_room(&obj, ch.in_room());
             }
         } else {
             let buf = format!(

@@ -492,7 +492,7 @@ pub fn mag_affects(
                     victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
-                db.act("$n goes to sleep.", true, victim, None, None, TO_ROOM);
+                db.act("$n goes to sleep.", true, Some(victim.unwrap().as_ref()), None, None, TO_ROOM);
                 victim.as_ref().unwrap().set_pos(POS_SLEEPING);
             }
         }
@@ -565,10 +565,10 @@ pub fn mag_affects(
     }
 
     if !to_vict.is_empty() {
-        db.act(to_vict, false, victim, None, Some(ch), TO_CHAR);
+        db.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(ch), TO_CHAR);
     }
     if !to_room.is_empty() {
-        db.act(to_room, true, victim, None, Some(ch), TO_ROOM);
+        db.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(ch), TO_ROOM);
     }
 }
 /*
@@ -1088,12 +1088,13 @@ pub fn mag_creations(db: &DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: 
         );
         return;
     }
-    DB::obj_to_char(tobj.as_ref().unwrap(), ch);
+    let tobj = tobj.unwrap();
+    DB::obj_to_char(&tobj, ch);
     db.act(
         "$n creates $p.",
         false,
         Some(ch),
-        tobj.as_ref(),
+        Some(tobj.as_ref()),
         None,
         TO_ROOM,
     );
@@ -1101,7 +1102,7 @@ pub fn mag_creations(db: &DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: 
         "You create $p.",
         false,
         Some(ch),
-        tobj.as_ref(),
+        Some(tobj.as_ref()),
         None,
         TO_CHAR,
     );

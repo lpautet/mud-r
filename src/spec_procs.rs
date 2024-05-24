@@ -266,11 +266,11 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
     let db = &game.db;
 
     if !game.db.mayor.borrow().move_ {
-        if db.time_info.borrow().hours == 6 {
+        if db.time_info.get().hours == 6 {
             game.db.mayor.borrow_mut().move_ = true;
             game.db.mayor.borrow_mut().path = OPEN_PATH;
             game.db.mayor.borrow_mut().path_index = 0;
-        } else if db.time_info.borrow().hours == 20 {
+        } else if db.time_info.get().hours == 20 {
             game.db.mayor.borrow_mut().move_ = true;
             game.db.mayor.borrow_mut().path = CLOSE_PATH;
             game.db.mayor.borrow_mut().path_index = 0;

@@ -3438,7 +3438,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
             game.db.act(
                 "$n has reconnected.",
                 true,
-                d.character.borrow().as_ref(),
+                Some(d.character.borrow().as_ref().unwrap().as_ref()),
                 None,
                 None,
                 TO_ROOM,
@@ -3463,7 +3463,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
                 d.as_ref(),
                 "You take over your own body, already in use!\r\n",
             );
-            game.db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, d.character.borrow().as_ref(), None, None, TO_ROOM);
+            game.db.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!", true, Some(d.character.borrow().as_ref().unwrap().as_ref()), None, None, TO_ROOM);
             game.mudlog(
                 NRM,
                 max(
@@ -3682,8 +3682,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                             BRF,
                             LVL_GOD as i32,
                             true,
-                            format!("Bad PW: {} [{}]", character.get_name(), d.host)
-                                .as_str(),
+                            format!("Bad PW: {} [{}]", character.get_name(), d.host).as_str(),
                         );
 
                         character.incr_bad_pws();
@@ -3774,12 +3773,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                         BRF,
                         max(LVL_IMMORT as i32, character.get_invis_lev() as i32),
                         true,
-                        format!(
-                            "{} [{}] has connected.",
-                            character.get_name(),
-                            d.host
-                        )
-                        .as_str(),
+                        format!("{} [{}] has connected.", character.get_name(), d.host).as_str(),
                     );
                 }
 
@@ -3911,12 +3905,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     NRM,
                     LVL_IMMORT as i32,
                     true,
-                    format!(
-                        "{} [{}] new player.",
-                        character.get_pc_name(),
-                        d.host
-                    )
-                    .as_str(),
+                    format!("{} [{}] new player.", character.get_pc_name(), d.host).as_str(),
                 );
             }
         }

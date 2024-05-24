@@ -180,9 +180,9 @@ pub struct DB {
     /* policies page		 */
     pub help_table: Vec<HelpIndexElement>,
     /* the help table	 */
-    pub time_info: RefCell<TimeInfoData>,
+    pub time_info: Cell<TimeInfoData>,
     /* the infomation about the time    */
-    pub weather_info: RefCell<WeatherData>,
+    pub weather_info: Cell<WeatherData>,
     /* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
     pub reset_q: RefCell<Vec<ZoneRnum>>,
@@ -530,13 +530,13 @@ impl DB {
             handbook: Rc::from("HANDOOK placeholder"),
             policies: Rc::from("POLICIES placeholder"),
             help_table: vec![],
-            time_info: RefCell::from(TimeInfoData {
+            time_info: Cell::from(TimeInfoData {
                 hours: 0,
                 day: 0,
                 month: 0,
                 year: 0,
             }),
-            weather_info: RefCell::new(WeatherData {
+            weather_info: Cell::new(WeatherData {
                 pressure: 0,
                 change: 0,
                 sky: 0,
@@ -694,46 +694,51 @@ impl DB {
             beginning_of_time = 650336715;
         }
 
-        *self.time_info.borrow_mut() = mud_time_passed(time_now(), beginning_of_time as u64);
+        let time_info = mud_time_passed(time_now(), beginning_of_time as u64);
+        self.time_info.set(time_info);
 
-        if self.time_info.borrow().hours <= 4 {
-            self.weather_info.borrow_mut().sunlight = SUN_DARK;
-        } else if self.time_info.borrow().hours == 5 {
-            self.weather_info.borrow_mut().sunlight = SUN_RISE;
-        } else if self.time_info.borrow().hours <= 20 {
-            self.weather_info.borrow_mut().sunlight = SUN_LIGHT;
-        } else if self.time_info.borrow().hours == 21 {
-            self.weather_info.borrow_mut().sunlight = SUN_SET;
+        let mut weather_info = self.weather_info.get();
+
+        if time_info.hours <= 4 {
+            weather_info.sunlight = SUN_DARK;
+        } else if time_info.hours == 5 {
+            weather_info.sunlight = SUN_RISE;
+        } else if time_info.hours <= 20 {
+            weather_info.sunlight = SUN_LIGHT;
+        } else if time_info.hours == 21 {
+            weather_info.sunlight = SUN_SET;
         } else {
-            self.weather_info.borrow_mut().sunlight = SUN_DARK;
+            weather_info.sunlight = SUN_DARK;
         }
 
         info!(
             "   Current Gametime: {}H {}D {}M {}Y.",
-            self.time_info.borrow().hours,
-            self.time_info.borrow().day,
-            self.time_info.borrow().month,
-            self.time_info.borrow().year
+            time_info.hours,
+            time_info.day,
+            time_info.month,
+            time_info.year
         );
 
-        self.weather_info.borrow_mut().pressure = 960;
-        if (self.time_info.borrow().month >= 7) && (self.time_info.borrow().month <= 12) {
-            self.weather_info.borrow_mut().pressure += dice(1, 50);
+        weather_info.pressure = 960;
+        if (time_info.month >= 7) && (time_info.month <= 12) {
+            weather_info.pressure += dice(1, 50);
         } else {
-            self.weather_info.borrow_mut().pressure += dice(1, 80);
+            weather_info.pressure += dice(1, 80);
         }
 
-        self.weather_info.borrow_mut().change = 0;
+        weather_info.change = 0;
 
-        if self.weather_info.borrow().pressure <= 980 {
-            self.weather_info.borrow_mut().sky = SKY_LIGHTNING;
-        } else if self.weather_info.borrow().pressure <= 1000 {
-            self.weather_info.borrow_mut().sky = SKY_RAINING;
-        } else if self.weather_info.borrow().pressure <= 1020 {
-            self.weather_info.borrow_mut().sky = SKY_CLOUDY;
+        if weather_info.pressure <= 980 {
+            weather_info.sky = SKY_LIGHTNING;
+        } else if weather_info.pressure <= 1000 {
+            weather_info.sky = SKY_RAINING;
+        } else if weather_info.pressure <= 1020 {
+            weather_info.sky = SKY_CLOUDY;
         } else {
-            self.weather_info.borrow_mut().sky = SKY_CLOUDLESS;
+            weather_info.sky = SKY_CLOUDLESS;
         }
+        self.weather_info.set(weather_info);
+
     }
 }
 

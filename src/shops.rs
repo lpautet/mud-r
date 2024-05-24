@@ -273,12 +273,12 @@ fn is_ok_char(game: &mut Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop_nr
 fn is_open(game: &mut Game, keeper: &Rc<CharData>, shop_nr: usize, msg: bool) -> bool {
     let db = &game.db;
     let mut buf = String::new();
-    if get_shop!(game, shop_nr).open1 > db.time_info.borrow().hours {
+    if get_shop!(game, shop_nr).open1 > db.time_info.get().hours {
         buf.push_str(MSG_NOT_OPEN_YET);
-    } else if get_shop!(game, shop_nr).close1 < db.time_info.borrow().hours {
-        if get_shop!(game, shop_nr).open2 > db.time_info.borrow().hours {
+    } else if get_shop!(game, shop_nr).close1 < db.time_info.get().hours {
+        if get_shop!(game, shop_nr).open2 > db.time_info.get().hours {
             buf.push_str(MSG_NOT_REOPEN_YET);
-        } else if get_shop!(game, shop_nr).close2 < db.time_info.borrow().hours {
+        } else if get_shop!(game, shop_nr).close2 < db.time_info.get().hours {
             buf.push_str(MSG_CLOSED_FOR_DAY);
         }
     }
@@ -873,7 +873,7 @@ fn shopping_buy(
 
     let tempbuf = format!("$n buys {}.", tempstr);
     game.db
-        .act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
+        .act(&tempbuf, false, Some(ch), obj.as_ref().map(|rc| rc.as_ref() ) , None, TO_ROOM);
 
     let tmpbuf = game.db.shop_index.borrow()[0]
         .message_buy
@@ -1128,7 +1128,7 @@ fn shopping_sell(
     let tempstr = times_message(None, &name, sold);
     let tempbuf = format!("$n sells {}.", tempstr);
     game.db
-        .act(&tempbuf, false, Some(ch), obj.as_ref(), None, TO_ROOM);
+        .act(&tempbuf, false, Some(ch), obj.as_ref().map(|rc| rc.as_ref() ), None, TO_ROOM);
 
     let tempbuf = get_shop!(game, shop_nr)
         .message_sell
