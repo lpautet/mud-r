@@ -182,7 +182,7 @@ pub fn move_gain(ch: &CharData) -> u8 {
     gain
 }
 
-pub fn set_title(ch: &Rc<CharData>, title: Option<String>) {
+pub fn set_title(ch: &CharData, title: Option<String>) {
     let mut title = title;
     if title.is_none() || title.clone().unwrap().is_empty() {
         if ch.get_sex() == SEX_FEMALE {
@@ -362,9 +362,7 @@ impl DB {
             _ => {}
         }
     }
-}
 
-impl DB {
     fn check_idling(&self, main_globals: &Game, ch: &Rc<CharData>) {
         ch.char_specials
             .borrow()

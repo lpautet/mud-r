@@ -253,7 +253,7 @@ impl Game {
 /* Mob Memory Routines */
 
 /* make ch remember victim */
-pub fn remember(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+pub fn remember(ch: &CharData, victim: &CharData) {
     if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PRF_NOHASSLE) {
         return;
     }
@@ -264,7 +264,7 @@ pub fn remember(ch: &Rc<CharData>, victim: &Rc<CharData>) {
 }
 
 /* make ch forget victim */
-pub fn forget(ch: &Rc<CharData>, victim: &Rc<CharData>) {
+pub fn forget(ch: &CharData, victim: &CharData) {
     ch.memory()
         .borrow_mut()
         .retain(|id| id != &victim.get_idnum());

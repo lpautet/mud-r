@@ -209,18 +209,18 @@ pub const REAL: i32 = 0;
 pub const VIRTUAL: i32 = 1;
 
 /* structure for the reset commands */
-pub struct ResetCom {
-    pub command: Cell<char>,
+struct ResetCom {
+    command: Cell<char>,
     /* current command                      */
-    pub if_flag: bool,
+    if_flag: bool,
     /* if TRUE: exe only if preceding exe'd */
-    pub arg1: i32,
+    arg1: i32,
     /*                                      */
-    pub arg2: i32,
+    arg2: i32,
     /* Arguments to the command             */
-    pub arg3: i32,
+    arg3: i32,
     /*                                      */
-    pub line: i32,
+    line: i32,
     /* line number this command appears on  */
 
     /*
@@ -251,7 +251,7 @@ pub struct ZoneData {
     /* conditions for reset (see below)   */
     pub number: ZoneVnum,
     /* virtual number of this zone	  */
-    pub cmd: Vec<ResetCom>,
+    cmd: Vec<ResetCom>,
     /* command table for reset	          */
 
     /*
@@ -713,10 +713,7 @@ impl DB {
 
         info!(
             "   Current Gametime: {}H {}D {}M {}Y.",
-            time_info.hours,
-            time_info.day,
-            time_info.month,
-            time_info.year
+            time_info.hours, time_info.day, time_info.month, time_info.year
         );
 
         weather_info.pressure = 960;
@@ -738,7 +735,6 @@ impl DB {
             weather_info.sky = SKY_CLOUDLESS;
         }
         self.weather_info.set(weather_info);
-
     }
 }
 
@@ -1368,19 +1364,22 @@ impl DB {
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
     fn check_start_rooms(&self) {
-        self.r_mortal_start_room.set(self.real_room(MORTAL_START_ROOM));
+        self.r_mortal_start_room
+            .set(self.real_room(MORTAL_START_ROOM));
         if self.r_mortal_start_room.get() == NOWHERE {
             error!("SYSERR:  Mortal start room does not exist.  Change in config.c.");
             process::exit(1);
         }
-        self.r_immort_start_room.set( self.real_room(IMMORT_START_ROOM));
+        self.r_immort_start_room
+            .set(self.real_room(IMMORT_START_ROOM));
         if self.r_immort_start_room.get() == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
-                self.r_immort_start_room.set( self.r_mortal_start_room.get());
+                self.r_immort_start_room.set(self.r_mortal_start_room.get());
             }
         }
-        self.r_frozen_start_room.set(self.real_room(FROZEN_START_ROOM));
+        self.r_frozen_start_room
+            .set(self.real_room(FROZEN_START_ROOM));
         if self.r_frozen_start_room.get() == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
@@ -2672,7 +2671,11 @@ impl DB {
                             );
                         } else {
                             obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.equip_char(mob.as_ref().unwrap(), obj.as_ref().unwrap(), zcmd.arg3 as i8);
+                            self.equip_char(
+                                mob.as_ref().unwrap(),
+                                obj.as_ref().unwrap(),
+                                zcmd.arg3 as i8,
+                            );
                             last_cmd = 1;
                         }
                     } else {
@@ -3089,7 +3092,7 @@ impl DB {
         st.points.hitroll = 0;
         st.points.damroll = 0;
 
-        if  ch.has_title() && !ch.get_title().is_empty() {
+        if ch.has_title() && !ch.get_title().is_empty() {
             copy_to_stored(&mut st.title, &ch.get_title());
         } else {
             st.title[0] = 0;
@@ -3167,7 +3170,7 @@ impl DB {
             let mut pie = pt.get_mut(pos);
             pie.as_mut().unwrap().name = name.to_lowercase();
             pos
-        }
+        };
     }
 }
 
