@@ -586,18 +586,7 @@ impl CharData {
         self.char_specials.borrow_mut().saved.idnum = val;
     }
     pub fn fighting(&self) -> Option<Rc<CharData>> {
-        if self.char_specials.borrow().fighting.is_none() {
-            None
-        } else {
-            Some(
-                self.char_specials
-                    .borrow()
-                    .fighting
-                    .as_ref()
-                    .unwrap()
-                    .clone(),
-            )
-        }
+        self.char_specials.borrow().fighting.as_ref().map( |f| f.clone())
     }
     pub fn set_fighting(&self, val: Option<Rc<CharData>>) {
         self.char_specials.borrow_mut().fighting = val;
@@ -1037,7 +1026,7 @@ impl DB {
 }
 
 pub fn self_(sub: &CharData, obj: &CharData) -> bool {
-    sub as *const _ == obj as *const _
+    std::ptr::eq(sub, obj)
 }
 
 impl ObjData {
@@ -1047,7 +1036,7 @@ impl ObjData {
 }
 
 impl DB {
-    pub fn pers<'a>(&self, ch: &'a CharData, vict: &CharData) -> Rc<str> {
+    pub fn pers(&self, ch: &CharData, vict: &CharData) -> Rc<str> {
         if self.can_see(vict, ch) {
             ch.get_name()
         } else {

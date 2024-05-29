@@ -2812,7 +2812,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 true,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap().clone()),
+                Some(&vict.unwrap().clone()),
                 TO_VICT,
             );
             command_interpreter(game, vict.as_ref().unwrap(), &to_force);
