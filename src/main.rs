@@ -98,7 +98,7 @@ pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 pub struct DescriptorData {
     stream: RefCell<TcpStream>,
     // file descriptor for socket
-    host: String,
+    host: Rc<str>,
     // hostname
     bad_pws: Cell<u8>,
     /* number of bad pw attemps this login	*/
@@ -487,9 +487,12 @@ impl Game {
             /* Process descriptors with input pending */
             let mut buf = [0u8];
             for d in self.descriptor_list.borrow().iter() {
-                let res = RefCell::borrow(&d.stream).peek(&mut buf);
-                if res.is_ok() && res.unwrap() != 0 {
-                    process_input(d);
+                match RefCell::borrow(&d.stream).peek(&mut buf) {
+                    Ok(size) if size != 0 => {
+                        process_input(d);
+                    }
+                    Err(err) => error!("Error while peeking TCP Stream: {}", err),
+                    _ => (),
                 }
             }
 
@@ -508,7 +511,6 @@ impl Game {
                     if wait_state > 0 {
                         character.decr_wait_state(1);
                     }
-
                     if character.get_wait_state() != 0 {
                         continue;
                     }
@@ -527,8 +529,7 @@ impl Game {
                         if character.in_room.get() != NOWHERE {
                             self.db.char_from_room(character);
                         }
-                        self.db
-                            .char_to_room(character, character.get_was_in());
+                        self.db.char_to_room(character, character.get_was_in());
                         character.set_was_in(NOWHERE);
                         self.db.act(
                             "$n has returned.",
@@ -551,7 +552,7 @@ impl Game {
                     show_string(d, &comm);
                 } else if d.state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, d.clone(), &comm);
+                    nanny(self, d, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
@@ -748,21 +749,18 @@ fn echo_on(d: &DescriptorData) {
 
 fn make_prompt(d: &DescriptorData) -> String {
     let mut prompt = "".to_string();
-    let mut_d = d;
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
 
-    if mut_d.str.borrow().is_some() {
+    if d.str.borrow().is_some() {
         prompt.push_str("] ");
-    } else if mut_d.showstr_count.get() != 0 {
+    } else if d.showstr_count.get() != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            mut_d.showstr_page.get(),
-            mut_d.showstr_count.get()
+            d.showstr_page.get(),
+            d.showstr_count.get()
         ));
-    } else if mut_d.connected.get() == ConPlaying
-        && !mut_d.character.borrow().as_ref().unwrap().is_npc()
-    {
+    } else if d.connected.get() == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
         let ohc = d.character.borrow();
         let character = ohc.as_ref().unwrap();
         if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
@@ -786,12 +784,10 @@ fn make_prompt(d: &DescriptorData) -> String {
         }
 
         prompt.push_str("> ");
-    } else if mut_d.connected.get() == ConPlaying
-        && mut_d.character.borrow().as_ref().unwrap().is_npc()
-    {
+    } else if d.connected.get() == ConPlaying && d.character.borrow().as_ref().unwrap().is_npc() {
         prompt.push_str(&*format!(
             "{}s>",
-            mut_d.character.borrow().as_ref().unwrap().get_name()
+            d.character.borrow().as_ref().unwrap().get_name()
         ));
     }
 
@@ -808,18 +804,18 @@ fn write_to_q(txt: &str, queue: &mut LinkedList<TxtBlock>, aliased: bool) {
 }
 
 fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut bool) -> bool {
-    let elt = queue.pop_front();
-    if elt.is_none() {
-        return false;
+    match queue.pop_front() {
+        None => false,
+        Some(elt) => {
+            *dest = elt.text;
+            *aliased = elt.aliased;
+            true
+        }
     }
-    let elt = elt.unwrap();
-    *dest = elt.text;
-    *aliased = elt.aliased;
-    return true;
 }
 
 /* Empty the queues before closing connection */
-fn flush_queues(d: &Rc<DescriptorData>) {
+fn flush_queues(d: &DescriptorData) {
     d.output.borrow_mut().clear();
     d.inbuf.borrow_mut().clear();
     d.input.borrow_mut().clear();
@@ -847,20 +843,24 @@ fn get_bind_addr() -> IpAddr {
     let bind_addr;
     let mut use_any = true;
     /* If DLFT_IP is unspecified, use INADDR_ANY */
-    if DFLT_IP.is_none() {
-        bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
-    } else {
-        let r = DFLT_IP.unwrap().parse::<IpAddr>();
-        if r.is_err() {
-            error!(
-                "SYSERR: DFLT_IP of {} appears to be an invalid IP address",
-                DFLT_IP.unwrap()
-            );
-            /* If the parsing fails, use INADDR_ANY */
-            bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
-        } else {
-            use_any = false;
-            bind_addr = r.unwrap();
+    match DFLT_IP {
+        None => bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap(),
+        Some(ip) => {
+            match ip.parse::<IpAddr>() {
+                Err(err) => {
+                    error!(
+                        "SYSERR: DFLT_IP of {} appears to be an invalid IP address: {}",
+                        DFLT_IP.unwrap(),
+                        err
+                    );
+                    /* If the parsing fails, use INADDR_ANY */
+                    bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
+                }
+                Ok(parsed_ip) => {
+                    use_any = false;
+                    bind_addr = parsed_ip;
+                }
+            }
         }
     }
 
@@ -872,6 +872,8 @@ fn get_bind_addr() -> IpAddr {
     }
     bind_addr
 }
+
+static EMPTY_STRING: &'static str = "";
 
 impl Game {
     fn new_descriptor(&self, mut stream: TcpStream, addr: SocketAddr) {
@@ -892,7 +894,7 @@ impl Game {
         /* initialize descriptor data */
         let mut newd = DescriptorData {
             stream: RefCell::new(stream),
-            host: String::new(),
+            host: Rc::from(EMPTY_STRING),
             bad_pws: Cell::new(0),
             idle_tics: Cell::new(0),
             connected: Cell::new(ConGetName),
@@ -923,16 +925,16 @@ impl Game {
             let r = dns_lookup::lookup_addr(&addr.ip());
             if r.is_err() {
                 error!("Error resolving address: {}", r.err().unwrap());
-                newd.host = addr.ip().to_string();
+                newd.host = Rc::from(addr.ip().to_string());
             } else {
-                newd.host = r.unwrap();
+                newd.host = Rc::from(r.unwrap());
             }
         } else {
-            newd.host = addr.ip().to_string();
+            newd.host = Rc::from(addr.ip().to_string());
         }
 
         /* determine if the site is banned */
-        if isbanned(&self.db,  &newd.host) == BAN_ALL {
+        if isbanned(&self.db, &newd.host) == BAN_ALL {
             newd.stream
                 .borrow_mut()
                 .shutdown(Shutdown::Both)
@@ -1056,26 +1058,21 @@ fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
     let mut write_total = 0;
 
     while total > 0 {
-        let bytes_written = stream.write(txt.as_ref());
-
-        if bytes_written.is_err() {
-            /* Fatal error.  Disconnect the player. */
-            error!("SYSERR: Write to socket {}", bytes_written.err().unwrap());
-            return -1;
-        } else {
-            let bytes_written = bytes_written.unwrap();
-            if bytes_written == 0 {
-                /* Temporary failure -- socket buffer full. */
-                return write_total;
-            } else {
+        match stream.write(txt.as_ref()) {
+            Err(err) => {
+                /* Fatal error.  Disconnect the player. */
+                error!("SYSERR: Write to socket {}", err);
+                return -1;
+            }
+            Ok(0) => return write_total, /* Temporary failure -- socket buffer full. */
+            Ok(bytes_written) => {
                 txt = &txt[bytes_written..];
                 total -= bytes_written;
                 write_total += bytes_written as i32;
             }
         }
     }
-
-    return write_total;
+    write_total
 }
 
 /*
@@ -1088,20 +1085,22 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
 
     let mut buf = [0u8; 4096];
 
-    let r = stream.read(&mut buf);
-    if r.is_err() {
-        error!("{:?}", r);
-        return r;
+    match stream.read(&mut buf) {
+        Err(err) => {
+            error!("{:?}", err);
+            return Err(err);
+        }
+        Ok(r) => match std::str::from_utf8(&buf[..r]) {
+            Err(err) => {
+                error!("UTF-8 ERROR {:?}", err);
+                Ok(0)
+            }
+            Ok(s) => {
+                input.push_str(s);
+                Ok(r)
+            }
+        },
     }
-
-    let r = r.unwrap();
-    let s = std::str::from_utf8(&buf[..r]);
-    if s.is_err() {
-        error!("UTF-8 ERROR {:?}", r);
-        return Ok(0);
-    }
-    input.push_str(s.unwrap());
-    return Ok(r);
 }
 
 /*
@@ -1117,7 +1116,7 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(t: &Rc<DescriptorData>) -> i32 {
+fn process_input(t: &DescriptorData) -> i32 {
     let buf_length;
     let mut failed_subst;
     let mut bytes_read;
@@ -1135,16 +1134,10 @@ fn process_input(t: &Rc<DescriptorData>) -> i32 {
             return -1;
         }
 
-        bytes_read = perform_socket_read(t);
-
-        if bytes_read.is_err() {
-            /* Error, disconnect them. */
-            return -1;
-        }
-        let bytes_read = bytes_read.unwrap();
-        if bytes_read == 0 {
-            /* Just blocking, no problems. */
-            return 0;
+        match perform_socket_read(t) {
+            Err(_) => return -1, /* Error, disconnect them. */
+            Ok(0) => return 0,   /* Just blocking, no problems. */
+            Ok(size) => bytes_read = size,
         }
 
         /* at this point, we know we got some data from the read */
@@ -1294,7 +1287,7 @@ fn process_input(t: &Rc<DescriptorData>) -> i32 {
  * orig string, i.e. the one being modified.  subst contains the
  * substition string, i.e. "^telm^tell"
  */
-fn perform_subst(t: &Rc<DescriptorData>, orig: &str, subst: &mut String) -> bool {
+fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
     /*
      * first is the position of the beginning of the first string (the one
      * to be replaced
@@ -1340,10 +1333,10 @@ fn perform_subst(t: &Rc<DescriptorData>, orig: &str, subst: &mut String) -> bool
 }
 
 impl Game {
-    pub fn close_socket(&self, d: &Rc<DescriptorData>) {
+    pub fn close_socket(&self, d: &DescriptorData) {
         self.descriptor_list
             .borrow_mut()
-            .retain(|c| !Rc::ptr_eq(c, d));
+            .retain(|c| !std::ptr::eq(c.as_ref(), d));
 
         d.stream
             .borrow_mut()
@@ -1364,59 +1357,65 @@ impl Game {
             *d.snoop_by.borrow_mut() = None;
         }
 
-        if d.character.borrow().is_some() {
-            /* If we're switched, this resets the mobile taken. */
-            *d.character.borrow().as_ref().unwrap().desc.borrow_mut() = None;
+        match d.character.borrow().as_ref() {
+            Some(character) => {
+                /* If we're switched, this resets the mobile taken. */
+                *character.desc.borrow_mut() = None;
 
-            if d.state() == ConPlaying || d.state() == ConDisconnect {
-                let original = d.original.borrow();
-                let link_challenged = if original.is_some() {
-                    original.as_ref().unwrap().clone()
-                } else {
-                    d.character.borrow().as_ref().unwrap().clone()
-                };
+                match d.state() {
+                    ConPlaying | ConDisconnect => {
+                        let original = d.original.borrow();
+                        let link_challenged = if original.is_some() {
+                            original.as_ref().unwrap().clone()
+                        } else {
+                            d.character.borrow().as_ref().unwrap().clone()
+                        };
 
-                /* We are guaranteed to have a person. */
-                self.db.act(
-                    "$n has lost $s link.",
-                    true,
-                    Some(&link_challenged),
-                    None,
-                    None,
-                    TO_ROOM,
-                );
-                self.db.save_char(&link_challenged);
-                self.mudlog(
-                    NRM,
-                    max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),
-                    true,
-                    format!("Closing link to: {}.", link_challenged.get_name()).as_str(),
-                );
-            } else {
-                let name = d.character.borrow().as_ref().unwrap().get_name();
+                        /* We are guaranteed to have a person. */
+                        self.db.act(
+                            "$n has lost $s link.",
+                            true,
+                            Some(&link_challenged),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                        self.db.save_char(&link_challenged);
+                        self.mudlog(
+                            NRM,
+                            max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),
+                            true,
+                            format!("Closing link to: {}.", link_challenged.get_name()).as_str(),
+                        );
+                    }
+                    _ => {
+                        let name = d.character.borrow().as_ref().unwrap().get_name();
+                        self.mudlog(
+                            CMP,
+                            LVL_IMMORT as i32,
+                            true,
+                            format!(
+                                "Losing player: {}.",
+                                if name.is_empty() {
+                                    name.as_ref()
+                                } else {
+                                    "<null>"
+                                }
+                            )
+                            .as_str(),
+                        );
+                        free_char(d.character.borrow().as_ref().unwrap());
+                    }
+                }
+            }
+            None => {
                 self.mudlog(
                     CMP,
                     LVL_IMMORT as i32,
                     true,
-                    format!(
-                        "Losing player: {}.",
-                        if name.is_empty() {
-                            name.as_ref()
-                        } else {
-                            "<null>"
-                        }
-                    )
-                    .as_str(),
+                    "Losing descriptor without char.",
                 );
-                free_char(d.character.borrow().as_ref().unwrap());
             }
-        } else {
-            self.mudlog(
-                CMP,
-                LVL_IMMORT as i32,
-                true,
-                "Losing descriptor without char.",
-            );
         }
 
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
@@ -1926,7 +1925,7 @@ impl DB {
 
         for to in char_list.borrow().iter() {
             if !sendok!(to.as_ref(), to_sleeping)
-                || (ch.is_some() && std::ptr::eq( to.as_ref(), ch.unwrap()))
+                || (ch.is_some() && std::ptr::eq(to.as_ref(), ch.unwrap()))
             {
                 continue;
             }

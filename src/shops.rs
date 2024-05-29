@@ -1322,7 +1322,7 @@ pub fn shopping_list(
                 keeper,
                 ch,
             ));
-            page_string(ch.desc.borrow().as_ref(), &buf, true);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
         }
     }
 }
@@ -1857,7 +1857,7 @@ fn list_all_shops(db: &DB, ch: &Rc<CharData>) {
         );
     }
 
-    page_string(ch.desc.borrow().as_ref(), &buf, true);
+    page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
 }
 
 fn list_detailed_shop(db: &DB, ch: &Rc<CharData>, shop_nr: i32) {

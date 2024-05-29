@@ -136,7 +136,7 @@ pub fn list_skills(db: &DB, ch: &Rc<CharData>) {
         }
     }
 
-    page_string(ch.desc.borrow().as_ref(), &buf, true);
+    page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
 }
 
 pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {

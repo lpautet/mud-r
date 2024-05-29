@@ -3391,7 +3391,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     print_zone_to_buf(db, &mut buf, i as ZoneRnum);
                 }
             }
-            page_string(ch.desc.borrow().as_ref(), &buf, true);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
         }
 
         /* show player */
@@ -3524,7 +3524,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     }
                 }
             }
-            page_string(ch.desc.borrow().as_ref(), &buf, true);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
         }
 
         /* show death */
@@ -3545,7 +3545,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     );
                 }
             }
-            page_string(ch.desc.borrow().as_ref(), &buf, true);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
         }
 
         /* show godrooms */
@@ -3566,7 +3566,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     );
                 }
             }
-            page_string(ch.desc.borrow().as_ref(), &buf, true);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
         }
 
         /* show shops */

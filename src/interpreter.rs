@@ -2993,7 +2993,7 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
  *   1: String was _not_ modified in place; rather, the expanded aliases
  *      have been placed at the front of the character's input queue.
  */
-pub fn perform_alias(d: &Rc<DescriptorData>, orig: &mut String) -> bool {
+pub fn perform_alias(d: &DescriptorData, orig: &mut String) -> bool {
     /* Mobs don't have aliases. */
     if d.character.borrow().as_ref().unwrap().is_npc() {
         return false;
@@ -3308,7 +3308,7 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
+fn perform_dupe_check(game: &mut Game, d: &Rc<DescriptorData>) -> bool {
     let mut target: Option<Rc<CharData>> = None;
     let mut mode = 0;
     let id: i64;
@@ -3501,7 +3501,7 @@ fn perform_dupe_check(game: &mut Game, d: Rc<DescriptorData>) -> bool {
 }
 
 /* deal with newcomers and other non-playing sockets */
-pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
+pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
     let arg = arg.trim();
 
     match d.state() {
@@ -3752,7 +3752,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     }
                 }
                 /* check and make sure no other copies of this player are logged in */
-                if perform_dupe_check(game, d.clone()) {
+                if perform_dupe_check(game, &d) {
                     return;
                 }
                 let och = d.character.borrow();
@@ -4020,7 +4020,7 @@ pub fn nanny(game: &mut Game, d: Rc<DescriptorData>, arg: &str) {
                     d.set_state(ConExdesc);
                 }
                 '3' => {
-                    page_string(Some(&d), &game.db.background, false);
+                    page_string(&d, &game.db.background, false);
                     d.set_state(ConRmotd);
                 }
                 '4' => {

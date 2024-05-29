@@ -451,7 +451,7 @@ There are {} messages on the board.\r\n",
                 );
             }
         }
-        page_string(ch.desc.borrow().as_ref(), &buf, true);
+        page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
     }
     return true;
 }
@@ -531,7 +531,7 @@ fn board_display_msg(
         RefCell::borrow(&b.msg_storage[msg_slot_num])
     );
 
-    page_string(ch.desc.borrow().as_ref(), &buffer, true);
+    page_string(ch.desc.borrow().as_ref().unwrap(), &buffer, true);
 
     true
 }

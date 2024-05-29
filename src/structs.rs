@@ -212,7 +212,7 @@ pub const CONT_PICKPROOF: i32 = 1 << 1; /* Container is pickproof	*/
 pub const CONT_CLOSED: i32 = 1 << 2; /* Container is closed		*/
 pub const CONT_LOCKED: i32 = 1 << 3; /* Container is locked		*/
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum ConState {
     ConPlaying,
     /* Playing - Nominal state		*/
@@ -354,13 +354,7 @@ pub struct CharData {
     pub carrying: RefCell<Vec<Rc<ObjData>>>,
     /* Head of list                  */
     pub desc: RefCell<Option<Rc<DescriptorData>>>,
-    /* NULL for mobiles              */
-    pub next_in_room: RefCell<Option<Rc<CharData>>>,
-    /* For room->people - list         */
-    pub next: RefCell<Option<Rc<CharData>>>,
-    /* For either monster or ppl-list  */
-    // pub next_fighting: RefCell<Option<Rc<CharData>>>,
-    /* For fighting list               */
+    /* NULL for mobiles              */          
     pub followers: RefCell<Vec<FollowType>>,
     /* List of chars followers       */
     pub master: RefCell<Option<Rc<CharData>>>,

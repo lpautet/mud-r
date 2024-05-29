@@ -54,7 +54,7 @@ use crate::structs::{CharData, LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
 use crate::{send_to_char, write_to_output, DescriptorData, Game, PAGE_LENGTH, PAGE_WIDTH};
 
-pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
+pub fn string_write(d: &DescriptorData, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
     if d.character.borrow().is_some() && !d.character.borrow().as_ref().unwrap().is_npc() {
         d.character
             .borrow()
@@ -69,7 +69,7 @@ pub fn string_write(d: &Rc<DescriptorData>, writeto: Rc<RefCell<String>>, len: u
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(db: &DB, d: &Rc<DescriptorData>, str_: &str) {
+pub fn string_add(db: &DB, d: &DescriptorData, str_: &str) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
@@ -392,12 +392,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(d: Option<&Rc<DescriptorData>>, msg: &str, keep_internal: bool) {
-    if d.is_none() {
-        return;
-    }
-
-    let d = d.unwrap();
+pub fn page_string(d: &DescriptorData, msg: &str, keep_internal: bool) {
 
     if msg.is_empty() {
         return;
@@ -420,7 +415,7 @@ pub fn page_string(d: Option<&Rc<DescriptorData>>, msg: &str, keep_internal: boo
 }
 
 /* The call that displays the next page. */
-pub fn show_string(d: &Rc<DescriptorData>, input: &str) {
+pub fn show_string(d: &DescriptorData, input: &str) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 

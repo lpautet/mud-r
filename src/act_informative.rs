@@ -82,7 +82,7 @@ fn show_obj_to_char(obj: &ObjData, ch: &CharData, mode: i32) {
                         "There is something written on it:\r\n\r\n{}",
                         RefCell::borrow(&obj.action_description)
                     );
-                    page_string(ch.desc.borrow().as_ref(), notebuf.as_str(), true);
+                    page_string(ch.desc.borrow().as_ref().unwrap(), notebuf.as_str(), true);
                 } else {
                     send_to_char(ch, "It's blank.\r\n");
                 }
@@ -815,7 +815,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
         i += 1;
         if i == fnum {
             page_string(
-                ch.desc.borrow().as_ref(),
+                ch.desc.borrow().as_ref().unwrap(),
                 desc.as_ref().unwrap().as_str(),
                 false,
             );
@@ -1316,7 +1316,7 @@ pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let argument = argument.trim_start();
 
     if argument.len() == 0 {
-        page_string(ch.desc.borrow().as_ref(), &game.db.help, false);
+        page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.help, false);
         return;
     }
     if game.db.help_table.len() == 0 {
@@ -1338,7 +1338,7 @@ pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 mid -= 1;
             }
             page_string(
-                ch.desc.borrow().as_ref(),
+                ch.desc.borrow().as_ref().unwrap(),
                 &game.db.help_table[mid].entry,
                 false,
             );
@@ -1827,31 +1827,31 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
     match subcmd {
         SCMD_CREDITS => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.credits, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.credits, false);
         }
         SCMD_NEWS => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.news, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.news, false);
         }
         SCMD_INFO => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.info, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.info, false);
         }
         SCMD_WIZLIST => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.wizlist, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.wizlist, false);
         }
         SCMD_IMMLIST => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.immlist, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.immlist, false);
         }
         SCMD_HANDBOOK => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.handbook, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.handbook, false);
         }
         SCMD_POLICIES => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.policies, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.policies, false);
         }
         SCMD_MOTD => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.motd, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.motd, false);
         }
         SCMD_IMOTD => {
-            page_string(ch.desc.borrow().as_ref(), &game.db.imotd, false);
+            page_string(ch.desc.borrow().as_ref().unwrap(), &game.db.imotd, false);
         }
         SCMD_CLEAR => {
             send_to_char(ch, "\x21[H\x21[J");
@@ -2138,7 +2138,7 @@ pub fn do_levels(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
         )
         .as_str(),
     );
-    page_string(ch.desc.borrow().as_ref(), buf.as_str(), true);
+    page_string(ch.desc.borrow().as_ref().unwrap(), buf.as_str(), true);
 }
 
 pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {

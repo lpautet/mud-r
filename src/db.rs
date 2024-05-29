@@ -277,12 +277,7 @@ pub struct BanListElement {
 impl DB {
     pub fn get_name_by_id(&self, id: i64) -> Option<String> {
         let pt = self.player_table.borrow();
-        let p = pt.iter().find(|p| p.id == id);
-        return if p.is_some() {
-            Some(p.unwrap().name.clone())
-        } else {
-            None
-        };
+        pt.iter().find(|p| p.id == id).map(|p| p.name.clone())
     }
 
     pub fn get_id_by_name(&self, name: &str) -> i64 {
@@ -343,77 +338,93 @@ pub fn do_reboot(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 
     one_argument(argument, &mut arg);
     let mut n = Rc::from("");
-    if arg == "all" || arg == "*" {
-        if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
-            game.db.greetings = n.clone();
-            prune_crlf(&mut game.db.greetings);
+    match arg.as_str() {
+        "all" | "*" => {
+            if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
+                game.db.greetings = n.clone();
+                prune_crlf(&mut game.db.greetings);
+            }
+            game.file_to_string_alloc(WIZLIST_FILE, &mut n);
+            game.db.wizlist = n.clone();
+            game.file_to_string_alloc(IMMLIST_FILE, &mut n);
+            game.db.immlist = n.clone();
+            game.file_to_string_alloc(NEWS_FILE, &mut n);
+            game.db.news = n.clone();
+            game.file_to_string_alloc(CREDITS_FILE, &mut n);
+            game.db.credits = n.clone();
+            game.file_to_string_alloc(MOTD_FILE, &mut n);
+            game.db.motd = n.clone();
+            game.file_to_string_alloc(IMOTD_FILE, &mut n);
+            game.db.imotd = n.clone();
+            game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
+            game.db.help = n.clone();
+            game.file_to_string_alloc(INFO_FILE, &mut n);
+            game.db.info = n.clone();
+            game.file_to_string_alloc(POLICIES_FILE, &mut n);
+            game.db.policies = n.clone();
+            game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
+            game.db.handbook = n.clone();
+            game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
+            game.db.background = n.clone();
         }
-        game.file_to_string_alloc(WIZLIST_FILE, &mut n);
-        game.db.wizlist = n.clone();
-        game.file_to_string_alloc(IMMLIST_FILE, &mut n);
-        game.db.immlist = n.clone();
-        game.file_to_string_alloc(NEWS_FILE, &mut n);
-        game.db.news = n.clone();
-        game.file_to_string_alloc(CREDITS_FILE, &mut n);
-        game.db.credits = n.clone();
-        game.file_to_string_alloc(MOTD_FILE, &mut n);
-        game.db.motd = n.clone();
-        game.file_to_string_alloc(IMOTD_FILE, &mut n);
-        game.db.imotd = n.clone();
-        game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
-        game.db.help = n.clone();
-        game.file_to_string_alloc(INFO_FILE, &mut n);
-        game.db.info = n.clone();
-        game.file_to_string_alloc(POLICIES_FILE, &mut n);
-        game.db.policies = n.clone();
-        game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
-        game.db.handbook = n.clone();
-        game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
-        game.db.background = n.clone();
-    } else if arg == "wizlist" {
-        game.file_to_string_alloc(WIZLIST_FILE, &mut n);
-        game.db.wizlist = n.clone();
-    } else if arg == "immlist" {
-        game.file_to_string_alloc(IMMLIST_FILE, &mut n);
-        game.db.immlist = n.clone();
-    } else if arg == "news" {
-        game.file_to_string_alloc(NEWS_FILE, &mut n);
-        game.db.news = n.clone();
-    } else if arg == "credits" {
-        game.file_to_string_alloc(CREDITS_FILE, &mut n);
-        game.db.credits = n.clone();
-    } else if arg == "motd" {
-        game.file_to_string_alloc(MOTD_FILE, &mut n);
-        game.db.motd = n.clone();
-    } else if arg == "imotd" {
-        game.file_to_string_alloc(IMOTD_FILE, &mut n);
-        game.db.imotd = n.clone();
-    } else if arg == "help" {
-        game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
-        game.db.help = n.clone();
-    } else if arg == "info" {
-        game.file_to_string_alloc(INFO_FILE, &mut n);
-        game.db.info = n.clone();
-    } else if arg == "policy" {
-        game.file_to_string_alloc(POLICIES_FILE, &mut n);
-        game.db.policies = n.clone();
-    } else if arg == "handbook" {
-        game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
-        game.db.handbook = n.clone();
-    } else if arg == "background" {
-        game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
-        game.db.background = n.clone();
-    } else if arg == "greetings" {
-        if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
-            game.db.greetings = n.clone();
-            prune_crlf(&mut game.db.greetings);
+        "wizlist" => {
+            game.file_to_string_alloc(WIZLIST_FILE, &mut n);
+            game.db.wizlist = n.clone();
         }
-    } else if arg == "xhelp" {
-        game.db.help_table.clear();
-        game.db.index_boot(DB_BOOT_HLP);
-    } else {
-        send_to_char(ch, "Unknown reload option.\r\n");
-        return;
+        "immlist" => {
+            game.file_to_string_alloc(IMMLIST_FILE, &mut n);
+            game.db.immlist = n.clone();
+        }
+        "news" => {
+            game.file_to_string_alloc(NEWS_FILE, &mut n);
+            game.db.news = n.clone();
+        }
+        "credits" => {
+            game.file_to_string_alloc(CREDITS_FILE, &mut n);
+            game.db.credits = n.clone();
+        }
+        "motd" => {
+            game.file_to_string_alloc(MOTD_FILE, &mut n);
+            game.db.motd = n.clone();
+        }
+        "imotd" => {
+            game.file_to_string_alloc(IMOTD_FILE, &mut n);
+            game.db.imotd = n.clone();
+        }
+        "help" => {
+            game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
+            game.db.help = n.clone();
+        }
+        "info" => {
+            game.file_to_string_alloc(INFO_FILE, &mut n);
+            game.db.info = n.clone();
+        }
+        "policy" => {
+            game.file_to_string_alloc(POLICIES_FILE, &mut n);
+            game.db.policies = n.clone();
+        }
+        "handbook" => {
+            game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
+            game.db.handbook = n.clone();
+        }
+        "background" => {
+            game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
+            game.db.background = n.clone();
+        }
+        "greetings" => {
+            if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
+                game.db.greetings = n.clone();
+                prune_crlf(&mut game.db.greetings);
+            }
+        }
+        "xhelp" => {
+            game.db.help_table.clear();
+            game.db.index_boot(DB_BOOT_HLP);
+        }
+        _ => {
+            send_to_char(ch, "Unknown reload option.\r\n");
+            return;
+        }
     }
 
     send_to_char(ch, OK);
@@ -675,21 +686,23 @@ impl DB {
     fn reset_time(&self) {
         let mut beginning_of_time = 0;
 
-        let bgtime = OpenOptions::new().read(true).open(TIME_FILE);
-        if bgtime.is_err() {
-            info!("SYSERR: Can't open '{}'", TIME_FILE);
-        } else {
-            let bgtime = bgtime.unwrap();
-            let mut reader = BufReader::new(bgtime);
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .expect(format!("SYSERR: Can't read from '{}'", TIME_FILE).as_str());
-            line = line.trim().to_string();
-            beginning_of_time = line
-                .parse::<u128>()
-                .expect(format!("SYSERR: Invalid mud time: {}", line).as_str());
+        match OpenOptions::new().read(true).open(TIME_FILE) {
+            Err(err) => {
+                info!("SYSERR: Can't open '{}': {}", TIME_FILE, err);
+            }
+            Ok(bgtime) => {
+                let mut reader = BufReader::new(bgtime);
+                let mut line = String::new();
+                reader
+                    .read_line(&mut line)
+                    .expect(format!("SYSERR: Can't read from '{}'", TIME_FILE).as_str());
+                line = line.trim().to_string();
+                beginning_of_time = line
+                    .parse::<u128>()
+                    .expect(format!("SYSERR: Invalid mud time: {}", line).as_str());
+            }
         }
+
         if beginning_of_time == 0 {
             beginning_of_time = 650336715;
         }
@@ -699,17 +712,13 @@ impl DB {
 
         let mut weather_info = self.weather_info.get();
 
-        if time_info.hours <= 4 {
-            weather_info.sunlight = SUN_DARK;
-        } else if time_info.hours == 5 {
-            weather_info.sunlight = SUN_RISE;
-        } else if time_info.hours <= 20 {
-            weather_info.sunlight = SUN_LIGHT;
-        } else if time_info.hours == 21 {
-            weather_info.sunlight = SUN_SET;
-        } else {
-            weather_info.sunlight = SUN_DARK;
-        }
+        weather_info.sunlight = match time_info.hours {
+            0..=4 => SUN_DARK,
+            5 => SUN_RISE,
+            6..=20 => SUN_LIGHT,
+            21 => SUN_SET,
+            _ => SUN_DARK,
+        };
 
         info!(
             "   Current Gametime: {}H {}D {}M {}Y.",
@@ -725,15 +734,13 @@ impl DB {
 
         weather_info.change = 0;
 
-        if weather_info.pressure <= 980 {
-            weather_info.sky = SKY_LIGHTNING;
-        } else if weather_info.pressure <= 1000 {
-            weather_info.sky = SKY_RAINING;
-        } else if weather_info.pressure <= 1020 {
-            weather_info.sky = SKY_CLOUDY;
-        } else {
-            weather_info.sky = SKY_CLOUDLESS;
-        }
+        weather_info.sky = match weather_info.pressure {
+            ..=980 => SKY_LIGHTNING,
+            ..=1000 => SKY_RAINING,
+            ..=1020 => SKY_CLOUDY,
+            _ => SKY_CLOUDLESS,
+        };
+
         self.weather_info.set(weather_info);
     }
 }
@@ -776,24 +783,24 @@ impl DB {
         let recs: u64;
 
         let player_file: File;
-        let r = OpenOptions::new().write(true).read(true).open(PLAYER_FILE);
-        if r.is_err() {
-            let err = r.err().unwrap();
-            if err.kind() != ErrorKind::NotFound {
-                error!("SYSERR: fatal error opening playerfile: {}", err);
-                process::exit(1);
-            } else {
-                info!("No playerfile.  Creating a new one.");
-                touch(Path::new(PLAYER_FILE)).expect("SYSERR: fatal error creating playerfile");
-                player_file = OpenOptions::new()
-                    .write(true)
-                    .read(true)
-                    .open(PLAYER_FILE)
-                    .expect("SYSERR: fatal error opening playerfile after creation");
-            }
-        } else {
-            player_file = r.unwrap();
-        }
+        player_file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .open(PLAYER_FILE)
+            .unwrap_or_else(|err| {
+                if err.kind() != ErrorKind::NotFound {
+                    error!("SYSERR: fatal error opening playerfile: {}", err);
+                    process::exit(1);
+                } else {
+                    info!("No playerfile.  Creating a new one.");
+                    touch(Path::new(PLAYER_FILE)).expect("SYSERR: fatal error creating playerfile");
+                    OpenOptions::new()
+                        .write(true)
+                        .read(true)
+                        .open(PLAYER_FILE)
+                        .expect("SYSERR: fatal error opening playerfile after creation")
+                }
+            });
 
         *self.player_fl.borrow_mut() = Some(player_file);
 
@@ -932,30 +939,18 @@ impl DB {
         let mut rec_count = 0;
         let mut size: [usize; 2] = [0; 2];
 
-        match mode {
-            DB_BOOT_WLD => {
-                prefix = WLD_PREFIX;
-            }
-            DB_BOOT_MOB => {
-                prefix = MOB_PREFIX;
-            }
-            DB_BOOT_OBJ => {
-                prefix = OBJ_PREFIX;
-            }
-            DB_BOOT_ZON => {
-                prefix = ZON_PREFIX;
-            }
-            DB_BOOT_SHP => {
-                prefix = SHP_PREFIX;
-            }
-            DB_BOOT_HLP => {
-                prefix = HLP_PREFIX;
-            }
+        prefix = match mode {
+            DB_BOOT_WLD => WLD_PREFIX,
+            DB_BOOT_MOB => MOB_PREFIX,
+            DB_BOOT_OBJ => OBJ_PREFIX,
+            DB_BOOT_ZON => ZON_PREFIX,
+            DB_BOOT_SHP => SHP_PREFIX,
+            DB_BOOT_HLP => HLP_PREFIX,
             _ => {
                 error!("SYSERR: Unknown subcommand {} to index_boot!", mode);
                 process::exit(1);
             }
-        }
+        };
 
         if self.mini_mud {
             index_filename = MINDEX_FILE;
@@ -964,16 +959,10 @@ impl DB {
         }
 
         let mut buf2 = format!("{}{}", prefix, index_filename);
-        let db_index = File::open(buf2.as_str());
-        if db_index.is_err() {
-            error!(
-                "SYSERR: opening index file '{}': {}",
-                buf2.as_str(),
-                db_index.err().unwrap()
-            );
+        let db_index = File::open(buf2.as_str()).unwrap_or_else(|err| {
+            error!("SYSERR: opening index file '{}': {}", buf2.as_str(), err);
             process::exit(1);
-        }
-        let db_index = db_index.unwrap();
+        });
 
         let mut reader = BufReader::new(db_index);
         /* first, count the number of records in the file so we can malloc */
@@ -1387,9 +1376,7 @@ impl DB {
             }
         }
     }
-}
 
-impl DB {
     /* resolve all vnums into rnums in the world */
     fn renum_world(&mut self) {
         for (_, room_data) in self.world.borrow().iter().enumerate() {
@@ -1604,7 +1591,6 @@ impl DB {
      */
     fn interpret_espec(&mut self, keyword: &str, value: &str, mobch: &mut CharData, nr: i32) {
         let mut num_arg = 0;
-        let mut matched = false;
 
         /*
          * If there isn't a colon, there is no value.  While Boolean options are
@@ -1615,59 +1601,53 @@ impl DB {
             num_arg = if r.is_ok() { r.unwrap() } else { 0 };
         }
 
-        if !matched && keyword == "BareHandAttack" {
-            matched = true;
-            num_arg = max(0, min(99, num_arg));
-            mobch.mob_specials.attack_type = num_arg as u8;
-        }
+        match keyword {
+            "BareHandAttack" => {
+                num_arg = max(0, min(99, num_arg));
+                mobch.mob_specials.attack_type = num_arg as u8;
+            }
 
-        if !matched && keyword == "Str" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().str = num_arg as i8;
-        }
+            "Str" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().str = num_arg as i8;
+            }
 
-        if !matched && keyword == "StrAdd" {
-            matched = true;
-            num_arg = max(0, min(100, num_arg));
-            mobch.real_abils.borrow_mut().str_add = num_arg as i8;
-        }
+            "StrAdd" => {
+                num_arg = max(0, min(100, num_arg));
+                mobch.real_abils.borrow_mut().str_add = num_arg as i8;
+            }
 
-        if !matched && keyword == "Int" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().intel = num_arg as i8;
-        }
+            "Int" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().intel = num_arg as i8;
+            }
 
-        if !matched && keyword == "Wis" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().wis = num_arg as i8;
-        }
+            "Wis" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().wis = num_arg as i8;
+            }
 
-        if !matched && keyword == "Dex" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().dex = num_arg as i8;
-        }
+            "Dex" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().dex = num_arg as i8;
+            }
 
-        if !matched && keyword == "Con" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().con = num_arg as i8;
-        }
+            "Con" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().con = num_arg as i8;
+            }
 
-        if !matched && keyword == "Cha" {
-            matched = true;
-            num_arg = max(3, min(25, num_arg));
-            mobch.real_abils.borrow_mut().cha = num_arg as i8;
-        }
+            "Cha" => {
+                num_arg = max(3, min(25, num_arg));
+                mobch.real_abils.borrow_mut().cha = num_arg as i8;
+            }
 
-        if !matched {
-            error!(
-                "SYSERR: Warning: unrecognized espec keyword {} in mob #{}",
-                keyword, nr
-            );
+            _ => {
+                error!(
+                    "SYSERR: Warning: unrecognized espec keyword {} in mob #{}",
+                    keyword, nr
+                );
+            }
         }
     }
 
@@ -2290,13 +2270,11 @@ impl DB {
             get_one_line(&mut reader, &mut key);
         }
     }
-}
 
 /*************************************************************************
 *  procedures for resetting, both play-time and boot-time	 	 *
 *************************************************************************/
 
-impl DB {
     pub fn vnum_mobile(&self, searchname: &str, ch: &Rc<CharData>) -> i32 {
         let mut found = 0;
         for nr in 0..self.mob_protos.len() {
@@ -2337,7 +2315,6 @@ impl DB {
 
         return found;
     }
-}
 // /* create a character, and add it to the char list */
 // struct char_data *create_char(void)
 // {
@@ -2351,7 +2328,6 @@ impl DB {
 // return (ch);
 // }
 
-impl DB {
     /* create a new mobile from a prototype */
     pub(crate) fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */
     {
@@ -2810,9 +2786,7 @@ impl DB {
             .iter()
             .position(|pie| pie.name == name);
     }
-}
 
-impl DB {
     /* Load a char, TRUE if loaded, FALSE if not */
     pub fn load_char(&self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
         let player_i = self.get_ptable_by_name(name);
@@ -2854,7 +2828,7 @@ impl DB {
 
         copy_to_stored(
             &mut st.host,
-            ch.desc.borrow().as_ref().unwrap().host.as_str(),
+            ch.desc.borrow().as_ref().unwrap().host.as_ref(),
         );
 
         unsafe {
@@ -3294,8 +3268,6 @@ pub fn reset_char(ch: &CharData) {
     *ch.master.borrow_mut() = None;
     ch.set_in_room(NOWHERE);
     ch.carrying.borrow_mut().clear();
-    *ch.next.borrow_mut() = None;
-    *ch.next_in_room.borrow_mut() = None;
     ch.set_fighting(None);
     ch.char_specials.borrow_mut().position = POS_STANDING;
     ch.char_specials.borrow_mut().carry_weight = 0;
@@ -3434,9 +3406,7 @@ impl DB {
         }
         ch.set_loadroom(NOWHERE);
     }
-}
 
-impl DB {
     // /* returns the real number of the room with given virtual number */
     pub fn real_room(&self, vnum: RoomRnum) -> RoomRnum {
         let r = self
@@ -3823,8 +3793,6 @@ impl CharData {
             equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
             carrying: RefCell::new(vec![]),
             desc: RefCell::new(None),
-            next_in_room: RefCell::new(None),
-            next: RefCell::new(None),
             // next_fighting: RefCell::new(None),
             followers: RefCell::new(vec![]),
             master: RefCell::new(None),
@@ -3915,8 +3883,6 @@ impl CharData {
             equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
             carrying: RefCell::new(vec![]),
             desc: RefCell::new(None),
-            next_in_room: RefCell::new(None),
-            next: RefCell::new(None),
             // next_fighting: RefCell::new(None),
             followers: RefCell::new(vec![]),
             master: RefCell::new(None),
