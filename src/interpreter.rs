@@ -3983,7 +3983,7 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                     if character.get_level() == 0 {
                         do_start(game, character);
                         send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
-                        look_at_room(&game.db, och.as_ref().unwrap(), false);
+                        look_at_room(game, och.as_ref().unwrap(), false);
                     }
                     if game
                         .db

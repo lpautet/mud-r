@@ -564,7 +564,7 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
-        mag_groups(&game.db, level, Some(caster), spellnum, savetype);
+        mag_groups(game, level, Some(caster), spellnum, savetype);
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
         mag_masses(&game.db, level, caster, spellnum, savetype);
@@ -594,10 +594,10 @@ pub fn call_magic(
             SPELL_LOCATE_OBJECT => spell_locate_object(&game.db, level, Some(caster), cvict, ovict),
             SPELL_SUMMON => spell_summon(game, level, Some(caster), cvict, ovict),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(&game.db, level, Some(caster), cvict, ovict);
+                spell_recall(game, level, Some(caster), cvict, ovict);
             }
             SPELL_TELEPORT => {
-                spell_teleport(&game.db, level, Some(caster), cvict, ovict);
+                spell_teleport(game, level, Some(caster), cvict, ovict);
             }
             _ => {}
         }

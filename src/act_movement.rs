@@ -169,15 +169,13 @@ pub fn do_simple_move(
         return false;
     }
 
-    let db = &game.db;
-
     /* charmed? */
     if ch.aff_flagged(AFF_CHARM)
         && ch.master.borrow().is_some()
         && ch.in_room() == ch.master.borrow().as_ref().unwrap().in_room()
     {
         send_to_char(ch, "The thought of leaving your master makes you weep.\r\n");
-        db.act(
+        game.db.act(
             "$n bursts into tears.",
             false,
             Some(ch),
@@ -189,8 +187,8 @@ pub fn do_simple_move(
     }
 
     /* if this room or the one we're going to needs a boat, check for one */
-    if (db.sect(ch.in_room()) == SECT_WATER_NOSWIM)
-        || (db.sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) == SECT_WATER_NOSWIM)
+    if (game.db.sect(ch.in_room()) == SECT_WATER_NOSWIM)
+        || (game.db.sect(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) == SECT_WATER_NOSWIM)
     {
         if !has_boat(ch) {
             send_to_char(ch, "You need a boat to go there.\r\n");
@@ -199,9 +197,9 @@ pub fn do_simple_move(
     }
 
     /* move points needed is avg. move loss for src and destination sect type */
-    need_movement = (MOVEMENT_LOSS[db.sect(ch.in_room()) as usize]
+    need_movement = (MOVEMENT_LOSS[game.db.sect(ch.in_room()) as usize]
         + MOVEMENT_LOSS
-            [db.sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) as usize])
+            [game.db.sect(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) as usize])
         / 2;
 
     if ch.get_move() < need_movement as i16 && !ch.is_npc() {
@@ -214,21 +212,21 @@ pub fn do_simple_move(
         return false;
     }
 
-    if db.room_flagged(ch.in_room(), ROOM_ATRIUM) {
+    if game.db.room_flagged(ch.in_room(), ROOM_ATRIUM) {
         if !house_can_enter(
-            db,
+            &game.db,
             ch,
-            db.get_room_vnum(db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()),
+            game.db.get_room_vnum(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()),
         ) {
             send_to_char(ch, "That's private property -- no trespassing!\r\n");
             return false;
         }
     }
-    if db.room_flagged(
-        db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
+    if game.db.room_flagged(
+        game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
         ROOM_TUNNEL,
     ) && num_pc_in_room(
-        db.world.borrow()[db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() as usize]
+        game.db.world.borrow()[game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() as usize]
             .borrow(),
     ) >= TUNNEL_SIZE
     {
@@ -243,8 +241,8 @@ pub fn do_simple_move(
         return false;
     }
     /* Mortals and low level gods cannot enter greater god rooms. */
-    if db.room_flagged(
-        db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
+    if game.db.room_flagged(
+        game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
         ROOM_GODROOM,
     ) && ch.get_level() < LVL_GRGOD as u8
     {
@@ -259,13 +257,13 @@ pub fn do_simple_move(
 
     if !ch.aff_flagged(AFF_SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
-        db.act(buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
+        game.db.act(buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
     was_in = ch.in_room();
-    db.char_from_room(ch);
-    db.char_to_room(
+    game.db.char_from_room(ch);
+    game.db.char_to_room(
         ch,
-        db.world.borrow()[was_in as usize].dir_option[dir as usize]
+        game.db.world.borrow()[was_in as usize].dir_option[dir as usize]
             .as_ref()
             .unwrap()
             .to_room
@@ -273,17 +271,17 @@ pub fn do_simple_move(
     );
 
     if !ch.aff_flagged(AFF_SNEAK) {
-        db.act("$n has arrived.", true, Some(ch), None, None, TO_ROOM);
+        game.db.act("$n has arrived.", true, Some(ch), None, None, TO_ROOM);
     }
 
     if ch.desc.borrow().is_some() {
-        look_at_room(db, ch, false);
+        look_at_room(game, ch, false);
     }
 
-    if db.room_flagged(ch.in_room(), ROOM_DEATH) && ch.get_level() < LVL_IMMORT as u8 {
+    if game.db.room_flagged(ch.in_room(), ROOM_DEATH) && ch.get_level() < LVL_IMMORT as u8 {
         log_death_trap(game, ch);
-        db.death_cry(ch);
-        db.extract_char(ch);
+        game.db.death_cry(ch);
+        game.db.extract_char(ch);
         return false;
     }
     return true;

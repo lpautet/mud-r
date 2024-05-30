@@ -129,11 +129,11 @@ fn show_obj_modifiers(obj: &ObjData, ch: &CharData) {
     }
 }
 
-fn list_obj_to_char(db: &DB, list: &Vec<Rc<ObjData>>, ch: &CharData, mode: i32, show: bool) {
+fn list_obj_to_char(game: &mut Game, list: &Vec<Rc<ObjData>>, ch: &CharData, mode: i32, show: bool) {
     let mut found = true;
 
     for obj in list {
-        if db.can_see_obj(ch, obj) {
+        if game.db.can_see_obj(ch, obj) {
             show_obj_to_char(obj, ch, mode);
             found = true;
         }
@@ -499,12 +499,12 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
     }
 }
 
-pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
+pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
     if ch.desc.borrow().is_none() {
         return;
     }
 
-    if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
+    if game.db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(ch, "It is pitch black...\r\n");
         return;
     } else if ch.aff_flagged(AFF_BLIND) {
@@ -515,13 +515,13 @@ pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
 
     if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
         let mut buf = String::new();
-        sprintbit(db.room_flags(ch.in_room()) as i64, &ROOM_BITS, &mut buf);
+        sprintbit(game.db.room_flags(ch.in_room()) as i64, &ROOM_BITS, &mut buf);
         send_to_char(
             ch,
             format!(
                 "[{}] {} [{}]",
-                db.get_room_vnum(ch.in_room()),
-                db.world.borrow()[ch.in_room() as usize].name,
+                game.db.get_room_vnum(ch.in_room()),
+                game.db.world.borrow()[ch.in_room() as usize].name,
                 buf
             )
             .as_str(),
@@ -529,7 +529,7 @@ pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
     } else {
         send_to_char(
             ch,
-            format!("{}", db.world.borrow()[ch.in_room() as usize].name).as_str(),
+            format!("{}", game.db.world.borrow()[ch.in_room() as usize].name).as_str(),
         );
     }
 
@@ -537,35 +537,33 @@ pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
 
     if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
         || ignore_brief
-        || db.room_flagged(ch.in_room(), ROOM_DEATH)
+        || game.db.room_flagged(ch.in_room(), ROOM_DEATH)
     {
         send_to_char(
             ch,
-            format!("{}", db.world.borrow()[ch.in_room() as usize].description).as_str(),
+            format!("{}", game.db.world.borrow()[ch.in_room() as usize].description).as_str(),
         );
     }
 
     /* autoexits */
     if !ch.is_npc() && ch.prf_flagged(PRF_AUTOEXIT) {
-        do_auto_exits(db, ch);
+        do_auto_exits(&game.db, ch);
     }
 
     /* now list characters & objects */
     send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
     list_obj_to_char(
-        db,
-        db.world.borrow()[ch.in_room() as usize]
-            .contents
-            .borrow()
-            .as_ref(),
+        game,
+        room.contents.borrow().as_ref(),
         ch,
         SHOW_OBJ_LONG,
         false,
     );
     send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
     list_char_to_char(
-        db,
-        db.world.borrow()[ch.in_room() as usize]
+        &game.db,
+        game.db.world.borrow()[ch.in_room() as usize]
             .peoples
             .borrow()
             .as_ref(),
@@ -574,9 +572,9 @@ pub fn look_at_room(db: &DB, ch: &Rc<CharData>, ignore_brief: bool) {
     send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
 }
 
-fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
-    if db.exit(ch, dir as usize).is_some() {
-        if !db
+fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
+    if game.db.exit(ch, dir as usize).is_some() {
+        if !game.db
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
@@ -587,7 +585,7 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
                 ch,
                 format!(
                     "{}",
-                    db.exit(ch, dir as usize)
+                    game.db.exit(ch, dir as usize)
                         .as_ref()
                         .unwrap()
                         .general_description
@@ -597,12 +595,12 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
         } else {
             send_to_char(ch, "You see nothing special.\r\n");
         }
-        if db
+        if game.db
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
             .exit_flagged(EX_CLOSED)
-            && !db
+            && !game.db
                 .exit(ch, dir as usize)
                 .as_ref()
                 .unwrap()
@@ -613,16 +611,16 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
                 ch,
                 format!(
                     "The {} is closed.\r\n",
-                    fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
+                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
                 )
                 .as_str(),
             );
-        } else if db
+        } else if game.db
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
             .exit_flagged(EX_ISDOOR)
-            && !db
+            && !game.db
                 .exit(ch, dir as usize)
                 .as_ref()
                 .unwrap()
@@ -633,7 +631,7 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
                 ch,
                 format!(
                     "The {} is open.\r\n",
-                    fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
+                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
                 )
                 .as_str(),
             );
@@ -643,7 +641,7 @@ fn look_in_direction(db: &DB, ch: &Rc<CharData>, dir: i32) {
     }
 }
 
-fn look_in_obj(db: &DB, ch: &Rc<CharData>, arg: &str) {
+fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let mut dummy: Option<Rc<CharData>> = None;
     let mut obj: Option<Rc<ObjData>> = None;
     let bits;
@@ -652,7 +650,7 @@ fn look_in_obj(db: &DB, ch: &Rc<CharData>, arg: &str) {
         send_to_char(ch, "Look in what?\r\n");
         return;
     }
-    bits = db.generic_find(
+    bits = game.db.generic_find(
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -692,7 +690,7 @@ fn look_in_obj(db: &DB, ch: &Rc<CharData>, arg: &str) {
                 }
 
                 list_obj_to_char(
-                    db,
+                    game,
                     &obj.as_ref().unwrap().contains.borrow(),
                     ch,
                     SHOW_OBJ_SHORT,
@@ -916,16 +914,16 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let look_type;
         if arg.is_empty() {
             /* "look" alone, without an argument at all */
-            look_at_room(db, ch, true);
+            look_at_room(game, ch, true);
         } else if is_abbrev(arg.as_ref(), "in") {
-            look_in_obj(&game.db, ch, arg2.as_str());
+            look_in_obj(game, ch, arg2.as_str());
             /* did the char type 'look <direction>?' */
         } else if {
             look_type = search_block(arg.as_str(), &DIRS, false);
             look_type
         } != None
         {
-            look_in_direction(&game.db, ch, look_type.unwrap() as i32);
+            look_in_direction(game, ch, look_type.unwrap() as i32);
         } else if is_abbrev(arg.as_ref(), "at") {
             look_at_target(&game.db, ch, arg2.as_ref());
         } else {
@@ -966,7 +964,7 @@ pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             || tmp_object.get_obj_type() == ITEM_CONTAINER
         {
             send_to_char(ch, "When you look inside, you see:\r\n");
-            look_in_obj(&game.db, ch, &arg);
+            look_in_obj(game, ch, &arg);
         }
     }
 }
@@ -1169,7 +1167,7 @@ pub fn do_inventory(
 ) {
     send_to_char(ch, "You are carrying:\r\n");
     list_obj_to_char(
-        &game.db,
+        game,
         ch.carrying.borrow().as_ref(),
         ch,
         SHOW_OBJ_SHORT,

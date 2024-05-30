@@ -576,7 +576,7 @@ pub fn mag_affects(
  * is the one you should change to add new group spells.
  */
 fn perform_mag_groups(
-    db: &DB,
+    game: &mut Game,
     level: i32,
     ch: &Rc<CharData>,
     tch: &Rc<CharData>,
@@ -588,10 +588,10 @@ fn perform_mag_groups(
             mag_points(level, ch, Some(tch), SPELL_HEAL, savetype);
         }
         SPELL_GROUP_ARMOR => {
-            mag_affects(db, level, ch, Some(tch), SPELL_ARMOR, savetype);
+            mag_affects(&game.db, level, ch, Some(tch), SPELL_ARMOR, savetype);
         }
         SPELL_GROUP_RECALL => {
-            spell_recall(db, level, Some(ch), Some(tch), None);
+            spell_recall(game, level, Some(ch), Some(tch), None);
         }
         _ => {}
     }
@@ -608,7 +608,7 @@ fn perform_mag_groups(
  * To add new group spells, you shouldn't have to change anything in
  * mag_groups -- just add a new case to perform_mag_groups.
  */
-pub fn mag_groups(db: &DB, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
+pub fn mag_groups(game: &mut Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
     if ch.is_none() {
         return;
     }
@@ -634,13 +634,13 @@ pub fn mag_groups(db: &DB, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32,
         if Rc::ptr_eq(ch, &tch) {
             continue;
         }
-        perform_mag_groups(db, level, ch, &tch, spellnum, savetype);
+        perform_mag_groups(game, level, ch, &tch, spellnum, savetype);
     }
 
     if !Rc::ptr_eq(&k, ch) && k.aff_flagged(AFF_GROUP) {
-        perform_mag_groups(db, level, ch, &k, spellnum, savetype);
+        perform_mag_groups(game, level, ch, &k, spellnum, savetype);
     }
-    perform_mag_groups(db, level, ch, ch, spellnum, savetype);
+    perform_mag_groups(game, level, ch, ch, spellnum, savetype);
 }
 
 /*

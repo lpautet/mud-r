@@ -304,7 +304,7 @@ pub fn spell_create_water(
 }
 
 pub fn spell_recall(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -316,10 +316,10 @@ pub fn spell_recall(
 
     let victim = victim.unwrap();
 
-    db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
-    db.char_from_room(victim);
-    db.char_to_room(victim, db.r_mortal_start_room.get());
-    db.act(
+    game.db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    game.db.char_from_room(victim);
+    game.db.char_to_room(victim, game.db.r_mortal_start_room.get());
+    game.db.act(
         "$n appears in the middle of the room.",
         true,
         Some(victim),
@@ -327,11 +327,11 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(db, victim, false);
+    look_at_room(game, victim, false);
 }
 
 pub fn spell_teleport(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -345,8 +345,8 @@ pub fn spell_teleport(
     let victim = victim.unwrap();
 
     loop {
-        to_room = rand_number(0, db.world.borrow().len() as u32);
-        if !db.room_flagged(
+        to_room = rand_number(0, game.db.world.borrow().len() as u32);
+        if !game.db.room_flagged(
             to_room as RoomRnum,
             ROOM_PRIVATE | ROOM_DEATH | ROOM_GODROOM,
         ) {
@@ -354,7 +354,7 @@ pub fn spell_teleport(
         }
     }
 
-    db.act(
+    game.db.act(
         "$n slowly fades out of existence and is gone.",
         false,
         Some(victim),
@@ -362,9 +362,9 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    db.char_from_room(victim);
-    db.char_to_room(victim, to_room as RoomRnum);
-    db.act(
+    game.db.char_from_room(victim);
+    game.db.char_to_room(victim, to_room as RoomRnum);
+    game.db.act(
         "$n slowly fades into existence.",
         false,
         Some(victim),
@@ -372,19 +372,18 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(db, victim, false);
+    look_at_room(game, victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 pub fn spell_summon(
-    game: &Game,
+    game: &mut Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
     _obj: Option<&Rc<ObjData>>,
 ) {
-    let db = &game.db;
     if ch.is_none() || victim.is_none() {
         return;
     }
@@ -397,7 +396,7 @@ pub fn spell_summon(
 
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
-            db.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
+            game.db.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
                    false, Some(ch), None, Some(victim), TO_CHAR);
             return;
         }
@@ -406,7 +405,7 @@ pub fn spell_summon(
             && !victim.plr_flagged(PLR_KILLER)
         {
             send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
-                                         ch.get_name(), db.world.borrow()[ch.in_room() as usize].name,
+                                         ch.get_name(), game.db.world.borrow()[ch.in_room() as usize].name,
                                          if ch.player.borrow().sex == SEX_MALE { "He" } else { "She" }).as_str());
 
             send_to_char(
@@ -425,7 +424,7 @@ pub fn spell_summon(
                     "{} failed summoning {} to {}.",
                     ch.get_name(),
                     victim.get_name(),
-                    db.world.borrow()[ch.in_room() as usize].name
+                    game.db.world.borrow()[ch.in_room() as usize].name
                 )
                 .as_str(),
             );
@@ -440,7 +439,7 @@ pub fn spell_summon(
         return;
     }
 
-    db.act(
+    game.db.act(
         "$n disappears suddenly.",
         true,
         Some(victim),
@@ -449,10 +448,10 @@ pub fn spell_summon(
         TO_ROOM,
     );
 
-    db.char_from_room(victim);
-    db.char_to_room(victim, ch.in_room());
+    game.db.char_from_room(victim);
+    game.db.char_to_room(victim, ch.in_room());
 
-    db.act(
+    game.db.act(
         "$n arrives suddenly.",
         true,
         Some(victim),
@@ -460,7 +459,7 @@ pub fn spell_summon(
         None,
         TO_ROOM,
     );
-    db.act(
+    game.db.act(
         "$n has summoned you!",
         false,
         Some(ch),
@@ -468,7 +467,7 @@ pub fn spell_summon(
         Some(victim),
         TO_VICT,
     );
-    look_at_room(db, victim, false);
+    look_at_room(game, victim, false);
 }
 
 pub fn spell_locate_object(

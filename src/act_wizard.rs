@@ -286,11 +286,10 @@ pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
 }
 
 pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let location;
 
     if {
-        location = find_target_room(db, ch, argument);
+        location = find_target_room(&game.db, ch, argument);
         location == NOWHERE
     } {
         return;
@@ -305,10 +304,10 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "disappears in a puff of smoke."
         }
     );
-    db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+    game.db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
-    db.char_from_room(ch);
-    db.char_to_room(ch, location);
+    game.db.char_from_room(ch);
+    game.db.char_to_room(ch, location);
 
     let x = ch.poofin();
     let buf = format!(
@@ -319,13 +318,12 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "appears with an ear-splitting bang."
         }
     );
-    db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+    game.db.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
-    look_at_room(db, ch, false);
+    look_at_room(game, ch, false);
 }
 
 pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
@@ -334,7 +332,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         send_to_char(ch, "Whom do you wish to transfer?\r\n");
     } else if "all" != buf {
         if {
-            victim = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+            victim = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
             victim.is_none()
         } {
             send_to_char(ch, NOPERSON);
@@ -346,7 +344,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 send_to_char(ch, "Go transfer someone your own size.\r\n");
                 return;
             }
-            db.act(
+            game.db.act(
                 "$n disappears in a mushroom cloud.",
                 false,
                 Some(victim),
@@ -354,9 +352,9 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 None,
                 TO_ROOM,
             );
-            db.char_from_room(victim);
-            db.char_to_room(victim, ch.in_room());
-            db.act(
+            game.db.char_from_room(victim);
+            game.db.char_to_room(victim, ch.in_room());
+            game.db.act(
                 "$n arrives from a puff of smoke.",
                 false,
                 Some(victim),
@@ -364,7 +362,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 None,
                 TO_ROOM,
             );
-            db.act(
+            game.db.act(
                 "$n has transferred you!",
                 false,
                 Some(ch),
@@ -372,7 +370,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 Some(victim),
                 TO_VICT,
             );
-            look_at_room(db, victim, false);
+            look_at_room(game, victim, false);
         }
     } else {
         /* Trans All */
@@ -381,7 +379,8 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             return;
         }
 
-        for i in game.descriptor_list.borrow().iter() {
+        let list = clone_vec(&game.descriptor_list);
+        for i in list {
             if i.state() == ConPlaying
                 && i.character.borrow().is_some()
                 && !Rc::ptr_eq(i.character.borrow().as_ref().unwrap(), ch)
@@ -391,7 +390,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 if victim.get_level() >= ch.get_level() {
                     continue;
                 }
-                db.act(
+                game.db.act(
                     "$n disappears in a mushroom cloud.",
                     false,
                     Some(victim),
@@ -399,9 +398,9 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     None,
                     TO_ROOM,
                 );
-                db.char_from_room(victim);
-                db.char_to_room(victim, ch.in_room());
-                db.act(
+                game.db.char_from_room(victim);
+                game.db.char_to_room(victim, ch.in_room());
+                game.db.act(
                     "$n arrives from a puff of smoke.",
                     false,
                     Some(victim),
@@ -409,7 +408,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     None,
                     TO_ROOM,
                 );
-                db.act(
+                game.db.act(
                     "$n has transferred you!",
                     false,
                     Some(ch),
@@ -417,7 +416,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     Some(victim),
                     TO_VICT,
                 );
-                look_at_room(db, victim, false);
+                look_at_room(game, victim, false);
             }
         }
     }
@@ -425,7 +424,6 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 }
 
 pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
 
@@ -435,7 +433,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     if buf.is_empty() {
         send_to_char(ch, "Whom do you wish to teleport?\r\n");
     } else if {
-        victim = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+        victim = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
         victim.is_none()
     } {
         send_to_char(ch, NOPERSON);
@@ -446,12 +444,12 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     } else if buf2.is_empty() {
         send_to_char(ch, "Where do you wish to send this person?\r\n");
     } else if {
-        target = find_target_room(db, ch, &buf2);
+        target = find_target_room(&game.db, ch, &buf2);
         target != NOWHERE
     } {
         let victim = victim.as_ref().unwrap();
         send_to_char(ch, OK);
-        db.act(
+        game.db.act(
             "$n disappears in a puff of smoke.",
             false,
             Some(victim),
@@ -459,9 +457,9 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             None,
             TO_ROOM,
         );
-        db.char_from_room(victim);
-        db.char_to_room(victim, target);
-        db.act(
+        game.db.char_from_room(victim);
+        game.db.char_to_room(victim, target);
+        game.db.act(
             "$n arrives from a puff of smoke.",
             false,
             Some(victim),
@@ -469,7 +467,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             None,
             TO_ROOM,
         );
-        db.act(
+        game.db.act(
             "$n has teleported you!",
             false,
             Some(ch),
@@ -477,7 +475,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             Some(victim),
             TO_VICT,
         );
-        look_at_room(db, victim, false);
+        look_at_room(game, victim, false);
     }
 }
 
