@@ -143,7 +143,7 @@ fn list_obj_to_char(game: &mut Game, list: &Vec<Rc<ObjData>>, ch: &CharData, mod
     }
 }
 
-fn diag_char_to_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn diag_char_to_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     struct Item {
         percent: i8,
         text: &'static str,
@@ -183,7 +183,7 @@ fn diag_char_to_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
         },
     ];
 
-    let pers = db.pers(i, ch);
+    let pers = game.db.pers(i, ch);
 
     let percent;
     if i.get_max_hit() > 0 {
@@ -212,7 +212,7 @@ fn diag_char_to_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     );
 }
 
-fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     let mut found;
     //struct obj_data *tmp_obj;
 
@@ -223,7 +223,7 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     if !RefCell::borrow(&i.player.borrow().description).is_empty() {
         send_to_char(ch, RefCell::borrow(&i.player.borrow().description).as_str());
     } else {
-        db.act(
+        game.db.act(
             "You see nothing special about $m.",
             false,
             Some(i),
@@ -233,20 +233,20 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
         );
     }
 
-    diag_char_to_char(db, i, ch);
+    diag_char_to_char(game, i, ch);
 
     found = false;
     for j in 0..NUM_WEARS {
-        if i.get_eq(j).is_some() && db.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
+        if i.get_eq(j).is_some() && game.db.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
             found = true;
         }
     }
 
     if found {
         send_to_char(ch, "\r\n"); /* act() does capitalization. */
-        db.act("$n is using:", false, Some(i), None, Some(ch), TO_VICT);
+        game.db.act("$n is using:", false, Some(i), None, Some(ch), TO_VICT);
         for j in 0..NUM_WEARS {
-            if i.get_eq(j).is_some() && db.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
+            if i.get_eq(j).is_some() && game.db.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
                 send_to_char(ch, WEAR_WHERE[j as usize]);
                 show_obj_to_char(i.get_eq(j).as_ref().unwrap(), ch, SHOW_OBJ_SHORT);
             }
@@ -254,7 +254,7 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
     if !Rc::ptr_eq(i, ch) && (ch.is_thief() || ch.get_level() >= LVL_IMMORT as u8) {
         found = false;
-        db.act(
+        game.db.act(
             "\r\nYou attempt to peek at $s inventory:",
             false,
             Some(i),
@@ -263,7 +263,7 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
             TO_VICT,
         );
         for tmp_obj in i.carrying.borrow().iter() {
-            if db.can_see_obj(ch, tmp_obj) && rand_number(0, 20) < ch.get_level() as u32 {
+            if game.db.can_see_obj(ch, tmp_obj) && rand_number(0, 20) < ch.get_level() as u32 {
                 show_obj_to_char(tmp_obj, ch, SHOW_OBJ_SHORT);
                 found = true;
             }
@@ -275,7 +275,7 @@ fn look_at_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
 }
 
-fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     const POSITIONS: [&str; 9] = [
         " is lying here, dead.",
         " is lying here, mortally wounded.",
@@ -304,7 +304,7 @@ fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
         send_to_char(ch, i.player.borrow().long_descr.as_str());
 
         if i.aff_flagged(AFF_SANCTUARY) {
-            db.act(
+            game.db.act(
                 "...$e glows with a bright light!",
                 false,
                 Some(i),
@@ -314,7 +314,7 @@ fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
             );
         }
         if i.aff_flagged(AFF_BLIND) {
-            db.act(
+            game.db.act(
                 "...$e is groping around blindly!",
                 false,
                 Some(i),
@@ -366,7 +366,7 @@ fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
                 if i.in_room() == i.fighting().as_ref().unwrap().in_room() {
                     send_to_char(
                         ch,
-                        format!("{}!", db.pers(i.fighting().as_ref().unwrap(), ch.as_ref()))
+                        format!("{}!", game.db.pers(i.fighting().as_ref().unwrap(), ch.as_ref()))
                             .as_str(),
                     );
                 } else {
@@ -389,7 +389,7 @@ fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     send_to_char(ch, "\r\n");
 
     if i.aff_flagged(AFF_SANCTUARY) {
-        db.act(
+        game.db.act(
             "...$e glows with a bright light!",
             false,
             Some(i),
@@ -400,12 +400,12 @@ fn list_one_char(db: &DB, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
 }
 
-fn list_char_to_char(db: &DB, list: &Vec<Rc<CharData>>, ch: &Rc<CharData>) {
+fn list_char_to_char(game: &mut Game, list: &Vec<Rc<CharData>>, ch: &Rc<CharData>) {
     for i in list {
         if !Rc::ptr_eq(i, &ch) {
-            if db.can_see(ch.as_ref(), i) {
-                list_one_char(db, i, &ch);
-            } else if db.is_dark(ch.in_room())
+            if game.db.can_see(ch.as_ref(), i) {
+                list_one_char(game, i, &ch);
+            } else if game.db.is_dark(ch.in_room())
                 && !ch.can_see_in_dark()
                 && i.aff_flagged(AFF_INFRAVISION)
             {
@@ -561,9 +561,10 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
         false,
     );
     send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
+    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
     list_char_to_char(
-        &game.db,
-        game.db.world.borrow()[ch.in_room() as usize]
+        game,
+        room
             .peoples
             .borrow()
             .as_ref(),
@@ -747,7 +748,7 @@ fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<String> {
  * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
  * suggested fix to this problem.
  */
-fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
+fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let mut i = 0;
     let mut found = false;
     let mut found_char: Option<Rc<CharData>> = None;
@@ -762,7 +763,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
         return;
     }
 
-    let bits = db.generic_find(
+    let bits = game.db.generic_find(
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP | FIND_CHAR_ROOM) as i64,
         ch,
@@ -773,10 +774,10 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
     /* Is the target a character? */
     if found_char.is_some() {
         let found_char = found_char.as_ref().unwrap();
-        look_at_char(db, found_char, ch);
+        look_at_char(game, found_char, ch);
         if !Rc::ptr_eq(ch, found_char) {
-            if db.can_see(found_char, ch) {
-                db.act(
+            if game.db.can_see(found_char, ch) {
+                game.db.act(
                     "$n looks at you.",
                     true,
                     Some(ch),
@@ -785,7 +786,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
                     TO_VICT,
                 );
             }
-            db.act(
+            game.db.act(
                 "$n looks at $N.",
                 true,
                 Some(ch),
@@ -807,7 +808,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
     /* Does the argument match an extra desc in the room? */
     let desc = find_exdesc(
         &arg,
-        &db.world.borrow()[ch.in_room() as usize].ex_descriptions,
+        &game.db.world.borrow()[ch.in_room() as usize].ex_descriptions,
     );
     if desc.is_some() {
         i += 1;
@@ -823,7 +824,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some() && db.can_see_obj(ch, ch.get_eq(j).as_ref().unwrap()) {
+        if ch.get_eq(j).is_some() && game.db.can_see_obj(ch, ch.get_eq(j).as_ref().unwrap()) {
             let desc = find_exdesc(&arg, &ch.get_eq(j).as_ref().unwrap().ex_descriptions);
             if desc.is_some() {
                 i += 1;
@@ -837,7 +838,7 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
 
     /* Does the argument match an extra desc in the char's inventory? */
     for obj in ch.carrying.borrow().iter() {
-        if db.can_see_obj(ch, obj) {
+        if game.db.can_see_obj(ch, obj) {
             let desc = find_exdesc(&arg, &obj.ex_descriptions);
             if desc.is_some() {
                 i += 1;
@@ -850,12 +851,12 @@ fn look_at_target(db: &DB, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc of an object in the room? */
-    for obj in db.world.borrow()[ch.in_room() as usize]
+    for obj in game.db.world.borrow()[ch.in_room() as usize]
         .contents
         .borrow()
         .iter()
     {
-        if db.can_see_obj(ch, obj) {
+        if game.db.can_see_obj(ch, obj) {
             if let Some(desc) = find_exdesc(&arg, &obj.ex_descriptions) {
                 i += 1;
                 if i == fnum {
@@ -890,9 +891,10 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(ch, "It is pitch black...\r\n");
+        let room = db.world.borrow()[ch.in_room() as usize].clone();
         list_char_to_char(
-            db,
-            &db.world.borrow()[ch.in_room() as usize].peoples.borrow(),
+            game,
+            &room.peoples.borrow(),
             ch,
         );
         /* glowing red eyes */
@@ -907,7 +909,7 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             if arg.is_empty() {
                 send_to_char(ch, "Read what?\r\n");
             } else {
-                look_at_target(&game.db, ch, &mut arg);
+                look_at_target(game, ch, &mut arg);
             }
             return;
         }
@@ -925,9 +927,9 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         {
             look_in_direction(game, ch, look_type.unwrap() as i32);
         } else if is_abbrev(arg.as_ref(), "at") {
-            look_at_target(&game.db, ch, arg2.as_ref());
+            look_at_target(game, ch, arg2.as_ref());
         } else {
-            look_at_target(&game.db, ch, arg.as_ref());
+            look_at_target(game, ch, arg.as_ref());
         }
     }
 }
@@ -946,7 +948,7 @@ pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     }
 
     /* look_at_target() eats the number. */
-    look_at_target(&game.db, ch, &arg);
+    look_at_target(game, ch, &arg);
     let mut tmp_char = None;
     let mut tmp_object = None;
     game.db.generic_find(
@@ -2196,11 +2198,11 @@ pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         } {
             send_to_char(ch, NOPERSON);
         } else {
-            diag_char_to_char(&game.db, vict.as_ref().unwrap(), ch);
+            diag_char_to_char(game, vict.as_ref().unwrap(), ch);
         }
     } else {
         if ch.fighting().is_some() {
-            diag_char_to_char(&game.db, ch.fighting().as_ref().unwrap(), ch);
+            diag_char_to_char(game, ch.fighting().as_ref().unwrap(), ch);
         } else {
             send_to_char(ch, "Diagnose who?\r\n");
         }
