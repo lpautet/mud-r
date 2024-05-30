@@ -313,7 +313,7 @@ impl DB {
     }
     
     /* remove a char from the list of fighting chars */
-    pub fn stop_fighting(&self, ch: &Rc<CharData>) {
+    pub fn stop_fighting(&mut self, ch: &Rc<CharData>) {
         self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
         ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
@@ -321,7 +321,7 @@ impl DB {
         update_pos(ch);
     }
 
-    pub fn make_corpse(&self, ch: &Rc<CharData>) {
+    pub fn make_corpse(&mut self, ch: &Rc<CharData>) {
         let mut corpse = ObjData::new();
 
         corpse.item_number = NOTHING;
@@ -348,7 +348,7 @@ impl DB {
         }
 
         let corpse = Rc::from(corpse);
-        self.object_list.borrow_mut().push(corpse.clone());
+        self.object_list.push(corpse.clone());
 
         /* transfer character's inventory to the corpse */
         for o in ch.carrying.borrow().iter() {
@@ -420,7 +420,7 @@ impl DB {
         }
     }
 
-    pub fn raw_kill(&self, ch: &Rc<CharData>) {
+    pub fn raw_kill(&mut self, ch: &Rc<CharData>) {
         if ch.fighting().is_some() {
             self.stop_fighting(ch);
         }
@@ -437,7 +437,7 @@ impl DB {
     }
 }
 
-pub fn die(ch: &Rc<CharData>, game: &Game) {
+pub fn die(ch: &Rc<CharData>, game: &mut Game) {
     gain_exp(ch, -(ch.get_exp() / 2), game);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);

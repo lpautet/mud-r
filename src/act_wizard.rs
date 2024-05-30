@@ -3463,7 +3463,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     }
                 }
             }
-            for _ in game.db.object_list.borrow().iter() {
+            for _ in game.db.object_list.iter() {
                 k += 1;
             }
             send_to_char(
@@ -3961,7 +3961,7 @@ const SET_FIELDS: [SetStruct; 52] = [
     },
 ];
 
-fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
+fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
     let mut on = false;
     let mut off = false;
     let mut value = 0;
@@ -4433,7 +4433,6 @@ fn perform_set(db: &DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_a
 }
 
 pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut player_i = None;
     let mut is_file = false;
     let mut is_player = false;
@@ -4473,7 +4472,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     if !is_file {
         if is_player {
             if {
-                vict = db.get_player_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = game.db.get_player_vis(ch, &mut name, None, FIND_CHAR_WORLD);
                 vict.is_none()
             } {
                 send_to_char(ch, "There is no such player.\r\n");
@@ -4482,7 +4481,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         } else {
             /* is_mob */
             if {
-                vict = db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = game.db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
                 vict.is_none()
             } {
                 send_to_char(ch, "There is no such creature.\r\n");
@@ -4494,7 +4493,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         let mut cbuf = CharData::new();
         clear_char(&mut cbuf);
         if {
-            player_i = db.load_char(&name, &mut tmp_store);
+            player_i = game.db.load_char(&name, &mut tmp_store);
             player_i.is_some()
         } {
             store_to_char(&tmp_store, &mut cbuf);
@@ -4518,22 +4517,22 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     };
 
     /* perform the set */
-    let retval = perform_set(db, ch, vict.as_ref().unwrap(), mode as i32, &buf);
+    let retval = perform_set(&mut game.db, ch, vict.as_ref().unwrap(), mode as i32, &buf);
 
     /* save the character if a change was made */
     if retval {
         if !is_file && !vict.as_ref().unwrap().is_npc() {
-            db.save_char(vict.as_ref().unwrap());
+            game.db.save_char(vict.as_ref().unwrap());
         }
         if is_file {
-            db.char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
+            game.db.char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
 
             unsafe {
                 let player_slice = slice::from_raw_parts(
                     &mut tmp_store as *mut _ as *mut u8,
                     mem::size_of::<CharFileU>(),
                 );
-                db.player_fl
+                game.db.player_fl
                     .borrow_mut()
                     .as_mut()
                     .unwrap()

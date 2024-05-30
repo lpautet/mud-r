@@ -460,7 +460,7 @@ impl Game {
 
         /* objects */
         let mut old_object_list = vec![];
-        for o in self.db.object_list.borrow().iter() {
+        for o in self.db.object_list.iter() {
             old_object_list.push(o.clone());
         }
         for j in old_object_list.iter() {

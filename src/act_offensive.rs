@@ -189,7 +189,6 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
 
 pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32) {
     let mut arg = String::new();
-    let db = &game.db;
 
     if ch.get_level() < LVL_IMPL as u8 || ch.is_npc() {
         do_hit(game, ch, argument, cmd, subcmd);
@@ -201,14 +200,14 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
         send_to_char(ch, "Kill who?\r\n");
     } else {
         if {
-            vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
             vict.is_none()
         } {
             send_to_char(ch, "They aren't here.\r\n");
         } else if Rc::ptr_eq(ch, vict.as_ref().unwrap()) {
             send_to_char(ch, "Your mother would be so sad.. :(\r\n");
         } else {
-            db.act(
+            game.db.act(
                 "You chop $M to pieces!  Ah!  The blood!",
                 false,
                 Some(ch),
@@ -216,7 +215,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(vict.as_ref().unwrap()),
                 TO_CHAR,
             );
-            db.act(
+            game.db.act(
                 "$N chops you to pieces!",
                 false,
                 Some(vict.as_ref().unwrap()),
@@ -224,7 +223,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(ch),
                 TO_CHAR,
             );
-            db.act(
+            game.db.act(
                 "$n brutally slays $N!",
                 false,
                 Some(ch),
@@ -232,7 +231,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(vict.as_ref().unwrap()),
                 TO_NOTVICT,
             );
-            db.raw_kill(vict.as_ref().unwrap());
+            game.db.raw_kill(vict.as_ref().unwrap());
         }
     }
 }
@@ -517,7 +516,6 @@ pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
 pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
-    let db = &game.db;
 
     if ch.is_npc() || ch.get_skill(SKILL_RESCUE) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
@@ -527,7 +525,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     one_argument(argument, &mut arg);
     let vict;
     if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(ch, "Whom do you want to rescue?\r\n");
@@ -544,7 +542,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
     let mut tmp_ch = None;
     {
-        let w = db.world.borrow();
+        let w = game.db.world.borrow();
         for tch in w[ch.in_room() as usize].peoples.borrow().iter() {
             if tch.fighting().is_some() && Rc::ptr_eq(tch.fighting().as_ref().unwrap(), vict) {
                 tmp_ch = Some(tch.clone());
@@ -554,7 +552,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
 
     if tmp_ch.is_none() {
-        db.act(
+        game.db.act(
             "But nobody is fighting $M!",
             false,
             Some(ch),
@@ -573,7 +571,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         return;
     }
     send_to_char(ch, "Banzai!  To the rescue...\r\n");
-    db.act(
+    game.db.act(
         "You are rescued by $N, you are confused!",
         false,
         Some(vict),
@@ -581,7 +579,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         Some(ch),
         TO_CHAR,
     );
-    db.act(
+    game.db.act(
         "$n heroically rescues $N!",
         false,
         Some(ch),
@@ -591,17 +589,17 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     );
 
     if vict.fighting().is_some() && Rc::ptr_eq(vict.fighting().as_ref().unwrap(), &tmp_ch) {
-        db.stop_fighting(vict);
+        game.db.stop_fighting(vict);
     }
     if tmp_ch.fighting().is_some() {
-        db.stop_fighting(&tmp_ch);
+        game.db.stop_fighting(&tmp_ch);
     }
     if ch.fighting().is_some() {
-        db.stop_fighting(ch);
+        game.db.stop_fighting(ch);
     }
 
-    db.set_fighting(ch, &tmp_ch, game);
-    db.set_fighting(&tmp_ch, ch, game);
+    game.db.set_fighting(ch, &tmp_ch, game);
+    game.db.set_fighting(&tmp_ch, ch, game);
 
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }

@@ -380,7 +380,7 @@ pub fn affect_join(
 
 impl DB {
     /* move a player out of a room */
-    pub fn char_from_room(&self, ch: &Rc<CharData>) {
+    pub fn char_from_room(&mut self, ch: &Rc<CharData>) {
         if ch.in_room() == NOWHERE {
             error!("SYSERR: NULL character or NOWHERE in char_from_room");
             process::exit(1);
@@ -406,7 +406,7 @@ impl DB {
     }
 
     /* place a character in a room */
-    pub(crate) fn char_to_room(&self, ch: &Rc<CharData>, room: RoomRnum) {
+    pub(crate) fn char_to_room(&mut self, ch: &Rc<CharData>, room: RoomRnum) {
         if room == NOWHERE || room >= self.world.borrow().len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
@@ -691,7 +691,7 @@ impl DB {
 
     /* search the entire world for an object number, and return a pointer  */
     pub(crate) fn get_obj_num(&self, nr: ObjRnum) -> Option<Rc<ObjData>> {
-        for o in self.object_list.borrow_mut().iter() {
+        for o in self.object_list.iter() {
             if o.get_obj_rnum() == nr {
                 return Some(o.clone());
             }
@@ -900,7 +900,6 @@ impl DB {
         }
 
         self.object_list
-            .borrow_mut()
             .retain(|o| !Rc::ptr_eq(&obj, o));
 
         if obj.get_obj_rnum() != NOTHING {
@@ -1398,7 +1397,7 @@ impl DB {
         }
 
         /* ok.. no luck yet. scan the entire obj list   */
-        for i in self.object_list.borrow().iter() {
+        for i in self.object_list.iter() {
             if isname(&name, &i.name.borrow()) {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
@@ -1567,7 +1566,7 @@ pub fn money_desc(amount: i32) -> &'static str {
 }
 
 impl DB {
-    pub fn create_money(&self, amount: i32) -> Option<Rc<ObjData>> {
+    pub fn create_money(&mut self, amount: i32) -> Option<Rc<ObjData>> {
         if amount <= 0 {
             error!("SYSERR: Try to create negative or 0 money. ({})", amount);
             return None;
@@ -1613,7 +1612,7 @@ impl DB {
 
         obj.ex_descriptions.push(new_descr);
         let ret = Rc::from(obj);
-        self.object_list.borrow_mut().push(ret.clone());
+        self.object_list.push(ret.clone());
 
         Some(ret)
     }

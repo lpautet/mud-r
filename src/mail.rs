@@ -135,15 +135,14 @@ impl MailSystem {
 /* -------------------------------------------------------------------------- */
 
 fn mail_recip_ok(game: &mut Game, name: &str) -> bool {
-    let db = &game.db;
     let mut ret = false;
     let mut tmp_store = CharFileU::new();
     let mut victim = CharData::new();
     clear_char(&mut victim);
-    if db.load_char(name, &mut tmp_store).is_some() {
+    if game.db.load_char(name, &mut tmp_store).is_some() {
         store_to_char(&tmp_store, &mut victim);
         let victim = &Rc::from(victim);
-        db.char_to_room(&victim, 0);
+        game.db.char_to_room(&victim, 0);
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
@@ -691,8 +690,7 @@ pub fn postmaster(
     if !(cmd_is(cmd, "mail") || cmd_is(cmd, "check") || cmd_is(cmd, "receive")) {
         return false;
     }
-    let db = &game.db;
-    if db.no_mail.get() {
+    if game.db.no_mail.get() {
         send_to_char(
             ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
@@ -711,7 +709,7 @@ pub fn postmaster(
         true
     } else if cmd_is(cmd, "check") {
         postmaster_check_mail(
-            db,
+            &mut game.db,
             ch,
             me.downcast_ref::<Rc<CharData>>().unwrap(),
             cmd,
@@ -720,7 +718,7 @@ pub fn postmaster(
         true
     } else if cmd_is(cmd, "receive") {
         postmaster_receive_mail(
-            db,
+            &mut game.db,
             ch,
             me.downcast_ref::<Rc<CharData>>().unwrap(),
             cmd,
@@ -844,19 +842,18 @@ fn postmaster_check_mail(
 }
 
 fn postmaster_receive_mail(
-    db: &DB,
+    db: &mut DB,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
     _cmd: i32,
     _arg: &str,
 ) {
-    let m = &mut db.mails.borrow_mut();
-    if !m.has_mail(ch.get_idnum()) {
+    if !db.mails.borrow_mut().has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
         db.act(buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
-    while m.has_mail(ch.get_idnum()) {
+    while db.mails.borrow_mut().has_mail(ch.get_idnum()) {
         let obj = db.create_obj(
             NOTHING,
             "mail paper letter",
@@ -869,7 +866,7 @@ fn postmaster_receive_mail(
             10,
         );
 
-        let mail_content = m.read_delete(db, ch.get_idnum());
+        let mail_content = db.mails.borrow_mut().read_delete(db, ch.get_idnum());
         let mail_content = if mail_content.is_some() {
             mail_content.unwrap()
         } else {

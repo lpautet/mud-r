@@ -2068,7 +2068,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
             }
         }
         num = 0;
-        for k in game.db.object_list.borrow().iter() {
+        for k in game.db.object_list.iter() {
             if game.db.can_see_obj(ch, k) && isname(arg, &k.name.borrow()) {
                 found = true;
                 print_object_location(

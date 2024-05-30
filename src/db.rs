@@ -121,7 +121,7 @@ pub struct DB {
     /* index table for mobile file	 */
     pub mob_protos: Vec<Rc<CharData>>,
     /* prototypes for mobs		 */
-    pub object_list: RefCell<Vec<Rc<ObjData>>>,
+    pub object_list: Vec<Rc<ObjData>>,
     /* global linked list of objs	 */
     pub obj_index: Vec<IndexData>,
     /* index table for object file	 */
@@ -467,7 +467,7 @@ impl DB {
         self.character_list.clear();
 
         /* Active Objects */
-        self.object_list.borrow_mut().clear();
+        self.object_list.clear();
 
         /* Rooms */
         for cnt in 0..self.world.borrow().len() {
@@ -511,7 +511,7 @@ impl DB {
             character_list: vec![],
             mob_index: vec![],
             mob_protos: vec![],
-            object_list: RefCell::new(vec![]),
+            object_list: vec![],
             obj_index: vec![],
             obj_proto: vec![],
             zone_table: RefCell::new(vec![]),
@@ -2382,7 +2382,7 @@ impl DB {
 
     /* create an object, and add it to the object list */
     pub fn create_obj(
-        &self,
+        &mut self,
         num: ObjVnum,
         name: &str,
         short_description: &str,
@@ -2406,7 +2406,7 @@ impl DB {
         obj.set_obj_cost(cost);
         obj.set_obj_rent(rent);
         let ret = Rc::from(obj);
-        self.object_list.borrow_mut().push(ret.clone());
+        self.object_list.push(ret.clone());
 
         ret
     }
@@ -2430,7 +2430,7 @@ impl DB {
 
         let obj = self.obj_proto[i as usize].make_copy();
         let rc = Rc::from(obj);
-        self.object_list.borrow_mut().push(rc.clone());
+        self.object_list.push(rc.clone());
 
         self.obj_index[i as usize].number+= 1;
 
@@ -2549,8 +2549,9 @@ impl Game {
                     if self.db.mob_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
                         let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as MobVnum;
                         mob = self.db.read_mobile(nr, REAL);
+                        let room = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum;
                         self.db
-                            .char_to_room(mob.as_ref().unwrap(), self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum);
+                            .char_to_room(mob.as_ref().unwrap(), room);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;

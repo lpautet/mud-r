@@ -488,7 +488,7 @@ pub fn spell_locate_object(
     name.push_str(&obj.name.borrow());
     let mut j = level / 2;
 
-    for i in db.object_list.borrow().iter() {
+    for i in db.object_list.iter() {
         if !isname(&name, &i.name.borrow()) {
             continue;
         }

@@ -3378,8 +3378,8 @@ fn perform_dupe_check(game: &mut Game, d: &Rc<DescriptorData>) -> bool {
      * choose one if one is available (while still deleting the other
      * duplicates, though theoretically none should be able to exist).
      */
-
-    for ch in game.db.character_list.iter() {
+let list = clone_vec2(&game.db.character_list);
+    for ch in list.iter() {
         if ch.is_npc() {
             continue;
         }

@@ -293,8 +293,7 @@ fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
  * Used by Tim and Tom
  */
 fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharData>) -> bool {
-    let db = &game.db;
-    let ch_bad_guy = db.world.borrow()[ch_hero.in_room() as usize]
+    let ch_bad_guy = game.db.world.borrow()[ch_hero.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -306,7 +305,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         return false;
     }
 
-    db.act(
+    game.db.act(
         "You bravely rescue $N.\r\n",
         false,
         Some(ch_hero),
@@ -314,7 +313,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         Some(ch_victim),
         TO_CHAR,
     );
-    db.act(
+    game.db.act(
         "You are rescued by $N, your loyal friend!\r\n",
         false,
         Some(ch_victim),
@@ -322,7 +321,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         Some(ch_hero),
         TO_CHAR,
     );
-    db.act(
+    game.db.act(
         "$n heroically rescues $N.",
         false,
         Some(ch_hero),
@@ -332,14 +331,14 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
     );
     let ch_bad_guy = ch_bad_guy.as_ref().unwrap();
     if ch_bad_guy.fighting().is_some() {
-        db.stop_fighting(ch_bad_guy);
+        game.db.stop_fighting(ch_bad_guy);
     }
     if ch_hero.fighting().is_some() {
-        db.stop_fighting(ch_hero);
+        game.db.stop_fighting(ch_hero);
     }
 
-    db.set_fighting(ch_hero, ch_bad_guy, game);
-    db.set_fighting(ch_bad_guy, ch_hero, game);
+    game.db.set_fighting(ch_hero, ch_bad_guy, game);
+    game.db.set_fighting(ch_bad_guy, ch_hero, game);
     return true;
 }
 

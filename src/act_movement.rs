@@ -261,9 +261,10 @@ pub fn do_simple_move(
     }
     was_in = ch.in_room();
     game.db.char_from_room(ch);
+    let room = game.db.world.borrow()[was_in as usize].clone();
     game.db.char_to_room(
         ch,
-        game.db.world.borrow()[was_in as usize].dir_option[dir as usize]
+        room.dir_option[dir as usize]
             .as_ref()
             .unwrap()
             .to_room
