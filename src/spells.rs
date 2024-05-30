@@ -269,7 +269,7 @@ pub struct AttackHitType {
  * Special spells appear below.
  */
 pub fn spell_create_water(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
@@ -296,8 +296,8 @@ pub fn spell_create_water(
                 obj.set_obj_val(2, LIQ_WATER);
                 obj.set_obj_val(1, obj.get_obj_val(1) + water);
                 name_to_drinkcon(Some(obj), LIQ_WATER);
-                weight_change_object(db, obj, water);
-                db.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+                weight_change_object(game, obj, water);
+                game.db.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
             }
         }
     }

@@ -585,7 +585,7 @@ pub fn call_magic(
     if is_set!(sinfo_routines, MAG_MANUAL) {
         match spellnum {
             SPELL_CHARM => spell_charm(&game.db, level, Some(caster), cvict, ovict),
-            SPELL_CREATE_WATER => spell_create_water(&game.db, level, Some(caster), cvict, ovict),
+            SPELL_CREATE_WATER => spell_create_water(game, level, Some(caster), cvict, ovict),
             SPELL_DETECT_POISON => spell_detect_poison(&game.db, level, Some(caster), cvict, ovict),
             SPELL_ENCHANT_WEAPON => {
                 spell_enchant_weapon(&game.db, level, Some(caster), cvict, ovict)
