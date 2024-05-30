@@ -575,7 +575,7 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
-        mag_summons(&game.db, level, Some(caster), ovict, spellnum, savetype);
+        mag_summons(game, level, Some(caster), ovict, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {

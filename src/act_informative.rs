@@ -1911,7 +1911,7 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         }
     } else {
         /* print only FIRST char, not all. */
-        for i in game.db.character_list.borrow().iter() {
+        for i in game.db.character_list.iter() {
             if i.in_room() == NOWHERE || Rc::ptr_eq(i, ch) {
                 continue;
             }
@@ -2045,7 +2045,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     } else {
         let mut found = false;
         let mut num = 0;
-        for i in game.db.character_list.borrow().iter() {
+        for i in game.db.character_list.iter() {
             if game.db.can_see(ch, i)
                 && i.in_room() != NOWHERE
                 && isname(arg, &i.player.borrow().name)

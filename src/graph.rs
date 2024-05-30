@@ -66,7 +66,7 @@ fn valid_edge(game: &mut Game, x: RoomRnum, y: usize) -> bool {
     {
         return false;
     }
-    if !game.config.track_through_doors.get() && is_closed(db, x, y) {
+    if !game.config.track_through_doors && is_closed(db, x, y) {
         return false;
     }
     if db.room_flagged(toroom(db, x, y), ROOM_NOTRACK) || is_marked(db, toroom(db, x, y)) {

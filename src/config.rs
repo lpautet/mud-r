@@ -38,8 +38,6 @@
 * However, if you decide you want to have an all-out knock-down drag-out
 * PK Mud, just set pk_allowed to YES - and anything goes.
 */
-use std::cell::Cell;
-
 use crate::structs::{RoomRnum, LVL_GOD};
 
 pub const PK_ALLOWED: bool = false;
@@ -237,7 +235,7 @@ pub struct Config {
      * You can experiment with the setting of NAMESERVER_IS_SLOW on-line using
      * the SLOWNS command from within the MUD.
      */
-    pub nameserver_is_slow: Cell<bool>,
+    pub nameserver_is_slow: bool,
 
     /*
      * You can define or not define TRACK_THOUGH_DOORS, depending on whether
@@ -245,7 +243,7 @@ pub struct Config {
      * hidden doors. A setting of 'NO' means to not go through the doors
      * while 'YES' will pass through doors to find the target.
      */
-    pub track_through_doors: Cell<bool>,
+    pub track_through_doors: bool,
 }
 
 pub const MENU: &str = "

@@ -1589,23 +1589,23 @@ pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     if arg.is_empty() {
         info!("(GC) Shutdown by {}.", ch.get_name());
         game.send_to_all("Shutting down.\r\n");
-        game.circle_shutdown.set(true);
+        game.circle_shutdown = true;
     } else if arg == "reboot" {
         info!("(GC) Reboot by {}.", ch.get_name());
         game.send_to_all("Rebooting.. come back in a minute or two.\r\n");
         touch(Path::new(FASTBOOT_FILE)).unwrap();
-        game.circle_shutdown.set(true);
-        game.circle_reboot.set(true);
+        game.circle_shutdown = true;
+        game.circle_reboot = true;
     } else if arg == "die" {
         info!("(GC) Shutdown by {}.", ch.get_name());
         game.send_to_all("Shutting down for maintenance.\r\n");
         touch(Path::new(KILLSCRIPT_FILE)).unwrap();
-        game.circle_shutdown.set(true);
+        game.circle_shutdown = true;
     } else if arg == "pause" {
         info!("(GC) Shutdown by {}.", ch.get_name());
         game.send_to_all("Shutting down for maintenance.\r\n");
         touch(Path::new(PAUSE_FILE)).unwrap();
-        game.circle_shutdown.set(true);
+        game.circle_shutdown = true;
     } else {
         send_to_char(ch, "Unknown shutdown option.\r\n");
     }
@@ -1929,7 +1929,6 @@ pub fn do_return(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
 }
 
 pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
 
@@ -1948,16 +1947,16 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let r_num;
 
         if {
-            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num = game.db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
         } {
             send_to_char(ch, "There is no monster with that number.\r\n");
             return;
         }
-        let mob = db.read_mobile(r_num, REAL);
-        db.char_to_room(mob.as_ref().unwrap(), ch.in_room());
+        let mob = game.db.read_mobile(r_num, REAL);
+        game.db.char_to_room(mob.as_ref().unwrap(), ch.in_room());
 
-        db.act(
+        game.db.act(
             "$n makes a quaint, magical gesture with one hand.",
             true,
             Some(ch),
@@ -1965,7 +1964,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        db.act(
+        game.db.act(
             "$n has created $N!",
             false,
             Some(ch),
@@ -1973,7 +1972,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             Some(mob.as_ref().unwrap()),
             TO_ROOM,
         );
-        db.act(
+        game.db.act(
             "You create $N.",
             false,
             Some(ch),
@@ -1985,19 +1984,19 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let r_num;
 
         if {
-            r_num = db.real_object(buf2.parse::<i16>().unwrap());
+            r_num = game.db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
         } {
             send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let obj = db.read_object(r_num, REAL).unwrap();
+        let obj = game.db.read_object(r_num, REAL).unwrap();
         if LOAD_INTO_INVENTORY {
             DB::obj_to_char(&obj, ch);
         } else {
-            db.obj_to_room(&obj, ch.in_room());
+            game.db.obj_to_room(&obj, ch.in_room());
         }
-        db.act(
+        game.db.act(
             "$n makes a strange magical gesture.",
             true,
             Some(ch),
@@ -2005,7 +2004,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        db.act(
+        game.db.act(
             "$n has created $p!",
             false,
             Some(ch),
@@ -2013,7 +2012,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        db.act(
+        game.db.act(
             "You create $p.",
             false,
             Some(ch),
@@ -2027,7 +2026,6 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 }
 
 pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
 
@@ -2046,29 +2044,29 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         let r_num;
 
         if {
-            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num = game.db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
         } {
             send_to_char(ch, "There is no monster with that number.\r\n");
             return;
         }
-        let mob = db.read_mobile(r_num, REAL);
-        db.char_to_room(mob.as_ref().unwrap(), 0);
-        do_stat_character(db, ch, mob.as_ref().unwrap());
-        db.extract_char(mob.as_ref().unwrap());
+        let mob = game.db.read_mobile(r_num, REAL);
+        game.db.char_to_room(mob.as_ref().unwrap(), 0);
+        do_stat_character(&game.db, ch, mob.as_ref().unwrap());
+        game.db.extract_char(mob.as_ref().unwrap());
     } else if is_abbrev(&buf, "obj") {
         let r_num;
 
         if {
-            r_num = db.real_object(buf2.parse::<i16>().unwrap());
+            r_num = game.db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
         } {
             send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let obj = db.read_object(r_num, REAL);
-        do_stat_object(db, ch, obj.as_ref().unwrap());
-        db.extract_obj(obj.as_ref().unwrap());
+        let obj = game.db.read_object(r_num, REAL);
+        do_stat_object(&game.db, ch, obj.as_ref().unwrap());
+        game.db.extract_obj(obj.as_ref().unwrap());
     } else {
         send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
@@ -2976,7 +2974,6 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 }
 
 pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -2984,10 +2981,11 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         send_to_char(ch, "You must specify a zone.\r\n");
         return;
     }
-    let mut i = db.zone_table.borrow().len();
+    let zone_count = game.db.zone_table.borrow().len();
+    let mut i = zone_count;
     if arg.starts_with('*') {
-        for i in 0..db.zone_table.borrow().len() {
-            db.reset_zone(game, i);
+        for i in 0..zone_count {
+            game.reset_zone( i);
         }
         send_to_char(ch, "Reset world.\r\n");
         game.mudlog(
@@ -2998,29 +2996,29 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         );
         return;
     } else if arg.starts_with('.') {
-        i = db.world.borrow()[ch.in_room() as usize].zone as usize;
+        i = game.db.world.borrow()[ch.in_room() as usize].zone as usize;
     } else {
         let j = arg.parse::<i32>();
         if j.is_err() {
             return;
         };
         let j = j.unwrap();
-        for ii in 0..db.zone_table.borrow().len() {
-            if db.zone_table.borrow()[ii].number == j as i16 {
+        for ii in 0..game.db.zone_table.borrow().len() {
+            if game.db.zone_table.borrow()[ii].number == j as i16 {
                 i = ii;
                 break;
             }
         }
     }
-    if i < db.zone_table.borrow().len() {
-        db.reset_zone(game, i as usize);
+    if i < game.db.zone_table.borrow().len() {
+        game.reset_zone( i as usize);
         send_to_char(
             ch,
             format!(
                 "Reset zone {} (#{}): {}.\r\n",
                 i,
-                db.zone_table.borrow()[i].number,
-                db.zone_table.borrow()[i].name
+                game.db.zone_table.borrow()[i].number,
+                game.db.zone_table.borrow()[i].name
             )
             .as_str(),
         );
@@ -3032,7 +3030,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 "(GC) {} reset zone {} ({})",
                 ch.get_name(),
                 i,
-                db.zone_table.borrow()[i].name
+                game.db.zone_table.borrow()[i].name
             )
             .as_str(),
         );
@@ -3456,7 +3454,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             let mut j = 0;
             let mut k = 0;
             let mut con = 0;
-            for vict in db.character_list.borrow().iter() {
+            for vict in db.character_list.iter() {
                 if vict.is_npc() {
                     j += 1;
                 } else if db.can_see(ch, vict) {

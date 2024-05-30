@@ -47,7 +47,7 @@ use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{ hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
+use crate::util::{hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
 
 mod act_comm;
 mod act_informative;
@@ -151,10 +151,10 @@ pub struct Game {
     db: DB,
     mother_desc: Option<TcpListener>,
     descriptor_list: Vec<Rc<DescriptorData>>,
-    last_desc: Cell<usize>,
-    circle_shutdown: Cell<bool>,
+    last_desc: usize,
+    circle_shutdown: bool,
     /* clean shutdown */
-    circle_reboot: Cell<bool>,
+    circle_reboot: bool,
     /* reboot the game after a shutdown */
     max_players: i32,
     /* max descriptors available */
@@ -162,7 +162,7 @@ pub struct Game {
     /* for extern checkpointing */
     // byte reread_wizlist;		/* signal: SIGUSR1 */
     // byte emergency_unban;		/* signal: SIGUSR2 */
-    mins_since_crashsave: Cell<u32>,
+    mins_since_crashsave: u32,
     config: Config,
 }
 
@@ -178,16 +178,16 @@ fn main() -> ExitCode {
 
     let mut game = Box::new(Game {
         descriptor_list: Vec::new(),
-        last_desc: Cell::new(0),
-        circle_shutdown: Cell::new(false),
-        circle_reboot: Cell::new(false),
+        last_desc: 0,
+        circle_shutdown: false,
+        circle_reboot: false,
         db: DB::new(),
         mother_desc: None,
         // tics: 0,
-        mins_since_crashsave: Cell::new(0),
+        mins_since_crashsave: 0,
         config: Config {
-            nameserver_is_slow: Cell::new(false),
-            track_through_doors: Cell::new(true),
+            nameserver_is_slow: false,
+            track_through_doors: true,
         },
         max_players: 0,
     });
@@ -384,7 +384,7 @@ impl Game {
         info!("Saving current MUD time.");
         save_mud_time(&self.db.time_info.get());
 
-        if self.circle_reboot.get() {
+        if self.circle_reboot {
             info!("Rebooting.");
             process::exit(52); /* what's so great about HHGTTG, anyhow? */
         }
@@ -433,7 +433,7 @@ impl Game {
         let mut last_time = Instant::now();
 
         /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
-        while !self.circle_shutdown.get() {
+        while !self.circle_shutdown {
             /* Sleep if we don't have any connections */
             if self.descriptor_list.is_empty() {
                 debug!("No connections.  Going to sleep.");
@@ -650,7 +650,7 @@ impl Game {
 impl Game {
     fn heartbeat(&mut self, pulse: u128) {
         if pulse % PULSE_ZONE == 0 {
-            self.db.zone_update(self);
+            self.zone_update();
         }
 
         if pulse % PULSE_IDLEPWD == 0 {
@@ -675,10 +675,9 @@ impl Game {
 
         if AUTO_SAVE && (pulse % PULSE_AUTOSAVE) != 0 {
             /* 1 minute */
-            self.mins_since_crashsave
-                .set(self.mins_since_crashsave.get() + 1);
-            if self.mins_since_crashsave.get() >= AUTOSAVE_TIME as u32 {
-                self.mins_since_crashsave.set(0);
+            self.mins_since_crashsave += 1;
+            if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
+                self.mins_since_crashsave = 0;
                 crash_save_all(self);
                 house_save_all(&self.db);
             }
@@ -922,7 +921,7 @@ impl Game {
         };
 
         /* find the sitename */
-        if !self.config.nameserver_is_slow.get() {
+        if !self.config.nameserver_is_slow {
             let r = dns_lookup::lookup_addr(&addr.ip());
             if r.is_err() {
                 error!("Error resolving address: {}", r.err().unwrap());
@@ -954,11 +953,11 @@ impl Game {
          * allocated and allow a user defined history size?
          */
         // TODO CREATE(newd -> history, char *, HISTORY_SIZE);
-        self.last_desc.set(self.last_desc.get() + 1);
-        if self.last_desc.get() == 1000 {
-            self.last_desc.set(1);
+        self.last_desc += 1;
+        if self.last_desc == 1000 {
+            self.last_desc = 1;
         }
-        newd.desc_num.set(self.last_desc.get());
+        newd.desc_num.set(self.last_desc);
 
         /* append to list */
         let rc = Rc::new(newd);

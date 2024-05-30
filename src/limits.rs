@@ -28,7 +28,7 @@ use crate::structs::{
 use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
-use crate::util::{age, clone_vec, BRF, CMP};
+use crate::util::{age, clone_vec2, BRF, CMP};
 use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
@@ -423,7 +423,7 @@ impl Game {
     /* Update PCs, NPCs, and objects */
     pub fn point_update(&mut self) {
         /* characters */
-        let characters = clone_vec(&self.db.character_list);
+        let characters = clone_vec2(&self.db.character_list);
         for i in characters.iter() {
             self.db.gain_condition(i, FULL, -1);
             self.db.gain_condition(i, DRUNK, -1);

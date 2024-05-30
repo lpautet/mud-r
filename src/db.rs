@@ -58,8 +58,8 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
-    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
-    CMP, NRM, SECS_PER_REAL_HOUR,
+   dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number,
+    time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR,
 };
 use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
 
@@ -115,7 +115,7 @@ pub struct HelpIndexElement {
 
 pub struct DB {
     pub world: RefCell<Vec<Rc<RoomData>>>,
-    pub character_list: RefCell<Vec<Rc<CharData>>>,
+    pub character_list: Vec<Rc<CharData>>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
@@ -461,10 +461,10 @@ impl DB {
     /* Free the world, in a memory allocation sense. */
     pub fn destroy_db(&mut self) {
         /* Active Mobiles & Players */
-        for chtmp in self.character_list.borrow_mut().iter() {
+        for chtmp in self.character_list.iter() {
             free_char(chtmp);
         }
-        self.character_list.borrow_mut().clear();
+        self.character_list.clear();
 
         /* Active Objects */
         self.object_list.borrow_mut().clear();
@@ -508,7 +508,7 @@ impl DB {
     pub fn new() -> DB {
         DB {
             world: RefCell::new(vec![]),
-            character_list: RefCell::new(vec![]),
+            character_list: vec![],
             mob_index: vec![],
             mob_protos: vec![],
             object_list: RefCell::new(vec![]),
@@ -667,12 +667,16 @@ impl DB {
             house_boot(&game.db);
         }
 
-        for (i, zone) in game.db.zone_table.borrow().iter().enumerate() {
+        let zone_count = game.db.zone_table.borrow().len();
+        for i in 0..zone_count {
             info!(
                 "Resetting #{}: {} (rooms {}-{}).",
-                zone.number, zone.name, zone.bot, zone.top
+                game.db.zone_table.borrow()[i].number,
+                game.db.zone_table.borrow()[i].name,
+                game.db.zone_table.borrow()[i].bot,
+                game.db.zone_table.borrow()[i].top
             );
-            game.db.reset_zone(game, i);
+            game.reset_zone(i);
         }
 
         // TODO reset_q.head = reset_q.tail = NULL;
@@ -1482,7 +1486,7 @@ fn renum_zone_table(game: &mut Game) {
                         }
                     );
                     let mut cmd_no = cmd_no as i32;
-                    db.log_zone_error(game, zone.number as usize, zcmd, &buf, &mut cmd_no);
+                    game.log_zone_error(zone.number as usize, zcmd, &buf, &mut cmd_no);
                 }
                 zcmd.command.set('*');
             }
@@ -2271,9 +2275,9 @@ impl DB {
         }
     }
 
-/*************************************************************************
-*  procedures for resetting, both play-time and boot-time	 	 *
-*************************************************************************/
+    /*************************************************************************
+    *  procedures for resetting, both play-time and boot-time	 	 *
+    *************************************************************************/
 
     pub fn vnum_mobile(&self, searchname: &str, ch: &Rc<CharData>) -> i32 {
         let mut found = 0;
@@ -2315,21 +2319,21 @@ impl DB {
 
         return found;
     }
-// /* create a character, and add it to the char list */
-// struct char_data *create_char(void)
-// {
-// struct char_data *ch;
-//
-// CREATE(ch, struct char_data, 1);
-// clear_char(ch);
-// ch->next = character_list;
-// character_list = ch;
-//
-// return (ch);
-// }
+    // /* create a character, and add it to the char list */
+    // struct char_data *create_char(void)
+    // {
+    // struct char_data *ch;
+    //
+    // CREATE(ch, struct char_data, 1);
+    // clear_char(ch);
+    // ch->next = character_list;
+    // character_list = ch;
+    //
+    // return (ch);
+    // }
 
     /* create a new mobile from a prototype */
-    pub(crate) fn read_mobile(&self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */
+    pub(crate) fn read_mobile(&mut self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */
     {
         let i;
         if _type == VIRTUAL {
@@ -2373,7 +2377,7 @@ impl DB {
             .set(self.mob_index[i as usize].number.get() + 1);
 
         let rc = Rc::from(mob);
-        self.character_list.borrow_mut().push(rc.clone());
+        self.character_list.push(rc.clone());
 
         Some(rc)
     }
@@ -2440,22 +2444,22 @@ impl DB {
 
 const ZO_DEAD: i32 = 999;
 
-impl DB {
+impl Game {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
-    pub(crate) fn zone_update(&self, main_globals: &Game) {
+    pub(crate) fn zone_update(&mut self) {
         /* jelson 10/22/92 */
-        self.timer.set(self.timer.get());
-        if (self.timer.get() * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
+        self.db.timer.set(self.db.timer.get());
+        if (self.db.timer.get() * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
             /* one minute has passed */
             /*
              * NOT accurate unless PULSE_ZONE is a multiple of PASSES_PER_SEC or a
              * factor of 60
              */
 
-            self.timer.set(0);
+            self.db.timer.set(0);
 
             /* since one minute has passed, increment zone ages */
-            for (i, zone) in self.zone_table.borrow().iter().enumerate() {
+            for (i, zone) in self.db.zone_table.borrow().iter().enumerate() {
                 if zone.age.get() < zone.lifespan && zone.reset_mode != 0 {
                     zone.age.set(zone.age.get() + 1);
                 }
@@ -2465,7 +2469,7 @@ impl DB {
                     && zone.reset_mode != 0
                 {
                     /* enqueue zone */
-                    self.reset_q.borrow_mut().push(i as RoomRnum);
+                    self.db.reset_q.borrow_mut().push(i as RoomRnum);
 
                     zone.age.set(ZO_DEAD);
                 }
@@ -2474,42 +2478,36 @@ impl DB {
 
         /* dequeue zones (if possible) and reset */
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
-        for update_u in self.reset_q.borrow().iter() {
-            if self.zone_table.borrow()[*update_u as usize].reset_mode == 2
-                || is_empty(main_globals, *update_u)
+        let update_list = self.db.reset_q.borrow().clone();
+        for update_u in update_list {
+            if self.db.zone_table.borrow()[update_u as usize].reset_mode == 2
+                || is_empty(self, update_u)
             {
-                self.reset_zone(main_globals, *update_u as usize);
-                main_globals.mudlog(
+                self.reset_zone(update_u as usize);
+                self.mudlog(
                     CMP,
                     LVL_GOD as i32,
                     false,
                     format!(
                         "Auto zone reset: {}",
-                        self.zone_table.borrow()[*update_u as usize].name
+                        self.db.zone_table.borrow()[update_u as usize].name
                     )
                     .as_str(),
                 );
             }
         }
-        self.reset_q.borrow_mut().clear();
+        self.db.reset_q.borrow_mut().clear();
     }
 
     /* execute the reset command table of a given zone */
-    fn log_zone_error(
-        &self,
-        main_globals: &Game,
-        zone: usize,
-        zcmd: &ResetCom,
-        message: &str,
-        last_cmd: &mut i32,
-    ) {
-        main_globals.mudlog(
+    fn log_zone_error(&self, zone: usize, zcmd: &ResetCom, message: &str, last_cmd: &mut i32) {
+        self.mudlog(
             NRM,
             LVL_GOD as i32,
             true,
             format!("SYSERR: zone file: {}", message).as_str(),
         );
-        main_globals.mudlog(
+        self.mudlog(
             NRM,
             LVL_GOD as i32,
             true,
@@ -2524,16 +2522,17 @@ impl DB {
         *last_cmd = 0;
     }
 
-    pub(crate) fn reset_zone(&self, main_globals: &Game, zone: usize) {
+    pub(crate) fn reset_zone(&mut self, zone: usize) {
         let mut last_cmd = 0;
         let mut obj;
         let mut mob = None;
-        for cmd_no in 0..self.zone_table.borrow()[zone].cmd.len() {
-            let zcmd = &self.zone_table.borrow()[zone].cmd[cmd_no];
-            if zcmd.command.get() == 'S' {
+        let cmd_count = self.db.zone_table.borrow()[zone].cmd.len();
+        for cmd_no in 0..cmd_count {
+           // let zcmd = &self.db.zone_table.borrow()[zone].cmd[cmd_no];
+            if self.db.zone_table.borrow()[zone].cmd[cmd_no].command.get() == 'S' {
                 break;
             }
-            if zcmd.if_flag && last_cmd == 0 {
+            if self.db.zone_table.borrow()[zone].cmd[cmd_no].if_flag && last_cmd == 0 {
                 continue;
             }
 
@@ -2542,7 +2541,8 @@ impl DB {
              *  the list of commands in load_zone() so that the counting
              *  will still be correct. - ae.
              */
-            match zcmd.command.get() {
+            let command = self.db.zone_table.borrow()[zone].cmd[cmd_no].command.get();
+            match  command {
                 '*' => {
                     /* ignore command */
                     last_cmd = 0;
@@ -2550,9 +2550,11 @@ impl DB {
 
                 'M' => {
                     /* read a mobile */
-                    if self.mob_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
-                        mob = self.read_mobile(zcmd.arg1 as MobVnum, REAL);
-                        self.char_to_room(mob.as_ref().unwrap(), zcmd.arg3 as RoomRnum);
+                    if self.db.mob_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as MobVnum;
+                        mob = self.db.read_mobile(nr, REAL);
+                        self.db
+                            .char_to_room(mob.as_ref().unwrap(), self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2561,13 +2563,14 @@ impl DB {
 
                 'O' => {
                     /* read an object */
-                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
-                        if zcmd.arg3 != NOWHERE as i32 {
-                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.obj_to_room(obj.as_ref().unwrap(), zcmd.arg3 as RoomRnum);
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
+                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                            self.db
+                                .obj_to_room(obj.as_ref().unwrap(), self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum);
                             last_cmd = 1;
                         } else {
-                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
                             obj.as_ref().unwrap().in_room.set(NOWHERE);
                             last_cmd = 1;
                         }
@@ -2578,21 +2581,21 @@ impl DB {
 
                 'P' => {
                     /* object to object */
-                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
-                        obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                        let obj_to = self.get_obj_num(zcmd.arg3 as ObjRnum);
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                        let obj_to = self.db.get_obj_num(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
                             self.log_zone_error(
-                                main_globals,
                                 zone,
-                                zcmd,
+                                &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
                             );
-                            zcmd.command.set('*');
+                            self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                             continue;
                         }
-                        self.obj_to_obj(obj.as_ref().unwrap(), obj_to.as_ref().unwrap());
+                        self.db
+                            .obj_to_obj(obj.as_ref().unwrap(), obj_to.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2603,18 +2606,17 @@ impl DB {
                     /* obj_to_char */
                     if mob.is_none() {
                         self.log_zone_error(
-                            main_globals,
                             zone,
-                            zcmd,
+                            &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                             "attempt to give obj to non-existant mob, command disabled",
                             &mut last_cmd,
                         );
 
-                        zcmd.command.set('*');
+                        self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
-                        obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
                         DB::obj_to_char(obj.as_ref().unwrap(), mob.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
@@ -2626,31 +2628,29 @@ impl DB {
                     /* object to equipment list */
                     if mob.is_none() {
                         self.log_zone_error(
-                            main_globals,
                             zone,
-                            zcmd,
+                            &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                             "trying to equip non-existant mob, command disabled",
                             &mut last_cmd,
                         );
 
-                        zcmd.command.set('*');
+                        self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.obj_index[zcmd.arg1 as usize].number.get() < zcmd.arg2 {
-                        if zcmd.arg3 < 0 || zcmd.arg3 >= NUM_WEARS as i32 {
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 < 0 || self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32 {
                             self.log_zone_error(
-                                main_globals,
                                 zone,
-                                zcmd,
+                                &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                                 "invalid equipment pos number",
                                 &mut last_cmd,
                             );
                         } else {
-                            obj = self.read_object(zcmd.arg1 as ObjVnum, REAL);
-                            self.equip_char(
+                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                            self.db.equip_char(
                                 mob.as_ref().unwrap(),
                                 obj.as_ref().unwrap(),
-                                zcmd.arg3 as i8,
+                                self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as i8,
                             );
                             last_cmd = 1;
                         }
@@ -2661,70 +2661,70 @@ impl DB {
 
                 'R' => {
                     /* rem obj from room */
-                    obj = self.get_obj_in_list_num(
-                        zcmd.arg2 as i16,
-                        self.world.borrow()[zcmd.arg1 as usize]
+                    obj = self.db.get_obj_in_list_num(
+                        self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as i16,
+                        self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize]
                             .contents
                             .borrow()
                             .as_ref(),
                     );
                     if obj.is_some() {
-                        self.extract_obj(obj.as_ref().unwrap());
+                        self.db.extract_obj(obj.as_ref().unwrap());
                     }
                     last_cmd = 1;
                 }
 
                 'D' => {
                     /* set state of door */
-                    if zcmd.arg2 < 0
-                        || zcmd.arg2 >= NUM_OF_DIRS as i32
-                        || (self.world.borrow()[zcmd.arg1 as usize].dir_option[zcmd.arg2 as usize]
+                    if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 < 0
+                        || self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
+                        || (self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                            [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
                         self.log_zone_error(
-                            main_globals,
                             zone,
-                            zcmd,
+                            &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                             "door does not exist, command disabled",
                             &mut last_cmd,
                         );
-                        zcmd.command.set('*');
+                        self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                     } else {
-                        match zcmd.arg3 {
+                        match self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
 
                             1 => {
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
 
                             2 => {
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.world.borrow()[zcmd.arg1 as usize].dir_option
-                                    [zcmd.arg2 as usize]
+                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                    [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .set_exit_info_bit(EX_CLOSED as i32);
@@ -2737,18 +2737,17 @@ impl DB {
 
                 _ => {
                     self.log_zone_error(
-                        main_globals,
                         zone,
-                        zcmd,
+                        &self.db.zone_table.borrow()[zone].cmd[cmd_no],
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,
                     );
-                    zcmd.command.set('*');
+                    self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                 }
             }
         }
 
-        self.zone_table.borrow()[zone].age.set(0);
+        self.db.zone_table.borrow()[zone].age.set(0);
     }
 }
 

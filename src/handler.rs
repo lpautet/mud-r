@@ -735,7 +735,7 @@ impl DB {
 
     /* search all over the world for a char num, and return a pointer if found */
     pub fn get_char_num(&self, nr: MobRnum) -> Option<Rc<CharData>> {
-        for i in self.character_list.borrow().iter() {
+        for i in self.character_list.iter() {
             if i.get_mob_rnum() == nr {
                 return Some(i.clone());
             }
@@ -1079,7 +1079,7 @@ impl Game {
             }
         }
         /* we can't forget the hunters either... */
-        for temp in self.db.character_list.borrow().iter() {
+        for temp in self.db.character_list.iter() {
             if temp.char_specials.borrow().hunting.is_some()
                 && Rc::ptr_eq(temp.char_specials.borrow().hunting.as_ref().unwrap(), ch)
             {
@@ -1152,7 +1152,7 @@ impl Game {
             );
         }
 
-        let characters = clone_vec(&self.db.character_list);
+        let characters = clone_vec2(&self.db.character_list);
         for vict in characters.iter() {
             if vict.mob_flagged(MOB_NOTDEADYET) {
                 vict.remove_mob_flags_bit(MOB_NOTDEADYET);
@@ -1202,7 +1202,7 @@ impl DB {
         }
         let number = t;
 
-        for i in self.character_list.borrow().iter() {
+        for i in self.character_list.iter() {
             if i.is_npc() {
                 continue;
             }
@@ -1293,7 +1293,7 @@ impl DB {
             return self.get_player_vis(ch, name, None, 0);
         }
 
-        for i in self.character_list.borrow().iter() {
+        for i in self.character_list.iter() {
             if ch.in_room() == i.in_room() {
                 continue;
             }

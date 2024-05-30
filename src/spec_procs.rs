@@ -845,13 +845,12 @@ pub fn pet_shops(
     cmd: i32,
     argument: &str,
 ) -> bool {
-    let db = &game.db;
     /* Gross. */
     let pet_room = ch.in_room() + 1;
 
     if cmd_is(cmd, "list") {
         send_to_char(ch, "Available pets are:\r\n");
-        for pet in db.world.borrow()[pet_room as usize].peoples.borrow().iter() {
+        for pet in game.db.world.borrow()[pet_room as usize].peoples.borrow().iter() {
             /* No, you can't have the Implementor as a pet if he's in there. */
             if !pet.is_npc() {
                 continue;
@@ -866,7 +865,7 @@ pub fn pet_shops(
         let mut buf = String::new();
         let mut pet_name = String::new();
         two_arguments(argument, &mut buf, &mut pet_name);
-        let pet = db.get_char_room(&buf, None, pet_room);
+        let pet = game.db.get_char_room(&buf, None, pet_room);
         if pet.is_none() || !pet.as_ref().unwrap().is_npc() {
             send_to_char(ch, "There is no such pet!\r\n");
             return true;
@@ -878,7 +877,7 @@ pub fn pet_shops(
         }
         ch.set_gold(ch.get_gold() - pet_price(pet));
 
-        let pet = db.read_mobile(pet.get_mob_rnum(), REAL).unwrap();
+        let pet = game.db.read_mobile(pet.get_mob_rnum(), REAL).unwrap();
         pet.set_exp(0);
         pet.set_aff_flags_bits(AFF_CHARM);
 
@@ -895,15 +894,15 @@ pub fn pet_shops(
             /* free(pet->player.description); don't free the prototype! */
             *RefCell::borrow_mut(&pet.player.borrow().description) = buf;
         }
-        db.char_to_room(&pet, ch.in_room());
-        add_follower(db, &pet, ch);
+        game.db.char_to_room(&pet, ch.in_room());
+        add_follower(&game.db, &pet, ch);
 
         /* Be certain that pets can't get/carry/use/wield/wear items */
         pet.set_is_carrying_w(1000);
         pet.set_is_carrying_n(100);
 
         send_to_char(ch, "May you enjoy your pet.\r\n");
-        db.act(
+        game.db.act(
             "$n buys $N as a pet.",
             false,
             Some(ch),

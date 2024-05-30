@@ -71,7 +71,7 @@ pub fn mag_savingthrow(ch: &Rc<CharData>, type_: i32, modifier: i32) -> bool {
 
 /* affect_update: called from comm.c (causes spells to wear off) */
 pub fn affect_update(db: &DB) {
-    for i in db.character_list.borrow().iter() {
+    for i in db.character_list.iter() {
         let mut last_type_notification = -1;
         i.affected.borrow_mut().retain_mut(|af| {
             if af.duration >= 1 {
@@ -779,7 +779,7 @@ const MOB_CLONE: i32 = 10;
 const MOB_ZOMBIE: i32 = 11;
 
 pub fn mag_summons(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     ch: Option<&Rc<CharData>>,
     obj: Option<&Rc<ObjData>>,
@@ -807,7 +807,7 @@ pub fn mag_summons(
         }
         SPELL_ANIMATE_DEAD => {
             if obj.is_none() || !obj.unwrap().is_corpse() {
-                db.act(
+                game.db.act(
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
                     Some(ch),
@@ -840,7 +840,7 @@ pub fn mag_summons(
     for _ in 0..num {
         let mob;
         if {
-            mob = db.read_mobile(mob_num, VIRTUAL);
+            mob = game.db.read_mobile(mob_num, VIRTUAL);
             mob.is_none()
         } {
             send_to_char(
@@ -850,7 +850,7 @@ pub fn mag_summons(
             return;
         }
         let mob = mob.as_ref().unwrap();
-        db.char_to_room(mob, ch.in_room());
+        game.db.char_to_room(mob, ch.in_room());
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
         mob.set_aff_flags_bits(AFF_CHARM);
@@ -859,7 +859,7 @@ pub fn mag_summons(
             mob.player.borrow_mut().name = ch.get_name().to_string();
             mob.player.borrow_mut().short_descr = ch.get_name().to_string();
         }
-        db.act(
+        game.db.act(
             MAG_SUMMON_MSGS[msg],
             false,
             Some(ch),
@@ -867,14 +867,14 @@ pub fn mag_summons(
             Some(mob),
             TO_ROOM,
         );
-        add_follower(db, mob, ch);
+        add_follower(&game.db, mob, ch);
 
         if handle_corpse {
             for tobj in clone_vec(&obj.as_ref().unwrap().contains) {
                 DB::obj_from_obj(&tobj);
                 DB::obj_to_char(&tobj, mob);
             }
-            db.extract_obj(obj.as_ref().unwrap());
+            game.db.extract_obj(obj.as_ref().unwrap());
         }
     }
 }

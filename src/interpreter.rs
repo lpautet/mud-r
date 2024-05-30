@@ -3379,7 +3379,7 @@ fn perform_dupe_check(game: &mut Game, d: &Rc<DescriptorData>) -> bool {
      * duplicates, though theoretically none should be able to exist).
      */
 
-    for ch in game.db.character_list.borrow().iter() {
+    for ch in game.db.character_list.iter() {
         if ch.is_npc() {
             continue;
         }
@@ -3960,7 +3960,7 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                         }
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
-                        game.db.character_list.borrow_mut().push(character.clone());
+                        game.db.character_list.push(character.clone());
                         game.db.char_to_room(character, load_room);
                         load_result = crash_load(game, d.character.borrow().as_ref().unwrap());
 

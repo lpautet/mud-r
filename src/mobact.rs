@@ -23,12 +23,12 @@ use crate::structs::{
     MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY,
     NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::{clone_vec, num_followers_charmed, rand_number};
+use crate::util::{clone_vec, clone_vec2, num_followers_charmed, rand_number};
 use crate::{Game, TO_ROOM};
 
 impl Game {
     pub fn mobile_activity(&mut self) {
-        let characters = clone_vec(&self.db.character_list);
+        let characters = clone_vec2(&self.db.character_list);
         for ch in characters.iter() {
             if !self.db.is_mob(ch) {
                 continue;

@@ -1271,8 +1271,8 @@ pub fn do_gen_tog(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
             result = {
                 game.config
                     .nameserver_is_slow
-                    .set(game.config.nameserver_is_slow.get());
-                game.config.nameserver_is_slow.get()
+                    =!game.config.nameserver_is_slow;
+                game.config.nameserver_is_slow
             }
         }
         SCMD_AUTOEXIT => {
@@ -1282,8 +1282,8 @@ pub fn do_gen_tog(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
             result = {
                 game.config
                     .track_through_doors
-                    .set(!game.config.track_through_doors.get());
-                game.config.track_through_doors.get()
+                    =!game.config.track_through_doors;
+                game.config.track_through_doors
             }
         }
         _ => {

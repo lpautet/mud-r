@@ -215,8 +215,7 @@ pub fn do_reply(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
          *      hear tells anyway. :) -gg 2/24/98
          */
         let db = &game.db;
-        let ch_list = db.character_list.borrow();
-        let tch = ch_list
+        let tch = db.character_list
             .iter()
             .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell());
 
