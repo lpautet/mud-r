@@ -664,7 +664,7 @@ impl DB {
         // /* Moved here so the object limit code works. -gg 6/24/98 */
         if !game.db.mini_mud {
             info!("Booting houses.");
-            house_boot(&game.db);
+            house_boot(&mut game.db);
         }
 
         let zone_count = game.db.zone_table.borrow().len();
@@ -1696,7 +1696,7 @@ impl DB {
 
         self.mob_index.push(IndexData {
             vnum: nr as MobVnum,
-            number: Cell::from(0),
+            number: 0,
             func: None,
         });
 
@@ -1811,7 +1811,7 @@ impl DB {
         let i = self.obj_index.len() as ObjVnum;
         self.obj_index.push(IndexData {
             vnum: nr,
-            number: Cell::from(0),
+            number: 0,
             func: None,
         });
 
@@ -2372,9 +2372,7 @@ impl DB {
         mob.player.borrow_mut().time.played = 0;
         mob.player.borrow_mut().time.logon = time_now();
 
-        self.mob_index[i as usize]
-            .number
-            .set(self.mob_index[i as usize].number.get() + 1);
+        self.mob_index[i as usize].number+= 1;
 
         let rc = Rc::from(mob);
         self.character_list.push(rc.clone());
@@ -2414,7 +2412,7 @@ impl DB {
     }
 
     /* create a new object from a prototype */
-    pub fn read_object(&self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
+    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
         let i = if _type == VIRTUAL {
             self.real_object(nr)
         } else {
@@ -2434,9 +2432,7 @@ impl DB {
         let rc = Rc::from(obj);
         self.object_list.borrow_mut().push(rc.clone());
 
-        self.obj_index[i as usize]
-            .number
-            .set(self.obj_index[i as usize].number.get() + 1);
+        self.obj_index[i as usize].number+= 1;
 
         Some(rc)
     }
@@ -2550,7 +2546,7 @@ impl Game {
 
                 'M' => {
                     /* read a mobile */
-                    if self.db.mob_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                    if self.db.mob_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
                         let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as MobVnum;
                         mob = self.db.read_mobile(nr, REAL);
                         self.db
@@ -2563,14 +2559,16 @@ impl Game {
 
                 'O' => {
                     /* read an object */
-                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
                         if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
-                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                            let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            obj = self.db.read_object(nr, REAL);
                             self.db
                                 .obj_to_room(obj.as_ref().unwrap(), self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum);
                             last_cmd = 1;
                         } else {
-                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                            let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            obj = self.db.read_object(nr, REAL);
                             obj.as_ref().unwrap().in_room.set(NOWHERE);
                             last_cmd = 1;
                         }
@@ -2581,8 +2579,9 @@ impl Game {
 
                 'P' => {
                     /* object to object */
-                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
-                        obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
+                        obj = self.db.read_object(nr, REAL);
                         let obj_to = self.db.get_obj_num(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
                             self.log_zone_error(
@@ -2615,8 +2614,9 @@ impl Game {
                         self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
-                        obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                        let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
+                        obj = self.db.read_object(nr, REAL);
                         DB::obj_to_char(obj.as_ref().unwrap(), mob.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
@@ -2637,7 +2637,7 @@ impl Game {
                         self.db.zone_table.borrow()[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number.get() < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
+                    if self.db.obj_index[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 {
                         if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 < 0 || self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32 {
                             self.log_zone_error(
                                 zone,
@@ -2646,7 +2646,8 @@ impl Game {
                                 &mut last_cmd,
                             );
                         } else {
-                            obj = self.db.read_object(self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum, REAL);
+                            let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            obj = self.db.read_object(nr, REAL);
                             self.db.equip_char(
                                 mob.as_ref().unwrap(),
                                 obj.as_ref().unwrap(),

@@ -1012,7 +1012,7 @@ pub struct WeatherData {
 pub struct IndexData {
     pub vnum: MobVnum,
     /* virtual number of this mob/obj		*/
-    pub number: Cell<i32>,
+    pub number: i32,
     /* number of existing units of this mob/obj	*/
     pub func: Option<Special>,
 }

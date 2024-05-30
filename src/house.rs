@@ -112,7 +112,7 @@ fn house_get_filename(vnum: RoomVnum, filename: &mut String) -> bool {
 }
 
 /* Load all objects for a house */
-fn house_load(db: &DB, vnum: RoomVnum) -> bool {
+fn house_load(db: &mut DB, vnum: RoomVnum) -> bool {
     let rnum;
     if {
         rnum = db.real_room(vnum);
@@ -152,7 +152,8 @@ fn house_load(db: &DB, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            db.obj_to_room(obj_from_store(db, &object, &mut i).as_ref().unwrap(), rnum);
+            let newobj = obj_from_store(db, &object, &mut i).clone().unwrap();
+            db.obj_to_room(&newobj, rnum);
         }
     }
 
@@ -359,7 +360,7 @@ fn house_save_control(db: &DB) {
 
 /* call from boot_db - will load control recs, load objs, set atrium bits */
 /* should do sanity checks on vnums & remove invalid records */
-pub fn house_boot(db: &DB) {
+pub fn house_boot(db: &mut DB) {
     let mut temp_house = HouseControlRec::new();
 
     let fl;

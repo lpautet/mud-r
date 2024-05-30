@@ -1306,7 +1306,6 @@ pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
-    let db = &game.db;
 
     if ch.is_npc() {
         /* Cannot use ) on mobs. */
@@ -1319,7 +1318,7 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
     }
     let food;
     if {
-        food = db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+        food = game.db.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
         food.is_none()
     } {
         send_to_char(
@@ -1345,10 +1344,10 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
         return;
     }
     if subcmd == SCMD_EAT {
-        db.act("You eat $p.", false, Some(ch), Some(&food), None, TO_CHAR);
-        db.act("$n eats $p.", true, Some(ch), Some(&food), None, TO_ROOM);
+        game.db.act("You eat $p.", false, Some(ch), Some(&food), None, TO_CHAR);
+        game.db.act("$n eats $p.", true, Some(ch), Some(&food), None, TO_ROOM);
     } else {
-        db.act(
+        game.db.act(
             "You nibble a little bit of $p.",
             false,
             Some(ch),
@@ -1356,7 +1355,7 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
             None,
             TO_CHAR,
         );
-        db.act(
+        game.db.act(
             "$n tastes a little bit of $p.",
             true,
             Some(ch),
@@ -1372,7 +1371,7 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
         1
     };
 
-    db.gain_condition(ch, FULL, amount);
+    game.db.gain_condition(ch, FULL, amount);
 
     if ch.get_cond(FULL) > 20 {
         send_to_char(ch, "You are full.\r\n");
@@ -1381,7 +1380,7 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
     if food.get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT as u8) {
         /* The crap was poisoned ! */
         send_to_char(ch, "Oops, that tasted rather strange!\r\n");
-        db.act(
+        game.db.act(
             "$n coughs and utters some strange sounds.",
             false,
             Some(ch),
@@ -1401,14 +1400,14 @@ pub fn do_eat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
         affect_join(ch, &mut af, false, false, false, false);
     }
     if subcmd == SCMD_EAT {
-        db.extract_obj(&food);
+        game.db.extract_obj(&food);
     } else {
         if {
             food.decr_obj_val(0);
             food.get_obj_val(0) == 0
         } {
             send_to_char(ch, "There's nothing left now.\r\n");
-            db.extract_obj(&food);
+            game.db.extract_obj(&food);
         }
     }
 }

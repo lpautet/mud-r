@@ -870,7 +870,7 @@ pub fn object_list_new_owner(obj: &ObjData, ch: Option<Rc<CharData>>) {
 
 impl DB {
     /* Extract an object from the world */
-    pub fn extract_obj(&self, obj: &Rc<ObjData>) {
+    pub fn extract_obj(&mut self, obj: &Rc<ObjData>) {
         let tch = obj.worn_by.borrow().clone();
         if tch.is_some() {
             if !Rc::ptr_eq(
@@ -904,9 +904,7 @@ impl DB {
             .retain(|o| !Rc::ptr_eq(&obj, o));
 
         if obj.get_obj_rnum() != NOTHING {
-            self.obj_index[obj.get_obj_rnum() as usize]
-                .number
-                .set(self.obj_index[obj.get_obj_rnum() as usize].number.get() - 1);
+            self.obj_index[obj.get_obj_rnum() as usize].number-= 1;
         }
     }
 }
@@ -1090,9 +1088,7 @@ impl Game {
 
         if ch.is_npc() {
             if ch.get_mob_rnum() != NOTHING {
-                self.db.mob_index[ch.get_mob_rnum() as usize]
-                    .number
-                    .set(self.db.mob_index[ch.get_mob_rnum() as usize].number.get() - 1);
+                self.db.mob_index[ch.get_mob_rnum() as usize].number-= 1;
             }
             ch.clear_memory()
         } else {

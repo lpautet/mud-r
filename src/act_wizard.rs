@@ -2074,7 +2074,6 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
 pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     /* clean a room of all mobiles and objects */
-    let db = &game.db;
     let mut buf = String::new();
     one_argument(argument, &mut buf);
     let vict;
@@ -2082,7 +2081,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
         if {
-            vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+            vict = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
             vict.is_some()
         } {
             if !vict.as_ref().unwrap().is_npc()
@@ -2091,7 +2090,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 send_to_char(ch, "Fuuuuuuuuu!\r\n");
                 return;
             }
-            db.act(
+            game.db.act(
                 "$n disintegrates $N.",
                 false,
                 Some(ch),
@@ -2113,18 +2112,18 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     *vict.desc.borrow_mut() = None;
                 }
             }
-            db.extract_char(vict);
+            game.db.extract_char(vict);
         } else if {
-            obj = db.get_obj_in_list_vis(
+            obj = game.db.get_obj_in_list_vis(
                 ch,
                 &mut buf,
                 None,
-                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                game.db.world.borrow()[ch.in_room() as usize].contents.borrow(),
             );
             obj.is_some()
         } {
             let obj = obj.unwrap();
-            db.act(
+            game.db.act(
                 "$n destroys $p.",
                 false,
                 Some(ch),
@@ -2132,7 +2131,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 None,
                 TO_ROOM,
             );
-            db.extract_obj(&obj);
+            game.db.extract_obj(&obj);
         } else {
             send_to_char(ch, "Nothing here by that name.\r\n");
             return;
@@ -2142,7 +2141,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     } else {
         /* no argument. clean out the room */
 
-        db.act(
+        game.db.act(
             "$n gestures... You are surrounded by scorching flames!",
             false,
             Some(ch),
@@ -2150,10 +2149,11 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             None,
             TO_ROOM,
         );
-        db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
+        game.db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
-        for vict in db.world.borrow()[ch.in_room() as usize]
-            .peoples
+        let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+        for vict in 
+            room.peoples
             .borrow()
             .iter()
         {
@@ -2163,29 +2163,29 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
             /* Dump inventory. */
             while vict.carrying.borrow().len() > 0 {
-                db.extract_obj(&vict.carrying.borrow()[0].clone());
+                game.db.extract_obj(&vict.carrying.borrow()[0].clone());
             }
 
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
                 if vict.get_eq(i).is_some() {
-                    db.extract_obj(vict.get_eq(i).as_ref().unwrap())
+                    game.db.extract_obj(vict.get_eq(i).as_ref().unwrap())
                 }
             }
 
             /* Dump character. */
-            db.extract_char(vict);
+            game.db.extract_char(vict);
         }
 
         /* Clear the ground. */
-        while db.world.borrow()[ch.in_room() as usize]
+        while game.db.world.borrow()[ch.in_room() as usize]
             .contents
             .borrow()
             .len()
             > 0
         {
-            let o = db.world.borrow()[ch.in_room() as usize].contents.borrow()[0].clone();
-            db.extract_obj(&o);
+            let o = game.db.world.borrow()[ch.in_room() as usize].contents.borrow()[0].clone();
+            game.db.extract_obj(&o);
         }
     }
 }
@@ -3257,7 +3257,6 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
 }
 
 pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut self_ = false;
 
     struct ShowStruct {
@@ -3366,23 +3365,23 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         1 => {
             /* tightened up by JE 4/6/93 */
             if self_ {
-                print_zone_to_buf(db, &mut buf, db.world.borrow()[ch.in_room() as usize].zone);
+                print_zone_to_buf(&game.db, &mut buf, game.db.world.borrow()[ch.in_room() as usize].zone);
             } else if !value.is_empty() && is_number(&value) {
                 let value = value.parse::<i32>().unwrap();
-                let zrn = db
+                let zrn = game.db
                     .zone_table
                     .borrow()
                     .iter()
                     .position(|z| z.number == value as i16);
                 if zrn.is_some() {
-                    print_zone_to_buf(db, &mut buf, zrn.unwrap() as ZoneRnum);
+                    print_zone_to_buf(&game.db, &mut buf, zrn.unwrap() as ZoneRnum);
                 } else {
                     send_to_char(ch, "That is not a valid zone.\r\n");
                     return;
                 }
             } else {
-                for i in 0..db.zone_table.borrow().len() {
-                    print_zone_to_buf(db, &mut buf, i as ZoneRnum);
+                for i in 0..game.db.zone_table.borrow().len() {
+                    print_zone_to_buf(&game.db, &mut buf, i as ZoneRnum);
                 }
             }
             page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
@@ -3396,7 +3395,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             }
 
             let mut vbuf = CharFileU::new();
-            if db.load_char(&value, &mut vbuf).is_none() {
+            if game.db.load_char(&value, &mut vbuf).is_none() {
                 send_to_char(ch, "There is no such player.\r\n");
                 return;
             }
@@ -3445,7 +3444,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 send_to_char(ch, "A name would help.\r\n");
                 return;
             }
-            crash_listrent(db, ch, &value);
+            crash_listrent(&mut game.db, ch, &value);
         }
 
         /* show stats */
@@ -3454,17 +3453,17 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             let mut j = 0;
             let mut k = 0;
             let mut con = 0;
-            for vict in db.character_list.iter() {
+            for vict in game.db.character_list.iter() {
                 if vict.is_npc() {
                     j += 1;
-                } else if db.can_see(ch, vict) {
+                } else if game.db.can_see(ch, vict) {
                     i += 1;
                     if vict.desc.borrow().is_some() {
                         con += 1;
                     }
                 }
             }
-            for _ in db.object_list.borrow().iter() {
+            for _ in game.db.object_list.borrow().iter() {
                 k += 1;
             }
             send_to_char(
@@ -3478,13 +3477,13 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                                {:5} rooms            {:5} zones\r\n",
                     i,
                     con,
-                    db.player_table.borrow().len(),
+                    game.db.player_table.borrow().len(),
                     j,
-                    db.mob_protos.len(),
+                    game.db.mob_protos.len(),
                     k,
-                    db.obj_proto.len(),
-                    db.world.borrow().len(),
-                    db.zone_table.borrow().len()
+                    game.db.obj_proto.len(),
+                    game.db.world.borrow().len(),
+                    game.db.zone_table.borrow().len()
                 )
                 .as_str(),
             );
@@ -3494,10 +3493,10 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         5 => {
             let mut buf = "Errant Rooms\r\n------------\r\n".to_string();
             let mut k = 0;
-            for i in 0..db.world.borrow().len() {
+            for i in 0..game.db.world.borrow().len() {
                 for j in 0..NUM_OF_DIRS {
-                    if db.world.borrow()[i].dir_option[j].is_some()
-                        && db.world.borrow()[i].dir_option[j]
+                    if game.db.world.borrow()[i].dir_option[j].is_some()
+                        && game.db.world.borrow()[i].dir_option[j]
                             .as_ref()
                             .unwrap()
                             .to_room
@@ -3510,8 +3509,8 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                             format!(
                                 "{:2}: [{:5}] {}\r\n",
                                 k,
-                                db.get_room_vnum(i as RoomVnum),
-                                db.world.borrow()[i].name
+                                game.db.get_room_vnum(i as RoomVnum),
+                                game.db.world.borrow()[i].name
                             )
                             .as_str(),
                         )
@@ -3525,15 +3524,15 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         6 => {
             let mut buf = "Death Traps\r\n-----------\r\n".to_string();
             let mut j = 0;
-            for i in 0..db.world.borrow().len() {
-                if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
+            for i in 0..game.db.world.borrow().len() {
+                if game.db.room_flagged(i as RoomRnum, ROOM_DEATH) {
                     j += 1;
                     buf.push_str(
                         format!(
                             "{:2}: [{:5}] {}\r\n",
                             j,
-                            db.get_room_vnum(i as RoomVnum),
-                            db.borrow().world.borrow()[i].name
+                            game.db.get_room_vnum(i as RoomVnum),
+                            game.db.world.borrow()[i].name
                         )
                         .as_str(),
                     );
@@ -3546,15 +3545,15 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         7 => {
             let mut buf = "Godrooms\r\n--------------------------\r\n".to_string();
             let mut j = 0;
-            for i in 0..db.world.borrow().len() {
-                if db.room_flagged(i as RoomRnum, ROOM_GODROOM) {
+            for i in 0..game.db.world.borrow().len() {
+                if game.db.room_flagged(i as RoomRnum, ROOM_GODROOM) {
                     j += 1;
                     buf.push_str(
                         format!(
                             "{:2}: [{:5}] {}\r\n",
                             j,
-                            db.get_room_vnum(i as RoomVnum),
-                            db.borrow().world.borrow()[i].name
+                            game.db.get_room_vnum(i as RoomVnum),
+                            game.db.world.borrow()[i].name
                         )
                         .as_str(),
                     );
@@ -3565,12 +3564,12 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
         /* show shops */
         8 => {
-            show_shops(db, ch, &value);
+            show_shops(&game.db, ch, &value);
         }
 
         /* show houses */
         9 => {
-            hcontrol_list_houses(db, ch);
+            hcontrol_list_houses(&game.db, ch);
         }
 
         /* show snoop */
@@ -3589,7 +3588,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
                     continue;
                 }
-                if !db.can_see(ch, dc) || dc.in_room() == NOWHERE {
+                if !game.db.can_see(ch, dc) || dc.in_room() == NOWHERE {
                     continue;
                 }
                 i += 1;

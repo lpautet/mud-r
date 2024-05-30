@@ -80,7 +80,7 @@ pub fn do_quit(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
          */
 
         if FREE_RENT {
-            crash_rentsave(&game.db, ch, 0);
+            crash_rentsave(&mut game.db, ch, 0);
         }
 
         /* If someone is quitting in their house, let them load back here. */

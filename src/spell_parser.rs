@@ -579,7 +579,7 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {
-        mag_creations(&game.db, level, Some(caster), spellnum);
+        mag_creations(&mut game.db, level, Some(caster), spellnum);
     }
 
     if is_set!(sinfo_routines, MAG_MANUAL) {

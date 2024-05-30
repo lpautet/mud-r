@@ -192,7 +192,8 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argume
 }
 
 pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
-    for k in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents) {
+    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+    for k in clone_vec(&room.contents) {
         game.db.act(
             "$p vanishes in a puff of smoke!",
             false,
@@ -210,7 +211,8 @@ pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argumen
 
     do_drop(game, ch, argument, cmd as usize, SCMD_DROP as i32);
     let mut value = 0;
-    for k in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents) {
+    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+    for k in clone_vec(&room.contents) {
         game.db.act(
             "$p vanishes in a puff of smoke!",
             false,
@@ -671,7 +673,8 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
         return false;
     }
 
-    for i in clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents)
+    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+    for i in clone_vec(&room.contents)
     {
         if !i.is_corpse() {
             continue;

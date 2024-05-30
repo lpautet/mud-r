@@ -362,8 +362,9 @@ impl DB {
             _ => {}
         }
     }
-
-    fn check_idling(&self, main_globals: &Game, ch: &Rc<CharData>) {
+}
+impl Game {
+    fn check_idling(&mut self, ch: &Rc<CharData>) {
         ch.char_specials
             .borrow()
             .timer
@@ -372,10 +373,10 @@ impl DB {
             if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
                 ch.set_was_in(ch.in_room());
                 if ch.fighting().is_some() {
-                    self.stop_fighting(ch.fighting().as_ref().unwrap());
-                    self.stop_fighting(ch);
+                    self.db.stop_fighting(ch.fighting().as_ref().unwrap());
+                    self.db.stop_fighting(ch);
                 }
-                self.act(
+                self.db.act(
                     "$n disappears into the void.",
                     true,
                     Some(ch),
@@ -384,15 +385,15 @@ impl DB {
                     TO_ROOM,
                 );
                 send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-                self.save_char(ch);
-                crash_crashsave(self, ch);
-                self.char_from_room(ch);
-                self.char_to_room(ch, 1);
+                self.db.save_char(ch);
+                crash_crashsave(&mut self.db, ch);
+                self.db.char_from_room(ch);
+                self.db.char_to_room(ch, 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
                 if ch.in_room() != NOWHERE {
-                    self.char_from_room(ch);
+                    self.db.char_from_room(ch);
                 }
-                self.char_to_room(ch, 3);
+                self.db.char_to_room(ch, 3);
                 if ch.desc.borrow().is_some() {
                     ch.desc.borrow().as_ref().unwrap().set_state(ConDisconnect);
 
@@ -404,22 +405,21 @@ impl DB {
                     *ch.desc.borrow_mut() = None;
                 }
                 if FREE_RENT {
-                    crash_rentsave(self, ch, 0);
+                    crash_rentsave(&mut self.db, ch, 0);
                 } else {
-                    crash_idlesave(self, ch);
+                    crash_idlesave(&mut self.db, ch);
                 }
-                main_globals.mudlog(
+                self.mudlog(
                     CMP,
                     LVL_GOD as i32,
                     true,
                     format!("{} force-rented and extracted (idle).", ch.get_name()).as_str(),
                 );
-                self.extract_char(ch);
+                self.db.extract_char(ch);
             }
         }
     }
-}
-impl Game {
+
     /* Update PCs, NPCs, and objects */
     pub fn point_update(&mut self) {
         /* characters */
@@ -453,7 +453,7 @@ impl Game {
             if !i.is_npc() {
                 self.db.update_char_objects(i);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
-                    self.db.check_idling(self, i);
+                    self.check_idling(i);
                 }
             }
         }

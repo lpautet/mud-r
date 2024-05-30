@@ -1063,7 +1063,7 @@ pub fn mag_alter_objs(
     }
 }
 
-pub fn mag_creations(db: &DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: i32) {
+pub fn mag_creations(db: &mut DB, _level: i32, ch: Option<&Rc<CharData>>, spellnum: i32) {
     if ch.is_none() {
         return;
     }
