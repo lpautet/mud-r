@@ -62,8 +62,7 @@ use crate::structs::{
     ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    age, clone_vec, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
-    SECS_PER_MUD_YEAR,
+    age, clone_vec, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
 };
 use crate::{
     _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
@@ -379,7 +378,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             return;
         }
 
-        let list = clone_vec(&game.descriptor_list);
+        let list = clone_vec2(&game.descriptor_list);
         for i in list {
             if i.state() == ConPlaying
                 && i.character.borrow().is_some()
@@ -2492,7 +2491,7 @@ pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     if argument.is_empty() {
         send_to_char(ch, "That must be a mistake...\r\n");
     } else {
-        for pt in game.descriptor_list.borrow().iter() {
+        for pt in game.descriptor_list.iter() {
             if pt.state() == ConPlaying
                 && pt.character.borrow().is_some()
                 && !Rc::ptr_eq(pt.character.borrow().as_ref().unwrap(), ch)
@@ -2546,8 +2545,7 @@ pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
     let num_to_dc = num_to_dc.unwrap();
     let mut d = None;
     {
-        let gdl = game.descriptor_list.borrow();
-        for cd in gdl.iter() {
+        for cd in game.descriptor_list.iter() {
             if cd.desc_num.get() == num_to_dc as usize {
                 d = Some(cd.clone());
             }
@@ -2791,7 +2789,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             true,
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
         );
-        let descriptors = clone_vec(&game.descriptor_list);
+        let descriptors = clone_vec2(&game.descriptor_list);
         for i in descriptors.iter() {
             let mut vict = None;
             let ic = i.character.borrow();
@@ -2850,7 +2848,7 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 
         '@' => {
             send_to_char(ch, "God channel status:\r\n");
-            for d in game.descriptor_list.borrow().iter() {
+            for d in game.descriptor_list.iter() {
                 if d.state() != ConPlaying
                     || d.character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
                 {
@@ -2933,7 +2931,7 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             argument
         );
     }
-    for d in game.descriptor_list.borrow().iter() {
+    for d in game.descriptor_list.iter() {
         let db = &game.db;
         if d.state() == ConPlaying
             && d.character.borrow().as_ref().unwrap().get_level() >= level as u8
@@ -3584,7 +3582,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 ch,
                 "People currently snooping:\r\n--------------------------\r\n",
             );
-            for d in game.descriptor_list.borrow().iter() {
+            for d in game.descriptor_list.iter() {
                 if d.snooping.borrow().is_none() || d.character.borrow().is_none() {
                     continue;
                 }

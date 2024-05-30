@@ -434,7 +434,7 @@ pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let buf = format!("\007\007*$n* {}", buf2);
         if arg == "all" {
             if ch.get_level() > LVL_GOD as u8 {
-                for d in game.descriptor_list.borrow().iter() {
+                for d in game.descriptor_list.iter() {
                     if d.state() == ConPlaying && d.character.borrow().is_some() {
                         db.act(
                             &buf,
@@ -595,7 +595,7 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
 
     /* now send all the strings out */
-    for i in game.descriptor_list.borrow().iter() {
+    for i in game.descriptor_list.iter() {
         if i.state() == ConPlaying
             && !Rc::ptr_eq(i, ch.desc.borrow().as_ref().unwrap())
             && i.character.borrow().is_some()
@@ -688,7 +688,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
             buf = argument.to_string();
         }
 
-        for i in game.descriptor_list.borrow().iter() {
+        for i in game.descriptor_list.iter() {
             if i.state() == ConPlaying
                 && !Rc::ptr_eq(i, ch.desc.borrow().as_ref().unwrap())
                 && i.character.borrow().is_some()

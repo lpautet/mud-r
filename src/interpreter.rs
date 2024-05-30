@@ -76,7 +76,7 @@ use crate::structs::{
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
     SEX_MALE,
 };
-use crate::util::{clone_vec, BRF, NRM};
+use crate::util::{clone_vec, clone_vec2, BRF, NRM};
 use crate::{
     _clrlevel, clr, send_to_char, write_to_q, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED,
     TO_ROOM,
@@ -3319,7 +3319,7 @@ fn perform_dupe_check(game: &mut Game, d: &Rc<DescriptorData>) -> bool {
      * Now that this descriptor has successfully logged in, disconnect all
      * other descriptors controlling a character with the same ID number.
      */
-    let descriptors = clone_vec(&game.descriptor_list);
+    let descriptors = clone_vec2(&game.descriptor_list);
     for k in descriptors.iter() {
         if Rc::ptr_eq(k, &d) {
             continue;

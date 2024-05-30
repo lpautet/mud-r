@@ -2754,7 +2754,7 @@ impl DB {
 
 /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
 fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
-    for i in game.descriptor_list.borrow().iter() {
+    for i in game.descriptor_list.iter() {
         if i.state() != ConPlaying {
             continue;
         }
@@ -3219,7 +3219,7 @@ pub fn free_char(ch: &Rc<CharData>) {
  */
 impl Game {
     fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
-        for in_use in &*self.descriptor_list.borrow() {
+        for in_use in &self.descriptor_list {
             if &in_use.showstr_vector.borrow_mut()[0].as_ref() == &buf.as_ref() {
                 return -1;
             }
@@ -3232,7 +3232,7 @@ impl Game {
         }
         let temp = r.unwrap();
 
-        for in_use in &*self.descriptor_list.borrow() {
+        for in_use in &*self.descriptor_list {
             if in_use.showstr_count.get() == 0
                 || in_use.showstr_vector.borrow()[0].as_ref() != buf.as_ref()
             {

@@ -29,6 +29,7 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::Appender;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
+use util::clone_vec2;
 
 use crate::act_social::free_social_messages;
 use crate::ban::{free_invalid_list, isbanned};
@@ -46,7 +47,7 @@ use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{clone_vec, hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
+use crate::util::{ hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
 
 mod act_comm;
 mod act_informative;
@@ -149,7 +150,7 @@ pub struct DescriptorData {
 pub struct Game {
     db: DB,
     mother_desc: Option<TcpListener>,
-    descriptor_list: RefCell<Vec<Rc<DescriptorData>>>,
+    descriptor_list: Vec<Rc<DescriptorData>>,
     last_desc: Cell<usize>,
     circle_shutdown: Cell<bool>,
     /* clean shutdown */
@@ -176,7 +177,7 @@ fn main() -> ExitCode {
     let mut port = DFLT_PORT;
 
     let mut game = Box::new(Game {
-        descriptor_list: RefCell::new(Vec::new()),
+        descriptor_list: Vec::new(),
         last_desc: Cell::new(0),
         circle_shutdown: Cell::new(false),
         circle_reboot: Cell::new(false),
@@ -374,7 +375,7 @@ impl Game {
         crash_save_all(self);
 
         info!("Closing all sockets.");
-        clone_vec(&self.descriptor_list)
+        clone_vec2(&self.descriptor_list)
             .iter()
             .for_each(|d| self.close_socket(d));
 
@@ -434,7 +435,7 @@ impl Game {
         /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
         while !self.circle_shutdown.get() {
             /* Sleep if we don't have any connections */
-            if self.descriptor_list.borrow().is_empty() {
+            if self.descriptor_list.is_empty() {
                 debug!("No connections.  Going to sleep.");
                 last_time = Instant::now();
             }
@@ -486,7 +487,7 @@ impl Game {
 
             /* Process descriptors with input pending */
             let mut buf = [0u8];
-            for d in self.descriptor_list.borrow().iter() {
+            for d in self.descriptor_list.iter() {
                 match RefCell::borrow(&d.stream).peek(&mut buf) {
                     Ok(size) if size != 0 => {
                         process_input(d);
@@ -497,7 +498,7 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            for d in clone_vec(&self.descriptor_list).iter() {
+            for d in clone_vec2(&self.descriptor_list).iter() {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
@@ -568,7 +569,7 @@ impl Game {
             }
 
             /* Send queued output out to the operating system (ultimately to user). */
-            for d in self.descriptor_list.borrow().iter() {
+            for d in self.descriptor_list.iter() {
                 if !d.output.borrow().is_empty() {
                     process_output(d);
                     if d.output.borrow().is_empty() {
@@ -578,7 +579,7 @@ impl Game {
             }
 
             /* Print prompts for other descriptors who had no other output */
-            for d in self.descriptor_list.borrow().iter() {
+            for d in self.descriptor_list.iter() {
                 if !d.has_prompt.get() && d.output.borrow().is_empty() {
                     let text = &make_prompt(d);
                     write_to_descriptor(&mut d.stream.borrow_mut(), text);
@@ -587,7 +588,7 @@ impl Game {
             }
 
             /* Kick out folks in the ConClose or ConDisconnect state */
-            for d in clone_vec(&self.descriptor_list).iter() {
+            for d in clone_vec2(&self.descriptor_list).iter() {
                 if d.state() == ConClose || d.state() == ConDisconnect {
                     self.close_socket(d);
                 }
@@ -710,7 +711,7 @@ impl Game {
         let mut sockets_connected = 0;
         let mut sockets_playing = 0;
 
-        for d in self.descriptor_list.borrow().iter() {
+        for d in self.descriptor_list.iter() {
             sockets_connected += 1;
             if d.state() == ConPlaying {
                 sockets_playing += 1;
@@ -876,13 +877,13 @@ fn get_bind_addr() -> IpAddr {
 static EMPTY_STRING: &'static str = "";
 
 impl Game {
-    fn new_descriptor(&self, mut stream: TcpStream, addr: SocketAddr) {
+    fn new_descriptor(&mut self, mut stream: TcpStream, addr: SocketAddr) {
         stream
             .set_nonblocking(true)
             .expect("Error with setting nonblocking");
 
         /* make sure we have room for it */
-        if self.descriptor_list.borrow().len() >= self.max_players as usize {
+        if self.descriptor_list.len() >= self.max_players as usize {
             write_to_descriptor(
                 &mut stream,
                 "Sorry, CircleMUD is full right now... please try again later!\r\n",
@@ -961,7 +962,7 @@ impl Game {
 
         /* append to list */
         let rc = Rc::new(newd);
-        self.descriptor_list.borrow_mut().push(rc.clone());
+        self.descriptor_list.push(rc.clone());
 
         write_to_output(rc.as_ref(), &self.db.greetings);
     }
@@ -1333,9 +1334,8 @@ fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
 }
 
 impl Game {
-    pub fn close_socket(&self, d: &DescriptorData) {
+    pub fn close_socket(&mut self, d: &DescriptorData) {
         self.descriptor_list
-            .borrow_mut()
             .retain(|c| !std::ptr::eq(c.as_ref(), d));
 
         d.stream
@@ -1434,7 +1434,7 @@ impl Game {
 
     fn check_idle_passwords(&self) {
         //struct descriptor_data * d, * next_d;
-        for d in self.descriptor_list.borrow().iter() {
+        for d in self.descriptor_list.iter() {
             if d.state() != ConPassword && d.state() != ConGetName {
                 continue;
             }
@@ -1585,7 +1585,7 @@ impl Game {
             return;
         }
 
-        for i in self.descriptor_list.borrow().iter() {
+        for i in self.descriptor_list.iter() {
             if i.state() != ConPlaying {
                 continue;
             }
@@ -1598,7 +1598,7 @@ impl Game {
             return;
         }
 
-        for i in self.descriptor_list.borrow().iter() {
+        for i in self.descriptor_list.iter() {
             if i.state() != ConPlaying || i.character.borrow().is_none() {
                 continue;
             }

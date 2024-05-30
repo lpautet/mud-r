@@ -1440,7 +1440,7 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     let db = &game.db;
     let mut num_can_see = 0;
 
-    for d in game.descriptor_list.borrow().iter() {
+    for d in game.descriptor_list.iter() {
         if d.state() != ConPlaying {
             continue;
         }
@@ -1664,7 +1664,7 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
     one_argument(argument, &mut arg);
     let db = &game.db;
-    for d in game.descriptor_list.borrow().iter() {
+    for d in game.descriptor_list.iter() {
         if d.state() != ConPlaying && playing {
             continue;
         }
@@ -1872,7 +1872,7 @@ pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
 fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     if arg.is_empty() {
         send_to_char(ch, "Players in your Zone\r\n--------------------\r\n");
-        for d in game.descriptor_list.borrow().iter() {
+        for d in game.descriptor_list.iter() {
             if d.state() != ConPlaying
                 || (d.character.borrow().is_some()
                     && Rc::ptr_eq(d.character.borrow().as_ref().unwrap(), ch))
@@ -1998,7 +1998,7 @@ fn print_object_location(db: &DB, num: i32, obj: &Rc<ObjData>, ch: &Rc<CharData>
 fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     if arg.is_empty() {
         send_to_char(ch, "Players\r\n-------\r\n");
-        for d in game.descriptor_list.borrow().iter() {
+        for d in game.descriptor_list.iter() {
             if d.state() == ConPlaying {
                 let oi = if d.original.borrow().is_some() {
                     d.original.borrow()

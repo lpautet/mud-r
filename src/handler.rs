@@ -35,7 +35,7 @@ use crate::structs::{
     LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
     PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
-use crate::util::{clone_vec, rand_number, SECS_PER_MUD_YEAR};
+use crate::util::{clone_vec, clone_vec2, rand_number, SECS_PER_MUD_YEAR};
 use crate::{is_set, send_to_char, write_to_output, Game, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
@@ -104,7 +104,6 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
 
     match loc {
         APPLY_NONE => {}
-
         APPLY_STR => {
             ch.incr_str(_mod as i8);
         }
@@ -991,7 +990,7 @@ impl Game {
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.borrow().is_none() {
-            let descriptors = clone_vec(&self.descriptor_list);
+            let descriptors = clone_vec2(&self.descriptor_list);
             for d in descriptors.iter() {
                 if d.original.borrow().is_some()
                     && Rc::ptr_eq(d.original.borrow().as_ref().unwrap(), ch)
@@ -1029,7 +1028,7 @@ impl Game {
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
-                for d in self.descriptor_list.borrow().iter() {
+                for d in self.descriptor_list.iter() {
                     if Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap()) {
                         continue;
                     }

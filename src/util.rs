@@ -897,6 +897,14 @@ pub fn clone_vec<A: Clone>(from: &RefCell<Vec<A>>) -> Vec<A> {
     ret
 }
 
+pub fn clone_vec2<A: Clone>(from: &Vec<A>) -> Vec<A> {
+    let mut ret = vec![];
+    for e in from.iter() {
+        ret.push(e.clone());
+    }
+    ret
+}
+
 impl ObjData {
     pub fn objwear_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_wear(), flag)
@@ -1319,7 +1327,7 @@ impl Game {
 
         let buf = format!("[ {} ]", msg);
 
-        for d in self.descriptor_list.borrow().iter() {
+        for d in self.descriptor_list.iter() {
             if d.state() != ConPlaying {
                 /* switch */
                 continue;

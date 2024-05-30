@@ -266,7 +266,7 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
      * will not have a character name yet and other people sitting at the
      * prompt won't have characters yet.
      */
-    for dt in game.descriptor_list.borrow().iter() {
+    for dt in game.descriptor_list.iter() {
         let character = dt.character.borrow();
 
         if character.is_none() {

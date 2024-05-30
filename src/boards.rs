@@ -605,7 +605,7 @@ fn board_remove_msg(
         );
         return true;
     }
-    for d in game.descriptor_list.borrow().iter() {
+    for d in game.descriptor_list.iter() {
         if d.state() == ConPlaying
             && d.str.borrow().is_some()
             && Rc::ptr_eq(d.str.borrow().as_ref().unwrap(), &b.msg_storage[slot_num])

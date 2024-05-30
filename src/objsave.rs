@@ -1583,7 +1583,7 @@ pub fn cryogenicist(
 }
 
 pub fn crash_save_all(game: &Game) {
-    for d in game.descriptor_list.borrow().iter() {
+    for d in game.descriptor_list.iter() {
         if d.state() == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
             if d.character
                 .borrow()
