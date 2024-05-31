@@ -2677,7 +2677,6 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
 }
 
 pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -2686,7 +2685,7 @@ pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         return;
     }
     let mut chdata = CharFileU::new();
-    if db.load_char(&arg, &mut chdata).is_none() {
+    if game.db.load_char(&arg, &mut chdata).is_none() {
         send_to_char(ch, "There is no such player.\r\n");
         return;
     }
@@ -4524,7 +4523,6 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     mem::size_of::<CharFileU>(),
                 );
                 game.db.player_fl
-                    .borrow_mut()
                     .as_mut()
                     .unwrap()
                     .write_all_at(

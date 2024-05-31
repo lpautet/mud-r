@@ -133,7 +133,7 @@ pub struct DB {
     /* fighting messages	 */
     pub(crate) player_table: Vec<PlayerIndexElement>,
     /* index to plr file	 */
-    pub(crate) player_fl: RefCell<Option<File>>,
+    pub(crate) player_fl: Option<File>,
     /* file desc of player file	 */
     top_idnum: Cell<i32>,
     /* highest idnum in use		 */
@@ -515,7 +515,7 @@ impl DB {
             zone_table: vec![],
             fight_messages: vec![],
             player_table: vec![],
-            player_fl: RefCell::new(None),
+            player_fl: None,
             top_idnum: Cell::new(0),
             no_mail: Cell::new(false),
             mini_mud: false,
@@ -804,10 +804,9 @@ impl DB {
                 }
             });
 
-        *self.player_fl.borrow_mut() = Some(player_file);
+        self.player_fl = Some(player_file);
 
-        let mut t = self.player_fl.borrow_mut();
-        let file_mut = t.as_mut().unwrap();
+        let file_mut = self.player_fl.as_mut().unwrap();
         let size = file_mut
             .seek(SeekFrom::End(0))
             .expect("SYSERR: fatal error seeking playerfile");
@@ -2784,14 +2783,13 @@ impl DB {
     }
 
     /* Load a char, TRUE if loaded, FALSE if not */
-    pub fn load_char(&self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
+    pub fn load_char(&mut self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
         let player_i = self.get_ptable_by_name(name);
         if player_i.is_none() {
             return player_i;
         }
         let player_i = player_i.unwrap();
-        let mut t = self.player_fl.borrow_mut();
-        let pfile = t.as_mut().unwrap();
+        let pfile = self.player_fl.as_mut().unwrap();
 
         let record_size = mem::size_of::<CharFileU>();
         pfile
@@ -2831,7 +2829,6 @@ impl DB {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
             self.player_fl
-                .borrow_mut()
                 .as_mut()
                 .unwrap()
                 .write_all_at(
