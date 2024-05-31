@@ -1320,11 +1320,11 @@ impl DB {
         let buf2 = format!("room #{}, direction D{}", room.number, dir);
 
         let mut rdr = RoomDirectionData {
-            general_description: fread_string(reader, buf2.as_str()),
-            keyword: fread_string(reader, buf2.as_str()),
-            exit_info: Cell::from(0),
+            general_description: Rc::from(fread_string(reader, buf2.as_str())),
+            keyword: Rc::from(fread_string(reader, buf2.as_str())),
+            exit_info: 0,
             key: 0,
-            to_room: Cell::new(0),
+            to_room: 0,
         };
 
         if get_line(reader, &mut line) == 0 {
@@ -1343,16 +1343,16 @@ impl DB {
         t[1] = f[2].parse::<i32>().unwrap();
         t[2] = f[3].parse::<i32>().unwrap();
         if t[0] == 1 {
-            rdr.exit_info.set(EX_ISDOOR);
+            rdr.exit_info = EX_ISDOOR;
         } else if t[0] == 2 {
-            rdr.exit_info.set(EX_ISDOOR | EX_PICKPROOF);
+            rdr.exit_info = EX_ISDOOR | EX_PICKPROOF;
         } else {
-            rdr.exit_info.set(0);
+            rdr.exit_info = 0;
         }
 
         rdr.key = t[1] as ObjVnum;
-        rdr.to_room.set(t[2] as RoomRnum);
-        room.dir_option[dir as usize] = Some(Rc::new(rdr));
+        rdr.to_room = t[2] as RoomRnum;
+        room.dir_option[dir as usize] = Some(rdr);
     }
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
@@ -1383,18 +1383,18 @@ impl DB {
 
     /* resolve all vnums into rnums in the world */
     fn renum_world(&mut self) {
-        for (_, room_data) in self.world.iter().enumerate() {
+        for i in 0..self.world.len() {
             for door in 0..NUM_OF_DIRS {
                 let to_room: RoomRnum;
                 {
-                    if room_data.dir_option[door].is_none() {
+                    if self.world[i].dir_option[door].is_none() {
                         continue;
                     }
-                    to_room = room_data.dir_option[door].as_ref().unwrap().to_room.get();
+                    to_room = self.world[i].dir_option[door].as_ref().unwrap().to_room;
                 }
                 if to_room != NOWHERE {
                     let rn = self.real_room(to_room);
-                    room_data.dir_option[door].as_ref().unwrap().to_room.set(rn);
+                    self.world[i].dir_option[door].as_mut().unwrap().to_room = rn;
                 }
             }
         }
@@ -2696,12 +2696,12 @@ impl Game {
                             0 => {
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
@@ -2709,12 +2709,12 @@ impl Game {
                             1 => {
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
@@ -2722,12 +2722,12 @@ impl Game {
                             2 => {
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
                                 self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_ref()
+                                    .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_CLOSED as i32);
                             }

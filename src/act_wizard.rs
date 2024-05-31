@@ -657,19 +657,19 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
             continue;
         }
         let buf1;
-        if rm.dir_option[i].as_ref().unwrap().to_room.get() == NOWHERE {
+        if rm.dir_option[i].as_ref().unwrap().to_room == NOWHERE {
             buf1 = format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM));
         } else {
             buf1 = format!(
                 "{}{:5}{}",
                 CCCYN!(ch, C_NRM),
-                db.get_room_vnum(rm.dir_option[i].as_ref().unwrap().to_room.get()),
+                db.get_room_vnum(rm.dir_option[i].as_ref().unwrap().to_room),
                 CCNRM!(ch, C_NRM)
             );
         }
         let mut buf2 = String::new();
         sprintbit(
-            rm.dir_option[i].as_ref().unwrap().exit_info.get() as i64,
+            rm.dir_option[i].as_ref().unwrap().exit_info as i64,
             &EXIT_BITS,
             &mut buf2,
         );
@@ -3498,7 +3498,6 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                             .as_ref()
                             .unwrap()
                             .to_room
-                            .get()
                             == 0
                     {
                         k += 1;

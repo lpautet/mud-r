@@ -871,17 +871,17 @@ pub const POS_FIGHTING: u8 = 7; /* fighting		*/
 pub const POS_STANDING: u8 = 8; /* standing		*/
 
 /* room-related structures ************************************************/
-
+#[derive(Clone)]
 pub struct RoomDirectionData {
-    pub general_description: String,
+    pub general_description: Rc<str>,
     /* When look DIR.			*/
-    pub keyword: String,
+    pub keyword: Rc<str>,
     /* for open/close			*/
-    pub exit_info: Cell<i16>,
+    pub exit_info: i16,
     /* Exit info			*/
     pub key: ObjVnum,
     /* Key's number (-1 for no key)		*/
-    pub to_room: Cell<RoomRnum>,
+    pub to_room: RoomRnum,
     /* Where direction leads (NOWHERE)	*/
 }
 
@@ -899,7 +899,7 @@ pub struct RoomData {
     /* Shown when entered                 */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* for examine/look       */
-    pub dir_option: [Option<Rc<RoomDirectionData>>; NUM_OF_DIRS],
+    pub dir_option: [Option<RoomDirectionData>; NUM_OF_DIRS],
     /* Directions */
     pub room_flags: Cell<i32>,
     /* DEATH,DARK ... etc */

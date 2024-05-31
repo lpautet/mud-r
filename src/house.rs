@@ -93,7 +93,6 @@ fn toroom(db: &DB, room: usize, dir: usize) -> RoomRnum {
             .as_ref()
             .unwrap()
             .to_room
-            .get()
     } else {
         NOWHERE
     }

@@ -47,7 +47,6 @@ fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
         .as_ref()
         .unwrap()
         .to_room
-        .get()
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
@@ -55,7 +54,6 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         .as_ref()
         .unwrap()
         .exit_info
-        .get()
         & EX_CLOSED
         != 0
 }

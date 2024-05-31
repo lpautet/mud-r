@@ -422,7 +422,7 @@ fn do_auto_exits(db: &DB, ch: &CharData) {
     send_to_char(ch, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
     for door in 0..NUM_OF_DIRS {
         if db.exit(ch, door).is_none()
-            || db.exit(ch, door).as_ref().unwrap().to_room.get() == NOWHERE
+            || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE
         {
             continue;
         }
@@ -453,7 +453,7 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
     let mut len = 0;
     for door in 0..NUM_OF_DIRS {
         if db.exit(ch, door).is_none()
-            || db.exit(ch, door).as_ref().unwrap().to_room.get() == NOWHERE
+            || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE
         {
             continue;
         }
@@ -470,8 +470,8 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
                 format!(
                     "{} - [{:5}] {}\r\n",
                     DIRS[door as usize],
-                    db.get_room_vnum(exit.to_room.get()),
-                    db.world[exit.to_room.get() as usize].name
+                    db.get_room_vnum(exit.to_room),
+                    db.world[exit.to_room as usize].name
                 )
                 .as_str(),
             );
@@ -481,10 +481,10 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
                 format!(
                     "{} - {}\r\n",
                     DIRS[door as usize],
-                    if db.is_dark(exit.to_room.get()) && !ch.can_see_in_dark() {
+                    if db.is_dark(exit.to_room) && !ch.can_see_in_dark() {
                         "Too dark to tell."
                     } else {
-                        db.world[exit.to_room.get() as usize].name.as_str()
+                        db.world[exit.to_room as usize].name.as_str()
                     }
                 )
                 .as_str(),
@@ -607,7 +607,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 ch,
                 format!(
                     "The {} is closed.\r\n",
-                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
+                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_ref())
                 )
                 .as_str(),
             );
@@ -627,7 +627,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 ch,
                 format!(
                     "The {} is open.\r\n",
-                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_str())
+                    fname(game.db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_ref())
                 )
                 .as_str(),
             );

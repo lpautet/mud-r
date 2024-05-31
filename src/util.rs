@@ -961,9 +961,9 @@ impl DB {
     }
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
         self.exit(ch, door).is_some()
-            && self.exit(ch, door).as_ref().unwrap().to_room.get() != NOWHERE
+            && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
             && !is_set!(
-                self.exit(ch, door).as_ref().unwrap().exit_info.get(),
+                self.exit(ch, door).as_ref().unwrap().exit_info,
                 EX_CLOSED
             )
     }
@@ -1133,18 +1133,18 @@ pub fn sana(obj: &ObjData) -> &str {
 
 impl RoomDirectionData {
     pub fn exit_flagged(&self, flag: i16) -> bool {
-        is_set!(self.exit_info.get(), flag)
+        is_set!(self.exit_info, flag)
     }
-    pub fn remove_exit_info_bit(&self, flag: i32) {
-        self.exit_info.set(self.exit_info.get() & !flag as i16);
+    pub fn remove_exit_info_bit(&mut self, flag: i32) {
+        self.exit_info &= !flag as i16;
     }
-    pub fn set_exit_info_bit(&self, flag: i32) {
-        self.exit_info.set(self.exit_info.get() | !flag as i16);
+    pub fn set_exit_info_bit(&mut self, flag: i32) {
+        self.exit_info |= !flag as i16;
     }
 }
 
 impl DB {
-    pub fn exit(&self, ch: &CharData, door: usize) -> Option<Rc<RoomDirectionData>> {
+    pub fn exit(&self, ch: &CharData, door: usize) -> Option<RoomDirectionData> {
         self.world[ch.in_room() as usize].dir_option[door].clone()
     }
     pub fn room_flags(&self, loc: RoomRnum) -> i32 {

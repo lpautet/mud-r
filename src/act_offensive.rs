@@ -409,8 +409,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
                     .exit(ch, attempt as usize)
                     .as_ref()
                     .unwrap()
-                    .to_room
-                    .get(),
+                    .to_room,
                 ROOM_DEATH,
             )
         {

@@ -412,8 +412,7 @@ impl DB {
                     self.world[ch.in_room() as usize].dir_option[door]
                         .as_ref()
                         .unwrap()
-                        .to_room
-                        .get(),
+                        .to_room,
                     "Your blood freezes as you hear someone's death cry.\r\n",
                 );
             }

@@ -98,12 +98,12 @@ impl Game {
                 && door < NUM_OF_DIRS as u32
                 && self.db.can_go(ch, door as usize)
                 && !self.db.room_flagged(
-                    self.db.exit(ch, door as usize).unwrap().to_room.get(),
+                    self.db.exit(ch, door as usize).unwrap().to_room,
                     ROOM_NOMOB | ROOM_DEATH,
                 )
                 && (!ch.mob_flagged(MOB_STAY_ZONE)
                     || self.db.world
-                        [self.db.exit(ch, door as usize).unwrap().to_room.get() as usize]
+                        [self.db.exit(ch, door as usize).unwrap().to_room as usize]
                         .zone
                         == self.db.world[ch.in_room() as usize].zone)
             {
