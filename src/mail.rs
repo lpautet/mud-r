@@ -206,7 +206,8 @@ impl MailSystem {
             .iter_mut()
             .position(|e| e.recipient == searchee)
     }
-
+}
+impl DB {
     /*
      * void write_to_file(void * #1, int #2, long #3)
      * #1 - A pointer to the data to write, usually the 'block' record.
@@ -215,13 +216,13 @@ impl MailSystem {
      *
      * Writes a mail block back into the database at the given location.
      */
-    fn write_to_file(&mut self, db: &DB, slice: &[u8], filepos: u64) {
+    fn write_to_file(&mut self, slice: &[u8], filepos: u64) {
         if filepos % BLOCK_SIZE as u64 != 0 {
             error!(
                 "SYSERR: Mail system -- fatal error #2!!! (invalid file position {})",
                 filepos
             );
-            db.no_mail.set(true);
+            self.no_mail = true;
             return;
         }
         let mail_file = OpenOptions::new()
@@ -235,7 +236,7 @@ impl MailSystem {
                 MAIL_FILE,
                 mail_file.err().unwrap()
             );
-            db.no_mail.set(true);
+            self.no_mail = true;
             return;
         }
         let mut mail_file = mail_file.unwrap();
@@ -248,7 +249,7 @@ impl MailSystem {
         mail_file
             .seek(SeekFrom::End(0))
             .expect("Seeking to the end of mail file");
-        self.file_end_pos = mail_file
+        self.mails.file_end_pos = mail_file
             .stream_position()
             .expect("getting stream position of mail file");
         return;
@@ -262,13 +263,13 @@ impl MailSystem {
      *
      * This reads a block from the mail database file.
      */
-    fn read_from_file(&mut self, db: &DB, slice: &mut [u8], filepos: u64) {
+    fn read_from_file(&mut self, slice: &mut [u8], filepos: u64) {
         if filepos % BLOCK_SIZE as u64 != 0 {
             error!(
                 "SYSERR: Mail system -- fatal error #2!!! (invalid file position {})",
                 filepos
             );
-            db.no_mail.set(true);
+            self.no_mail = true;
             return;
         }
         let mail_file = OpenOptions::new().read(true).open(MAIL_FILE);
@@ -278,7 +279,7 @@ impl MailSystem {
                 MAIL_FILE,
                 mail_file.err().unwrap()
             );
-            db.no_mail.set(true);
+            self.no_mail = true;
             return;
         }
         let mail_file = mail_file.unwrap();
@@ -287,7 +288,8 @@ impl MailSystem {
             .read_exact_at(slice, filepos)
             .expect("Reading mail file");
     }
-
+}
+impl MailSystem {
     fn index_mail(&mut self, id_to_index: i64, pos: u64) {
         if id_to_index < 0 {
             error!(
@@ -388,7 +390,8 @@ impl MailSystem {
     pub fn has_mail(&mut self, recipient: i64) -> bool {
         self.find_char_in_index(recipient).is_some()
     }
-
+}
+impl DB{
     /*
      * void store_mail(long #1, long #2, char * #3)
      * #1 - id number of the person to mail to.
@@ -399,7 +402,7 @@ impl MailSystem {
      * who the mail is to (long), who it's from (long), and a pointer to the
      * actual message text (char *).
      */
-    pub(crate) fn store_mail(&mut self, db: &DB, to: i64, from: i64, message_pointer: &str) {
+    pub(crate) fn store_mail(&mut self, to: i64, from: i64, message_pointer: &str) {
         let msg_txt = message_pointer;
 
         let total_length = message_pointer.len();
@@ -431,8 +434,8 @@ impl MailSystem {
 
         copy_to_stored(&mut header.txt, msg_txt);
 
-        let mut target_address = self.pop_free_list(); /* find next free block */
-        self.index_mail(to, target_address); /* add it to mail index in memory */
+        let mut target_address = self.mails.pop_free_list(); /* find next free block */
+        self.mails.index_mail(to, target_address); /* add it to mail index in memory */
         let slice;
         unsafe {
             slice = slice::from_raw_parts(
@@ -440,7 +443,7 @@ impl MailSystem {
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file(db, slice, target_address);
+        self.write_to_file( slice, target_address);
 
         if msg_txt.len() <= HEADER_BLOCK_DATASIZE {
             return; /* that was the whole message */
@@ -454,7 +457,7 @@ impl MailSystem {
          * the next block is.
          */
         let mut last_address = target_address;
-        target_address = self.pop_free_list();
+        target_address = self.mails.pop_free_list();
         header.header_data.next_block = target_address as i64;
         let slice;
         unsafe {
@@ -463,7 +466,7 @@ impl MailSystem {
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file(db, slice, last_address);
+        self.write_to_file( slice, last_address);
 
         /* now write the current data block */
         let mut data = DataBlockType {
@@ -480,7 +483,7 @@ impl MailSystem {
                 mem::size_of::<DataBlockType>(),
             );
         }
-        self.write_to_file(db, slice, target_address);
+        self.write_to_file( slice, target_address);
         bytes_written += copied;
         msg_txt = &msg_txt[copied..];
 
@@ -498,7 +501,7 @@ impl MailSystem {
          */
         while bytes_written < total_length {
             last_address = target_address;
-            target_address = self.pop_free_list();
+            target_address = self.mails.pop_free_list();
 
             /* rewrite the previous block to link it to the next */
             data.block_type = target_address as i64;
@@ -509,7 +512,7 @@ impl MailSystem {
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.write_to_file(db, slice, last_address);
+            self.write_to_file( slice, last_address);
 
             /* now write the next block, assuming it's the last.  */
             data.block_type = LAST_BLOCK;
@@ -522,7 +525,7 @@ impl MailSystem {
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.write_to_file(db, slice, target_address);
+            self.write_to_file( slice, target_address);
 
             bytes_written += copied;
             msg_txt = &msg_txt[copied..];
@@ -537,7 +540,7 @@ impl MailSystem {
      * Retrieves one messsage for a player. The mail is then discarded from
      * the file and the mail index.
      */
-    fn read_delete(&mut self, db: &DB, recipient: i64) -> Option<String> {
+    fn read_delete(&mut self, recipient: i64) -> Option<String> {
         if recipient < 0 {
             error!(
                 "SYSERR: Mail system -- non-fatal error #6. (recipient: {})",
@@ -545,13 +548,13 @@ impl MailSystem {
             );
             return None;
         }
-        let mail_idx = self.find_char_in_index(recipient);
+        let mail_idx = self.mails.find_char_in_index(recipient);
         if mail_idx.is_none() {
             error!("SYSERR: Mail system -- post office spec_proc error?  Error #7. (invalid character in index)");
             return None;
         }
         let mail_idx = mail_idx.unwrap();
-        let mail_pointer = &mut self.mail_index[mail_idx];
+        let mail_pointer = &mut self.mails.mail_index[mail_idx];
         let position_pointer = mail_pointer.position_list.get(0);
         if position_pointer.is_none() {
             error!("SYSERR: Mail system -- non-fatal error #8. (invalid position pointer)");
@@ -563,7 +566,7 @@ impl MailSystem {
             /* just 1 entry in list. */
             mail_address = *position_pointer;
 
-            self.mail_index.remove(mail_idx);
+            self.mails.mail_index.remove(mail_idx);
         } else {
             mail_address = mail_pointer
                 .position_list
@@ -589,19 +592,19 @@ impl MailSystem {
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.read_from_file(db, slice, mail_address);
+        self.read_from_file( slice, mail_address);
 
         if header.block_type != HEADER_BLOCK as i64 {
             let bt = header.block_type;
             error!("SYSERR: Oh dear. (Header block {} != {})", bt, HEADER_BLOCK);
-            db.no_mail.set(true);
+            self.no_mail = true;
             error!("SYSERR: Mail system disabled!  -- Error #9. (Invalid header block.)");
             return None;
         }
         let tmstr = ctime(header.header_data.mail_time);
 
-        let from = db.get_name_by_id(header.header_data.from);
-        let to = db.get_name_by_id(recipient);
+        let from = self.get_name_by_id(header.header_data.from);
+        let to = self.get_name_by_id(recipient);
 
         let mut buf = format!(
             " * * * * Midgaard Mail System * * * *\r\n\
@@ -635,8 +638,8 @@ From: {}\r\n\
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file(db, slice, mail_address);
-        self.push_free_list(mail_address);
+        self.write_to_file( slice, mail_address);
+        self.mails.push_free_list(mail_address);
 
         while following_block != LAST_BLOCK {
             let mut data = DataBlockType {
@@ -650,7 +653,7 @@ From: {}\r\n\
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.read_from_file(db, slice, following_block as u64);
+            self.read_from_file( slice, following_block as u64);
 
             buf.push_str(parse_c_string(&data.txt).as_str()); /* strcat: OK (data.txt:DATA_BLOCK_DATASIZE < buf:MAX_MAIL_SIZE) */
             mail_address = following_block as u64;
@@ -663,8 +666,8 @@ From: {}\r\n\
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.write_to_file(db, slice, mail_address);
-            self.push_free_list(mail_address);
+            self.write_to_file(slice, mail_address);
+            self.mails.push_free_list(mail_address);
         }
 
         Some(buf)
@@ -690,7 +693,7 @@ pub fn postmaster(
     if !(cmd_is(cmd, "mail") || cmd_is(cmd, "check") || cmd_is(cmd, "receive")) {
         return false;
     }
-    if game.db.no_mail.get() {
+    if game.db.no_mail {
         send_to_char(
             ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
@@ -813,14 +816,13 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 }
 
 fn postmaster_check_mail(
-    db: &DB,
+    db: &mut DB,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
     _cmd: i32,
     _arg: &str,
 ) {
-    let m = &mut db.mails.borrow_mut();
-    if m.has_mail(ch.get_idnum()) {
+    if db.mails.has_mail(ch.get_idnum()) {
         db.act(
             "$n tells you, 'You have mail waiting.'",
             false,
@@ -848,12 +850,12 @@ fn postmaster_receive_mail(
     _cmd: i32,
     _arg: &str,
 ) {
-    if !db.mails.borrow_mut().has_mail(ch.get_idnum()) {
+    if !db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
         db.act(buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
-    while db.mails.borrow_mut().has_mail(ch.get_idnum()) {
+    while db.mails.has_mail(ch.get_idnum()) {
         let obj = db.create_obj(
             NOTHING,
             "mail paper letter",
@@ -866,7 +868,7 @@ fn postmaster_receive_mail(
             10,
         );
 
-        let mail_content = db.mails.borrow_mut().read_delete(db, ch.get_idnum());
+        let mail_content = db.read_delete( ch.get_idnum());
         let mail_content = if mail_content.is_some() {
             mail_content.unwrap()
         } else {

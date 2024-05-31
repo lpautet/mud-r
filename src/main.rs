@@ -337,7 +337,7 @@ fn main() -> ExitCode {
         info!("Clearing other memory.");
         game.db.free_player_index(); /* db.rs */
         free_messages(&mut game.db); /* fight.rs */
-        game.db.mails.borrow_mut().clear_free_list(); /* mail.rs */
+        game.db.mails.clear_free_list(); /* mail.rs */
         game.db.free_text_files(); /* db.rs */
         board_clear_all(&mut game.db.boards.borrow_mut()); /* boards.rs */
         game.db.cmd_sort_info.clear(); /* act.informative.rs */
@@ -547,7 +547,7 @@ impl Game {
 
                 if d.str.borrow().is_some() {
                     /* Writing boards, mail, etc. */
-                    string_add(&self.db, d, &comm);
+                    string_add(&mut self.db, d, &comm);
                 } else if d.showstr_count.get() != 0 {
                     /* Reading something w/ pager */
                     show_string(d, &comm);

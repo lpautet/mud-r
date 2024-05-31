@@ -69,7 +69,7 @@ pub fn string_write(d: &DescriptorData, writeto: Rc<RefCell<String>>, len: usize
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(db: &DB, d: &DescriptorData, str_: &str) {
+pub fn string_add(db: &mut DB, d: &DescriptorData, str_: &str) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
@@ -119,8 +119,7 @@ pub fn string_add(db: &DB, d: &DescriptorData, str_: &str) {
                 .unwrap()
                 .plr_flagged(PLR_MAILING)
         {
-            db.mails.borrow_mut().store_mail(
-                db,
+            db.store_mail(
                 d.mail_to.get(),
                 d.character.borrow().as_ref().unwrap().get_idnum(),
                 RefCell::borrow(d.str.borrow().as_ref().unwrap()).as_str(),

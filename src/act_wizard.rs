@@ -2647,7 +2647,7 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     if subcmd == SCMD_DATE {
         mytime = time_now();
     } else {
-        mytime = game.db.boot_time.get() as u64;
+        mytime = game.db.boot_time as u64;
     }
 
     let date_time = Utc.timestamp_millis_opt(mytime as i64 * 1000).unwrap();
@@ -2656,7 +2656,7 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     if subcmd == SCMD_DATE {
         send_to_char(ch, format!("Current machine time: {}\r\n", tmstr).as_str());
     } else {
-        let mytime = time_now() - game.db.boot_time.get() as u64;
+        let mytime = time_now() - game.db.boot_time as u64;
         let d = mytime / 86400;
         let h = (mytime / 3600) % 24;
         let m = (mytime / 60) % 60;

@@ -135,15 +135,15 @@ pub struct DB {
     /* index to plr file	 */
     pub(crate) player_fl: Option<File>,
     /* file desc of player file	 */
-    top_idnum: Cell<i32>,
+    top_idnum: i32,
     /* highest idnum in use		 */
-    pub no_mail: Cell<bool>,
+    pub no_mail: bool,
     /* mail disabled?		 */
     pub mini_mud: bool,
     /* mini-mud mode?		 */
     pub no_rent_check: bool,
     /* skip rent check on boot?	 */
-    pub boot_time: Cell<u64>,
+    pub boot_time: u64,
     pub no_specials: bool,
     /* time of mud boot		 */
     pub circle_restrict: Cell<u8>,
@@ -199,7 +199,7 @@ pub struct DB {
     pub boards: RefCell<BoardSystem>,
     pub house_control: RefCell<[HouseControlRec; MAX_HOUSES]>,
     pub num_of_houses: Cell<usize>,
-    pub mails: RefCell<MailSystem>,
+    pub mails: MailSystem,
     pub(crate) mayor: RefCell<Mayor>,
     pub(crate) king_welmar: KingWelmar,
     pub scheck: bool,
@@ -516,11 +516,11 @@ impl DB {
             fight_messages: vec![],
             player_table: vec![],
             player_fl: None,
-            top_idnum: Cell::new(0),
-            no_mail: Cell::new(false),
+            top_idnum: 0,
+            no_mail: false,
             mini_mud: false,
             no_rent_check: false,
-            boot_time: Cell::new(time_now()),
+            boot_time: time_now(),
             no_specials: false,
             circle_restrict: Cell::new(0),
             r_mortal_start_room: Cell::new(NOWHERE),
@@ -565,7 +565,7 @@ impl DB {
             boards: RefCell::new(BoardSystem::new()),
             house_control: RefCell::new([HouseControlRec::new(); MAX_HOUSES]),
             num_of_houses: Cell::new(0),
-            mails: RefCell::new(MailSystem::new()),
+            mails: MailSystem::new(),
             mayor: RefCell::new(Mayor::new()),
             king_welmar: KingWelmar::new(),
             scheck: false,
@@ -645,9 +645,9 @@ impl DB {
         sort_spells(&mut game.db);
 
         info!("Booting mail system.");
-        if !game.db.mails.borrow_mut().scan_file() {
+        if !game.db.mails.scan_file() {
             info!("    Mail boot failed -- Mail system disabled");
-            game.db.no_mail.set(true);
+            game.db.no_mail = true;
         }
         info!("Reading banned site and invalid-name list.");
         load_banned(&mut game.db);
@@ -854,10 +854,10 @@ impl DB {
             };
             pie.name = pie.name.to_lowercase();
             self.player_table.push(pie);
-            self.top_idnum.set(max(
-                self.top_idnum.get(),
+            self.top_idnum = max(
+                self.top_idnum,
                 dummy.char_specials_saved.idnum as i32,
-            ));
+            );
         }
     }
 }

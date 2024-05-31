@@ -3987,7 +3987,6 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                     if game
                         .db
                         .mails
-                        .borrow_mut()
                         .has_mail(d.character.borrow().as_ref().unwrap().get_idnum())
                     {
                         send_to_char(
