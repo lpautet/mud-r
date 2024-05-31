@@ -472,12 +472,11 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
                     "{} - [{:5}] {}\r\n",
                     DIRS[door as usize],
                     db.get_room_vnum(exit.to_room.get()),
-                    db.world.borrow()[exit.to_room.get() as usize].name
+                    db.world[exit.to_room.get() as usize].name
                 )
                 .as_str(),
             );
         } else {
-            let world = db.world.borrow();
             send_to_char(
                 ch,
                 format!(
@@ -486,7 +485,7 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
                     if db.is_dark(exit.to_room.get()) && !ch.can_see_in_dark() {
                         "Too dark to tell."
                     } else {
-                        world[exit.to_room.get() as usize].name.as_str()
+                        db.world[exit.to_room.get() as usize].name.as_str()
                     }
                 )
                 .as_str(),
@@ -521,7 +520,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
             format!(
                 "[{}] {} [{}]",
                 game.db.get_room_vnum(ch.in_room()),
-                game.db.world.borrow()[ch.in_room() as usize].name,
+                game.db.world[ch.in_room() as usize].name,
                 buf
             )
             .as_str(),
@@ -529,7 +528,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
     } else {
         send_to_char(
             ch,
-            format!("{}", game.db.world.borrow()[ch.in_room() as usize].name).as_str(),
+            format!("{}", game.db.world[ch.in_room() as usize].name).as_str(),
         );
     }
 
@@ -541,7 +540,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
     {
         send_to_char(
             ch,
-            format!("{}", game.db.world.borrow()[ch.in_room() as usize].description).as_str(),
+            format!("{}", game.db.world[ch.in_room() as usize].description).as_str(),
         );
     }
 
@@ -552,7 +551,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
 
     /* now list characters & objects */
     send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
-    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+    let room = game.db.world[ch.in_room() as usize].clone();
     list_obj_to_char(
         game,
         room.contents.borrow().as_ref(),
@@ -561,7 +560,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
         false,
     );
     send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
-    let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+    let room = game.db.world[ch.in_room() as usize].clone();
     list_char_to_char(
         game,
         room
@@ -808,7 +807,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     /* Does the argument match an extra desc in the room? */
     let desc = find_exdesc(
         &arg,
-        &game.db.world.borrow()[ch.in_room() as usize].ex_descriptions,
+        &game.db.world[ch.in_room() as usize].ex_descriptions,
     );
     if desc.is_some() {
         i += 1;
@@ -851,7 +850,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc of an object in the room? */
-    for obj in game.db.world.borrow()[ch.in_room() as usize]
+    for obj in game.db.world[ch.in_room() as usize]
         .contents
         .borrow()
         .iter()
@@ -891,7 +890,7 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(ch, "It is pitch black...\r\n");
-        let room = db.world.borrow()[ch.in_room() as usize].clone();
+        let room = db.world[ch.in_room() as usize].clone();
         list_char_to_char(
             game,
             &room.peoples.borrow(),
@@ -1475,8 +1474,8 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             continue;
         }
         if localwho
-            && db.world.borrow()[ch.in_room() as usize].zone
-                != db.world.borrow()[tch.in_room() as usize].zone
+            && db.world[ch.in_room() as usize].zone
+                != db.world[tch.in_room() as usize].zone
         {
             continue;
         }
@@ -1894,8 +1893,8 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
             if i.in_room() == NOWHERE || !game.db.can_see(ch, i) {
                 continue;
             }
-            if game.db.world.borrow()[ch.in_room() as usize].zone
-                != game.db.world.borrow()[i.in_room() as usize].zone
+            if game.db.world[ch.in_room() as usize].zone
+                != game.db.world[i.in_room() as usize].zone
             {
                 continue;
             }
@@ -1904,7 +1903,7 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 format!(
                     "%{:20} - {}\r\n",
                     i.get_name(),
-                    game.db.world.borrow()[i.in_room() as usize].name
+                    game.db.world[i.in_room() as usize].name
                 )
                 .as_str(),
             );
@@ -1916,8 +1915,8 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 continue;
             }
             if !game.db.can_see(ch, i)
-                || game.db.world.borrow()[i.in_room() as usize].zone
-                    != game.db.world.borrow()[ch.in_room() as usize].zone
+                || game.db.world[i.in_room() as usize].zone
+                    != game.db.world[ch.in_room() as usize].zone
             {
                 continue;
             }
@@ -1929,7 +1928,7 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 format!(
                     "{:25} - {}\r\n",
                     i.get_name(),
-                    game.db.world.borrow()[i.in_room() as usize].name
+                    game.db.world[i.in_room() as usize].name
                 )
                 .as_str(),
             );
@@ -1955,7 +1954,7 @@ fn print_object_location(db: &DB, num: i32, obj: &Rc<ObjData>, ch: &Rc<CharData>
             format!(
                 "[{:5}] {}\r\n",
                 db.get_room_vnum(obj.in_room()),
-                db.world.borrow()[obj.in_room() as usize].name
+                db.world[obj.in_room() as usize].name
             )
             .as_str(),
         );
@@ -2020,7 +2019,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                                 game.db.get_room_vnum(
                                     d.character.borrow().as_ref().unwrap().in_room.get()
                                 ),
-                                game.db.world.borrow()
+                                game.db.world
                                     [d.character.borrow().as_ref().unwrap().in_room.get() as usize]
                                     .name,
                                 d.character.borrow().as_ref().unwrap().get_name()
@@ -2034,7 +2033,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                                 "{:20} - [{:5}] {}\r\n",
                                 i.get_name(),
                                 game.db.get_room_vnum(i.in_room()),
-                                game.db.world.borrow()[i.in_room() as usize].name
+                                game.db.world[i.in_room() as usize].name
                             )
                             .as_str(),
                         );
@@ -2061,7 +2060,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                         },
                         i.get_name(),
                         game.db.get_room_vnum(i.in_room()),
-                        game.db.world.borrow()[i.in_room() as usize].name
+                        game.db.world[i.in_room() as usize].name
                     )
                     .as_str(),
                 );

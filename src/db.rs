@@ -114,7 +114,7 @@ pub struct HelpIndexElement {
 }
 
 pub struct DB {
-    pub world: RefCell<Vec<Rc<RoomData>>>,
+    pub world: Vec<Rc<RoomData>>,
     pub character_list: Vec<Rc<CharData>>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
@@ -470,17 +470,17 @@ impl DB {
         self.object_list.clear();
 
         /* Rooms */
-        for cnt in 0..self.world.borrow().len() {
+        for cnt in 0..self.world.len() {
             // self.world.borrow_mut()[cnt].ex_descriptions.clear();
 
             for itr in 0..NUM_OF_DIRS {
-                if self.world.borrow()[cnt].dir_option[itr].is_none() {
+                if self.world[cnt].dir_option[itr].is_none() {
                     continue;
                 }
                 // self.world.borrow_mut()[cnt].dir_option[itr] = None;
             }
         }
-        self.world.borrow_mut().clear();
+        self.world.clear();
 
         /* Objects */
         self.obj_proto.clear();
@@ -507,7 +507,7 @@ impl DB {
 
     pub fn new() -> DB {
         DB {
-            world: RefCell::new(vec![]),
+            world: vec![],
             character_list: vec![],
             mob_index: vec![],
             mob_protos: vec![],
@@ -1022,7 +1022,7 @@ impl DB {
 
         match mode {
             DB_BOOT_WLD => {
-                self.world.borrow_mut().reserve_exact(rec_count as usize);
+                self.world.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<CharData>() * rec_count as usize;
                 info!("   {} rooms, {} bytes.", rec_count, size[0]);
             }
@@ -1210,7 +1210,7 @@ fn asciiflag_conv(flag: &str) -> i64 {
 
 impl DB {
     /* load the rooms */
-    fn parse_room(&self, reader: &mut BufReader<File>, virtual_nr: i32) {
+    fn parse_room(&mut self, reader: &mut BufReader<File>, virtual_nr: i32) {
         let mut t = [0; 10];
         let mut line = String::new();
         let mut zone = 0;
@@ -1309,7 +1309,7 @@ impl DB {
                 }
             }
         }
-        self.world.borrow_mut().push(Rc::new(rd));
+        self.world.push(Rc::new(rd));
     }
 
     /* read direction data */
@@ -1383,7 +1383,7 @@ impl DB {
 
     /* resolve all vnums into rnums in the world */
     fn renum_world(&mut self) {
-        for (_, room_data) in self.world.borrow().iter().enumerate() {
+        for (_, room_data) in self.world.iter().enumerate() {
             for door in 0..NUM_OF_DIRS {
                 let to_room: RoomRnum;
                 {
@@ -2665,7 +2665,7 @@ impl Game {
                     /* rem obj from room */
                     obj = self.db.get_obj_in_list_num(
                         self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as i16,
-                        self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize]
+                        self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize]
                             .contents
                             .borrow()
                             .as_ref(),
@@ -2680,7 +2680,7 @@ impl Game {
                     /* set state of door */
                     if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 < 0
                         || self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
-                        || (self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                        || (self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                             [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
@@ -2694,12 +2694,12 @@ impl Game {
                     } else {
                         match self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
@@ -2707,12 +2707,12 @@ impl Game {
                             }
 
                             1 => {
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
@@ -2720,12 +2720,12 @@ impl Game {
                             }
 
                             2 => {
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world.borrow()[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as usize]
                                     .as_ref()
                                     .unwrap()
@@ -2765,7 +2765,7 @@ fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
         if i.character.borrow().as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if game.db.world.borrow()[i.character.borrow().as_ref().unwrap().in_room() as usize].zone
+        if game.db.world[i.character.borrow().as_ref().unwrap().in_room() as usize].zone
             != zone_nr
         {
             continue;
@@ -3412,7 +3412,6 @@ impl DB {
     pub fn real_room(&self, vnum: RoomRnum) -> RoomRnum {
         let r = self
             .world
-            .borrow()
             .binary_search_by_key(&vnum, |idx| idx.number);
         if r.is_err() {
             return NOWHERE;

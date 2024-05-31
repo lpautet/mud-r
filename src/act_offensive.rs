@@ -58,7 +58,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         if helpee.fighting().is_some() {
             opponent = helpee.fighting();
         } else {
-            for p in game.db.world.borrow()[ch.in_room() as usize]
+            for p in game.db.world[ch.in_room() as usize]
                 .peoples
                 .borrow()
                 .iter()
@@ -542,8 +542,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
     let mut tmp_ch = None;
     {
-        let w = game.db.world.borrow();
-        for tch in w[ch.in_room() as usize].peoples.borrow().iter() {
+        for tch in game.db.world[ch.in_room() as usize].peoples.borrow().iter() {
             if tch.fighting().is_some() && Rc::ptr_eq(tch.fighting().as_ref().unwrap(), vict) {
                 tmp_ch = Some(tch.clone());
                 break;

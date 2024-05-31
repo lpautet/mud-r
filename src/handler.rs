@@ -393,30 +393,29 @@ impl DB {
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
                 if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
-                    self.world.borrow()[ch.in_room() as usize]
+                    self.world[ch.in_room() as usize]
                         .light
-                        .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                        .set(self.world[ch.in_room() as usize].light.get() - 1);
                 }
             }
         }
 
-        let w = self.world.borrow();
-        let mut list = w[ch.in_room() as usize].peoples.borrow_mut();
+        let mut list = self.world[ch.in_room() as usize].peoples.borrow_mut();
         list.retain(|c_rch| !Rc::ptr_eq(c_rch, ch));
     }
 
     /* place a character in a room */
     pub(crate) fn char_to_room(&mut self, ch: &Rc<CharData>, room: RoomRnum) {
-        if room == NOWHERE || room >= self.world.borrow().len() as i16 {
+        if room == NOWHERE || room >= self.world.len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
                 room,
-                self.world.borrow().len(),
+                self.world.len(),
                 'x'
             );
             return;
         }
-        self.world.borrow()[room as usize]
+        self.world[room as usize]
             .peoples
             .borrow_mut()
             .push(ch.clone());
@@ -425,9 +424,9 @@ impl DB {
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
                 if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
-                    self.world.borrow()[ch.in_room() as usize]
+                    self.world[ch.in_room() as usize]
                         .light
-                        .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
+                        .set(self.world[ch.in_room() as usize].light.get() + 1);
                     /* Light ON */
                 }
             }
@@ -592,9 +591,9 @@ impl DB {
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
                     /* if light is ON */
-                    self.world.borrow()[ch.in_room() as usize]
+                    self.world[ch.in_room() as usize]
                         .light
-                        .set(self.world.borrow()[ch.in_room() as usize].light.get() + 1);
+                        .set(self.world[ch.in_room() as usize].light.get() + 1);
                 }
             }
         } else {
@@ -634,9 +633,9 @@ impl DB {
         if ch.in_room() != NOWHERE {
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
-                    self.world.borrow()[ch.in_room() as usize]
+                    self.world[ch.in_room() as usize]
                         .light
-                        .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                        .set(self.world[ch.in_room() as usize].light.get() - 1);
                 }
             }
         } else {
@@ -721,7 +720,7 @@ impl DB {
             return None;
         }
 
-        for i in self.world.borrow()[room as usize].peoples.borrow().iter() {
+        for i in self.world[room as usize].peoples.borrow().iter() {
             if isname(&name, &i.player.borrow().name) {
                 *number -= 1;
                 if *number == 0 {
@@ -746,11 +745,11 @@ impl DB {
 
     /* put an object in a room */
     pub fn obj_to_room(&self, object: &Rc<ObjData>, room: RoomRnum) {
-        if room == NOWHERE || room >= self.world.borrow().len() as i16 {
+        if room == NOWHERE || room >= self.world.len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{})",
                 room,
-                self.world.borrow().len()
+                self.world.len()
             );
             return;
         }
@@ -759,7 +758,7 @@ impl DB {
         if self.room_flagged(room, ROOM_HOUSE) {
             self.set_room_flags_bit(room, ROOM_HOUSE_CRASH)
         }
-        self.world.borrow()[room as usize]
+        self.world[room as usize]
             .contents
             .borrow_mut()
             .push(object.clone());
@@ -775,7 +774,7 @@ impl DB {
             return;
         }
 
-        self.world.borrow()[object.in_room() as usize]
+        self.world[object.in_room() as usize]
             .contents
             .borrow_mut()
             .retain(|x| !Rc::ptr_eq(x, &object));
@@ -952,9 +951,9 @@ impl DB {
                             None,
                             TO_ROOM,
                         );
-                        self.world.borrow()[ch.in_room() as usize]
+                        self.world[ch.in_room() as usize]
                             .light
-                            .set(self.world.borrow()[ch.in_room() as usize].light.get() - 1);
+                            .set(self.world[ch.in_room() as usize].light.get() - 1);
                     }
                 }
             }
@@ -1245,7 +1244,7 @@ impl DB {
             return self.get_player_vis(ch, name, None, FIND_CHAR_ROOM);
         }
 
-        for i in self.world.borrow()[ch.in_room() as usize]
+        for i in self.world[ch.in_room() as usize]
             .peoples
             .borrow()
             .iter()
@@ -1390,7 +1389,7 @@ impl DB {
             ch,
             &name,
             Some(number),
-            self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            self.world[ch.in_room() as usize].contents.borrow(),
         );
         if i.is_some() {
             return i;
@@ -1703,7 +1702,7 @@ impl DB {
                 ch,
                 &name,
                 Some(&mut number),
-                self.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                self.world[ch.in_room() as usize].contents.borrow(),
             );
             if tar_obj.is_some() {
                 return FIND_OBJ_ROOM;

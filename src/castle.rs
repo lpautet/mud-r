@@ -184,7 +184,7 @@ fn member_of_royal_guard(db: &DB, ch: &Rc<CharData>) -> bool {
  * Used by Tim and Tom
  */
 fn find_npc_by_name(db: &DB, ch_at: &Rc<CharData>, name: &str) -> Option<Rc<CharData>> {
-    db.world.borrow()[ch_at.in_room() as usize]
+    db.world[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -199,7 +199,7 @@ fn find_npc_by_name(db: &DB, ch_at: &Rc<CharData>, name: &str) -> Option<Rc<Char
  * Used by Peter the Captain of the Royal Guard
  */
 fn find_guard(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
-    db.world.borrow()[ch_at.in_room() as usize]
+    db.world[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -217,7 +217,7 @@ fn find_guard(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
     let mut num_bad_guys = 0;
 
-    for ch in db.world.borrow()[ch_at.in_room() as usize]
+    for ch in db.world[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -238,7 +238,7 @@ fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 
     num_bad_guys = 0;
 
-    for ch in db.world.borrow()[ch_at.in_room() as usize]
+    for ch in db.world[ch_at.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -293,7 +293,7 @@ fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
  * Used by Tim and Tom
  */
 fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharData>) -> bool {
-    let ch_bad_guy = game.db.world.borrow()[ch_hero.in_room() as usize]
+    let ch_bad_guy = game.db.world[ch_hero.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -1019,7 +1019,7 @@ fn castle_cleaner(db: &DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
         return false;
     }
 
-    for i in clone_vec(&db.world.borrow()[ch.in_room() as usize].contents).iter() {
+    for i in clone_vec(&db.world[ch.in_room() as usize].contents).iter() {
         if !is_trash(i) {
             continue;
         }

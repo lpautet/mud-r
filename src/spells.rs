@@ -345,7 +345,7 @@ pub fn spell_teleport(
     let victim = victim.unwrap();
 
     loop {
-        to_room = rand_number(0, game.db.world.borrow().len() as u32);
+        to_room = rand_number(0, game.db.world.len() as u32);
         if !game.db.room_flagged(
             to_room as RoomRnum,
             ROOM_PRIVATE | ROOM_DEATH | ROOM_GODROOM,
@@ -405,7 +405,7 @@ pub fn spell_summon(
             && !victim.plr_flagged(PLR_KILLER)
         {
             send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
-                                         ch.get_name(), game.db.world.borrow()[ch.in_room() as usize].name,
+                                         ch.get_name(), game.db.world[ch.in_room() as usize].name,
                                          if ch.player.borrow().sex == SEX_MALE { "He" } else { "She" }).as_str());
 
             send_to_char(
@@ -424,7 +424,7 @@ pub fn spell_summon(
                     "{} failed summoning {} to {}.",
                     ch.get_name(),
                     victim.get_name(),
-                    game.db.world.borrow()[ch.in_room() as usize].name
+                    game.db.world[ch.in_room() as usize].name
                 )
                 .as_str(),
             );
@@ -517,7 +517,7 @@ pub fn spell_locate_object(
                 ch.unwrap(),
                 format!(
                     " is in {}.\r\n",
-                    db.world.borrow()[i.in_room() as usize].name
+                    db.world[i.in_room() as usize].name
                 )
                 .as_str(),
             );

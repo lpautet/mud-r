@@ -618,8 +618,8 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             let ib = i.character.borrow();
             let ic = ib.as_ref().unwrap();
             if subcmd == SCMD_SHOUT
-                && (db.world.borrow()[ch.in_room() as usize].zone
-                    != db.world.borrow()[ic.in_room() as usize].zone
+                && (db.world[ch.in_room() as usize].zone
+                    != db.world[ic.in_room() as usize].zone
                     || !ic.awake())
             {
                 continue;

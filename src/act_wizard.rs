@@ -231,7 +231,7 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
     if db.room_flagged(location, ROOM_GODROOM) {
         send_to_char(ch, "You are not godly enough to use that room!\r\n");
     } else if db.room_flagged(location, ROOM_PRIVATE)
-        && db.world.borrow()[location as usize].peoples.borrow().len() > 1
+        && db.world[location as usize].peoples.borrow().len() > 1
     {
         send_to_char(
             ch,
@@ -504,7 +504,7 @@ pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 }
 
 fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
-    let rm = &db.world.borrow()[ch.in_room() as usize];
+    let rm = &db.world[ch.in_room() as usize];
 
     send_to_char(
         ch,
@@ -771,7 +771,6 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         )
         .as_str(),
     );
-    let w = db.world.borrow();
     send_to_char(
         ch,
         format!(
@@ -780,7 +779,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             if j.in_room() == NOWHERE {
                 "Nowhere"
             } else {
-                w[j.in_room() as usize].name.as_str()
+                db.world[j.in_room() as usize].name.as_str()
             }
         )
         .as_str(),
@@ -1553,7 +1552,7 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 ch,
                 &mut name,
                 Some(&mut number),
-                game.db.world.borrow()[ch.in_room() as usize]
+                game.db.world[ch.in_room() as usize]
                     .contents
                     .borrow(),
             );
@@ -2118,7 +2117,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 ch,
                 &mut buf,
                 None,
-                game.db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                game.db.world[ch.in_room() as usize].contents.borrow(),
             );
             obj.is_some()
         } {
@@ -2151,7 +2150,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         );
         game.db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
-        let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+        let room = game.db.world[ch.in_room() as usize].clone();
         for vict in 
             room.peoples
             .borrow()
@@ -2178,13 +2177,13 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         }
 
         /* Clear the ground. */
-        while game.db.world.borrow()[ch.in_room() as usize]
+        while game.db.world[ch.in_room() as usize]
             .contents
             .borrow()
             .len()
             > 0
         {
-            let o = game.db.world.borrow()[ch.in_room() as usize].contents.borrow()[0].clone();
+            let o = game.db.world[ch.in_room() as usize].contents.borrow()[0].clone();
             game.db.extract_obj(&o);
         }
     }
@@ -2416,7 +2415,7 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 }
 
 fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
-    for tch in db.world.borrow()[ch.in_room() as usize]
+    for tch in db.world[ch.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -2769,7 +2768,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             )
             .as_str(),
         );
-        let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+        let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
         for vict in peoples_in_room.iter() {
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
                 continue;
@@ -2996,7 +2995,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         );
         return;
     } else if arg.starts_with('.') {
-        i = game.db.world.borrow()[ch.in_room() as usize].zone as usize;
+        i = game.db.world[ch.in_room() as usize].zone as usize;
     } else {
         let j = arg.parse::<i32>();
         if j.is_err() {
@@ -3365,7 +3364,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         1 => {
             /* tightened up by JE 4/6/93 */
             if self_ {
-                print_zone_to_buf(&game.db, &mut buf, game.db.world.borrow()[ch.in_room() as usize].zone);
+                print_zone_to_buf(&game.db, &mut buf, game.db.world[ch.in_room() as usize].zone);
             } else if !value.is_empty() && is_number(&value) {
                 let value = value.parse::<i32>().unwrap();
                 let zrn = game.db
@@ -3482,7 +3481,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     game.db.mob_protos.len(),
                     k,
                     game.db.obj_proto.len(),
-                    game.db.world.borrow().len(),
+                    game.db.world.len(),
                     game.db.zone_table.borrow().len()
                 )
                 .as_str(),
@@ -3493,10 +3492,10 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         5 => {
             let mut buf = "Errant Rooms\r\n------------\r\n".to_string();
             let mut k = 0;
-            for i in 0..game.db.world.borrow().len() {
+            for i in 0..game.db.world.len() {
                 for j in 0..NUM_OF_DIRS {
-                    if game.db.world.borrow()[i].dir_option[j].is_some()
-                        && game.db.world.borrow()[i].dir_option[j]
+                    if game.db.world[i].dir_option[j].is_some()
+                        && game.db.world[i].dir_option[j]
                             .as_ref()
                             .unwrap()
                             .to_room
@@ -3510,7 +3509,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                                 "{:2}: [{:5}] {}\r\n",
                                 k,
                                 game.db.get_room_vnum(i as RoomVnum),
-                                game.db.world.borrow()[i].name
+                                game.db.world[i].name
                             )
                             .as_str(),
                         )
@@ -3524,7 +3523,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         6 => {
             let mut buf = "Death Traps\r\n-----------\r\n".to_string();
             let mut j = 0;
-            for i in 0..game.db.world.borrow().len() {
+            for i in 0..game.db.world.len() {
                 if game.db.room_flagged(i as RoomRnum, ROOM_DEATH) {
                     j += 1;
                     buf.push_str(
@@ -3532,7 +3531,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                             "{:2}: [{:5}] {}\r\n",
                             j,
                             game.db.get_room_vnum(i as RoomVnum),
-                            game.db.world.borrow()[i].name
+                            game.db.world[i].name
                         )
                         .as_str(),
                     );
@@ -3545,7 +3544,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         7 => {
             let mut buf = "Godrooms\r\n--------------------------\r\n".to_string();
             let mut j = 0;
-            for i in 0..game.db.world.borrow().len() {
+            for i in 0..game.db.world.len() {
                 if game.db.room_flagged(i as RoomRnum, ROOM_GODROOM) {
                     j += 1;
                     buf.push_str(
@@ -3553,7 +3552,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                             "{:2}: [{:5}] {}\r\n",
                             j,
                             game.db.get_room_vnum(i as RoomVnum),
-                            game.db.world.borrow()[i].name
+                            game.db.world[i].name
                         )
                         .as_str(),
                     );

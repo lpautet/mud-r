@@ -226,7 +226,7 @@ pub fn do_simple_move(
         game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
         ROOM_TUNNEL,
     ) && num_pc_in_room(
-        game.db.world.borrow()[game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() as usize]
+        game.db.world[game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() as usize]
             .borrow(),
     ) >= TUNNEL_SIZE
     {
@@ -261,7 +261,7 @@ pub fn do_simple_move(
     }
     was_in = ch.in_room();
     game.db.char_from_room(ch);
-    let room = game.db.world.borrow()[was_in as usize].clone();
+    let room = game.db.world[was_in as usize].clone();
     game.db.char_to_room(
         ch,
         room.dir_option[dir as usize]
@@ -405,7 +405,7 @@ const FLAGS_DOOR: [i32; 5] = [
 ];
 
 fn exitn(db: &DB, room: RoomRnum, door: usize) -> Rc<RoomDirectionData> {
-    db.world.borrow()[room as usize].dir_option[door]
+    db.world[room as usize].dir_option[door]
         .as_ref()
         .unwrap()
         .clone()
@@ -475,7 +475,6 @@ fn do_doorcmd(
     let mut other_room = NOWHERE;
 
     let mut back = None;
-    let w = db.world.borrow();
 
     buf = format!("$n {}s ", CMD_DOOR[scmd as usize]);
     if obj.is_none() && {
@@ -483,7 +482,7 @@ fn do_doorcmd(
         other_room != NOWHERE
     } {
         if {
-            back = w[other_room as usize].dir_option[REV_DIR[door.unwrap()] as usize].as_ref();
+            back = db.world[other_room as usize].dir_option[REV_DIR[door.unwrap()] as usize].as_ref();
             back.is_some()
         } {
             if back.unwrap().to_room != ch.in_room {

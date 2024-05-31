@@ -369,7 +369,7 @@ fn say_spell(
         buf2.push_str(format!("$n utters the words, '{}'.", buf).as_str());
     }
 
-    for i in db.world.borrow()[ch.in_room() as usize]
+    for i in db.world[ch.in_room() as usize]
         .peoples
         .borrow()
         .iter()
@@ -691,7 +691,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                  * Solution: We special case the area/mass spells here.
                  */
                 if has_spell_routine(&game.db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
-                    let mut i = game.db.world.borrow()[ch.in_room() as usize]
+                    let mut i = game.db.world[ch.in_room() as usize]
                         .peoples
                         .borrow()
                         .len();
@@ -701,7 +701,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                     }
                 } else {
                     let peoples_in_room =
-                        clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+                        clone_vec(&game.db.world[ch.in_room() as usize].peoples);
                     for tch in peoples_in_room.iter() {
                         if !Rc::ptr_eq(ch, tch) {
                             call_magic(
@@ -1147,7 +1147,7 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     ch,
                     &t,
                     None,
-                    db.world.borrow()[ch.in_room.get() as usize]
+                    db.world[ch.in_room.get() as usize]
                         .contents
                         .borrow(),
                 );

@@ -58,7 +58,7 @@ impl Game {
 
             /* Scavenger (picking up objects) */
             if ch.mob_flagged(MOB_SCAVENGER) {
-                if self.db.world.borrow()[ch.in_room() as usize]
+                if self.db.world[ch.in_room() as usize]
                     .contents
                     .borrow()
                     .len()
@@ -68,8 +68,7 @@ impl Game {
                     let mut max = 1;
                     let mut best_obj = None;
                     {
-                        let world = self.db.world.borrow();
-                        let contents = world[ch.in_room() as usize].contents.borrow();
+                        let contents = self.db.world[ch.in_room() as usize].contents.borrow();
                         for obj in contents.iter() {
                             if self.db.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
                                 best_obj = Some(obj.clone());
@@ -103,10 +102,10 @@ impl Game {
                     ROOM_NOMOB | ROOM_DEATH,
                 )
                 && (!ch.mob_flagged(MOB_STAY_ZONE)
-                    || self.db.world.borrow()
+                    || self.db.world
                         [self.db.exit(ch, door as usize).unwrap().to_room.get() as usize]
                         .zone
-                        == self.db.world.borrow()[ch.in_room() as usize].zone)
+                        == self.db.world[ch.in_room() as usize].zone)
             {
                 perform_move(self, ch, door as i32, true);
             }
@@ -115,7 +114,7 @@ impl Game {
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;
@@ -148,7 +147,7 @@ impl Game {
             if ch.mob_flagged(MOB_MEMORY) && ch.memory().borrow().len() != 0 {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;
@@ -218,7 +217,7 @@ impl Game {
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world.borrow()[ch.in_room() as usize].peoples);
+                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;

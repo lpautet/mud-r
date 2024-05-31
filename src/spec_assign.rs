@@ -56,7 +56,7 @@ pub fn assignroom(db: &mut DB, room: RoomVnum, fname: Special) {
     let rnum = db.real_room(room);
 
     if rnum != NOWHERE {
-        *db.world.borrow()[rnum as usize].func.borrow_mut() = Some(fname);
+        *db.world[rnum as usize].func.borrow_mut() = Some(fname);
     } else if !db.mini_mud {
         error!(
             "SYSERR: Attempt to assign spec to non-existant room #{}",
@@ -275,10 +275,10 @@ pub fn assign_rooms(db: &mut DB) {
     assignroom(db, 3031, pet_shops);
 
     if DTS_ARE_DUMPS {
-        let l = db.world.borrow().len();
+        let l = db.world.len();
         for i in 0..l {
             if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
-                *db.world.borrow_mut()[i].func.borrow_mut() = Some(dump);
+                *db.world[i].func.borrow_mut() = Some(dump);
             }
         }
     }

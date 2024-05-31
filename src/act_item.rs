@@ -397,7 +397,7 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
             ch,
             arg,
             None,
-            game.db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+            game.db.world[ch.in_room() as usize].contents.borrow(),
         );
         if obj.is_none() {
             send_to_char(
@@ -415,7 +415,7 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
                     ch,
                     arg,
                     None,
-                    game.db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                    game.db.world[ch.in_room() as usize].contents.borrow(),
                 );
             }
         }
@@ -424,7 +424,7 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
             send_to_char(ch, "Get all of what?\r\n");
             return;
         }
-        let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+        let room = game.db.world[ch.in_room() as usize].clone();
         for obj in 
             room.contents
             .borrow()
@@ -519,7 +519,7 @@ pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     }
                 }
             }
-            let room = game.db.world.borrow()[ch.in_room() as usize].clone();
+            let room = game.db.world[ch.in_room() as usize].clone();
             for cont in 
                 room.contents
                 .borrow()
@@ -1153,7 +1153,7 @@ pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 ch,
                 &arg,
                 None,
-                game.db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                game.db.world[ch.in_room() as usize].contents.borrow(),
             );
             temp.is_none()
         } {
@@ -1486,7 +1486,7 @@ pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 ch,
                 &arg2,
                 None,
-                db.world.borrow()[ch.in_room() as usize].contents.borrow(),
+                db.world[ch.in_room() as usize].contents.borrow(),
             );
             from_obj.is_none()
         } {

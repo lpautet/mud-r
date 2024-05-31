@@ -213,7 +213,7 @@ impl CharData {
 impl DB {
     pub fn get_room_vnum(&self, rnum: RoomVnum) -> i16 {
         if self.valid_room_rnum(rnum) {
-            self.world.borrow()[rnum as usize].number
+            self.world[rnum as usize].number
         } else {
             NOWHERE
         }
@@ -944,11 +944,11 @@ impl CharData {
 
 impl DB {
     pub fn valid_room_rnum(&self, rnum: RoomRnum) -> bool {
-        rnum != NOWHERE && rnum <= self.world.borrow().len() as i16
+        rnum != NOWHERE && rnum <= self.world.len() as i16
     }
     pub fn get_room_spec(&self, rnum: RoomRnum) -> Option<Special> {
         if self.valid_room_rnum(rnum) {
-            self.world.borrow()[rnum as usize].func.borrow().clone()
+            self.world[rnum as usize].func.borrow().clone()
         } else {
             None
         }
@@ -1145,25 +1145,25 @@ impl RoomDirectionData {
 
 impl DB {
     pub fn exit(&self, ch: &CharData, door: usize) -> Option<Rc<RoomDirectionData>> {
-        self.world.borrow()[ch.in_room() as usize].dir_option[door].clone()
+        self.world[ch.in_room() as usize].dir_option[door].clone()
     }
     pub fn room_flags(&self, loc: RoomRnum) -> i32 {
-        self.world.borrow()[loc as usize].room_flags.get()
+        self.world[loc as usize].room_flags.get()
     }
     pub fn room_flagged(&self, loc: RoomRnum, flag: i64) -> bool {
         is_set!(self.room_flags(loc), flag as i32)
     }
     pub fn set_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) | flags as i32;
-        self.world.borrow()[loc as usize].room_flags.set(flags);
+        self.world[loc as usize].room_flags.set(flags);
     }
     pub fn remove_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) & !flags as i32;
-        self.world.borrow()[loc as usize].room_flags.set(flags);
+        self.world[loc as usize].room_flags.set(flags);
     }
     pub fn sect(&self, loc: RoomRnum) -> i32 {
         if self.valid_room_rnum(loc) {
-            self.world.borrow()[loc as usize].sector_type
+            self.world[loc as usize].sector_type
         } else {
             SECT_INSIDE
         }
@@ -1257,7 +1257,7 @@ pub fn log_death_trap(game: &Game, ch: &CharData) {
             "{} hit death trap #{} ({})",
             ch.get_name(),
             game.db.get_room_vnum(ch.in_room()),
-            game.db.world.borrow()[ch.in_room() as usize].name
+            game.db.world[ch.in_room() as usize].name
         )
         .as_str(),
     );
@@ -1807,12 +1807,12 @@ impl DB {
             error!(
                 "room_is_dark: Invalid room rnum {}. (0-{})",
                 room,
-                self.world.borrow().len()
+                self.world.len()
             );
             return false;
         }
 
-        if self.world.borrow()[room as usize].light.get() != 0 {
+        if self.world[room as usize].light.get() != 0 {
             return false;
         }
 

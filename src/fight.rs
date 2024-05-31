@@ -280,7 +280,7 @@ pub fn check_killer(ch: &CharData, vict: &CharData, game: &Game) {
             "PC Killer bit set on {} for initiating attack on {} at {}.",
             ch.get_name(),
             vict.get_name(),
-            game.db.world.borrow()[vict.in_room() as usize].name
+            game.db.world[vict.in_room() as usize].name
         )
         .as_str(),
     );
@@ -409,7 +409,7 @@ impl DB {
         for door in 0..NUM_OF_DIRS {
             if self.can_go(ch, door) {
                 self.send_to_room(
-                    self.world.borrow()[ch.in_room() as usize].dir_option[door]
+                    self.world[ch.in_room() as usize].dir_option[door]
                         .as_ref()
                         .unwrap()
                         .to_room
@@ -1101,7 +1101,7 @@ impl Game {
                             "{} killed by {} at {}",
                             victim.get_name(),
                             ch.get_name(),
-                            self.db.world.borrow()[victim.in_room() as usize].name
+                            self.db.world[victim.in_room() as usize].name
                         )
                         .as_str(),
                     );

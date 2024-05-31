@@ -482,7 +482,7 @@ impl Game {
                             TO_CHAR,
                         );
                     } else if j.in_room() != NOWHERE
-                        && self.db.world.borrow()[j.in_room() as usize]
+                        && self.db.world[j.in_room() as usize]
                             .peoples
                             .borrow()
                             .len()
@@ -492,7 +492,7 @@ impl Game {
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                &self.db.world.borrow()[j.in_room() as usize]
+                                &self.db.world[j.in_room() as usize]
                                     .peoples
                                     .borrow()[0],
                             ),
@@ -504,7 +504,7 @@ impl Game {
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                &self.db.world.borrow()[j.in_room() as usize]
+                                &self.db.world[j.in_room() as usize]
                                     .peoples
                                     .borrow()[0],
                             ),

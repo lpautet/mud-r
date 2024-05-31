@@ -3224,7 +3224,7 @@ pub fn is_move(cmdnum: i32) -> bool {
 
 pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     /* special in room? */
-    let room_data = game.db.world.borrow()[ch.in_room() as usize].clone();
+    let room_data = game.db.world[ch.in_room() as usize].clone();
     if game.db.get_room_spec(ch.in_room()).is_some() {
         let f = game.db.get_room_spec(ch.in_room()).unwrap();
         if f(game, ch, &room_data, cmd, arg) {
@@ -3260,7 +3260,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
 
     /* special in mobile present? */
 
-    let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].peoples);
+    let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
     for k in peoples_in_room.iter() {
         if !k.mob_flagged(MOB_NOTDEADYET) {
             if game.db.get_mob_spec(k).is_some()
@@ -3271,7 +3271,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
         }
     }
 
-    let peoples_in_room = clone_vec(&game.db.world.borrow()[ch.in_room() as usize].contents);
+    let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].contents);
     for i in peoples_in_room.iter() {
         if game.db.get_obj_spec(i).is_some() {
             if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {

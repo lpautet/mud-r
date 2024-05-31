@@ -43,7 +43,7 @@ fn is_marked(db: &DB, room: RoomRnum) -> bool {
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
-    db.world.borrow()[x as usize].dir_option[y]
+    db.world[x as usize].dir_option[y]
         .as_ref()
         .unwrap()
         .to_room
@@ -51,7 +51,7 @@ fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
-    db.world.borrow()[x as usize].dir_option[y]
+    db.world[x as usize].dir_option[y]
         .as_ref()
         .unwrap()
         .exit_info
@@ -62,7 +62,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
 
 fn valid_edge(game: &mut Game, x: RoomRnum, y: usize) -> bool {
     let db = &game.db;
-    if db.world.borrow()[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
+    if db.world[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
     {
         return false;
     }
@@ -102,8 +102,8 @@ impl BfsTracker {
 fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
     if src == NOWHERE
         || target == NOWHERE
-        || src >= game.db.world.borrow().len() as i16
-        || target > game.db.world.borrow().len() as i16
+        || src >= game.db.world.len() as i16
+        || target > game.db.world.len() as i16
     {
         error!(
             "SYSERR: Illegal value {} or {} passed to find_first_step.",
@@ -116,7 +116,7 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
     }
 
     /* clear marks first, some OLC systems will save the mark. */
-    for curr_room in 0..game.db.world.borrow().len() {
+    for curr_room in 0..game.db.world.len() {
         unmark(&game.db, curr_room as RoomRnum);
     }
 

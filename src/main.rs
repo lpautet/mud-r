@@ -1614,7 +1614,7 @@ impl Game {
 
 impl DB {
     pub fn send_to_room(&self, room: RoomRnum, msg: &str) {
-        for i in self.world.borrow()[room as usize].peoples.borrow().iter() {
+        for i in self.world[room as usize].peoples.borrow().iter() {
             if i.desc.borrow().is_none() {
                 continue;
             }
@@ -1911,12 +1911,11 @@ impl DB {
             return;
         }
         /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
-        let w = self.world.borrow();
         let char_list;
         if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
-            char_list = &w[ch.as_ref().unwrap().in_room() as usize].peoples;
+            char_list = &self.world[ch.as_ref().unwrap().in_room() as usize].peoples;
         } else if obj.is_some() && obj.unwrap().in_room() != NOWHERE {
-            char_list = &w[obj.unwrap().in_room() as usize].peoples;
+            char_list = &self.world[obj.unwrap().in_room() as usize].peoples;
         } else {
             error!("SYSERR: no valid target to act()!");
             return;

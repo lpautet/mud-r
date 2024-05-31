@@ -88,8 +88,8 @@ impl HouseControlRec {
 }
 
 fn toroom(db: &DB, room: usize, dir: usize) -> RoomRnum {
-    if db.world.borrow()[room].dir_option[dir].is_some() {
-        db.world.borrow()[room].dir_option[dir]
+    if db.world[room].dir_option[dir].is_some() {
+        db.world[room].dir_option[dir]
             .as_ref()
             .unwrap()
             .to_room
@@ -219,13 +219,13 @@ pub fn house_crashsave(db: &DB, vnum: RoomVnum) {
     let mut fp = fp.unwrap();
     if !house_save(
         db,
-        &db.world.borrow()[rnum as usize].contents.borrow(),
+        &db.world[rnum as usize].contents.borrow(),
         &mut fp,
     ) {
         return;
     }
 
-    house_restore_weight(&db.world.borrow()[rnum as usize].contents.borrow());
+    house_restore_weight(&db.world[rnum as usize].contents.borrow());
     db.remove_room_flags_bit(rnum, ROOM_HOUSE_CRASH);
 }
 

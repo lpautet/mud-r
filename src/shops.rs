@@ -1859,7 +1859,7 @@ fn list_detailed_shop(db: &DB, ch: &Rc<CharData>, shop_nr: i32) {
         } {
             buf1 = format!(
                 "{} (#{})",
-                db.world.borrow()[temp as usize].name,
+                db.world[temp as usize].name,
                 db.get_room_vnum(temp)
             );
         } else {
