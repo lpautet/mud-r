@@ -2150,10 +2150,9 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         );
         game.db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
-        let room = game.db.world[ch.in_room() as usize].clone();
+        let list = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
         for vict in 
-            room.peoples
-            .borrow()
+            list
             .iter()
         {
             if !vict.is_npc() {

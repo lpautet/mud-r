@@ -114,7 +114,7 @@ pub struct HelpIndexElement {
 }
 
 pub struct DB {
-    pub world: Vec<Rc<RoomData>>,
+    pub world: Vec<RoomData>,
     pub character_list: Vec<Rc<CharData>>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
@@ -1309,7 +1309,7 @@ impl DB {
                 }
             }
         }
-        self.world.push(Rc::new(rd));
+        self.world.push(rd);
     }
 
     /* read direction data */

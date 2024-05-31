@@ -53,8 +53,7 @@ use crate::structs::{
     POS_STUNNED, PRF_SUMMONABLE, THIRST,
 };
 use crate::util::{
-    age, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR,
-    SECS_PER_REAL_MIN,
+    age, clone_vec, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
 };
 use crate::{
     _clrlevel, an, clr, send_to_char, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT,
@@ -551,22 +550,19 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
 
     /* now list characters & objects */
     send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
-    let room = game.db.world[ch.in_room() as usize].clone();
+    let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
     list_obj_to_char(
         game,
-        room.contents.borrow().as_ref(),
+        &list,
         ch,
         SHOW_OBJ_LONG,
         false,
     );
     send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
-    let room = game.db.world[ch.in_room() as usize].clone();
+    let list = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
     list_char_to_char(
         game,
-        room
-            .peoples
-            .borrow()
-            .as_ref(),
+        &list,
         ch,
     );
     send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
@@ -890,10 +886,10 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(ch, "It is pitch black...\r\n");
-        let room = db.world[ch.in_room() as usize].clone();
+        let list = clone_vec(&db.world[ch.in_room() as usize].peoples);
         list_char_to_char(
             game,
-            &room.peoples.borrow(),
+            &list,
             ch,
         );
         /* glowing red eyes */

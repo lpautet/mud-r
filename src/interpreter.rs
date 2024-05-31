@@ -3224,10 +3224,9 @@ pub fn is_move(cmdnum: i32) -> bool {
 
 pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
     /* special in room? */
-    let room_data = game.db.world[ch.in_room() as usize].clone();
     if game.db.get_room_spec(ch.in_room()).is_some() {
         let f = game.db.get_room_spec(ch.in_room()).unwrap();
-        if f(game, ch, &room_data, cmd, arg) {
+        if f(game, ch, &0, cmd, arg) {
             return true;
         }
     }

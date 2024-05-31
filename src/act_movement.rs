@@ -188,7 +188,14 @@ pub fn do_simple_move(
 
     /* if this room or the one we're going to needs a boat, check for one */
     if (game.db.sect(ch.in_room()) == SECT_WATER_NOSWIM)
-        || (game.db.sect(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) == SECT_WATER_NOSWIM)
+        || (game.db.sect(
+            game.db
+                .exit(ch, dir as usize)
+                .as_ref()
+                .unwrap()
+                .to_room
+                .get(),
+        ) == SECT_WATER_NOSWIM)
     {
         if !has_boat(ch) {
             send_to_char(ch, "You need a boat to go there.\r\n");
@@ -198,8 +205,14 @@ pub fn do_simple_move(
 
     /* move points needed is avg. move loss for src and destination sect type */
     need_movement = (MOVEMENT_LOSS[game.db.sect(ch.in_room()) as usize]
-        + MOVEMENT_LOSS
-            [game.db.sect(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()) as usize])
+        + MOVEMENT_LOSS[game.db.sect(
+            game.db
+                .exit(ch, dir as usize)
+                .as_ref()
+                .unwrap()
+                .to_room
+                .get(),
+        ) as usize])
         / 2;
 
     if ch.get_move() < need_movement as i16 && !ch.is_npc() {
@@ -216,17 +229,35 @@ pub fn do_simple_move(
         if !house_can_enter(
             &game.db,
             ch,
-            game.db.get_room_vnum(game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get()),
+            game.db.get_room_vnum(
+                game.db
+                    .exit(ch, dir as usize)
+                    .as_ref()
+                    .unwrap()
+                    .to_room
+                    .get(),
+            ),
         ) {
             send_to_char(ch, "That's private property -- no trespassing!\r\n");
             return false;
         }
     }
     if game.db.room_flagged(
-        game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
+        game.db
+            .exit(ch, dir as usize)
+            .as_ref()
+            .unwrap()
+            .to_room
+            .get(),
         ROOM_TUNNEL,
     ) && num_pc_in_room(
-        game.db.world[game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get() as usize]
+        game.db.world[game
+            .db
+            .exit(ch, dir as usize)
+            .as_ref()
+            .unwrap()
+            .to_room
+            .get() as usize]
             .borrow(),
     ) >= TUNNEL_SIZE
     {
@@ -242,7 +273,12 @@ pub fn do_simple_move(
     }
     /* Mortals and low level gods cannot enter greater god rooms. */
     if game.db.room_flagged(
-        game.db.exit(ch, dir as usize).as_ref().unwrap().to_room.get(),
+        game.db
+            .exit(ch, dir as usize)
+            .as_ref()
+            .unwrap()
+            .to_room
+            .get(),
         ROOM_GODROOM,
     ) && ch.get_level() < LVL_GRGOD as u8
     {
@@ -257,22 +293,21 @@ pub fn do_simple_move(
 
     if !ch.aff_flagged(AFF_SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
-        game.db.act(buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
+        game.db
+            .act(buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
     was_in = ch.in_room();
     game.db.char_from_room(ch);
-    let room = game.db.world[was_in as usize].clone();
-    game.db.char_to_room(
-        ch,
-        room.dir_option[dir as usize]
-            .as_ref()
-            .unwrap()
-            .to_room
-            .get(),
-    );
+    let room_dir = game.db.world[was_in as usize].dir_option[dir as usize]
+        .as_ref()
+        .unwrap()
+        .to_room
+        .get();
+    game.db.char_to_room(ch, room_dir);
 
     if !ch.aff_flagged(AFF_SNEAK) {
-        game.db.act("$n has arrived.", true, Some(ch), None, None, TO_ROOM);
+        game.db
+            .act("$n has arrived.", true, Some(ch), None, None, TO_ROOM);
     }
 
     if ch.desc.borrow().is_some() {
@@ -482,7 +517,8 @@ fn do_doorcmd(
         other_room != NOWHERE
     } {
         if {
-            back = db.world[other_room as usize].dir_option[REV_DIR[door.unwrap()] as usize].as_ref();
+            back =
+                db.world[other_room as usize].dir_option[REV_DIR[door.unwrap()] as usize].as_ref();
             back.is_some()
         } {
             if back.unwrap().to_room != ch.in_room {

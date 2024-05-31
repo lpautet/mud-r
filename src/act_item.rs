@@ -424,11 +424,8 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
             send_to_char(ch, "Get all of what?\r\n");
             return;
         }
-        let room = game.db.world[ch.in_room() as usize].clone();
-        for obj in 
-            room.contents
-            .borrow()
-            .iter()
+        let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+        for obj in list.iter()
         {
             if game.db.can_see_obj(ch, obj) && (dotmode == FIND_ALL || isname(arg, &obj.name.borrow())) {
                 found = true;
@@ -519,10 +516,9 @@ pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     }
                 }
             }
-            let room = game.db.world[ch.in_room() as usize].clone();
+            let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
             for cont in 
-                room.contents
-                .borrow()
+                list
                 .iter()
             {
                 if game.db.can_see_obj(ch, cont)
