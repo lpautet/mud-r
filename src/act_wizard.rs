@@ -2609,13 +2609,13 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             send_to_char(ch, "Invalid wizlock value.\r\n");
             return;
         }
-        game.db.circle_restrict.set(value as u8);
+        game.db.circle_restrict = value as u8;
         when = "now";
     } else {
         when = "currently";
     }
 
-    match game.db.circle_restrict.get() {
+    match game.db.circle_restrict {
         0 => {
             send_to_char(
                 ch,
@@ -2633,7 +2633,7 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 ch,
                 format!(
                     "Only level {} and above may enter the game {}.\r\n",
-                    game.db.circle_restrict.get(),
+                    game.db.circle_restrict,
                     when
                 )
                 .as_str(),

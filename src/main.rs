@@ -252,7 +252,7 @@ fn main() -> ExitCode {
                 info!("Quick boot mode -- rent check supressed.");
             }
             'r' => {
-                game.db.circle_restrict.set(1);
+                game.db.circle_restrict = 1;
                 info!("Restricting game -- no new players allowed.");
             }
             's' => {

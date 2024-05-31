@@ -3607,7 +3607,7 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                     d.set_state(ConClose);
                     return;
                 }
-                if game.db.circle_restrict.get() != 0 {
+                if game.db.circle_restrict != 0 {
                     write_to_output(&d, "Sorry, new players can't be created at the moment.\r\n");
                     game.mudlog(
                         NRM,
@@ -3729,7 +3729,7 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                         return;
                     }
                     if d.character.borrow().as_ref().unwrap().get_level()
-                        < game.db.circle_restrict.get()
+                        < game.db.circle_restrict
                     {
                         write_to_output(
                             &d,
@@ -3948,14 +3948,14 @@ pub fn nanny(game: &mut Game, d: &Rc<DescriptorData>, arg: &str) {
                         /* If char was saved with NOWHERE, or real_room above failed... */
                         if load_room == NOWHERE {
                             if character.get_level() >= LVL_IMMORT as u8 {
-                                load_room = game.db.r_immort_start_room.get();
+                                load_room = game.db.r_immort_start_room;
                             } else {
-                                load_room = game.db.r_mortal_start_room.get();
+                                load_room = game.db.r_mortal_start_room;
                             }
                         }
 
                         if character.plr_flagged(PLR_FROZEN) {
-                            load_room = game.db.r_frozen_start_room.get();
+                            load_room = game.db.r_frozen_start_room;
                         }
 
                         send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
