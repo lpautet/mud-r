@@ -1144,8 +1144,8 @@ impl RoomDirectionData {
 }
 
 impl DB {
-    pub fn exit(&self, ch: &CharData, door: usize) -> Option<RoomDirectionData> {
-        self.world[ch.in_room() as usize].dir_option[door].clone()
+    pub fn exit(&self, ch: &CharData, door: usize) -> Option<&RoomDirectionData> {
+        self.world[ch.in_room() as usize].dir_option[door].as_ref()
     }
     pub fn room_flags(&self, loc: RoomRnum) -> i32 {
         self.world[loc as usize].room_flags

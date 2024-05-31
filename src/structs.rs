@@ -866,7 +866,6 @@ pub const POS_FIGHTING: u8 = 7; /* fighting		*/
 pub const POS_STANDING: u8 = 8; /* standing		*/
 
 /* room-related structures ************************************************/
-#[derive(Clone)]
 pub struct RoomDirectionData {
     pub general_description: Rc<str>,
     /* When look DIR.			*/
