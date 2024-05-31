@@ -119,13 +119,13 @@ pub struct DB {
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
-    pub mob_protos: Vec<Rc<CharData>>,
+    pub mob_protos: Vec<CharData>,
     /* prototypes for mobs		 */
     pub object_list: Vec<Rc<ObjData>>,
     /* global linked list of objs	 */
     pub obj_index: Vec<IndexData>,
     /* index table for object file	 */
-    pub obj_proto: Vec<Rc<ObjData>>,
+    pub obj_proto: Vec<ObjData>,
     /* prototypes for objs		 */
     pub(crate) zone_table: Vec<ZoneData>,
     /* zone table			 */
@@ -1791,7 +1791,7 @@ impl DB {
         mobch.nr = self.mob_protos.len() as MobRnum;
         mobch.desc = RefCell::new(None);
 
-        self.mob_protos.push(Rc::from(mobch));
+        self.mob_protos.push(mobch);
     }
 
     /* read all objects from obj file; generate index and prototypes */
@@ -2005,7 +2005,6 @@ impl DB {
                     j += 1;
                 }
                 '$' | '#' => {
-                    let obj = Rc::from(obj);
                     self.check_object(&obj);
                     self.obj_proto.push(obj);
                     return line.clone();
@@ -3434,7 +3433,7 @@ pub fn real_zone(db: &DB, vnum: RoomVnum) -> Option<usize> {
  * TODO: Add checks for unknown bitvectors.
  */
 impl DB {
-    fn check_object(&self, obj: &Rc<ObjData>) -> bool {
+    fn check_object(&self, obj: &ObjData) -> bool {
         let mut error = false;
 
         if obj.get_obj_weight() < 0 {
@@ -3548,7 +3547,7 @@ impl DB {
         return error;
     }
 
-    fn check_object_spell_number(&self, obj: &Rc<ObjData>, val: usize) -> bool {
+    fn check_object_spell_number(&self, obj: &ObjData, val: usize) -> bool {
         let mut error = false;
 
         if obj.get_obj_val(val) == -1 {
@@ -3611,7 +3610,7 @@ impl DB {
         return error;
     }
 
-    fn check_object_level(&self, obj: &Rc<ObjData>, val: usize) -> bool {
+    fn check_object_level(&self, obj: &ObjData, val: usize) -> bool {
         let error = false;
 
         if obj.get_obj_val(val) < 0 || obj.get_obj_val(val) > LVL_IMPL as i32 && error {

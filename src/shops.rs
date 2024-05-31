@@ -446,7 +446,7 @@ fn trade_with(item: &Rc<ObjData>, shop: &ShopData) -> i32 {
     return OBJECT_NOTOK;
 }
 
-fn same_obj(obj1: &Rc<ObjData>, obj2: &Rc<ObjData>) -> bool {
+fn same_obj(obj1: &ObjData, obj2: &ObjData) -> bool {
     if obj1.get_obj_rnum() != obj2.get_obj_rnum() {
         return false;
     }
@@ -531,7 +531,7 @@ fn get_slide_obj_vis(
 ) -> Option<Rc<ObjData>> {
     let mut tmpname = name.to_string();
     let number;
-    let mut last_match = None;
+    let mut last_match: Option<Rc<ObjData>> = None;
     if {
         number = get_number(&mut tmpname);
         number == 0
@@ -922,7 +922,7 @@ fn get_selling_obj(
     None
 }
 
-fn slide_obj(db: &mut DB, obj: &Rc<ObjData>, keeper: &Rc<CharData>, shop_nr: usize) -> Rc<ObjData> {
+fn slide_obj(db: &mut DB, obj: &Rc<ObjData>, keeper: &Rc<CharData>, shop_nr: usize) {
     /*
        This function is a slight hack!  To make sure that duplicate items are
        only listed once on the "list", this function groups "identical"
@@ -935,12 +935,10 @@ fn slide_obj(db: &mut DB, obj: &Rc<ObjData>, keeper: &Rc<CharData>, shop_nr: usi
     if db.shop_index[shop_nr].lastsort < keeper.is_carrying_n() as i32 {
         sort_keeper_objs(db, keeper, shop_nr);
     }
-    let temp;
     /* Extract the object if it is identical to one produced */
     if shop_producing(db, obj, shop_nr) {
-        temp = obj.get_obj_rnum();
         db.extract_obj(obj);
-        return db.obj_proto[temp as usize].clone();
+        return;
     }
     db.shop_index[shop_nr].lastsort += 1;
     DB::obj_to_char(obj, keeper);
@@ -962,7 +960,6 @@ fn slide_obj(db: &mut DB, obj: &Rc<ObjData>, keeper: &Rc<CharData>, shop_nr: usi
         keeper.carrying.borrow_mut().push(obj.clone());
     }
 
-    obj.clone()
 }
 
 fn sort_keeper_objs(db: &mut DB, keeper: &Rc<CharData>, shop_nr: usize) {
