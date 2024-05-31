@@ -68,7 +68,7 @@ pub fn load_banned(db: &mut DB) {
 
         let bt = BAN_TYPES.iter().position(|e| *e == ban_type);
         ble.type_ = if bt.is_some() { bt.unwrap() } else { 0 } as i32;
-        db.ban_list.borrow_mut().push(ble);
+        db.ban_list.push(ble);
     }
 }
 
@@ -79,7 +79,6 @@ pub fn isbanned(db: &DB, hostname: &str) -> i32 {
     let hostname = hostname.to_lowercase();
     let mut i = 0;
     db.ban_list
-        .borrow()
         .iter()
         .filter(|b| hostname.contains(b.site.as_ref()))
         .for_each(|b| i = max(i, b.type_));
@@ -105,7 +104,7 @@ fn write_ban_list(db: &DB) {
         return;
     }
     let mut writer = BufWriter::new(fl.unwrap());
-    for ban_node in db.ban_list.borrow().iter() {
+    for ban_node in db.ban_list.iter() {
         _write_one_node(&mut writer, ban_node); /* recursively write from end to start */
     }
 
@@ -119,9 +118,8 @@ macro_rules! ban_list_format {
 }
 
 pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     if argument.is_empty() {
-        if db.ban_list.borrow().is_empty() {
+        if game.db.ban_list.is_empty() {
             send_to_char(ch, "No sites are banned.\r\n");
             return;
         }
@@ -145,7 +143,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             .as_str(),
         );
 
-        for ban_node in db.ban_list.borrow().iter() {
+        for ban_node in game.db.ban_list.iter() {
             let timestr;
             if ban_node.date != 0 {
                 timestr = ctime(ban_node.date as u64);
@@ -175,8 +173,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         send_to_char(ch, "Flag must be ALL, SELECT, or NEW.\r\n");
         return;
     }
-    let bnl = db.ban_list.borrow();
-    let ban_node = bnl.iter().find(|b| b.site.as_ref() == site);
+    let ban_node = game.db.ban_list.iter().find(|b| b.site.as_ref() == site);
     if ban_node.is_some() {
         send_to_char(
             ch,
@@ -199,7 +196,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         ban_node.type_ = ban_node_type as i32;
     }
 
-    db.ban_list.borrow_mut().push(ban_node);
+    game.db.ban_list.push(ban_node);
 
     game.mudlog(
         NRM,
@@ -214,20 +211,18 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         .as_str(),
     );
     send_to_char(ch, "Site banned.\r\n");
-    write_ban_list(db);
+    write_ban_list(&game.db);
 }
 
 pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut site = String::new();
     one_argument(argument, &mut site);
     if site.is_empty() {
         send_to_char(ch, "A site to unban might help.\r\n");
         return;
     }
-    let p = db
+    let p = game.db
         .ban_list
-        .borrow()
         .iter()
         .position(|b| b.site.as_ref() == site);
 
@@ -236,7 +231,7 @@ pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         return;
     }
 
-    let ban_node = db.ban_list.borrow_mut().remove(p.unwrap());
+    let ban_node = game.db.ban_list.remove(p.unwrap());
     send_to_char(ch, "Site unbanned.\r\n");
     game.mudlog(
         NRM,
@@ -251,7 +246,7 @@ pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         .as_str(),
     );
 
-    write_ban_list(db);
+    write_ban_list(&game.db);
 }
 
 /**************************************************************************
@@ -282,7 +277,7 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
 
     let db = &game.db;
     /* return valid if list doesn't exist */
-    if db.invalid_list.borrow().len() == 0 {
+    if db.invalid_list.len() == 0 {
         return true;
     }
 
@@ -290,7 +285,7 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
     let tmpname = newname.to_lowercase();
 
     /* Does the desired name contain a string in the invalid list? */
-    for invalid in db.invalid_list.borrow().iter() {
+    for invalid in db.invalid_list.iter() {
         if tmpname.contains(invalid.as_ref()) {
             return false;
         }
@@ -301,7 +296,7 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
 
 /* What's with the wacky capitalization in here? */
 pub fn free_invalid_list(db: &mut DB) {
-    db.invalid_list.borrow_mut().clear();
+    db.invalid_list.clear();
 }
 
 pub fn read_invalid_list(db: &mut DB) {
@@ -325,6 +320,6 @@ pub fn read_invalid_list(db: &mut DB) {
         if r.unwrap() == 0 {
             break;
         }
-        db.invalid_list.borrow_mut().push(Rc::from(line));
+        db.invalid_list.push(Rc::from(line));
     }
 }
