@@ -1855,8 +1855,6 @@ impl DB {
             worn_on: Cell::new(0),
             in_obj: RefCell::new(None),
             contains: RefCell::new(vec![]),
-            next_content: RefCell::new(None),
-            next: RefCell::new(None),
         };
 
         clear_object(&mut obj);
@@ -3929,8 +3927,6 @@ impl ObjData {
             worn_on: Cell::new(0),
             in_obj: RefCell::new(None),
             contains: RefCell::new(vec![]),
-            next_content: RefCell::new(None),
-            next: RefCell::new(None),
         }
     }
     fn make_copy(&self) -> ObjData {
@@ -3989,8 +3985,6 @@ impl ObjData {
             worn_on: Cell::new(0),
             in_obj: RefCell::new(None),
             contains: RefCell::new(vec![]),
-            next_content: RefCell::new(None),
-            next: RefCell::new(None),
         };
         for x in &self.ex_descriptions {
             ret.ex_descriptions.push(ExtraDescrData {

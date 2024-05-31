@@ -667,10 +667,6 @@ pub struct ObjData {
     /* In what object NULL when none    */
     pub contains: RefCell<Vec<Rc<ObjData>>>,
     /* Contains objects                 */
-    pub next_content: RefCell<Option<Rc<ObjData>>>,
-    /* For 'contains' lists             */
-    pub next: RefCell<Option<Rc<ObjData>>>,
-    /* For the object list              */
 }
 /* ======================================================================= */
 
