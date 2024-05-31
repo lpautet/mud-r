@@ -1239,7 +1239,7 @@ impl DB {
             dir_option: [None, None, None, None, None, None],
             room_flags: 0,
             light: 0, /* Zero light sources */
-            func: RefCell::new(None),
+            func: None,
             contents: RefCell::new(vec![]),
             peoples: RefCell::new(vec![]),
         };
