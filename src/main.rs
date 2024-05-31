@@ -339,7 +339,7 @@ fn main() -> ExitCode {
         free_messages(&mut game.db); /* fight.rs */
         game.db.mails.clear_free_list(); /* mail.rs */
         game.db.free_text_files(); /* db.rs */
-        board_clear_all(&mut game.db.boards.borrow_mut()); /* boards.rs */
+        board_clear_all(&mut game.db.boards); /* boards.rs */
         game.db.cmd_sort_info.clear(); /* act.informative.rs */
         free_social_messages(&mut game.db); /* act.social.rs */
         game.db.free_help(); /* db.rs */

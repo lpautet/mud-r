@@ -140,7 +140,7 @@ pub fn string_add(db: &mut DB, d: &DescriptorData, str_: &str) {
 
         if d.mail_to.get() >= BOARD_MAGIC {
             board_save_board(
-                &mut db.boards.borrow_mut(),
+                &mut db.boards,
                 (d.mail_to.get() - BOARD_MAGIC) as usize,
             );
             d.mail_to.set(0);
