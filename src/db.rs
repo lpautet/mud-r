@@ -185,9 +185,9 @@ pub struct DB {
     pub weather_info: WeatherData,
     /* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
-    pub reset_q: RefCell<Vec<ZoneRnum>>,
-    pub extractions_pending: Cell<i32>,
-    pub timer: Cell<u128>,
+    pub reset_q: Vec<ZoneRnum>,
+    pub extractions_pending: i32,
+    pub timer: u128,
     pub cmd_sort_info: Vec<usize>,
     pub combat_list: RefCell<Vec<Rc<CharData>>>,
     pub shop_index: Vec<ShopData>,
@@ -551,9 +551,9 @@ impl DB {
                 sky: 0,
                 sunlight: 0,
             },
-            reset_q: RefCell::new(vec![]),
-            extractions_pending: Cell::new(0),
-            timer: Cell::new(0),
+            reset_q: vec![],
+            extractions_pending: 0,
+            timer: 0,
             cmd_sort_info: vec![],
             combat_list: RefCell::new(vec![]),
             shop_index: vec![],
@@ -2434,15 +2434,15 @@ impl Game {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
     pub(crate) fn zone_update(&mut self) {
         /* jelson 10/22/92 */
-        self.db.timer.set(self.db.timer.get());
-        if (self.db.timer.get() * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
+        self.db.timer += 1;
+        if (self.db.timer * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
             /* one minute has passed */
             /*
              * NOT accurate unless PULSE_ZONE is a multiple of PASSES_PER_SEC or a
              * factor of 60
              */
 
-            self.db.timer.set(0);
+            self.db.timer = 0;
 
             /* since one minute has passed, increment zone ages */
             for (i, zone) in self.db.zone_table.iter().enumerate() {
@@ -2455,7 +2455,7 @@ impl Game {
                     && zone.reset_mode != 0
                 {
                     /* enqueue zone */
-                    self.db.reset_q.borrow_mut().push(i as RoomRnum);
+                    self.db.reset_q.push(i as RoomRnum);
 
                     zone.age.set(ZO_DEAD);
                 }
@@ -2464,7 +2464,7 @@ impl Game {
 
         /* dequeue zones (if possible) and reset */
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
-        let update_list = self.db.reset_q.borrow().clone();
+        let update_list = self.db.reset_q.clone();
         for update_u in update_list {
             if self.db.zone_table[update_u as usize].reset_mode == 2
                 || is_empty(self, update_u)
@@ -2482,7 +2482,7 @@ impl Game {
                 );
             }
         }
-        self.db.reset_q.borrow_mut().clear();
+        self.db.reset_q.clear();
     }
 
     /* execute the reset command table of a given zone */

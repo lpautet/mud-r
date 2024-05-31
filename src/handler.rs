@@ -1106,15 +1106,14 @@ impl DB {
      * A: Because code doing 'vict = vict.next' would
      *    get really confused otherwise.
      */
-    pub fn extract_char(&self, ch: &Rc<CharData>) {
+    pub fn extract_char(&mut self, ch: &Rc<CharData>) {
         if ch.is_npc() {
             ch.set_mob_flags_bit(MOB_NOTDEADYET);
         } else {
             ch.set_plr_flag_bit(PLR_NOTDEADYET);
         }
 
-        let n = self.extractions_pending.get();
-        self.extractions_pending.set(n + 1);
+        self.extractions_pending += 1;
     }
 }
 
@@ -1132,10 +1131,10 @@ impl Game {
     pub fn extract_pending_chars(&mut self) {
         // struct char_data * vict, * next_vict, * prev_vict;
 
-        if self.db.extractions_pending.get() < 0 {
+        if self.db.extractions_pending < 0 {
             error!(
                 "SYSERR: Negative ({}) extractions pending.",
-                self.db.extractions_pending.get()
+                self.db.extractions_pending
             );
         }
 
@@ -1152,18 +1151,17 @@ impl Game {
 
             self.extract_char_final(vict);
             self.db
-                .extractions_pending
-                .set(self.db.extractions_pending.get() - 1);
+                .extractions_pending-= 1;
         }
 
-        if self.db.extractions_pending.get() > 0 {
+        if self.db.extractions_pending > 0 {
             error!(
                 "SYSERR: Couldn't find {} extractions as counted.",
-                self.db.extractions_pending.get()
+                self.db.extractions_pending
             );
         }
 
-        self.db.extractions_pending.set(0);
+        self.db.extractions_pending = 0;
     }
 }
 
