@@ -530,7 +530,6 @@ pub struct PlayerSpecialDataSaved {
 
 /* This structure is purely intended to be an easy way to transfer */
 /* and return information about time (real or mudwise).            */
-#[derive(Debug, Copy, Clone)]
 pub struct TimeInfoData {
     pub hours: i32,
     pub day: i32,
@@ -992,7 +991,6 @@ pub struct ConAppType {
 }
 
 
-#[derive(Debug, Clone, Copy)]
 pub struct WeatherData {
     pub pressure: i32,
     /* How is the pressure ( Mb ) */

@@ -267,12 +267,12 @@ fn is_ok_char(game: &mut Game, keeper: &Rc<CharData>, ch: &Rc<CharData>, shop_nr
 fn is_open(game: &mut Game, keeper: &Rc<CharData>, shop_nr: usize, msg: bool) -> bool {
     let db = &game.db;
     let mut buf = String::new();
-    if game.db.shop_index[shop_nr].open1 > db.time_info.get().hours {
+    if game.db.shop_index[shop_nr].open1 > db.time_info.hours {
         buf.push_str(MSG_NOT_OPEN_YET);
-    } else if game.db.shop_index[shop_nr].close1 < db.time_info.get().hours {
-        if game.db.shop_index[shop_nr].open2 > db.time_info.get().hours {
+    } else if game.db.shop_index[shop_nr].close1 < db.time_info.hours {
+        if game.db.shop_index[shop_nr].open2 > db.time_info.hours {
             buf.push_str(MSG_NOT_REOPEN_YET);
-        } else if game.db.shop_index[shop_nr].close2 < db.time_info.get().hours {
+        } else if game.db.shop_index[shop_nr].close2 < db.time_info.hours {
             buf.push_str(MSG_CLOSED_FOR_DAY);
         }
     }

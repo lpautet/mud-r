@@ -180,9 +180,9 @@ pub struct DB {
     /* policies page		 */
     pub help_table: Vec<HelpIndexElement>,
     /* the help table	 */
-    pub time_info: Cell<TimeInfoData>,
+    pub time_info: TimeInfoData,
     /* the infomation about the time    */
-    pub weather_info: Cell<WeatherData>,
+    pub weather_info: WeatherData,
     /* the infomation about the weather */
     // struct player_special_data dummy_mob;	/* dummy spec area for mobs	*/
     pub reset_q: RefCell<Vec<ZoneRnum>>,
@@ -539,18 +539,18 @@ impl DB {
             handbook: Rc::from("HANDOOK placeholder"),
             policies: Rc::from("POLICIES placeholder"),
             help_table: vec![],
-            time_info: Cell::from(TimeInfoData {
+            time_info: TimeInfoData {
                 hours: 0,
                 day: 0,
                 month: 0,
                 year: 0,
-            }),
-            weather_info: Cell::new(WeatherData {
+            },
+            weather_info: WeatherData {
                 pressure: 0,
                 change: 0,
                 sky: 0,
                 sunlight: 0,
-            }),
+            },
             reset_q: RefCell::new(vec![]),
             extractions_pending: Cell::new(0),
             timer: Cell::new(0),
@@ -685,7 +685,7 @@ impl DB {
     }
 
     /* reset the time in the game from file */
-    fn reset_time(&self) {
+    fn reset_time(&mut self) {
         let mut beginning_of_time = 0;
 
         match OpenOptions::new().read(true).open(TIME_FILE) {
@@ -709,12 +709,9 @@ impl DB {
             beginning_of_time = 650336715;
         }
 
-        let time_info = mud_time_passed(time_now(), beginning_of_time as u64);
-        self.time_info.set(time_info);
+        self.time_info = mud_time_passed(time_now(), beginning_of_time as u64);
 
-        let mut weather_info = self.weather_info.get();
-
-        weather_info.sunlight = match time_info.hours {
+        self.weather_info.sunlight = match self.time_info.hours {
             0..=4 => SUN_DARK,
             5 => SUN_RISE,
             6..=20 => SUN_LIGHT,
@@ -724,26 +721,25 @@ impl DB {
 
         info!(
             "   Current Gametime: {}H {}D {}M {}Y.",
-            time_info.hours, time_info.day, time_info.month, time_info.year
+            self.time_info.hours, self.time_info.day, self.time_info.month, self.time_info.year
         );
 
-        weather_info.pressure = 960;
-        if (time_info.month >= 7) && (time_info.month <= 12) {
-            weather_info.pressure += dice(1, 50);
+        self.weather_info.pressure = 960;
+        if (self.time_info.month >= 7) && (self.time_info.month <= 12) {
+            self.weather_info.pressure += dice(1, 50);
         } else {
-            weather_info.pressure += dice(1, 80);
+            self.weather_info.pressure += dice(1, 80);
         }
 
-        weather_info.change = 0;
+        self.weather_info.change = 0;
 
-        weather_info.sky = match weather_info.pressure {
+        self.weather_info.sky = match self.weather_info.pressure {
             ..=980 => SKY_LIGHTNING,
             ..=1000 => SKY_RAINING,
             ..=1020 => SKY_CLOUDY,
             _ => SKY_CLOUDLESS,
         };
 
-        self.weather_info.set(weather_info);
     }
 }
 

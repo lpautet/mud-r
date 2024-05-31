@@ -1200,21 +1200,21 @@ pub fn do_equipment(
 
 pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     /* day in [1..35] */
-    let day = game.db.time_info.get().day + 1;
+    let day = game.db.time_info.day + 1;
 
     /* 35 days in a month, 7 days a week */
-    let weekday = ((35 * game.db.time_info.get().month) + day) % 7;
+    let weekday = ((35 * game.db.time_info.month) + day) % 7;
 
     send_to_char(
         ch,
         format!(
             "It is {} o'clock {}, on {}.\r\n",
-            if game.db.time_info.get().hours % 12 == 0 {
+            if game.db.time_info.hours % 12 == 0 {
                 12
             } else {
-                game.db.time_info.get().hours % 12
+                game.db.time_info.hours % 12
             },
-            if game.db.time_info.get().hours >= 12 {
+            if game.db.time_info.hours >= 12 {
                 "pm"
             } else {
                 "am"
@@ -1255,8 +1255,8 @@ pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
             "The {}{} Day of the {}, Year {}.\r\n",
             day,
             suf,
-            MONTH_NAME[game.db.time_info.get().month as usize],
-            game.db.time_info.get().year
+            MONTH_NAME[game.db.time_info.month as usize],
+            game.db.time_info.year
         )
         .as_str(),
     );
@@ -1275,8 +1275,8 @@ pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
             ch,
             format!(
                 "The sky is {} and {}.\r\n",
-                SKY_LOOK[db.weather_info.get().sky as usize],
-                if db.weather_info.get().change >= 0 {
+                SKY_LOOK[db.weather_info.sky as usize],
+                if db.weather_info.change >= 0 {
                     "you feel a warm wind from south"
                 } else {
                     "your foot tells you bad weather is due"
@@ -1289,10 +1289,10 @@ pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
                 ch,
                 format!(
                     "Pressure: {} (change: {}), Sky: {} ({})\r\n",
-                    db.weather_info.get().pressure,
-                    db.weather_info.get().change,
-                    db.weather_info.get().sky,
-                    SKY_LOOK[db.weather_info.get().sky as usize],
+                    db.weather_info.pressure,
+                    db.weather_info.change,
+                    db.weather_info.sky,
+                    SKY_LOOK[db.weather_info.sky as usize],
                 )
                 .as_str(),
             );

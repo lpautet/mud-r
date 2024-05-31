@@ -382,7 +382,7 @@ impl Game {
         self.mother_desc = None;
 
         info!("Saving current MUD time.");
-        save_mud_time(&self.db.time_info.get());
+        save_mud_time(&self.db.time_info);
 
         if self.circle_reboot {
             info!("Rebooting.");
@@ -688,7 +688,7 @@ impl Game {
         }
 
         if pulse % PULSE_TIMESAVE == 0 {
-            save_mud_time(&self.db.time_info.get());
+            save_mud_time(&self.db.time_info);
         }
 
         /* Every pulse! Don't want them to stink the place up... */
