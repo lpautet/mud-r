@@ -265,36 +265,35 @@ const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
 const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 
 pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    let db = &game.db;
 
-    if !game.db.mayor.borrow().move_ {
-        if db.time_info.hours == 6 {
-            game.db.mayor.borrow_mut().move_ = true;
-            game.db.mayor.borrow_mut().path = OPEN_PATH;
-            game.db.mayor.borrow_mut().path_index = 0;
-        } else if db.time_info.hours == 20 {
-            game.db.mayor.borrow_mut().move_ = true;
-            game.db.mayor.borrow_mut().path = CLOSE_PATH;
-            game.db.mayor.borrow_mut().path_index = 0;
+    if !game.db.mayor.move_ {
+        if game.db.time_info.hours == 6 {
+            game.db.mayor.move_ = true;
+            game.db.mayor.path = OPEN_PATH;
+            game.db.mayor.path_index = 0;
+        } else if game.db.time_info.hours == 20 {
+            game.db.mayor.move_ = true;
+            game.db.mayor.path = CLOSE_PATH;
+            game.db.mayor.path_index = 0;
         }
     }
     if cmd != 0
-        || !game.db.mayor.borrow().move_
+        || !game.db.mayor.move_
         || ch.get_pos() < POS_SLEEPING
         || ch.get_pos() == POS_FIGHTING
     {
         return false;
     }
 
-    let a = &game.db.mayor.borrow().path
-        [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index + 1]
+    let a = &game.db.mayor.path
+        [game.db.mayor.path_index..game.db.mayor.path_index + 1]
         .chars()
         .next()
         .unwrap();
     match a {
         '0' | '1' | '2' | '3' => {
-            let dir = game.db.mayor.borrow().path
-                [game.db.mayor.borrow().path_index..game.db.mayor.borrow().path_index + 1]
+            let dir = game.db.mayor.path
+                [game.db.mayor.path_index..game.db.mayor.path_index + 1]
                 .parse::<u8>()
                 .unwrap();
             perform_move(game, ch, dir as i32, true);
@@ -302,7 +301,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
 
         'W' => {
             ch.set_pos(POS_STANDING);
-            db.act(
+            game.db.act(
                 "$n awakens and groans loudly.",
                 false,
                 Some(ch),
@@ -314,7 +313,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
 
         'S' => {
             ch.set_pos(POS_SLEEPING);
-            db.act(
+            game.db.act(
                 "$n lies down and instantly falls asleep.",
                 false,
                 Some(ch),
@@ -325,7 +324,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         'a' => {
-            db.act(
+            game.db.act(
                 "$n says 'Hello Honey!'",
                 false,
                 Some(ch),
@@ -333,11 +332,11 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
                 None,
                 TO_ROOM,
             );
-            db.act("$n smirks.", false, Some(ch), None, None, TO_ROOM);
+            game.db.act("$n smirks.", false, Some(ch), None, None, TO_ROOM);
         }
 
         'b' => {
-            db.act(
+            game.db.act(
                 "$n says 'What a view!  I must get something done about that dump!'",
                 false,
                 Some(ch),
@@ -348,7 +347,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         'c' => {
-            db.act(
+            game.db.act(
                 "$n says 'Vandals!  Youngsters nowadays have no respect for anything!'",
                 false,
                 Some(ch),
@@ -359,7 +358,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         'd' => {
-            db.act(
+            game.db.act(
                 "$n says 'Good day, citizens!'",
                 false,
                 Some(ch),
@@ -370,7 +369,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         'e' => {
-            db.act(
+            game.db.act(
                 "$n says 'I hereby declare the bazaar open!'",
                 false,
                 Some(ch),
@@ -381,7 +380,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         'E' => {
-            db.act(
+            game.db.act(
                 "$n says 'I hereby declare Midgaard closed!'",
                 false,
                 Some(ch),
@@ -402,12 +401,12 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         }
 
         '.' => {
-            game.db.mayor.borrow_mut().move_ = false;
+            game.db.mayor.move_ = false;
         }
         _ => {}
     }
 
-    game.db.mayor.borrow_mut().path_index += 1;
+    game.db.mayor.path_index += 1;
     return false;
 }
 

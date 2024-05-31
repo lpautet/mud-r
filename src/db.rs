@@ -200,7 +200,7 @@ pub struct DB {
     pub house_control: [HouseControlRec; MAX_HOUSES],
     pub num_of_houses: usize,
     pub mails: MailSystem,
-    pub(crate) mayor: RefCell<Mayor>,
+    pub(crate) mayor: Mayor,
     pub(crate) king_welmar: KingWelmar,
     pub scheck: bool,
 }
@@ -566,7 +566,7 @@ impl DB {
             house_control: [HouseControlRec::new(); MAX_HOUSES],
             num_of_houses: 0,
             mails: MailSystem::new(),
-            mayor: RefCell::new(Mayor::new()),
+            mayor: Mayor::new(),
             king_welmar: KingWelmar::new(),
             scheck: false,
         }
