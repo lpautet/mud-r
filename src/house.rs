@@ -318,13 +318,12 @@ fn house_delete_file(vnum: RoomVnum) {
 
 fn find_house(db: &DB, vnum: RoomVnum) -> Option<usize> {
     db.house_control
-        .borrow()
         .iter()
         .position(|hc| hc.vnum == vnum)
 }
 
 /* Save the house control information */
-fn house_save_control(db: &DB) {
+fn house_save_control(db: &mut DB) {
     let fl;
 
     if {
@@ -341,11 +340,11 @@ fn house_save_control(db: &DB) {
         return;
     }
     let mut fl = fl.unwrap();
-    for i in 0..db.num_of_houses.get() {
+    for i in 0..db.num_of_houses {
         let slice;
         unsafe {
             slice = slice::from_raw_parts(
-                &mut db.house_control.borrow_mut()[i] as *mut _ as *mut u8,
+                &mut db.house_control[i] as *mut _ as *mut u8,
                 mem::size_of::<HouseControlRec>(),
             );
         }
@@ -376,7 +375,7 @@ pub fn house_boot(db: &mut DB) {
         return;
     }
     let mut fl = fl.unwrap();
-    while db.num_of_houses.get() < MAX_HOUSES {
+    while db.num_of_houses < MAX_HOUSES {
         unsafe {
             let hc_slice = slice::from_raw_parts_mut(
                 &mut temp_house as *mut _ as *mut u8,
@@ -422,8 +421,8 @@ pub fn house_boot(db: &mut DB) {
                 continue; /* exit num mismatch -- skip */
             }
 
-            db.house_control.borrow_mut()[db.num_of_houses.get()] = temp_house;
-            db.num_of_houses.set(db.num_of_houses.get() + 1);
+            db.house_control[db.num_of_houses] = temp_house;
+            db.num_of_houses += 1;
             db.set_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE);
             db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
 
@@ -443,7 +442,7 @@ const HCONTROL_FORMAT: &str =
        hcontrol show\r\n";
 
 pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
-    if db.num_of_houses.get() == 0 {
+    if db.num_of_houses == 0 {
         send_to_char(ch, "No houses have been defined.\r\n");
         return;
     }
@@ -452,8 +451,8 @@ pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
         "Address  Atrium  Build Date  Guests  Owner        Last Paymt\r\n\
 -------  ------  ----------  ------  ------------ ----------\r\n",
     );
-    let house_control = db.house_control.borrow();
-    for i in 0..db.num_of_houses.get() {
+    let house_control = db.house_control;
+    for i in 0..db.num_of_houses {
         /* Avoid seeing <UNDEF> entries from self-deleted people. -gg 6/21/98 */
         let temp;
         if {
@@ -497,7 +496,7 @@ pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
 }
 
 fn hcontrol_build_house(db: &mut DB, ch: &Rc<CharData>, arg: &mut str) {
-    if db.num_of_houses.get() >= MAX_HOUSES {
+    if db.num_of_houses >= MAX_HOUSES {
         send_to_char(ch, "Max houses already defined.\r\n");
         return;
     }
@@ -602,8 +601,8 @@ fn hcontrol_build_house(db: &mut DB, ch: &Rc<CharData>, arg: &mut str) {
         _spare7: 0,
     };
 
-    db.house_control.borrow_mut()[db.num_of_houses.get()] = temp_house;
-    db.num_of_houses.set(db.num_of_houses.get() + 1);
+    db.house_control[db.num_of_houses] = temp_house;
+    db.num_of_houses += 1;
 
     db.set_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE);
     db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
@@ -631,36 +630,36 @@ fn hcontrol_destroy_house(db: &mut DB, ch: &Rc<CharData>, arg: &str) {
     let i = i.unwrap();
     let real_atrium;
     if {
-        real_atrium = db.real_room(db.house_control.borrow_mut()[i].atrium);
+        real_atrium = db.real_room(db.house_control[i].atrium);
         real_atrium == NOWHERE
     } {
         error!(
             "SYSERR: House {} had invalid atrium {}!",
-            argi, db.house_control.borrow_mut()[i].atrium
+            argi, db.house_control[i].atrium
         );
     } else {
         db.remove_room_flags_bit(real_atrium, ROOM_ATRIUM);
     }
     let real_house;
     if {
-        real_house = db.real_room(db.house_control.borrow_mut()[i].vnum);
+        real_house = db.real_room(db.house_control[i].vnum);
         real_house == NOWHERE
     } {
         error!(
             "SYSERR: House {} had invalid vnum {}!",
-            argi, db.house_control.borrow_mut()[i].vnum
+            argi, db.house_control[i].vnum
         );
     } else {
         db.remove_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE | ROOM_HOUSE_CRASH);
     }
 
-    house_delete_file(db.house_control.borrow_mut()[i].vnum);
+    house_delete_file(db.house_control[i].vnum);
 
-    for j in i..db.num_of_houses.get() - 1 {
-        db.house_control.borrow_mut()[j] = db.house_control.borrow()[j + 1];
+    for j in i..db.num_of_houses - 1 {
+        db.house_control[j] = db.house_control[j + 1];
     }
 
-    db.num_of_houses.set(db.num_of_houses.get() - 1);
+    db.num_of_houses -= 1;
 
     send_to_char(ch, "House deleted.\r\n");
     house_save_control(db);
@@ -670,10 +669,10 @@ fn hcontrol_destroy_house(db: &mut DB, ch: &Rc<CharData>, arg: &str) {
      * just in case the house we just deleted shared an atrium with another
      * house.  --JE 9/19/94
      */
-    for i in 0..db.num_of_houses.get() {
+    for i in 0..db.num_of_houses {
         let real_atrium;
         if {
-            real_atrium = db.real_room(db.house_control.borrow_mut()[i].atrium);
+            real_atrium = db.real_room(db.house_control[i].atrium);
             real_atrium != NOWHERE
         } {
             db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
@@ -681,15 +680,14 @@ fn hcontrol_destroy_house(db: &mut DB, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-fn hcontrol_pay_house(game: &Game, ch: &Rc<CharData>, arg: &str) {
-    let db = &game.db;
+fn hcontrol_pay_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let argi = arg.parse::<i16>();
     let argi = if argi.is_err() { -1 } else { argi.unwrap() };
     let i;
     if arg.is_empty() {
         send_to_char(ch, HCONTROL_FORMAT);
     } else if {
-        i = find_house(db, argi);
+        i = find_house(&game.db, argi);
         i.is_none()
     } {
         send_to_char(ch, "Unknown house.\r\n");
@@ -702,8 +700,8 @@ fn hcontrol_pay_house(game: &Game, ch: &Rc<CharData>, arg: &str) {
         );
 
         let i = i.unwrap();
-        db.house_control.borrow_mut()[i].last_payment = time_now();
-        house_save_control(db);
+        game.db.house_control[i].last_payment = time_now();
+        house_save_control(&mut game.db);
         send_to_char(ch, "Payment recorded.\r\n");
     }
 }
@@ -733,22 +731,21 @@ pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
-    let db = &game.db;
     let i;
     let id;
-    if !db.room_flagged(ch.in_room(), ROOM_HOUSE) {
+    if !game.db.room_flagged(ch.in_room(), ROOM_HOUSE) {
         send_to_char(ch, "You must be in your house to set guests.\r\n");
     } else if {
-        i = find_house(db, db.get_room_vnum(ch.in_room()));
+        i = find_house(&game.db, game.db.get_room_vnum(ch.in_room()));
         i.is_none()
     } {
         send_to_char(ch, "Um.. this house seems to be screwed up.\r\n");
-    } else if ch.get_idnum() != db.house_control.borrow()[i.unwrap()].owner {
+    } else if ch.get_idnum() != game.db.house_control[i.unwrap()].owner {
         send_to_char(ch, "Only the primary owner can set guests.\r\n");
     } else if arg.is_empty() {
-        house_list_guests(db, ch, i.unwrap(), false);
+        house_list_guests(&game.db, ch, i.unwrap(), false);
     } else if {
-        id = db.get_id_by_name(&arg);
+        id = game.db.get_id_by_name(&arg);
         id < 0
     } {
         send_to_char(ch, "No such player.\r\n");
@@ -756,27 +753,27 @@ pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         send_to_char(ch, "It's your house!\r\n");
     } else {
         let i = i.unwrap();
-        for j in 0..db.house_control.borrow()[i as usize].num_of_guests {
-            if db.house_control.borrow()[i as usize].guests[j as usize] == id {
-                for j in j..db.house_control.borrow()[i as usize].num_of_guests {
-                    db.house_control.borrow_mut()[i as usize].guests[j as usize] =
-                        db.house_control.borrow()[i as usize].guests[j as usize + 1];
+        for j in 0..game.db.house_control[i as usize].num_of_guests {
+            if game.db.house_control[i as usize].guests[j as usize] == id {
+                for j in j..game.db.house_control[i as usize].num_of_guests {
+                    game.db.house_control[i as usize].guests[j as usize] =
+                        game.db.house_control[i as usize].guests[j as usize + 1];
                 }
-                db.house_control.borrow_mut()[i as usize].num_of_guests += 1;
-                house_save_control(db);
+                game.db.house_control[i as usize].num_of_guests += 1;
+                house_save_control(&mut game.db);
                 send_to_char(ch, "Guest deleted.\r\n");
                 return;
             }
         }
 
-        if db.house_control.borrow()[i as usize].num_of_guests == MAX_GUESTS as i32 {
+        if game.db.house_control[i as usize].num_of_guests == MAX_GUESTS as i32 {
             send_to_char(ch, "You have too many guests.\r\n");
             return;
         }
-        db.house_control.borrow_mut()[i as usize].num_of_guests += 1;
-        let j = db.house_control.borrow_mut()[i as usize].num_of_guests;
-        db.house_control.borrow_mut()[i as usize].guests[j as usize] = id;
-        house_save_control(db);
+        game.db.house_control[i as usize].num_of_guests += 1;
+        let j = game.db.house_control[i as usize].num_of_guests;
+        game.db.house_control[i as usize].guests[j as usize] = id;
+        house_save_control(&mut game.db);
         send_to_char(ch, "Guest added.\r\n");
     }
 }
@@ -785,11 +782,11 @@ pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
 /* crash-save all the houses */
 pub fn house_save_all(db: &mut DB) {
-    for i in 0..db.num_of_houses.get() {
-        let real_house = db.real_room(db.house_control.borrow()[i].vnum);
+    for i in 0..db.num_of_houses{
+        let real_house = db.real_room(db.house_control[i].vnum);
         if real_house != NOWHERE {
             if db.room_flagged(real_house, ROOM_HOUSE_CRASH) {
-                let room_vnum = db.house_control.borrow()[i].vnum;
+                let room_vnum = db.house_control[i].vnum;
                 house_crashsave(db, room_vnum);
             }
         }
@@ -807,13 +804,13 @@ pub fn house_can_enter(db: &DB, ch: &Rc<CharData>, house: RoomVnum) -> bool {
         return true;
     }
     let i = i.unwrap();
-    match db.house_control.borrow()[i].mode {
+    match db.house_control[i].mode {
         HOUSE_PRIVATE => {
-            if ch.get_idnum() == db.house_control.borrow()[i].owner {
+            if ch.get_idnum() == db.house_control[i].owner {
                 return true;
             }
-            for j in 0..db.house_control.borrow()[i].num_of_guests as usize {
-                if ch.get_idnum() == db.house_control.borrow()[i].guests[j] {
+            for j in 0..db.house_control[i].num_of_guests as usize {
+                if ch.get_idnum() == db.house_control[i].guests[j] {
                     return true;
                 }
             }
@@ -824,7 +821,7 @@ pub fn house_can_enter(db: &DB, ch: &Rc<CharData>, house: RoomVnum) -> bool {
 }
 
 fn house_list_guests(db: &DB, ch: &Rc<CharData>, i: usize, quiet: bool) {
-    let house_control = db.house_control.borrow();
+    let house_control = db.house_control;
     if house_control[i].num_of_guests == 0 {
         if !quiet {
             send_to_char(ch, "  Guests: None\r\n");
