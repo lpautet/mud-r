@@ -1238,7 +1238,7 @@ impl DB {
             ex_descriptions: vec![],
             dir_option: [None, None, None, None, None, None],
             room_flags: 0,
-            light: Cell::new(0), /* Zero light sources */
+            light: 0, /* Zero light sources */
             func: RefCell::new(None),
             contents: RefCell::new(vec![]),
             peoples: RefCell::new(vec![]),
@@ -2650,10 +2650,11 @@ impl Game {
                         } else {
                             let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
                             obj = self.db.read_object(nr, REAL);
+                            let pos = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as i8;
                             self.db.equip_char(
                                 mob.as_ref().unwrap(),
                                 obj.as_ref().unwrap(),
-                                self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as i8,
+                                pos,
                             );
                             last_cmd = 1;
                         }
@@ -2819,7 +2820,7 @@ impl DB {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&self, ch: &Rc<CharData>) {
+    pub fn save_char(&mut self, ch: &Rc<CharData>) {
         let mut st: CharFileU = CharFileU::new();
 
         if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
@@ -3003,7 +3004,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 
 /* copy vital data from a players char-structure to the file structure */
 impl DB {
-    pub fn char_to_store(&self, ch: &Rc<CharData>, st: &mut CharFileU) {
+    pub fn char_to_store(&mut self, ch: &Rc<CharData>, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
         let mut char_eq: [Option<Rc<ObjData>>; NUM_WEARS as usize] =
             [(); NUM_WEARS as usize].map(|_| None);

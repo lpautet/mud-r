@@ -361,7 +361,8 @@ impl DB {
         /* transfer character's equipment to the corpse */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                self.obj_to_obj(self.unequip_char(ch, i).as_ref().unwrap(), &corpse);
+                let obj = self.unequip_char(ch, i).as_ref().unwrap().clone();
+                self.obj_to_obj(&obj, &corpse);
             }
         }
         /* transfer gold */
@@ -444,7 +445,7 @@ pub fn die(ch: &Rc<CharData>, game: &mut Game) {
     game.db.raw_kill(ch);
 }
 
-pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &Game) {
+pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &mut Game) {
     let share = min(MAX_EXP_GAIN, max(1, base));
 
     if share > 1 {
@@ -466,7 +467,7 @@ pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, g
     change_alignment(ch, victim);
 }
 
-pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
+pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &mut Game) {
     let k;
     if ch.master.borrow().is_none() {
         k = ch.clone();
@@ -512,7 +513,7 @@ pub fn group_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
     }
 }
 
-pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &Game) {
+pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &mut Game) {
     let mut exp = min(MAX_EXP_GAIN, victim.get_exp() / 3);
 
     /* Calculate level-difference bonus */

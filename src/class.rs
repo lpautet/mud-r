@@ -3518,7 +3518,7 @@ pub fn roll_real_abils(ch: &CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &Game, ch: &Rc<CharData>) {
+pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
     ch.set_level(1);
     ch.set_exp(1);
 
@@ -3547,7 +3547,7 @@ pub fn do_start(game: &Game, ch: &Rc<CharData>) {
         _ => {}
     }
 
-    advance_level(ch, &game.db);
+    advance_level(ch, &mut game.db);
 
     game.mudlog(
         BRF,
@@ -3573,7 +3573,7 @@ pub fn do_start(game: &Game, ch: &Rc<CharData>) {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(ch: &Rc<CharData>, db: &DB) {
+pub fn advance_level(ch: &Rc<CharData>, db: &mut DB) {
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;

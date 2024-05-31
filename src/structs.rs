@@ -903,7 +903,7 @@ pub struct RoomData {
     /* Directions */
     pub room_flags: i32,
     /* DEATH,DARK ... etc */
-    pub light: Cell<u8>,
+    pub light: u8,
     /* Number of lightsources in room     */
     pub func: RefCell<Option<Special>>,
     pub contents: RefCell<Vec<Rc<ObjData>>>,

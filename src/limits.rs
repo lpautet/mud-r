@@ -221,7 +221,7 @@ pub fn set_title(ch: &CharData, title: Option<String>) {
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
 
-pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &Game) {
+pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
     let mut is_altered = false;
     let mut num_levels = 0;
 
@@ -242,7 +242,7 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &Game) {
             ch.set_level(ch.get_level() + 1);
 
             num_levels += 1;
-            advance_level(ch, &game.db);
+            advance_level(ch, &mut game.db);
             is_altered = true;
         }
 
@@ -281,10 +281,9 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &Game) {
     }
 }
 
-pub fn gain_exp_regardless(game: &Game, ch: &Rc<CharData>, gain: i32) {
+pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
     let mut is_altered = false;
     let mut num_levels = 0;
-    let db = &game.db;
 
     ch.set_exp(ch.get_exp() + gain);
     if ch.get_exp() < 0 {
@@ -297,7 +296,7 @@ pub fn gain_exp_regardless(game: &Game, ch: &Rc<CharData>, gain: i32) {
         {
             ch.set_level(ch.get_level() + 1);
             num_levels += 1;
-            advance_level(ch, db);
+            advance_level(ch, &mut game.db);
             is_altered = true;
         }
 

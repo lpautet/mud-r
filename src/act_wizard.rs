@@ -2228,12 +2228,11 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     let mut name = String::new();
     let mut level = String::new();
     let victim;
-    let db = &game.db;
     two_arguments(argument, &mut name, &mut level);
 
     if name.len() != 0 {
         if {
-            victim = db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+            victim = game.db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
             victim.is_none()
         } {
             send_to_char(ch, "That player is not here.\r\n");
@@ -2288,7 +2287,7 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             "You are momentarily enveloped by darkness!\r\nYou feel somewhat diminished.\r\n",
         );
     } else {
-        db.act(
+        game.db.act(
             "$n makes some strange gestures.\r\n\
 A strange feeling comes upon you,\r\n\
 Like a giant hand, light comes down\r\n\
@@ -2343,7 +2342,7 @@ You feel slightly different.",
         &victim,
         level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),
     );
-    db.save_char(&victim);
+    game.db.save_char(&victim);
 }
 
 pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
@@ -3041,14 +3040,13 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
  *  General fn for wizcommands of the sort: cmd <player>
  */
 pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let vict;
     if arg.is_empty() {
         send_to_char(ch, "Yes, but for whom?!?\r\n");
     } else if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(ch, "There is no such player.\r\n");
@@ -3156,7 +3154,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 vict.set_freeze_lev(ch.get_level() as i8);
                 send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
                 send_to_char(ch, "Frozen.\r\n");
-                db.act(
+                game.db.act(
                     "A sudden cold wind conjured from nowhere freezes $n!",
                     false,
                     Some(vict),
@@ -3201,7 +3199,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 vict.remove_plr_flag(PLR_FROZEN);
                 send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
                 send_to_char(ch, "Thawed.\r\n");
-                db.act(
+                game.db.act(
                     "A sudden fireball conjured from nowhere thaws $n!",
                     false,
                     Some(vict),
@@ -3229,7 +3227,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
             }
         }
-        db.save_char(vict);
+        game.db.save_char(vict);
     }
 }
 

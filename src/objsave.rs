@@ -114,9 +114,8 @@ pub fn obj_to_store(db: &DB, obj: &Rc<ObjData>, fl: &mut File, location: i32) ->
 /*
  * AutoEQ by Burkhard Knopf <burkhard.knopf@informatik.tu-clausthal.de>
  */
-fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) {
+fn auto_equip(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) {
     let mut location = location;
-    let db = &game.db;
     /* Lots of checks... */
     let mut j = 0;
     if location > 0 {
@@ -216,7 +215,7 @@ fn auto_equip(game: &Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, location: i32) 
             if invalid_align(ch, obj) || invalid_class(ch, obj) {
                 location = LOC_INVENTORY;
             } else {
-                db.equip_char(ch, obj, j as i8);
+                game.db.equip_char(ch, obj, j as i8);
             }
         } else {
             /* Oops, saved a player with double equipment? */

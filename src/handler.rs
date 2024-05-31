@@ -394,8 +394,7 @@ impl DB {
             if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
                 if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
                     self.world[ch.in_room() as usize]
-                        .light
-                        .set(self.world[ch.in_room() as usize].light.get() - 1);
+                        .light-= 1;
                 }
             }
         }
@@ -425,8 +424,7 @@ impl DB {
             if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
                 if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2) != 0 {
                     self.world[ch.in_room() as usize]
-                        .light
-                        .set(self.world[ch.in_room() as usize].light.get() + 1);
+                        .light+= 1;
                     /* Light ON */
                 }
             }
@@ -533,7 +531,7 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
 }
 
 impl DB {
-    pub(crate) fn equip_char(&self, ch: &Rc<CharData>, obj: &Rc<ObjData>, pos: i8) {
+    pub(crate) fn equip_char(&mut self, ch: &Rc<CharData>, obj: &Rc<ObjData>, pos: i8) {
         //int j;
 
         if pos < 0 || pos >= NUM_WEARS {
@@ -592,8 +590,7 @@ impl DB {
                 if obj.get_obj_val(2) != 0 {
                     /* if light is ON */
                     self.world[ch.in_room() as usize]
-                        .light
-                        .set(self.world[ch.in_room() as usize].light.get() + 1);
+                        .light+= 1;
                 }
             }
         } else {
@@ -616,7 +613,7 @@ impl DB {
         affect_total(ch.as_ref());
     }
 
-    pub fn unequip_char(&self, ch: &Rc<CharData>, pos: i8) -> Option<Rc<ObjData>> {
+    pub fn unequip_char(&mut self, ch: &Rc<CharData>, pos: i8) -> Option<Rc<ObjData>> {
         if pos < 0 || pos > NUM_WEARS || ch.get_eq(pos).is_none() {
             //core_dump();
             return None;
@@ -634,8 +631,7 @@ impl DB {
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
                     self.world[ch.in_room() as usize]
-                        .light
-                        .set(self.world[ch.in_room() as usize].light.get() - 1);
+                        .light-= 1;
                 }
             }
         } else {
@@ -921,7 +917,7 @@ fn update_object(obj: &ObjData, _use: i32) {
 }
 
 impl DB {
-    pub(crate) fn update_char_objects(&self, ch: &Rc<CharData>) {
+    pub(crate) fn update_char_objects(&mut self, ch: &Rc<CharData>) {
         let i;
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             if ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_type() == ITEM_LIGHT {
@@ -952,8 +948,7 @@ impl DB {
                             TO_ROOM,
                         );
                         self.world[ch.in_room() as usize]
-                            .light
-                            .set(self.world[ch.in_room() as usize].light.get() - 1);
+                            .light-= 1;
                     }
                 }
             }
@@ -1056,8 +1051,9 @@ impl Game {
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
+                let obj = self.db.unequip_char(ch, i).as_ref().unwrap().clone();
                 self.db
-                    .obj_to_room(self.db.unequip_char(ch, i).as_ref().unwrap(), ch.in_room())
+                    .obj_to_room(&obj, ch.in_room())
             }
         }
 

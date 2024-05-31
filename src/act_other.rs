@@ -191,12 +191,11 @@ pub fn do_hide(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
 }
 
 pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     if ch.is_npc() || ch.get_skill(SKILL_STEAL) == 0 {
         send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
     }
-    if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+    if game.db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
         send_to_char(
             ch,
             "This room just has such a peaceful, easy feeling...\r\n",
@@ -208,7 +207,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
     if {
-        vict = db.get_char_vis(ch, &mut vict_name, None, FIND_CHAR_ROOM);
+        vict = game.db.get_char_vis(ch, &mut vict_name, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(ch, "Steal what from who?\r\n");
@@ -241,8 +240,8 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     /* NO NO With Imp's and Shopkeepers, and if player thieving is not allowed */
     if vict.get_level() >= LVL_IMMORT as u8
         || pcsteal
-        || (db.get_mob_spec(vict).is_some()
-            && db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
+        || (game.db.get_mob_spec(vict).is_some()
+            && game.db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
     {
         percent = 101; /* Failure */
     }
@@ -250,7 +249,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     let mut the_eq_pos = -1;
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            obj = db.get_obj_in_list_vis(ch, &mut obj_name, None, vict.carrying.borrow());
+            obj = game.db.get_obj_in_list_vis(ch, &mut obj_name, None, vict.carrying.borrow());
             obj.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
@@ -259,14 +258,14 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         &obj_name,
                         vict.get_eq(eq_pos).as_ref().unwrap().name.borrow().as_ref(),
                     )
-                    && db.can_see_obj(ch, vict.get_eq(eq_pos).as_ref().unwrap())
+                    && game.db.can_see_obj(ch, vict.get_eq(eq_pos).as_ref().unwrap())
                 {
                     obj = vict.get_eq(eq_pos);
                     the_eq_pos = eq_pos;
                 }
             }
             if obj.is_none() {
-                db.act(
+                game.db.act(
                     "$E hasn't got that item.",
                     false,
                     Some(ch),
@@ -282,7 +281,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     return;
                 } else {
                     let obj = obj.as_ref().unwrap();
-                    db.act(
+                    game.db.act(
                         "You unequip $p and steal it.",
                         false,
                         Some(ch),
@@ -290,7 +289,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         None,
                         TO_CHAR,
                     );
-                    db.act(
+                    game.db.act(
                         "$n steals $p from $N.",
                         false,
                         Some(ch),
@@ -298,7 +297,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         Some(vict),
                         TO_NOTVICT,
                     );
-                    DB::obj_to_char(db.unequip_char(vict, the_eq_pos).as_ref().unwrap(), ch);
+                    DB::obj_to_char(game.db.unequip_char(vict, the_eq_pos).as_ref().unwrap(), ch);
                 }
             }
         } else {
@@ -309,7 +308,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
                 send_to_char(ch, "Oops..\r\n");
-                db.act(
+                game.db.act(
                     "$n tried to steal something from you!",
                     false,
                     Some(ch),
@@ -317,7 +316,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     Some(vict),
                     TO_VICT,
                 );
-                db.act(
+                game.db.act(
                     "$n tries to steal something from $N.",
                     true,
                     Some(ch),
@@ -343,7 +342,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         if vict.awake() && percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
             ohoh = true;
             send_to_char(ch, "Oops..\r\n");
-            db.act(
+            game.db.act(
                 "You discover that $n has $s hands in your wallet.",
                 false,
                 Some(ch),
@@ -351,7 +350,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 Some(vict),
                 TO_VICT,
             );
-            db.act(
+            game.db.act(
                 "$n tries to steal gold from $N.",
                 true,
                 Some(ch),

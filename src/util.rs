@@ -1812,7 +1812,7 @@ impl DB {
             return false;
         }
 
-        if self.world[room as usize].light.get() != 0 {
+        if self.world[room as usize].light != 0 {
             return false;
         }
 
