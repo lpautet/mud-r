@@ -218,13 +218,13 @@ pub fn house_crashsave(db: &mut DB, vnum: RoomVnum) {
     let mut fp = fp.unwrap();
     if !house_save(
         db,
-        &db.world[rnum as usize].contents.borrow(),
+        &db.world[rnum as usize].contents,
         &mut fp,
     ) {
         return;
     }
 
-    house_restore_weight(&db.world[rnum as usize].contents.borrow());
+    house_restore_weight(&db.world[rnum as usize].contents);
     db.remove_room_flags_bit(rnum, ROOM_HOUSE_CRASH);
 }
 

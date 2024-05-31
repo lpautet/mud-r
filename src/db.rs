@@ -1240,7 +1240,7 @@ impl DB {
             room_flags: 0,
             light: 0, /* Zero light sources */
             func: None,
-            contents: RefCell::new(vec![]),
+            contents: vec![],
             peoples: RefCell::new(vec![]),
         };
 
@@ -2669,7 +2669,6 @@ impl Game {
                         self.db.zone_table.borrow()[zone].cmd[cmd_no].arg2 as i16,
                         self.db.world[self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as usize]
                             .contents
-                            .borrow()
                             .as_ref(),
                     );
                     if obj.is_some() {

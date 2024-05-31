@@ -60,7 +60,6 @@ impl Game {
             if ch.mob_flagged(MOB_SCAVENGER) {
                 if self.db.world[ch.in_room() as usize]
                     .contents
-                    .borrow()
                     .len()
                     != 0
                     && rand_number(0, 10) == 0
@@ -68,7 +67,7 @@ impl Game {
                     let mut max = 1;
                     let mut best_obj = None;
                     {
-                        let contents = self.db.world[ch.in_room() as usize].contents.borrow();
+                        let contents = clone_vec2(&self.db.world[ch.in_room() as usize].contents);
                         for obj in contents.iter() {
                             if self.db.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
                                 best_obj = Some(obj.clone());

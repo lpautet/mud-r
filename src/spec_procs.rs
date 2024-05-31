@@ -37,7 +37,7 @@ use crate::structs::{
     CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
     PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{add_follower, clone_vec, rand_number};
+use crate::util::{add_follower, clone_vec, clone_vec2, rand_number};
 use crate::{send_to_char, Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 /* ********************************************************************
@@ -192,7 +192,7 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argume
 }
 
 pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
-    let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+    let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for k in &list {
         game.db.act(
             "$p vanishes in a puff of smoke!",
@@ -211,7 +211,7 @@ pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argumen
 
     do_drop(game, ch, argument, cmd as usize, SCMD_DROP as i32);
     let mut value = 0;
-    let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+    let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for k in &list {
         game.db.act(
             "$p vanishes in a puff of smoke!",
@@ -672,7 +672,7 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
         return false;
     }
 
-    let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+    let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in &list
     {
         if !i.is_corpse() {
@@ -708,7 +708,7 @@ pub fn janitor(
     if cmd != 0 || !ch.awake() {
         return false;
     }
-    for i in clone_vec(&game.db.world[ch.in_room() as usize].contents).iter() {
+    for i in clone_vec2(&game.db.world[ch.in_room() as usize].contents).iter() {
         if !i.can_wear(ITEM_WEAR_TAKE) {
             continue;
         }

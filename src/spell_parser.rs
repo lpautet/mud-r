@@ -1143,13 +1143,12 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
             if {
-                tobj = db.get_obj_in_list_vis(
+                tobj = db.get_obj_in_list_vis2(
                     ch,
                     &t,
                     None,
-                    db.world[ch.in_room.get() as usize]
+                    &db.world[ch.in_room.get() as usize]
                         .contents
-                        .borrow(),
                 );
                 tobj.is_some()
             } {

@@ -30,7 +30,7 @@ use crate::structs::{
     CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
     NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{clone_vec, rand_number};
+use crate::util::{clone_vec, clone_vec2, rand_number};
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 const Z_KINGS_C: i32 = 150;
@@ -1019,7 +1019,7 @@ fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool
         return false;
     }
 
-    for i in clone_vec(&db.world[ch.in_room() as usize].contents).iter() {
+    for i in clone_vec2(&db.world[ch.in_room() as usize].contents).iter() {
         if !is_trash(i) {
             continue;
         }

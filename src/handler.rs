@@ -756,7 +756,6 @@ impl DB {
         }
         self.world[room as usize]
             .contents
-            .borrow_mut()
             .push(object.clone());
     }
 
@@ -772,7 +771,6 @@ impl DB {
 
         self.world[object.in_room() as usize]
             .contents
-            .borrow_mut()
             .retain(|x| !Rc::ptr_eq(x, &object));
 
         if self.room_flagged(object.in_room(), ROOM_HOUSE) {
@@ -1353,6 +1351,41 @@ impl DB {
         None
     }
 
+    pub fn get_obj_in_list_vis2(
+        &self,
+        ch: &Rc<CharData>,
+        name: &str,
+        number: Option<&mut i32>,
+        list: &Vec<Rc<ObjData>>,
+    ) -> Option<Rc<ObjData>> {
+        let mut num;
+        let t: &mut i32;
+        let mut name = name.to_string();
+        if number.is_none() {
+            num = get_number(&mut name);
+            t = &mut num;
+        } else {
+            t = number.unwrap();
+        }
+        let number: &mut i32 = t;
+        if *number == 0 {
+            return None;
+        }
+
+        for i in list.iter() {
+            if isname(&name, &i.name.borrow()) {
+                if self.can_see_obj(ch, i) {
+                    *number -= 1;
+                    if *number == 0 {
+                        return Some(i.clone());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     /* search the entire world for an object, and return a pointer  */
     pub fn get_obj_vis(
         &self,
@@ -1381,11 +1414,11 @@ impl DB {
         }
 
         /* scan room */
-        let i = self.get_obj_in_list_vis(
+        let i = self.get_obj_in_list_vis2(
             ch,
             &name,
             Some(number),
-            self.world[ch.in_room() as usize].contents.borrow(),
+            &self.world[ch.in_room() as usize].contents,
         );
         if i.is_some() {
             return i;
@@ -1694,11 +1727,11 @@ impl DB {
         }
 
         if is_set!(bitvector, FIND_OBJ_ROOM as i64) {
-            *tar_obj = self.get_obj_in_list_vis(
+            *tar_obj = self.get_obj_in_list_vis2(
                 ch,
                 &name,
                 Some(&mut number),
-                self.world[ch.in_room() as usize].contents.borrow(),
+                &self.world[ch.in_room() as usize].contents,
             );
             if tar_obj.is_some() {
                 return FIND_OBJ_ROOM;

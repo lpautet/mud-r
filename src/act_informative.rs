@@ -53,7 +53,7 @@ use crate::structs::{
     POS_STUNNED, PRF_SUMMONABLE, THIRST,
 };
 use crate::util::{
-    age, clone_vec, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
+    age, clone_vec, clone_vec2, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
 };
 use crate::{
     _clrlevel, an, clr, send_to_char, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT,
@@ -550,7 +550,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
 
     /* now list characters & objects */
     send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
-    let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+    let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     list_obj_to_char(
         game,
         &list,
@@ -848,7 +848,6 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     /* Does the argument match an extra desc of an object in the room? */
     for obj in game.db.world[ch.in_room() as usize]
         .contents
-        .borrow()
         .iter()
     {
         if game.db.can_see_obj(ch, obj) {

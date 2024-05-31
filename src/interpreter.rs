@@ -3270,7 +3270,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
         }
     }
 
-    let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+    let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in peoples_in_room.iter() {
         if game.db.get_obj_spec(i).is_some() {
             if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {

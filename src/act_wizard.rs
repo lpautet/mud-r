@@ -613,11 +613,11 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         }
         send_to_char(ch, CCNRM!(ch, C_NRM));
     }
-    if !rm.contents.borrow().is_empty() {
+    if !rm.contents.is_empty() {
         send_to_char(ch, format!("Contents:{}", CCGRN!(ch, C_NRM)).as_str());
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
-        for (i, j) in rm.contents.borrow().iter().enumerate() {
+        for (i, j) in rm.contents.iter().enumerate() {
             if !db.can_see_obj(ch, j) {
                 continue;
             }
@@ -637,7 +637,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                     ch,
                     format!(
                         "{}\r\n",
-                        if i == rm.contents.borrow().len() - 1 {
+                        if i == rm.contents.len() - 1 {
                             ","
                         } else {
                             ""
@@ -1548,13 +1548,13 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         } {
             do_stat_character(&game.db, ch, victim.as_ref().unwrap());
         } else if {
-            object = game.db.get_obj_in_list_vis(
+            object = game.db.get_obj_in_list_vis2(
                 ch,
                 &mut name,
                 Some(&mut number),
-                game.db.world[ch.in_room() as usize]
+                &game.db.world[ch.in_room() as usize]
                     .contents
-                    .borrow(),
+                    ,
             );
             object.is_some()
         } {
@@ -2113,11 +2113,11 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             }
             game.db.extract_char(vict);
         } else if {
-            obj = game.db.get_obj_in_list_vis(
+            obj = game.db.get_obj_in_list_vis2(
                 ch,
                 &mut buf,
                 None,
-                game.db.world[ch.in_room() as usize].contents.borrow(),
+                &game.db.world[ch.in_room() as usize].contents,
             );
             obj.is_some()
         } {
@@ -2178,11 +2178,10 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         /* Clear the ground. */
         while game.db.world[ch.in_room() as usize]
             .contents
-            .borrow()
             .len()
             > 0
         {
-            let o = game.db.world[ch.in_room() as usize].contents.borrow()[0].clone();
+            let o = game.db.world[ch.in_room() as usize].contents[0].clone();
             game.db.extract_obj(&o);
         }
     }

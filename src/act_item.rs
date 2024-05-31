@@ -37,7 +37,7 @@ use crate::structs::{
     WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
     WEAR_WRIST_R,
 };
-use crate::util::{clone_vec, rand_number};
+use crate::util::{clone_vec, clone_vec2, rand_number};
 use crate::{an, send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 fn perform_put(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<ObjData>) {
@@ -393,11 +393,11 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
     let dotmode = find_all_dots(arg);
 
     if dotmode == FIND_INDIV {
-        let mut obj = game.db.get_obj_in_list_vis(
+        let mut obj = game.db.get_obj_in_list_vis2(
             ch,
             arg,
             None,
-            game.db.world[ch.in_room() as usize].contents.borrow(),
+            &game.db.world[ch.in_room() as usize].contents,
         );
         if obj.is_none() {
             send_to_char(
@@ -411,11 +411,11 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
                 }
                 howmany -= 1;
                 perform_get_from_room(game, ch, obj.as_ref().unwrap());
-                obj = game.db.get_obj_in_list_vis(
+                obj = game.db.get_obj_in_list_vis2(
                     ch,
                     arg,
                     None,
-                    game.db.world[ch.in_room() as usize].contents.borrow(),
+                    &game.db.world[ch.in_room() as usize].contents,
                 );
             }
         }
@@ -424,7 +424,7 @@ fn get_from_room(game: &mut Game, ch: &Rc<CharData>, arg: &str, howmany: i32) {
             send_to_char(ch, "Get all of what?\r\n");
             return;
         }
-        let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+        let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
         for obj in list.iter()
         {
             if game.db.can_see_obj(ch, obj) && (dotmode == FIND_ALL || isname(arg, &obj.name.borrow())) {
@@ -516,7 +516,7 @@ pub fn do_get(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     }
                 }
             }
-            let list = clone_vec(&game.db.world[ch.in_room() as usize].contents);
+            let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
             for cont in 
                 list
                 .iter()
@@ -1145,11 +1145,11 @@ pub fn do_drink(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         temp.is_none()
     } {
         if {
-            temp = game.db.get_obj_in_list_vis(
+            temp = game.db.get_obj_in_list_vis2(
                 ch,
                 &arg,
                 None,
-                game.db.world[ch.in_room() as usize].contents.borrow(),
+                &game.db.world[ch.in_room() as usize].contents,
             );
             temp.is_none()
         } {
@@ -1478,11 +1478,11 @@ pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             return;
         }
         if {
-            from_obj = db.get_obj_in_list_vis(
+            from_obj = db.get_obj_in_list_vis2(
                 ch,
                 &arg2,
                 None,
-                db.world[ch.in_room() as usize].contents.borrow(),
+                &db.world[ch.in_room() as usize].contents,
             );
             from_obj.is_none()
         } {

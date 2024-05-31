@@ -199,7 +199,6 @@ fn find_slot(b: &mut BoardSystem) -> Option<usize> {
 fn find_board(b: &mut BoardSystem, db: &DB, ch: &Rc<CharData>) -> Option<usize> {
     for obj in db.world[ch.in_room() as usize]
         .contents
-        .borrow()
         .iter()
     {
         for i in 0..NUM_OF_BOARDS {
