@@ -131,7 +131,7 @@ pub struct DB {
     /* zone table			 */
     pub(crate) fight_messages: Vec<MessageList>,
     /* fighting messages	 */
-    pub(crate) player_table: RefCell<Vec<PlayerIndexElement>>,
+    pub(crate) player_table: Vec<PlayerIndexElement>,
     /* index to plr file	 */
     pub(crate) player_fl: RefCell<Option<File>>,
     /* file desc of player file	 */
@@ -276,13 +276,11 @@ pub struct BanListElement {
 
 impl DB {
     pub fn get_name_by_id(&self, id: i64) -> Option<String> {
-        let pt = self.player_table.borrow();
-        pt.iter().find(|p| p.id == id).map(|p| p.name.clone())
+        self.player_table.iter().find(|p| p.id == id).map(|p| p.name.clone())
     }
 
     pub fn get_id_by_name(&self, name: &str) -> i64 {
-        let pt = self.player_table.borrow();
-        let r = pt.iter().find(|p| p.name == name);
+        let r = self.player_table.iter().find(|p| p.name == name);
         if r.is_some() {
             r.unwrap().id
         } else {
@@ -516,7 +514,7 @@ impl DB {
             obj_proto: vec![],
             zone_table: vec![],
             fight_messages: vec![],
-            player_table: RefCell::new(vec![]),
+            player_table: vec![],
             player_fl: RefCell::new(None),
             top_idnum: Cell::new(0),
             no_mail: Cell::new(false),
@@ -765,7 +763,7 @@ pub fn save_mud_time(when: &TimeInfoData) {
 
 impl DB {
     pub fn free_player_index(&mut self) {
-        self.player_table.borrow_mut().clear();
+        self.player_table.clear();
     }
 }
 
@@ -823,9 +821,9 @@ impl DB {
         recs = size / mem::size_of::<CharFileU>() as u64;
         if recs != 0 {
             info!("   {} players in database.", recs);
-            self.player_table.borrow_mut().reserve_exact(recs as usize);
+            self.player_table.reserve_exact(recs as usize);
         } else {
-            self.player_table.borrow_mut().clear();
+            self.player_table.clear();
             return;
         }
 
@@ -856,7 +854,7 @@ impl DB {
                 id: dummy.char_specials_saved.idnum,
             };
             pie.name = pie.name.to_lowercase();
-            self.player_table.borrow_mut().push(pie);
+            self.player_table.push(pie);
             self.top_idnum.set(max(
                 self.top_idnum.get(),
                 dummy.char_specials_saved.idnum as i32,
@@ -2781,7 +2779,6 @@ impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
         return self
             .player_table
-            .borrow()
             .iter()
             .position(|pie| pie.name == name);
     }
@@ -3124,14 +3121,14 @@ pub fn copy_to_stored(to: &mut [u8], from: &str) -> usize {
  * we re-use the old position.
  */
 impl DB {
-    pub(crate) fn create_entry(&self, name: &str) -> usize {
+    pub(crate) fn create_entry(&mut self, name: &str) -> usize {
         let i: usize;
         let pos = self.get_ptable_by_name(name);
 
         return if pos.is_none() {
             /* new name */
-            i = self.player_table.borrow().len();
-            self.player_table.borrow_mut().push(PlayerIndexElement {
+            i = self.player_table.len();
+            self.player_table.push(PlayerIndexElement {
                 name: name.to_lowercase(),
                 id: i as i64,
             });
@@ -3139,8 +3136,7 @@ impl DB {
         } else {
             let pos = pos.unwrap();
 
-            let mut pt = self.player_table.borrow_mut();
-            let mut pie = pt.get_mut(pos);
+            let mut pie = self.player_table.get_mut(pos);
             pie.as_mut().unwrap().name = name.to_lowercase();
             pos
         };
@@ -3312,9 +3308,9 @@ fn clear_object(obj: &mut ObjData) {
  * (and then never again for that character).
  */
 impl DB {
-    pub(crate) fn init_char(&self, ch: &CharData) {
+    pub(crate) fn init_char(&mut self, ch: &CharData) {
         /* *** if this is our first player --- he be God *** */
-        if self.player_table.borrow().len() == 1 {
+        if self.player_table.len() == 1 {
             ch.set_level(LVL_IMPL as u8);
             ch.set_exp(7000000);
 
@@ -3368,8 +3364,8 @@ impl DB {
             );
         } else {
             let i = i.unwrap();
-            let top_n = self.player_table.borrow().len();
-            self.player_table.borrow_mut()[i].id = top_n as i64; //*self.top_idnum.borrow() as i64;
+            let top_n = self.player_table.len();
+            self.player_table[i].id = top_n as i64; //*self.top_idnum.borrow() as i64;
             ch.set_idnum(top_n as i64); /*self.top_idnum.borrow()*/
         }
 

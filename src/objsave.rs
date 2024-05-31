@@ -372,9 +372,9 @@ fn crash_clean_file(name: &str) -> bool {
 }
 
 pub fn update_obj_file(db: &DB) {
-    for i in 0..db.player_table.borrow().len() {
-        if !db.player_table.borrow()[i].name.is_empty() {
-            crash_clean_file(&db.player_table.borrow()[i].name);
+    for i in 0..db.player_table.len() {
+        if !db.player_table[i].name.is_empty() {
+            crash_clean_file(&db.player_table[i].name);
         }
     }
 }
