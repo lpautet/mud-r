@@ -532,7 +532,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         .as_str(),
     );
 
-    sprintbit(rm.room_flags.get() as i64, &ROOM_BITS, &mut buf2);
+    sprintbit(rm.room_flags as i64, &ROOM_BITS, &mut buf2);
     send_to_char(
         ch,
         format!(

@@ -744,7 +744,7 @@ impl DB {
     }
 
     /* put an object in a room */
-    pub fn obj_to_room(&self, object: &Rc<ObjData>, room: RoomRnum) {
+    pub fn obj_to_room(&mut self, object: &Rc<ObjData>, room: RoomRnum) {
         if room == NOWHERE || room >= self.world.len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to obj_to_room. (Room #{}/{})",
@@ -765,7 +765,7 @@ impl DB {
     }
 
     /* Take an object from a room */
-    pub fn obj_from_room(&self, object: &Rc<ObjData>) {
+    pub fn obj_from_room(&mut self, object: &Rc<ObjData>) {
         if object.in_room() == NOWHERE {
             error!(
                 "SYSERR: obj not in a room ({}) passed to obj_from_room",

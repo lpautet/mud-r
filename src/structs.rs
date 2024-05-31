@@ -901,7 +901,7 @@ pub struct RoomData {
     /* for examine/look       */
     pub dir_option: [Option<RoomDirectionData>; NUM_OF_DIRS],
     /* Directions */
-    pub room_flags: Cell<i32>,
+    pub room_flags: i32,
     /* DEATH,DARK ... etc */
     pub light: Cell<u8>,
     /* Number of lightsources in room     */

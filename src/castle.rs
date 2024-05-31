@@ -1008,13 +1008,13 @@ fn castle_twin_proc(
  * This doesn't make sure he _can_ carry it...
  */
 fn james(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    return castle_cleaner(&game.db, ch, cmd, true);
+    return castle_cleaner(&mut game.db, ch, cmd, true);
 }
 
 /*
  * Common code for James and the Cleaning Woman.
  */
-fn castle_cleaner(db: &DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
+fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
     if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
         return false;
     }
@@ -1055,7 +1055,7 @@ fn castle_cleaner(db: &DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
  * Picks up any trash she finds...
  */
 fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    return castle_cleaner(&game.db, ch, cmd, false);
+    return castle_cleaner(&mut game.db, ch, cmd, false);
 }
 
 /*

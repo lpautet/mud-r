@@ -679,7 +679,7 @@ impl Game {
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave = 0;
                 crash_save_all(self);
-                house_save_all(&self.db);
+                house_save_all(&mut self.db);
             }
         }
 

@@ -1237,7 +1237,7 @@ impl DB {
             description: fread_string(reader, buf2.as_str()),
             ex_descriptions: vec![],
             dir_option: [None, None, None, None, None, None],
-            room_flags: Cell::new(0),
+            room_flags: 0,
             light: Cell::new(0), /* Zero light sources */
             func: RefCell::new(None),
             contents: RefCell::new(vec![]),
@@ -1268,10 +1268,10 @@ impl DB {
 
         /* t[0] is the zone number; ignored with the zone-file system */
 
-        rd.room_flags.set(asciiflag_conv(flags) as i32);
+        rd.room_flags = asciiflag_conv(flags) as i32;
         let msg = format!("object #{}", virtual_nr); /* sprintf: OK (until 399-bit integers) */
         check_bitvector_names(
-            rd.room_flags.get() as i64,
+            rd.room_flags as i64,
             ROOM_BITS_COUNT,
             msg.as_str(),
             "room",
@@ -2564,8 +2564,9 @@ impl Game {
                         if self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
                             let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;
                             obj = self.db.read_object(nr, REAL);
+                            let room_nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum;
                             self.db
-                                .obj_to_room(obj.as_ref().unwrap(), self.db.zone_table.borrow()[zone].cmd[cmd_no].arg3 as RoomRnum);
+                                .obj_to_room(obj.as_ref().unwrap(), room_nr);
                             last_cmd = 1;
                         } else {
                             let nr = self.db.zone_table.borrow()[zone].cmd[cmd_no].arg1 as ObjVnum;

@@ -708,15 +708,14 @@ pub fn janitor(
     if cmd != 0 || !ch.awake() {
         return false;
     }
-    let db = &game.db;
-    for i in clone_vec(&db.world[ch.in_room() as usize].contents).iter() {
+    for i in clone_vec(&game.db.world[ch.in_room() as usize].contents).iter() {
         if !i.can_wear(ITEM_WEAR_TAKE) {
             continue;
         }
         if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {
             continue;
         }
-        db.act(
+        game.db.act(
             "$n picks up some trash.",
             false,
             Some(ch),
@@ -724,7 +723,7 @@ pub fn janitor(
             None,
             TO_ROOM,
         );
-        db.obj_from_room(i);
+        game.db.obj_from_room(i);
         DB::obj_to_char(i, ch);
         return true;
     }

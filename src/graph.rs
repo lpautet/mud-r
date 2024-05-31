@@ -30,11 +30,11 @@ struct BfsQueueStruct {
 }
 
 /* Utility functions */
-fn mark(db: &DB, room: RoomRnum) {
+fn mark(db: &mut DB, room: RoomRnum) {
     db.set_room_flags_bit(room, ROOM_BFS_MARK);
 }
 
-fn unmark(db: &DB, room: RoomRnum) {
+fn unmark(db: &mut DB, room: RoomRnum) {
     db.remove_room_flags_bit(room, ROOM_BFS_MARK);
 }
 
@@ -115,10 +115,10 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
 
     /* clear marks first, some OLC systems will save the mark. */
     for curr_room in 0..game.db.world.len() {
-        unmark(&game.db, curr_room as RoomRnum);
+        unmark(&mut game.db, curr_room as RoomRnum);
     }
 
-    mark(&game.db, src);
+    mark(&mut game.db, src);
 
     /* first, enqueue the first steps, saving which direction we're going. */
 
@@ -126,7 +126,8 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
 
     for curr_dir in 0..NUM_OF_DIRS {
         if valid_edge(game, src, curr_dir) {
-            mark(&game.db, toroom(&game.db, src, curr_dir));
+            let room_nr = toroom(&game.db, src, curr_dir);
+            mark(&mut game.db, room_nr);
             tracker.bfs_enqueue(toroom(&game.db, src, curr_dir), curr_dir);
         }
     }
@@ -139,7 +140,8 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
         } else {
             for curr_dir in 0..NUM_OF_DIRS {
                 if valid_edge(game, tracker.queue[0].room, curr_dir) {
-                    mark(&game.db, toroom(&game.db, tracker.queue[0].room, curr_dir));
+                    let room_nr = toroom(&game.db, tracker.queue[0].room, curr_dir);
+                    mark(&mut game.db, room_nr);
                     tracker.bfs_enqueue(
                         toroom(&game.db, tracker.queue[0].room, curr_dir),
                         tracker.queue[0].dir,

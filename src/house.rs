@@ -195,7 +195,7 @@ fn house_restore_weight(objects: &Vec<Rc<ObjData>>) {
 }
 
 /* Save all objects in a house */
-pub fn house_crashsave(db: &DB, vnum: RoomVnum) {
+pub fn house_crashsave(db: &mut DB, vnum: RoomVnum) {
     let rnum;
     if {
         rnum = db.real_room(vnum);
@@ -496,7 +496,7 @@ pub fn hcontrol_list_houses(db: &DB, ch: &Rc<CharData>) {
     }
 }
 
-fn hcontrol_build_house(db: &DB, ch: &Rc<CharData>, arg: &mut str) {
+fn hcontrol_build_house(db: &mut DB, ch: &Rc<CharData>, arg: &mut str) {
     if db.num_of_houses.get() >= MAX_HOUSES {
         send_to_char(ch, "Max houses already defined.\r\n");
         return;
@@ -613,8 +613,7 @@ fn hcontrol_build_house(db: &DB, ch: &Rc<CharData>, arg: &mut str) {
     house_save_control(db);
 }
 
-fn hcontrol_destroy_house(db: &DB, ch: &Rc<CharData>, arg: &str) {
-    let house_control = db.house_control.borrow_mut();
+fn hcontrol_destroy_house(db: &mut DB, ch: &Rc<CharData>, arg: &str) {
     if arg.is_empty() {
         send_to_char(ch, HCONTROL_FORMAT);
         return;
@@ -632,30 +631,30 @@ fn hcontrol_destroy_house(db: &DB, ch: &Rc<CharData>, arg: &str) {
     let i = i.unwrap();
     let real_atrium;
     if {
-        real_atrium = db.real_room(house_control[i].atrium);
+        real_atrium = db.real_room(db.house_control.borrow_mut()[i].atrium);
         real_atrium == NOWHERE
     } {
         error!(
             "SYSERR: House {} had invalid atrium {}!",
-            argi, house_control[i].atrium
+            argi, db.house_control.borrow_mut()[i].atrium
         );
     } else {
         db.remove_room_flags_bit(real_atrium, ROOM_ATRIUM);
     }
     let real_house;
     if {
-        real_house = db.real_room(house_control[i].vnum);
+        real_house = db.real_room(db.house_control.borrow_mut()[i].vnum);
         real_house == NOWHERE
     } {
         error!(
             "SYSERR: House {} had invalid vnum {}!",
-            argi, house_control[i].vnum
+            argi, db.house_control.borrow_mut()[i].vnum
         );
     } else {
         db.remove_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE | ROOM_HOUSE_CRASH);
     }
 
-    house_delete_file(house_control[i].vnum);
+    house_delete_file(db.house_control.borrow_mut()[i].vnum);
 
     for j in i..db.num_of_houses.get() - 1 {
         db.house_control.borrow_mut()[j] = db.house_control.borrow()[j + 1];
@@ -674,7 +673,7 @@ fn hcontrol_destroy_house(db: &DB, ch: &Rc<CharData>, arg: &str) {
     for i in 0..db.num_of_houses.get() {
         let real_atrium;
         if {
-            real_atrium = db.real_room(house_control[i].atrium);
+            real_atrium = db.real_room(db.house_control.borrow_mut()[i].atrium);
             real_atrium != NOWHERE
         } {
             db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
@@ -711,7 +710,6 @@ fn hcontrol_pay_house(game: &Game, ch: &Rc<CharData>, arg: &str) {
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
 pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut argument = argument.to_string();
@@ -719,13 +717,13 @@ pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     half_chop(&mut argument, &mut arg1, &mut arg2);
 
     if is_abbrev(&arg1, "build") {
-        hcontrol_build_house(db, ch, &mut arg2);
+        hcontrol_build_house(&mut game.db, ch, &mut arg2);
     } else if is_abbrev(&arg1, "destroy") {
-        hcontrol_destroy_house(db, ch, &arg2);
+        hcontrol_destroy_house(&mut game.db, ch, &arg2);
     } else if is_abbrev(&arg1, "pay") {
         hcontrol_pay_house(game, ch, &arg2);
     } else if is_abbrev(&arg1, "show") {
-        hcontrol_list_houses(db, ch);
+        hcontrol_list_houses(&game.db, ch);
     } else {
         send_to_char(ch, HCONTROL_FORMAT);
     }
@@ -786,12 +784,13 @@ pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 /* Misc. administrative functions */
 
 /* crash-save all the houses */
-pub fn house_save_all(db: &DB) {
+pub fn house_save_all(db: &mut DB) {
     for i in 0..db.num_of_houses.get() {
         let real_house = db.real_room(db.house_control.borrow()[i].vnum);
         if real_house != NOWHERE {
             if db.room_flagged(real_house, ROOM_HOUSE_CRASH) {
-                house_crashsave(db, db.house_control.borrow()[i].vnum);
+                let room_vnum = db.house_control.borrow()[i].vnum;
+                house_crashsave(db, room_vnum);
             }
         }
     }

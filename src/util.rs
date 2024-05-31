@@ -1148,18 +1148,18 @@ impl DB {
         self.world[ch.in_room() as usize].dir_option[door].clone()
     }
     pub fn room_flags(&self, loc: RoomRnum) -> i32 {
-        self.world[loc as usize].room_flags.get()
+        self.world[loc as usize].room_flags
     }
     pub fn room_flagged(&self, loc: RoomRnum, flag: i64) -> bool {
         is_set!(self.room_flags(loc), flag as i32)
     }
-    pub fn set_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
+    pub fn set_room_flags_bit(&mut self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) | flags as i32;
-        self.world[loc as usize].room_flags.set(flags);
+        self.world[loc as usize].room_flags = flags;
     }
-    pub fn remove_room_flags_bit(&self, loc: RoomRnum, flags: i64) {
+    pub fn remove_room_flags_bit(&mut self, loc: RoomRnum, flags: i64) {
         let flags = self.room_flags(loc) & !flags as i32;
-        self.world[loc as usize].room_flags.set(flags);
+        self.world[loc as usize].room_flags = flags;
     }
     pub fn sect(&self, loc: RoomRnum) -> i32 {
         if self.valid_room_rnum(loc) {

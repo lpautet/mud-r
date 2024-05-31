@@ -122,7 +122,8 @@ pub fn do_save(game: &mut Game, ch: &Rc<CharData>, _argument: &str, cmd: usize, 
     crash_crashsave(&game.db, ch);
 
     if game.db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
-        house_crashsave(&game.db, game.db.get_room_vnum(ch.in_room()));
+        let in_room =  game.db.get_room_vnum(ch.in_room());
+        house_crashsave(&mut game.db, in_room);
     }
 }
 
