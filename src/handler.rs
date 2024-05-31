@@ -399,7 +399,7 @@ impl DB {
             }
         }
 
-        let mut list = self.world[ch.in_room() as usize].peoples.borrow_mut();
+        let list = &mut self.world[ch.in_room() as usize].peoples;
         list.retain(|c_rch| !Rc::ptr_eq(c_rch, ch));
     }
 
@@ -416,7 +416,6 @@ impl DB {
         }
         self.world[room as usize]
             .peoples
-            .borrow_mut()
             .push(ch.clone());
         ch.set_in_room(room);
 
@@ -716,7 +715,7 @@ impl DB {
             return None;
         }
 
-        for i in self.world[room as usize].peoples.borrow().iter() {
+        for i in self.world[room as usize].peoples.iter() {
             if isname(&name, &i.player.borrow().name) {
                 *number -= 1;
                 if *number == 0 {
@@ -1240,7 +1239,6 @@ impl DB {
 
         for i in self.world[ch.in_room() as usize]
             .peoples
-            .borrow()
             .iter()
         {
             if isname(name, i.player.borrow().name.as_str()) {

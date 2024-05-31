@@ -503,7 +503,6 @@ pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
     let db = &game.db;
     for cons in db.world[ch.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if !cons.is_npc() && cons.get_level() < LVL_IMMORT as u8 && rand_number(0, 4) == 0 {
@@ -527,7 +526,7 @@ pub fn magic_user(
     /* pseudo-randomly choose someone in the room who is fighting me */
     let mut vict = None;
     {
-        let peoples = game.db.world[ch.in_room() as usize].peoples.borrow();
+        let peoples = &game.db.world[ch.in_room() as usize].peoples;
         for v in peoples.iter() {
             if v.fighting().is_some()
                 && Rc::ptr_eq(v.fighting().as_ref().unwrap(), ch)
@@ -746,7 +745,7 @@ pub fn cityguard(
     let mut min_cha = 6;
     let mut spittle = None;
     let mut evil = None;
-    let peoples = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+    let peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
     for tch in peoples.iter() {
         if !game.db.can_see(ch, tch) {
             continue;
@@ -851,7 +850,7 @@ pub fn pet_shops(
 
     if cmd_is(cmd, "list") {
         send_to_char(ch, "Available pets are:\r\n");
-        for pet in game.db.world[pet_room as usize].peoples.borrow().iter() {
+        for pet in game.db.world[pet_room as usize].peoples.iter() {
             /* No, you can't have the Implementor as a pet if he's in there. */
             if !pet.is_npc() {
                 continue;

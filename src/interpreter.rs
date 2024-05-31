@@ -76,7 +76,7 @@ use crate::structs::{
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
     SEX_MALE,
 };
-use crate::util::{clone_vec, clone_vec2, BRF, NRM};
+use crate::util::{ clone_vec2, BRF, NRM};
 use crate::{
     _clrlevel, clr, send_to_char, write_to_q, DescriptorData, Game, CCNRM, CCRED, PLR_DELETED,
     TO_ROOM,
@@ -3259,7 +3259,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
 
     /* special in mobile present? */
 
-    let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+    let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
     for k in peoples_in_room.iter() {
         if !k.mob_flagged(MOB_NOTDEADYET) {
             if game.db.get_mob_spec(k).is_some()

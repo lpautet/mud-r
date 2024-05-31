@@ -908,7 +908,7 @@ pub struct RoomData {
     pub func: Option<Special>,
     pub contents: Vec<Rc<ObjData>>,
     /* List of items in room              */
-    pub peoples: RefCell<Vec<Rc<CharData>>>,
+    pub peoples: Vec<Rc<CharData>>,
     /* List of NPC / PC in room           */
 }
 /* ====================================================================== */

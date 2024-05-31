@@ -38,7 +38,7 @@ use crate::structs::{
     ITEM_BLESS, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_INVISIBLE, ITEM_NODROP, ITEM_NOINVIS,
     ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING,
 };
-use crate::util::{add_follower, clone_vec, dice, rand_number};
+use crate::util::{add_follower, clone_vec, clone_vec2, dice, rand_number};
 use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
 
 /*
@@ -651,7 +651,6 @@ pub fn mag_groups(game: &mut Game, level: i32, ch: Option<&Rc<CharData>>, spelln
 pub fn mag_masses(db: &DB, _level: i32, ch: &Rc<CharData>, spellnum: i32, _savetype: i32) {
     for tch in db.world[ch.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if Rc::ptr_eq(tch, ch) {
@@ -704,7 +703,7 @@ pub fn mag_areas(
     if !to_room.is_empty() {
         game.db.act(to_room, false, Some(ch), None, None, TO_ROOM);
     }
-    let peoples = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+    let peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
     for tch in peoples.iter() {
         /*
          * The skips: 1: the caster

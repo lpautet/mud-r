@@ -483,7 +483,6 @@ impl Game {
                     } else if j.in_room() != NOWHERE
                         && self.db.world[j.in_room() as usize]
                             .peoples
-                            .borrow()
                             .len()
                             != 0
                     {
@@ -493,7 +492,7 @@ impl Game {
                             Some(
                                 &self.db.world[j.in_room() as usize]
                                     .peoples
-                                    .borrow()[0],
+                                    [0],
                             ),
                             Some(j),
                             None,
@@ -505,7 +504,7 @@ impl Game {
                             Some(
                                 &self.db.world[j.in_room() as usize]
                                     .peoples
-                                    .borrow()[0],
+                                [0],
                             ),
                             Some(j),
                             None,

@@ -23,7 +23,7 @@ use crate::structs::{
     MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY,
     NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::{clone_vec, clone_vec2, num_followers_charmed, rand_number};
+use crate::util::{ clone_vec2, num_followers_charmed, rand_number};
 use crate::{Game, TO_ROOM};
 
 impl Game {
@@ -113,7 +113,7 @@ impl Game {
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
+                    clone_vec2(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;
@@ -146,7 +146,7 @@ impl Game {
             if ch.mob_flagged(MOB_MEMORY) && ch.memory().borrow().len() != 0 {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
+                    clone_vec2(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;
@@ -216,7 +216,7 @@ impl Game {
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
                 let peoples_in_room =
-                    clone_vec(&self.db.world[ch.in_room() as usize].peoples);
+                    clone_vec2(&self.db.world[ch.in_room() as usize].peoples);
                 for vict in peoples_in_room.iter() {
                     if found {
                         break;

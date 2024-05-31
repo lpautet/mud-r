@@ -30,7 +30,7 @@ use crate::structs::{
     CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
     NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{clone_vec, clone_vec2, rand_number};
+use crate::util::{ clone_vec2, rand_number};
 use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 const Z_KINGS_C: i32 = 150;
@@ -186,7 +186,6 @@ fn member_of_royal_guard(db: &DB, ch: &Rc<CharData>) -> bool {
 fn find_npc_by_name(db: &DB, ch_at: &Rc<CharData>, name: &str) -> Option<Rc<CharData>> {
     db.world[ch_at.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
         .find(|e| e.is_npc() && e.player.borrow().short_descr.starts_with(name))
         .cloned()
@@ -201,7 +200,6 @@ fn find_npc_by_name(db: &DB, ch_at: &Rc<CharData>, name: &str) -> Option<Rc<Char
 fn find_guard(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
     db.world[ch_at.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
         .find(|c| c.fighting().is_none() && member_of_royal_guard(db, c))
         .cloned()
@@ -219,7 +217,6 @@ fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 
     for ch in db.world[ch_at.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if ch.fighting().is_some() && member_of_staff(db, ch.fighting().as_ref().unwrap()) {
@@ -240,7 +237,6 @@ fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 
     for ch in db.world[ch_at.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if ch.fighting().is_none() {
@@ -295,7 +291,6 @@ fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
 fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharData>) -> bool {
     let ch_bad_guy = game.db.world[ch_hero.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
         .find(|c| c.fighting().is_some() && !Rc::ptr_eq(c.fighting().as_ref().unwrap(), ch_victim))
         .cloned();

@@ -1614,7 +1614,7 @@ impl Game {
 
 impl DB {
     pub fn send_to_room(&self, room: RoomRnum, msg: &str) {
-        for i in self.world[room as usize].peoples.borrow().iter() {
+        for i in self.world[room as usize].peoples.iter() {
             if i.desc.borrow().is_none() {
                 continue;
             }
@@ -1921,7 +1921,7 @@ impl DB {
             return;
         }
 
-        for to in char_list.borrow().iter() {
+        for to in char_list.iter() {
             if !sendok!(to.as_ref(), to_sleeping)
                 || (ch.is_some() && std::ptr::eq(to.as_ref(), ch.unwrap()))
             {

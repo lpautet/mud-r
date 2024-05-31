@@ -62,7 +62,7 @@ use crate::structs::{
     ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    age, clone_vec, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
+    age, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
 };
 use crate::{
     _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
@@ -231,7 +231,7 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
     if db.room_flagged(location, ROOM_GODROOM) {
         send_to_char(ch, "You are not godly enough to use that room!\r\n");
     } else if db.room_flagged(location, ROOM_PRIVATE)
-        && db.world[location as usize].peoples.borrow().len() > 1
+        && db.world[location as usize].peoples.len() > 1
     {
         send_to_char(
             ch,
@@ -570,7 +570,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         send_to_char(ch, format!("Chars present:{}", CCYEL!(ch, C_NRM)).as_str());
         let mut column = 14; /* ^^^ strlen ^^^ */
         let mut found = 0;
-        for (i, k) in rm.peoples.borrow().iter().enumerate() {
+        for (i, k) in rm.peoples.iter().enumerate() {
             if !db.can_see(ch, k) {
                 continue;
             }
@@ -599,7 +599,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                     ch,
                     format!(
                         "{}\r\n",
-                        if i == rm.peoples.borrow().len() - 1 {
+                        if i == rm.peoples.len() - 1 {
                             ","
                         } else {
                             ""
@@ -2150,7 +2150,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         );
         game.db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
-        let list = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+        let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
         for vict in 
             list
             .iter()
@@ -2414,7 +2414,6 @@ pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
 fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
     for tch in db.world[ch.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if Rc::ptr_eq(tch, ch) {
@@ -2765,7 +2764,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             )
             .as_str(),
         );
-        let peoples_in_room = clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+        let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
         for vict in peoples_in_room.iter() {
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
                 continue;

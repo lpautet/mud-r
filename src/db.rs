@@ -1241,7 +1241,7 @@ impl DB {
             light: 0, /* Zero light sources */
             func: None,
             contents: vec![],
-            peoples: RefCell::new(vec![]),
+            peoples: vec![],
         };
 
         if get_line(reader, &mut line) == 0 {

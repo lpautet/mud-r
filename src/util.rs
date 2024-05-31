@@ -1751,7 +1751,7 @@ pub fn get_filename(filename: &mut String, mode: i32, orig_name: &str) -> bool {
 }
 
 pub fn num_pc_in_room(room: &RoomData) -> i32 {
-    room.peoples.borrow().len() as i32
+    room.peoples.len() as i32
 }
 
 /*

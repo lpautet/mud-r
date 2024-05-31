@@ -54,7 +54,7 @@ use crate::structs::{
     PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
-use crate::util::{clone_vec, has_spell_routine, rand_number};
+use crate::util::{ clone_vec2, has_spell_routine, rand_number};
 use crate::{is_set, send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 /*
@@ -371,7 +371,6 @@ fn say_spell(
 
     for i in db.world[ch.in_room() as usize]
         .peoples
-        .borrow()
         .iter()
     {
         if Rc::ptr_eq(i, ch)
@@ -693,7 +692,6 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                 if has_spell_routine(&game.db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
                     let mut i = game.db.world[ch.in_room() as usize]
                         .peoples
-                        .borrow()
                         .len();
                     while i > 0 {
                         i -= 1;
@@ -701,7 +699,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                     }
                 } else {
                     let peoples_in_room =
-                        clone_vec(&game.db.world[ch.in_room() as usize].peoples);
+                        clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
                     for tch in peoples_in_room.iter() {
                         if !Rc::ptr_eq(ch, tch) {
                             call_magic(
