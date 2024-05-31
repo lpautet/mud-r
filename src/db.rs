@@ -241,7 +241,7 @@ pub struct ZoneData {
     /* name of this zone                  */
     pub lifespan: i32,
     /* how long between resets (minutes)  */
-    pub age: Cell<i32>,
+    pub age: i32,
     /* current age of this zone (minutes) */
     pub bot: RoomRnum,
     /* starting room number for this zone */
@@ -2026,7 +2026,7 @@ impl DB {
         let mut z = ZoneData {
             name: "".to_string(),
             lifespan: 0,
-            age: Cell::from(0),
+            age: 0,
             bot: 0,
             top: 0,
             reset_mode: 0,
@@ -2445,19 +2445,19 @@ impl Game {
             self.db.timer = 0;
 
             /* since one minute has passed, increment zone ages */
-            for (i, zone) in self.db.zone_table.iter().enumerate() {
-                if zone.age.get() < zone.lifespan && zone.reset_mode != 0 {
-                    zone.age.set(zone.age.get() + 1);
+            for (i, zone) in self.db.zone_table.iter_mut().enumerate() {
+                if zone.age < zone.lifespan && zone.reset_mode != 0 {
+                    zone.age += 1;
                 }
 
-                if zone.age.get() >= zone.lifespan
-                    && zone.age.get() < ZO_DEAD
+                if zone.age >= zone.lifespan
+                    && zone.age < ZO_DEAD
                     && zone.reset_mode != 0
                 {
                     /* enqueue zone */
                     self.db.reset_q.push(i as RoomRnum);
 
-                    zone.age.set(ZO_DEAD);
+                    zone.age = ZO_DEAD;
                 }
             }
         } /* end - one minute has passed */
@@ -2740,7 +2740,7 @@ impl Game {
             }
         }
 
-        self.db.zone_table[zone].age.set(0);
+        self.db.zone_table[zone].age = 0;
     }
 }
 

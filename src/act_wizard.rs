@@ -3238,7 +3238,7 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
             "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
             zone.number,
             zone.name,
-            zone.age.get(),
+            zone.age,
             zone.lifespan,
             zone.reset_mode,
             zone.bot,
