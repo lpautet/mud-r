@@ -1059,7 +1059,7 @@ impl Game {
         }
 
         let mut old_combat_list = vec![];
-        for c in self.db.combat_list.borrow().iter() {
+        for c in self.db.combat_list.iter() {
             old_combat_list.push(c.clone());
         }
         for k in old_combat_list.iter() {

@@ -332,8 +332,8 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         game.db.stop_fighting(ch_hero);
     }
 
-    game.db.set_fighting(ch_hero, ch_bad_guy, game);
-    game.db.set_fighting(ch_bad_guy, ch_hero, game);
+    game.set_fighting(ch_hero, ch_bad_guy);
+    game.set_fighting(ch_bad_guy, ch_hero);
     return true;
 }
 

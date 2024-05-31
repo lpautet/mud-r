@@ -287,8 +287,8 @@ pub fn check_killer(ch: &CharData, vict: &CharData, game: &Game) {
 }
 
 /* start one char fighting another (yes, it is horrible, I know... )  */
-impl DB {
-    pub(crate) fn set_fighting(&self, ch: &Rc<CharData>, vict: &Rc<CharData>, game: &Game) {
+impl Game {
+    pub(crate) fn set_fighting(&mut self, ch: &Rc<CharData>, vict: &Rc<CharData>) {
         if Rc::ptr_eq(ch, vict) {
             return;
         }
@@ -298,7 +298,7 @@ impl DB {
             return;
         }
 
-        self.combat_list.borrow_mut().push(ch.clone());
+        self.db.combat_list.push(ch.clone());
 
         if ch.aff_flagged(AFF_SLEEP) {
             affect_from_char(ch, SPELL_SLEEP as i16);
@@ -308,13 +308,14 @@ impl DB {
         ch.set_pos(POS_FIGHTING);
 
         if !PK_ALLOWED {
-            check_killer(ch, vict, game);
+            check_killer(ch, vict, self);
         }
     }
-    
+}
+impl DB {
     /* remove a char from the list of fighting chars */
     pub fn stop_fighting(&mut self, ch: &Rc<CharData>) {
-        self.combat_list.borrow_mut().retain(|c| !Rc::ptr_eq(c, ch));
+        self.combat_list.retain(|c| !Rc::ptr_eq(c, ch));
         ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
 
@@ -900,12 +901,12 @@ impl Game {
         if !Rc::ptr_eq(victim, ch) {
             /* Start the attacker fighting the victim */
             if ch.get_pos() > POS_STUNNED && ch.fighting().is_none() {
-                self.db.set_fighting(ch, victim, self);
+                self.set_fighting(ch, victim);
             }
 
             /* Start the victim fighting the attacker */
             if victim.get_pos() > POS_STUNNED && victim.fighting().is_none() {
-                self.db.set_fighting(victim, ch, self);
+                self.set_fighting(victim, ch);
                 if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
                     remember(victim, ch);
                 }
@@ -1268,7 +1269,7 @@ impl Game {
     /* control the fights going on.  Called every 2 seconds from comm.c. */
     pub fn perform_violence(&mut self) {
         let mut old_combat_list = vec![];
-        for c in self.db.combat_list.borrow().iter() {
+        for c in self.db.combat_list.iter() {
             old_combat_list.push(c.clone());
         }
 

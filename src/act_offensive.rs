@@ -595,8 +595,8 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         game.db.stop_fighting(ch);
     }
 
-    game.db.set_fighting(ch, &tmp_ch, game);
-    game.db.set_fighting(&tmp_ch, ch, game);
+    game.set_fighting(ch, &tmp_ch);
+    game.set_fighting(&tmp_ch, ch);
 
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
