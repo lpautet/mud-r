@@ -70,7 +70,7 @@ fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
         return NOBODY;
     }
 
-    return db.zone_table.borrow()[zon.unwrap()].bot + offset;
+    return db.zone_table[zon.unwrap()].bot + offset;
 }
 
 fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
@@ -80,7 +80,7 @@ fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
         return NOWHERE;
     }
 
-    return db.real_room(db.zone_table.borrow()[zon.unwrap()].bot + roomoffset);
+    return db.real_room(db.zone_table[zon.unwrap()].bot + roomoffset);
 }
 
 /*

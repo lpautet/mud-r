@@ -522,7 +522,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         ch,
         format!(
             "Zone: [{:3}], VNum: [{}{:5}{}], RNum: [{:5}], Type: {}\r\n",
-            db.zone_table.borrow()[rm.zone as usize].number,
+            db.zone_table[rm.zone as usize].number,
             CCGRN!(ch, C_NRM),
             rm.number,
             CCNRM!(ch, C_NRM),
@@ -2976,7 +2976,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         send_to_char(ch, "You must specify a zone.\r\n");
         return;
     }
-    let zone_count = game.db.zone_table.borrow().len();
+    let zone_count = game.db.zone_table.len();
     let mut i = zone_count;
     if arg.starts_with('*') {
         for i in 0..zone_count {
@@ -2998,22 +2998,22 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             return;
         };
         let j = j.unwrap();
-        for ii in 0..game.db.zone_table.borrow().len() {
-            if game.db.zone_table.borrow()[ii].number == j as i16 {
+        for ii in 0..game.db.zone_table.len() {
+            if game.db.zone_table[ii].number == j as i16 {
                 i = ii;
                 break;
             }
         }
     }
-    if i < game.db.zone_table.borrow().len() {
+    if i < game.db.zone_table.len() {
         game.reset_zone( i as usize);
         send_to_char(
             ch,
             format!(
                 "Reset zone {} (#{}): {}.\r\n",
                 i,
-                game.db.zone_table.borrow()[i].number,
-                game.db.zone_table.borrow()[i].name
+                game.db.zone_table[i].number,
+                game.db.zone_table[i].name
             )
             .as_str(),
         );
@@ -3025,7 +3025,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 "(GC) {} reset zone {} ({})",
                 ch.get_name(),
                 i,
-                game.db.zone_table.borrow()[i].name
+                game.db.zone_table[i].name
             )
             .as_str(),
         );
@@ -3233,8 +3233,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
 code 3 times ... -je, 4/6/93 */
 
 fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
-    let zt = db.zone_table.borrow();
-    let zone = &zt[zone as usize];
+    let zone = &db.zone_table[zone as usize];
     buf.push_str(
         format!(
             "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
@@ -3364,7 +3363,6 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 let value = value.parse::<i32>().unwrap();
                 let zrn = game.db
                     .zone_table
-                    .borrow()
                     .iter()
                     .position(|z| z.number == value as i16);
                 if zrn.is_some() {
@@ -3374,7 +3372,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     return;
                 }
             } else {
-                for i in 0..game.db.zone_table.borrow().len() {
+                for i in 0..game.db.zone_table.len() {
                     print_zone_to_buf(&game.db, &mut buf, i as ZoneRnum);
                 }
             }
@@ -3477,7 +3475,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     k,
                     game.db.obj_proto.len(),
                     game.db.world.len(),
-                    game.db.zone_table.borrow().len()
+                    game.db.zone_table.len()
                 )
                 .as_str(),
             );
