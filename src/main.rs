@@ -86,6 +86,7 @@ mod structs;
 mod telnet;
 mod util;
 mod weather;
+mod depot;
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
