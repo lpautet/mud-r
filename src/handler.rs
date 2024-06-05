@@ -36,7 +36,7 @@ use crate::structs::{
     PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
 use crate::util::{clone_vec, clone_vec2, rand_number, SECS_PER_MUD_YEAR};
-use crate::{is_set, send_to_char, write_to_output, Game, TO_CHAR, TO_ROOM};
+use crate::{is_set, Game, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
 pub const FIND_CHAR_WORLD: i32 = 1 << 1;
@@ -529,7 +529,7 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
     false
 }
 
-impl DB {
+impl Game {
     pub(crate) fn equip_char(&mut self, ch: &Rc<CharData>, obj: &Rc<ObjData>, pos: i8) {
         //int j;
 
@@ -588,7 +588,7 @@ impl DB {
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
                     /* if light is ON */
-                    self.world[ch.in_room() as usize]
+                    self.db.world[ch.in_room() as usize]
                         .light+= 1;
                 }
             }
@@ -629,7 +629,7 @@ impl DB {
         if ch.in_room() != NOWHERE {
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
-                    self.world[ch.in_room() as usize]
+                    self.db.world[ch.in_room() as usize]
                         .light-= 1;
                 }
             }
@@ -860,7 +860,7 @@ pub fn object_list_new_owner(obj: &ObjData, ch: Option<Rc<CharData>>) {
     }
 }
 
-impl DB {
+impl Game {
     /* Extract an object from the world */
     pub fn extract_obj(&mut self, obj: &Rc<ObjData>) {
         let tch = obj.worn_by.borrow().clone();
@@ -876,7 +876,7 @@ impl DB {
         }
 
         if obj.in_room() != NOWHERE {
-            self.obj_from_room(obj);
+            self.db.obj_from_room(obj);
         } else if obj.carried_by.borrow().is_some() {
             obj_from_char(obj);
         } else if obj.in_obj.borrow().is_some() {
@@ -891,11 +891,11 @@ impl DB {
             self.extract_obj(o);
         }
 
-        self.object_list
+        self.db.object_list
             .retain(|o| !Rc::ptr_eq(&obj, o));
 
         if obj.get_obj_rnum() != NOTHING {
-            self.obj_index[obj.get_obj_rnum() as usize].number-= 1;
+            self.db.obj_index[obj.get_obj_rnum() as usize].number-= 1;
         }
     }
 }
@@ -913,7 +913,7 @@ fn update_object(obj: &ObjData, _use: i32) {
     update_object_list(obj.contains.borrow().as_ref(), _use);
 }
 
-impl DB {
+impl Game {
     pub(crate) fn update_char_objects(&mut self, ch: &Rc<CharData>) {
         let i;
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
@@ -925,7 +925,7 @@ impl DB {
                         .decr_obj_val(2);
                     i = ch.get_eq(WEAR_LIGHT as i8).as_ref().unwrap().get_obj_val(2);
                     if i == 1 {
-                        send_to_char(ch, "Your light begins to flicker and fade.\r\n");
+                        self.send_to_char(ch, "Your light begins to flicker and fade.\r\n");
                         self.act(
                             "$n's light begins to flicker and fade.",
                             false,
@@ -935,7 +935,7 @@ impl DB {
                             TO_ROOM,
                         );
                     } else if i == 0 {
-                        send_to_char(ch, "Your light sputters out and dies.\r\n");
+                        self.send_to_char(ch, "Your light sputters out and dies.\r\n");
                         self.act(
                             "$n's light sputters out and dies.",
                             false,
@@ -944,7 +944,7 @@ impl DB {
                             None,
                             TO_ROOM,
                         );
-                        self.world[ch.in_room() as usize]
+                        self.db.world[ch.in_room() as usize]
                             .light-= 1;
                     }
                 }
@@ -960,8 +960,7 @@ impl DB {
             update_object_list(ch.carrying.borrow().as_ref(), 2);
         }
     }
-}
-impl Game {
+
     /* Extract a ch completely from the world, and leave his stuff behind */
     pub fn extract_char_final(&mut self, ch: &Rc<CharData>) {
         if ch.in_room() == NOWHERE {
@@ -978,12 +977,12 @@ impl Game {
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.borrow().is_none() {
-            let descriptors = clone_vec2(&self.descriptor_list);
-            for d in descriptors.iter() {
-                if d.original.borrow().is_some()
-                    && Rc::ptr_eq(d.original.borrow().as_ref().unwrap(), ch)
+            for d_id in self.descriptor_list.ids() {
+                if self.desc(d_id).original.borrow().is_some()
+                    && Rc::ptr_eq(self.desc(d_id).original.borrow().as_ref().unwrap(), ch)
                 {
-                    do_return(self, d.character.borrow().as_ref().unwrap(), "", 0, 0);
+                    let ch = self.desc(d_id).character.borrow().as_ref().unwrap().clone();
+                    do_return(self, &ch, "", 0, 0);
                     break;
                 }
             }
@@ -998,11 +997,11 @@ impl Game {
              * If this body is not possessed, the owner won't have a
              * body after the removal so dump them to the main menu.
              */
-            if ch
-                .desc
+            if 
+            self.desc(
+                ch.desc
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .original
                 .borrow()
                 .is_some()
@@ -1016,27 +1015,27 @@ impl Game {
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
-                for d in self.descriptor_list.iter() {
-                    if Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap()) {
+                for d in self.descriptor_list.ids() {
+                    if d == ch.desc.borrow().unwrap() {
                         continue;
                     }
 
-                    if d.character.borrow().is_some()
-                        && ch.get_idnum() == d.character.borrow().as_ref().unwrap().get_idnum()
+                    if self.descriptor_list.get(d).character.borrow().is_some()
+                        && ch.get_idnum() == self.descriptor_list.get(d).character.borrow().as_ref().unwrap().get_idnum()
                     {
-                        d.set_state(ConClose);
+                        self.descriptor_list.get_mut(d).set_state(ConClose);
                     }
                 }
-                ch.desc.borrow().as_ref().unwrap().set_state(ConMenu);
+                self.desc_mut(ch.desc.borrow().unwrap()).set_state(ConMenu);
 
-                write_to_output(ch.desc.borrow().as_ref().unwrap(), MENU);
+                self.write_to_output(ch.desc.borrow().unwrap(), MENU);
             }
         }
 
         /* On with the character's assets... */
 
         if ch.followers.borrow().len() != 0 || ch.master.borrow().is_some() {
-            self.db.die_follower(ch);
+            self.die_follower(ch);
         }
 
         /* transfer objects to room, if any */
@@ -1048,7 +1047,7 @@ impl Game {
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                let obj = self.db.unequip_char(ch, i).as_ref().unwrap().clone();
+                let obj = self.unequip_char(ch, i).as_ref().unwrap().clone();
                 self.db
                     .obj_to_room(&obj, ch.in_room())
             }
@@ -1083,7 +1082,7 @@ impl Game {
             }
             ch.clear_memory()
         } else {
-            self.db.save_char(ch);
+            self.save_char(ch);
             crash_delete_crashfile(ch);
         }
 
@@ -1169,7 +1168,7 @@ impl Game {
 * Here follows high-level versions of some earlier routines, ie functions*
 * which incorporate the actual player-data                               *.
 *********************************************************************** */
-impl DB {
+impl Game {
     pub fn get_player_vis(
         &self,
         ch: &CharData,
@@ -1187,7 +1186,7 @@ impl DB {
         }
         let number = t;
 
-        for i in self.character_list.iter() {
+        for i in self.db.character_list.iter() {
             if i.is_npc() {
                 continue;
             }
@@ -1235,7 +1234,7 @@ impl DB {
             return self.get_player_vis(ch, name, None, FIND_CHAR_ROOM);
         }
 
-        for i in self.world[ch.in_room() as usize]
+        for i in self.db.world[ch.in_room() as usize]
             .peoples
             .iter()
         {
@@ -1277,7 +1276,7 @@ impl DB {
             return self.get_player_vis(ch, name, None, 0);
         }
 
-        for i in self.character_list.iter() {
+        for i in self.db.character_list.iter() {
             if ch.in_room() == i.in_room() {
                 continue;
             }
@@ -1414,14 +1413,14 @@ impl DB {
             ch,
             &name,
             Some(number),
-            &self.world[ch.in_room() as usize].contents,
+            &self.db.world[ch.in_room() as usize].contents,
         );
         if i.is_some() {
             return i;
         }
 
         /* ok.. no luck yet. scan the entire obj list   */
-        for i in self.object_list.iter() {
+        for i in self.db.object_list.iter() {
             if isname(&name, &i.name.borrow()) {
                 if self.can_see_obj(ch, i) {
                     *number -= 1;
@@ -1640,7 +1639,8 @@ impl DB {
 
         Some(ret)
     }
-
+}
+impl Game {
     /* Generic Find, designed to find any object/character
      *
      * Calling:
@@ -1727,7 +1727,7 @@ impl DB {
                 ch,
                 &name,
                 Some(&mut number),
-                &self.world[ch.in_room() as usize].contents,
+                &self.db.world[ch.in_room() as usize].contents,
             );
             if tar_obj.is_some() {
                 return FIND_OBJ_ROOM;

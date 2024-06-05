@@ -44,9 +44,7 @@ use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
     ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
 };
-use crate::{
-    _clrlevel, clr, send_to_char, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT,
-};
+use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
 // pub const OFF: u8 = 0;
 pub const BRF: u8 = 1;
@@ -284,10 +282,10 @@ macro_rules! isnewl {
 
 impl DescriptorData {
     pub fn state(&self) -> ConState {
-        self.connected.get()
+        self.connected
     }
-    pub fn set_state(&self, val: ConState) {
-        self.connected.set(val);
+    pub fn set_state(&mut self, val: ConState) {
+        self.connected = val;
     }
 }
 
@@ -586,7 +584,11 @@ impl CharData {
         self.char_specials.borrow_mut().saved.idnum = val;
     }
     pub fn fighting(&self) -> Option<Rc<CharData>> {
-        self.char_specials.borrow().fighting.as_ref().map( |f| f.clone())
+        self.char_specials
+            .borrow()
+            .fighting
+            .as_ref()
+            .map(|f| f.clone())
     }
     pub fn set_fighting(&self, val: Option<Rc<CharData>>) {
         self.char_specials.borrow_mut().fighting = val;
@@ -720,30 +722,6 @@ impl CharData {
     pub fn is_warrior(&self) -> bool {
         self.is_npc() && self.get_class() == CLASS_WARRIOR
     }
-    pub fn get_real_level(&self) -> u8 {
-        if self.desc.borrow().is_some()
-            && self
-                .desc
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .original
-                .borrow()
-                .is_some()
-        {
-            self.desc
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .original
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .get_level()
-        } else {
-            self.get_level()
-        }
-    }
     pub fn get_eq(&self, pos: i8) -> Option<Rc<ObjData>> {
         self.equipment.borrow()[pos as usize].clone()
     }
@@ -785,6 +763,27 @@ impl CharData {
     }
     pub fn set_freeze_lev(&self, val: i8) {
         self.player_specials.borrow_mut().saved.freeze_level = val;
+    }
+}
+
+impl Game {
+    pub fn get_real_level(&self, ch: &CharData) -> u8 {
+        if ch.desc.borrow().is_some()
+            && self
+                .desc(ch.desc.borrow().unwrap())
+                .original
+                .borrow()
+                .is_some()
+        {
+            self.desc(ch.desc.borrow().unwrap())
+                .original
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .get_level()
+        } else {
+            ch.get_level()
+        }
     }
 }
 
@@ -956,16 +955,11 @@ impl DB {
     pub fn outside(&self, ch: &CharData) -> bool {
         !self.room_flagged(ch.in_room(), ROOM_INDOORS)
     }
-    pub fn can_get_obj(&self, ch: &CharData, obj: &ObjData) -> bool {
-        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(ch, obj)
-    }
+
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
         self.exit(ch, door).is_some()
             && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
-            && !is_set!(
-                self.exit(ch, door).as_ref().unwrap().exit_info,
-                EX_CLOSED
-            )
+            && !is_set!(self.exit(ch, door).as_ref().unwrap().exit_info, EX_CLOSED)
     }
 
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
@@ -1009,41 +1003,35 @@ impl DB {
     pub fn mort_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
         self.light_ok(sub) && invis_ok(sub, obj)
     }
+
+    pub fn imm_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+        self.mort_can_see(sub, obj) || (!sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT))
+    }
+}
+
+impl Game {
+    pub fn can_get_obj(&self, ch: &CharData, obj: &ObjData) -> bool {
+        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(ch, obj)
+    }
+    pub fn mort_can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
+        self.db.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(sub, obj)
+    }
+    pub fn can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+        self_(sub, obj)
+            || ((self.get_real_level(sub)
+                >= (if obj.is_npc() {
+                    0
+                } else {
+                    obj.get_invis_lev() as u8
+                }))
+                && self.db.imm_can_see(sub, obj))
+    }
     pub fn can_see_obj_carrier(&self, sub: &CharData, obj: &ObjData) -> bool {
         (obj.carried_by.borrow().is_none()
             || self.can_see(sub, obj.carried_by.borrow().as_ref().unwrap().borrow()))
             && (obj.worn_by.borrow().is_none()
                 || self.can_see(sub, obj.worn_by.borrow().as_ref().unwrap().borrow()))
     }
-    pub fn mort_can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
-        self.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(sub, obj)
-    }
-    pub fn imm_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
-        self.mort_can_see(sub, obj) || (!sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT))
-    }
-    pub fn can_see(&self, sub: &CharData, obj: &CharData) -> bool {
-        self_(sub, obj)
-            || ((sub.get_real_level()
-                >= (if obj.is_npc() {
-                    0
-                } else {
-                    obj.get_invis_lev() as u8
-                }))
-                && self.imm_can_see(sub, obj))
-    }
-}
-
-pub fn self_(sub: &CharData, obj: &CharData) -> bool {
-    std::ptr::eq(sub, obj)
-}
-
-impl ObjData {
-    pub fn in_room(&self) -> RoomRnum {
-        self.in_room.get()
-    }
-}
-
-impl DB {
     pub fn pers(&self, ch: &CharData, vict: &CharData) -> Rc<str> {
         if self.can_see(vict, ch) {
             ch.get_name()
@@ -1051,10 +1039,6 @@ impl DB {
             Rc::from("someone")
         }
     }
-    pub fn can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
-        self.mort_can_see_obj(sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
-    }
-
     pub fn objs<'a>(&self, obj: &'a ObjData, vict: &CharData) -> &'a str {
         if self.can_see_obj(vict, obj) {
             obj.short_description.as_str()
@@ -1070,6 +1054,22 @@ impl DB {
             Rc::from("something")
         }
     }
+    pub fn can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
+        self.mort_can_see_obj(sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
+    }
+}
+
+pub fn self_(sub: &CharData, obj: &CharData) -> bool {
+    std::ptr::eq(sub, obj)
+}
+
+impl ObjData {
+    pub fn in_room(&self) -> RoomRnum {
+        self.in_room.get()
+    }
+}
+
+impl DB {
     pub fn get_obj_spec(&self, obj: &Rc<ObjData>) -> Option<Special> {
         if self.valid_obj_rnum(obj) {
             self.obj_index[obj.get_obj_rnum() as usize].func
@@ -1248,7 +1248,7 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &Game, ch: &CharData) {
+pub fn log_death_trap(game: &mut Game, ch: &CharData) {
     game.mudlog(
         BRF,
         LVL_IMMORT as i32,
@@ -1312,7 +1312,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * based on syslog by Fen Jul 3, 1992
  */
 impl Game {
-    pub(crate) fn mudlog(&self, _type: u8, level: i32, file: bool, msg: &str) {
+    pub(crate) fn mudlog(&mut self, _type: u8, level: i32, file: bool, msg: &str) {
         if msg == "" {
             return;
         }
@@ -1327,13 +1327,12 @@ impl Game {
 
         let buf = format!("[ {} ]", msg);
 
-        for d in self.descriptor_list.iter() {
-            if d.state() != ConPlaying {
+        for d_id in self.descriptor_list.ids() {
+            if self.desc(d_id).state() != ConPlaying {
                 /* switch */
                 continue;
             }
-            let ohc = d.character.borrow();
-            let character = ohc.as_ref().unwrap();
+            let character = self.desc(d_id).character.as_ref().unwrap().clone();
             if character.is_npc() {
                 /* switch */
                 continue;
@@ -1361,7 +1360,7 @@ impl Game {
             // 1: 0) + (PRF_FLAGGED(i->character, PRF_LOG2)?
             // 2: 0))
             // continue;
-            send_to_char(
+            self.send_to_char(
                 &character,
                 format!(
                     "{}{}{}",
@@ -1516,8 +1515,8 @@ pub fn circle_follow(ch: &Rc<CharData>, victim: Option<&Rc<CharData>>) -> bool {
 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
-impl DB {
-    pub fn stop_follower(&self, ch: &Rc<CharData>) {
+impl Game {
+    pub fn stop_follower(&mut self, ch: &Rc<CharData>) {
         if ch.master.borrow().is_none() {
             return;
         }
@@ -1603,9 +1602,9 @@ pub fn num_followers_charmed(ch: &Rc<CharData>) -> i32 {
     total
 }
 
-impl DB {
+impl Game {
     /* Called when a character that follows/is followed dies */
-    pub fn die_follower(&self, ch: &Rc<CharData>) {
+    pub fn die_follower(&mut self, ch: &Rc<CharData>) {
         if ch.master.borrow().is_some() {
             self.stop_follower(ch);
         }
@@ -1618,7 +1617,7 @@ impl DB {
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
-pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
+pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
     if ch.master.borrow().is_some() {
         // core_dump();
         return;
@@ -1631,7 +1630,7 @@ pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
     };
     leader.followers.borrow_mut().push(k);
 
-    db.act(
+    game.act(
         "You now follow $N.",
         false,
         Some(ch),
@@ -1639,8 +1638,8 @@ pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
         Some(leader),
         TO_CHAR,
     );
-    if db.can_see(leader, ch) {
-        db.act(
+    if game.can_see(leader, ch) {
+        game.act(
             "$n starts following you.",
             true,
             Some(ch),
@@ -1649,7 +1648,7 @@ pub fn add_follower(db: &DB, ch: &Rc<CharData>, leader: &Rc<CharData>) {
             TO_VICT,
         );
     }
-    db.act(
+    game.act(
         "$n starts to follow $N.",
         true,
         Some(ch),
@@ -1824,9 +1823,7 @@ impl DB {
             return false;
         }
 
-        if self.weather_info.sunlight == SUN_SET
-            || self.weather_info.sunlight == SUN_DARK
-        {
+        if self.weather_info.sunlight == SUN_SET || self.weather_info.sunlight == SUN_DARK {
             return true;
         }
 

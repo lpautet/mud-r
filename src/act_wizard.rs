@@ -65,16 +65,15 @@ use crate::util::{
     age, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
 };
 use crate::{
-    _clrlevel, clr, onoff, send_to_char, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
+    _clrlevel, clr, onoff, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
     TO_NOTVICT, TO_ROOM, TO_VICT,
 };
 
 pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
-    let db = &game.db;
     let argument = argument.trim_start();
 
     if argument.is_empty() {
-        send_to_char(ch, "Yes.. but what?\r\n");
+        game.send_to_char(ch, "Yes.. but what?\r\n");
     } else {
         let buf;
         if subcmd == SCMD_EMOTE {
@@ -83,18 +82,17 @@ pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             buf = argument.to_string();
         }
 
-        db.act(&buf, false, Some(ch), None, None, TO_ROOM);
+        game.act(&buf, false, Some(ch), None, None, TO_ROOM);
 
         if ch.prf_flagged(PRF_NOREPEAT) {
-            send_to_char(ch, OK);
+            game.send_to_char(ch, OK);
         } else {
-            db.act(&buf, false, Some(ch), None, None, TO_CHAR);
+            game.act(&buf, false, Some(ch), None, None, TO_CHAR);
         }
     }
 }
 
 pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut argument = argument.to_string();
     let mut arg = String::new();
     let mut buf = String::new();
@@ -103,21 +101,21 @@ pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     half_chop(&mut argument, &mut arg, &mut buf);
 
     if argument.is_empty() {
-        send_to_char(ch, "Send what to who?\r\n");
+        game.send_to_char(ch, "Send what to who?\r\n");
         return;
     }
     if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        send_to_char(ch, NOPERSON);
+        game.send_to_char(ch, NOPERSON);
         return;
     }
-    send_to_char(vict.as_ref().unwrap(), format!("{}\r\n", buf).as_str());
+    game.send_to_char(vict.as_ref().unwrap(), format!("{}\r\n", buf).as_str());
     if ch.prf_flagged(PRF_NOREPEAT) {
-        send_to_char(ch, "Sent.\r\n");
+        game.send_to_char(ch, "Sent.\r\n");
     } else {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "You send '{}' to {}.\r\n",
@@ -130,22 +128,22 @@ pub fn do_send(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 }
 
 /* take a string, and return an rnum.. used for goto, at, etc.  -je 4/6/93 */
-fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
+fn find_target_room(game: &mut Game, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
     let mut location = NOWHERE;
     let mut roomstr = String::new();
     one_argument(rawroomstr, &mut roomstr);
 
     if roomstr.is_empty() {
-        send_to_char(ch, "You must supply a room number or name.\r\n");
+        game.send_to_char(ch, "You must supply a room number or name.\r\n");
         return NOWHERE;
     }
 
     if roomstr.chars().next().unwrap().is_digit(10) && !roomstr.contains('.') {
         if {
-            location = db.real_room(roomstr.parse::<i16>().unwrap());
+            location = game.db.real_room(roomstr.parse::<i16>().unwrap());
             location == NOWHERE
         } {
-            send_to_char(ch, "No room exists with that number.\r\n");
+            game.send_to_char(ch, "No room exists with that number.\r\n");
             return NOWHERE;
         }
     } else {
@@ -155,18 +153,18 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
 
         let mut num = get_number(&mut mobobjstr);
         if {
-            target_mob = db.get_char_vis(ch, &mut mobobjstr, Some(&mut num), FIND_CHAR_WORLD);
+            target_mob = game.get_char_vis(ch, &mut mobobjstr, Some(&mut num), FIND_CHAR_WORLD);
             target_mob.is_some()
         } {
             if {
                 location = target_mob.as_ref().unwrap().in_room();
                 location == NOWHERE
             } {
-                send_to_char(ch, "That character is currently lost.\r\n");
+                game.send_to_char(ch, "That character is currently lost.\r\n");
                 return NOWHERE;
             }
         } else if {
-            target_obj = db.get_obj_vis(ch, &mut mobobjstr, Some(&mut num));
+            target_obj = game.get_obj_vis(ch, &mut mobobjstr, Some(&mut num));
             target_obj.is_some()
         } {
             if target_obj.as_ref().unwrap().in_room() != NOWHERE {
@@ -212,13 +210,13 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
             }
 
             if location == NOWHERE {
-                send_to_char(ch, "That object is currently not in a room.\r\n");
+                game.send_to_char(ch, "That object is currently not in a room.\r\n");
                 return NOWHERE;
             }
         }
 
         if location == NOWHERE {
-            send_to_char(ch, "Nothing exists by that name.\r\n");
+            game.send_to_char(ch, "Nothing exists by that name.\r\n");
             return NOWHERE;
         }
     }
@@ -228,19 +226,19 @@ fn find_target_room(db: &DB, ch: &Rc<CharData>, rawroomstr: &str) -> RoomRnum {
         return location;
     }
 
-    if db.room_flagged(location, ROOM_GODROOM) {
-        send_to_char(ch, "You are not godly enough to use that room!\r\n");
-    } else if db.room_flagged(location, ROOM_PRIVATE)
-        && db.world[location as usize].peoples.len() > 1
+    if game.db.room_flagged(location, ROOM_GODROOM) {
+        game.send_to_char(ch, "You are not godly enough to use that room!\r\n");
+    } else if game.db.room_flagged(location, ROOM_PRIVATE)
+        && game.db.world[location as usize].peoples.len() > 1
     {
-        send_to_char(
+        game.send_to_char(
             ch,
             "There's a private conversation going on in that room.\r\n",
         );
-    } else if db.room_flagged(location, ROOM_HOUSE)
-        && !house_can_enter(db, ch, db.get_room_vnum(location))
+    } else if game.db.room_flagged(location, ROOM_HOUSE)
+        && !house_can_enter(&game.db, ch, game.db.get_room_vnum(location))
     {
-        send_to_char(ch, "That's private property -- no trespassing!\r\n");
+        game.send_to_char(ch, "That's private property -- no trespassing!\r\n");
     } else {
         return location;
     }
@@ -255,17 +253,17 @@ pub fn do_at(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
 
     half_chop(&mut argument, &mut buf, &mut command);
     if buf.is_empty() {
-        send_to_char(ch, "You must supply a room number or a name.\r\n");
+        game.send_to_char(ch, "You must supply a room number or a name.\r\n");
         return;
     }
 
     if command.is_empty() {
-        send_to_char(ch, "What do you want to do there?\r\n");
+        game.send_to_char(ch, "What do you want to do there?\r\n");
         return;
     }
     let location;
     if {
-        location = find_target_room(&game.db, ch, &buf);
+        location = find_target_room(game, ch, &buf);
         location == NOWHERE
     } {
         return;
@@ -288,7 +286,7 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let location;
 
     if {
-        location = find_target_room(&game.db, ch, argument);
+        location = find_target_room(game, ch, argument);
         location == NOWHERE
     } {
         return;
@@ -303,7 +301,7 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "disappears in a puff of smoke."
         }
     );
-    game.db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+    game.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
     game.db.char_from_room(ch);
     game.db.char_to_room(ch, location);
@@ -317,7 +315,7 @@ pub fn do_goto(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "appears with an ear-splitting bang."
         }
     );
-    game.db.act(&buf, true, Some(ch), None, None, TO_ROOM);
+    game.act(&buf, true, Some(ch), None, None, TO_ROOM);
 
     look_at_room(game, ch, false);
 }
@@ -328,22 +326,22 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     one_argument(argument, &mut buf);
     let victim;
     if buf.is_empty() {
-        send_to_char(ch, "Whom do you wish to transfer?\r\n");
+        game.send_to_char(ch, "Whom do you wish to transfer?\r\n");
     } else if "all" != buf {
         if {
-            victim = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+            victim = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
             victim.is_none()
         } {
-            send_to_char(ch, NOPERSON);
+            game.send_to_char(ch, NOPERSON);
         } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
-            send_to_char(ch, "That doesn't make much sense, does it?\r\n");
+            game.send_to_char(ch, "That doesn't make much sense, does it?\r\n");
         } else {
             let victim = victim.as_ref().unwrap();
             if (ch.get_level() < victim.get_level()) && !victim.is_npc() {
-                send_to_char(ch, "Go transfer someone your own size.\r\n");
+                game.send_to_char(ch, "Go transfer someone your own size.\r\n");
                 return;
             }
-            game.db.act(
+            game.act(
                 "$n disappears in a mushroom cloud.",
                 false,
                 Some(victim),
@@ -353,7 +351,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             );
             game.db.char_from_room(victim);
             game.db.char_to_room(victim, ch.in_room());
-            game.db.act(
+            game.act(
                 "$n arrives from a puff of smoke.",
                 false,
                 Some(victim),
@@ -361,7 +359,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 None,
                 TO_ROOM,
             );
-            game.db.act(
+            game.act(
                 "$n has transferred you!",
                 false,
                 Some(ch),
@@ -374,52 +372,52 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     } else {
         /* Trans All */
         if ch.get_level() < LVL_GRGOD as u8 {
-            send_to_char(ch, "I think not.\r\n");
+            game.send_to_char(ch, "I think not.\r\n");
             return;
         }
 
-        let list = clone_vec2(&game.descriptor_list);
+        let list = game.descriptor_list.ids();
         for i in list {
-            if i.state() == ConPlaying
-                && i.character.borrow().is_some()
-                && !Rc::ptr_eq(i.character.borrow().as_ref().unwrap(), ch)
+            if game.descriptor_list.get(i).state() == ConPlaying
+                && game.descriptor_list.get(i).character.borrow().is_some()
+                && !Rc::ptr_eq(game.descriptor_list.get(i).character.borrow().as_ref().unwrap(), ch)
             {
-                let ic = i.character.borrow();
-                let victim = ic.as_ref().unwrap();
+                let ic = game.descriptor_list.get(i).character.borrow();
+                let victim = ic.as_ref().unwrap().clone();
                 if victim.get_level() >= ch.get_level() {
                     continue;
                 }
-                game.db.act(
+                game.act(
                     "$n disappears in a mushroom cloud.",
                     false,
-                    Some(victim),
+                    Some(&victim),
                     None,
                     None,
                     TO_ROOM,
                 );
-                game.db.char_from_room(victim);
-                game.db.char_to_room(victim, ch.in_room());
-                game.db.act(
+                game.db.char_from_room(&victim);
+                game.db.char_to_room(&victim, ch.in_room());
+                game.act(
                     "$n arrives from a puff of smoke.",
                     false,
-                    Some(victim),
+                    Some(&victim),
                     None,
                     None,
                     TO_ROOM,
                 );
-                game.db.act(
+                game.act(
                     "$n has transferred you!",
                     false,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(&victim),
                     TO_VICT,
                 );
-                look_at_room(game, victim, false);
+                look_at_room(game, &victim, false);
             }
         }
     }
-    send_to_char(ch, OK);
+    game.send_to_char(ch, OK);
 }
 
 pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
@@ -430,25 +428,25 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     let victim;
     let target;
     if buf.is_empty() {
-        send_to_char(ch, "Whom do you wish to teleport?\r\n");
+        game.send_to_char(ch, "Whom do you wish to teleport?\r\n");
     } else if {
-        victim = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+        victim = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
         victim.is_none()
     } {
-        send_to_char(ch, NOPERSON);
+        game.send_to_char(ch, NOPERSON);
     } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
-        send_to_char(ch, "Use 'goto' to teleport yourself.\r\n");
+        game.send_to_char(ch, "Use 'goto' to teleport yourself.\r\n");
     } else if victim.as_ref().unwrap().get_level() >= ch.get_level() {
-        send_to_char(ch, "Maybe you shouldn't do that.\r\n");
+        game.send_to_char(ch, "Maybe you shouldn't do that.\r\n");
     } else if buf2.is_empty() {
-        send_to_char(ch, "Where do you wish to send this person?\r\n");
+        game.send_to_char(ch, "Where do you wish to send this person?\r\n");
     } else if {
-        target = find_target_room(&game.db, ch, &buf2);
+        target = find_target_room(game, ch, &buf2);
         target != NOWHERE
     } {
         let victim = victim.as_ref().unwrap();
-        send_to_char(ch, OK);
-        game.db.act(
+        game.send_to_char(ch, OK);
+        game.act(
             "$n disappears in a puff of smoke.",
             false,
             Some(victim),
@@ -458,7 +456,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         );
         game.db.char_from_room(victim);
         game.db.char_to_room(victim, target);
-        game.db.act(
+        game.act(
             "$n arrives from a puff of smoke.",
             false,
             Some(victim),
@@ -466,7 +464,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             None,
             TO_ROOM,
         );
-        game.db.act(
+        game.act(
             "$n has teleported you!",
             false,
             Some(ch),
@@ -479,7 +477,6 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 }
 
 pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -487,44 +484,55 @@ pub fn do_vnum(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     half_chop(&mut argument, &mut buf, &mut buf2);
 
     if buf.is_empty() || buf2.is_empty() || !is_abbrev(&buf, "mob") && !is_abbrev(&buf, "obj") {
-        send_to_char(ch, "Usage: vnum { obj | mob } <name>\r\n");
+        game.send_to_char(ch, "Usage: vnum { obj | mob } <name>\r\n");
         return;
     }
     if is_abbrev(&buf, "mob") {
-        if db.vnum_mobile(&buf2, ch) == 0 {
-            send_to_char(ch, "No mobiles by that name.\r\n");
+        if game.vnum_mobile(&buf2, ch) == 0 {
+            game.send_to_char(ch, "No mobiles by that name.\r\n");
         }
     }
 
     if is_abbrev(&buf, "obj") {
-        if db.vnum_object(&buf2, ch) == 0 {
-            send_to_char(ch, "No objects by that name.\r\n");
+        if game.vnum_object(&buf2, ch) == 0 {
+            game.send_to_char(ch, "No objects by that name.\r\n");
         }
     }
 }
 
-fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
-    let rm = &db.world[ch.in_room() as usize];
+fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
+    let rm_name = game.db.world[ch.in_room() as usize].name.clone();
+    let rm_zone = game.db.world[ch.in_room() as usize].zone;
+    let rm_sector_type = game.db.world[ch.in_room() as usize].sector_type;
+    let rm_number = game.db.world[ch.in_room() as usize].number;
+    let rm_func_is_none =  game.db.world[ch.in_room() as usize].func.is_none();
+    let rm_description = game.db.world[ch.in_room() as usize].description.clone();
+    let rm_ex_descriptions_len = game.db.world[ch.in_room() as usize].ex_descriptions.len();
+    let rm_peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
+    let rm_contents = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
+    let rm_room_flags = game.db.world[ch.in_room() as usize].room_flags;
+    let rm_dir_option = game.db.world[ch.in_room() as usize].dir_option.clone();
 
-    send_to_char(
+
+    game.send_to_char(
         ch,
         format!(
             "Room name: {}{}{}\r\n",
             CCCYN!(ch, C_NRM),
-            rm.name,
+            rm_name,
             CCNRM!(ch, C_NRM)
         )
         .as_str(),
     );
     let mut buf2 = String::new();
-    sprinttype(rm.sector_type, &SECTOR_TYPES, &mut buf2);
-    send_to_char(
+    sprinttype(rm_sector_type, &SECTOR_TYPES, &mut buf2);
+    game.send_to_char(
         ch,
         format!(
             "Zone: [{:3}], VNum: [{}{:5}{}], RNum: [{:5}], Type: {}\r\n",
-            db.zone_table[rm.zone as usize].number,
+            game.db.zone_table[rm_zone as usize].number,
             CCGRN!(ch, C_NRM),
-            rm.number,
+            rm_number,
             CCNRM!(ch, C_NRM),
             ch.in_room(),
             buf2
@@ -532,12 +540,12 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         .as_str(),
     );
 
-    sprintbit(rm.room_flags as i64, &ROOM_BITS, &mut buf2);
-    send_to_char(
+    sprintbit(rm_room_flags as i64, &ROOM_BITS, &mut buf2);
+    game.send_to_char(
         ch,
         format!(
             "SpecProc: {}, Flags: {}\r\n",
-            if rm.func.borrow().is_none() {
+            if rm_func_is_none {
                 "None"
             } else {
                 "Exists"
@@ -547,12 +555,12 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         .as_str(),
     );
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Description:\r\n{}",
-            if !rm.description.is_empty() {
-                &rm.description
+            if !rm_description.is_empty() {
+                &rm_description
             } else {
                 "  None.\r\n"
             }
@@ -560,22 +568,26 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
         .as_str(),
     );
 
-    if !rm.ex_descriptions.is_empty() {
-        send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
-        for desc in rm.ex_descriptions.iter() {
-            send_to_char(ch, format!(" {}", desc.keyword).as_str());
-            send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
-        }
+    if rm_ex_descriptions_len != 0 {
+        game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
+        for idx in 0..rm_ex_descriptions_len {
+            let desc_keyword = game.db.world[ch.in_room() as usize].ex_descriptions[idx].keyword.clone();
 
-        send_to_char(ch, format!("Chars present:{}", CCYEL!(ch, C_NRM)).as_str());
+            game.send_to_char(ch, format!(" {}", desc_keyword).as_str());
+            game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+        }
+    }
+
+    if rm_peoples.len() != 0 {
+        game.send_to_char(ch, format!("Chars present:{}", CCYEL!(ch, C_NRM)).as_str());
         let mut column = 14; /* ^^^ strlen ^^^ */
         let mut found = 0;
-        for (i, k) in rm.peoples.iter().enumerate() {
-            if !db.can_see(ch, k) {
+        for (i, k) in rm_peoples.iter().enumerate() {
+            if !game.can_see(ch, k) {
                 continue;
             }
 
-            column += send_to_char(
+            column += game.send_to_char(
                 ch,
                 format!(
                     "{} {}({})",
@@ -584,7 +596,7 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                     if !k.is_npc() {
                         "PC"
                     } else {
-                        if !db.is_mob(k) {
+                        if !game.db.is_mob(k) {
                             "NPC"
                         } else {
                             "MOB"
@@ -595,11 +607,11 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
             );
             found += 1;
             if column >= 62 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}\r\n",
-                        if i == rm.peoples.len() - 1 {
+                        if i == rm_peoples.len() - 1 {
                             ","
                         } else {
                             ""
@@ -611,18 +623,18 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                 column = 0;
             }
         }
-        send_to_char(ch, CCNRM!(ch, C_NRM));
+        game.send_to_char(ch, CCNRM!(ch, C_NRM));
     }
-    if !rm.contents.is_empty() {
-        send_to_char(ch, format!("Contents:{}", CCGRN!(ch, C_NRM)).as_str());
+    if !rm_contents.is_empty() {
+        game.send_to_char(ch, format!("Contents:{}", CCGRN!(ch, C_NRM)).as_str());
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
-        for (i, j) in rm.contents.iter().enumerate() {
-            if !db.can_see_obj(ch, j) {
+        for (i, j) in rm_contents.iter().enumerate() {
+            if !game.can_see_obj(ch, j) {
                 continue;
             }
 
-            column += send_to_char(
+            column += game.send_to_char(
                 ch,
                 format!(
                     "{} {}",
@@ -633,11 +645,11 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
             );
             found += 1;
             if column >= 62 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}\r\n",
-                        if i == rm.contents.len() - 1 {
+                        if i == rm_contents.len() - 1 {
                             ","
                         } else {
                             ""
@@ -649,32 +661,32 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                 column = 0;
             }
         }
-        send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+        game.send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
     }
 
     for i in 0..NUM_OF_DIRS {
-        if rm.dir_option[i].is_none() {
+        if rm_dir_option[i].is_none() {
             continue;
         }
         let buf1;
-        if rm.dir_option[i].as_ref().unwrap().to_room == NOWHERE {
+        if rm_dir_option[i].as_ref().unwrap().to_room == NOWHERE {
             buf1 = format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM));
         } else {
             buf1 = format!(
                 "{}{:5}{}",
                 CCCYN!(ch, C_NRM),
-                db.get_room_vnum(rm.dir_option[i].as_ref().unwrap().to_room),
+                game.db.get_room_vnum(rm_dir_option[i].as_ref().unwrap().to_room),
                 CCNRM!(ch, C_NRM)
             );
         }
         let mut buf2 = String::new();
         sprintbit(
-            rm.dir_option[i].as_ref().unwrap().exit_info as i64,
+            rm_dir_option[i].as_ref().unwrap().exit_info as i64,
             &EXIT_BITS,
             &mut buf2,
         );
 
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
@@ -682,20 +694,20 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
                 DIRS[i],
                 CCNRM!(ch, C_NRM),
                 buf1,
-                rm.dir_option[i].as_ref().unwrap().key,
-                if !rm.dir_option[i].as_ref().unwrap().keyword.is_empty() {
-                    &rm.dir_option[i].as_ref().unwrap().keyword
+                rm_dir_option[i].as_ref().unwrap().key,
+                if !rm_dir_option[i].as_ref().unwrap().keyword.is_empty() {
+                    &rm_dir_option[i].as_ref().unwrap().keyword
                 } else {
                     "None"
                 },
                 buf2,
-                if !rm.dir_option[i]
+                if !rm_dir_option[i]
                     .as_ref()
                     .unwrap()
                     .general_description
                     .is_empty()
                 {
-                    &rm.dir_option[i].as_ref().unwrap().general_description
+                    &rm_dir_option[i].as_ref().unwrap().general_description
                 } else {
                     "  No exit description.\r\n"
                 }
@@ -705,9 +717,9 @@ fn do_stat_room(db: &DB, ch: &Rc<CharData>) {
     }
 }
 
-fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
-    let vnum = db.get_obj_vnum(j);
-    send_to_char(
+fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
+    let vnum = game.db.get_obj_vnum(j);
+    game.send_to_char(
         ch,
         format!(
             "Name: '{}{}{}', Aliases: {}\r\n",
@@ -724,7 +736,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
     );
     let mut buf = String::new();
     sprinttype(j.get_obj_type() as i32, &ITEM_TYPES, &mut buf);
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "VNum: [{}{:5}{}], RNum: [{:5}], Type: {}, SpecProc: {}\r\n",
@@ -733,7 +745,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             CCNRM!(ch, C_NRM),
             j.get_obj_rnum(),
             buf,
-            if db.get_obj_spec(j).is_some() {
+            if game.db.get_obj_spec(j).is_some() {
                 "Exists"
             } else {
                 "none"
@@ -743,24 +755,24 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
     );
 
     if !j.ex_descriptions.is_empty() {
-        send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
+        game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
 
         for desc in j.ex_descriptions.iter() {
-            send_to_char(ch, format!(" {}", desc.keyword).as_str());
-            send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+            game.send_to_char(ch, format!(" {}", desc.keyword).as_str());
+            game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
         }
     }
     buf.clear();
     sprintbit(j.get_obj_wear() as i64, &WEAR_BITS, &mut buf);
-    send_to_char(ch, format!("Can be worn on: {}\r\n", buf).as_str());
+    game.send_to_char(ch, format!("Can be worn on: {}\r\n", buf).as_str());
     buf.clear();
     sprintbit(j.get_obj_affect(), &AFFECTED_BITS, &mut buf);
-    send_to_char(ch, format!("Set char bits : {}\r\n", buf).as_str());
+    game.send_to_char(ch, format!("Set char bits : {}\r\n", buf).as_str());
     buf.clear();
     sprintbit(j.get_obj_extra() as i64, &EXTRA_BITS, &mut buf);
-    send_to_char(ch, format!("Extra flags   : {}\r\n", buf).as_str());
+    game.send_to_char(ch, format!("Extra flags   : {}\r\n", buf).as_str());
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Weight: {}, Value: {}, Cost/day: {}, Timer: {}\r\n",
@@ -771,15 +783,15 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         )
         .as_str(),
     );
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "In room: {} ({}), ",
-            db.get_room_vnum(j.in_room()),
+            game.db.get_room_vnum(j.in_room()),
             if j.in_room() == NOWHERE {
                 "Nowhere"
             } else {
-                db.world[j.in_room() as usize].name.as_str()
+                game.db.world[j.in_room() as usize].name.as_str()
             }
         )
         .as_str(),
@@ -790,7 +802,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
      *       character holding the object. Therefore, we do not need CAN_SEE().
      */
     let jio = j.in_obj.borrow();
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "In object: {}, ",
@@ -802,7 +814,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         )
         .as_str(),
     );
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Carried by: {}, ",
@@ -814,7 +826,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         )
         .as_str(),
     );
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Worn by: {}\r\n",
@@ -830,33 +842,33 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
     match j.get_obj_type() {
         ITEM_LIGHT => {
             if j.get_obj_val(2) == -1 {
-                send_to_char(ch, "Hours left: Infinite\r\n");
+                game.send_to_char(ch, "Hours left: Infinite\r\n");
             } else {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!("Hours left: [{}]\r\n", j.get_obj_val(2)).as_str(),
                 );
             }
         }
         ITEM_SCROLL | ITEM_POTION => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Spells: (Level {}) {}, {}, {}\r\n",
                     j.get_obj_val(0),
-                    skill_name(db, j.get_obj_val(1)),
-                    skill_name(db, j.get_obj_val(2)),
-                    skill_name(db, j.get_obj_val(3))
+                    skill_name(&game.db, j.get_obj_val(1)),
+                    skill_name(&game.db, j.get_obj_val(2)),
+                    skill_name(&game.db, j.get_obj_val(3))
                 )
                 .as_str(),
             );
         }
         ITEM_WAND | ITEM_STAFF => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Spell: {} at level {}, {} (of {}) charges remaining\r\n",
-                    skill_name(db, j.get_obj_val(3)),
+                    skill_name(&game.db, j.get_obj_val(3)),
                     j.get_obj_val(0),
                     j.get_obj_val(2),
                     j.get_obj_val(1)
@@ -865,7 +877,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             );
         }
         ITEM_WEAPON => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Todam: {}d{}, Message type: {}\r\n",
@@ -877,10 +889,10 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             );
         }
         ITEM_ARMOR => {
-            send_to_char(ch, format!("AC-apply: [{}]\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("AC-apply: [{}]\r\n", j.get_obj_val(0)).as_str());
         }
         ITEM_TRAP => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Spell: {}, - Hitpoints: {}\r\n",
@@ -893,7 +905,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         ITEM_CONTAINER => {
             buf.clear();
             sprintbit(j.get_obj_val(1) as i64, &CONTAINER_BITS, &mut buf);
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Weight capacity: {}, Lock Type: {}, Key Num: {}, Corpse: {}\r\n",
@@ -908,7 +920,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         ITEM_DRINKCON | ITEM_FOUNTAIN => {
             buf.clear();
             sprinttype(j.get_obj_val(2), &DRINKS, &mut buf);
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Capacity: {}, Contains: {}, Poisoned: {}, Liquid: {}\r\n",
@@ -921,11 +933,11 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             );
         }
         ITEM_NOTE => {
-            send_to_char(ch, format!("Tongue: {}\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("Tongue: {}\r\n", j.get_obj_val(0)).as_str());
         }
         ITEM_KEY => { /* Nothing */ }
         ITEM_FOOD => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Makes full: {}, Poisoned: {}\r\n",
@@ -936,10 +948,10 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             );
         }
         ITEM_MONEY => {
-            send_to_char(ch, format!("Coins: {}\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("Coins: {}\r\n", j.get_obj_val(0)).as_str());
         }
         _ => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Values 0-3: [{}] [{}] [{}] [{}]\r\n",
@@ -959,12 +971,12 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
      */
 
     if !j.contains.borrow().is_empty() {
-        send_to_char(ch, format!("\r\nContents:{}", CCGRN!(ch, C_NRM)).as_str());
+        game.send_to_char(ch, format!("\r\nContents:{}", CCGRN!(ch, C_NRM)).as_str());
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
 
         for (i2, j2) in j.contains.borrow().iter().enumerate() {
-            column += send_to_char(
+            column += game.send_to_char(
                 ch,
                 format!(
                     "{} {}",
@@ -974,7 +986,7 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 .as_str(),
             );
             if column >= 62 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}\r\n",
@@ -990,17 +1002,17 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 column = 0;
             }
         }
-        send_to_char(ch, CCNRM!(ch, C_NRM));
+        game.send_to_char(ch, CCNRM!(ch, C_NRM));
     }
 
     let mut found = 0;
-    send_to_char(ch, "Affections:");
+    game.send_to_char(ch, "Affections:");
 
     for i in 0..MAX_OBJ_AFFECT as usize {
         if j.affected[i].get().modifier != 0 {
             buf.clear();
             sprinttype(j.affected[i].get().location as i32, &APPLY_TYPES, &mut buf);
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "{} {} to {}",
@@ -1013,16 +1025,16 @@ fn do_stat_object(db: &DB, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             found += 1;
         }
         if found == 0 {
-            send_to_char(ch, " None");
+            game.send_to_char(ch, " None");
         }
-        send_to_char(ch, "\r\n");
+        game.send_to_char(ch, "\r\n");
     }
 }
 
-fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
+fn do_stat_character(game: &mut Game, ch: &Rc<CharData>, k: &Rc<CharData>) {
     let mut buf = String::new();
     sprinttype(k.get_sex() as i32, &GENDERS, &mut buf);
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "{} {} '{}'  IDNum: [{:5}], In room [{:5}]\r\n",
@@ -1030,7 +1042,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
             if !k.is_npc() {
                 "PC"
             } else {
-                if !db.is_mob(k) {
+                if !game.db.is_mob(k) {
                     "NPC"
                 } else {
                     "MOB"
@@ -1038,25 +1050,25 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
             },
             k.get_name(),
             k.get_idnum(),
-            db.get_room_vnum(k.in_room())
+            game.db.get_room_vnum(k.in_room())
         )
         .as_str(),
     );
 
-    if db.is_mob(k) {
-        send_to_char(
+    if game.db.is_mob(k) {
+        game.send_to_char(
             ch,
             format!(
                 "Alias: {}, VNum: [{:5}], RNum: [{:5}]\r\n",
                 k.player.borrow().name,
-                db.get_mob_vnum(k),
+                game.db.get_mob_vnum(k),
                 k.get_mob_rnum()
             )
             .as_str(),
         );
     }
     let kp = k.player.borrow();
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Title: {}\r\n",
@@ -1069,7 +1081,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
         .as_str(),
     );
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "L-Des: {}",
@@ -1091,7 +1103,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
         },
         &mut buf,
     );
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "{}Class: {}, Lev: [{}{:2}{}], XP: [{}{:7}{}], Align: [{:4}]\r\n",
@@ -1111,7 +1123,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
     if !k.is_npc() {
         let buf1 = ctime(k.player.borrow().time.birth);
         let buf2 = ctime(k.player.borrow().time.logon);
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Created: [{}], Last Logon: [{}], Played [{}h {}m], Age [{}]\r\n",
@@ -1124,7 +1136,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
             .as_str(),
         );
 
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Hometown: [{}], Speaks: [{}/{}/{}], (STL[{}]/per[{}]/NSTL[{}])\r\n",
@@ -1139,7 +1151,7 @@ fn do_stat_character(db: &DB, ch: &Rc<CharData>, k: &Rc<CharData>) {
             .as_str(),
         );
     }
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Str: [{}{}/{}{}]  Int: [{}{}{}]  Wis: [{}{}{}]  \
@@ -1167,7 +1179,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         .as_str(),
     );
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Hit p.:[{}{}/{}+{}{}]  Mana p.:[{}{}/{}+{}{}]  Move p.:[{}{}/{}+{}{}]\r\n",
@@ -1190,7 +1202,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         .as_str(),
     );
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Coins: [{:9}], Bank: [{:9}] (Total: {})\r\n",
@@ -1201,7 +1213,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         .as_str(),
     );
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "AC: [{}{}/10], Hitroll: [{:2}], Damroll: [{:2}], Saving throws: [{}/{}/{}/{}/{}]\r\n",
@@ -1219,7 +1231,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     );
     buf.clear();
     sprinttype(k.get_pos() as i32, &POSITION_TYPES, &mut buf);
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Pos: {}, Fighting: {}",
@@ -1234,7 +1246,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     );
 
     if k.is_npc() {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 ", Attack type: {}",
@@ -1247,20 +1259,20 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     if k.desc.borrow().is_some() {
         buf.clear();
         sprinttype(
-            k.desc.borrow().as_ref().unwrap().state() as i32,
+            game.descriptor_list.get(k.desc.borrow().unwrap()).state() as i32,
             &CONNECTED_TYPES,
             &mut buf,
         );
-        send_to_char(ch, format!(", Connected: {}", buf).as_str());
+        game.send_to_char(ch, format!(", Connected: {}", buf).as_str());
     }
 
     if k.is_npc() {
         buf.clear();
         sprinttype(k.mob_specials.default_pos as i32, &POSITION_TYPES, &mut buf);
-        send_to_char(ch, format!(", Default position: {}\r\n", buf).as_str());
+        game.send_to_char(ch, format!(", Default position: {}\r\n", buf).as_str());
         buf.clear();
         sprintbit(k.mob_flags(), &ACTION_BITS, &mut buf);
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "NPC flags: {}{}{}\r\n",
@@ -1271,7 +1283,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             .as_str(),
         );
     } else {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 ", Idle Timer (in tics) [{}]\r\n",
@@ -1281,24 +1293,24 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         );
         buf.clear();
         sprintbit(k.plr_flags(), &PLAYER_BITS, &mut buf);
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("PLR: {}{}{}\r\n", CCCYN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
         );
         buf.clear();
         sprintbit(k.prf_flags(), &PREFERENCE_BITS, &mut buf);
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("PRF: {}{}{}\r\n", CCGRN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
         );
     }
 
-    if db.is_mob(k) {
-        send_to_char(
+    if game.db.is_mob(k) {
+        game.send_to_char(
             ch,
             format!(
                 "Mob Spec-Proc: {}, NPC Bare Hand Dam: {}d{}\r\n",
-                if db.mob_index[k.get_mob_rnum() as usize].func.is_some() {
+                if game.db.mob_index[k.get_mob_rnum() as usize].func.is_some() {
                     "Exists"
                 } else {
                     "None"
@@ -1310,7 +1322,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         );
     }
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "Carried: weight: {}, items: {}; Items in: inventory: {}, ",
@@ -1328,10 +1340,10 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         }
     }
 
-    send_to_char(ch, format!("eq: {}\r\n", i2).as_str());
+    game.send_to_char(ch, format!("eq: {}\r\n", i2).as_str());
 
     if !k.is_npc() {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Hunger: {}, Thirst: {}, Drunk: {}\r\n",
@@ -1343,7 +1355,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         );
     }
 
-    let mut column = send_to_char(
+    let mut column = game.send_to_char(
         ch,
         format!(
             "Master is: {}, Followers are:",
@@ -1356,22 +1368,22 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         .as_str(),
     );
     if k.followers.borrow().is_empty() {
-        send_to_char(ch, " <none>\r\n");
+        game.send_to_char(ch, " <none>\r\n");
     } else {
         let mut found = 0;
         for (i, fol) in k.followers.borrow().iter().enumerate() {
-            column += send_to_char(
+            column += game.send_to_char(
                 ch,
                 format!(
                     "{} {}",
                     if found != 0 { "," } else { "" },
-                    db.pers(fol.follower.borrow(), ch)
+                    game.pers(fol.follower.borrow(), ch)
                 )
                 .as_str(),
             );
             found += 1;
             if column >= 62 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}\r\n",
@@ -1388,14 +1400,14 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             }
         }
         if column != 0 {
-            send_to_char(ch, "\r\n");
+            game.send_to_char(ch, "\r\n");
         }
     }
 
     /* Showing the bitvector */
     buf.clear();
     sprintbit(k.aff_flags(), &AFFECTED_BITS, &mut buf);
-    send_to_char(
+    game.send_to_char(
         ch,
         format!("AFF: {}{}{}\r\n", CCYEL!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
     );
@@ -1403,20 +1415,20 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     /* Routine to show what spells a char is affected by */
     if k.affected.borrow().len() != 0 {
         for aff in k.affected.borrow().iter() {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "SPL: ({:3}hr) {}{:21}{} ",
                     aff.duration + 1,
                     CCCYN!(ch, C_NRM),
-                    skill_name(db, aff._type as i32),
+                    skill_name(&game.db, aff._type as i32),
                     CCNRM!(ch, C_NRM)
                 )
                 .as_str(),
             );
 
             if aff.modifier != 0 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{} to {}",
@@ -1428,13 +1440,13 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
             if aff.bitvector != 0 {
                 if aff.modifier != 0 {
-                    send_to_char(ch, ", ");
+                    game.send_to_char(ch, ", ");
                 }
                 buf.clear();
                 sprintbit(aff.bitvector, &AFFECTED_BITS, &mut buf);
-                send_to_char(ch, format!("sets {}", buf).as_str());
+                game.send_to_char(ch, format!("sets {}", buf).as_str());
             }
-            send_to_char(ch, "\r\n");
+            game.send_to_char(ch, "\r\n");
         }
     }
 }
@@ -1447,47 +1459,47 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     half_chop(&mut argument, &mut buf1, &mut buf2);
 
     if buf1.is_empty() {
-        send_to_char(ch, "Stats on who or what?\r\n");
+        game.send_to_char(ch, "Stats on who or what?\r\n");
         return;
     } else if is_abbrev(&buf1, "room") {
-        do_stat_room(&game.db, ch);
+        do_stat_room(game, ch);
     } else if is_abbrev(&buf1, "mob") {
         if buf2.is_empty() {
-            send_to_char(ch, "Stats on which mobile?\r\n");
+            game.send_to_char(ch, "Stats on which mobile?\r\n");
         } else {
             let victim;
             if {
-                victim = game.db.get_char_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = game.get_char_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(&game.db, ch, victim.as_ref().unwrap());
+                do_stat_character(game, ch, victim.as_ref().unwrap());
             } else {
-                send_to_char(ch, "No such mobile around.\r\n");
+                game.send_to_char(ch, "No such mobile around.\r\n");
             }
         }
     } else if is_abbrev(&buf1, "player") {
         if buf2.is_empty() {
-            send_to_char(ch, "Stats on which player?\r\n");
+            game.send_to_char(ch, "Stats on which player?\r\n");
         } else {
             let victim;
             if {
-                victim = game.db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = game.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(&game.db, ch, victim.as_ref().unwrap());
+                do_stat_character(game, ch, victim.as_ref().unwrap());
             } else {
-                send_to_char(ch, "No such player around.\r\n");
+                game.send_to_char(ch, "No such player around.\r\n");
             }
         }
     } else if is_abbrev(&buf1, "file") {
         let victim;
         if buf2.is_empty() {
-            send_to_char(ch, "Stats on which player?\r\n");
+            game.send_to_char(ch, "Stats on which player?\r\n");
         } else if {
-            victim = game.db.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
+            victim = game.get_player_vis(ch, &mut buf2, None, FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
+            do_stat_character(game, ch, victim.as_ref().unwrap());
         } else {
             let mut victim = CharData::new();
             let mut tmp_store = CharFileU::new();
@@ -1498,27 +1510,27 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 let victim = Rc::new(victim);
                 game.db.char_to_room(&victim, 0);
                 if victim.get_level() > ch.get_level() {
-                    send_to_char(ch, "Sorry, you can't do that.\r\n");
+                    game.send_to_char(ch, "Sorry, you can't do that.\r\n");
                 } else {
-                    do_stat_character(&game.db, ch, &victim);
+                    do_stat_character(game, ch, &victim.clone());
                 }
                 game.extract_char_final(&victim);
             } else {
-                send_to_char(ch, "There is no such player.\r\n");
+                game.send_to_char(ch, "There is no such player.\r\n");
             }
         }
     } else if is_abbrev(&buf1, "object") {
         if buf2.is_empty() {
-            send_to_char(ch, "Stats on which object?\r\n");
+            game.send_to_char(ch, "Stats on which object?\r\n");
         } else {
             let object;
             if {
-                object = game.db.get_obj_vis(ch, &mut buf2, None);
+                object = game.get_obj_vis(ch, &mut buf2, None);
                 object.is_some()
             } {
-                do_stat_object(&game.db, ch, object.as_ref().unwrap());
+                do_stat_object(game, ch, object.as_ref().unwrap());
             } else {
-                send_to_char(ch, "No such object around.\r\n");
+                game.send_to_char(ch, "No such object around.\r\n");
             }
         }
     } else {
@@ -1528,27 +1540,24 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let mut victim;
         if {
             object = game
-                .db
                 .get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
             object.is_some()
         } {
-            do_stat_object(&game.db, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
             object =
-                game.db
-                    .get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
+                game.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
             object.is_some()
         } {
-            do_stat_object(&game.db, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
             victim = game
-                .db
                 .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
         } {
-            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
+            do_stat_character(game, ch, victim.as_ref().unwrap());
         } else if {
-            object = game.db.get_obj_in_list_vis2(
+            object = game.get_obj_in_list_vis2(
                 ch,
                 &mut name,
                 Some(&mut number),
@@ -1558,21 +1567,20 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             );
             object.is_some()
         } {
-            do_stat_object(&game.db, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
             victim = game
-                .db
                 .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(&game.db, ch, victim.as_ref().unwrap());
+            do_stat_character(game, ch, victim.as_ref().unwrap());
         } else if {
-            object = game.db.get_obj_vis(ch, &mut name, Some(&mut number));
+            object = game.get_obj_vis(ch, &mut name, Some(&mut number));
             object.is_some()
         } {
-            do_stat_object(&game.db, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, object.as_ref().unwrap());
         } else {
-            send_to_char(ch, "Nothing around by that name.\r\n");
+            game.send_to_char(ch, "Nothing around by that name.\r\n");
         }
     }
 }
@@ -1580,7 +1588,7 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let mut arg = String::new();
     if subcmd != SCMD_SHUTDOWN {
-        send_to_char(ch, "If you want to shut something down, say so!\r\n");
+        game.send_to_char(ch, "If you want to shut something down, say so!\r\n");
         return;
     }
     one_argument(argument, &mut arg);
@@ -1606,11 +1614,11 @@ pub fn do_shutdown(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         touch(Path::new(PAUSE_FILE)).unwrap();
         game.circle_shutdown = true;
     } else {
-        send_to_char(ch, "Unknown shutdown option.\r\n");
+        game.send_to_char(ch, "Unknown shutdown option.\r\n");
     }
 }
 
-pub fn snoop_check(ch: &CharData) {
+pub fn snoop_check(game: &mut Game, ch: Rc<CharData>) {
     /*  This short routine is to ensure that characters that happen
      *  to be snooping (or snooped) and get advanced/demoted will
      *  not be snooping/snooped someone of a higher/lower level (and
@@ -1619,84 +1627,64 @@ pub fn snoop_check(ch: &CharData) {
     if ch.desc.borrow().is_none() {
         return;
     }
-    let desco = ch.desc.borrow();
-    let desc = desco.as_ref().unwrap();
-    if desc.snooping.borrow().is_some()
-        && desc
-            .snooping
-            .borrow()
-            .as_ref()
-            .unwrap()
+    let d_id = ch.desc.borrow().unwrap();
+    if game.desc(d_id).snooping.is_some()
+        && game.desc(game.desc(d_id).snooping.unwrap())
             .character
-            .borrow()
             .as_ref()
             .unwrap()
             .get_level()
             >= ch.get_level()
     {
-        *desc
+        game.desc_mut(game.desc(d_id)
             .snooping
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .snoop_by
-            .borrow_mut() = None;
-        *desc.snooping.borrow_mut() = None;
+            .unwrap())
+            .snoop_by= None;
+        game.desc_mut(d_id).snooping = None;
     }
 
-    if desc.snoop_by.borrow().is_some()
+    if game.desc(d_id).snoop_by.is_some()
         && ch.get_level()
-            >= desc
+            >= game.desc(game.desc(d_id)
                 .snoop_by
-                .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .character
-                .borrow()
                 .as_ref()
                 .unwrap()
                 .get_level()
     {
-        *desc
+        game.desc_mut(game.desc(d_id)
             .snoop_by
-            .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .snooping
-            .borrow_mut() = None;
-        *desc.snoop_by.borrow_mut() = None;
+             = None;
+             game.desc_mut(d_id).snoop_by = None;
     }
 }
 
-fn stop_snooping(ch: &Rc<CharData>) {
-    if ch
+fn stop_snooping(game: &mut Game, ch: &Rc<CharData>) {
+    if game.desc(ch
         .desc
         .borrow()
-        .as_ref()
-        .unwrap()
+        .unwrap())
         .snooping
-        .borrow()
         .is_none()
     {
-        send_to_char(ch, "You aren't snooping anyone.\r\n");
+        game.send_to_char(ch, "You aren't snooping anyone.\r\n");
     } else {
-        send_to_char(ch, "You stop snooping.\r\n");
-        *ch.desc
+        game.send_to_char(ch, "You stop snooping.\r\n");
+        game.desc_mut(game.desc(ch.desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .snooping
-            .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .snoop_by
-            .borrow_mut() = None;
-        *ch.desc.borrow().as_ref().unwrap().snooping.borrow_mut() = None;
+             = None;
+        game.desc_mut(ch.desc.borrow().unwrap()).snooping = None;
     }
 }
 
 pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     if ch.desc.borrow().is_none() {
@@ -1705,156 +1693,137 @@ pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
     one_argument(argument, &mut arg);
     let victim;
-    let vdesco;
     let voriginal;
     let tch;
     if arg.is_empty() {
-        stop_snooping(ch);
+        stop_snooping(game, ch);
     } else if {
-        victim = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         victim.is_none()
     } {
-        send_to_char(ch, "No such person around.\r\n");
+        game.send_to_char(ch, "No such person around.\r\n");
     } else if victim.as_ref().unwrap().desc.borrow().is_none() {
-        send_to_char(ch, "There's no link.. nothing to snoop.\r\n");
+        game.send_to_char(ch, "There's no link.. nothing to snoop.\r\n");
     } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
-        stop_snooping(ch);
-    } else if victim
+        stop_snooping(game,ch);
+    } else if game.desc(victim
         .as_ref()
         .unwrap()
         .desc
         .borrow()
-        .as_ref()
-        .unwrap()
+        .unwrap())
         .snoop_by
-        .borrow()
         .is_some()
     {
-        send_to_char(ch, "Busy already. \r\n");
-    } else if Rc::ptr_eq(
-        victim
+        game.send_to_char(ch, "Busy already. \r\n");
+    } else if 
+        game.desc(victim
             .as_ref()
             .unwrap()
             .desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .snooping
-            .borrow()
-            .as_ref()
-            .unwrap(),
-        ch.desc.borrow().as_ref().unwrap(),
-    ) {
-        send_to_char(ch, "Don't be stupid.\r\n");
+            .unwrap() == 
+        ch.desc.borrow().unwrap()
+     {
+        game.send_to_char(ch, "Don't be stupid.\r\n");
     } else {
-        if victim
+        if game.desc(victim
             .as_ref()
             .unwrap()
             .desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .original
-            .borrow()
             .is_some()
         {
-            vdesco = victim.as_ref().unwrap().desc.borrow();
-            voriginal = vdesco.as_ref().unwrap().original.borrow();
+            voriginal = game.desc(victim.as_ref().unwrap().desc.borrow().unwrap()).original.as_ref().map(|e| e.clone());
             tch = voriginal.as_ref();
         } else {
             tch = victim.as_ref();
         }
         if tch.as_ref().unwrap().get_level() >= ch.get_level() {
-            send_to_char(ch, "You can't.\r\n");
+            game.send_to_char(ch, "You can't.\r\n");
             return;
         }
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
 
-        if ch
+        if game.desc(ch
             .desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .snooping
-            .borrow()
             .is_some()
         {
-            *ch.desc
+            game.desc_mut(game.desc(ch.desc
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .snooping
-                .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .snoop_by
-                .borrow_mut() = None;
+                 = None;
         }
-        *ch.desc.borrow().as_ref().unwrap().snooping.borrow_mut() =
-            victim.as_ref().unwrap().desc.borrow().clone();
+        game.desc_mut(ch.desc.borrow().unwrap()).snooping =
+            Some(victim.as_ref().unwrap().desc.borrow().unwrap());
     }
 }
 
 pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
     let victim;
-    if ch
+    if game.desc(ch
         .desc
         .borrow()
-        .as_ref()
-        .unwrap()
+        .unwrap())
         .original
-        .borrow()
         .is_some()
     {
-        send_to_char(ch, "You're already switched.\r\n");
+        game.send_to_char(ch, "You're already switched.\r\n");
     } else if arg.is_empty() {
-        send_to_char(ch, "Switch with who?\r\n");
+        game.send_to_char(ch, "Switch with who?\r\n");
     } else if {
-        victim = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         victim.is_none()
     } {
-        send_to_char(ch, "No such character.\r\n");
+        game.send_to_char(ch, "No such character.\r\n");
     } else if Rc::ptr_eq(ch, victim.as_ref().unwrap()) {
-        send_to_char(ch, "Hee hee... we are jolly funny today, eh?\r\n");
+        game.send_to_char(ch, "Hee hee... we are jolly funny today, eh?\r\n");
     } else if victim.as_ref().unwrap().desc.borrow().is_some() {
-        send_to_char(ch, "You can't do that, the body is already in use!\r\n");
+        game.send_to_char(ch, "You can't do that, the body is already in use!\r\n");
     } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
-        send_to_char(ch, "You aren't holy enough to use a mortal's body.\r\n");
+        game.send_to_char(ch, "You aren't holy enough to use a mortal's body.\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
+        && game.db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
     {
-        send_to_char(ch, "You are not godly enough to use that room!\r\n");
+        game.send_to_char(ch, "You are not godly enough to use that room!\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
-        && !house_can_enter(db, ch, db.get_room_vnum(victim.as_ref().unwrap().in_room()))
+        && game.db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
+        && !house_can_enter(&game.db, ch, game.db.get_room_vnum(victim.as_ref().unwrap().in_room()))
     {
-        send_to_char(ch, "That's private property -- no trespassing!\r\n");
+        game.send_to_char(ch, "That's private property -- no trespassing!\r\n");
     } else {
-        send_to_char(ch, OK);
-        *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = victim.clone();
-        *ch.desc.borrow().as_ref().unwrap().original.borrow_mut() = Some(ch.clone());
+        game.send_to_char(ch, OK);
+        game.desc_mut(ch.desc.borrow().unwrap()).character = victim.clone();
+        game.desc_mut(ch.desc.borrow().unwrap()).original = Some(ch.clone());
 
         *victim.as_ref().unwrap().desc.borrow_mut() = ch.desc.borrow().clone();
         *ch.desc.borrow_mut() = None;
     }
 }
 
-pub fn do_return(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_return(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.desc.borrow().is_some()
-        && ch
+        && game.desc(ch
             .desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .original
-            .borrow()
             .is_some()
     {
-        send_to_char(ch, "You return to your original body.\r\n");
+        game.send_to_char(ch, "You return to your original body.\r\n");
 
         /*
          * If someone switched into your original body, disconnect them.
@@ -1865,60 +1834,43 @@ pub fn do_return(_game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
          * close_socket() will damage our character's pointer to our descriptor
          * (which is assigned below in this function). 12/17/99
          */
-        if ch
+        if game.desc(ch
             .desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .original
-            .borrow()
             .as_ref()
             .unwrap()
             .desc
             .borrow()
             .is_some()
         {
-            *ch.desc
+            let dorig_id = game.desc(ch.desc
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .original
-                .borrow()
                 .as_ref()
                 .unwrap()
                 .desc
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap();
+            game.desc_mut(dorig_id)
                 .character
-                .borrow_mut() = None;
-            ch.desc
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .original
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .desc
-                .borrow()
-                .as_ref()
-                .unwrap()
+                 = None;
+            game.desc_mut(dorig_id)
                 .set_state(ConDisconnect);
         }
 
         /* Now our descriptor points to our original body. */
-        *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() =
-            ch.desc.borrow().as_ref().unwrap().original.borrow().clone();
-        *ch.desc.borrow().as_ref().unwrap().original.borrow_mut() = None;
+        game.desc_mut(ch.desc.borrow().unwrap()).character =
+            game.desc(ch.desc.borrow().unwrap()).original.clone();
+        game.desc_mut(ch.desc.borrow().unwrap()).original = None;
 
         /* And our body's pointer to descriptor now points to our descriptor. */
-        *ch.desc
+        *game.desc(ch.desc
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .character
-            .borrow()
             .as_ref()
             .unwrap()
             .desc
@@ -1934,11 +1886,11 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     two_arguments(argument, &mut buf, &mut buf2);
 
     if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
-        send_to_char(ch, "Usage: load { obj | mob } <number>\r\n");
+        game.send_to_char(ch, "Usage: load { obj | mob } <number>\r\n");
         return;
     }
     if !is_number(&buf2) {
-        send_to_char(ch, "That is not a number.\r\n");
+        game.send_to_char(ch, "That is not a number.\r\n");
         return;
     }
 
@@ -1949,13 +1901,13 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             r_num = game.db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
         } {
-            send_to_char(ch, "There is no monster with that number.\r\n");
+            game.send_to_char(ch, "There is no monster with that number.\r\n");
             return;
         }
         let mob = game.db.read_mobile(r_num, REAL);
         game.db.char_to_room(mob.as_ref().unwrap(), ch.in_room());
 
-        game.db.act(
+        game.act(
             "$n makes a quaint, magical gesture with one hand.",
             true,
             Some(ch),
@@ -1963,7 +1915,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        game.db.act(
+        game.act(
             "$n has created $N!",
             false,
             Some(ch),
@@ -1971,7 +1923,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             Some(mob.as_ref().unwrap()),
             TO_ROOM,
         );
-        game.db.act(
+        game.act(
             "You create $N.",
             false,
             Some(ch),
@@ -1986,7 +1938,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             r_num = game.db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
         } {
-            send_to_char(ch, "There is no object with that number.\r\n");
+            game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
         let obj = game.db.read_object(r_num, REAL).unwrap();
@@ -1995,7 +1947,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         } else {
             game.db.obj_to_room(&obj, ch.in_room());
         }
-        game.db.act(
+        game.act(
             "$n makes a strange magical gesture.",
             true,
             Some(ch),
@@ -2003,7 +1955,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        game.db.act(
+        game.act(
             "$n has created $p!",
             false,
             Some(ch),
@@ -2011,7 +1963,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             None,
             TO_ROOM,
         );
-        game.db.act(
+        game.act(
             "You create $p.",
             false,
             Some(ch),
@@ -2020,7 +1972,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             TO_CHAR,
         );
     } else {
-        send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
+        game.send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
 }
 
@@ -2031,11 +1983,11 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     two_arguments(argument, &mut buf, &mut buf2);
 
     if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
-        send_to_char(ch, "Usage: vstat { obj | mob } <number>\r\n");
+        game.send_to_char(ch, "Usage: vstat { obj | mob } <number>\r\n");
         return;
     }
     if !is_number(&buf2) {
-        send_to_char(ch, "That's not a valid number.\r\n");
+        game.send_to_char(ch, "That's not a valid number.\r\n");
         return;
     }
 
@@ -2046,12 +1998,12 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             r_num = game.db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
         } {
-            send_to_char(ch, "There is no monster with that number.\r\n");
+            game.send_to_char(ch, "There is no monster with that number.\r\n");
             return;
         }
         let mob = game.db.read_mobile(r_num, REAL);
         game.db.char_to_room(mob.as_ref().unwrap(), 0);
-        do_stat_character(&game.db, ch, mob.as_ref().unwrap());
+        do_stat_character(game, ch, mob.as_ref().unwrap());
         game.db.extract_char(mob.as_ref().unwrap());
     } else if is_abbrev(&buf, "obj") {
         let r_num;
@@ -2060,14 +2012,14 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             r_num = game.db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
         } {
-            send_to_char(ch, "There is no object with that number.\r\n");
+            game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
         let obj = game.db.read_object(r_num, REAL);
-        do_stat_object(&game.db, ch, obj.as_ref().unwrap());
-        game.db.extract_obj(obj.as_ref().unwrap());
+        do_stat_object(game, ch, obj.as_ref().unwrap());
+        game.extract_obj(obj.as_ref().unwrap());
     } else {
-        send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
+        game.send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
 }
 
@@ -2080,16 +2032,16 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
         if {
-            vict = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+            vict = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
             vict.is_some()
         } {
             if !vict.as_ref().unwrap().is_npc()
                 && ch.get_level() <= vict.as_ref().unwrap().get_level()
             {
-                send_to_char(ch, "Fuuuuuuuuu!\r\n");
+                game.send_to_char(ch, "Fuuuuuuuuu!\r\n");
                 return;
             }
-            game.db.act(
+            game.act(
                 "$n disintegrates $N.",
                 false,
                 Some(ch),
@@ -2106,14 +2058,14 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
                 );
                 if vict.desc.borrow().is_some() {
-                    vict.desc.borrow().as_ref().unwrap().set_state(ConClose);
-                    *vict.desc.borrow().as_ref().unwrap().character.borrow_mut() = None;
+                    game.desc_mut(vict.desc.borrow().unwrap()).set_state( ConClose );
+                    game.desc_mut(vict.desc.borrow().unwrap()).character = None;
                     *vict.desc.borrow_mut() = None;
                 }
             }
             game.db.extract_char(vict);
         } else if {
-            obj = game.db.get_obj_in_list_vis2(
+            obj = game.get_obj_in_list_vis2(
                 ch,
                 &mut buf,
                 None,
@@ -2122,7 +2074,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             obj.is_some()
         } {
             let obj = obj.unwrap();
-            game.db.act(
+            game.act(
                 "$n destroys $p.",
                 false,
                 Some(ch),
@@ -2130,17 +2082,17 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 None,
                 TO_ROOM,
             );
-            game.db.extract_obj(&obj);
+            game.extract_obj(&obj);
         } else {
-            send_to_char(ch, "Nothing here by that name.\r\n");
+            game.send_to_char(ch, "Nothing here by that name.\r\n");
             return;
         }
 
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
     } else {
         /* no argument. clean out the room */
 
-        game.db.act(
+        game.act(
             "$n gestures... You are surrounded by scorching flames!",
             false,
             Some(ch),
@@ -2148,7 +2100,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             None,
             TO_ROOM,
         );
-        game.db.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
+        game.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
         let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
         for vict in 
@@ -2161,13 +2113,13 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
             /* Dump inventory. */
             while vict.carrying.borrow().len() > 0 {
-                game.db.extract_obj(&vict.carrying.borrow()[0].clone());
+                game.extract_obj(&vict.carrying.borrow()[0].clone());
             }
 
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
                 if vict.get_eq(i).is_some() {
-                    game.db.extract_obj(vict.get_eq(i).as_ref().unwrap())
+                    game.extract_obj(vict.get_eq(i).as_ref().unwrap())
                 }
             }
 
@@ -2182,19 +2134,19 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             > 0
         {
             let o = game.db.world[ch.in_room() as usize].contents[0].clone();
-            game.db.extract_obj(&o);
+            game.extract_obj(&o);
         }
     }
 }
 
 const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
-pub fn do_syslog(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_syslog(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Your syslog is currently {}.\r\n",
@@ -2210,14 +2162,14 @@ pub fn do_syslog(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         tp = search_block(&arg, &LOGTYPES, false);
         tp.is_none()
     } {
-        send_to_char(ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
+        game.send_to_char(ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
         return;
     }
     let tp = tp.unwrap();
     ch.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
     ch.set_prf_flags_bits(PRF_LOG1 * (tp & 1) as i64 | PRF_LOG2 * (tp & 2) as i64 >> 1);
 
-    send_to_char(
+    game.send_to_char(
         ch,
         format!("Your syslog is now {}.\r\n", &LOGTYPES[tp]).as_str(),
     );
@@ -2231,24 +2183,24 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
 
     if name.len() != 0 {
         if {
-            victim = game.db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+            victim = game.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
             victim.is_none()
         } {
-            send_to_char(ch, "That player is not here.\r\n");
+            game.send_to_char(ch, "That player is not here.\r\n");
             return;
         }
     } else {
-        send_to_char(ch, "Advance who?\r\n");
+        game.send_to_char(ch, "Advance who?\r\n");
         return;
     }
     let victim = victim.unwrap();
 
     if ch.get_level() <= victim.get_level() {
-        send_to_char(ch, "Maybe that's not such a great idea.\r\n");
+        game.send_to_char(ch, "Maybe that's not such a great idea.\r\n");
         return;
     }
     if victim.is_npc() {
-        send_to_char(ch, "NO!  Not on NPC's.\r\n");
+        game.send_to_char(ch, "NO!  Not on NPC's.\r\n");
         return;
     }
     let r = level.parse::<u8>();
@@ -2257,23 +2209,23 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         newlevel = r.unwrap();
         newlevel == 0
     } {
-        send_to_char(ch, "That's not a level!\r\n");
+        game.send_to_char(ch, "That's not a level!\r\n");
         return;
     }
 
     if newlevel > LVL_IMPL as u8 {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("{} is the highest possible level.\r\n", LVL_IMPL).as_str(),
         );
         return;
     }
     if newlevel > ch.get_level() {
-        send_to_char(ch, "Yeah, right.\r\n");
+        game.send_to_char(ch, "Yeah, right.\r\n");
         return;
     }
     if newlevel == victim.get_level() {
-        send_to_char(ch, "They are already at that level.\r\n");
+        game.send_to_char(ch, "They are already at that level.\r\n");
         return;
     }
     let oldlevel = victim.get_level();
@@ -2281,12 +2233,12 @@ pub fn do_advance(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         do_start(game, &victim);
         victim.set_level(newlevel);
 
-        send_to_char(
+        game.send_to_char(
             &victim,
             "You are momentarily enveloped by darkness!\r\nYou feel somewhat diminished.\r\n",
         );
     } else {
-        game.db.act(
+        game.act(
             "$n makes some strange gestures.\r\n\
 A strange feeling comes upon you,\r\n\
 Like a giant hand, light comes down\r\n\
@@ -2307,7 +2259,7 @@ You feel slightly different.",
         );
     }
 
-    send_to_char(ch, OK);
+    game.send_to_char(ch, OK);
 
     if newlevel < oldlevel {
         info!(
@@ -2341,27 +2293,26 @@ You feel slightly different.",
         &victim,
         level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),
     );
-    game.db.save_char(&victim);
+    game.save_char(&victim);
 }
 
 pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
     let vict;
     if buf.is_empty() {
-        send_to_char(ch, "Whom do you wish to restore?\r\n");
+        game.send_to_char(ch, "Whom do you wish to restore?\r\n");
     } else if {
-        vict = db.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        send_to_char(ch, NOPERSON);
+        game.send_to_char(ch, NOPERSON);
     } else if !vict.as_ref().unwrap().is_npc()
         && !Rc::ptr_eq(ch, vict.as_ref().unwrap())
         && vict.as_ref().unwrap().get_level() >= ch.get_level()
     {
-        send_to_char(ch, "They don't need your help.\r\n");
+        game.send_to_char(ch, "They don't need your help.\r\n");
     } else {
         let vict = vict.as_ref().unwrap();
         vict.set_hit(vict.get_max_hit());
@@ -2387,8 +2338,8 @@ pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         }
         update_pos(vict);
         affect_total(vict);
-        send_to_char(ch, OK);
-        db.act(
+        game.send_to_char(ch, OK);
+        game.act(
             "You have been fully healed by $N!",
             false,
             Some(vict),
@@ -2399,28 +2350,27 @@ pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     }
 }
 
-pub fn perform_immort_vis(db: &DB, ch: &Rc<CharData>) {
+pub fn perform_immort_vis(game: &mut Game, ch: &Rc<CharData>) {
     if ch.get_invis_lev() == 0 && !ch.aff_flagged(AFF_HIDE | AFF_INVISIBLE) {
-        send_to_char(ch, "You are already fully visible.\r\n");
+        game.send_to_char(ch, "You are already fully visible.\r\n");
         return;
     }
 
     ch.set_invis_lev(0);
 
-    db.appear(ch);
-    send_to_char(ch, "You are now fully visible.\r\n");
+    game.appear(ch);
+    game.send_to_char(ch, "You are now fully visible.\r\n");
 }
 
-fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
-    for tch in db.world[ch.in_room() as usize]
-        .peoples
-        .iter()
+fn perform_immort_invis(game: &mut Game, ch: &Rc<CharData>, level: i32) {
+    let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
+    for tch in list.iter()
     {
         if Rc::ptr_eq(tch, ch) {
             continue;
         }
         if tch.get_level() >= ch.get_invis_lev() as u8 && tch.get_level() < level as u8 {
-            db.act(
+            game.act(
                 "You blink and suddenly realize that $n is gone.",
                 false,
                 Some(ch),
@@ -2430,7 +2380,7 @@ fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
             );
         }
         if tch.get_level() < ch.get_invis_lev() as u8 && tch.get_level() >= level as u8 {
-            db.act(
+            game.act(
                 "You suddenly realize that $n is standing beside you.",
                 false,
                 Some(ch),
@@ -2442,37 +2392,36 @@ fn perform_immort_invis(db: &DB, ch: &Rc<CharData>, level: i32) {
     }
 
     ch.set_invis_lev(level as i16);
-    send_to_char(
+    game.send_to_char(
         ch,
         format!("Your invisibility level is {}.\r\n", level).as_str(),
     );
 }
 
 pub fn do_invis(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     if ch.is_npc() {
-        send_to_char(ch, "You can't do that!\r\n");
+        game.send_to_char(ch, "You can't do that!\r\n");
         return;
     }
 
     one_argument(argument, &mut arg);
     if arg.is_empty() {
         if ch.get_invis_lev() > 0 {
-            perform_immort_vis(db, ch);
+            perform_immort_vis(game, ch);
         } else {
-            perform_immort_invis(db, ch, ch.get_level() as i32);
+            perform_immort_invis(game, ch, ch.get_level() as i32);
         }
     } else {
         let level = arg.parse::<i32>();
         let level = if level.is_err() { 0 } else { level.unwrap() };
         if level > ch.get_level() as i32 {
-            send_to_char(ch, "You can't go invisible above your own level.\r\n");
+            game.send_to_char(ch, "You can't go invisible above your own level.\r\n");
         } else if level < 1 {
-            perform_immort_vis(db, ch);
+            perform_immort_vis(game, ch);
         } else {
-            perform_immort_invis(db, ch, level);
+            perform_immort_invis(game, ch, level);
         }
     }
 }
@@ -2482,28 +2431,29 @@ pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     delete_doubledollar(&mut argument);
 
     if argument.is_empty() {
-        send_to_char(ch, "That must be a mistake...\r\n");
+        game.send_to_char(ch, "That must be a mistake...\r\n");
     } else {
-        for pt in game.descriptor_list.iter() {
-            if pt.state() == ConPlaying
-                && pt.character.borrow().is_some()
-                && !Rc::ptr_eq(pt.character.borrow().as_ref().unwrap(), ch)
+        for pt_id in game.descriptor_list.ids() {
+            if game.desc(pt_id).state() == ConPlaying
+                && game.desc(pt_id).character.borrow().is_some()
+                && !Rc::ptr_eq(game.desc(pt_id).character.borrow().as_ref().unwrap(), ch)
             {
-                send_to_char(
-                    pt.character.borrow().as_ref().unwrap(),
+                let ch = game.desc(pt_id).character.as_ref().map(|e| e.clone());
+                game.send_to_char(
+                    ch.as_ref().unwrap(),
                     format!("{}\r\n", argument).as_str(),
                 );
             }
         }
         if ch.prf_flagged(PRF_NOREPEAT) {
-            send_to_char(ch, OK);
+            game.send_to_char(ch, OK);
         } else {
-            send_to_char(ch, format!("{}\r\n", argument).as_str());
+            game.send_to_char(ch, format!("{}\r\n", argument).as_str());
         }
     }
 }
 
-pub fn do_poofset(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_poofset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
     let msg;
     let mut cps = ch.player_specials.borrow_mut();
     match subcmd {
@@ -2522,41 +2472,40 @@ pub fn do_poofset(_game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 
     *msg = Rc::from(argument);
 
-    send_to_char(ch, OK);
+    game.send_to_char(ch, OK);
 }
 
 pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
     let num_to_dc = arg.parse::<u32>();
     if num_to_dc.is_err() {
-        send_to_char(ch, "Usage: DC <user number> (type USERS for a list)\r\n");
+        game.send_to_char(ch, "Usage: DC <user number> (type USERS for a list)\r\n");
         return;
     }
     let num_to_dc = num_to_dc.unwrap();
-    let mut d = None;
+    let mut d_id  = None;
     {
-        for cd in game.descriptor_list.iter() {
-            if cd.desc_num.get() == num_to_dc as usize {
-                d = Some(cd.clone());
+        for cd_id in game.descriptor_list.ids() {
+            if game.desc(cd_id).desc_num == num_to_dc as usize {
+                d_id = Some(cd_id);
             }
         }
     }
 
-    if d.is_none() {
-        send_to_char(ch, "No such connection.\r\n");
+    if d_id.is_none() {
+        game.send_to_char(ch, "No such connection.\r\n");
         return;
     }
-    let d = d.as_ref().unwrap();
-    if d.character.borrow().is_some()
-        && d.character.borrow().as_ref().unwrap().get_level() >= ch.get_level()
+    let d_id = d_id.unwrap();
+    if game.desc(d_id).character.borrow().is_some()
+        && game.desc(d_id).character.as_ref().unwrap().get_level() >= ch.get_level()
     {
-        if !db.can_see(ch, d.character.borrow().as_ref().unwrap()) {
-            send_to_char(ch, "No such connection.\r\n");
+        if !game.can_see(ch, game.desc(d_id).character.borrow().as_ref().unwrap()) {
+            game.send_to_char(ch, "No such connection.\r\n");
         } else {
-            send_to_char(ch, "Umm.. maybe that's not such a good idea...\r\n");
+            game.send_to_char(ch, "Umm.. maybe that's not such a good idea...\r\n");
         }
         return;
     }
@@ -2576,20 +2525,20 @@ pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
      * by two different immortals in the same 1/10th of a second, we have
      * the below 'if' check. -gg 12/17/99
      */
-    if d.state() == ConDisconnect || d.state() == ConClose {
-        send_to_char(ch, "They're already being disconnected.\r\n");
+    if game.desc(d_id).state() == ConDisconnect || game.desc(d_id).state() == ConClose {
+        game.send_to_char(ch, "They're already being disconnected.\r\n");
     } else {
         /*
          * Remember that we can disconnect people not in the game and
          * that rather confuses the code when it expected there to be
          * a character context.
          */
-        if d.state() == ConPlaying {
-            d.set_state(ConDisconnect);
+        if game.desc(d_id).state() == ConPlaying {
+            game.desc_mut(d_id).set_state(ConDisconnect);
         } else {
-            d.set_state(ConClose);
+            game.desc_mut(d_id).set_state(ConClose);
         }
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("Connection #{} closed.\r\n", num_to_dc).as_str(),
         );
@@ -2606,7 +2555,7 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         value = arg.parse::<i32>();
         let value = if value.is_err() { -1 } else { value.unwrap() };
         if value < 0 || value > ch.get_level() as i32 {
-            send_to_char(ch, "Invalid wizlock value.\r\n");
+            game.send_to_char(ch, "Invalid wizlock value.\r\n");
             return;
         }
         game.db.circle_restrict = value as u8;
@@ -2617,19 +2566,19 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
 
     match game.db.circle_restrict {
         0 => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("The game is {} completely open.\r\n", when).as_str(),
             );
         }
         1 => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("The game is {} closed to new players.\r\n", when).as_str(),
             );
         }
         _ => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Only level {} and above may enter the game {}.\r\n",
@@ -2654,14 +2603,14 @@ pub fn do_date(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     let tmstr = date_time.to_rfc2822();
 
     if subcmd == SCMD_DATE {
-        send_to_char(ch, format!("Current machine time: {}\r\n", tmstr).as_str());
+        game.send_to_char(ch, format!("Current machine time: {}\r\n", tmstr).as_str());
     } else {
         let mytime = time_now() - game.db.boot_time as u64;
         let d = mytime / 86400;
         let h = (mytime / 3600) % 24;
         let m = (mytime / 60) % 60;
 
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Up since {}: {} day{}, {}:{:2}\r\n",
@@ -2681,20 +2630,20 @@ pub fn do_last(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        send_to_char(ch, "For whom do you wish to search?\r\n");
+        game.send_to_char(ch, "For whom do you wish to search?\r\n");
         return;
     }
     let mut chdata = CharFileU::new();
     if game.db.load_char(&arg, &mut chdata).is_none() {
-        send_to_char(ch, "There is no such player.\r\n");
+        game.send_to_char(ch, "There is no such player.\r\n");
         return;
     }
     if chdata.level > ch.get_level() && ch.get_level() < LVL_IMPL as u8 {
-        send_to_char(ch, "You are not sufficiently godly for that!\r\n");
+        game.send_to_char(ch, "You are not sufficiently godly for that!\r\n");
         return;
     }
     let id = chdata.char_specials_saved.idnum;
-    send_to_char(
+    game.send_to_char(
         ch,
         format!(
             "[{:5}] [{:2} {}] {:12} : {:-18} : {:20}\r\n",
@@ -2719,21 +2668,21 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     let buf1 = format!("$n has forced you to '{}'.", to_force);
     let vict;
     if arg.is_empty() || to_force.is_empty() {
-        send_to_char(ch, "Whom do you wish to force do what?\r\n");
+        game.send_to_char(ch, "Whom do you wish to force do what?\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
         if {
-            vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
             vict.is_none()
         } {
-            send_to_char(ch, NOPERSON);
+            game.send_to_char(ch, NOPERSON);
         } else if !vict.as_ref().unwrap().is_npc()
             && ch.get_level() <= vict.as_ref().unwrap().get_level()
         {
-            send_to_char(ch, "No, no, no!\r\n");
+            game.send_to_char(ch, "No, no, no!\r\n");
         } else {
             let vict = vict.as_ref().unwrap();
-            send_to_char(ch, OK);
-            game.db
+            game.send_to_char(ch, OK);
+            game
                 .act(&buf1, true, Some(ch), None, Some(vict.as_ref()), TO_VICT);
             game.mudlog(
                 NRM,
@@ -2750,7 +2699,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             command_interpreter(game, vict, &to_force);
         }
     } else if arg == "room" {
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
         game.mudlog(
             NRM,
             max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -2768,26 +2717,24 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
                 continue;
             }
-            game.db
+            game
                 .act(&buf1, true, Some(ch), None, Some(vict), TO_VICT);
             command_interpreter(game, vict, &to_force);
         }
     } else {
         /* force all */
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
         game.mudlog(
             NRM,
             max(LVL_GOD as i32, ch.get_invis_lev() as i32),
             true,
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
         );
-        let descriptors = clone_vec2(&game.descriptor_list);
-        for i in descriptors.iter() {
+        for i in game.descriptor_list.ids() {
             let mut vict = None;
-            let ic = i.character.borrow();
-            if i.state() != ConPlaying
+            if game.desc(i).state() != ConPlaying
                 || {
-                    vict = ic.as_ref().clone();
+                    vict = game.desc(i).character.as_ref().map(|e| e.clone());
                     vict.is_none()
                 }
                 || !vict.as_ref().unwrap().is_npc()
@@ -2795,12 +2742,12 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             {
                 continue;
             }
-            game.db.act(
+            game.act(
                 &buf1,
                 true,
                 Some(ch),
                 None,
-                Some(&vict.unwrap().clone()),
+                Some(&vict),
                 TO_VICT,
             );
             command_interpreter(game, vict.as_ref().unwrap(), &to_force);
@@ -2809,7 +2756,6 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 }
 
 pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut emote = false;
     let mut level = LVL_IMMORT;
     let mut buf1 = String::new();
@@ -2817,7 +2763,7 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     delete_doubledollar(&mut argument);
 
     if argument.is_empty() {
-        send_to_char(ch, "Usage: wiznet <text> | #<level> <text> | *<emotetext> |\r\n        wiznet @<level> *<emotetext> | wiz @\r\n");
+        game.send_to_char(ch, "Usage: wiznet <text> | #<level> <text> | *<emotetext> |\r\n        wiznet @<level> *<emotetext> | wiz @\r\n");
         return;
     }
     match argument.chars().next().unwrap() {
@@ -2831,7 +2777,7 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 half_chop(&mut arg_left, &mut buf1, &mut argument);
                 level = max(buf1.parse::<i16>().unwrap(), LVL_IMMORT);
                 if level > ch.get_level() as i16 {
-                    send_to_char(ch, "You can't wizline above your own level.\r\n");
+                    game.send_to_char(ch, "You can't wizline above your own level.\r\n");
                     return;
                 }
             } else if emote {
@@ -2839,19 +2785,19 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         }
 
         '@' => {
-            send_to_char(ch, "God channel status:\r\n");
-            for d in game.descriptor_list.iter() {
-                if d.state() != ConPlaying
-                    || d.character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
+            game.send_to_char(ch, "God channel status:\r\n");
+            for d_id in game.descriptor_list.ids() {
+                if game.desc(d_id).state() != ConPlaying
+                    || game.desc(d_id).character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
                 {
                     continue;
                 }
-                if !db.can_see(ch, d.character.borrow().as_ref().unwrap()) {
+                if !game.can_see(ch, game.desc(d_id).character.borrow().as_ref().unwrap()) {
                     continue;
                 }
-                let dco = d.character.borrow();
+                let dco = game.desc(d_id).character.borrow();
                 let dc = dco.as_ref().unwrap();
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "  {:20}{}{}{}\r\n",
@@ -2886,13 +2832,13 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
 
     if ch.prf_flagged(PRF_NOWIZ) {
-        send_to_char(ch, "You are offline!\r\n");
+        game.send_to_char(ch, "You are offline!\r\n");
         return;
     }
     let argument = argument.trim_start();
 
     if argument.is_empty() {
-        send_to_char(ch, "Don't bother the gods like that!\r\n");
+        game.send_to_char(ch, "Don't bother the gods like that!\r\n");
         return;
     }
     let buf2;
@@ -2923,47 +2869,46 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             argument
         );
     }
-    for d in game.descriptor_list.iter() {
-        let db = &game.db;
-        if d.state() == ConPlaying
-            && d.character.borrow().as_ref().unwrap().get_level() >= level as u8
-            && !d
+    for d_id in game.descriptor_list.ids() {
+        if game.desc(d_id).state() == ConPlaying
+            && game.desc(d_id).character.as_ref().unwrap().get_level() >= level as u8
+            && !game.desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
                 .unwrap()
                 .prf_flagged(PRF_NOWIZ)
-            && !d
+            && !game.desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
                 .unwrap()
                 .plr_flagged(PLR_WRITING | PLR_MAILING)
-            && !Rc::ptr_eq(d, ch.desc.borrow().as_ref().unwrap())
-            || !d
+            && d_id == ch.desc.borrow().unwrap()
+            || !game.desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
                 .unwrap()
                 .prf_flagged(PRF_NOREPEAT)
         {
-            send_to_char(
-                d.character.borrow().as_ref().unwrap(),
-                CCCYN!(d.character.borrow().as_ref().unwrap(), C_NRM),
+            let ch = game.desc(d_id).character.borrow().as_ref().unwrap().clone();
+            game.send_to_char(
+                ch.as_ref(),
+                CCCYN!(game.desc(d_id).character.borrow().as_ref().unwrap(), C_NRM),
             );
-            let dco = d.character.borrow();
-            let dc = dco.as_ref().unwrap();
-            if db.can_see(dc, ch) {
-                send_to_char(dc, &buf1);
+            let dc = game.desc(d_id).character.as_ref().unwrap().clone();
+            if game.can_see(dc.as_ref(), ch.as_ref()) {
+                game.send_to_char(dc.as_ref(), &buf1);
             } else {
-                send_to_char(dc, &buf2);
+                game.send_to_char(dc.as_ref(), &buf2);
             }
-            send_to_char(dc, CCNRM!(dc, C_NRM));
+            game.send_to_char(dc.as_ref(), CCNRM!(dc, C_NRM));
         }
     }
 
     if ch.prf_flagged(PRF_NOREPEAT) {
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
     }
 }
 
@@ -2972,7 +2917,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        send_to_char(ch, "You must specify a zone.\r\n");
+        game.send_to_char(ch, "You must specify a zone.\r\n");
         return;
     }
     let zone_count = game.db.zone_table.len();
@@ -2981,7 +2926,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         for i in 0..zone_count {
             game.reset_zone( i);
         }
-        send_to_char(ch, "Reset world.\r\n");
+        game.send_to_char(ch, "Reset world.\r\n");
         game.mudlog(
             NRM,
             max(LVL_GRGOD as i32, ch.get_invis_lev() as i32),
@@ -3006,7 +2951,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
     if i < game.db.zone_table.len() {
         game.reset_zone( i as usize);
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "Reset zone {} (#{}): {}.\r\n",
@@ -3029,7 +2974,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             .as_str(),
         );
     } else {
-        send_to_char(ch, "Invalid zone number.\r\n");
+        game.send_to_char(ch, "Invalid zone number.\r\n");
     }
 }
 
@@ -3041,24 +2986,24 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     one_argument(argument, &mut arg);
     let vict;
     if arg.is_empty() {
-        send_to_char(ch, "Yes, but for whom?!?\r\n");
+        game.send_to_char(ch, "Yes, but for whom?!?\r\n");
     } else if {
-        vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        send_to_char(ch, "There is no such player.\r\n");
+        game.send_to_char(ch, "There is no such player.\r\n");
     } else if vict.as_ref().unwrap().is_npc() {
-        send_to_char(ch, "You can't do that to a mob!\r\n");
+        game.send_to_char(ch, "You can't do that to a mob!\r\n");
     } else if vict.as_ref().unwrap().get_level() > ch.get_level() {
-        send_to_char(ch, "Hmmm...you'd better not.\r\n");
+        game.send_to_char(ch, "Hmmm...you'd better not.\r\n");
     } else {
         let vict = vict.as_ref().unwrap();
         match subcmd {
             SCMD_REROLL => {
-                send_to_char(ch, "Rerolled...\r\n");
+                game.send_to_char(ch, "Rerolled...\r\n");
                 roll_real_abils(vict);
                 info!("(GC) {} has rerolled {}.", ch.get_name(), vict.get_name());
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "New stats: Str {}/{}, Int {}, Wis {}, Dex {}, Con {}, Cha {}\r\n",
@@ -3075,12 +3020,12 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             }
             SCMD_PARDON => {
                 if !vict.plr_flagged(PLR_THIEF | PLR_KILLER) {
-                    send_to_char(ch, "Your victim is not flagged.\r\n");
+                    game.send_to_char(ch, "Your victim is not flagged.\r\n");
                     return;
                 }
                 vict.remove_plr_flag(PLR_THIEF | PLR_KILLER);
-                send_to_char(ch, "Pardoned.\r\n");
-                send_to_char(vict, "You have been pardoned by the Gods!\r\n");
+                game.send_to_char(ch, "Pardoned.\r\n");
+                game.send_to_char(vict, "You have been pardoned by the Gods!\r\n");
                 game.mudlog(
                     BRF,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -3102,7 +3047,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                     )
                     .as_str(),
                 );
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "(GC) Notitle {} for {} by {}.\r\n",
@@ -3127,7 +3072,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                     )
                     .as_str(),
                 );
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "(GC) Squelch {} for {} by {}.\r\n",
@@ -3140,18 +3085,18 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             }
             SCMD_FREEZE => {
                 if Rc::ptr_eq(ch, vict) {
-                    send_to_char(ch, "Oh, yeah, THAT'S real smart...\r\n");
+                    game.send_to_char(ch, "Oh, yeah, THAT'S real smart...\r\n");
                     return;
                 }
                 if vict.plr_flagged(PLR_FROZEN) {
-                    send_to_char(ch, "Your victim is already pretty cold.\r\n");
+                    game.send_to_char(ch, "Your victim is already pretty cold.\r\n");
                     return;
                 }
                 vict.set_plr_flag_bit(PLR_FROZEN);
                 vict.set_freeze_lev(ch.get_level() as i8);
-                send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
-                send_to_char(ch, "Frozen.\r\n");
-                game.db.act(
+                game.send_to_char(vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
+                game.send_to_char(ch, "Frozen.\r\n");
+                game.act(
                     "A sudden cold wind conjured from nowhere freezes $n!",
                     false,
                     Some(vict),
@@ -3168,14 +3113,14 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             }
             SCMD_THAW => {
                 if !vict.plr_flagged(PLR_FROZEN) {
-                    send_to_char(
+                    game.send_to_char(
                         ch,
                         "Sorry, your victim is not morbidly encased in ice at the moment.\r\n",
                     );
                     return;
                 }
                 if vict.get_freeze_lev() > ch.get_level() as i8 {
-                    send_to_char(
+                    game.send_to_char(
                         ch,
                         format!(
                             "Sorry, a level {} God froze {}... you can't unfreeze {}.\r\n",
@@ -3194,9 +3139,9 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                     format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
                 );
                 vict.remove_plr_flag(PLR_FROZEN);
-                send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
-                send_to_char(ch, "Thawed.\r\n");
-                game.db.act(
+                game.send_to_char(vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
+                game.send_to_char(ch, "Thawed.\r\n");
+                game.act(
                     "A sudden fireball conjured from nowhere thaws $n!",
                     false,
                     Some(vict),
@@ -3210,13 +3155,13 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                     while vict.affected.borrow().len() != 0 {
                         affect_remove(vict, &vict.affected.borrow()[0]);
                     }
-                    send_to_char(
+                    game.send_to_char(
                         vict,
                         "There is a brief flash of light!\r\nYou feel slightly different.\r\n",
                     );
-                    send_to_char(ch, "All spells removed.\r\n");
+                    game.send_to_char(ch, "All spells removed.\r\n");
                 } else {
-                    send_to_char(ch, "Your victim does not have any affections!\r\n");
+                    game.send_to_char(ch, "Your victim does not have any affections!\r\n");
                     return;
                 }
             }
@@ -3224,7 +3169,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
             }
         }
-        game.db.save_char(vict);
+        game.save_char(vict);
     }
 }
 
@@ -3310,11 +3255,11 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let argument = argument.trim_start();
 
     if argument.is_empty() {
-        send_to_char(ch, "Show options:\r\n");
+        game.send_to_char(ch, "Show options:\r\n");
         let mut j = 0;
         for i in 1..FIELDS.len() - 1 {
             if FIELDS[i].level <= ch.get_level() as i16 {
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{:15}{}",
@@ -3332,7 +3277,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 );
             }
         }
-        send_to_char(ch, "\r\n");
+        game.send_to_char(ch, "\r\n");
         return;
     }
 
@@ -3344,7 +3289,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let l = if l.is_some() { l.unwrap() } else { 0 };
 
     if ch.get_level() < FIELDS[l].level as u8 {
-        send_to_char(ch, "You are not godly enough for that!\r\n");
+        game.send_to_char(ch, "You are not godly enough for that!\r\n");
         return;
     }
     if value == "." {
@@ -3367,7 +3312,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 if zrn.is_some() {
                     print_zone_to_buf(&game.db, &mut buf, zrn.unwrap() as ZoneRnum);
                 } else {
-                    send_to_char(ch, "That is not a valid zone.\r\n");
+                    game.send_to_char(ch, "That is not a valid zone.\r\n");
                     return;
                 }
             } else {
@@ -3375,23 +3320,23 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     print_zone_to_buf(&game.db, &mut buf, i as ZoneRnum);
                 }
             }
-            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
+            page_string(game, ch.desc.borrow().unwrap(), &buf, true);
         }
 
         /* show player */
         2 => {
             if value.is_empty() {
-                send_to_char(ch, "A name would help.\r\n");
+                game.send_to_char(ch, "A name would help.\r\n");
                 return;
             }
 
             let mut vbuf = CharFileU::new();
             if game.db.load_char(&value, &mut vbuf).is_none() {
-                send_to_char(ch, "There is no such player.\r\n");
+                game.send_to_char(ch, "There is no such player.\r\n");
                 return;
             }
 
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Player: {:12} ({}) [{:2} {}]\r\n",
@@ -3407,7 +3352,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             let exp = vbuf.points.exp;
             let ali = vbuf.char_specials_saved.alignment;
             let stl = vbuf.player_specials_saved.spells_to_learn;
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Au:{:8}  Bal:{:8}  Exp:{:8}  Align: {:5}  Lessons: {:3}\r\n",
@@ -3416,8 +3361,8 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 .as_str(),
             );
             /* ctime() uses static buffer: do not combine. */
-            send_to_char(ch, format!("Started: {}  ", ctime(vbuf.birth)).as_str());
-            send_to_char(
+            game.send_to_char(ch, format!("Started: {}  ", ctime(vbuf.birth)).as_str());
+            game.send_to_char(
                 ch,
                 format!(
                     "Last: {:20}  Played: {:3}h {:2}m\r\n",
@@ -3432,10 +3377,10 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         /* show rent */
         3 => {
             if value.is_empty() {
-                send_to_char(ch, "A name would help.\r\n");
+                game.send_to_char(ch, "A name would help.\r\n");
                 return;
             }
-            crash_listrent(&mut game.db, ch, &value);
+            crash_listrent(game, ch, &value);
         }
 
         /* show stats */
@@ -3447,7 +3392,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             for vict in game.db.character_list.iter() {
                 if vict.is_npc() {
                     j += 1;
-                } else if game.db.can_see(ch, vict) {
+                } else if game.can_see(ch, vict) {
                     i += 1;
                     if vict.desc.borrow().is_some() {
                         con += 1;
@@ -3457,7 +3402,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             for _ in game.db.object_list.iter() {
                 k += 1;
             }
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "Current stats:\r\n\
@@ -3507,7 +3452,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     }
                 }
             }
-            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
+            page_string(game, ch.desc.borrow().unwrap(), &buf, true);
         }
 
         /* show death */
@@ -3528,7 +3473,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     );
                 }
             }
-            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
+            page_string(game, ch.desc.borrow().unwrap(), &buf, true);
         }
 
         /* show godrooms */
@@ -3549,49 +3494,46 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     );
                 }
             }
-            page_string(ch.desc.borrow().as_ref().unwrap(), &buf, true);
+            page_string(game, ch.desc.borrow().unwrap(), &buf, true);
         }
 
         /* show shops */
         8 => {
-            show_shops(&game.db, ch, &value);
+            show_shops(game, ch, &value);
         }
 
         /* show houses */
         9 => {
-            hcontrol_list_houses(&game.db, ch);
+            hcontrol_list_houses(game, ch);
         }
 
         /* show snoop */
         10 => {
             let mut i = 0;
-            send_to_char(
+            game.send_to_char(
                 ch,
                 "People currently snooping:\r\n--------------------------\r\n",
             );
-            for d in game.descriptor_list.iter() {
-                if d.snooping.borrow().is_none() || d.character.borrow().is_none() {
+            for d_id in game.descriptor_list.ids() {
+                if game.desc(d_id).snooping.borrow().is_none() || game.desc(d_id).character.borrow().is_none() {
                     continue;
                 }
-                let dco = d.character.borrow();
+                let dco = game.desc(d_id).character.borrow();
                 let dc = dco.as_ref().unwrap();
-                if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
+                if game.desc(d_id).state() != ConPlaying || ch.get_level() < dc.get_level() {
                     continue;
                 }
-                if !game.db.can_see(ch, dc) || dc.in_room() == NOWHERE {
+                if !game.can_see(ch, dc) || dc.in_room() == NOWHERE {
                     continue;
                 }
                 i += 1;
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{:10} - snooped by {}.\r\n",
-                        d.snooping
-                            .borrow()
-                            .as_ref()
-                            .unwrap()
+                        game.desc(game.desc(d_id).snooping
+                            .unwrap())
                             .character
-                            .borrow()
                             .as_ref()
                             .unwrap()
                             .get_name(),
@@ -3601,13 +3543,13 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 );
             }
             if i == 0 {
-                send_to_char(ch, "No one is currently snooping.\r\n");
+                game.send_to_char(ch, "No one is currently snooping.\r\n");
             }
         }
 
         /* show what? */
         _ => {
-            send_to_char(ch, "Sorry, I don't understand that.\r\n");
+            game.send_to_char(ch, "Sorry, I don't understand that.\r\n");
         }
     }
 }
@@ -3951,7 +3893,7 @@ const SET_FIELDS: [SetStruct; 52] = [
     },
 ];
 
-fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
+fn perform_set(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
     let mut on = false;
     let mut off = false;
     let mut value = 0;
@@ -3960,21 +3902,21 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
     /* Check to make sure all the levels are correct */
     if ch.get_level() != LVL_IMPL as u8 {
         if !vict.is_npc() && ch.get_level() <= vict.get_level() && !Rc::ptr_eq(vict, ch) {
-            send_to_char(ch, "Maybe that's not such a great idea...\r\n");
+            game.send_to_char(ch, "Maybe that's not such a great idea...\r\n");
             return false;
         }
     }
     if ch.get_level() < SET_FIELDS[mode].level as u8 {
-        send_to_char(ch, "You are not godly enough for that!\r\n");
+        game.send_to_char(ch, "You are not godly enough for that!\r\n");
         return false;
     }
 
     /* Make sure the PC/NPC is correct */
     if vict.is_npc() && SET_FIELDS[mode].pcnpc & NPC == 0 {
-        send_to_char(ch, "You can't do that to a beast!\r\n");
+        game.send_to_char(ch, "You can't do that to a beast!\r\n");
         return false;
     } else if !vict.is_npc() && SET_FIELDS[mode].pcnpc & PC == 0 {
-        send_to_char(ch, "That can only be done to a beast!\r\n");
+        game.send_to_char(ch, "That can only be done to a beast!\r\n");
         return false;
     }
 
@@ -3986,10 +3928,10 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
             off = true;
         }
         if !on || off {
-            send_to_char(ch, "Value must be 'on' or 'off'.\r\n");
+            game.send_to_char(ch, "Value must be 'on' or 'off'.\r\n");
             return false;
         }
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "{} {} for {}.\r\n",
@@ -4002,7 +3944,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
     } else if SET_FIELDS[mode].type_ == NUMBER {
         let r = val_arg.parse::<i32>();
         value = if r.is_ok() { r.unwrap() } else { 0 };
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "{}'s {} set to {}.\r\n",
@@ -4013,7 +3955,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
             .as_str(),
         );
     } else {
-        send_to_char(ch, OK);
+        game.send_to_char(ch, OK);
     }
     let rnum;
     match mode {
@@ -4033,7 +3975,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         2 => {
             set_title(vict, Some(val_arg.to_string()));
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "{}'s title is now: {}\r\n",
@@ -4049,7 +3991,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
             } else {
                 vict.remove_prf_flags_bits(PRF_SUMMONABLE)
             }
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("Nosummon {} for {}.\r\n", onoff!(!on), vict.get_name()).as_str(),
             );
@@ -4167,14 +4109,14 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         24 => {
             if ch.get_level() < LVL_IMPL as u8 && !Rc::ptr_eq(ch, vict) {
-                send_to_char(ch, "You aren't godly enough for that!\r\n");
+                game.send_to_char(ch, "You aren't godly enough for that!\r\n");
                 return false;
             }
             vict.set_invis_lev(range!(value, 0, vict.get_level()) as i16);
         }
         25 => {
             if ch.get_level() < LVL_IMPL as u8 && !Rc::ptr_eq(ch, vict) {
-                send_to_char(ch, "You aren't godly enough for that!\r\n");
+                game.send_to_char(ch, "You aren't godly enough for that!\r\n");
                 return false;
             }
             if on {
@@ -4185,7 +4127,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         26 => {
             if Rc::ptr_eq(ch, vict) && on {
-                send_to_char(ch, "Better not -- could be a long winter!\r\n");
+                game.send_to_char(ch, "Better not -- could be a long winter!\r\n");
                 return false;
             }
             if on {
@@ -4200,7 +4142,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         29 | 30 | 31 => {
             if val_arg == "off" {
                 vict.set_cond((mode - 29) as i32, -1); /* warning: magic number here */
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}'s {} now off.\r\n",
@@ -4213,7 +4155,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                 value = val_arg.parse::<i32>().unwrap();
                 value = range!(value, 0, 24);
                 vict.set_cond((mode - 29) as i32, value as i16); /* and here too */
-                send_to_char(
+                game.send_to_char(
                     ch,
                     format!(
                         "{}'s {} set to {}.\r\n",
@@ -4224,7 +4166,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                     .as_str(),
                 );
             } else {
-                send_to_char(ch, "Must be 'off' or a value from 0 to 24.\r\n");
+                game.send_to_char(ch, "Must be 'off' or a value from 0 to 24.\r\n");
                 return false;
             }
         }
@@ -4244,7 +4186,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         34 => {
             if value > ch.get_level() as i32 || value > LVL_IMPL as i32 {
-                send_to_char(ch, "You can't do that.\r\n");
+                game.send_to_char(ch, "You can't do that.\r\n");
                 return false;
             }
             value = range!(value, 0, LVL_IMPL);
@@ -4252,17 +4194,17 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         35 => {
             if {
-                rnum = db.real_room(value as RoomRnum);
+                rnum = game.db.real_room(value as RoomRnum);
                 rnum == NOWHERE
             } {
-                send_to_char(ch, "No room exists with that number.\r\n");
+                game.send_to_char(ch, "No room exists with that number.\r\n");
                 return false;
             }
             if vict.in_room() != NOWHERE {
                 /* Another Eric Green special. */
-                db.char_from_room(vict);
+                game.db.char_from_room(vict);
             }
-            db.char_to_room(vict, rnum);
+            game.db.char_to_room(vict, rnum);
         }
         36 => {
             if on {
@@ -4291,7 +4233,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                 i = parse_class(val_arg.chars().next().unwrap());
                 i == CLASS_UNDEFINED
             } {
-                send_to_char(ch, "That is not a class.\r\n");
+                game.send_to_char(ch, "That is not a class.\r\n");
                 return false;
             }
             vict.set_class(i);
@@ -4315,10 +4257,10 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                 vict.remove_prf_flags_bits(PLR_LOADROOM);
             } else if is_number(val_arg) {
                 let rvnum = val_arg.parse::<i32>().unwrap() as RoomRnum;
-                if db.real_room(rvnum) != NOWHERE {
+                if game.db.real_room(rvnum) != NOWHERE {
                     vict.set_plr_flag_bit(PLR_LOADROOM);
                     vict.set_loadroom(rvnum);
-                    send_to_char(
+                    game.send_to_char(
                         ch,
                         format!(
                             "{} will enter at room #{}.",
@@ -4328,11 +4270,11 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                         .as_str(),
                     );
                 } else {
-                    send_to_char(ch, "That room does not exist!\r\n");
+                    game.send_to_char(ch, "That room does not exist!\r\n");
                     return false;
                 }
             } else {
-                send_to_char(ch, "Must be 'off' or a room's virtual number.\r\n");
+                game.send_to_char(ch, "Must be 'off' or a room's virtual number.\r\n");
                 return false;
             }
         }
@@ -4351,11 +4293,11 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
         45 => {
             if ch.get_idnum() > 1 {
-                send_to_char(ch, "Please don't use this command, yet.\r\n");
+                game.send_to_char(ch, "Please don't use this command, yet.\r\n");
                 return false;
             }
             if vict.get_level() >= LVL_GRGOD as u8 {
-                send_to_char(ch, "You cannot change that.\r\n");
+                game.send_to_char(ch, "You cannot change that.\r\n");
                 return false;
             }
             let mut passwd2 = [0 as u8; 16];
@@ -4363,7 +4305,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
             pbkdf2::pbkdf2::<Hmac<Sha256>>(val_arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
                 .expect("Error while encrypting password");
             vict.set_passwd(passwd2);
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("Password changed to '{}'.\r\n", val_arg).as_str(),
             );
@@ -4381,7 +4323,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
                 i = search_block(val_arg, &GENDERS, false);
                 i.is_none()
             } {
-                send_to_char(ch, "Must be 'male', 'female', or 'neutral'.\r\n");
+                game.send_to_char(ch, "Must be 'male', 'female', or 'neutral'.\r\n");
                 return false;
             }
             vict.set_sex(i.unwrap() as u8);
@@ -4390,7 +4332,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
             /* set age */
             if value < 2 || value > 200 {
                 /* Arbitrary limits. */
-                send_to_char(ch, "Ages 2 to 200 accepted.\r\n");
+                game.send_to_char(ch, "Ages 2 to 200 accepted.\r\n");
                 return false;
             }
             /*
@@ -4414,7 +4356,7 @@ fn perform_set(db: &mut DB, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, v
         }
 
         _ => {
-            send_to_char(ch, "Can't set that!\r\n");
+            game.send_to_char(ch, "Can't set that!\r\n");
             return false;
         }
     }
@@ -4454,7 +4396,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     buf = buf2;
 
     if name.is_empty() || field.is_empty() {
-        send_to_char(ch, "Usage: set <victim> <field> <value>\r\n");
+        game.send_to_char(ch, "Usage: set <victim> <field> <value>\r\n");
         return;
     }
     let mut vict = None;
@@ -4462,19 +4404,19 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     if !is_file {
         if is_player {
             if {
-                vict = game.db.get_player_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = game.get_player_vis(ch, &mut name, None, FIND_CHAR_WORLD);
                 vict.is_none()
             } {
-                send_to_char(ch, "There is no such player.\r\n");
+                game.send_to_char(ch, "There is no such player.\r\n");
                 return;
             }
         } else {
             /* is_mob */
             if {
-                vict = game.db.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = game.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
                 vict.is_none()
             } {
-                send_to_char(ch, "There is no such creature.\r\n");
+                game.send_to_char(ch, "There is no such creature.\r\n");
                 return;
             }
         }
@@ -4488,12 +4430,12 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         } {
             store_to_char(&tmp_store, &mut cbuf);
             if cbuf.get_level() >= ch.get_level() {
-                send_to_char(ch, "Sorry, you can't do that.\r\n");
+                game.send_to_char(ch, "Sorry, you can't do that.\r\n");
                 return;
             }
             vict = Some(Rc::new(cbuf));
         } else {
-            send_to_char(ch, "There is no such player.\r\n");
+            game.send_to_char(ch, "There is no such player.\r\n");
             return;
         }
     }
@@ -4507,15 +4449,15 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     };
 
     /* perform the set */
-    let retval = perform_set(&mut game.db, ch, vict.as_ref().unwrap(), mode as i32, &buf);
+    let retval = perform_set(game, ch, vict.as_ref().unwrap(), mode as i32, &buf);
 
     /* save the character if a change was made */
     if retval {
         if !is_file && !vict.as_ref().unwrap().is_npc() {
-            game.db.save_char(vict.as_ref().unwrap());
+            game.save_char(vict.as_ref().unwrap());
         }
         if is_file {
-            game.db.char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
+            game.char_to_store(vict.as_ref().unwrap(), &mut tmp_store);
 
             unsafe {
                 let player_slice = slice::from_raw_parts(
@@ -4532,7 +4474,7 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     .expect("Error while writing player record to file");
             }
 
-            send_to_char(ch, "Saved in file.\r\n");
+            game.send_to_char(ch, "Saved in file.\r\n");
         }
     }
 }

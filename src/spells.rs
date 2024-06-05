@@ -15,7 +15,6 @@ use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
 use crate::config::PK_ALLOWED;
 use crate::constants::{AFFECTED_BITS, APPLY_TYPES, EXTRA_BITS, ITEM_TYPES};
-use crate::db::DB;
 use crate::fight::compute_armor_class;
 use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
@@ -28,8 +27,8 @@ use crate::structs::{
     MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
     ROOM_DEATH, ROOM_GODROOM, ROOM_PRIVATE, SEX_MALE,
 };
-use crate::util::{add_follower, age, circle_follow, rand_number, sprintbit, sprinttype, BRF};
-use crate::{send_to_char, Game, TO_CHAR, TO_ROOM, TO_VICT};
+use crate::util::{add_follower, age, circle_follow, clone_vec2, rand_number, sprintbit, sprinttype, BRF};
+use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 pub const DEFAULT_STAFF_LVL: i32 = 12;
 pub const DEFAULT_WAND_LVL: i32 = 12;
@@ -297,7 +296,7 @@ pub fn spell_create_water(
                 obj.set_obj_val(1, obj.get_obj_val(1) + water);
                 name_to_drinkcon(Some(obj), LIQ_WATER);
                 weight_change_object(game, obj, water);
-                game.db.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+                game.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
             }
         }
     }
@@ -316,10 +315,10 @@ pub fn spell_recall(
 
     let victim = victim.unwrap();
 
-    game.db.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    game.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
     game.db.char_from_room(victim);
     game.db.char_to_room(victim, game.db.r_mortal_start_room);
-    game.db.act(
+    game.act(
         "$n appears in the middle of the room.",
         true,
         Some(victim),
@@ -354,7 +353,7 @@ pub fn spell_teleport(
         }
     }
 
-    game.db.act(
+    game.act(
         "$n slowly fades out of existence and is gone.",
         false,
         Some(victim),
@@ -364,7 +363,7 @@ pub fn spell_teleport(
     );
     game.db.char_from_room(victim);
     game.db.char_to_room(victim, to_room as RoomRnum);
-    game.db.act(
+    game.act(
         "$n slowly fades into existence.",
         false,
         Some(victim),
@@ -390,13 +389,13 @@ pub fn spell_summon(
     let victim = victim.unwrap();
     let ch = ch.unwrap();
     if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
-        send_to_char(ch, SUMMON_FAIL);
+        game.send_to_char(ch, SUMMON_FAIL);
         return;
     }
 
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
-            game.db.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
+            game.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
                    false, Some(ch), None, Some(victim), TO_CHAR);
             return;
         }
@@ -404,11 +403,11 @@ pub fn spell_summon(
             && !victim.prf_flagged(PRF_SUMMONABLE)
             && !victim.plr_flagged(PLR_KILLER)
         {
-            send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
+            game.send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
                                          ch.get_name(), game.db.world[ch.in_room() as usize].name,
                                          if ch.player.borrow().sex == SEX_MALE { "He" } else { "She" }).as_str());
 
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!(
                     "You failed because {} has summon protection on.\r\n",
@@ -435,11 +434,11 @@ pub fn spell_summon(
     if victim.mob_flagged(MOB_NOSUMMON)
         || victim.is_npc() && mag_savingthrow(victim, SAVING_SPELL, 0)
     {
-        send_to_char(ch, SUMMON_FAIL);
+        game.send_to_char(ch, SUMMON_FAIL);
         return;
     }
 
-    game.db.act(
+    game.act(
         "$n disappears suddenly.",
         true,
         Some(victim),
@@ -451,7 +450,7 @@ pub fn spell_summon(
     game.db.char_from_room(victim);
     game.db.char_to_room(victim, ch.in_room());
 
-    game.db.act(
+    game.act(
         "$n arrives suddenly.",
         true,
         Some(victim),
@@ -459,7 +458,7 @@ pub fn spell_summon(
         None,
         TO_ROOM,
     );
-    game.db.act(
+    game.act(
         "$n has summoned you!",
         false,
         Some(ch),
@@ -471,7 +470,7 @@ pub fn spell_summon(
 }
 
 pub fn spell_locate_object(
-    db: &DB,
+    game: &mut Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
@@ -488,12 +487,13 @@ pub fn spell_locate_object(
     name.push_str(&obj.name.borrow());
     let mut j = level / 2;
 
-    for i in db.object_list.iter() {
+    let list = clone_vec2(&game.db.object_list);
+    for i in list.iter() {
         if !isname(&name, &i.name.borrow()) {
             continue;
         }
 
-        send_to_char(
+        game.send_to_char(
             ch.unwrap(),
             format!(
                 "{}{}",
@@ -504,25 +504,25 @@ pub fn spell_locate_object(
         );
 
         if i.carried_by.borrow().is_some() {
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is being carried by {}.\r\n",
-                    db.pers(i.carried_by.borrow().as_ref().unwrap(), ch.unwrap())
+                    game.pers(i.carried_by.borrow().as_ref().unwrap(), ch.unwrap())
                 )
                 .as_str(),
             );
         } else if i.in_room() != NOWHERE {
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is in {}.\r\n",
-                    db.world[i.in_room() as usize].name
+                    game.db.world[i.in_room() as usize].name
                 )
                 .as_str(),
             );
         } else if i.in_obj.borrow().is_some() {
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is in {}.\r\n",
@@ -531,28 +531,28 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else if i.worn_by.borrow().is_some() {
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is being worn by {}.\r\n",
-                    db.pers(i.worn_by.borrow().as_ref().unwrap(), ch.unwrap())
+                    game.pers(i.worn_by.borrow().as_ref().unwrap(), ch.unwrap())
                 )
                 .as_str(),
             );
         } else {
-            send_to_char(ch.unwrap(), "'s location is uncertain.\r\n");
+            game.send_to_char(ch.unwrap(), "'s location is uncertain.\r\n");
         }
 
         j -= 1;
     }
 
     if j == level / 2 {
-        send_to_char(ch.unwrap(), "You sense nothing.\r\n");
+        game.send_to_char(ch.unwrap(), "You sense nothing.\r\n");
     }
 }
 
 pub fn spell_charm(
-    db: &DB,
+    game: &mut Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -565,30 +565,30 @@ pub fn spell_charm(
     let ch = ch.unwrap();
 
     if Rc::ptr_eq(victim, ch) {
-        send_to_char(ch, "You like yourself even better!\r\n");
+        game.send_to_char(ch, "You like yourself even better!\r\n");
     } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
-        send_to_char(ch, "You fail because SUMMON protection is on!\r\n");
+        game.send_to_char(ch, "You fail because SUMMON protection is on!\r\n");
     } else if victim.aff_flagged(AFF_SANCTUARY) {
-        send_to_char(ch, "Your victim is protected by sanctuary!\r\n");
+        game.send_to_char(ch, "Your victim is protected by sanctuary!\r\n");
     } else if victim.mob_flagged(MOB_NOCHARM) {
-        send_to_char(ch, "Your victim resists!\r\n");
+        game.send_to_char(ch, "Your victim resists!\r\n");
     } else if ch.aff_flagged(AFF_CHARM) {
-        send_to_char(ch, "You can't have any followers of your own!\r\n");
+        game.send_to_char(ch, "You can't have any followers of your own!\r\n");
     } else if victim.aff_flagged(AFF_CHARM) || level < victim.get_level() as i32 {
-        send_to_char(ch, "You fail.\r\n");
+        game.send_to_char(ch, "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
-        send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
+        game.send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
     } else if circle_follow(victim, Some(ch)) {
-        send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
+        game.send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
-        send_to_char(ch, "Your victim resists!\r\n");
+        game.send_to_char(ch, "Your victim resists!\r\n");
     } else {
         if victim.master.borrow().is_some() {
-            db.stop_follower(victim);
+            game.stop_follower(victim);
         }
 
-        add_follower(db, victim, ch);
+        add_follower(game, victim, ch);
         let mut af = AffectedType {
             _type: SPELL_CHARM as i16,
             duration: 24 * 2,
@@ -604,7 +604,7 @@ pub fn spell_charm(
         }
         affect_to_char(victim, &af);
 
-        db.act(
+        game.act(
             "Isn't $n just such a nice fellow?",
             false,
             Some(ch),
@@ -619,7 +619,7 @@ pub fn spell_charm(
 }
 
 pub fn spell_identify(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -630,7 +630,7 @@ pub fn spell_identify(
         let mut bitbuf = String::new();
 
         sprinttype(obj.get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
-        send_to_char(
+        game.send_to_char(
             ch.unwrap(),
             format!(
                 "You feel informed:\r\nObject '{}', Item type: {}\r\n",
@@ -641,16 +641,16 @@ pub fn spell_identify(
 
         if obj.get_obj_affect() != 0 {
             sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
         }
 
         sprintbit(obj.get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
-        send_to_char(ch.unwrap(), format!("Item is: {}\r\n", bitbuf).as_str());
+        game.send_to_char(ch.unwrap(), format!("Item is: {}\r\n", bitbuf).as_str());
 
-        send_to_char(
+        game.send_to_char(
             ch.unwrap(),
             format!(
                 "Weight: {}, Value: {}, Rent: {}\r\n",
@@ -664,18 +664,18 @@ pub fn spell_identify(
         match obj.get_obj_type() {
             ITEM_SCROLL | ITEM_POTION => {
                 if obj.get_obj_val(1) >= 1 {
-                    bitbuf.push_str(skill_name(db, obj.get_obj_val(1)));
+                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(1)));
                 }
 
                 if obj.get_obj_val(2) >= 1 {
-                    bitbuf.push_str(skill_name(db, obj.get_obj_val(2)));
+                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(2)));
                 }
 
                 if obj.get_obj_val(3) >= 1 {
-                    bitbuf.push_str(skill_name(db, obj.get_obj_val(3)));
+                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(3)));
                 }
 
-                send_to_char(
+                game.send_to_char(
                     ch.unwrap(),
                     format!(
                         "This {} casts: {}\r\n",
@@ -686,12 +686,12 @@ pub fn spell_identify(
                 );
             }
             ITEM_WAND | ITEM_STAFF => {
-                send_to_char(
+                game.send_to_char(
                     ch.unwrap(),
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
                         ITEM_TYPES[obj.get_obj_type() as usize],
-                        skill_name(db, obj.get_obj_val(3)),
+                        skill_name(&game.db, obj.get_obj_val(3)),
                         obj.get_obj_val(1),
                         if obj.get_obj_val(1) == 1 { "" } else { "s" },
                         obj.get_obj_val(2)
@@ -700,7 +700,7 @@ pub fn spell_identify(
                 );
             }
             ITEM_WEAPON => {
-                send_to_char(
+                game.send_to_char(
                     ch.unwrap(),
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
@@ -712,7 +712,7 @@ pub fn spell_identify(
                 );
             }
             ITEM_ARMOR => {
-                send_to_char(
+                game.send_to_char(
                     ch.unwrap(),
                     format!("AC-apply is {}\r\n", obj.get_obj_val(0)).as_str(),
                 );
@@ -725,7 +725,7 @@ pub fn spell_identify(
                 && obj.affected[i].get().modifier != 0
             {
                 if !found {
-                    send_to_char(ch.unwrap(), "Can affect you as :\r\n");
+                    game.send_to_char(ch.unwrap(), "Can affect you as :\r\n");
                     found = true;
                 }
                 sprinttype(
@@ -733,7 +733,7 @@ pub fn spell_identify(
                     &APPLY_TYPES,
                     &mut bitbuf,
                 );
-                send_to_char(
+                game.send_to_char(
                     ch.unwrap(),
                     format!(
                         "   Affects: {} By {}\r\n",
@@ -747,12 +747,12 @@ pub fn spell_identify(
     } else if victim.is_some() {
         /* victim */
         let victim = victim.unwrap();
-        send_to_char(
+        game.send_to_char(
             ch.unwrap(),
             format!("Name: {}\r\n", victim.get_name()).as_str(),
         );
         if !victim.is_npc() {
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     "{} is {} years, {} months, {} days and {} hours old.\r\n",
@@ -764,7 +764,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     "Height {} cm, Weight {} pounds\r\n",
@@ -773,7 +773,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     "Level: {}, Hits: {}, Mana: {}\r\n",
@@ -783,7 +783,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     "AC: {}, Hitroll: {}, Damroll: {}\r\n",
@@ -793,7 +793,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            send_to_char(
+            game.send_to_char(
                 ch.unwrap(),
                 format!(
                     "Str: {}/{}, Int: {}, Wis: {}, Dex: {}, Con: {}, Cha: {}\r\n",
@@ -816,7 +816,7 @@ pub fn spell_identify(
  * wielding character's hit/dam totals.
  */
 pub fn spell_enchant_weapon(
-    db: &DB,
+    game: &mut Game,
     level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
@@ -854,12 +854,12 @@ pub fn spell_enchant_weapon(
 
     if ch.is_good() {
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
-        db.act("$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act("$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else if ch.is_evil() {
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
-        db.act("$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act("$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else {
-        db.act(
+        game.act(
             "$p glows yellow.",
             false,
             Some(ch),
@@ -871,7 +871,7 @@ pub fn spell_enchant_weapon(
 }
 
 pub fn spell_detect_poison(
-    db: &DB,
+    game: &mut Game,
     _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
@@ -882,13 +882,13 @@ pub fn spell_detect_poison(
         let ch = ch.unwrap();
         if Rc::ptr_eq(ch, victim) {
             if victim.aff_flagged(AFF_POISON) {
-                send_to_char(ch, "You can sense poison in your blood.\r\n");
+                game.send_to_char(ch, "You can sense poison in your blood.\r\n");
             } else {
-                send_to_char(ch, "You feel healthy.\r\n");
+                game.send_to_char(ch, "You feel healthy.\r\n");
             }
         } else {
             if victim.aff_flagged(AFF_POISON) {
-                db.act(
+                game.act(
                     "You sense that $E is poisoned.",
                     false,
                     Some(ch),
@@ -897,7 +897,7 @@ pub fn spell_detect_poison(
                     TO_CHAR,
                 );
             } else {
-                db.act(
+                game.act(
                     "You sense that $E is healthy.",
                     false,
                     Some(ch),
@@ -914,7 +914,7 @@ pub fn spell_detect_poison(
             match obj.get_obj_type() {
                 ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
                     if obj.get_obj_val(3) != 0 {
-                        db.act(
+                        game.act(
                             "You sense that $p has been contaminated.",
                             false,
                             Some(ch),
@@ -923,7 +923,7 @@ pub fn spell_detect_poison(
                             TO_CHAR,
                         );
                     } else {
-                        db.act(
+                        game.act(
                             "You sense that $p is safe for consumption.",
                             false,
                             Some(ch),
@@ -934,7 +934,7 @@ pub fn spell_detect_poison(
                     }
                 }
                 _ => {
-                    send_to_char(ch, "You sense that it should not be consumed.\r\n");
+                    game.send_to_char(ch, "You sense that it should not be consumed.\r\n");
                 }
             }
         }

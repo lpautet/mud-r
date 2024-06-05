@@ -43,7 +43,7 @@ use crate::structs::{
 };
 use crate::util::{dice, rand_number, BRF};
 use crate::{
-    _clrlevel, clr, send_to_char, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
     TO_SLEEP, TO_VICT,
 };
 
@@ -118,8 +118,8 @@ macro_rules! is_weapon {
 }
 
 /* The Fight related routines */
-impl DB {
-    pub fn appear(&self, ch: &CharData) {
+impl Game {
+    pub fn appear(&mut self, ch: &CharData) {
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
             affect_from_char(ch, SPELL_INVISIBLE as i16);
         }
@@ -261,7 +261,7 @@ pub fn update_pos(victim: &CharData) {
     }
 }
 
-pub fn check_killer(ch: &CharData, vict: &CharData, game: &Game) {
+pub fn check_killer(ch: &CharData, vict: &CharData, game: &mut Game) {
     if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
         return;
     }
@@ -271,7 +271,7 @@ pub fn check_killer(ch: &CharData, vict: &CharData, game: &Game) {
 
     ch.set_plr_flag_bit(PLR_KILLER);
 
-    send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
+    game.send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
     game.mudlog(
         BRF,
         LVL_IMMORT as i32,
@@ -321,6 +321,8 @@ impl DB {
 
         update_pos(ch);
     }
+}
+impl Game {
 
     pub fn make_corpse(&mut self, ch: &Rc<CharData>) {
         let mut corpse = ObjData::new();
@@ -349,7 +351,7 @@ impl DB {
         }
 
         let corpse = Rc::from(corpse);
-        self.object_list.push(corpse.clone());
+        self.db.object_list.push(corpse.clone());
 
         /* transfer character's inventory to the corpse */
         for o in ch.carrying.borrow().iter() {
@@ -363,7 +365,7 @@ impl DB {
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
                 let obj = self.unequip_char(ch, i).as_ref().unwrap().clone();
-                self.obj_to_obj(&obj, &corpse);
+                self.db.obj_to_obj(&obj, &corpse);
             }
         }
         /* transfer gold */
@@ -376,8 +378,8 @@ impl DB {
              * test below shall live on, for a while. -gg 3/3/2002
              */
             if ch.is_npc() || ch.desc.borrow().is_some() {
-                let money = self.create_money(ch.get_gold());
-                self.obj_to_obj(money.as_ref().unwrap(), &corpse);
+                let money = self.db.create_money(ch.get_gold());
+                self.db.obj_to_obj(money.as_ref().unwrap(), &corpse);
             }
             ch.set_gold(0);
         }
@@ -385,7 +387,7 @@ impl DB {
         ch.set_is_carrying_w(0);
         ch.set_is_carrying_n(0);
 
-        self.obj_to_room(&corpse, ch.in_room());
+        self.db.obj_to_room(&corpse, ch.in_room());
     }
 }
 
@@ -398,8 +400,8 @@ pub fn change_alignment(ch: &CharData, victim: &CharData) {
     ch.set_alignment(ch.get_alignment() + (-victim.get_alignment() - ch.get_alignment()) / 16);
 }
 
-impl DB {
-    pub fn death_cry(&self, ch: &CharData) {
+impl Game {
+    pub fn death_cry(&mut self, ch: &CharData) {
         self.act(
             "Your blood freezes as you hear $n's death cry.",
             false,
@@ -409,9 +411,9 @@ impl DB {
             TO_ROOM,
         );
         for door in 0..NUM_OF_DIRS {
-            if self.can_go(ch, door) {
+            if self.db.can_go(ch, door) {
                 self.send_to_room(
-                    self.world[ch.in_room() as usize].dir_option[door]
+                    self.db.world[ch.in_room() as usize].dir_option[door]
                         .as_ref()
                         .unwrap()
                         .to_room,
@@ -423,7 +425,7 @@ impl DB {
 
     pub fn raw_kill(&mut self, ch: &Rc<CharData>) {
         if ch.fighting().is_some() {
-            self.stop_fighting(ch);
+            self.db.stop_fighting(ch);
         }
 
         ch.affected.borrow_mut().retain(|af| {
@@ -434,7 +436,7 @@ impl DB {
         self.death_cry(ch);
 
         self.make_corpse(ch);
-        self.extract_char(ch);
+        self.db.extract_char(ch);
     }
 }
 
@@ -443,14 +445,14 @@ pub fn die(ch: &Rc<CharData>, game: &mut Game) {
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
     }
-    game.db.raw_kill(ch);
+    game.raw_kill(ch);
 }
 
 pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, game: &mut Game) {
     let share = min(MAX_EXP_GAIN, max(1, base));
 
     if share > 1 {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!(
                 "You receive your share of experience -- {} points.\r\n",
@@ -459,7 +461,7 @@ pub fn perform_group_gain(ch: &Rc<CharData>, base: i32, victim: &Rc<CharData>, g
             .as_str(),
         );
     } else {
-        send_to_char(
+        game.send_to_char(
             ch,
             "You receive your share of experience -- one measly little point!\r\n",
         );
@@ -532,12 +534,12 @@ pub fn solo_gain(ch: &Rc<CharData>, victim: &Rc<CharData>, game: &mut Game) {
     exp = max(exp, 1);
 
     if exp > 1 {
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("You receive {} experience points.\r\n", exp).as_str(),
         );
     } else {
-        send_to_char(ch, "You receive one lousy experience point.\r\n");
+        game.send_to_char(ch, "You receive one lousy experience point.\r\n");
     }
     gain_exp(ch, exp, game);
     change_alignment(ch, victim);
@@ -573,9 +575,9 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
     buf.clone()
 }
 
-impl DB {
+impl Game {
     /* message for doing damage with a weapon */
-    pub fn dam_message(&self, dam: i32, ch: &CharData, victim: &CharData, mut w_type: i32) {
+    pub fn dam_message(&mut self, dam: i32, ch: &CharData, victim: &CharData, mut w_type: i32) {
         struct DamWeaponType {
             to_room: &'static str,
             to_char: &'static str,
@@ -662,17 +664,17 @@ impl DB {
         self.act(&buf, false, Some(ch), None, Some(victim), TO_NOTVICT);
 
         /* damage message to damager */
-        send_to_char(ch, CCYEL!(ch, C_CMP));
+        self.send_to_char(ch, CCYEL!(ch, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_char,
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
         self.act(&buf, false, Some(ch), None, Some(victim), TO_CHAR);
-        send_to_char(ch, CCNRM!(ch, C_CMP));
+        self.send_to_char(ch, CCNRM!(ch, C_CMP));
 
         /* damage message to damagee */
-        send_to_char(victim, CCRED!(victim, C_CMP));
+        self.send_to_char(victim, CCRED!(victim, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_victim,
             ATTACK_HIT_TEXT[w_type].singular,
@@ -686,7 +688,7 @@ impl DB {
             Some(victim),
             TO_VICT | TO_SLEEP,
         );
-        send_to_char(victim, CCNRM!(victim, C_CMP));
+        self.send_to_char(victim, CCNRM!(victim, C_CMP));
     }
 
     /*
@@ -694,7 +696,7 @@ impl DB {
      *  C3.0: Also used for weapon damage on miss and death blows
      */
     pub fn skill_message(
-        &self,
+        &mut self,
         dam: i32,
         ch: &CharData,
         vict: &CharData,
@@ -704,14 +706,18 @@ impl DB {
         let weap = weap_b.as_ref();
         let weapref = if weap.is_none() { None } else { Some(weap.unwrap().as_ref())};
 
-        for i in 0..self.fight_messages.len() {
-            if self.fight_messages[i].a_type == attacktype {
-                let nr = dice(1, self.fight_messages[i].messages.len() as i32) as usize;
-                let msg = &self.fight_messages[i].messages[nr];
+        for i in 0..self.db.fight_messages.len() {
+            if self.db.fight_messages[i].a_type == attacktype {
+                let nr = dice(1, self.db.fight_messages[i].messages.len() as i32) as usize;
+             
+
 
                 if !vict.is_npc() && vict.get_level() >= LVL_IMMORT as u8 {
+                    let attacker_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].god_msg.attacker_msg.clone();
+                    let victim_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].god_msg.victim_msg.clone();
+                    let room_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].god_msg.room_msg.clone();
                     self.act(
-                        &msg.god_msg.attacker_msg,
+                        attacker_msg,
                         false,
                         Some(ch),
                         weapref,
@@ -719,7 +725,7 @@ impl DB {
                         TO_CHAR,
                     );
                     self.act(
-                        &msg.god_msg.victim_msg,
+                        victim_msg,
                         false,
                         Some(ch),
                         weapref,
@@ -727,7 +733,7 @@ impl DB {
                         TO_VICT,
                     );
                     self.act(
-                        &msg.god_msg.room_msg,
+                        room_msg,
                         false,
                         Some(ch),
                         weapref,
@@ -740,32 +746,35 @@ impl DB {
                      * of damage without attacker_msg.
                      */
                     if vict.get_pos() == POS_DEAD {
-                        if !msg.die_msg.attacker_msg.is_empty() {
-                            send_to_char(ch, CCYEL!(ch, C_CMP));
+                        let attacker_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].die_msg.attacker_msg.clone();
+                        let victim_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].die_msg.victim_msg.clone();
+                        let room_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].die_msg.room_msg.clone();
+                        if !attacker_msg.is_empty() {
+                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
                             self.act(
-                                &msg.die_msg.attacker_msg,
+                                attacker_msg,
                                 false,
                                 Some(ch),
                                 weapref,
                                 Some(vict),
                                 TO_CHAR,
                             );
-                            send_to_char(ch, CCNRM!(ch, C_CMP));
+                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
 
-                        send_to_char(vict, CCRED!(vict, C_CMP));
+                        self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(
-                            &msg.die_msg.victim_msg,
+                            victim_msg,
                             false,
                             Some(ch),
                             weapref,
                             Some(vict),
                             TO_VICT | TO_SLEEP,
                         );
-                        send_to_char(vict, CCNRM!(vict, C_CMP));
+                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(
-                            &msg.die_msg.room_msg,
+                            room_msg,
                             false,
                             Some(ch),
                             weapref,
@@ -773,32 +782,35 @@ impl DB {
                             TO_NOTVICT,
                         );
                     } else {
-                        if !msg.hit_msg.attacker_msg.is_empty() {
-                            send_to_char(ch, CCYEL!(ch, C_CMP));
+                        let attacker_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].hit_msg.attacker_msg.clone();
+                        let victim_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].hit_msg.victim_msg.clone();
+                        let room_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].hit_msg.room_msg.clone();
+                        if !attacker_msg.is_empty() {
+                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
                             self.act(
-                                &msg.hit_msg.attacker_msg,
+                                attacker_msg,
                                 false,
                                 Some(ch),
                                 weapref,
                                 Some(vict),
                                 TO_CHAR,
                             );
-                            send_to_char(ch, CCNRM!(ch, C_CMP));
+                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
 
-                        send_to_char(vict, CCRED!(vict, C_CMP));
+                        self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(
-                            &msg.hit_msg.victim_msg,
+                            victim_msg,
                             false,
                             Some(ch),
                             weapref,
                             Some(vict),
                             TO_VICT | TO_SLEEP,
                         );
-                        send_to_char(vict, CCNRM!(vict, C_CMP));
+                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(
-                            &msg.hit_msg.room_msg,
+                            room_msg,
                             false,
                             Some(ch),
                             weapref,
@@ -807,33 +819,36 @@ impl DB {
                         );
                     }
                 } else if !std::ptr::eq(ch, vict) {
+                    let attacker_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].miss_msg.attacker_msg.clone();
+                    let victim_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].miss_msg.victim_msg.clone();
+                    let room_msg: &Rc<str> = &self.db.fight_messages[i].messages[nr].miss_msg.room_msg.clone();
                     /* Dam == 0 */
-                    if !msg.miss_msg.attacker_msg.is_empty() {
-                        send_to_char(ch, CCYEL!(ch, C_CMP));
+                    if !attacker_msg.is_empty() {
+                        self.send_to_char(ch, CCYEL!(ch, C_CMP));
                         self.act(
-                            &msg.miss_msg.attacker_msg,
+                            attacker_msg,
                             false,
                             Some(ch),
                             weapref,
                             Some(vict),
                             TO_CHAR,
                         );
-                        send_to_char(ch, CCNRM!(ch, C_CMP));
+                        self.send_to_char(ch, CCNRM!(ch, C_CMP));
                     }
 
-                    send_to_char(vict, CCRED!(vict, C_CMP));
+                    self.send_to_char(vict, CCRED!(vict, C_CMP));
                     self.act(
-                        &msg.miss_msg.victim_msg,
+                        victim_msg,
                         false,
                         Some(ch),
                         weapref,
                         Some(vict),
                         TO_VICT | TO_SLEEP,
                     );
-                    send_to_char(vict, CCNRM!(vict, C_CMP));
+                    self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                     self.act(
-                        &msg.miss_msg.room_msg,
+                        room_msg,
                         false,
                         Some(ch),
                         weapref,
@@ -846,8 +861,7 @@ impl DB {
         }
         return 0;
     }
-}
-impl Game {
+
     /*
      * Alert: As of bpl14, this function returns the following codes:
      *	< 0	Victim died.
@@ -881,7 +895,7 @@ impl Game {
 
         /* peaceful rooms */
         if !Rc::ptr_eq(ch, victim) && self.db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-            send_to_char(
+            self.send_to_char(
                 ch,
                 "This room just has such a peaceful, easy feeling...\r\n",
             );
@@ -917,12 +931,12 @@ impl Game {
         if victim.master.borrow().is_some()
             && Rc::ptr_eq(victim.master.borrow().as_ref().unwrap(), ch)
         {
-            self.db.stop_follower(victim);
+            self.stop_follower(victim);
         }
 
         /* If the attacker is invisible, he becomes visible */
         if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
-            self.db.appear(ch);
+            self.appear(ch);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
@@ -961,21 +975,21 @@ impl Game {
          * dam_message. Otherwise, always send a dam_message.
          */
         if !is_weapon!(attacktype) {
-            self.db.skill_message(dam, ch, victim, attacktype);
+            self.skill_message(dam, ch, victim, attacktype);
         } else {
             if victim.get_pos() == POS_DEAD || dam == 0 {
-                if self.db.skill_message(dam, ch, victim, attacktype) == 0 {
-                    self.db.dam_message(dam, ch, victim, attacktype);
+                if self.skill_message(dam, ch, victim, attacktype) == 0 {
+                    self.dam_message(dam, ch, victim, attacktype);
                 }
             } else {
-                self.db.dam_message(dam, ch, victim, attacktype);
+                self.dam_message(dam, ch, victim, attacktype);
             }
         }
 
-        /* Use send_to_char -- act() doesn't send message if you are DEAD. */
+        /* Use game.send_to_char -- act() doesn't send message if you are DEAD. */
         match victim.get_pos() {
             POS_MORTALLYW => {
-                self.db.act(
+                self.act(
                     "$n is mortally wounded, and will die soon, if not aided.",
                     true,
                     Some(victim),
@@ -983,14 +997,14 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(
+                self.send_to_char(
                     victim,
                     "You are mortally wounded, and will die soon, if not aided.\r\n",
                 );
             }
 
             POS_INCAP => {
-                self.db.act(
+                self.act(
                     "$n is incapacitated and will slowly die, if not aided.",
                     true,
                     Some(victim),
@@ -998,13 +1012,13 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(
+                self.send_to_char(
                     victim,
                     "You are incapacitated an will slowly die, if not aided.\r\n",
                 );
             }
             POS_STUNNED => {
-                self.db.act(
+                self.act(
                     "$n is stunned, but will probably regain consciousness again.",
                     true,
                     Some(victim),
@@ -1012,13 +1026,13 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(
+                self.send_to_char(
                     victim,
                     "You're stunned, but will probably regain consciousness again.\r\n",
                 );
             }
             POS_DEAD => {
-                self.db.act(
+                self.act(
                     "$n is dead!  R.I.P.",
                     false,
                     Some(victim),
@@ -1026,17 +1040,17 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(victim, "You are dead!  Sorry...\r\n");
+                self.send_to_char(victim, "You are dead!  Sorry...\r\n");
             }
 
             _ => {
                 /* >= POSITION SLEEPING */
                 if dam > (victim.get_max_hit() / 4) as i32 {
-                    send_to_char(victim, "That really did HURT!\r\n");
+                    self.send_to_char(victim, "That really did HURT!\r\n");
                 }
 
                 if victim.get_hit() < victim.get_max_hit() / 4 {
-                    send_to_char(
+                    self.send_to_char(
                         victim,
                         format!(
                             "{}You wish that your wounds would stop BLEEDING so much!{}\r\n",
@@ -1055,7 +1069,7 @@ impl Game {
                     && victim.get_hit() < victim.get_wimp_lev() as i16
                     && victim.get_hit() > 0
                 {
-                    send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
+                    self.send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
                     do_flee(self, victim, "", 0, 0);
                 }
             }
@@ -1065,7 +1079,7 @@ impl Game {
         if !victim.is_npc() && victim.desc.borrow().is_none() && victim.get_pos() > POS_STUNNED {
             do_flee(self, victim, "", 0, 0);
             if victim.fighting().is_none() {
-                self.db.act(
+                self.act(
                     "$n is rescued by divine forces.",
                     false,
                     Some(victim),
@@ -1291,7 +1305,7 @@ impl Game {
 
                 if ch.get_pos() < POS_FIGHTING {
                     ch.set_pos(POS_FIGHTING);
-                    self.db.act(
+                    self.act(
                         "$n scrambles to $s feet!",
                         true,
                         Some(ch),
@@ -1303,7 +1317,7 @@ impl Game {
             }
 
             if ch.get_pos() < POS_FIGHTING {
-                send_to_char(ch, "You can't fight while sitting!!\r\n");
+                self.send_to_char(ch, "You can't fight while sitting!!\r\n");
                 continue;
             }
 

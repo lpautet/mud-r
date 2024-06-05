@@ -29,7 +29,7 @@ use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
 use crate::util::{age, clone_vec2, BRF, CMP};
-use crate::{send_to_char, Game, TO_CHAR, TO_ROOM};
+use crate::{Game, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -242,7 +242,7 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
             ch.set_level(ch.get_level() + 1);
 
             num_levels += 1;
-            advance_level(ch, &mut game.db);
+            advance_level(ch, game);
             is_altered = true;
         }
 
@@ -261,9 +261,9 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
                 .as_str(),
             );
             if num_levels == 1 {
-                send_to_char(ch, "You rise a level!\r\n");
+                game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
                 set_title(ch, None);
 
                 if ch.get_level() >= LVL_IMMORT as u8 {
@@ -296,7 +296,7 @@ pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
         {
             ch.set_level(ch.get_level() + 1);
             num_levels += 1;
-            advance_level(ch, &mut game.db);
+            advance_level(ch, game);
             is_altered = true;
         }
 
@@ -315,9 +315,9 @@ pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
                 .as_str(),
             );
             if num_levels == 1 {
-                send_to_char(ch, "You rise a level!\r\n");
+                game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
             }
             set_title(ch, None);
             if ch.get_level() >= LVL_IMMORT as u8 {
@@ -327,8 +327,8 @@ pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
     }
 }
 
-impl DB {
-    pub(crate) fn gain_condition(&self, ch: &CharData, condition: i32, value: i32) {
+impl Game {
+    pub(crate) fn gain_condition(&mut self, ch: &CharData, condition: i32, value: i32) {
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
             return;
@@ -348,21 +348,20 @@ impl DB {
 
         match condition {
             FULL => {
-                send_to_char(ch, "You are hungry.\r\n");
+                self.send_to_char(ch, "You are hungry.\r\n");
             }
             THIRST => {
-                send_to_char(ch, "You are thirsty.\r\n");
+                self.send_to_char(ch, "You are thirsty.\r\n");
             }
             DRUNK => {
                 if intoxicated {
-                    send_to_char(ch, "You are now sober.\r\n");
+                    self.send_to_char(ch, "You are now sober.\r\n");
                 }
             }
             _ => {}
         }
     }
-}
-impl Game {
+
     fn check_idling(&mut self, ch: &Rc<CharData>) {
         ch.char_specials
             .borrow()
@@ -375,7 +374,7 @@ impl Game {
                     self.db.stop_fighting(ch.fighting().as_ref().unwrap());
                     self.db.stop_fighting(ch);
                 }
-                self.db.act(
+                self.act(
                     "$n disappears into the void.",
                     true,
                     Some(ch),
@@ -383,9 +382,9 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-                self.db.save_char(ch);
-                crash_crashsave(&mut self.db, ch);
+                self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
+                self.save_char(ch);
+                crash_crashsave(&self.db, ch);
                 self.db.char_from_room(ch);
                 self.db.char_to_room(ch, 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
@@ -394,19 +393,19 @@ impl Game {
                 }
                 self.db.char_to_room(ch, 3);
                 if ch.desc.borrow().is_some() {
-                    ch.desc.borrow().as_ref().unwrap().set_state(ConDisconnect);
+                    self.desc_mut(ch.desc.borrow().unwrap()).set_state(ConDisconnect);
 
                     /*
                      * For the 'if (d->character)' test in close_socket().
                      * -gg 3/1/98 (Happy anniversary.)
                      */
-                    *ch.desc.borrow().as_ref().unwrap().character.borrow_mut() = None;
+                    self.desc_mut(ch.desc.borrow().unwrap()).character  = None;
                     *ch.desc.borrow_mut() = None;
                 }
                 if FREE_RENT {
-                    crash_rentsave(&mut self.db, ch, 0);
+                    crash_rentsave(self, ch, 0);
                 } else {
-                    crash_idlesave(&mut self.db, ch);
+                    crash_idlesave(self, ch);
                 }
                 self.mudlog(
                     CMP,
@@ -424,9 +423,9 @@ impl Game {
         /* characters */
         let characters = clone_vec2(&self.db.character_list);
         for i in characters.iter() {
-            self.db.gain_condition(i, FULL, -1);
-            self.db.gain_condition(i, DRUNK, -1);
-            self.db.gain_condition(i, THIRST, -1);
+            self.gain_condition(i, FULL, -1);
+            self.gain_condition(i, DRUNK, -1);
+            self.gain_condition(i, THIRST, -1);
 
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
@@ -450,7 +449,7 @@ impl Game {
                 }
             }
             if !i.is_npc() {
-                self.db.update_char_objects(i);
+                self.update_char_objects(i);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
                     self.check_idling(i);
                 }
@@ -472,7 +471,7 @@ impl Game {
 
                 if j.get_obj_timer() == 0 {
                     if j.carried_by.borrow().is_some() {
-                        self.db.act(
+                        self.act(
                             "$p decays in your hands.",
                             false,
                             Some(j.carried_by.borrow().as_ref().unwrap().as_ref()),
@@ -486,26 +485,22 @@ impl Game {
                             .len()
                             != 0
                     {
-                        self.db.act(
+                        let ch = self.db.world[j.in_room() as usize].peoples[0].clone();
+                        self.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                &self.db.world[j.in_room() as usize]
-                                    .peoples
-                                    [0],
+                                ch.as_ref(),
                             ),
                             Some(j),
                             None,
                             TO_ROOM,
                         );
-                        self.db.act(
+                        self.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                &self.db.world[j.in_room() as usize]
-                                    .peoples
-                                [0],
-                            ),
+                                ch.as_ref()),
                             Some(j),
                             None,
                             TO_CHAR,
@@ -532,7 +527,7 @@ impl Game {
                             //   core_dump();
                         }
                     }
-                    self.db.extract_obj(j);
+                    self.extract_obj(j);
                 }
             }
         }

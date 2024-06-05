@@ -13,8 +13,9 @@ use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use crate::depot::DepotId;
 use crate::interpreter::AliasData;
-use crate::{DescriptorData, Game};
+use crate::Game;
 
 pub type Special =
     fn(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
@@ -353,7 +354,7 @@ pub struct CharData {
     /* Equipment array               */
     pub carrying: RefCell<Vec<Rc<ObjData>>>,
     /* Head of list                  */
-    pub desc: RefCell<Option<Rc<DescriptorData>>>,
+    pub desc: RefCell<Option<DepotId>>,
     /* NULL for mobiles              */          
     pub followers: RefCell<Vec<FollowType>>,
     /* List of chars followers       */
@@ -866,6 +867,7 @@ pub const POS_FIGHTING: u8 = 7; /* fighting		*/
 pub const POS_STANDING: u8 = 8; /* standing		*/
 
 /* room-related structures ************************************************/
+#[derive(Clone)]
 pub struct RoomDirectionData {
     pub general_description: Rc<str>,
     /* When look DIR.			*/

@@ -26,13 +26,13 @@ use crate::structs::{
     POS_STANDING, PULSE_VIOLENCE, ROOM_DEATH, ROOM_PEACEFUL, WEAR_WIELD,
 };
 use crate::util::rand_number;
-use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
+use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     if ch.fighting().is_some() {
-        send_to_char(
+        game.send_to_char(
             ch,
             "You're already fighting!  How can you assist someone else?\r\n",
         );
@@ -41,14 +41,14 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     one_argument(argument, &mut arg);
     let helpee;
     if arg.is_empty() {
-        send_to_char(ch, "Whom do you wish to assist?\r\n");
+        game.send_to_char(ch, "Whom do you wish to assist?\r\n");
     } else if {
-        helpee = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         helpee.is_none()
     } {
-        send_to_char(ch, NOPERSON);
+        game.send_to_char(ch, NOPERSON);
     } else if Rc::ptr_eq(helpee.as_ref().unwrap(), ch) {
-        send_to_char(ch, "You can't help yourself any more than this!\r\n");
+        game.send_to_char(ch, "You can't help yourself any more than this!\r\n");
     } else {
         /*
          * Hit the same enemy the person you're helping is.
@@ -72,7 +72,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         }
 
         if opponent.is_none() {
-            game.db.act(
+            game.act(
                 "But nobody is fighting $M!",
                 false,
                 Some(ch),
@@ -80,8 +80,8 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 Some(helpee),
                 TO_CHAR,
             );
-        } else if game.db.can_see(ch, opponent.as_ref().unwrap()) {
-            game.db.act(
+        } else if game.can_see(ch, opponent.as_ref().unwrap()) {
+            game.act(
                 "You can't see who is fighting $M!",
                 false,
                 Some(ch),
@@ -91,7 +91,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             );
         } else if !PK_ALLOWED && !opponent.as_ref().unwrap().is_npc() {
             /* prevent accidental pkill */
-            game.db.act(
+            game.act(
                 "Use 'murder' if you really want to attack $N.",
                 false,
                 Some(ch),
@@ -100,8 +100,8 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 TO_CHAR,
             );
         } else {
-            send_to_char(ch, "You join the fight!\r\n");
-            game.db.act(
+            game.send_to_char(ch, "You join the fight!\r\n");
+            game.act(
                 "$N assists you!",
                 false,
                 Some(helpee),
@@ -109,7 +109,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 Some(ch),
                 TO_CHAR,
             );
-            game.db.act(
+            game.act(
                 "$n assists $N.",
                 false,
                 Some(ch),
@@ -127,17 +127,16 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
     let vict: Option<Rc<CharData>>;
 
     one_argument(argument, &mut arg);
-    let db = &game.db;
     if arg.is_empty() {
-        send_to_char(ch, "Hit who?\r\n");
+        game.send_to_char(ch, "Hit who?\r\n");
     } else if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        send_to_char(ch, "They don't seem to be here.\r\n");
+        game.send_to_char(ch, "They don't seem to be here.\r\n");
     } else if Rc::ptr_eq(vict.as_ref().unwrap(), ch) {
-        send_to_char(ch, "You hit yourself...OUCH!.\r\n");
-        db.act(
+        game.send_to_char(ch, "You hit yourself...OUCH!.\r\n");
+        game.act(
             "$n hits $mself, and says OUCH!",
             false,
             Some(ch),
@@ -148,7 +147,7 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
     } else if ch.aff_flagged(AFF_CHARM)
         && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), vict.as_ref().unwrap())
     {
-        db.act(
+        game.act(
             "$N is just such a good friend, you simply can't hit $M.",
             false,
             Some(ch),
@@ -161,7 +160,7 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
         if !PK_ALLOWED {
             if !vict.is_npc() && !ch.is_npc() {
                 if subcmd != SCMD_MURDER {
-                    send_to_char(ch, "Use 'murder' to hit another player.\r\n");
+                    game.send_to_char(ch, "Use 'murder' to hit another player.\r\n");
                     return;
                 } else {
                     check_killer(ch, vict, game);
@@ -181,7 +180,7 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
             game.hit(ch, vict, TYPE_UNDEFINED);
             ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
         } else {
-            send_to_char(ch, "You do the best you can!\r\n");
+            game.send_to_char(ch, "You do the best you can!\r\n");
         }
     }
 }
@@ -196,17 +195,17 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
     one_argument(argument, &mut arg);
     let vict;
     if arg.is_empty() {
-        send_to_char(ch, "Kill who?\r\n");
+        game.send_to_char(ch, "Kill who?\r\n");
     } else {
         if {
-            vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
             vict.is_none()
         } {
-            send_to_char(ch, "They aren't here.\r\n");
+            game.send_to_char(ch, "They aren't here.\r\n");
         } else if Rc::ptr_eq(ch, vict.as_ref().unwrap()) {
-            send_to_char(ch, "Your mother would be so sad.. :(\r\n");
+            game.send_to_char(ch, "Your mother would be so sad.. :(\r\n");
         } else {
-            game.db.act(
+            game.act(
                 "You chop $M to pieces!  Ah!  The blood!",
                 false,
                 Some(ch),
@@ -214,7 +213,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(vict.as_ref().unwrap()),
                 TO_CHAR,
             );
-            game.db.act(
+            game.act(
                 "$N chops you to pieces!",
                 false,
                 Some(vict.as_ref().unwrap()),
@@ -222,7 +221,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(ch),
                 TO_CHAR,
             );
-            game.db.act(
+            game.act(
                 "$n brutally slays $N!",
                 false,
                 Some(ch),
@@ -230,7 +229,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 Some(vict.as_ref().unwrap()),
                 TO_NOTVICT,
             );
-            game.db.raw_kill(vict.as_ref().unwrap());
+            game.raw_kill(vict.as_ref().unwrap());
         }
     }
 }
@@ -239,37 +238,37 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     let mut buf = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_BACKSTAB) == 0 {
-        send_to_char(ch, "You have no idea how to do that.\r\n");
+        game.send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
     }
 
     one_argument(argument, &mut buf);
     let vict;
     if {
-        vict = game.db.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        send_to_char(ch, "Backstab who?\r\n");
+        game.send_to_char(ch, "Backstab who?\r\n");
         return;
     }
     let vict = vict.as_ref().unwrap();
     if Rc::ptr_eq(vict, ch) {
-        send_to_char(ch, "How can you sneak up on yourself?\r\n");
+        game.send_to_char(ch, "How can you sneak up on yourself?\r\n");
         return;
     }
     if ch.get_eq(WEAR_WIELD as i8).is_none() {
-        send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
+        game.send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }
     if ch.get_eq(WEAR_WIELD as i8).as_ref().unwrap().get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
-        send_to_char(
+        game.send_to_char(
             ch,
             "Only piercing weapons can be used for backstabbing.\r\n",
         );
         return;
     }
     if vict.fighting().is_some() {
-        send_to_char(
+        game.send_to_char(
             ch,
             "You can't backstab a fighting person -- they're too alert!\r\n",
         );
@@ -277,7 +276,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     }
 
     if vict.mob_flagged(MOB_AWARE) && vict.awake() {
-        game.db.act(
+        game.act(
             "You notice $N lunging at you!",
             false,
             Some(vict),
@@ -285,7 +284,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             Some(ch),
             TO_CHAR,
         );
-        game.db.act(
+        game.act(
             "$e notices you lunging at $m!",
             false,
             Some(vict),
@@ -293,7 +292,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             Some(ch),
             TO_VICT,
         );
-        game.db.act(
+        game.act(
             "$n notices $N lunging at $m!",
             false,
             Some(vict),
@@ -317,7 +316,6 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 }
 
 pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
-    let db = &game.db;
     let mut name = String::new();
     let mut message = String::new();
     let mut found = false;
@@ -326,17 +324,17 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     half_chop(&mut argument, &mut name, &mut message);
     let vict;
     if name.is_empty() || message.is_empty() {
-        send_to_char(ch, "Order who to do what?\r\n");
+        game.send_to_char(ch, "Order who to do what?\r\n");
     } else if {
-        vict = db.get_char_vis(ch, &mut name, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(ch, &mut name, None, FIND_CHAR_ROOM);
         vict.is_none() && !is_abbrev(&name, "followers")
     } {
-        send_to_char(ch, "That person isn't here.\r\n");
+        game.send_to_char(ch, "That person isn't here.\r\n");
     } else if vict.is_some() && Rc::ptr_eq(ch, vict.as_ref().unwrap()) {
-        send_to_char(ch, "You obviously suffer from skitzofrenia.\r\n");
+        game.send_to_char(ch, "You obviously suffer from skitzofrenia.\r\n");
     } else {
         if ch.aff_flagged(AFF_CHARM) {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 "Your superior would not aprove of you giving orders.\r\n",
             );
@@ -346,8 +344,8 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             let vict = vict.as_ref().unwrap();
 
             let buf = format!("$N orders you to '{}'", message);
-            db.act(&buf, false, Some(vict), None, Some(ch), TO_CHAR);
-            db.act(
+            game.act(&buf, false, Some(vict), None, Some(ch), TO_CHAR);
+            game.act(
                 "$n gives $N an order.",
                 false,
                 Some(ch),
@@ -360,7 +358,7 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 && !Rc::ptr_eq(vict.master.borrow().as_ref().unwrap(), ch)
                 || !vict.aff_flagged(AFF_CHARM)
             {
-                db.act(
+                game.act(
                     "$n has an indifferent look.",
                     false,
                     Some(vict),
@@ -369,14 +367,14 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     TO_ROOM,
                 );
             } else {
-                send_to_char(ch, OK);
+                game.send_to_char(ch, OK);
                 command_interpreter(game, vict, &message);
             }
         } else {
             /* This is order "followers" */
 
             let buf = format!("$n issues the order '{}'.", message);
-            db.act(&buf, false, Some(ch), None, None, TO_ROOM);
+            game.act(&buf, false, Some(ch), None, None, TO_ROOM);
             for k in ch.followers.borrow().iter() {
                 if ch.in_room() == k.follower.in_room() {
                     if k.follower.aff_flagged(AFF_CHARM) {
@@ -386,9 +384,9 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 }
             }
             if found {
-                send_to_char(ch, OK);
+                game.send_to_char(ch, OK);
             } else {
-                send_to_char(ch, "Nobody here is a loyal subject of yours!\r\n");
+                game.send_to_char(ch, "Nobody here is a loyal subject of yours!\r\n");
             }
         }
     }
@@ -396,7 +394,7 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
 pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
     if ch.get_pos() < POS_FIGHTING {
-        send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
+        game.send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;
     }
     let was_fighting;
@@ -412,7 +410,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
                 ROOM_DEATH,
             )
         {
-            game.db.act(
+            game.act(
                 "$n panics, and attempts to flee!",
                 true,
                 Some(ch),
@@ -423,7 +421,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
             was_fighting = ch.fighting();
             let r = do_simple_move(game, ch, attempt as i32, true);
             if r {
-                send_to_char(ch, "You flee head over heels.\r\n");
+                game.send_to_char(ch, "You flee head over heels.\r\n");
                 if was_fighting.is_some() && !ch.is_npc() {
                     let mut loss = was_fighting.as_ref().unwrap().get_max_hit()
                         - was_fighting.as_ref().unwrap().get_hit();
@@ -431,7 +429,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
                     gain_exp(ch, -loss as i32, game);
                 }
             } else {
-                game.db.act(
+                game.act(
                     "$n tries to flee, but can't!",
                     true,
                     Some(ch),
@@ -443,7 +441,7 @@ pub fn do_flee(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
             return;
         }
     }
-    send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
+    game.send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
 }
 
 pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
@@ -453,35 +451,35 @@ pub fn do_bash(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     one_argument(argument, &mut arg);
 
     if ch.is_npc() || ch.get_skill(SKILL_BASH) == 0 {
-        send_to_char(ch, "You have no idea how.\r\n");
+        game.send_to_char(ch, "You have no idea how.\r\n");
         return;
     }
     if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-        send_to_char(
+        game.send_to_char(
             ch,
             "This room just has such a peaceful, easy feeling...\r\n",
         );
         return;
     }
     if ch.get_eq(WEAR_WIELD as i8).is_none() {
-        send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
+        game.send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }
     let mut victo;
     if {
-        victo = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        victo = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         victo.is_some()
     } {
         if ch.fighting().is_some() && ch.in_room() == ch.fighting().as_ref().unwrap().in_room() {
             victo = ch.fighting();
         } else {
-            send_to_char(ch, "Bash who?\r\n");
+            game.send_to_char(ch, "Bash who?\r\n");
             return;
         }
     }
     let vict = victo.as_ref().unwrap();
     if Rc::ptr_eq(vict, ch) {
-        send_to_char(ch, "Aren't we funny today...\r\n");
+        game.send_to_char(ch, "Aren't we funny today...\r\n");
         return;
     }
     let mut percent = rand_number(1, 101); /* 101% is a complete failure */
@@ -516,26 +514,26 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     let mut arg = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_RESCUE) == 0 {
-        send_to_char(ch, "You have no idea how to do that.\r\n");
+        game.send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
     }
 
     one_argument(argument, &mut arg);
     let vict;
     if {
-        vict = game.db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        send_to_char(ch, "Whom do you want to rescue?\r\n");
+        game.send_to_char(ch, "Whom do you want to rescue?\r\n");
         return;
     }
     let vict = vict.as_ref().unwrap();
     if Rc::ptr_eq(vict, ch) {
-        send_to_char(ch, "What about fleeing instead?\r\n");
+        game.send_to_char(ch, "What about fleeing instead?\r\n");
         return;
     }
     if ch.fighting().is_some() && Rc::ptr_eq(ch.fighting().as_ref().unwrap(), vict) {
-        send_to_char(ch, "How can you rescue someone you are trying to kill?\r\n");
+        game.send_to_char(ch, "How can you rescue someone you are trying to kill?\r\n");
         return;
     }
     let mut tmp_ch = None;
@@ -549,7 +547,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     }
 
     if tmp_ch.is_none() {
-        game.db.act(
+        game.act(
             "But nobody is fighting $M!",
             false,
             Some(ch),
@@ -564,11 +562,11 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     let prob = ch.get_skill(SKILL_RESCUE);
 
     if percent > prob as u32 {
-        send_to_char(ch, "You fail the rescue!\r\n");
+        game.send_to_char(ch, "You fail the rescue!\r\n");
         return;
     }
-    send_to_char(ch, "Banzai!  To the rescue...\r\n");
-    game.db.act(
+    game.send_to_char(ch, "Banzai!  To the rescue...\r\n");
+    game.act(
         "You are rescued by $N, you are confused!",
         false,
         Some(vict),
@@ -576,7 +574,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         Some(ch),
         TO_CHAR,
     );
-    game.db.act(
+    game.act(
         "$n heroically rescues $N!",
         false,
         Some(ch),
@@ -603,28 +601,27 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 
 pub fn do_kick(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
-    let db = &game.db;
 
     if ch.is_npc() || ch.get_skill(SKILL_KICK) == 0 {
-        send_to_char(ch, "You have no idea how.\r\n");
+        game.send_to_char(ch, "You have no idea how.\r\n");
         return;
     }
     one_argument(argument, &mut arg);
     let mut vict;
     if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         if ch.fighting().is_some() && ch.in_room() == ch.fighting().as_ref().unwrap().in_room() {
             vict = ch.fighting();
         } else {
-            send_to_char(ch, "Kick who?\r\n");
+            game.send_to_char(ch, "Kick who?\r\n");
             return;
         }
     }
     let vict = vict.as_ref().unwrap();
     if Rc::ptr_eq(vict, ch) {
-        send_to_char(ch, "Aren't we funny today...\r\n");
+        game.send_to_char(ch, "Aren't we funny today...\r\n");
         return;
     }
     /* 101% is a complete failure */

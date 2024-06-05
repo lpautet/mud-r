@@ -69,7 +69,7 @@ impl Game {
                     {
                         let contents = clone_vec2(&self.db.world[ch.in_room() as usize].contents);
                         for obj in contents.iter() {
-                            if self.db.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
+                            if self.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
                                 best_obj = Some(obj.clone());
                                 max = obj.get_obj_cost();
                             }
@@ -78,7 +78,7 @@ impl Game {
                     if best_obj.is_some() {
                         self.db.obj_from_room(best_obj.as_ref().unwrap());
                         DB::obj_to_char(best_obj.as_ref().unwrap(), ch);
-                        self.db.act(
+                        self.act(
                             "$n gets $p.",
                             false,
                             Some(ch),
@@ -118,7 +118,7 @@ impl Game {
                     if found {
                         break;
                     }
-                    if vict.is_npc() || !self.db.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
                     }
@@ -151,7 +151,7 @@ impl Game {
                     if found {
                         break;
                     }
-                    if vict.is_npc() || !self.db.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
                     }
@@ -166,7 +166,7 @@ impl Game {
                         }
 
                         found = true;
-                        self.db.act(
+                        self.act(
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
                             Some(ch),
@@ -198,7 +198,7 @@ impl Game {
                     Some(ch.master.borrow().as_ref().unwrap()),
                     ch.master.borrow().as_ref().unwrap(),
                 ) {
-                    if self.db.can_see(ch, ch.master.borrow().as_ref().unwrap())
+                    if self.can_see(ch, ch.master.borrow().as_ref().unwrap())
                         && !ch
                             .master
                             .borrow()
@@ -207,7 +207,7 @@ impl Game {
                             .prf_flagged(PRF_NOHASSLE)
                     {
                         self.hit(ch, ch.master.borrow().as_ref().unwrap(), TYPE_UNDEFINED);
-                        self.db.stop_follower(ch);
+                        self.stop_follower(ch);
                     }
                 }
             }
@@ -230,7 +230,7 @@ impl Game {
                         continue;
                     }
 
-                    self.db.act(
+                    self.act(
                         "$n jumps to the aid of $N!",
                         false,
                         Some(ch),

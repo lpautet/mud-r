@@ -35,7 +35,7 @@ use crate::structs::{
     PLR_MAILING,
 };
 use crate::util::{ctime, time_now, touch};
-use crate::{send_to_char, Game, TO_ROOM, TO_VICT};
+use crate::{Game, TO_ROOM, TO_VICT};
 
 const MIN_MAIL_LEVEL: i32 = 2;
 
@@ -694,7 +694,7 @@ pub fn postmaster(
         return false;
     }
     if game.db.no_mail {
-        send_to_char(
+        game.send_to_char(
             ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
         );
@@ -712,7 +712,7 @@ pub fn postmaster(
         true
     } else if cmd_is(cmd, "check") {
         postmaster_check_mail(
-            &mut game.db,
+            game,
             ch,
             me.downcast_ref::<Rc<CharData>>().unwrap(),
             cmd,
@@ -721,7 +721,7 @@ pub fn postmaster(
         true
     } else if cmd_is(cmd, "receive") {
         postmaster_receive_mail(
-            &mut game.db,
+            game,
             ch,
             me.downcast_ref::<Rc<CharData>>().unwrap(),
             cmd,
@@ -745,7 +745,7 @@ fn postmaster_send_mail(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        game.db
+        game
             .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
@@ -754,7 +754,7 @@ fn postmaster_send_mail(
 
     if buf.is_empty() {
         /* you'll get no argument from me! */
-        game.db.act(
+        game.act(
             "$n tells you, 'You need to specify an addressee!'",
             false,
             Some(mailman),
@@ -771,13 +771,13 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        game.db
+        game
             .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
     let recipient = game.db.get_id_by_name(&buf);
     if recipient < 0 || !mail_recip_ok(game, &buf) {
-        game.db.act(
+        game.act(
             "$n tells you, 'No one by that name is registered here!'",
             false,
             Some(mailman),
@@ -787,7 +787,7 @@ $n tells you, '...which I see you can't afford.'",
         );
         return;
     }
-    game.db.act(
+    game.act(
         "$n starts to write some mail.",
         true,
         Some(ch),
@@ -801,14 +801,14 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
 
-    game.db
+    game
         .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
     /* Start writing! */
     string_write(
-        ch.desc.borrow().as_ref().unwrap(),
+        game.desc_mut(ch.desc.borrow().unwrap()),
         Rc::new(RefCell::new(String::new())),
         MAX_MAIL_SIZE,
         recipient,
@@ -816,14 +816,14 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 }
 
 fn postmaster_check_mail(
-    db: &mut DB,
+    game: &mut Game,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
     _cmd: i32,
     _arg: &str,
 ) {
-    if db.mails.has_mail(ch.get_idnum()) {
-        db.act(
+    if game.db.mails.has_mail(ch.get_idnum()) {
+        game.act(
             "$n tells you, 'You have mail waiting.'",
             false,
             Some(mailman),
@@ -832,7 +832,7 @@ fn postmaster_check_mail(
             TO_VICT,
         );
     } else {
-        db.act(
+        game.act(
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
             Some(mailman),
@@ -844,19 +844,19 @@ fn postmaster_check_mail(
 }
 
 fn postmaster_receive_mail(
-    db: &mut DB,
+    game: &mut Game,
     ch: &Rc<CharData>,
     mailman: &Rc<CharData>,
     _cmd: i32,
     _arg: &str,
 ) {
-    if !db.mails.has_mail(ch.get_idnum()) {
+    if !game.db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
-        db.act(buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.act(buf, false, Some(mailman), None, Some(ch), TO_VICT);
         return;
     }
-    while db.mails.has_mail(ch.get_idnum()) {
-        let obj = db.create_obj(
+    while game.db.mails.has_mail(ch.get_idnum()) {
+        let obj = game.db.create_obj(
             NOTHING,
             "mail paper letter",
             "a piece of mail",
@@ -868,7 +868,7 @@ fn postmaster_receive_mail(
             10,
         );
 
-        let mail_content = db.read_delete( ch.get_idnum());
+        let mail_content = game.db.read_delete( ch.get_idnum());
         let mail_content = if mail_content.is_some() {
             mail_content.unwrap()
         } else {
@@ -878,7 +878,7 @@ fn postmaster_receive_mail(
 
         DB::obj_to_char(&obj, ch);
 
-        db.act(
+        game.act(
             "$n gives you a piece of mail.",
             false,
             Some(mailman),
@@ -886,7 +886,7 @@ fn postmaster_receive_mail(
             Some(ch),
             TO_VICT,
         );
-        db.act(
+        game.act(
             "$N gives $n a piece of mail.",
             false,
             Some(ch),

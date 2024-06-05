@@ -10,7 +10,7 @@
 ************************************************************************ */
 use std::any::Any;
 use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
@@ -22,6 +22,7 @@ use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
+use depot::{Depot, DepotId};
 use log::{debug, error, info, warn, LevelFilter};
 
 use log4rs::append::console::ConsoleAppender;
@@ -65,6 +66,7 @@ mod class;
 mod config;
 mod constants;
 mod db;
+mod depot;
 mod fight;
 mod graph;
 mod handler;
@@ -86,7 +88,6 @@ mod structs;
 mod telnet;
 mod util;
 mod weather;
-mod depot;
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
@@ -98,60 +99,92 @@ pub const TO_CHAR: i32 = 4;
 pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 
 pub struct DescriptorData {
-    stream: RefCell<TcpStream>,
+    stream: Option<TcpStream>,
     // file descriptor for socket
     host: Rc<str>,
     // hostname
-    bad_pws: Cell<u8>,
+    bad_pws: u8,
     /* number of bad pw attemps this login	*/
-    idle_tics: Cell<u8>,
+    idle_tics: u8,
     /* tics idle at password prompt		*/
-    connected: Cell<ConState>,
+    connected: ConState,
     // mode of 'connectedness'
-    desc_num: Cell<usize>,
+    desc_num: usize,
     // unique num assigned to desc
     login_time: Instant,
     /* when the person connected		*/
-    showstr_head: RefCell<Option<Rc<str>>>,
+    showstr_head: Option<Rc<str>>,
     /* for keeping track of an internal str	*/
-    showstr_vector: RefCell<Vec<Rc<str>>>,
+    showstr_vector: Vec<Rc<str>>,
     /* for paging through texts		*/
-    showstr_count: Cell<i32>,
+    showstr_count: i32,
     /* number of pages to page through	*/
-    showstr_page: Cell<i32>,
+    showstr_page: i32,
     /* which page are we currently showing?	*/
-    str: RefCell<Option<Rc<RefCell<String>>>>,
+    str: Option<Rc<RefCell<String>>>,
     /* for the modify-str system		*/
-    pub max_str: Cell<usize>,
+    pub max_str: usize,
     /*		-			*/
-    mail_to: Cell<i64>,
+    mail_to: i64,
     /* name for mail system			*/
-    has_prompt: Cell<bool>,
+    has_prompt: bool,
     /* is the user at a prompt?             */
-    inbuf: RefCell<String>,
+    inbuf: String,
     /* buffer for raw input		*/
-    last_input: RefCell<String>,
+    last_input: String,
     /* the last input			*/
-    history: RefCell<[String; HISTORY_SIZE]>,
+    history: [String; HISTORY_SIZE],
     /* History of commands, for ! mostly.	*/
-    history_pos: Cell<usize>,
+    history_pos: usize,
     /* Circular array position.		*/
-    output: RefCell<String>,
-    input: RefCell<LinkedList<TxtBlock>>,
-    character: RefCell<Option<Rc<CharData>>>,
+    output: String,
+    input: LinkedList<TxtBlock>,
+    character: Option<Rc<CharData>>,
     /* linked to char			*/
-    original: RefCell<Option<Rc<CharData>>>,
+    original: Option<Rc<CharData>>,
     /* original char if switched		*/
-    snooping: RefCell<Option<Rc<DescriptorData>>>,
+    snooping: Option<DepotId>,
     /* Who is this char snooping	*/
-    snoop_by: RefCell<Option<Rc<DescriptorData>>>,
+    snoop_by: Option<DepotId>,
     /* And who is snooping this char	*/
+}
+
+impl Default for DescriptorData {
+    fn default() -> Self {
+        DescriptorData {
+            stream: None,
+            host: Rc::from(EMPTY_STRING),
+            bad_pws: 0,
+            idle_tics: 0,
+            connected: ConGetName,
+            desc_num: 0,
+            login_time: Instant::now(),
+            showstr_head: None,
+            showstr_vector: vec![],
+            showstr_count: 0,
+            showstr_page: 0,
+            str: None,
+            max_str: 0,
+            mail_to: 0,
+            has_prompt: false,
+            inbuf: String::new(),
+            last_input: "".to_string(),
+            history: [(); HISTORY_SIZE].map(|_| String::new()),
+            history_pos: 0,
+            output: String::new(),
+            input: LinkedList::new(),
+            character: None,
+            original: None,
+            snooping: None,
+            snoop_by: None,
+        }
+    }
 }
 
 pub struct Game {
     db: DB,
     mother_desc: Option<TcpListener>,
-    descriptor_list: Vec<Rc<DescriptorData>>,
+    descriptor_list: Depot<DescriptorData>,
     last_desc: usize,
     circle_shutdown: bool,
     /* clean shutdown */
@@ -178,7 +211,7 @@ fn main() -> ExitCode {
     let mut port = DFLT_PORT;
 
     let mut game = Box::new(Game {
-        descriptor_list: Vec::new(),
+        descriptor_list: Depot::new(),
         last_desc: 0,
         circle_shutdown: false,
         circle_reboot: false,
@@ -376,9 +409,8 @@ impl Game {
         crash_save_all(self);
 
         info!("Closing all sockets.");
-        clone_vec2(&self.descriptor_list)
-            .iter()
-            .for_each(|d| self.close_socket(d));
+        let ids = self.descriptor_list.ids();
+        ids.iter().for_each(|d| self.close_socket(*d));
 
         self.mother_desc = None;
 
@@ -421,6 +453,14 @@ fn get_max_players() -> i32 {
  * such as mobile_activity().
  */
 impl Game {
+    pub fn desc(&self, desc_id: DepotId) -> &DescriptorData {
+        self.descriptor_list.get(desc_id)
+    }
+
+    pub fn desc_mut(&mut self, desc_id: DepotId) -> &mut DescriptorData {
+        self.descriptor_list.get_mut(desc_id)
+    }
+
     fn game_loop(&mut self) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
@@ -488,10 +528,10 @@ impl Game {
 
             /* Process descriptors with input pending */
             let mut buf = [0u8];
-            for d in self.descriptor_list.iter() {
-                match RefCell::borrow(&d.stream).peek(&mut buf) {
+            for d_id in self.descriptor_list.ids() {
+                match self.desc(d_id).stream.as_ref().unwrap().peek(&mut buf) {
                     Ok(size) if size != 0 => {
-                        process_input(d);
+                        self.process_input(d_id);
                     }
                     Err(err) => error!("Error while peeking TCP Stream: {}", err),
                     _ => (),
@@ -499,99 +539,115 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            for d in clone_vec2(&self.descriptor_list).iter() {
+            let ids = self.descriptor_list.ids();
+            for d_id in ids {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
                  * state then 1 is subtracted. Therefore we don't go less
                  * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
                  */
-                if d.character.borrow().is_some() {
-                    let ohc = d.character.borrow();
-                    let character = ohc.as_ref().unwrap();
-                    let wait_state = character.get_wait_state();
-                    if wait_state > 0 {
-                        character.decr_wait_state(1);
+                {
+                    if self.descriptor_list.get_mut(d_id).character.is_some() {
+                        let character = self.descriptor_list.get_mut(d_id).character.as_ref().unwrap();
+                        let wait_state = character.get_wait_state();
+                        if wait_state > 0 {
+                            character.decr_wait_state(1);
+                        }
+                        if character.get_wait_state() != 0 {
+                            continue;
+                        }
                     }
-                    if character.get_wait_state() != 0 {
+
+                    if !get_from_q(&mut self.descriptor_list.get_mut(d_id).input, &mut comm, &mut aliased) {
                         continue;
                     }
-                }
 
-                if !get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased) {
-                    continue;
-                }
-
-                if d.character.borrow().is_some() {
-                    /* Reset the idle timer & pull char back from void if necessary */
-                    let ohc = d.character.borrow();
-                    let character = ohc.as_ref().unwrap();
-                    character.char_specials.borrow().timer.set(0);
-                    if d.state() == ConPlaying && character.get_was_in() != NOWHERE {
-                        if character.in_room.get() != NOWHERE {
-                            self.db.char_from_room(character);
+                    if self.descriptor_list.get_mut(d_id).character.borrow().is_some() {
+                        /* Reset the idle timer & pull char back from void if necessary */
+                        let character = self.descriptor_list.get_mut(d_id).character.borrow().as_ref().unwrap().clone();
+                        character.char_specials.borrow().timer.set(0);
+                        if self.descriptor_list.get_mut(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
+                            if character.in_room.get() != NOWHERE {
+                                self.db.char_from_room(&character);
+                            }
+                            self.db.char_to_room(&character, character.get_was_in());
+                            character.set_was_in(NOWHERE);
+                            self.act(
+                                "$n has returned.",
+                                true,
+                                Some(character.as_ref()),
+                                None,
+                                None,
+                                TO_ROOM,
+                            );
                         }
-                        self.db.char_to_room(character, character.get_was_in());
-                        character.set_was_in(NOWHERE);
-                        self.db.act(
-                            "$n has returned.",
-                            true,
-                            Some(character.as_ref()),
-                            None,
-                            None,
-                            TO_ROOM,
-                        );
+                        character.set_wait_state(1);
                     }
-                    character.set_wait_state(1);
+                    
+                    self.descriptor_list.get_mut(d_id).has_prompt = false;
                 }
-                d.has_prompt.set(false);
 
-                if d.str.borrow().is_some() {
+                if self.descriptor_list.get_mut(d_id).str.is_some() {
                     /* Writing boards, mail, etc. */
-                    string_add(&mut self.db, d, &comm);
-                } else if d.showstr_count.get() != 0 {
+                    string_add(self, d_id, &comm);
+                } else if self.descriptor_list.get_mut(d_id).showstr_count != 0 {
                     /* Reading something w/ pager */
-                    show_string(d, &comm);
-                } else if d.state() != ConPlaying {
+                    show_string(self, d_id, &comm);
+                } else if self.descriptor_list.get_mut(d_id).state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, d, &comm);
+                    nanny(self, d_id, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
                         /* To prevent recursive aliases. */
-                        d.has_prompt.set(true); /* To get newline before next cmd output. */
-                    } else if perform_alias(d, &mut comm) {
+                        self.descriptor_list.get_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
+                    } else if perform_alias(self.descriptor_list.get_mut(d_id), &mut comm) {
                         /* Run it through aliasing system */
-                        get_from_q(&mut d.input.borrow_mut(), &mut comm, &mut aliased);
+                        get_from_q(
+                            &mut self.descriptor_list.get_mut(d_id).input,
+                            &mut comm,
+                            &mut aliased,
+                        );
                     }
                     /* Send it to interpreter */
-                    command_interpreter(self, d.character.borrow().as_ref().unwrap(), &comm);
+                    let ch = self
+                        .descriptor_list
+                        .get_mut(d_id)
+                        .character
+                        .as_ref()
+                        .unwrap()
+                        .clone();
+                    command_interpreter(self, &ch, &comm);
                 }
             }
 
             /* Send queued output out to the operating system (ultimately to user). */
-            for d in self.descriptor_list.iter() {
-                if !d.output.borrow().is_empty() {
-                    process_output(d);
-                    if d.output.borrow().is_empty() {
-                        d.has_prompt.set(true);
+            for d_id in self.descriptor_list.ids() {
+                if !self.desc(d_id).output.is_empty() {
+                    self.process_output(d_id);
+                    if self.desc(d_id).output.is_empty() {
+                        self.desc_mut(d_id).has_prompt = true;
                     }
                 }
             }
 
             /* Print prompts for other descriptors who had no other output */
-            for d in self.descriptor_list.iter() {
-                if !d.has_prompt.get() && d.output.borrow().is_empty() {
+            for d_id in self.descriptor_list.ids() {
+                let d = self.descriptor_list.get_mut(d_id);
+                if !d.has_prompt && d.output.is_empty() {
                     let text = &make_prompt(d);
-                    write_to_descriptor(&mut d.stream.borrow_mut(), text);
-                    d.has_prompt.set(true);
+                    write_to_descriptor(d.stream.as_mut().unwrap(), text);
+                    d.has_prompt = true;
                 }
             }
 
             /* Kick out folks in the ConClose or ConDisconnect state */
-            for d in clone_vec2(&self.descriptor_list).iter() {
+            let ids = self.descriptor_list.ids();
+            for id in ids {
+                let d = self.descriptor_list.get(id);
                 if d.state() == ConClose || d.state() == ConDisconnect {
-                    self.close_socket(d);
+                    self.close_socket(id);
                 }
             }
 
@@ -669,7 +725,7 @@ impl Game {
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(1);
-            affect_update(&self.db);
+            affect_update(self);
             self.point_update();
             //fflush(player_fl);
         }
@@ -727,25 +783,27 @@ impl Game {
 /*
  * Turn off echoing (specific to telnet client)
  */
-fn echo_off(d: &DescriptorData) {
-    let mut off_string = String::new();
-    off_string.push(char::from(IAC));
-    off_string.push(char::from(WILL));
-    off_string.push(char::from(TELOPT_ECHO));
+impl Game {
+    fn echo_off(&mut self, desc_id: DepotId) {
+        let mut off_string = String::new();
+        off_string.push(char::from(IAC));
+        off_string.push(char::from(WILL));
+        off_string.push(char::from(TELOPT_ECHO));
 
-    write_to_output(d, &off_string);
-}
+        self.write_to_output(desc_id, &off_string);
+    }
 
-/*
- * Turn on echoing (specific to telnet client)
- */
-fn echo_on(d: &DescriptorData) {
-    let mut off_string = String::new();
-    off_string.push(char::from(IAC));
-    off_string.push(char::from(WONT));
-    off_string.push(char::from(TELOPT_ECHO));
+    /*
+     * Turn on echoing (specific to telnet client)
+     */
+    fn echo_on(&mut self, desc_id: DepotId) {
+        let mut off_string = String::new();
+        off_string.push(char::from(IAC));
+        off_string.push(char::from(WONT));
+        off_string.push(char::from(TELOPT_ECHO));
 
-    write_to_output(d, &off_string);
+        self.write_to_output(desc_id, &off_string);
+    }
 }
 
 fn make_prompt(d: &DescriptorData) -> String {
@@ -755,13 +813,12 @@ fn make_prompt(d: &DescriptorData) -> String {
 
     if d.str.borrow().is_some() {
         prompt.push_str("] ");
-    } else if d.showstr_count.get() != 0 {
+    } else if d.showstr_count != 0 {
         prompt.push_str(&*format!(
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            d.showstr_page.get(),
-            d.showstr_count.get()
+            d.showstr_page, d.showstr_count
         ));
-    } else if d.connected.get() == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
+    } else if d.connected == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
         let ohc = d.character.borrow();
         let character = ohc.as_ref().unwrap();
         if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
@@ -785,7 +842,7 @@ fn make_prompt(d: &DescriptorData) -> String {
         }
 
         prompt.push_str("> ");
-    } else if d.connected.get() == ConPlaying && d.character.borrow().as_ref().unwrap().is_npc() {
+    } else if d.connected == ConPlaying && d.character.borrow().as_ref().unwrap().is_npc() {
         prompt.push_str(&*format!(
             "{}s>",
             d.character.borrow().as_ref().unwrap().get_name()
@@ -816,16 +873,18 @@ fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut
 }
 
 /* Empty the queues before closing connection */
-fn flush_queues(d: &DescriptorData) {
-    d.output.borrow_mut().clear();
-    d.inbuf.borrow_mut().clear();
-    d.input.borrow_mut().clear();
+fn flush_queues(d: &mut DescriptorData) {
+    d.output.clear();
+    d.inbuf.clear();
+    d.input.clear();
 }
 
-/* Add a new string to a player's output queue. */
-fn write_to_output(t: &DescriptorData, txt: &str) -> usize {
-    t.output.borrow_mut().push_str(txt);
-    txt.as_bytes().len()
+impl Game {
+    /* Add a new string to a player's output queue. */
+    fn write_to_output(&mut self, desc_id: DepotId, txt: &str) -> usize {
+        self.desc_mut(desc_id).output.push_str(txt);
+        txt.as_bytes().len()
+    }
 }
 
 /* ******************************************************************
@@ -893,33 +952,8 @@ impl Game {
         }
         /* create a new descriptor */
         /* initialize descriptor data */
-        let mut newd = DescriptorData {
-            stream: RefCell::new(stream),
-            host: Rc::from(EMPTY_STRING),
-            bad_pws: Cell::new(0),
-            idle_tics: Cell::new(0),
-            connected: Cell::new(ConGetName),
-            desc_num: Cell::new(0),
-            login_time: Instant::now(),
-            showstr_head: RefCell::new(None),
-            showstr_vector: RefCell::new(vec![]),
-            showstr_count: Cell::from(0),
-            showstr_page: Cell::from(0),
-            str: RefCell::new(None),
-            max_str: Cell::new(0),
-            mail_to: Cell::new(0),
-            has_prompt: Cell::new(false),
-            inbuf: RefCell::from(String::new()),
-            last_input: RefCell::new("".to_string()),
-            history: RefCell::new([(); HISTORY_SIZE].map(|_| String::new())),
-            history_pos: Cell::new(0),
-            output: RefCell::new(String::new()),
-            input: RefCell::new(LinkedList::new()),
-            character: RefCell::new(None),
-            original: RefCell::new(None),
-            snooping: RefCell::new(None),
-            snoop_by: RefCell::new(None),
-        };
+        let mut newd = DescriptorData::default();
+        newd.stream = Some(stream);
 
         /* find the sitename */
         if !self.config.nameserver_is_slow {
@@ -937,7 +971,8 @@ impl Game {
         /* determine if the site is banned */
         if isbanned(&self.db, &newd.host) == BAN_ALL {
             newd.stream
-                .borrow_mut()
+                .as_mut()
+                .unwrap()
                 .shutdown(Shutdown::Both)
                 .expect("shutdowning socket which is banned");
             self.mudlog(
@@ -958,13 +993,13 @@ impl Game {
         if self.last_desc == 1000 {
             self.last_desc = 1;
         }
-        newd.desc_num.set(self.last_desc);
+        newd.desc_num = self.last_desc;
 
         /* append to list */
-        let rc = Rc::new(newd);
-        self.descriptor_list.push(rc.clone());
+        let desc_id = self.descriptor_list.push(newd);
+        let txt = self.db.greetings.clone();
+        self.write_to_output(desc_id, txt.as_ref());
 
-        write_to_output(rc.as_ref(), &self.db.greetings);
     }
 }
 
@@ -978,71 +1013,78 @@ impl Game {
  *	 2 bytes: extra \r\n for non-comapct
  *      14 bytes: unused
  */
-fn process_output(t: &DescriptorData) -> i32 {
-    /* we may need this \r\n for later -- see below */
-    let mut i = "\r\n".to_string();
-    /* now, append the 'real' output */
-    i.push_str(&RefCell::borrow(&t.output));
+impl Game {
+    fn process_output(&mut self, desc_id: DepotId) -> i32 {
+        /* we may need this \r\n for later -- see below */
+        let mut i = "\r\n".to_string();
+        let mut result;
 
-    /* add the extra CRLF if the person isn't in compact mode */
-    if t.connected.get() == ConPlaying
-        && t.character.borrow().is_some()
-        && !t.character.borrow().as_ref().unwrap().is_npc()
-        && t.character
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .prf_flagged(PRF_COMPACT)
-    {
-        i.push_str("\r\n");
-    }
+        {
+        let t = self.desc_mut(desc_id);
+        /* now, append the 'real' output */
+        i.push_str(&t.output);
 
-    /* add a prompt */
-    i.push_str(&make_prompt(t));
-    let mut result;
-
-    /*
-     * now, send the output.  If this is an 'interruption', use the prepended
-     * CRLF, otherwise send the straight output sans CRLF.
-     */
-    if t.has_prompt.get() {
-        t.has_prompt.set(false);
-        result = write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), &i);
-        if result >= 2 {
-            result -= 2;
+        /* add the extra CRLF if the person isn't in compact mode */
+        if t.connected == ConPlaying
+            && t.character.borrow().is_some()
+            && !t.character.borrow().as_ref().unwrap().is_npc()
+            && t.character
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .prf_flagged(PRF_COMPACT)
+        {
+            i.push_str("\r\n");
         }
-    } else {
-        result = write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), &i[2..]);
+
+        /* add a prompt */
+        i.push_str(&make_prompt(t));
+
+        /*
+         * now, send the output.  If this is an 'interruption', use the prepended
+         * CRLF, otherwise send the straight output sans CRLF.
+         */
+        if t.has_prompt {
+            t.has_prompt = false;
+            result = write_to_descriptor(t.stream.as_mut().unwrap(), &i);
+            if result >= 2 {
+                result -= 2;
+            }
+        } else {
+            result = write_to_descriptor(t.stream.as_mut().unwrap(), &i[2..]);
+        }
+
+        if result < 0 {
+            /* Oops, fatal error. Bye! */
+            let _ = t.stream.as_mut().unwrap().shutdown(Shutdown::Both);
+            return -1;
+        } else if result == 0 {
+            /* Socket buffer full. Try later. */
+            return 0;
+        }
     }
 
-    if result < 0 {
-        /* Oops, fatal error. Bye! */
-        let _ = RefCell::borrow(&t.stream).shutdown(Shutdown::Both);
-        return -1;
-    } else if result == 0 {
-        /* Socket buffer full. Try later. */
-        return 0;
-    }
+        /* Handle snooping: prepend "% " and send to snooper. */
+        if self.desc(desc_id).snoop_by.is_some() {
+            let snooper_id = self.desc_mut(desc_id).snoop_by.unwrap();
+            self.write_to_output(
+                snooper_id,
+                format!("% {}%%", result).as_str(),
+            );
+        }
+    
 
-    /* Handle snooping: prepend "% " and send to snooper. */
-    if t.snoop_by.borrow().is_some() {
-        write_to_output(
-            t.snoop_by.borrow().as_ref().unwrap(),
-            format!("% {}%%", result).as_str(),
-        );
+        /* The common case: all saved output was handed off to the kernel buffer. */
+        let exp_len = (i.as_bytes().len() - 2) as i32;
+        if result >= exp_len {
+            self.desc_mut(desc_id).output.clear();
+        } else {
+            /* Not all data in buffer sent.  result < output buffersize. */
+            let _ = self.desc_mut(desc_id).output.split_off(result as usize);
+        }
+        result
     }
-
-    /* The common case: all saved output was handed off to the kernel buffer. */
-    let exp_len = (i.as_bytes().len() - 2) as i32;
-    if result >= exp_len {
-        RefCell::borrow_mut(&t.output).clear();
-    } else {
-        /* Not all data in buffer sent.  result < output buffersize. */
-        let _ = t.output.borrow_mut().split_off(result as usize);
-    }
-    result
 }
-
 /*
  * write_to_descriptor takes a descriptor, and text to write to the
  * descriptor.  It keeps calling the system-level write() until all
@@ -1080,9 +1122,9 @@ fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
  * Same information about perform_socket_write applies here. I like
  * standards, there are so many of them. -gg 6/30/98
  */
-fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
-    let mut stream = d.stream.borrow_mut();
-    let mut input = d.inbuf.borrow_mut();
+fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
+    let stream = d.stream.as_mut().unwrap();
+    let input = &mut d.inbuf;
 
     let mut buf = [0u8; 4096];
 
@@ -1117,178 +1159,181 @@ fn perform_socket_read(d: &DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(t: &DescriptorData) -> i32 {
-    let buf_length;
-    let mut failed_subst;
-    let mut bytes_read;
-    let mut read_point = 0;
-    let mut nl_pos: Option<usize> = None;
-    let mut tmp = String::new();
+impl Game {
+    fn process_input(&mut self, d_id: DepotId) -> i32 {
+        let buf_length;
+        let mut failed_subst;
+        let mut bytes_read;
+        let mut read_point = 0;
+        let mut nl_pos: Option<usize> = None;
+        let mut tmp = String::new();
 
-    /* first, find the point where we left off reading data */
-    buf_length = t.inbuf.borrow().len();
-    let mut space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
+        /* first, find the point where we left off reading data */
+        buf_length = self.desc(d_id).inbuf.len();
+        let mut space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
 
-    loop {
-        if space_left <= 0 {
-            warn!("WARNING: process_input: about to close connection: input overflow");
-            return -1;
-        }
+        loop {
+            if space_left <= 0 {
+                warn!("WARNING: process_input: about to close connection: input overflow");
+                return -1;
+            }
 
-        match perform_socket_read(t) {
-            Err(_) => return -1, /* Error, disconnect them. */
-            Ok(0) => return 0,   /* Just blocking, no problems. */
-            Ok(size) => bytes_read = size,
-        }
+            match perform_socket_read(self.desc_mut(d_id)) {
+                Err(_) => return -1, /* Error, disconnect them. */
+                Ok(0) => return 0,   /* Just blocking, no problems. */
+                Ok(size) => bytes_read = size,
+            }
 
-        /* at this point, we know we got some data from the read */
+            /* at this point, we know we got some data from the read */
 
-        /* search for a newline in the data we just read */
-        for i in read_point..read_point + bytes_read {
-            let x = t.inbuf.borrow().chars().nth(i).unwrap();
+            /* search for a newline in the data we just read */
+            for i in read_point..read_point + bytes_read {
+                let x = self.desc(d_id).inbuf.chars().nth(i).unwrap();
 
+                if nl_pos.is_some() {
+                    break;
+                }
+                if isnewl!(x) {
+                    nl_pos = Some(i);
+                }
+            }
+
+            read_point += bytes_read;
+            space_left -= bytes_read;
             if nl_pos.is_some() {
                 break;
             }
-            if isnewl!(x) {
-                nl_pos = Some(i);
-            }
         }
 
-        read_point += bytes_read;
-        space_left -= bytes_read;
-        if nl_pos.is_some() {
-            break;
-        }
-    }
+        /*
+         * okay, at this point we have at least one newline in the string; now we
+         * can copy the formatted data to a new array for further processing.
+         */
 
-    /*
-     * okay, at this point we have at least one newline in the string; now we
-     * can copy the formatted data to a new array for further processing.
-     */
+        let mut read_point = 0;
 
-    let mut read_point = 0;
+        let ptr = 0usize;
+        while nl_pos.is_some() {
+            tmp.truncate(0);
+            space_left = MAX_INPUT_LENGTH - 1;
 
-    let ptr = 0usize;
-    while nl_pos.is_some() {
-        tmp.truncate(0);
-        space_left = MAX_INPUT_LENGTH - 1;
-
-        /* The '> 1' reserves room for a '$ => $$' expansion. */
-        for ptr in 0..t.inbuf.borrow().len() {
-            let x = t.inbuf.borrow().chars().nth(ptr).unwrap();
-            if space_left <= 1 || ptr >= nl_pos.unwrap() {
-                break;
-            }
-            if x == 8 as char /* \b */ || x == 127 as char {
-                /* handle backspacing or delete key */
-                if !tmp.is_empty() {
-                    tmp.pop();
-                    if !tmp.is_empty() && tmp.chars().last().unwrap() == '$' {
-                        tmp.pop();
-                        space_left += 2;
-                    } else {
-                        space_left += 1;
-                    }
-                }
-            } else if x.is_ascii() && !x.is_control() {
-                tmp.push(x);
-                if x == '$' {
-                    tmp.push(x);
-                    space_left -= 2;
-                } else {
-                    space_left -= 1;
-                }
-            }
-        }
-
-        if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-            if write_to_descriptor(&mut RefCell::borrow_mut(&t.stream), tmp.as_str()) < 0 {
-                return -1;
-            }
-        }
-
-        if t.snoop_by.borrow().is_some() {
-            write_to_output(
-                t.snoop_by.borrow().as_ref().unwrap(),
-                format!("% {}\r\n", tmp).as_str(),
-            );
-        }
-        failed_subst = false;
-
-        if tmp == "!" {
-            /* Redo last command. */
-            tmp = t.last_input.borrow().clone();
-        } else if tmp.starts_with('!') && tmp.len() > 1 {
-            let mut commandln = &tmp[1..];
-            let starting_pos = t.history_pos.get();
-            let mut cnt = if t.history_pos.get() == 0 {
-                HISTORY_SIZE - 1
-            } else {
-                t.history_pos.get() - 1
-            };
-
-            commandln = commandln.trim_start();
-            while cnt != starting_pos {
-                if !t.history.borrow()[cnt].is_empty()
-                    && is_abbrev(commandln, t.history.borrow()[cnt].as_str())
-                {
-                    tmp = t.history.borrow()[cnt].clone();
-                    *t.last_input.borrow_mut() = tmp.clone();
-                    write_to_output(t, format!("{}\r\n", tmp).as_str());
+            /* The '> 1' reserves room for a '$ => $$' expansion. */
+            for ptr in 0..self.desc(d_id).inbuf.len() {
+                let x = self.desc(d_id).inbuf.chars().nth(ptr).unwrap();
+                if space_left <= 1 || ptr >= nl_pos.unwrap() {
                     break;
                 }
-                if cnt == 0 {
-                    /* At top, loop to bottom. */
-                    cnt = HISTORY_SIZE;
+                if x == 8 as char /* \b */ || x == 127 as char {
+                    /* handle backspacing or delete key */
+                    if !tmp.is_empty() {
+                        tmp.pop();
+                        if !tmp.is_empty() && tmp.chars().last().unwrap() == '$' {
+                            tmp.pop();
+                            space_left += 2;
+                        } else {
+                            space_left += 1;
+                        }
+                    }
+                } else if x.is_ascii() && !x.is_control() {
+                    tmp.push(x);
+                    if x == '$' {
+                        tmp.push(x);
+                        space_left -= 2;
+                    } else {
+                        space_left -= 1;
+                    }
                 }
-                cnt -= 1;
             }
-        } else if tmp.starts_with('^') {
-            failed_subst = perform_subst(t, t.last_input.borrow().as_ref(), &mut tmp);
+
+            if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
+                if write_to_descriptor(self.desc_mut(d_id).stream.as_mut().unwrap(), tmp.as_str()) < 0 {
+                    return -1;
+                }
+            }
+
+            if self.desc(d_id).snoop_by.is_some() {
+                let desc_id = self.desc_mut(d_id).snoop_by.unwrap();
+                self.write_to_output(
+                    desc_id,
+                    format!("% {}\r\n", tmp).as_str(),
+                );
+            }
+            failed_subst = false;
+
+            if tmp == "!" {
+                /* Redo last command. */
+                tmp = self.desc_mut(d_id).last_input.clone();
+            } else if tmp.starts_with('!') && tmp.len() > 1 {
+                let mut commandln = &tmp[1..];
+                let starting_pos = self.desc(d_id).history_pos;
+                let mut cnt = if self.desc(d_id).history_pos == 0 {
+                    HISTORY_SIZE - 1
+                } else {
+                    self.desc_mut(d_id).history_pos - 1
+                };
+
+                commandln = commandln.trim_start();
+                while cnt != starting_pos {
+                    if !self.desc(d_id).history[cnt].is_empty()
+                        && is_abbrev(commandln, self.desc(d_id).history[cnt].as_str())
+                    {
+                        tmp = self.desc(d_id).history[cnt].clone();
+                        self.desc_mut(d_id).last_input = tmp.clone();
+                        self.write_to_output(d_id, format!("{}\r\n", tmp).as_str());
+                        break;
+                    }
+                    if cnt == 0 {
+                        /* At top, loop to bottom. */
+                        cnt = HISTORY_SIZE;
+                    }
+                    cnt -= 1;
+                }
+            } else if tmp.starts_with('^') {
+                let orig = self.desc(d_id).last_input.clone();
+                failed_subst = self.perform_subst(d_id, orig.as_str(), &mut tmp);
+                if !failed_subst {
+                    self.desc_mut(d_id).last_input = tmp.to_string();
+                }
+            } else {
+                self.desc_mut(d_id).last_input = tmp.to_string();
+                let pos = self.desc_mut(d_id).history_pos;
+                self.desc_mut(d_id).history[pos] = tmp.to_string();
+                self.desc_mut(d_id).history_pos = self.desc(d_id).history_pos + 1;
+                if self.desc_mut(d_id).history_pos >= HISTORY_SIZE {
+                    self.desc_mut(d_id).history_pos = 0;
+                }
+            }
+
             if !failed_subst {
-                *t.last_input.borrow_mut() = tmp.to_string();
+                write_to_q(tmp.as_str(), &mut self.desc_mut(d_id).input, false);
             }
-        } else {
-            *t.last_input.borrow_mut() = tmp.to_string();
-            t.history.borrow_mut()[t.history_pos.get()] = tmp.to_string();
-            t.history_pos.set(t.history_pos.get() + 1);
-            if t.history_pos.get() >= HISTORY_SIZE {
-                t.history_pos.set(0);
+
+            /* find the end of this line */
+            while nl_pos.unwrap() < self.desc(d_id).inbuf.len()
+                && isnewl!(self.desc(d_id).inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+            {
+                nl_pos = Some(nl_pos.unwrap() + 1);
             }
-        }
 
-        if !failed_subst {
-            write_to_q(tmp.as_str(), &mut t.input.borrow_mut(), false);
-        }
-
-        /* find the end of this line */
-        while nl_pos.unwrap() < t.inbuf.borrow().len()
-            && isnewl!(t.inbuf.borrow().chars().nth(nl_pos.unwrap()).unwrap())
-        {
-            nl_pos = Some(nl_pos.unwrap() + 1);
-        }
-
-        /* see if there's another newline in the input buffer */
-        read_point = nl_pos.unwrap();
-        nl_pos = None;
-        for i in read_point..t.inbuf.borrow().len() {
-            if isnewl!(t.inbuf.borrow().chars().nth(i).unwrap()) {
-                nl_pos = Some(i);
-                break;
+            /* see if there's another newline in the input buffer */
+            read_point = nl_pos.unwrap();
+            nl_pos = None;
+            for i in read_point..self.desc(d_id).inbuf.len() {
+                if isnewl!(self.desc(d_id).inbuf.chars().nth(i).unwrap()) {
+                    nl_pos = Some(i);
+                    break;
+                }
             }
         }
+        self.desc_mut(d_id).inbuf.drain(..read_point);
+
+        return 1;
     }
-    t.inbuf.borrow_mut().drain(..read_point);
-
-    return 1;
-}
-
 /* perform substitution for the '^..^' csh-esque syntax orig is the
  * orig string, i.e. the one being modified.  subst contains the
  * substition string, i.e. "^telm^tell"
  */
-fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
+fn perform_subst(&mut self, desc_id: DepotId, orig: &str, subst: &mut String) -> bool {
     /*
      * first is the position of the beginning of the first string (the one
      * to be replaced
@@ -1298,7 +1343,7 @@ fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
     /* now find the second '^' */
 
     if second.is_none() {
-        write_to_output(t, "Invalid substitution.\r\n");
+        self.write_to_output(desc_id, "Invalid substitution.\r\n");
         return true;
     }
     /* terminate "first" at the position of the '^' and make 'second' point
@@ -1309,7 +1354,7 @@ fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
     /* now, see if the contents of the first string appear in the original */
     let strpos = orig.find(first);
     if strpos.is_none() {
-        write_to_output(t, "Invalid substitution.\r\n");
+        self.write_to_output(desc_id, "Invalid substitution.\r\n");
         return true;
     }
     let strpos = strpos.unwrap();
@@ -1332,32 +1377,32 @@ fn perform_subst(t: &DescriptorData, orig: &str, subst: &mut String) -> bool {
 
     return false;
 }
-
+}
 impl Game {
-    pub fn close_socket(&mut self, d: &DescriptorData) {
-        self.descriptor_list
-            .retain(|c| !std::ptr::eq(c.as_ref(), d));
+    pub fn close_socket(&mut self, d: DepotId) {
+        let mut d = self.descriptor_list.remove(d);
 
         d.stream
-            .borrow_mut()
+            .as_mut()
+            .unwrap()
             .shutdown(Shutdown::Both)
             .expect("SYSERR while closing socket");
-        flush_queues(d);
+        flush_queues(&mut d);
 
         /* Forget snooping */
-        if d.snooping.borrow().is_some() {
-            *d.snooping.borrow().as_ref().unwrap().snoop_by.borrow_mut() = None;
+        if d.snooping.is_some() {
+            self.desc_mut(d.snooping.unwrap()).snoop_by = None;
         }
 
-        if d.snoop_by.borrow().is_some() {
-            write_to_output(
-                d.snoop_by.borrow().as_ref().unwrap(),
+        if d.snoop_by.is_some() {
+            self.write_to_output(
+                d.snoop_by.unwrap(),
                 "Your victim is no longer among us.\r\n",
             );
-            *d.snoop_by.borrow_mut() = None;
+            d.snoop_by = None;
         }
 
-        match d.character.borrow().as_ref() {
+        match d.character.as_ref() {
             Some(character) => {
                 /* If we're switched, this resets the mobile taken. */
                 *character.desc.borrow_mut() = None;
@@ -1372,7 +1417,7 @@ impl Game {
                         };
 
                         /* We are guaranteed to have a person. */
-                        self.db.act(
+                        self.act(
                             "$n has lost $s link.",
                             true,
                             Some(&link_challenged),
@@ -1380,7 +1425,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.db.save_char(&link_challenged);
+                        self.save_char(&link_challenged);
                         self.mudlog(
                             NRM,
                             max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),
@@ -1432,18 +1477,18 @@ impl Game {
         }
     }
 
-    fn check_idle_passwords(&self) {
+    fn check_idle_passwords(&mut self) {
         //struct descriptor_data * d, * next_d;
-        for d in self.descriptor_list.iter() {
-            if d.state() != ConPassword && d.state() != ConGetName {
+        for d_id in self.descriptor_list.ids() {
+            if self.desc(d_id).state() != ConPassword && self.desc(d_id).state() != ConGetName {
                 continue;
             }
-            if d.idle_tics.get() == 0 {
-                d.idle_tics.set(1);
+            if self.desc(d_id).idle_tics == 0 {
+                self.desc_mut(d_id).idle_tics = 1;
             } else {
-                echo_on(d.as_ref());
-                write_to_output(d, "\r\nTimed out... goodbye.\r\n");
-                d.set_state(ConClose);
+                self.echo_on(d_id);
+                self.write_to_output(d_id, "\r\nTimed out... goodbye.\r\n");
+                self.desc_mut(d_id).set_state(ConClose);
             }
         }
     }
@@ -1572,11 +1617,16 @@ impl Game {
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-pub fn send_to_char(ch: &CharData, messg: &str) -> usize {
-    if ch.desc.borrow().is_some() && messg != "" {
-        return write_to_output(ch.desc.borrow().as_ref().unwrap(), messg);
+impl Game {
+    pub fn send_to_char(&mut self, ch: &CharData, messg: &str) -> usize {
+        if ch.desc.borrow().is_some() && messg != "" {
+            return self.write_to_output(
+                ch.desc.borrow().unwrap(),
+                messg,
+            );
+        }
+        0
     }
-    0
 }
 
 impl Game {
@@ -1585,11 +1635,12 @@ impl Game {
             return;
         }
 
-        for i in self.descriptor_list.iter() {
-            if i.state() != ConPlaying {
+        for d_id in self.descriptor_list.ids() {
+            let t = self.descriptor_list.get_mut(d_id);
+            if t.state() != ConPlaying {
                 continue;
             }
-            write_to_output(i, messg);
+            self.write_to_output(d_id, messg);
         }
     }
 
@@ -1598,7 +1649,8 @@ impl Game {
             return;
         }
 
-        for i in self.descriptor_list.iter() {
+        for d_id in self.descriptor_list.ids() {
+            let i = self.descriptor_list.get_mut(d_id);
             if i.state() != ConPlaying || i.character.borrow().is_none() {
                 continue;
             }
@@ -1608,28 +1660,27 @@ impl Game {
                 continue;
             }
 
-            write_to_output(i, messg);
+            self.write_to_output(d_id, messg);
         }
     }
-}
 
-impl DB {
-    pub fn send_to_room(&self, room: RoomRnum, msg: &str) {
-        for i in self.world[room as usize].peoples.iter() {
+    pub fn send_to_room(&mut self, room: RoomRnum, msg: &str) {
+        let list = clone_vec2(&self.db.world[room as usize].peoples);
+        for i in list {
             if i.desc.borrow().is_none() {
                 continue;
             }
-            write_to_output(i.desc.borrow().as_ref().unwrap(), msg);
+            self.write_to_output(i.desc.borrow().unwrap(), msg);
         }
     }
 }
 
 const ACTNULL: &str = "<NULL>";
 
-impl DB {
+impl Game {
     /* higher-level communication: the act() function */
     fn perform_act(
-        &self,
+        &mut self,
         orig: &str,
         ch: Option<&CharData>,
         obj: Option<&ObjData>,
@@ -1844,8 +1895,8 @@ impl DB {
         // TODO orig.pop();
         buf.push_str("\r\n");
 
-        write_to_output(
-            to.desc.borrow().as_ref().unwrap().as_ref(),
+        self.write_to_output(
+            to.desc.borrow().unwrap(),
             format!("{}", buf).as_str(),
         );
     }
@@ -1859,9 +1910,9 @@ macro_rules! sendok {
     };
 }
 
-impl DB {
+impl Game {
     pub fn act(
-        &self,
+        &mut self,
         str: &str,
         hide_invisible: bool,
         ch: Option<&CharData>,
@@ -1914,15 +1965,16 @@ impl DB {
         /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
         let char_list;
         if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
-            char_list = &self.world[ch.as_ref().unwrap().in_room() as usize].peoples;
+            char_list = &self.db.world[ch.as_ref().unwrap().in_room() as usize].peoples;
         } else if obj.is_some() && obj.unwrap().in_room() != NOWHERE {
-            char_list = &self.world[obj.unwrap().in_room() as usize].peoples;
+            char_list = &self.db.world[obj.unwrap().in_room() as usize].peoples;
         } else {
             error!("SYSERR: no valid target to act()!");
             return;
         }
 
-        for to in char_list.iter() {
+        let list = clone_vec2(char_list);
+        for to in list.iter() {
             if !sendok!(to.as_ref(), to_sleeping)
                 || (ch.is_some() && std::ptr::eq(to.as_ref(), ch.unwrap()))
             {

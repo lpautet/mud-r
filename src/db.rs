@@ -61,7 +61,7 @@ use crate::util::{
    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number,
     time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR,
 };
-use crate::{check_player_special, get_last_tell_mut, send_to_char, Game};
+use crate::{check_player_special, get_last_tell_mut, Game};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -420,12 +420,12 @@ pub fn do_reboot(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             game.db.index_boot(DB_BOOT_HLP);
         }
         _ => {
-            send_to_char(ch, "Unknown reload option.\r\n");
+            game.send_to_char(ch, "Unknown reload option.\r\n");
             return;
         }
     }
 
-    send_to_char(ch, OK);
+    game.send_to_char(ch, OK);
 }
 
 pub(crate) fn boot_world(game: &mut Game) {
@@ -1476,7 +1476,10 @@ fn renum_zone_table(game: &mut Game) {
                         }
                     );
                     let mut cmd_no2 = cmd_no as i32;
-                    game.log_zone_error(game.db.zone_table[idx].number as usize, &game.db.zone_table[idx].cmd[cmd_no], &buf, &mut cmd_no2);
+                    let zone = game.db.zone_table[idx].number as usize;
+                    let zcmd_command = game.db.zone_table[idx].cmd[cmd_no].command.get();
+                    let zcmd_line = game.db.zone_table[idx].cmd[cmd_no].line;
+                    game.log_zone_error(zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
                 }
                 game.db.zone_table[idx].cmd[cmd_no].command.set('*');
             }
@@ -2265,19 +2268,20 @@ impl DB {
     /*************************************************************************
     *  procedures for resetting, both play-time and boot-time	 	 *
     *************************************************************************/
-
-    pub fn vnum_mobile(&self, searchname: &str, ch: &Rc<CharData>) -> i32 {
+}
+impl Game {
+    pub fn vnum_mobile(&mut self, searchname: &str, ch: &Rc<CharData>) -> i32 {
         let mut found = 0;
-        for nr in 0..self.mob_protos.len() {
-            let mp = &self.mob_protos[nr];
+        for nr in 0..self.db.mob_protos.len() {
+            let mp = &self.db.mob_protos[nr];
             if isname(searchname, &mp.player.borrow().name) {
                 found += 1;
-                send_to_char(
+                self.send_to_char(
                     ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found,
-                        self.mob_index[nr].vnum,
+                        self.db.mob_index[nr].vnum,
                         mp.player.borrow().short_descr
                     )
                     .as_str(),
@@ -2287,17 +2291,17 @@ impl DB {
         return found;
     }
 
-    pub fn vnum_object(&self, searchname: &str, ch: &Rc<CharData>) -> i32 {
+    pub fn vnum_object(&mut self, searchname: &str, ch: &Rc<CharData>) -> i32 {
         let mut found = 0;
-        for nr in 0..self.obj_proto.len() {
-            let op = &self.obj_proto[nr];
+        for nr in 0..self.db.obj_proto.len() {
+            let op = &self.db.obj_proto[nr];
             if isname(searchname, &op.name.borrow()) {
                 found += 1;
-                send_to_char(
+                self.send_to_char(
                     ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
-                        found, self.obj_index[nr].vnum, op.short_description
+                        found, self.db.obj_index[nr].vnum, op.short_description
                     )
                     .as_str(),
                 );
@@ -2306,6 +2310,8 @@ impl DB {
 
         return found;
     }
+}
+impl DB {
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
     // {
@@ -2483,7 +2489,7 @@ impl Game {
     }
 
     /* execute the reset command table of a given zone */
-    fn log_zone_error(&self, zone: usize, zcmd: &ResetCom, message: &str, last_cmd: &mut i32) {
+    fn log_zone_error(&mut self, zone: usize, zcmd_command: char, zcmd_line: i32, message: &str, last_cmd: &mut i32) {
         self.mudlog(
             NRM,
             LVL_GOD as i32,
@@ -2496,9 +2502,9 @@ impl Game {
             true,
             format!(
                 "SYSERR: ...offending cmd: '{}' cmd in zone #{}, line {}",
-                zcmd.command.get(),
+                zcmd_command,
                 zone,
-                zcmd.line
+                zcmd_line
             )
             .as_str(),
         );
@@ -2573,9 +2579,11 @@ impl Game {
                         obj = self.db.read_object(nr, REAL);
                         let obj_to = self.db.get_obj_num(self.db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
+                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                            let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
-                                &self.db.zone_table[zone].cmd[cmd_no],
+                                zcmd_command,zcmd_line,
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
                             );
@@ -2593,9 +2601,11 @@ impl Game {
                 'G' => {
                     /* obj_to_char */
                     if mob.is_none() {
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            &self.db.zone_table[zone].cmd[cmd_no],
+                            zcmd_command,zcmd_line,
                             "attempt to give obj to non-existant mob, command disabled",
                             &mut last_cmd,
                         );
@@ -2616,9 +2626,11 @@ impl Game {
                 'E' => {
                     /* object to equipment list */
                     if mob.is_none() {
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            &self.db.zone_table[zone].cmd[cmd_no],
+                            zcmd_command,zcmd_line,
                             "trying to equip non-existant mob, command disabled",
                             &mut last_cmd,
                         );
@@ -2628,9 +2640,11 @@ impl Game {
                     }
                     if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
                         if self.db.zone_table[zone].cmd[cmd_no].arg3 < 0 || self.db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32 {
+                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                            let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
-                                &self.db.zone_table[zone].cmd[cmd_no],
+                                zcmd_command,zcmd_line,
                                 "invalid equipment pos number",
                                 &mut last_cmd,
                             );
@@ -2638,7 +2652,7 @@ impl Game {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             obj = self.db.read_object(nr, REAL);
                             let pos = self.db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.db.equip_char(
+                            self.equip_char(
                                 mob.as_ref().unwrap(),
                                 obj.as_ref().unwrap(),
                                 pos,
@@ -2659,7 +2673,7 @@ impl Game {
                             .as_ref(),
                     );
                     if obj.is_some() {
-                        self.db.extract_obj(obj.as_ref().unwrap());
+                        self.extract_obj(obj.as_ref().unwrap());
                     }
                     last_cmd = 1;
                 }
@@ -2672,9 +2686,11 @@ impl Game {
                             [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            &self.db.zone_table[zone].cmd[cmd_no],
+                            zcmd_command,zcmd_line,
                             "door does not exist, command disabled",
                             &mut last_cmd,
                         );
@@ -2726,9 +2742,11 @@ impl Game {
                 }
 
                 _ => {
+                    let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                    let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                     self.log_zone_error(
                         zone,
-                        &self.db.zone_table[zone].cmd[cmd_no],
+                        zcmd_command,zcmd_line,
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,
                     );
@@ -2747,13 +2765,13 @@ fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
         if i.state() != ConPlaying {
             continue;
         }
-        if i.character.borrow().as_ref().unwrap().in_room() == NOWHERE {
+        if i.character.as_ref().unwrap().in_room() == NOWHERE {
             continue;
         }
-        if i.character.borrow().as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
+        if i.character.as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if game.db.world[i.character.borrow().as_ref().unwrap().in_room() as usize].zone
+        if game.db.world[i.character.as_ref().unwrap().in_room() as usize].zone
             != zone_nr
         {
             continue;
@@ -2796,6 +2814,8 @@ impl DB {
         }
         return Some(player_i);
     }
+}
+impl Game {
 
     /*
      * write the vital data of a player to the player file
@@ -2815,13 +2835,13 @@ impl DB {
 
         copy_to_stored(
             &mut st.host,
-            ch.desc.borrow().as_ref().unwrap().host.as_ref(),
+            self.descriptor_list.get(ch.desc.borrow().unwrap()).host.as_ref(),
         );
 
         unsafe {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
-            self.player_fl
+            self.db.player_fl
                 .as_mut()
                 .unwrap()
                 .write_all_at(
@@ -2986,7 +3006,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 } /* store_to_char */
 
 /* copy vital data from a players char-structure to the file structure */
-impl DB {
+impl Game {
     pub fn char_to_store(&mut self, ch: &Rc<CharData>, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
         let mut char_eq: [Option<Rc<ObjData>>; NUM_WEARS as usize] =
@@ -3203,9 +3223,9 @@ pub fn free_char(ch: &Rc<CharData>) {
  * as to avoid special cases.
  */
 impl Game {
-    fn file_to_string_alloc<'a>(&self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
-        for in_use in &self.descriptor_list {
-            if &in_use.showstr_vector.borrow_mut()[0].as_ref() == &buf.as_ref() {
+    fn file_to_string_alloc<'a>(&mut self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
+        for in_use in self.descriptor_list.iter() {
+            if &in_use.showstr_vector[0].as_ref() == &buf.as_ref() {
                 return -1;
             }
         }
@@ -3217,17 +3237,19 @@ impl Game {
         }
         let temp = r.unwrap();
 
-        for in_use in &*self.descriptor_list {
-            if in_use.showstr_count.get() == 0
-                || in_use.showstr_vector.borrow()[0].as_ref() != buf.as_ref()
+        for in_use_id in self.descriptor_list.ids() {
+            let in_use = self.descriptor_list.get_mut(in_use_id);
+            if in_use.showstr_count == 0
+                || in_use.showstr_vector[0].as_ref() != buf.as_ref()
             {
                 continue;
             }
 
-            let temppage = in_use.showstr_page.get();
-            *in_use.showstr_head.borrow_mut() = Some(in_use.showstr_vector.borrow()[0].clone());
-            in_use.showstr_page.set(temppage);
-            paginate_string(in_use.showstr_head.borrow().as_ref().unwrap(), in_use);
+            let temppage = in_use.showstr_page;
+            in_use.showstr_head = Some(in_use.showstr_vector[0].clone());
+            in_use.showstr_page = temppage;
+            let msg = in_use.showstr_head.as_ref().unwrap().clone();
+            paginate_string(msg.as_ref(), in_use);
         }
         *buf = Rc::from(temp);
         return 0;

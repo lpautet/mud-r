@@ -31,7 +31,7 @@ use crate::structs::{
     NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::{ clone_vec2, rand_number};
-use crate::{send_to_char, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
+use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 const Z_KINGS_C: i32 = 150;
 
@@ -270,7 +270,7 @@ fn banzaii(game: &mut Game, ch: &Rc<CharData>) -> bool {
         return false;
     }
 
-    game.db.act(
+    game.act(
         "$n roars: 'Protect the Kingdom of Great King Welmar!  BANZAIIII!!!'",
         false,
         Some(ch),
@@ -300,7 +300,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         return false;
     }
 
-    game.db.act(
+    game.act(
         "You bravely rescue $N.\r\n",
         false,
         Some(ch_hero),
@@ -308,7 +308,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         Some(ch_victim),
         TO_CHAR,
     );
-    game.db.act(
+    game.act(
         "You are rescued by $N, your loyal friend!\r\n",
         false,
         Some(ch_victim),
@@ -316,7 +316,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         Some(ch_hero),
         TO_CHAR,
     );
-    game.db.act(
+    game.act(
         "$n heroically rescues $N.",
         false,
         Some(ch_hero),
@@ -342,7 +342,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
  * Used by Tim/Tom at Kings bedroom and Dick/David at treasury.
  */
 fn block_way(
-    db: &DB,
+    game: &mut Game,
     ch: &Rc<CharData>,
     cmd: i32,
     _arg: &str,
@@ -358,12 +358,12 @@ fn block_way(
         return false;
     }
 
-    if ch.in_room() != db.real_room(in_room) {
+    if ch.in_room() != game.db.real_room(in_room) {
         return false;
     }
 
-    if !member_of_staff(db, ch) {
-        db.act(
+    if !member_of_staff(&game.db, ch) {
+        game.act(
             "The guard roars at $n and pushes $m back.",
             false,
             Some(ch),
@@ -373,7 +373,7 @@ fn block_way(
         );
     }
 
-    send_to_char(
+    game.send_to_char(
         ch,
         "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
     );
@@ -416,8 +416,8 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
 
     match rand_number(0, 8) {
         1 | 2 | 3 => {
-            send_to_char(ch, "You raise your hand in a dramatical gesture.\r\n");
-            db.act(
+            game.send_to_char(ch, "You raise your hand in a dramatical gesture.\r\n");
+            game.act(
                 "$n raises $s hand in a dramatical gesture.",
                 true,
                 Some(ch),
@@ -428,8 +428,8 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
             cast_spell(game, ch, Some(tch), None, SPELL_COLOR_SPRAY);
         }
         4 | 5 => {
-            send_to_char(ch, "You concentrate and mumble to yourself.\r\n");
-            db.act(
+            game.send_to_char(ch, "You concentrate and mumble to yourself.\r\n");
+            game.act(
                 "$n concentrates, and mumbles to $mself.",
                 true,
                 Some(ch),
@@ -440,7 +440,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
             cast_spell(game, ch, Some(tch), None, SPELL_HARM);
         }
         6 | 7 => {
-            db.act(
+            game.act(
                 "You look deeply into the eyes of $N.",
                 true,
                 Some(ch),
@@ -448,7 +448,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
                 Some(tch),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n looks deeply into the eyes of $N.",
                 true,
                 Some(ch),
@@ -456,7 +456,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
                 Some(tch),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You see an ill-boding flame in the eye of $n.",
                 true,
                 Some(ch),
@@ -566,7 +566,7 @@ pub fn king_welmar(
         }
 
         'A' | 'B' | 'C' | 'D' => {
-            game.db.act(
+            game.act(
                 MONOLOG[(game.db.king_welmar.path[game.db.king_welmar.path_index] - b'A') as usize],
                 false,
                 Some(ch),
@@ -580,7 +580,7 @@ pub fn king_welmar(
 
         'W' => {
             ch.set_pos(POS_STANDING);
-            game.db.act(
+            game.act(
                 "$n awakens and stands up.",
                 false,
                 Some(ch),
@@ -592,7 +592,7 @@ pub fn king_welmar(
 
         'S' => {
             ch.set_pos(POS_SLEEPING);
-            game.db.act(
+            game.act(
                 "$n lies down on $s beautiful bed and instantly falls asleep.",
                 false,
                 Some(ch),
@@ -604,7 +604,7 @@ pub fn king_welmar(
 
         'r' => {
             ch.set_pos(POS_SITTING);
-            game.db.act(
+            game.act(
                 "$n sits down on $s great throne.",
                 false,
                 Some(ch),
@@ -616,12 +616,12 @@ pub fn king_welmar(
 
         's' => {
             ch.set_pos(POS_STANDING);
-            game.db
+            game
                 .act("$n stands up.", false, Some(ch), None, None, TO_ROOM);
         }
 
         'G' => {
-            game.db.act(
+            game.act(
                 "$n says 'Good morning, trusted friends.'",
                 false,
                 Some(ch),
@@ -632,7 +632,7 @@ pub fn king_welmar(
         }
 
         'g' => {
-            game.db.act(
+            game.act(
                 "$n says 'Good morning, dear subjects.'",
                 false,
                 Some(ch),
@@ -712,7 +712,7 @@ pub fn training_master(
 
     match rand_number(0, 7) {
         0 => {
-            db.act(
+            game.act(
                 "$n hits $N on $s head with a powerful blow.",
                 false,
                 Some(pupil1),
@@ -720,7 +720,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You hit $N on $s head with a powerful blow.",
                 false,
                 Some(pupil1),
@@ -728,7 +728,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n hits you on your head with a powerful blow.",
                 false,
                 Some(pupil1),
@@ -739,7 +739,7 @@ pub fn training_master(
         }
 
         1 => {
-            db.act(
+            game.act(
                 "$n hits $N in $s chest with a thrust.",
                 false,
                 Some(pupil1),
@@ -747,7 +747,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You manage to thrust $N in the chest.",
                 false,
                 Some(pupil1),
@@ -755,7 +755,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n manages to thrust you in your chest.",
                 false,
                 Some(pupil1),
@@ -766,8 +766,8 @@ pub fn training_master(
         }
 
         2 => {
-            send_to_char(ch, "You command your pupils to bow.\r\n");
-            db.act(
+            game.send_to_char(ch, "You command your pupils to bow.\r\n");
+            game.act(
                 "$n commands $s pupils to bow.",
                 false,
                 Some(ch),
@@ -775,7 +775,7 @@ pub fn training_master(
                 None,
                 TO_ROOM,
             );
-            db.act(
+            game.act(
                 "$n bows before $N.",
                 false,
                 Some(pupil1),
@@ -783,7 +783,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "$N bows before $n.",
                 false,
                 Some(pupil1),
@@ -791,7 +791,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You bow before $N, who returns your gesture.",
                 false,
                 Some(pupil1),
@@ -799,7 +799,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "You bow before $n, who returns your gesture.",
                 false,
                 Some(pupil1),
@@ -810,7 +810,7 @@ pub fn training_master(
         }
 
         3 => {
-            db.act(
+            game.act(
                 "$N yells at $n, as he fumbles and drops $s sword.",
                 false,
                 Some(pupil1),
@@ -818,7 +818,7 @@ pub fn training_master(
                 Some(ch),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "$n quickly picks up $s weapon.",
                 false,
                 Some(pupil1),
@@ -826,7 +826,7 @@ pub fn training_master(
                 None,
                 TO_ROOM,
             );
-            db.act(
+            game.act(
                 "$N yells at you, as you fumble, losing your weapon.",
                 false,
                 Some(pupil1),
@@ -834,8 +834,8 @@ pub fn training_master(
                 Some(ch),
                 TO_CHAR,
             );
-            send_to_char(pupil1, "You quickly pick up your weapon again.\r\n");
-            db.act(
+            game.send_to_char(pupil1, "You quickly pick up your weapon again.\r\n");
+            game.act(
                 "You yell at $n, as he fumbles, losing $s weapon.",
                 false,
                 Some(pupil1),
@@ -846,7 +846,7 @@ pub fn training_master(
         }
 
         4 => {
-            db.act(
+            game.act(
                 "$N tricks $n, and slashes him across the back.",
                 false,
                 Some(pupil1),
@@ -854,7 +854,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "$N tricks you, and slashes you across your back.",
                 false,
                 Some(pupil1),
@@ -862,7 +862,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "You trick $n, and quickly slash him across $s back.",
                 false,
                 Some(pupil1),
@@ -873,7 +873,7 @@ pub fn training_master(
         }
 
         5 => {
-            db.act(
+            game.act(
                 "$n lunges a blow at $N but $N parries skillfully.",
                 false,
                 Some(pupil1),
@@ -881,7 +881,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You lunge a blow at $N but $E parries skillfully.",
                 false,
                 Some(pupil1),
@@ -889,7 +889,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n lunges a blow at you, but you skillfully parry it.",
                 false,
                 Some(pupil1),
@@ -900,7 +900,7 @@ pub fn training_master(
         }
 
         6 => {
-            db.act(
+            game.act(
                 "$n clumsily tries to kick $N, but misses.",
                 false,
                 Some(pupil1),
@@ -908,7 +908,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You clumsily miss $N with your poor excuse for a kick.",
                 false,
                 Some(pupil1),
@@ -916,7 +916,7 @@ pub fn training_master(
                 Some(pupil2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n fails an unusually clumsy attempt at kicking you.",
                 false,
                 Some(pupil1),
@@ -927,8 +927,8 @@ pub fn training_master(
         }
 
         _ => {
-            send_to_char(ch, "You show your pupils an advanced technique.\r\n");
-            db.act(
+            game.send_to_char(ch, "You show your pupils an advanced technique.\r\n");
+            game.act(
                 "$n shows $s pupils an advanced technique.",
                 false,
                 Some(ch),
@@ -966,7 +966,7 @@ fn castle_twin_proc(
     }
 
     if cmd != 0 {
-        return block_way(&game.db, ch, cmd, arg, castle_virtual(&game.db, ctlnum), 1);
+        return block_way(game, ch, cmd, arg, castle_virtual(&game.db, ctlnum), 1);
     }
 
     let king = find_npc_by_name(&game.db, ch, "King Welmar");
@@ -1003,24 +1003,24 @@ fn castle_twin_proc(
  * This doesn't make sure he _can_ carry it...
  */
 fn james(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    return castle_cleaner(&mut game.db, ch, cmd, true);
+    return castle_cleaner( game, ch, cmd, true);
 }
 
 /*
  * Common code for James and the Cleaning Woman.
  */
-fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
+fn castle_cleaner(game: &mut Game, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool {
     if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
         return false;
     }
 
-    for i in clone_vec2(&db.world[ch.in_room() as usize].contents).iter() {
+    for i in clone_vec2(&game.db.world[ch.in_room() as usize].contents).iter() {
         if !is_trash(i) {
             continue;
         }
 
         if gripe {
-            db.act(
+            game.act(
                 "$n says: 'My oh my!  I ought to fire that lazy cleaning woman!'",
                 false,
                 Some(ch),
@@ -1028,7 +1028,7 @@ fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool
                 None,
                 TO_ROOM,
             );
-            db.act(
+            game.act(
                 "$n picks up a piece of trash.",
                 false,
                 Some(ch),
@@ -1037,7 +1037,7 @@ fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool
                 TO_ROOM,
             );
         }
-        db.obj_from_room(i);
+        game.db.obj_from_room(i);
         DB::obj_to_char(i, ch);
         return true;
     }
@@ -1050,7 +1050,7 @@ fn castle_cleaner(db: &mut DB, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> bool
  * Picks up any trash she finds...
  */
 fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    return castle_cleaner(&mut game.db, ch, cmd, false);
+    return castle_cleaner(game, ch, cmd, false);
 }
 
 /*
@@ -1092,7 +1092,7 @@ fn dick_n_david(
         banzaii(game, ch);
     }
 
-    block_way(&game.db, ch, cmd, argument, castle_virtual(&game.db, 36), 1)
+    block_way(game, ch, cmd, argument, castle_virtual(&game.db, 36), 1)
 }
 
 /*
@@ -1114,7 +1114,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
         let ch_guard = ch_guard.as_ref().unwrap();
         match rand_number(0, 5) {
             0 => {
-                db.act(
+                game.act(
                     "$N comes sharply into attention as $n inspects $M.",
                     false,
                     Some(ch),
@@ -1122,7 +1122,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "$N comes sharply into attention as you inspect $M.",
                     false,
                     Some(ch),
@@ -1130,7 +1130,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_CHAR,
                 );
-                db.act(
+                game.act(
                     "You go sharply into attention as $n inspects you.",
                     false,
                     Some(ch),
@@ -1140,7 +1140,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 );
             }
             1 => {
-                db.act(
+                game.act(
                     "$N looks very small, as $n roars at $M.",
                     false,
                     Some(ch),
@@ -1148,7 +1148,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "$N looks very small as you roar at $M.",
                     false,
                     Some(ch),
@@ -1156,7 +1156,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_CHAR,
                 );
-                db.act(
+                game.act(
                     "You feel very small as $N roars at you.",
                     false,
                     Some(ch),
@@ -1166,7 +1166,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 );
             }
             2 => {
-                db.act(
+                game.act(
                     "$n gives $N some Royal directions.",
                     false,
                     Some(ch),
@@ -1174,7 +1174,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "You give $N some Royal directions.",
                     false,
                     Some(ch),
@@ -1182,7 +1182,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_CHAR,
                 );
-                db.act(
+                game.act(
                     "$n gives you some Royal directions.",
                     false,
                     Some(ch),
@@ -1192,7 +1192,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 );
             }
             3 => {
-                db.act(
+                game.act(
                     "$n looks at you.",
                     false,
                     Some(ch),
@@ -1200,7 +1200,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_VICT,
                 );
-                db.act(
+                game.act(
                     "$n looks at $N.",
                     false,
                     Some(ch),
@@ -1208,7 +1208,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "$n growls: 'Those boots need polishing!'",
                     false,
                     Some(ch),
@@ -1216,7 +1216,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_ROOM,
                 );
-                db.act(
+                game.act(
                     "You growl at $N.",
                     false,
                     Some(ch),
@@ -1226,7 +1226,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 );
             }
             4 => {
-                db.act(
+                game.act(
                     "$n looks at you.",
                     false,
                     Some(ch),
@@ -1234,7 +1234,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_VICT,
                 );
-                db.act(
+                game.act(
                     "$n looks at $N.",
                     false,
                     Some(ch),
@@ -1242,7 +1242,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "$n growls: 'Straighten that collar!'",
                     false,
                     Some(ch),
@@ -1250,7 +1250,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_ROOM,
                 );
-                db.act(
+                game.act(
                     "You growl at $N.",
                     false,
                     Some(ch),
@@ -1260,7 +1260,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 );
             }
             _ => {
-                db.act(
+                game.act(
                     "$n looks at you.",
                     false,
                     Some(ch),
@@ -1268,7 +1268,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_VICT,
                 );
-                db.act(
+                game.act(
                     "$n looks at $N.",
                     false,
                     Some(ch),
@@ -1276,7 +1276,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_NOTVICT,
                 );
-                db.act(
+                game.act(
                     "$n growls: 'That chain mail looks rusty!  CLEAN IT !!!'",
                     false,
                     Some(ch),
@@ -1284,7 +1284,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     Some(ch_guard),
                     TO_ROOM,
                 );
-                db.act(
+                game.act(
                     "You growl at $N.",
                     false,
                     Some(ch),
@@ -1336,7 +1336,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
 
     match rand_number(0, 5) {
         0 => {
-            db.act(
+            game.act(
                 "$n rolls the dice and cheers loudly at the result.",
                 false,
                 Some(gambler1),
@@ -1344,7 +1344,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You roll the dice and cheer. GREAT!",
                 false,
                 Some(gambler1),
@@ -1352,7 +1352,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n cheers loudly as $e rolls the dice.",
                 false,
                 Some(gambler1),
@@ -1362,7 +1362,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
             );
         }
         1 => {
-            db.act(
+            game.act(
                 "$n curses the Goddess of Luck roundly as he sees $N's roll.",
                 false,
                 Some(gambler1),
@@ -1370,7 +1370,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You curse the Goddess of Luck as $N rolls.",
                 false,
                 Some(gambler1),
@@ -1378,7 +1378,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n swears angrily. You are in luck!",
                 false,
                 Some(gambler1),
@@ -1388,7 +1388,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
             );
         }
         2 => {
-            db.act(
+            game.act(
                 "$n sighs loudly and gives $N some gold.",
                 false,
                 Some(gambler1),
@@ -1396,7 +1396,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You sigh loudly at the pain of having to give $N some gold.",
                 false,
                 Some(gambler1),
@@ -1404,7 +1404,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n sighs loudly as $e gives you your rightful win.",
                 false,
                 Some(gambler1),
@@ -1414,7 +1414,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
             );
         }
         3 => {
-            db.act(
+            game.act(
                 "$n smiles remorsefully as $N's roll tops $s.",
                 false,
                 Some(gambler1),
@@ -1422,7 +1422,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You smile sadly as you see that $N beats you. Again.",
                 false,
                 Some(gambler1),
@@ -1430,7 +1430,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n smiles remorsefully as your roll tops $s.",
                 false,
                 Some(gambler1),
@@ -1440,7 +1440,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
             );
         }
         4 => {
-            db.act(
+            game.act(
                 "$n excitedly follows the dice with $s eyes.",
                 false,
                 Some(gambler1),
@@ -1448,7 +1448,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You excitedly follow the dice with your eyes.",
                 false,
                 Some(gambler1),
@@ -1456,7 +1456,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n excitedly follows the dice with $s eyes.",
                 false,
                 Some(gambler1),
@@ -1466,7 +1466,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
             );
         }
         _ => {
-            db.act(
+            game.act(
                 "$n says 'Well, my luck has to change soon', as he shakes the dice.",
                 false,
                 Some(gambler1),
@@ -1474,7 +1474,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_NOTVICT,
             );
-            db.act(
+            game.act(
                 "You say 'Well, my luck has to change soon' and shake the dice.",
                 false,
                 Some(gambler1),
@@ -1482,7 +1482,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 Some(gambler2),
                 TO_CHAR,
             );
-            db.act(
+            game.act(
                 "$n says 'Well, my luck has to change soon', as he shakes the dice.",
                 false,
                 Some(gambler1),

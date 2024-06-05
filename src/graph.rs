@@ -22,7 +22,7 @@ use crate::structs::{
     CharData, RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
-use crate::{send_to_char, Game};
+use crate::{ Game};
 
 struct BfsQueueStruct {
     room: RoomRnum,
@@ -163,28 +163,28 @@ pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     let db = &game.db;
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
-        send_to_char(ch, "You have no idea how.\r\n");
+        game.send_to_char(ch, "You have no idea how.\r\n");
         return;
     }
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        send_to_char(ch, "Whom are you trying to track?\r\n");
+        game.send_to_char(ch, "Whom are you trying to track?\r\n");
         return;
     }
     let vict;
     /* The person can't see the victim. */
     if {
-        vict = db.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        send_to_char(ch, "No one is around by that name.\r\n");
+        game.send_to_char(ch, "No one is around by that name.\r\n");
         return;
     }
     let vict = vict.as_ref().unwrap();
     /* We can't track the victim. */
     if vict.aff_flagged(AFF_NOTRACK) {
-        send_to_char(ch, "You sense no trail.\r\n");
+        game.send_to_char(ch, "You sense no trail.\r\n");
         return;
     }
 
@@ -200,7 +200,7 @@ pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 break;
             }
         }
-        send_to_char(
+        game.send_to_char(
             ch,
             format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
@@ -212,21 +212,21 @@ pub fn do_track(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
     match dir {
         BFS_ERROR => {
-            send_to_char(ch, "Hmm.. something seems to be wrong.\r\n");
+            game.send_to_char(ch, "Hmm.. something seems to be wrong.\r\n");
         }
 
         BFS_ALREADY_THERE => {
-            send_to_char(ch, "You're already in the same room!!\r\n");
+            game.send_to_char(ch, "You're already in the same room!!\r\n");
         }
 
         BFS_NO_PATH => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
-            send_to_char(
+            game.send_to_char(
                 ch,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );

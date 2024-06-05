@@ -3547,7 +3547,7 @@ pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
         _ => {}
     }
 
-    advance_level(ch, &mut game.db);
+    advance_level(ch, game);
 
     game.mudlog(
         BRF,
@@ -3573,7 +3573,7 @@ pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(ch: &Rc<CharData>, db: &mut DB) {
+pub fn advance_level(ch: &Rc<CharData>, game: &mut Game) {
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;
@@ -3627,8 +3627,8 @@ pub fn advance_level(ch: &Rc<CharData>, db: &mut DB) {
         ch.set_prf_flags_bits(PRF_HOLYLIGHT);
     }
 
-    snoop_check(ch);
-    db.save_char(ch);
+    snoop_check(game, ch.clone());
+    game.save_char(ch);
 }
 
 /*
