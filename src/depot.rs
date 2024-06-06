@@ -48,7 +48,7 @@ where
         if insert_pos.is_none() {
             let slot = Slot {
                 seq: self.seq,
-                free: true,
+                free: false,
                 value: item,
             };
             idx = self.slots.len() as u32;
@@ -56,9 +56,10 @@ where
         } else {
             idx = insert_pos.unwrap() as u32;
             self.slots[idx as usize].free = false;
-            self.slots[idx as usize].free = false;
+            self.slots[idx as usize].seq = self.seq;
             self.slots[idx as usize].value = item;
         }
+        self.size += 1;
         DepotId {
             index: idx,
             seq: self.seq,
@@ -66,11 +67,12 @@ where
     }
 
     pub fn remove(&mut self, id: DepotId) -> T {
+        
         if id.index as usize >= self.slots.len() {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
         }
         self.slots[id.index as usize].free = true;
         self.size -= 1;
@@ -79,20 +81,20 @@ where
 
     pub fn get(&self, id: DepotId) -> &T {
         if id.index as usize >= self.slots.len() {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
         }
         &self.slots[id.index as usize].value
     }
 
     pub fn get_mut(&mut self, id: DepotId) -> &mut T {
         if id.index as usize >= self.slots.len() {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION");
+            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
         }
         &mut self.slots[id.index as usize].value
     }

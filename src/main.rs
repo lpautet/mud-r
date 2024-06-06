@@ -317,6 +317,8 @@ fn main() -> ExitCode {
         pos += 1;
     }
 
+    //game.db.mini_mud = true;
+
     if pos < args.len() {
         if !args[pos].chars().next().unwrap().is_digit(10) {
             println!(
@@ -533,8 +535,9 @@ impl Game {
                     Ok(size) if size != 0 => {
                         self.process_input(d_id);
                     }
-                    Err(err) => error!("Error while peeking TCP Stream: {}", err),
-                    _ => (),
+                    Ok(_) => (),
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => (),
+                    Err(err) => error!("Error while peeking TCP Stream: {} ({})", err, err.kind()),
                 }
             }
 
