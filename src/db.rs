@@ -1811,17 +1811,17 @@ impl DB {
         let mut obj = ObjData {
             item_number: 0,
             in_room: Cell::new(0),
-            obj_flags: ObjFlagData {
-                value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
+            obj_flags: RefCell::from(ObjFlagData {
+                value: [0, 0, 0, 0],
                 type_flag: 0,
                 wear_flags: 0,
-                extra_flags: Cell::new(0),
-                weight: Cell::new(0),
+                extra_flags: 0,
+                weight: 0,
                 cost: 0,
                 cost_per_day: 0,
-                timer: Cell::new(0),
-                bitvector: Cell::new(0),
-            },
+                timer: 0,
+                bitvector: 0,
+            }),
             affected: [
                 Cell::from(ObjAffectedType {
                     location: 0,
@@ -3901,17 +3901,17 @@ impl ObjData {
         ObjData {
             item_number: 0,
             in_room: Cell::new(0),
-            obj_flags: ObjFlagData {
-                value: [Cell::new(0), Cell::new(0), Cell::new(0), Cell::new(0)],
+            obj_flags: RefCell::from(ObjFlagData {
+                value: [0, 0,0, 0],
                 type_flag: 0,
                 wear_flags: 0,
-                extra_flags: Cell::new(0),
-                weight: Cell::new(0),
+                extra_flags: 0,
+                weight: 0,
                 cost: 0,
                 cost_per_day: 0,
-                timer: Cell::new(0),
-                bitvector: Cell::new(0),
-            },
+                timer: 0,
+                bitvector: 0,
+            }),
             affected: [
                 Cell::from(ObjAffectedType {
                     location: 0,
@@ -3954,22 +3954,22 @@ impl ObjData {
         let mut ret = ObjData {
             item_number: self.item_number,
             in_room: Cell::from(self.in_room.get()),
-            obj_flags: ObjFlagData {
+            obj_flags: RefCell::from(ObjFlagData {
                 value: [
-                    Cell::from(self.obj_flags.value[0].get()),
-                    Cell::from(self.obj_flags.value[1].get()),
-                    Cell::from(self.obj_flags.value[2].get()),
-                    Cell::from(self.obj_flags.value[3].get()),
+                    self.obj_flags.borrow().value[0],
+                    self.obj_flags.borrow().value[1],
+                    self.obj_flags.borrow().value[2],
+                    self.obj_flags.borrow().value[3],
                 ],
-                type_flag: self.obj_flags.type_flag,
-                wear_flags: self.obj_flags.wear_flags,
-                extra_flags: Cell::from(self.obj_flags.extra_flags.get()),
-                weight: Cell::from(self.obj_flags.weight.get()),
-                cost: self.obj_flags.cost,
-                cost_per_day: self.obj_flags.cost_per_day,
-                timer: Cell::from(self.obj_flags.timer.get()),
-                bitvector: Cell::from(self.obj_flags.bitvector.get()),
-            },
+                type_flag: self.obj_flags.borrow().type_flag,
+                wear_flags: self.obj_flags.borrow().wear_flags,
+                extra_flags: self.obj_flags.borrow().extra_flags,
+                weight: self.obj_flags.borrow().weight,
+                cost: self.obj_flags.borrow().cost,
+                cost_per_day: self.obj_flags.borrow().cost_per_day,
+                timer: self.obj_flags.borrow().timer,
+                bitvector: self.obj_flags.borrow().bitvector,
+            }),
             affected: [
                 Cell::from(ObjAffectedType {
                     location: 0,

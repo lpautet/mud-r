@@ -613,23 +613,23 @@ pub struct TxtBlock {
 
 /* object flags; used in obj_data */
 pub struct ObjFlagData {
-    pub value: [Cell<i32>; 4],
+    pub value: [i32; 4],
     /* Values of the item (see list)    */
     pub type_flag: u8,
     /* Type of item			    */
     pub wear_flags: i32,
     /* Where you can wear it	    */
-    pub(crate) extra_flags: Cell<i32>,
+    pub(crate) extra_flags: i32,
     /* If it hums, glows, etc.	    */
-    pub weight: Cell<i32>,
+    pub weight: i32,
     /* Weigt what else                  */
     pub cost: i32,
     /* Value when sold (gp.)            */
     pub cost_per_day: i32,
     /* Cost to keep pr. real day        */
-    pub timer: Cell<i32>,
+    pub timer: i32,
     /* Timer for object                 */
-    pub bitvector: Cell<i64>,
+    pub bitvector: i64,
     /* To set chars bits                */
 }
 
@@ -649,7 +649,7 @@ pub struct ObjData {
     /* Where in data-base			*/
     pub in_room: Cell<RoomRnum>,
     /* In what room -1 when conta/carr	*/
-    pub obj_flags: ObjFlagData,
+    pub obj_flags: RefCell<ObjFlagData>,
     /* Object information               */
     pub affected: [Cell<ObjAffectedType>; MAX_OBJ_AFFECT as usize],
     /* affects */
