@@ -19,7 +19,7 @@ use crate::db::DB;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
-    CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
+    MeRef, CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
     MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY,
     NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
@@ -45,7 +45,7 @@ impl Game {
                     );
                 } else {
                     if self.db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
-                        self, ch, ch, 0, "",
+                        self, ch, MeRef::Char(ch), 0, "",
                     ) {
                         continue; /* go to next char */
                     }

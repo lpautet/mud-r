@@ -9,7 +9,6 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -17,8 +16,14 @@ use crate::depot::DepotId;
 use crate::interpreter::AliasData;
 use crate::Game;
 
+pub enum MeRef<'a> {
+    None,
+    Char(&'a Rc<CharData>),
+    Obj(&'a Rc<ObjData>),
+}
+
 pub type Special =
-    fn(game: &mut Game, ch: &Rc<CharData>, me: &dyn Any, cmd: i32, argument: &str) -> bool;
+    fn(game: &mut Game, ch: &Rc<CharData>, me: MeRef, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;

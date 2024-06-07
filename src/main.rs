@@ -316,7 +316,7 @@ fn main() -> ExitCode {
         pos += 1;
     }
 
-    game.db.mini_mud = true;
+    //game.db.mini_mud = true;
 
     if pos < args.len() {
         if !args[pos].chars().next().unwrap().is_digit(10) {

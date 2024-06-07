@@ -16,7 +16,6 @@
 /* You can modify the following constants to fit your own MUD.  */
 
 /* minimum level a player must be to send mail	*/
-use std::any::Any;
 use std::cell::RefCell;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
@@ -25,14 +24,14 @@ use std::path::Path;
 use std::rc::Rc;
 use std::{mem, process, slice};
 
-use log::{error, info};
 use crate::VictimRef;
+use log::{error, info};
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
 use crate::modify::string_write;
 use crate::structs::{
-    CharData, CharFileU, ITEM_NOTE, ITEM_WEAR_HOLD, ITEM_WEAR_TAKE, NOTHING, PLR_DELETED,
+    CharData, CharFileU, MeRef, ITEM_NOTE, ITEM_WEAR_HOLD, ITEM_WEAR_TAKE, NOTHING, PLR_DELETED,
     PLR_MAILING,
 };
 use crate::util::{ctime, time_now, touch};
@@ -680,13 +679,7 @@ From: {}\r\n\
 * routines.  Written by Jeremy Elson (jelson@circlemud.org) *
 ****************************************************************/
 
-pub fn postmaster(
-    game: &mut Game,
-    ch: &Rc<CharData>,
-    me: &dyn Any,
-    cmd: i32,
-    argument: &str,
-) -> bool {
+pub fn postmaster(game: &mut Game, ch: &Rc<CharData>, me: MeRef, cmd: i32, argument: &str) -> bool {
     if ch.desc.borrow().is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
     }
@@ -703,31 +696,22 @@ pub fn postmaster(
     }
 
     return if cmd_is(cmd, "mail") {
-        postmaster_send_mail(
-            game,
-            ch,
-            me.downcast_ref::<Rc<CharData>>().unwrap(),
-            cmd,
-            argument,
-        );
+        match me {
+            MeRef::Char(mailman) => postmaster_send_mail(game, ch, mailman, cmd, argument),
+            _ => panic!("Unexpected MeRef type in postmaster"),
+        }
         true
     } else if cmd_is(cmd, "check") {
-        postmaster_check_mail(
-            game,
-            ch,
-            me.downcast_ref::<Rc<CharData>>().unwrap(),
-            cmd,
-            argument,
-        );
+        match me {
+            MeRef::Char(mailman) => postmaster_check_mail(game, ch, mailman, cmd, argument),
+            _ => panic!("Unexpected MeRef type in postmaster"),
+        }
         true
     } else if cmd_is(cmd, "receive") {
-        postmaster_receive_mail(
-            game,
-            ch,
-            me.downcast_ref::<Rc<CharData>>().unwrap(),
-            cmd,
-            argument,
-        );
+        match me {
+            MeRef::Char(mailman) => postmaster_receive_mail(game, ch, mailman, cmd, argument),
+            _ => panic!("Unexpected MeRef type in postmaster"),
+        }
         true
     } else {
         false
@@ -746,7 +730,14 @@ fn postmaster_send_mail(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
+        game.act(
+            &buf,
+            false,
+            Some(mailman),
+            None,
+            Some(VictimRef::Char(ch)),
+            TO_VICT,
+        );
         return;
     }
     let mut buf = String::new();
@@ -771,7 +762,14 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
+        game.act(
+            &buf,
+            false,
+            Some(mailman),
+            None,
+            Some(VictimRef::Char(ch)),
+            TO_VICT,
+        );
         return;
     }
     let recipient = game.db.get_id_by_name(&buf);
@@ -800,7 +798,14 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
 
-    game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
+    game.act(
+        &buf,
+        false,
+        Some(mailman),
+        None,
+        Some(VictimRef::Char(ch)),
+        TO_VICT,
+    );
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
@@ -850,7 +855,14 @@ fn postmaster_receive_mail(
 ) {
     if !game.db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
-        game.act(buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
+        game.act(
+            buf,
+            false,
+            Some(mailman),
+            None,
+            Some(VictimRef::Char(ch)),
+            TO_VICT,
+        );
         return;
     }
     while game.db.mails.has_mail(ch.get_idnum()) {

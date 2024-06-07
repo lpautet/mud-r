@@ -9,7 +9,6 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -35,7 +34,7 @@ use crate::spells::{
     SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
+    MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
     PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::{add_follower, clone_vec, clone_vec2, rand_number};
@@ -140,7 +139,7 @@ pub fn list_skills(game: &mut Game, ch: &Rc<CharData>) {
     page_string(game, ch.desc.borrow().unwrap(), &buf, true);
 }
 
-pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let db = &game.db;
     if ch.is_npc() || !cmd_is(cmd, "practice") {
         return false;
@@ -192,7 +191,7 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argume
     true
 }
 
-pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for k in &list {
         game.act(
@@ -265,7 +264,7 @@ impl Mayor {
 const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
 const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 
-pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
 
     if !game.db.mayor.move_ {
         if game.db.time_info.hours == 6 {
@@ -457,7 +456,7 @@ fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
 /*
  * Quite lethal to low-level characters.
  */
-pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || ch.get_pos() != POS_FIGHTING || ch.fighting().is_none() {
         return false;
     }
@@ -495,7 +494,7 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
     return true;
 }
 
-pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || ch.get_pos() != POS_STANDING {
         return false;
     }
@@ -514,7 +513,7 @@ pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
 pub fn magic_user(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -602,11 +601,15 @@ pub fn magic_user(
 pub fn guild_guard(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    let guard = me.downcast_ref::<Rc<CharData>>().unwrap();
+    let guard;
+    match me {
+        MeRef::Char(me_ch) => { guard = me_ch },
+        _ => panic!("Unexpected MeRef type in guild_guard"),
+    }
     let buf = "The guard humiliates you, and blocks your way.\r\n";
     let buf2 = "The guard humiliates $n, and blocks $s way.";
 
@@ -638,7 +641,7 @@ pub fn guild_guard(
     false
 }
 
-pub fn puff(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+pub fn puff(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 {
         return false;
     }
@@ -664,7 +667,7 @@ pub fn puff(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
     };
 }
 
-pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || !ch.awake() {
         return false;
     }
@@ -698,7 +701,7 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
 pub fn janitor(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -731,7 +734,7 @@ pub fn janitor(
 pub fn cityguard(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -839,7 +842,7 @@ fn pet_price(pet: &Rc<CharData>) -> i32 {
 pub fn pet_shops(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
@@ -921,7 +924,7 @@ pub fn pet_shops(
 *  Special procedures for objects                                     *
 ******************************************************************** */
 
-pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     return if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {
             game.send_to_char(

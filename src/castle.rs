@@ -15,7 +15,6 @@ Change it to apply to your chosen zone number. The default zone
 number (On Alex and Alfa) is 80 (That is rooms and mobs have numbers
 in the 8000 series... */
 
-use std::any::Any;
 use std::iter::Iterator;
 use std::rc::Rc;
 
@@ -28,7 +27,7 @@ use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
+    MeRef, CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
     NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::{clone_vec2, rand_number};
@@ -509,7 +508,7 @@ const MONOLOG: [&str; 4] = [
 pub fn king_welmar(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -662,7 +661,7 @@ pub fn king_welmar(
 pub fn training_master(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -932,11 +931,11 @@ pub fn training_master(
     false
 }
 
-pub fn tom(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn tom(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     return castle_twin_proc(game, ch, cmd, argument, 48, "Tim");
 }
 
-pub fn tim(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, argument: &str) -> bool {
+pub fn tim(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     return castle_twin_proc(game, ch, cmd, argument, 49, "Tom");
 }
 
@@ -992,7 +991,7 @@ fn castle_twin_proc(
  *
  * This doesn't make sure he _can_ carry it...
  */
-fn james(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+fn james(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     return castle_cleaner(game, ch, cmd, true);
 }
 
@@ -1039,7 +1038,7 @@ fn castle_cleaner(game: &mut Game, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> 
  * Routine for the Cleaning Woman.
  * Picks up any trash she finds...
  */
-fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     return castle_cleaner(game, ch, cmd, false);
 }
 
@@ -1051,7 +1050,7 @@ fn cleaning(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argume
 fn castle_guard(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
@@ -1070,7 +1069,7 @@ fn castle_guard(
 fn dick_n_david(
     game: &mut Game,
     ch: &Rc<CharData>,
-    _me: &dyn Any,
+    _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
@@ -1089,7 +1088,7 @@ fn dick_n_david(
  * Routine: peter
  * Routine for Captain of the Guards.
  */
-fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+fn peter(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
         return false;
     }
@@ -1293,7 +1292,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
  * Procedure for Jerry and Michael in x08 of King's Castle.
  * Code by Sapowox modified by Pjotr.(Original code from Master)
  */
-fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
+fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if !ch.awake() || ch.get_pos() == POS_FIGHTING {
         return false;
     }

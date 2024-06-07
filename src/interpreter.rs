@@ -68,7 +68,7 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
+    MeRef, CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
     NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING,
     POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
@@ -3222,7 +3222,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
     /* special in room? */
     if game.db.get_room_spec(ch.in_room()).is_some() {
         let f = game.db.get_room_spec(ch.in_room()).unwrap();
-        if f(game, ch, &0, cmd, arg) {
+        if f(game, ch, MeRef::None, cmd, arg) {
             return true;
         }
     }
@@ -3237,7 +3237,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
         {
             let eq = ch.get_eq(j);
             let obj = eq.as_ref().unwrap();
-            if game.db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, obj, cmd, arg)
+            if game.db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, MeRef::Obj(obj), cmd, arg)
             {
                 return true;
             }
@@ -3247,7 +3247,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
     /* special in inventory? */
     for i in ch.carrying.borrow().iter() {
         if game.db.get_obj_spec(i).is_some() {
-            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3259,7 +3259,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
     for k in peoples_in_room.iter() {
         if !k.mob_flagged(MOB_NOTDEADYET) {
             if game.db.get_mob_spec(k).is_some()
-                && game.db.get_mob_spec(k).as_ref().unwrap()(game, ch, k, cmd, arg)
+                && game.db.get_mob_spec(k).as_ref().unwrap()(game, ch, MeRef::Char(k), cmd, arg)
             {
                 return true;
             }
@@ -3269,7 +3269,7 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
     let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in peoples_in_room.iter() {
         if game.db.get_obj_spec(i).is_some() {
-            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, i, cmd, arg) {
+            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }

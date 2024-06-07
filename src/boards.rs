@@ -43,7 +43,6 @@ TO ADD A NEW BOARD, simply follow our easy 4-step program:
 
 */
 
-use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
@@ -58,7 +57,7 @@ use crate::interpreter::{delete_doubledollar, find_command, is_number, one_argum
 use crate::modify::{page_string, string_write};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ObjData, ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL,
+    MeRef, CharData, ObjData, ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL,
     NOTHING,
 };
 use crate::util::{ctime, time_now};
@@ -262,12 +261,16 @@ fn init_boards(db: &mut DB) {
 pub fn gen_board(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     let cmd = cmd as usize;
-    let board = me.downcast_ref::<Rc<ObjData>>().unwrap();
+    let board;
+    match me {
+        MeRef::Obj(me_obj) => {board = me_obj},
+        _ => panic!("Unexpected MeRef type in receptionist"),
+    }
     if !game.db.boards.loaded {
         init_boards(&mut game.db);
         game.db.boards.loaded = true;

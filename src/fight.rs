@@ -35,7 +35,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE,
+    MeRef, CharData, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON, ITEM_WEAR_TAKE,
     LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS,
     NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP,
@@ -1328,7 +1328,7 @@ impl Game {
                 && !ch.mob_flagged(MOB_NOTDEADYET)
             {
                 let actbuf = String::new();
-                self.db.get_mob_spec(ch).as_ref().unwrap()(self, ch, ch, 0, actbuf.as_str());
+                self.db.get_mob_spec(ch).as_ref().unwrap()(self, ch, MeRef::Char(ch), 0, actbuf.as_str());
             }
         }
     }

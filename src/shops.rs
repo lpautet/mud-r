@@ -9,7 +9,6 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::any::Any;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -30,7 +29,7 @@ use crate::handler::{fname, get_number, isname, obj_from_char};
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
 use crate::structs::{
-    CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, AFF_CHARM,
+    MeRef, CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, AFF_CHARM,
     ITEM_DRINKCON, ITEM_NOSELL, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
     NOWHERE,
 };
@@ -1306,13 +1305,15 @@ fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
 pub fn shop_keeper(
     game: &mut Game,
     ch: &Rc<CharData>,
-    me: &dyn Any,
+    me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
-    let keeper = me
-        .downcast_ref::<Rc<CharData>>()
-        .expect("Unexpected type for Rc<CharData> in shop_keeper");
+    let keeper;
+    match me {
+        MeRef::Char(me_rch) => keeper = me_rch,
+        _ => panic!("Unexpected MeRef type in shop_keeper"),
+    }
     let shop_nr;
     {
         let shops = &game.db.shop_index;
