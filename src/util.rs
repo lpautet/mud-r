@@ -18,6 +18,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::VictimRef;
 
 use chrono::{TimeZone, Utc};
 use log::{error, info};
@@ -1527,7 +1528,7 @@ impl Game {
                 false,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_CHAR,
             );
             self.act(
@@ -1535,7 +1536,7 @@ impl Game {
                 false,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_NOTVICT,
             );
             self.act(
@@ -1543,7 +1544,7 @@ impl Game {
                 false,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
@@ -1555,7 +1556,7 @@ impl Game {
                 false,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_CHAR,
             );
             self.act(
@@ -1563,15 +1564,16 @@ impl Game {
                 true,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_NOTVICT,
             );
+            let vr = ch.master.borrow();
             self.act(
                 "$n stops following you.",
                 true,
                 Some(ch),
                 None,
-                Some(ch.master.borrow().as_ref().unwrap()),
+                Some(VictimRef::Char(vr.as_ref().unwrap())),
                 TO_VICT,
             );
         }
@@ -1635,7 +1637,7 @@ pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
         false,
         Some(ch),
         None,
-        Some(leader),
+        Some(VictimRef::Char(leader)),
         TO_CHAR,
     );
     if game.can_see(leader, ch) {
@@ -1644,8 +1646,8 @@ pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
             true,
             Some(ch),
             None,
-            Some(leader),
-            TO_VICT,
+            Some(VictimRef::Char(leader)),
+                        TO_VICT,
         );
     }
     game.act(
@@ -1653,8 +1655,8 @@ pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
         true,
         Some(ch),
         None,
-        Some(leader),
-        TO_NOTVICT,
+        Some(VictimRef::Char(leader)),
+                TO_NOTVICT,
     );
 }
 

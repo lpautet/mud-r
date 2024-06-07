@@ -10,6 +10,7 @@
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
+use crate::VictimRef;
 
 use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
@@ -396,7 +397,7 @@ pub fn spell_summon(
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
             game.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
-                   false, Some(ch), None, Some(victim), TO_CHAR);
+                   false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
             return;
         }
         if !victim.is_npc()
@@ -463,7 +464,7 @@ pub fn spell_summon(
         false,
         Some(ch),
         None,
-        Some(victim),
+        Some(VictimRef::Char(victim)),
         TO_VICT,
     );
     look_at_room(game, victim, false);
@@ -609,7 +610,7 @@ pub fn spell_charm(
             false,
             Some(ch),
             None,
-            Some(victim),
+            Some(VictimRef::Char(victim)),
             TO_VICT,
         );
         if victim.is_npc() {
@@ -893,7 +894,7 @@ pub fn spell_detect_poison(
                     false,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
             } else {
@@ -902,7 +903,7 @@ pub fn spell_detect_poison(
                     false,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
             }

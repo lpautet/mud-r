@@ -11,7 +11,7 @@
 
 use std::borrow::Borrow;
 use std::rc::Rc;
-
+use crate::VictimRef;
 use crate::act_movement::do_simple_move;
 use crate::config::{NOPERSON, OK, PK_ALLOWED};
 use crate::fight::{check_killer, compute_armor_class};
@@ -77,7 +77,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 false,
                 Some(ch),
                 None,
-                Some(helpee),
+                Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
         } else if game.can_see(ch, opponent.as_ref().unwrap()) {
@@ -86,7 +86,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 false,
                 Some(ch),
                 None,
-                Some(helpee),
+                Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
         } else if !PK_ALLOWED && !opponent.as_ref().unwrap().is_npc() {
@@ -96,7 +96,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 false,
                 Some(ch),
                 None,
-                Some(opponent.as_ref().unwrap()),
+                Some(VictimRef::Char(opponent.as_ref().unwrap())),
                 TO_CHAR,
             );
         } else {
@@ -106,7 +106,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 false,
                 Some(helpee),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
             game.act(
@@ -114,7 +114,7 @@ pub fn do_assist(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                 false,
                 Some(ch),
                 None,
-                Some(helpee),
+                Some(VictimRef::Char(helpee)),
                 TO_NOTVICT,
             );
             game.hit(ch, opponent.as_ref().unwrap(), TYPE_UNDEFINED);
@@ -141,7 +141,7 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
             false,
             Some(ch),
             None,
-            Some(vict.as_ref().unwrap()),
+            Some(VictimRef::Char(vict.as_ref().unwrap())),
             TO_ROOM,
         );
     } else if ch.aff_flagged(AFF_CHARM)
@@ -152,7 +152,7 @@ pub fn do_hit(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, s
             false,
             Some(ch),
             None,
-            Some(vict.as_ref().unwrap()),
+            Some(VictimRef::Char(vict.as_ref().unwrap())),
             TO_CHAR,
         );
     } else {
@@ -210,7 +210,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_CHAR,
             );
             game.act(
@@ -218,7 +218,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 false,
                 Some(vict.as_ref().unwrap()),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
             game.act(
@@ -226,7 +226,7 @@ pub fn do_kill(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, s
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_NOTVICT,
             );
             game.raw_kill(vict.as_ref().unwrap());
@@ -281,7 +281,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             false,
             Some(vict),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_CHAR,
         );
         game.act(
@@ -289,7 +289,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             false,
             Some(vict),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         game.act(
@@ -297,7 +297,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             false,
             Some(vict),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
         game.hit(vict, ch, TYPE_UNDEFINED);
@@ -344,13 +344,13 @@ pub fn do_order(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             let vict = vict.as_ref().unwrap();
 
             let buf = format!("$N orders you to '{}'", message);
-            game.act(&buf, false, Some(vict), None, Some(ch), TO_CHAR);
+            game.act(&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
             game.act(
                 "$n gives $N an order.",
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_ROOM,
             );
 
@@ -552,7 +552,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
         return;
@@ -571,7 +571,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         false,
         Some(vict),
         None,
-        Some(ch),
+        Some(VictimRef::Char(ch)),
         TO_CHAR,
     );
     game.act(
@@ -579,7 +579,7 @@ pub fn do_rescue(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         false,
         Some(ch),
         None,
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
 

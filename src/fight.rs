@@ -29,6 +29,7 @@ use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
 use crate::shops::ok_damage_shopkeeper;
+use crate::VictimRef;
 use crate::spells::{
     AttackHitType, SKILL_BACKSTAB, SPELL_INVISIBLE, SPELL_SLEEP, TYPE_HIT, TYPE_SUFFERING,
     TYPE_UNDEFINED,
@@ -661,7 +662,7 @@ impl Game {
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(&buf, false, Some(ch), None, Some(victim), TO_NOTVICT);
+        self.act(&buf, false, Some(ch), None, Some(VictimRef::Char(victim)), TO_NOTVICT);
 
         /* damage message to damager */
         self.send_to_char(ch, CCYEL!(ch, C_CMP));
@@ -670,7 +671,7 @@ impl Game {
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(&buf, false, Some(ch), None, Some(victim), TO_CHAR);
+        self.act(&buf, false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
         self.send_to_char(ch, CCNRM!(ch, C_CMP));
 
         /* damage message to damagee */
@@ -685,7 +686,7 @@ impl Game {
             false,
             Some(ch),
             None,
-            Some(victim),
+            Some(VictimRef::Char(victim)),
             TO_VICT | TO_SLEEP,
         );
         self.send_to_char(victim, CCNRM!(victim, C_CMP));
@@ -721,7 +722,7 @@ impl Game {
                         false,
                         Some(ch),
                         weapref,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_CHAR,
                     );
                     self.act(
@@ -729,7 +730,7 @@ impl Game {
                         false,
                         Some(ch),
                         weapref,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_VICT,
                     );
                     self.act(
@@ -737,7 +738,7 @@ impl Game {
                         false,
                         Some(ch),
                         weapref,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                 } else if dam != 0 {
@@ -756,7 +757,7 @@ impl Game {
                                 false,
                                 Some(ch),
                                 weapref,
-                                Some(vict),
+                                Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
                             self.send_to_char(ch, CCNRM!(ch, C_CMP));
@@ -768,7 +769,7 @@ impl Game {
                             false,
                             Some(ch),
                             weapref,
-                            Some(vict),
+                            Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
                         self.send_to_char(vict, CCNRM!(vict, C_CMP));
@@ -778,7 +779,7 @@ impl Game {
                             false,
                             Some(ch),
                             weapref,
-                            Some(vict),
+                            Some(VictimRef::Char(vict)),
                             TO_NOTVICT,
                         );
                     } else {
@@ -792,7 +793,7 @@ impl Game {
                                 false,
                                 Some(ch),
                                 weapref,
-                                Some(vict),
+                                Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
                             self.send_to_char(ch, CCNRM!(ch, C_CMP));
@@ -804,7 +805,7 @@ impl Game {
                             false,
                             Some(ch),
                             weapref,
-                            Some(vict),
+                            Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
                         self.send_to_char(vict, CCNRM!(vict, C_CMP));
@@ -814,7 +815,7 @@ impl Game {
                             false,
                             Some(ch),
                             weapref,
-                            Some(vict),
+                            Some(VictimRef::Char(vict)),
                             TO_NOTVICT,
                         );
                     }
@@ -830,7 +831,7 @@ impl Game {
                             false,
                             Some(ch),
                             weapref,
-                            Some(vict),
+                            Some(VictimRef::Char(vict)),
                             TO_CHAR,
                         );
                         self.send_to_char(ch, CCNRM!(ch, C_CMP));
@@ -842,7 +843,7 @@ impl Game {
                         false,
                         Some(ch),
                         weapref,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_VICT | TO_SLEEP,
                     );
                     self.send_to_char(vict, CCNRM!(vict, C_CMP));
@@ -852,7 +853,7 @@ impl Game {
                         false,
                         Some(ch),
                         weapref,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                 }

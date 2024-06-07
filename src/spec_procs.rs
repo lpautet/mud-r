@@ -13,6 +13,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
+use crate::VictimRef;
 
 use crate::act_comm::do_say;
 use crate::act_item::do_drop;
@@ -432,7 +433,7 @@ fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
             false,
             Some(ch),
             None,
-            Some(victim),
+            Some(VictimRef::Char(victim)),
             TO_VICT,
         );
         game.act(
@@ -440,7 +441,7 @@ fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
             true,
             Some(ch),
             None,
-            Some(victim),
+            Some(VictimRef::Char(victim)),
             TO_NOTVICT,
         );
     } else {
@@ -471,7 +472,7 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         true,
         Some(ch),
         None,
-        Some(ch.fighting().as_ref().unwrap()),
+        Some(VictimRef::Char(ch.fighting().as_ref().unwrap())),
         TO_NOTVICT,
     );
     game.act(
@@ -479,7 +480,7 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argum
         true,
         Some(ch),
         None,
-        Some(ch.fighting().as_ref().unwrap()),
+        Some(VictimRef::Char(ch.fighting().as_ref().unwrap())),
         TO_VICT,
     );
     call_magic(
@@ -905,7 +906,7 @@ pub fn pet_shops(
             false,
             Some(ch),
             None,
-            Some(&pet),
+            Some(VictimRef::Char(&pet)),
             TO_ROOM,
         );
 

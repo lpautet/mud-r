@@ -16,6 +16,7 @@ use std::rc::Rc;
 
 use log::error;
 use regex::Regex;
+use crate::VictimRef;
 
 use crate::db::{DB, SOCMESS_FILE};
 use crate::handler::FIND_CHAR_ROOM;
@@ -117,7 +118,7 @@ pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
         } else {
@@ -126,7 +127,7 @@ pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
             game.act(
@@ -134,7 +135,7 @@ pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 action_hide,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
             game.act(
@@ -142,7 +143,7 @@ pub fn do_action(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize,
                 action_hide,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
         }
@@ -177,7 +178,7 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                                     false,
                                     Some(ch),
                                     None,
-                                    Some(victim),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             } else {
@@ -186,7 +187,7 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                                     false,
                                     Some(ch),
                                     None,
-                                    Some(victim),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             }
@@ -198,12 +199,12 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                                     false,
                                     Some(ch),
                                     None,
-                                    Some(victim),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             } else {
                                 game.act("$n tells you that you'd lose a beauty contest against a troll.",
-                                       false, Some(ch), None, Some(victim), TO_VICT);
+                                       false, Some(ch), None, Some(VictimRef::Char(victim)), TO_VICT);
                             }
                         }
                     }
@@ -213,7 +214,7 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                             false,
                             Some(ch),
                             None,
-                            Some(victim),
+                            Some(VictimRef::Char(victim)),
                             TO_VICT,
                         );
                     }
@@ -223,7 +224,7 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                             false,
                             Some(ch),
                             None,
-                            Some(victim),
+                            Some(VictimRef::Char(victim)),
                             TO_VICT,
                         );
                     }
@@ -234,7 +235,7 @@ pub fn do_insult(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
                     true,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(VictimRef::Char(victim)),
                     TO_NOTVICT,
                 );
             } else {

@@ -13,6 +13,7 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
+use crate::VictimRef;
 
 use crate::config::{DONATION_ROOM_1, NOPERSON, OK};
 use crate::constants::{DRINKNAMES, DRINKS, DRINK_AFF, STR_APP};
@@ -47,7 +48,7 @@ fn perform_put(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<
             false,
             Some(ch),
             Some(obj),
-            Some(cont),
+            Some(VictimRef::Obj(cont)),
             TO_CHAR,
         );
     } else if obj.obj_flagged(ITEM_NODROP) && cont.in_room() != NOWHERE {
@@ -68,7 +69,7 @@ fn perform_put(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<
             true,
             Some(ch),
             Some(obj),
-            Some(cont),
+            Some(VictimRef::Obj(cont)),
             TO_ROOM,
         );
 
@@ -81,7 +82,7 @@ fn perform_put(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<
                 false,
                 Some(ch),
                 Some(obj),
-                Some(cont),
+                Some(VictimRef::Obj(cont)),
                 TO_CHAR,
             );
         } else {
@@ -90,7 +91,7 @@ fn perform_put(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, cont: &Rc<
                 false,
                 Some(ch),
                 Some(obj),
-                Some(cont),
+                Some(VictimRef::Obj(cont)),
                 TO_CHAR,
             );
         }
@@ -300,7 +301,7 @@ fn perform_get_from_container(
                 false,
                 Some(ch),
                 Some(obj),
-                Some(cont),
+                Some(VictimRef::Obj(cont)),
                 TO_CHAR,
             );
             game.act(
@@ -308,7 +309,7 @@ fn perform_get_from_container(
                 true,
                 Some(ch),
                 Some(obj),
-                Some(cont),
+                Some(VictimRef::Obj(cont)),
                 TO_ROOM,
             );
             get_check_money(game, ch, obj);
@@ -842,7 +843,7 @@ fn perform_give(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &R
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
         return;
@@ -853,7 +854,7 @@ fn perform_give(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &R
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
         return;
@@ -865,7 +866,7 @@ fn perform_give(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &R
         false,
         Some(ch),
         Some(obj),
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_CHAR,
     );
     game.act(
@@ -873,7 +874,7 @@ fn perform_give(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &R
         false,
         Some(ch),
         Some(obj),
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_VICT,
     );
     game.act(
@@ -881,7 +882,7 @@ fn perform_give(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, obj: &R
         true,
         Some(ch),
         Some(obj),
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
 }
@@ -925,10 +926,10 @@ fn perform_give_gold(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, am
         amount,
         if amount == 1 { "" } else { "s" }
     );
-    game.act(&buf, false, Some(ch), None, Some(vict), TO_VICT);
+    game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_VICT);
 
     buf = format!("$n gives {} to $N.", money_desc(amount));
-    game.act(&buf, true, Some(ch), None, Some(vict), TO_NOTVICT);
+    game.act(&buf, true, Some(ch), None, Some(VictimRef::Char(vict)), TO_NOTVICT);
 
     if ch.is_npc() || ch.get_level() < LVL_GOD as u8 {
         ch.set_gold(ch.get_gold() - amount);
@@ -1595,7 +1596,7 @@ pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             false,
             Some(ch),
             Some(to_obj),
-            Some(from_obj),
+            Some(VictimRef::Obj(from_obj)),
             TO_CHAR,
         );
         game.act(
@@ -1603,7 +1604,7 @@ pub fn do_pour(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             true,
             Some(ch),
             Some(to_obj),
-            Some(from_obj),
+            Some(VictimRef::Obj(from_obj)),
             TO_ROOM,
         );
     }

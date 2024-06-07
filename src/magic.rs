@@ -13,6 +13,7 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
+use crate::VictimRef;
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
@@ -240,7 +241,7 @@ pub fn mag_damage(
                     false,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
                 return 0;
@@ -257,7 +258,7 @@ pub fn mag_damage(
                     false,
                     Some(ch),
                     None,
-                    Some(victim),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
                 return 0;
@@ -565,10 +566,10 @@ pub fn mag_affects(
     }
 
     if !to_vict.is_empty() {
-        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(ch), TO_CHAR);
+        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(ch), TO_ROOM);
+        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 /*
@@ -863,7 +864,7 @@ pub fn mag_summons(
             false,
             Some(ch),
             None,
-            Some(mob),
+            Some(VictimRef::Char(mob)),
             TO_ROOM,
         );
         add_follower(game, mob, ch);
@@ -973,10 +974,10 @@ pub fn mag_unaffects(
 
     affect_from_char(victim, spell as i16);
     if !to_vict.is_empty() {
-        game.act(to_vict, false, Some(victim), None, Some(ch), TO_CHAR);
+        game.act(to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, false, Some(victim), None, Some(ch), TO_ROOM);
+        game.act(to_room, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 

@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use log::{error, info};
 use regex::Regex;
-
+use crate::VictimRef;
 use crate::act_social::{do_action, do_insult};
 use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
 use crate::config::NOPERSON;
@@ -233,7 +233,7 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
             false,
             Some(i),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -249,7 +249,7 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
 
     if found {
         game.send_to_char(ch, "\r\n"); /* act() does capitalization. */
-        game.act("$n is using:", false, Some(i), None, Some(ch), TO_VICT);
+        game.act("$n is using:", false, Some(i), None, Some(VictimRef::Char(ch)), TO_VICT);
         for j in 0..NUM_WEARS {
             if i.get_eq(j).is_some() && game.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
                 game.send_to_char(ch, WEAR_WHERE[j as usize]);
@@ -264,7 +264,7 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
             false,
             Some(i),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         for tmp_obj in i.carrying.borrow().iter() {
@@ -314,7 +314,7 @@ fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
                 false,
                 Some(i),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -324,7 +324,7 @@ fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
                 false,
                 Some(i),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -402,7 +402,7 @@ fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
             false,
             Some(i),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -795,7 +795,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                     true,
                     Some(ch),
                     None,
-                    Some(found_char),
+                    Some(VictimRef::Char(found_char)),
                     TO_VICT,
                 );
             }
@@ -804,7 +804,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 true,
                 Some(ch),
                 None,
-                Some(found_char),
+                Some(VictimRef::Char(found_char)),
                 TO_NOTVICT,
             );
         }

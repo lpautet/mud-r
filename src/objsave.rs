@@ -19,6 +19,7 @@ use std::rc::Rc;
 use std::{fs, mem, slice};
 
 use log::{error, info};
+use crate::VictimRef;
 
 use crate::act_social::do_action;
 use crate::class::invalid_class;
@@ -1220,7 +1221,7 @@ on hand and in the bank.'\r\n",
         rent_deadline,
         if rent_deadline != 1 { "s" } else { "" }
     );
-    game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+    game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
 }
 
 fn crash_report_unrentables(
@@ -1234,7 +1235,7 @@ fn crash_report_unrentables(
     if crash_is_unrentable(obj) {
         has_norents = 1;
         let buf = format!("$n tells you, 'You cannot store {}.'", game.objs(obj, ch));
-        game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
     }
     for o in obj.contains.borrow().iter() {
         has_norents += crash_report_unrentables(game, ch, recep, o);
@@ -1262,7 +1263,7 @@ fn crash_report_rent(
                 obj.get_obj_rent() * factor,
                 game.objs(obj, ch)
             );
-            game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+            game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
         }
     }
     for o in obj.contains.borrow().iter() {
@@ -1331,7 +1332,7 @@ fn crash_offer_rent(
             false,
             Some(recep),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return 0;
@@ -1341,7 +1342,7 @@ fn crash_offer_rent(
             "$n tells you, 'Sorry, but I cannot store more than {} items.'",
             MAX_OBJ_SAVE
         );
-        game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
         return 0;
     }
     if display {
@@ -1349,7 +1350,7 @@ fn crash_offer_rent(
             "$n tells you, 'Plus, my {} coin fee..'",
             MIN_RENT_COST * factor
         );
-        game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
 
         let buf = format!(
             "$n tells you, 'For a total of {} coins{}.'",
@@ -1360,7 +1361,7 @@ fn crash_offer_rent(
                 ""
             }
         );
-        game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
 
         if totalcost > ch.get_gold() + ch.get_bank_gold() {
             game.act(
@@ -1368,7 +1369,7 @@ fn crash_offer_rent(
                 false,
                 Some(recep),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             return 0;
@@ -1436,7 +1437,7 @@ fn gen_receptionist(
             false,
             Some(recep),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return true;
@@ -1459,7 +1460,7 @@ fn gen_receptionist(
                 cost
             );
         }
-        game.act(&buf, false, Some(recep), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(recep), None, Some(VictimRef::Char(ch)), TO_VICT);
 
         if cost > ch.get_gold() + ch.get_bank_gold() {
             game.act(
@@ -1467,7 +1468,7 @@ fn gen_receptionist(
                 false,
                 Some(recep),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             return true;
@@ -1482,7 +1483,7 @@ fn gen_receptionist(
                 false,
                 Some(recep),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             crash_rentsave(game, ch, cost);
@@ -1507,7 +1508,7 @@ You begin to lose consciousness...",
                 false,
                 Some(recep),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             crash_cryosave(game, ch, cost);
@@ -1525,7 +1526,7 @@ You begin to lose consciousness...",
             false,
             Some(recep),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
 
@@ -1538,7 +1539,7 @@ You begin to lose consciousness...",
             false,
             Some(ch),
             None,
-            Some(recep),
+            Some(VictimRef::Char(recep)),
             TO_ROOM,
         );
     }

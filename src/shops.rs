@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use log::error;
 use regex::Regex;
+use crate::VictimRef;
 
 use crate::act_comm::{do_say, do_tell};
 use crate::act_social::do_action;
@@ -1352,7 +1353,7 @@ pub fn shop_keeper(
     if cmd_is(cmd, "steal") {
         let argm = format!("$N shouts '{}'", MSG_NO_STEAL_HERE);
         game
-            .act(&argm, false, Some(ch), None, Some(keeper), TO_CHAR);
+            .act(&argm, false, Some(ch), None, Some(VictimRef::Char(keeper)), TO_CHAR);
         do_action(
             game,
             keeper,

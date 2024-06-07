@@ -20,7 +20,7 @@ use chrono::{TimeZone, Utc};
 use hmac::Hmac;
 use log::{error, info};
 use sha2::Sha256;
-
+use crate::VictimRef;
 use crate::act_informative::look_at_room;
 use crate::class::{
     do_start, level_exp, parse_class, roll_real_abils, CLASS_ABBREVS, PC_CLASS_TYPES,
@@ -62,11 +62,12 @@ use crate::structs::{
     ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    age, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
+    age, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
+    SECS_PER_MUD_YEAR,
 };
 use crate::{
-    _clrlevel, clr, onoff, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
-    TO_NOTVICT, TO_ROOM, TO_VICT,
+    _clrlevel, clr, onoff, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    TO_VICT,
 };
 
 pub fn do_echo(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
@@ -364,7 +365,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(victim),
+                Some(VictimRef::Char(victim)),
                 TO_VICT,
             );
             look_at_room(game, victim, false);
@@ -380,7 +381,15 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         for i in list {
             if game.descriptor_list.get(i).state() == ConPlaying
                 && game.descriptor_list.get(i).character.borrow().is_some()
-                && !Rc::ptr_eq(game.descriptor_list.get(i).character.borrow().as_ref().unwrap(), ch)
+                && !Rc::ptr_eq(
+                    game.descriptor_list
+                        .get(i)
+                        .character
+                        .borrow()
+                        .as_ref()
+                        .unwrap(),
+                    ch,
+                )
             {
                 let ic = game.descriptor_list.get(i).character.borrow();
                 let victim = ic.as_ref().unwrap().clone();
@@ -410,7 +419,7 @@ pub fn do_trans(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     false,
                     Some(ch),
                     None,
-                    Some(&victim),
+                    Some(VictimRef::Char(&victim)),
                     TO_VICT,
                 );
                 look_at_room(game, &victim, false);
@@ -469,7 +478,7 @@ pub fn do_teleport(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             false,
             Some(ch),
             None,
-            Some(victim),
+            Some(VictimRef::Char(victim)),
             TO_VICT,
         );
         look_at_room(game, victim, false);
@@ -505,14 +514,13 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
     let rm_zone = game.db.world[ch.in_room() as usize].zone;
     let rm_sector_type = game.db.world[ch.in_room() as usize].sector_type;
     let rm_number = game.db.world[ch.in_room() as usize].number;
-    let rm_func_is_none =  game.db.world[ch.in_room() as usize].func.is_none();
+    let rm_func_is_none = game.db.world[ch.in_room() as usize].func.is_none();
     let rm_description = game.db.world[ch.in_room() as usize].description.clone();
     let rm_ex_descriptions_len = game.db.world[ch.in_room() as usize].ex_descriptions.len();
     let rm_peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
     let rm_contents = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     let rm_room_flags = game.db.world[ch.in_room() as usize].room_flags;
     let rm_dir_option = game.db.world[ch.in_room() as usize].dir_option.clone();
-
 
     game.send_to_char(
         ch,
@@ -545,11 +553,7 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
         ch,
         format!(
             "SpecProc: {}, Flags: {}\r\n",
-            if rm_func_is_none {
-                "None"
-            } else {
-                "Exists"
-            },
+            if rm_func_is_none { "None" } else { "Exists" },
             buf2
         )
         .as_str(),
@@ -571,7 +575,9 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
     if rm_ex_descriptions_len != 0 {
         game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
         for idx in 0..rm_ex_descriptions_len {
-            let desc_keyword = game.db.world[ch.in_room() as usize].ex_descriptions[idx].keyword.clone();
+            let desc_keyword = game.db.world[ch.in_room() as usize].ex_descriptions[idx]
+                .keyword
+                .clone();
 
             game.send_to_char(ch, format!(" {}", desc_keyword).as_str());
             game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
@@ -609,15 +615,7 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
             if column >= 62 {
                 game.send_to_char(
                     ch,
-                    format!(
-                        "{}\r\n",
-                        if i == rm_peoples.len() - 1 {
-                            ","
-                        } else {
-                            ""
-                        }
-                    )
-                    .as_str(),
+                    format!("{}\r\n", if i == rm_peoples.len() - 1 { "," } else { "" }).as_str(),
                 );
                 found = 0;
                 column = 0;
@@ -647,15 +645,7 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
             if column >= 62 {
                 game.send_to_char(
                     ch,
-                    format!(
-                        "{}\r\n",
-                        if i == rm_contents.len() - 1 {
-                            ","
-                        } else {
-                            ""
-                        }
-                    )
-                    .as_str(),
+                    format!("{}\r\n", if i == rm_contents.len() - 1 { "," } else { "" }).as_str(),
                 );
                 found = 0;
                 column = 0;
@@ -675,7 +665,8 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
             buf1 = format!(
                 "{}{:5}{}",
                 CCCYN!(ch, C_NRM),
-                game.db.get_room_vnum(rm_dir_option[i].as_ref().unwrap().to_room),
+                game.db
+                    .get_room_vnum(rm_dir_option[i].as_ref().unwrap().to_room),
                 CCNRM!(ch, C_NRM)
             );
         }
@@ -1539,20 +1530,17 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         let mut object;
         let mut victim;
         if {
-            object = game
-                .get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
+            object = game.get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
             object.is_some()
         } {
             do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
-            object =
-                game.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
+            object = game.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
             object.is_some()
         } {
             do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
-            victim = game
-                .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
+            victim = game.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
         } {
             do_stat_character(game, ch, victim.as_ref().unwrap());
@@ -1561,16 +1549,13 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 ch,
                 &mut name,
                 Some(&mut number),
-                &game.db.world[ch.in_room() as usize]
-                    .contents
-                    ,
+                &game.db.world[ch.in_room() as usize].contents,
             );
             object.is_some()
         } {
             do_stat_object(game, ch, object.as_ref().unwrap());
         } else if {
-            victim = game
-                .get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
+            victim = game.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
             do_stat_character(game, ch, victim.as_ref().unwrap());
@@ -1629,57 +1614,39 @@ pub fn snoop_check(game: &mut Game, ch: Rc<CharData>) {
     }
     let d_id = ch.desc.borrow().unwrap();
     if game.desc(d_id).snooping.is_some()
-        && game.desc(game.desc(d_id).snooping.unwrap())
+        && game
+            .desc(game.desc(d_id).snooping.unwrap())
             .character
             .as_ref()
             .unwrap()
             .get_level()
             >= ch.get_level()
     {
-        game.desc_mut(game.desc(d_id)
-            .snooping
-            .unwrap())
-            .snoop_by= None;
+        game.desc_mut(game.desc(d_id).snooping.unwrap()).snoop_by = None;
         game.desc_mut(d_id).snooping = None;
     }
 
     if game.desc(d_id).snoop_by.is_some()
         && ch.get_level()
-            >= game.desc(game.desc(d_id)
-                .snoop_by
-                .unwrap())
+            >= game
+                .desc(game.desc(d_id).snoop_by.unwrap())
                 .character
                 .as_ref()
                 .unwrap()
                 .get_level()
     {
-        game.desc_mut(game.desc(d_id)
-            .snoop_by
-            .unwrap())
-            .snooping
-             = None;
-             game.desc_mut(d_id).snoop_by = None;
+        game.desc_mut(game.desc(d_id).snoop_by.unwrap()).snooping = None;
+        game.desc_mut(d_id).snoop_by = None;
     }
 }
 
 fn stop_snooping(game: &mut Game, ch: &Rc<CharData>) {
-    if game.desc(ch
-        .desc
-        .borrow()
-        .unwrap())
-        .snooping
-        .is_none()
-    {
+    if game.desc(ch.desc.borrow().unwrap()).snooping.is_none() {
         game.send_to_char(ch, "You aren't snooping anyone.\r\n");
     } else {
         game.send_to_char(ch, "You stop snooping.\r\n");
-        game.desc_mut(game.desc(ch.desc
-            .borrow()
-            .unwrap())
-            .snooping
-            .unwrap())
-            .snoop_by
-             = None;
+        game.desc_mut(game.desc(ch.desc.borrow().unwrap()).snooping.unwrap())
+            .snoop_by = None;
         game.desc_mut(ch.desc.borrow().unwrap()).snooping = None;
     }
 }
@@ -1705,40 +1672,31 @@ pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     } else if victim.as_ref().unwrap().desc.borrow().is_none() {
         game.send_to_char(ch, "There's no link.. nothing to snoop.\r\n");
     } else if Rc::ptr_eq(victim.as_ref().unwrap(), ch) {
-        stop_snooping(game,ch);
-    } else if game.desc(victim
-        .as_ref()
-        .unwrap()
-        .desc
-        .borrow()
-        .unwrap())
+        stop_snooping(game, ch);
+    } else if game
+        .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
         .snoop_by
         .is_some()
     {
         game.send_to_char(ch, "Busy already. \r\n");
-    } else if 
-        game.desc(victim
-            .as_ref()
-            .unwrap()
-            .desc
-            .borrow()
-            .unwrap())
-            .snooping
-            .unwrap() == 
-        ch.desc.borrow().unwrap()
-     {
+    } else if game
+        .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+        .snooping
+        .unwrap()
+        == ch.desc.borrow().unwrap()
+    {
         game.send_to_char(ch, "Don't be stupid.\r\n");
     } else {
-        if game.desc(victim
-            .as_ref()
-            .unwrap()
-            .desc
-            .borrow()
-            .unwrap())
+        if game
+            .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
             .original
             .is_some()
         {
-            voriginal = game.desc(victim.as_ref().unwrap().desc.borrow().unwrap()).original.as_ref().map(|e| e.clone());
+            voriginal = game
+                .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+                .original
+                .as_ref()
+                .map(|e| e.clone());
             tch = voriginal.as_ref();
         } else {
             tch = victim.as_ref();
@@ -1749,20 +1707,9 @@ pub fn do_snoop(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         }
         game.send_to_char(ch, OK);
 
-        if game.desc(ch
-            .desc
-            .borrow()
-            .unwrap())
-            .snooping
-            .is_some()
-        {
-            game.desc_mut(game.desc(ch.desc
-                .borrow()
-                .unwrap())
-                .snooping
-                .unwrap())
-                .snoop_by
-                 = None;
+        if game.desc(ch.desc.borrow().unwrap()).snooping.is_some() {
+            game.desc_mut(game.desc(ch.desc.borrow().unwrap()).snooping.unwrap())
+                .snoop_by = None;
         }
         game.desc_mut(ch.desc.borrow().unwrap()).snooping =
             Some(victim.as_ref().unwrap().desc.borrow().unwrap());
@@ -1774,13 +1721,7 @@ pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 
     one_argument(argument, &mut arg);
     let victim;
-    if game.desc(ch
-        .desc
-        .borrow()
-        .unwrap())
-        .original
-        .is_some()
-    {
+    if game.desc(ch.desc.borrow().unwrap()).original.is_some() {
         game.send_to_char(ch, "You're already switched.\r\n");
     } else if arg.is_empty() {
         game.send_to_char(ch, "Switch with who?\r\n");
@@ -1796,12 +1737,20 @@ pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
         game.send_to_char(ch, "You aren't holy enough to use a mortal's body.\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && game.db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
+        && game
+            .db
+            .room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
     {
         game.send_to_char(ch, "You are not godly enough to use that room!\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && game.db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
-        && !house_can_enter(&game.db, ch, game.db.get_room_vnum(victim.as_ref().unwrap().in_room()))
+        && game
+            .db
+            .room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
+        && !house_can_enter(
+            &game.db,
+            ch,
+            game.db.get_room_vnum(victim.as_ref().unwrap().in_room()),
+        )
     {
         game.send_to_char(ch, "That's private property -- no trespassing!\r\n");
     } else {
@@ -1815,14 +1764,7 @@ pub fn do_switch(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
 }
 
 pub fn do_return(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
-    if ch.desc.borrow().is_some()
-        && game.desc(ch
-            .desc
-            .borrow()
-            .unwrap())
-            .original
-            .is_some()
-    {
+    if ch.desc.borrow().is_some() && game.desc(ch.desc.borrow().unwrap()).original.is_some() {
         game.send_to_char(ch, "You return to your original body.\r\n");
 
         /*
@@ -1834,10 +1776,8 @@ pub fn do_return(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
          * close_socket() will damage our character's pointer to our descriptor
          * (which is assigned below in this function). 12/17/99
          */
-        if game.desc(ch
-            .desc
-            .borrow()
-            .unwrap())
+        if game
+            .desc(ch.desc.borrow().unwrap())
             .original
             .as_ref()
             .unwrap()
@@ -1845,20 +1785,16 @@ pub fn do_return(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
             .borrow()
             .is_some()
         {
-            let dorig_id = game.desc(ch.desc
-                .borrow()
-                .unwrap())
+            let dorig_id = game
+                .desc(ch.desc.borrow().unwrap())
                 .original
                 .as_ref()
                 .unwrap()
                 .desc
                 .borrow()
                 .unwrap();
-            game.desc_mut(dorig_id)
-                .character
-                 = None;
-            game.desc_mut(dorig_id)
-                .set_state(ConDisconnect);
+            game.desc_mut(dorig_id).character = None;
+            game.desc_mut(dorig_id).set_state(ConDisconnect);
         }
 
         /* Now our descriptor points to our original body. */
@@ -1867,9 +1803,8 @@ pub fn do_return(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
         game.desc_mut(ch.desc.borrow().unwrap()).original = None;
 
         /* And our body's pointer to descriptor now points to our descriptor. */
-        *game.desc(ch.desc
-            .borrow()
-            .unwrap())
+        *game
+            .desc(ch.desc.borrow().unwrap())
             .character
             .as_ref()
             .unwrap()
@@ -1920,7 +1855,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             false,
             Some(ch),
             None,
-            Some(mob.as_ref().unwrap()),
+            Some(VictimRef::Char(mob.as_ref().unwrap())),
             TO_ROOM,
         );
         game.act(
@@ -1928,7 +1863,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             false,
             Some(ch),
             None,
-            Some(mob.as_ref().unwrap()),
+            Some(VictimRef::Char(mob.as_ref().unwrap())),
             TO_CHAR,
         );
     } else if is_abbrev(&buf, "obj") {
@@ -2046,7 +1981,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_NOTVICT,
             );
             let vict = vict.as_ref().unwrap();
@@ -2058,7 +1993,8 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
                 );
                 if vict.desc.borrow().is_some() {
-                    game.desc_mut(vict.desc.borrow().unwrap()).set_state( ConClose );
+                    game.desc_mut(vict.desc.borrow().unwrap())
+                        .set_state(ConClose);
                     game.desc_mut(vict.desc.borrow().unwrap()).character = None;
                     *vict.desc.borrow_mut() = None;
                 }
@@ -2103,10 +2039,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         game.send_to_room(ch.in_room(), "The world seems a little cleaner.\r\n");
 
         let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-        for vict in 
-            list
-            .iter()
-        {
+        for vict in list.iter() {
             if !vict.is_npc() {
                 continue;
             }
@@ -2128,11 +2061,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         }
 
         /* Clear the ground. */
-        while game.db.world[ch.in_room() as usize]
-            .contents
-            .len()
-            > 0
-        {
+        while game.db.world[ch.in_room() as usize].contents.len() > 0 {
             let o = game.db.world[ch.in_room() as usize].contents[0].clone();
             game.extract_obj(&o);
         }
@@ -2254,7 +2183,7 @@ You feel slightly different.",
             false,
             Some(ch),
             None,
-            Some(&victim),
+            Some(VictimRef::Char(&victim)),
             TO_VICT,
         );
     }
@@ -2344,7 +2273,7 @@ pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             false,
             Some(vict),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_CHAR,
         );
     }
@@ -2364,8 +2293,7 @@ pub fn perform_immort_vis(game: &mut Game, ch: &Rc<CharData>) {
 
 fn perform_immort_invis(game: &mut Game, ch: &Rc<CharData>, level: i32) {
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-    for tch in list.iter()
-    {
+    for tch in list.iter() {
         if Rc::ptr_eq(tch, ch) {
             continue;
         }
@@ -2375,7 +2303,7 @@ fn perform_immort_invis(game: &mut Game, ch: &Rc<CharData>, level: i32) {
                 false,
                 Some(ch),
                 None,
-                Some(tch),
+                Some(VictimRef::Char(tch)),
                 TO_VICT,
             );
         }
@@ -2385,7 +2313,7 @@ fn perform_immort_invis(game: &mut Game, ch: &Rc<CharData>, level: i32) {
                 false,
                 Some(ch),
                 None,
-                Some(tch),
+                Some(VictimRef::Char(tch)),
                 TO_VICT,
             );
         }
@@ -2439,10 +2367,7 @@ pub fn do_gecho(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 && !Rc::ptr_eq(game.desc(pt_id).character.borrow().as_ref().unwrap(), ch)
             {
                 let ch = game.desc(pt_id).character.as_ref().map(|e| e.clone());
-                game.send_to_char(
-                    ch.as_ref().unwrap(),
-                    format!("{}\r\n", argument).as_str(),
-                );
+                game.send_to_char(ch.as_ref().unwrap(), format!("{}\r\n", argument).as_str());
             }
         }
         if ch.prf_flagged(PRF_NOREPEAT) {
@@ -2485,7 +2410,7 @@ pub fn do_dc(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _s
         return;
     }
     let num_to_dc = num_to_dc.unwrap();
-    let mut d_id  = None;
+    let mut d_id = None;
     {
         for cd_id in game.descriptor_list.ids() {
             if game.desc(cd_id).desc_num == num_to_dc as usize {
@@ -2582,8 +2507,7 @@ pub fn do_wizlock(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                 ch,
                 format!(
                     "Only level {} and above may enter the game {}.\r\n",
-                    game.db.circle_restrict,
-                    when
+                    game.db.circle_restrict, when
                 )
                 .as_str(),
             );
@@ -2682,8 +2606,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         } else {
             let vict = vict.as_ref().unwrap();
             game.send_to_char(ch, OK);
-            game
-                .act(&buf1, true, Some(ch), None, Some(vict.as_ref()), TO_VICT);
+            game.act(&buf1, true, Some(ch), None, Some(VictimRef::Char(vict.as_ref())), TO_VICT);
             game.mudlog(
                 NRM,
                 max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -2717,8 +2640,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
                 continue;
             }
-            game
-                .act(&buf1, true, Some(ch), None, Some(vict), TO_VICT);
+            game.act(&buf1, true, Some(ch), None, Some(VictimRef::Char(vict)), TO_VICT);
             command_interpreter(game, vict, &to_force);
         }
     } else {
@@ -2747,7 +2669,7 @@ pub fn do_force(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 true,
                 Some(ch),
                 None,
-                Some(&vict),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_VICT,
             );
             command_interpreter(game, vict.as_ref().unwrap(), &to_force);
@@ -2788,7 +2710,14 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             game.send_to_char(ch, "God channel status:\r\n");
             for d_id in game.descriptor_list.ids() {
                 if game.desc(d_id).state() != ConPlaying
-                    || game.desc(d_id).character.borrow().as_ref().unwrap().get_level() < LVL_IMMORT as u8
+                    || game
+                        .desc(d_id)
+                        .character
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .get_level()
+                        < LVL_IMMORT as u8
                 {
                     continue;
                 }
@@ -2872,20 +2801,23 @@ pub fn do_wiznet(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     for d_id in game.descriptor_list.ids() {
         if game.desc(d_id).state() == ConPlaying
             && game.desc(d_id).character.as_ref().unwrap().get_level() >= level as u8
-            && !game.desc(d_id)
+            && !game
+                .desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
                 .unwrap()
                 .prf_flagged(PRF_NOWIZ)
-            && !game.desc(d_id)
+            && !game
+                .desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
                 .unwrap()
                 .plr_flagged(PLR_WRITING | PLR_MAILING)
             && d_id == ch.desc.borrow().unwrap()
-            || !game.desc(d_id)
+            || !game
+                .desc(d_id)
                 .character
                 .borrow()
                 .as_ref()
@@ -2924,7 +2856,7 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
     let mut i = zone_count;
     if arg.starts_with('*') {
         for i in 0..zone_count {
-            game.reset_zone( i);
+            game.reset_zone(i);
         }
         game.send_to_char(ch, "Reset world.\r\n");
         game.mudlog(
@@ -2950,14 +2882,12 @@ pub fn do_zreset(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
         }
     }
     if i < game.db.zone_table.len() {
-        game.reset_zone( i as usize);
+        game.reset_zone(i as usize);
         game.send_to_char(
             ch,
             format!(
                 "Reset zone {} (#{}): {}.\r\n",
-                i,
-                game.db.zone_table[i].number,
-                game.db.zone_table[i].name
+                i, game.db.zone_table[i].number, game.db.zone_table[i].name
             )
             .as_str(),
         );
@@ -3181,13 +3111,7 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
     buf.push_str(
         format!(
             "{:3} {:30} Age: {:3}; Reset: {:3} ({:1}); Range: {:5}-{:5}\r\n",
-            zone.number,
-            zone.name,
-            zone.age,
-            zone.lifespan,
-            zone.reset_mode,
-            zone.bot,
-            zone.top
+            zone.number, zone.name, zone.age, zone.lifespan, zone.reset_mode, zone.bot, zone.top
         )
         .as_str(),
     );
@@ -3302,10 +3226,15 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         1 => {
             /* tightened up by JE 4/6/93 */
             if self_ {
-                print_zone_to_buf(&game.db, &mut buf, game.db.world[ch.in_room() as usize].zone);
+                print_zone_to_buf(
+                    &game.db,
+                    &mut buf,
+                    game.db.world[ch.in_room() as usize].zone,
+                );
             } else if !value.is_empty() && is_number(&value) {
                 let value = value.parse::<i32>().unwrap();
-                let zrn = game.db
+                let zrn = game
+                    .db
                     .zone_table
                     .iter()
                     .position(|z| z.number == value as i16);
@@ -3432,11 +3361,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             for i in 0..game.db.world.len() {
                 for j in 0..NUM_OF_DIRS {
                     if game.db.world[i].dir_option[j].is_some()
-                        && game.db.world[i].dir_option[j]
-                            .as_ref()
-                            .unwrap()
-                            .to_room
-                            == 0
+                        && game.db.world[i].dir_option[j].as_ref().unwrap().to_room == 0
                     {
                         k += 1;
 
@@ -3515,7 +3440,9 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 "People currently snooping:\r\n--------------------------\r\n",
             );
             for d_id in game.descriptor_list.ids() {
-                if game.desc(d_id).snooping.borrow().is_none() || game.desc(d_id).character.borrow().is_none() {
+                if game.desc(d_id).snooping.borrow().is_none()
+                    || game.desc(d_id).character.borrow().is_none()
+                {
                     continue;
                 }
                 let dco = game.desc(d_id).character.borrow();
@@ -3531,8 +3458,7 @@ pub fn do_show(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     ch,
                     format!(
                         "{:10} - snooped by {}.\r\n",
-                        game.desc(game.desc(d_id).snooping
-                            .unwrap())
+                        game.desc(game.desc(d_id).snooping.unwrap())
                             .character
                             .as_ref()
                             .unwrap()
@@ -3893,7 +3819,13 @@ const SET_FIELDS: [SetStruct; 52] = [
     },
 ];
 
-fn perform_set(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, mode: i32, val_arg: &str) -> bool {
+fn perform_set(
+    game: &mut Game,
+    ch: &Rc<CharData>,
+    vict: &Rc<CharData>,
+    mode: i32,
+    val_arg: &str,
+) -> bool {
     let mut on = false;
     let mut off = false;
     let mut value = 0;
@@ -4464,7 +4396,8 @@ pub fn do_set(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     &mut tmp_store as *mut _ as *mut u8,
                     mem::size_of::<CharFileU>(),
                 );
-                game.db.player_fl
+                game.db
+                    .player_fl
                     .as_mut()
                     .unwrap()
                     .write_all_at(

@@ -25,6 +25,7 @@ use crate::structs::{
 };
 use crate::util::{ clone_vec2, num_followers_charmed, rand_number};
 use crate::{Game, TO_ROOM};
+use crate::VictimRef;
 
 impl Game {
     pub fn mobile_activity(&mut self) {
@@ -235,7 +236,7 @@ impl Game {
                         false,
                         Some(ch),
                         None,
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_ROOM,
                     );
                     self.hit(ch, vict.fighting().as_ref().unwrap(), TYPE_UNDEFINED);

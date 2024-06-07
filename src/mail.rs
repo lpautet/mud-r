@@ -26,6 +26,7 @@ use std::rc::Rc;
 use std::{mem, process, slice};
 
 use log::{error, info};
+use crate::VictimRef;
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
@@ -391,7 +392,7 @@ impl MailSystem {
         self.find_char_in_index(recipient).is_some()
     }
 }
-impl DB{
+impl DB {
     /*
      * void store_mail(long #1, long #2, char * #3)
      * #1 - id number of the person to mail to.
@@ -443,7 +444,7 @@ impl DB{
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file( slice, target_address);
+        self.write_to_file(slice, target_address);
 
         if msg_txt.len() <= HEADER_BLOCK_DATASIZE {
             return; /* that was the whole message */
@@ -466,7 +467,7 @@ impl DB{
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file( slice, last_address);
+        self.write_to_file(slice, last_address);
 
         /* now write the current data block */
         let mut data = DataBlockType {
@@ -483,7 +484,7 @@ impl DB{
                 mem::size_of::<DataBlockType>(),
             );
         }
-        self.write_to_file( slice, target_address);
+        self.write_to_file(slice, target_address);
         bytes_written += copied;
         msg_txt = &msg_txt[copied..];
 
@@ -512,7 +513,7 @@ impl DB{
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.write_to_file( slice, last_address);
+            self.write_to_file(slice, last_address);
 
             /* now write the next block, assuming it's the last.  */
             data.block_type = LAST_BLOCK;
@@ -525,7 +526,7 @@ impl DB{
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.write_to_file( slice, target_address);
+            self.write_to_file(slice, target_address);
 
             bytes_written += copied;
             msg_txt = &msg_txt[copied..];
@@ -592,7 +593,7 @@ impl DB{
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.read_from_file( slice, mail_address);
+        self.read_from_file(slice, mail_address);
 
         if header.block_type != HEADER_BLOCK as i64 {
             let bt = header.block_type;
@@ -638,7 +639,7 @@ From: {}\r\n\
                 mem::size_of::<HeaderBlockType>(),
             );
         }
-        self.write_to_file( slice, mail_address);
+        self.write_to_file(slice, mail_address);
         self.mails.push_free_list(mail_address);
 
         while following_block != LAST_BLOCK {
@@ -653,7 +654,7 @@ From: {}\r\n\
                     mem::size_of::<DataBlockType>(),
                 );
             }
-            self.read_from_file( slice, following_block as u64);
+            self.read_from_file(slice, following_block as u64);
 
             buf.push_str(parse_c_string(&data.txt).as_str()); /* strcat: OK (data.txt:DATA_BLOCK_DATASIZE < buf:MAX_MAIL_SIZE) */
             mail_address = following_block as u64;
@@ -730,7 +731,7 @@ pub fn postmaster(
         true
     } else {
         false
-    }
+    };
 }
 
 fn postmaster_send_mail(
@@ -745,8 +746,7 @@ fn postmaster_send_mail(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        game
-            .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
         return;
     }
     let mut buf = String::new();
@@ -759,7 +759,7 @@ fn postmaster_send_mail(
             false,
             Some(mailman),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
@@ -771,8 +771,7 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        game
-            .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
         return;
     }
     let recipient = game.db.get_id_by_name(&buf);
@@ -782,7 +781,7 @@ $n tells you, '...which I see you can't afford.'",
             false,
             Some(mailman),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
@@ -801,8 +800,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
 
-    game
-        .act(&buf, false, Some(mailman), None, Some(ch), TO_VICT);
+    game.act(&buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
@@ -828,7 +826,7 @@ fn postmaster_check_mail(
             false,
             Some(mailman),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     } else {
@@ -837,7 +835,7 @@ fn postmaster_check_mail(
             false,
             Some(mailman),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -852,7 +850,7 @@ fn postmaster_receive_mail(
 ) {
     if !game.db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
-        game.act(buf, false, Some(mailman), None, Some(ch), TO_VICT);
+        game.act(buf, false, Some(mailman), None, Some(VictimRef::Char(ch)), TO_VICT);
         return;
     }
     while game.db.mails.has_mail(ch.get_idnum()) {
@@ -868,7 +866,7 @@ fn postmaster_receive_mail(
             10,
         );
 
-        let mail_content = game.db.read_delete( ch.get_idnum());
+        let mail_content = game.db.read_delete(ch.get_idnum());
         let mail_content = if mail_content.is_some() {
             mail_content.unwrap()
         } else {
@@ -883,7 +881,7 @@ fn postmaster_receive_mail(
             false,
             Some(mailman),
             None,
-            Some(ch),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         game.act(
@@ -891,7 +889,7 @@ fn postmaster_receive_mail(
             false,
             Some(ch),
             None,
-            Some(mailman),
+            Some(VictimRef::Char(mailman)),
             TO_ROOM,
         );
     }

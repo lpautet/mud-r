@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 use std::rc::Rc;
-
+use crate::VictimRef;
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
 use crate::handler::{FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::interpreter::{
@@ -67,7 +67,7 @@ pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
         let buf = format!("$n tells the group, '{}'", argument);
         if k.aff_flagged(AFF_GROUP) && !Rc::ptr_eq(&k, ch) {
-            game.act(&buf, false, Some(ch), None, Some(&k), TO_VICT | TO_SLEEP);
+            game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(&k)), TO_VICT | TO_SLEEP);
         }
         for f in k.followers.borrow().iter() {
             if f.follower.aff_flagged(AFF_GROUP) && !Rc::ptr_eq(&f.follower, ch) {
@@ -76,7 +76,7 @@ pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     false,
                     Some(ch),
                     None,
-                    Some(&f.follower),
+                    Some(VictimRef::Char(&f.follower)),
                     TO_VICT | TO_SLEEP,
                 );
             }
@@ -95,7 +95,7 @@ pub fn do_gsay(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 fn perform_tell(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, arg: &str) {
     game.send_to_char(vict, CCRED!(vict, C_NRM));
     let buf = format!("$n tells you, '{}'", arg);
-    game.act(&buf, false, Some(ch), None, Some(vict), TO_VICT | TO_SLEEP);
+    game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_VICT | TO_SLEEP);
     game.send_to_char(vict, CCNRM!(vict, C_NRM));
 
     if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
@@ -103,7 +103,7 @@ fn perform_tell(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>, arg: &s
     } else {
         game.send_to_char(ch, CCRED!(ch, C_CMP));
         let buf = format!("You tell $N, '{}'", arg);
-        game.act(&buf, false, Some(ch), None, Some(vict), TO_CHAR | TO_SLEEP);
+        game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_CHAR | TO_SLEEP);
         game.send_to_char(ch, CCNRM!(ch, C_CMP));
     }
 
@@ -129,7 +129,7 @@ fn is_tell_ok(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> bool {
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else if vict.plr_flagged(PLR_WRITING) {
@@ -138,7 +138,7 @@ fn is_tell_ok(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> bool {
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
@@ -149,7 +149,7 @@ fn is_tell_ok(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> bool {
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else {
@@ -273,7 +273,7 @@ pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: us
         let vict = vict.as_ref().unwrap();
 
         let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
-        game.act(&buf1, false, Some(ch), None, Some(vict), TO_VICT);
+        game.act(&buf1, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_VICT);
 
         if ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(ch, OK);
@@ -283,7 +283,7 @@ pub fn do_spec_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: us
                 format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
             );
         }
-        game.act(action_others, false, Some(ch), None, Some(vict), TO_NOTVICT);
+        game.act(action_others, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_NOTVICT);
     }
 }
 
@@ -433,7 +433,7 @@ pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                             false,
                             Some(ch),
                             None,
-                            Some(&vict_obj),
+                            Some(VictimRef::Char(&vict_obj)),
                             TO_VICT,
                         );
                     } else {
@@ -450,11 +450,11 @@ pub fn do_page(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         } {
             let vict = vict.as_ref().unwrap();
 
-            game.act(&buf, false, Some(ch), None, Some(vict), TO_VICT);
+            game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_VICT);
             if ch.prf_flagged(PRF_NOREPEAT) {
                 game.send_to_char(ch, OK);
             } else {
-                game.act(&buf, false, Some(ch), None, Some(vict), TO_CHAR);
+                game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(vict)), TO_CHAR);
             }
         } else {
             game.send_to_char(ch, "There is no such person in the game!\r\n");
@@ -617,7 +617,7 @@ pub fn do_gen_comm(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             if COLOR_LEV!(ic) >= C_NRM {
                 game.send_to_char(ic.as_ref(), color_on);
             }
-            game.act(&buf1, false, Some(ch), None, Some(&ic), TO_VICT | TO_SLEEP);
+            game.act(&buf1, false, Some(ch), None, Some(VictimRef::Char(&ic)), TO_VICT | TO_SLEEP);
             if COLOR_LEV!(ic) >= C_NRM {
                 game.send_to_char(ic.as_ref(), KNRM);
             }
@@ -655,7 +655,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(&argument.to_string()),
+                Some(VictimRef::Str(&argument.to_string())),
                 TO_CHAR,
             );
         } else {
@@ -664,7 +664,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(&argument.to_string()),
+                Some(VictimRef::Str(&argument.to_string())),
                 TO_CHAR,
             );
         }
@@ -690,7 +690,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                     false,
                     Some(ch),
                     None,
-                    Some(&vict_obj),
+                    Some(VictimRef::Char(&vict_obj)),
                     TO_VICT | TO_SLEEP,
                 );
             }

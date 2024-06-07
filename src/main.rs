@@ -8,7 +8,6 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
-use std::any::Any;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::max;
@@ -317,7 +316,7 @@ fn main() -> ExitCode {
         pos += 1;
     }
 
-    //game.db.mini_mud = true;
+    game.db.mini_mud = true;
 
     if pos < args.len() {
         if !args[pos].chars().next().unwrap().is_digit(10) {
@@ -1687,7 +1686,7 @@ impl Game {
         orig: &str,
         ch: Option<&CharData>,
         obj: Option<&ObjData>,
-        vict_obj: Option<&dyn Any>,
+        vict_obj: Option<VictimRef>,
         to: &CharData,
     ) {
         let mut uppercasenext = false;
@@ -1710,11 +1709,10 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                            if p.is_some() {
-                                self.pers(p.unwrap(), to)
+                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                                self.pers(p, to)
                             } else {
-                                Rc::from("<INV_CHAR_REV>")
+                                Rc::from("<INV_CHAR_REF>")
                             }
                         };
                     }
@@ -1725,9 +1723,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                            if p.is_some() {
-                                Rc::from(hmhr(p.unwrap()))
+                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                                Rc::from(hmhr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1740,9 +1737,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                            if p.is_some() {
-                                Rc::from(hshr(p.unwrap()))
+                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                                Rc::from(hshr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1755,9 +1751,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                            if p.is_some() {
-                                Rc::from(hssh(p.unwrap()))
+                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                                Rc::from(hssh(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1774,9 +1769,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
-                            if p.is_some() {
-                                self.objn(p.unwrap(), to)
+                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                                self.objn(p, to)
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
                             }
@@ -1793,9 +1787,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
-                            if p.is_some() {
-                                Rc::from(self.objs(p.unwrap(), to))
+                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                                Rc::from(self.objs(p, to))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1812,9 +1805,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<Rc<ObjData>>();
-                            if p.is_some() {
-                                Rc::from(sana(p.unwrap()))
+                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                                Rc::from(sana(p))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1824,9 +1816,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<String>();
-                            if p.is_some() {
-                                Rc::from(p.unwrap().as_str())
+                            if let VictimRef::Str(p) = vict_obj.unwrap() {
+                                Rc::from(p)
                             } else {
                                 Rc::from("<INV_STR_REF>")
                             }
@@ -1836,9 +1827,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            let p = vict_obj.unwrap().downcast_ref::<String>();
-                            if p.is_some() {
-                                fname(p.unwrap())
+                            if let VictimRef::Str(p) = vict_obj.unwrap() {
+                                fname(p)
                             } else {
                                 Rc::from("<INV_STR_REF>")
                             }
@@ -1913,6 +1903,13 @@ macro_rules! sendok {
     };
 }
 
+#[derive(Clone, Copy)]
+pub enum VictimRef<'a> {
+    Char(&'a CharData),
+    Obj(&'a ObjData),
+    Str(&'a str),
+}
+
 impl Game {
     pub fn act(
         &mut self,
@@ -1920,7 +1917,7 @@ impl Game {
         hide_invisible: bool,
         ch: Option<&CharData>,
         obj: Option<&ObjData>,
-        vict_obj: Option<&dyn Any>,
+        vict_obj: Option<VictimRef>,
         _type: i32,
     ) {
         if str.is_empty() {
@@ -1954,10 +1951,9 @@ impl Game {
 
         if _type == TO_VICT {
             if vict_obj.is_some() {
-                let to = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                if to.is_some() {
-                    if sendok!(to.unwrap(), to_sleeping) {
-                        self.perform_act(str, ch, obj, vict_obj, to.unwrap());
+                if let VictimRef::Char(to) = vict_obj.unwrap() {
+                    if sendok!(to, to_sleeping) {
+                        self.perform_act(str, ch, obj, vict_obj, to);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -1991,9 +1987,8 @@ impl Game {
             }
             let same_chr;
             if vict_obj.is_some() {
-                let p = vict_obj.unwrap().downcast_ref::<Rc<CharData>>();
-                if p.is_some() {
-                    same_chr = Rc::ptr_eq(to, p.as_ref().unwrap());
+                if let Some(VictimRef::Char(p)) = vict_obj {
+                    same_chr = std::ptr::eq(to.as_ref(), p);
                 } else {
                     error!("Error in act: invalid CharData ref");
                     continue;

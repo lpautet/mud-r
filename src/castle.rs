@@ -19,6 +19,7 @@ use std::any::Any;
 use std::iter::Iterator;
 use std::rc::Rc;
 
+use crate::VictimRef;
 use log::error;
 
 use crate::act_movement::{do_follow, do_gen_door, perform_move};
@@ -30,8 +31,8 @@ use crate::structs::{
     CharData, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE, NOBODY,
     NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{ clone_vec2, rand_number};
-use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
+use crate::util::{clone_vec2, rand_number};
+use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 const Z_KINGS_C: i32 = 150;
 
@@ -215,10 +216,7 @@ fn find_guard(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
     let mut num_bad_guys = 0;
 
-    for ch in db.world[ch_at.in_room() as usize]
-        .peoples
-        .iter()
-    {
+    for ch in db.world[ch_at.in_room() as usize].peoples.iter() {
         if ch.fighting().is_some() && member_of_staff(db, ch.fighting().as_ref().unwrap()) {
             num_bad_guys += 1;
         }
@@ -235,10 +233,7 @@ fn get_victim(db: &DB, ch_at: &Rc<CharData>) -> Option<Rc<CharData>> {
 
     num_bad_guys = 0;
 
-    for ch in db.world[ch_at.in_room() as usize]
-        .peoples
-        .iter()
-    {
+    for ch in db.world[ch_at.in_room() as usize].peoples.iter() {
         if ch.fighting().is_none() {
             continue;
         }
@@ -305,7 +300,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         false,
         Some(ch_hero),
         None,
-        Some(ch_victim),
+        Some(VictimRef::Char(ch_victim)),
         TO_CHAR,
     );
     game.act(
@@ -313,7 +308,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         false,
         Some(ch_victim),
         None,
-        Some(ch_hero),
+        Some(VictimRef::Char(ch_hero)),
         TO_CHAR,
     );
     game.act(
@@ -321,7 +316,7 @@ fn do_npc_rescue(game: &mut Game, ch_hero: &Rc<CharData>, ch_victim: &Rc<CharDat
         false,
         Some(ch_hero),
         None,
-        Some(ch_victim),
+        Some(VictimRef::Char(ch_victim)),
         TO_NOTVICT,
     );
     let ch_bad_guy = ch_bad_guy.as_ref().unwrap();
@@ -445,7 +440,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
                 true,
                 Some(ch),
                 None,
-                Some(tch),
+                Some(VictimRef::Char(tch)),
                 TO_CHAR,
             );
             game.act(
@@ -453,7 +448,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
                 true,
                 Some(ch),
                 None,
-                Some(tch),
+                Some(VictimRef::Char(tch)),
                 TO_NOTVICT,
             );
             game.act(
@@ -461,7 +456,7 @@ fn fry_victim(game: &mut Game, ch: &Rc<CharData>) {
                 true,
                 Some(ch),
                 None,
-                Some(tch),
+                Some(VictimRef::Char(tch)),
                 TO_VICT,
             );
             cast_spell(game, ch, Some(tch), None, SPELL_FIREBALL);
@@ -523,15 +518,11 @@ pub fn king_welmar(
             game.db.king_welmar.move_ = true;
             game.db.king_welmar.path = THRONE_PATH;
             game.db.king_welmar.path_index = 0;
-        } else if game.db.time_info.hours == 21
-            && ch.in_room() == castle_real_room(&game.db, 17)
-        {
+        } else if game.db.time_info.hours == 21 && ch.in_room() == castle_real_room(&game.db, 17) {
             game.db.king_welmar.move_ = true;
             game.db.king_welmar.path = BEDROOM_PATH;
             game.db.king_welmar.path_index = 0;
-        } else if game.db.time_info.hours == 12
-            && ch.in_room() == castle_real_room(&game.db, 17)
-        {
+        } else if game.db.time_info.hours == 12 && ch.in_room() == castle_real_room(&game.db, 17) {
             game.db.king_welmar.move_ = true;
             game.db.king_welmar.path = MONOLOG_PATH;
             game.db.king_welmar.path_index = 0;
@@ -616,8 +607,7 @@ pub fn king_welmar(
 
         's' => {
             ch.set_pos(POS_STANDING);
-            game
-                .act("$n stands up.", false, Some(ch), None, None, TO_ROOM);
+            game.act("$n stands up.", false, Some(ch), None, None, TO_ROOM);
         }
 
         'G' => {
@@ -717,7 +707,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -725,7 +715,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -733,7 +723,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -744,7 +734,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -752,7 +742,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -760,7 +750,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -780,7 +770,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -788,7 +778,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -796,7 +786,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -804,7 +794,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -815,7 +805,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_NOTVICT,
             );
             game.act(
@@ -831,7 +821,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
             game.send_to_char(pupil1, "You quickly pick up your weapon again.\r\n");
@@ -840,7 +830,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(ch),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -851,7 +841,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -859,7 +849,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -867,7 +857,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -878,7 +868,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -886,7 +876,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -894,7 +884,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -905,7 +895,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -913,7 +903,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
             game.act(
@@ -921,7 +911,7 @@ pub fn training_master(
                 false,
                 Some(pupil1),
                 None,
-                Some(pupil2),
+                Some(VictimRef::Char(pupil2)),
                 TO_VICT,
             );
         }
@@ -1003,7 +993,7 @@ fn castle_twin_proc(
  * This doesn't make sure he _can_ carry it...
  */
 fn james(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument: &str) -> bool {
-    return castle_cleaner( game, ch, cmd, true);
+    return castle_cleaner(game, ch, cmd, true);
 }
 
 /*
@@ -1119,7 +1109,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1127,7 +1117,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
                 game.act(
@@ -1135,7 +1125,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
             }
@@ -1145,7 +1135,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1153,7 +1143,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
                 game.act(
@@ -1161,7 +1151,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
             }
@@ -1171,7 +1161,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1179,7 +1169,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
                 game.act(
@@ -1187,7 +1177,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
             }
@@ -1197,7 +1187,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
                 game.act(
@@ -1205,7 +1195,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1213,7 +1203,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
                 game.act(
@@ -1221,7 +1211,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
             }
@@ -1231,7 +1221,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
                 game.act(
@@ -1239,7 +1229,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1247,7 +1237,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
                 game.act(
@@ -1255,7 +1245,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
             }
@@ -1265,7 +1255,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
                 game.act(
@@ -1273,7 +1263,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
                 game.act(
@@ -1281,7 +1271,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
                 game.act(
@@ -1289,7 +1279,7 @@ fn peter(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                     false,
                     Some(ch),
                     None,
-                    Some(ch_guard),
+                    Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
             }
@@ -1341,7 +1331,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1349,7 +1339,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1357,7 +1347,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }
@@ -1367,7 +1357,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1375,7 +1365,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1383,7 +1373,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }
@@ -1393,7 +1383,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1401,7 +1391,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1409,7 +1399,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }
@@ -1419,7 +1409,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1427,7 +1417,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1435,7 +1425,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }
@@ -1445,7 +1435,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1453,7 +1443,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1461,7 +1451,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }
@@ -1471,7 +1461,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
             game.act(
@@ -1479,7 +1469,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
             game.act(
@@ -1487,7 +1477,7 @@ fn jerry(game: &mut Game, ch: &Rc<CharData>, _me: &dyn Any, cmd: i32, _argument:
                 false,
                 Some(gambler1),
                 None,
-                Some(gambler2),
+                Some(VictimRef::Char(gambler2)),
                 TO_VICT,
             );
         }

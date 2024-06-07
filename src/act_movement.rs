@@ -11,6 +11,7 @@
 
 use std::borrow::Borrow;
 use std::rc::Rc;
+use crate::VictimRef;
 
 use crate::act_informative::look_at_room;
 use crate::act_item::find_eq_pos;
@@ -139,7 +140,7 @@ pub fn perform_move(
                     false,
                     Some(&k.follower),
                     None,
-                    Some(ch),
+                    Some(VictimRef::Char(ch)),
                     TO_CHAR,
                 );
                 perform_move(game, &k.follower, dir, true);
@@ -607,7 +608,7 @@ fn do_doorcmd(
             if obj.is_some() {
                 None
             } else {
-                Some(&x)
+                Some(VictimRef::Str(&x))
             },
             TO_ROOM,
         );
@@ -789,7 +790,7 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
                 false,
                 Some(ch),
                 None,
-                Some(&CMD_DOOR[subcmd as usize]),
+                Some(VictimRef::Str(&CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
         } else if !door_is_open(&game.db, ch, obj.as_ref(), dooro)
@@ -1088,7 +1089,7 @@ pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_CHAR,
             );
         } else if vict.as_ref().unwrap().aff_flagged(AFF_SLEEP) {
@@ -1097,7 +1098,7 @@ pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_CHAR,
             );
         } else if vict.as_ref().unwrap().get_pos() < POS_SLEEPING {
@@ -1106,7 +1107,7 @@ pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_CHAR,
             );
         } else {
@@ -1115,7 +1116,7 @@ pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_CHAR,
             );
             game.act(
@@ -1123,7 +1124,7 @@ pub fn do_wake(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(vict.as_ref().unwrap()),
+                Some(VictimRef::Char(vict.as_ref().unwrap())),
                 TO_VICT | TO_SLEEP,
             );
             vict.as_ref().unwrap().set_pos(POS_SITTING);
@@ -1172,7 +1173,7 @@ pub fn do_follow(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             false,
             Some(ch),
             None,
-            Some(leader.as_ref().unwrap()),
+            Some(VictimRef::Char(leader.as_ref().unwrap())),
             TO_CHAR,
         );
         return;
@@ -1183,7 +1184,7 @@ pub fn do_follow(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             false,
             Some(ch),
             None,
-            Some(ch.master.borrow().as_ref().unwrap()),
+            Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
             TO_CHAR,
         );
     } else {

@@ -17,6 +17,7 @@ use std::io::Write;
 use std::rc::Rc;
 
 use log::error;
+use crate::VictimRef;
 
 use crate::act_wizard::perform_immort_vis;
 use crate::alias::write_aliases;
@@ -270,7 +271,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     false,
                     Some(ch),
                     None,
-                    Some(vict),
+                    Some(VictimRef::Char(vict)),
                     TO_CHAR,
                 );
                 return;
@@ -294,7 +295,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         false,
                         Some(ch),
                         Some(obj),
-                        Some(vict),
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                     DB::obj_to_char(game.unequip_char(vict, the_eq_pos).as_ref().unwrap(), ch);
@@ -313,7 +314,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     false,
                     Some(ch),
                     None,
-                    Some(vict),
+                    Some(VictimRef::Char(vict)),
                     TO_VICT,
                 );
                 game.act(
@@ -321,7 +322,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     true,
                     Some(ch),
                     None,
-                    Some(vict),
+                    Some(VictimRef::Char(vict)),
                     TO_NOTVICT,
                 );
             } else {
@@ -347,7 +348,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
             game.act(
@@ -355,7 +356,7 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 true,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
         } else {
@@ -458,7 +459,7 @@ fn perform_group(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> i32
             false,
             Some(ch),
             None,
-            Some(vict),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
     }
@@ -467,7 +468,7 @@ fn perform_group(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> i32
         false,
         Some(ch),
         None,
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_VICT,
     );
     game.act(
@@ -475,7 +476,7 @@ fn perform_group(game: &mut Game, ch: &Rc<CharData>, vict: &Rc<CharData>) -> i32
         false,
         Some(ch),
         None,
-        Some(vict),
+        Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
     return 1;
@@ -502,7 +503,7 @@ fn print_group(game: &mut Game, ch: &Rc<CharData>) {
                 k.get_level(),
                 k.class_abbr()
             );
-            game.act(&buf, false, Some(ch), None, Some(&k), TO_CHAR);
+            game.act(&buf, false, Some(ch), None, Some(VictimRef::Char(&k)), TO_CHAR);
         }
 
         for f in k.followers.borrow().iter() {
@@ -523,7 +524,7 @@ fn print_group(game: &mut Game, ch: &Rc<CharData>) {
                 false,
                 Some(ch),
                 None,
-                Some(f.follower.as_ref()),
+                Some(VictimRef::Char(f.follower.as_ref())),
                 TO_CHAR,
             );
         }
@@ -579,7 +580,7 @@ pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             false,
             Some(ch),
             None,
-            Some(vict.as_ref().unwrap()),
+            Some(VictimRef::Char(vict.as_ref().unwrap())),
             TO_CHAR,
         );
     } else {
@@ -594,7 +595,7 @@ pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     false,
                     Some(ch),
                     None,
-                    Some(vict),
+                    Some(VictimRef::Char(vict)),
                     TO_CHAR,
                 );
             }
@@ -603,7 +604,7 @@ pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
             game.act(
@@ -611,7 +612,7 @@ pub fn do_group(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 false,
                 Some(ch),
                 None,
-                Some(vict),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
             vict.remove_prf_flags_bits(AFF_GROUP);
@@ -638,7 +639,7 @@ pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
                     true,
                     Some(&f.follower),
                     None,
-                    Some(ch),
+                    Some(VictimRef::Char(ch)),
                     TO_CHAR,
                 );
                 if !f.follower.aff_flagged(AFF_CHARM) {
@@ -677,7 +678,7 @@ pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         false,
         Some(ch),
         None,
-        Some(tch),
+        Some(VictimRef::Char(tch)),
         TO_CHAR,
     );
     game.act(
@@ -685,7 +686,7 @@ pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         false,
         Some(ch),
         None,
-        Some(tch),
+        Some(VictimRef::Char(tch)),
         TO_VICT,
     );
     game.act(
@@ -693,7 +694,7 @@ pub fn do_ungroup(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
         false,
         Some(ch),
         None,
-        Some(tch),
+        Some(VictimRef::Char(tch)),
         TO_NOTVICT,
     );
 
@@ -726,11 +727,11 @@ pub fn do_report(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
 
     for f in k.followers.borrow().iter() {
         if f.follower.aff_flagged(AFF_GROUP) && !Rc::ptr_eq(&f.follower, ch) {
-            game.act(&buf, true, Some(ch), None, Some(&f.follower), TO_VICT);
+            game.act(&buf, true, Some(ch), None, Some(VictimRef::Char(&f.follower)), TO_VICT);
         }
     }
     if !Rc::ptr_eq(&k, ch) {
-        game.act(&buf, true, Some(ch), None, Some(&k), TO_VICT);
+        game.act(&buf, true, Some(ch), None, Some(VictimRef::Char(&k)), TO_VICT);
     }
 
     game.send_to_char(ch, "You report to the group.\r\n");

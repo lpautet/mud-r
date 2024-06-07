@@ -14,6 +14,7 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
+use crate::VictimRef;
 
 use crate::config::OK;
 use crate::db::DB;
@@ -384,9 +385,9 @@ fn say_spell(
             None
         };
         if ch.get_class() == i.get_class() {
-            game.perform_act(&buf1, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(&tch2), i);
+            game.perform_act(&buf1, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i);
         } else {
-            game.perform_act(&buf2, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(&tch2), i);
+            game.perform_act(&buf2, Some(ch), tobj.map(|rc| rc.as_ref() ), Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i);
         }
     }
 
@@ -406,7 +407,7 @@ fn say_spell(
             .as_str(),
         );
         let tch2 = tch.unwrap().clone();
-        game.act(&buf1, false, Some(ch), None, Some(&tch2), TO_VICT);
+        game.act(&buf1, false, Some(ch), None, Some(VictimRef::Char(&tch2)), TO_VICT);
     }
 }
 
@@ -739,7 +740,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                         false,
                         Some(ch),
                         Some(obj),
-                        Some(tch.as_ref().unwrap()),
+                        Some(VictimRef::Char(tch.as_ref().unwrap())),
                         TO_CHAR,
                     );
                     if !RefCell::borrow(&obj.action_description).is_empty() {
@@ -748,7 +749,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                             false,
                             Some(ch),
                             Some(obj),
-                            Some(tch.as_ref().unwrap()),
+                            Some(VictimRef::Char(tch.as_ref().unwrap())),
                             TO_ROOM,
                         );
                     } else {
@@ -757,7 +758,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                             true,
                             Some(ch),
                             Some(obj),
-                            Some(tch.as_ref().unwrap()),
+                            Some(VictimRef::Char(tch.as_ref().unwrap())),
                             TO_ROOM,
                         );
                     }
@@ -768,7 +769,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                     false,
                     Some(ch),
                     Some(obj),
-                    Some(tobj.as_ref().unwrap()),
+                    Some(VictimRef::Obj(tobj.as_ref().unwrap())),
                     TO_CHAR,
                 );
                 if !RefCell::borrow(&obj.action_description).is_empty() {
@@ -777,7 +778,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                         false,
                         Some(ch),
                         Some(obj),
-                        Some(tobj.as_ref().unwrap()),
+                        Some(VictimRef::Obj(tobj.as_ref().unwrap())),
                         TO_ROOM,
                     );
                 } else {
@@ -786,7 +787,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, obj: &Rc<ObjData>, ar
                         true,
                         Some(ch),
                         Some(obj),
-                        Some(tobj.as_ref().unwrap()),
+                        Some(VictimRef::Obj(tobj.as_ref().unwrap())),
                         TO_ROOM,
                     );
                 }
