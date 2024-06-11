@@ -210,7 +210,7 @@ pub const VIRTUAL: i32 = 1;
 
 /* structure for the reset commands */
 struct ResetCom {
-    command: Cell<char>,
+    command: char,
     /* current command                      */
     if_flag: bool,
     /* if TRUE: exe only if preceding exe'd */
@@ -1402,7 +1402,7 @@ fn renum_zone_table(game: &mut Game) {
 
     for idx in 0..game.db.zone_table.len() {
         for cmd_no in 0..game.db.zone_table[idx].cmd.len() {
-            if game.db.zone_table[idx].cmd[cmd_no].command.get() == 'S' {
+            if game.db.zone_table[idx].cmd[cmd_no].command == 'S' {
                 break;
             }
             let mut a = 0;
@@ -1411,7 +1411,7 @@ fn renum_zone_table(game: &mut Game) {
             olda = game.db.zone_table[idx].cmd[cmd_no].arg1;
             oldb = game.db.zone_table[idx].cmd[cmd_no].arg2;
             oldc = game.db.zone_table[idx].cmd[cmd_no].arg3;
-            match game.db.zone_table[idx].cmd[cmd_no].command.get() {
+            match game.db.zone_table[idx].cmd[cmd_no].command {
                 'M' => {
                     game.db.zone_table[idx].cmd[cmd_no].arg1 = game
                         .db
@@ -1501,11 +1501,11 @@ fn renum_zone_table(game: &mut Game) {
                     );
                     let mut cmd_no2 = cmd_no as i32;
                     let zone = game.db.zone_table[idx].number as usize;
-                    let zcmd_command = game.db.zone_table[idx].cmd[cmd_no].command.get();
+                    let zcmd_command = game.db.zone_table[idx].cmd[cmd_no].command;
                     let zcmd_line = game.db.zone_table[idx].cmd[cmd_no].line;
                     game.log_zone_error(zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
                 }
-                game.db.zone_table[idx].cmd[cmd_no].command.set('*');
+                game.db.zone_table[idx].cmd[cmd_no].command = '*';
             }
         }
     }
@@ -2152,7 +2152,7 @@ impl DB {
             buf = buf.trim_start().to_string();
 
             let mut zcmd = ResetCom {
-                command: Cell::new(0 as char),
+                command: 0 as char,
                 if_flag: false,
                 arg1: 0,
                 arg2: 0,
@@ -2161,19 +2161,19 @@ impl DB {
             };
 
             let original_buf = buf.clone();
-            zcmd.command.set(buf.remove(0));
+            zcmd.command = buf.remove(0);
 
-            if zcmd.command.get() == '*' {
+            if zcmd.command == '*' {
                 continue;
             }
 
-            if zcmd.command.get() == 'S' || zcmd.command.get() == '$' {
-                zcmd.command.set('S');
+            if zcmd.command == 'S' || zcmd.command == '$' {
+                zcmd.command = 'S';
                 break;
             }
             let mut error = 0;
             let mut tmp: i32 = -1;
-            if "MOEPD".find(zcmd.command.get()).is_none() {
+            if "MOEPD".find(zcmd.command).is_none() {
                 /* a 3-arg command */
                 let regex = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
                 let f = regex.captures(buf.as_str());
@@ -2546,7 +2546,7 @@ impl Game {
         let cmd_count = self.db.zone_table[zone].cmd.len();
         for cmd_no in 0..cmd_count {
             // let zcmd = &self.db.zone_table[zone].cmd[cmd_no];
-            if self.db.zone_table[zone].cmd[cmd_no].command.get() == 'S' {
+            if self.db.zone_table[zone].cmd[cmd_no].command == 'S' {
                 break;
             }
             if self.db.zone_table[zone].cmd[cmd_no].if_flag && last_cmd == 0 {
@@ -2558,7 +2558,7 @@ impl Game {
              *  the list of commands in load_zone() so that the counting
              *  will still be correct. - ae.
              */
-            let command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+            let command = self.db.zone_table[zone].cmd[cmd_no].command;
             match command {
                 '*' => {
                     /* ignore command */
@@ -2613,7 +2613,7 @@ impl Game {
                             .db
                             .get_obj_num(self.db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
-                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
@@ -2622,7 +2622,7 @@ impl Game {
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
                             );
-                            self.db.zone_table[zone].cmd[cmd_no].command.set('*');
+                            self.db.zone_table[zone].cmd[cmd_no].command = '*';
                             continue;
                         }
                         self.db
@@ -2636,7 +2636,7 @@ impl Game {
                 'G' => {
                     /* obj_to_char */
                     if mob.is_none() {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
@@ -2646,7 +2646,7 @@ impl Game {
                             &mut last_cmd,
                         );
 
-                        self.db.zone_table[zone].cmd[cmd_no].command.set('*');
+                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
                     }
                     if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
@@ -2664,7 +2664,7 @@ impl Game {
                 'E' => {
                     /* object to equipment list */
                     if mob.is_none() {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
@@ -2674,7 +2674,7 @@ impl Game {
                             &mut last_cmd,
                         );
 
-                        self.db.zone_table[zone].cmd[cmd_no].command.set('*');
+                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
                     }
                     if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
@@ -2683,7 +2683,7 @@ impl Game {
                         if self.db.zone_table[zone].cmd[cmd_no].arg3 < 0
                             || self.db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
                         {
-                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
@@ -2727,7 +2727,7 @@ impl Game {
                             [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
@@ -2736,7 +2736,7 @@ impl Game {
                             "door does not exist, command disabled",
                             &mut last_cmd,
                         );
-                        self.db.zone_table[zone].cmd[cmd_no].command.set('*');
+                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
                     } else {
                         match self.db.zone_table[zone].cmd[cmd_no].arg3 {
                             0 => {
@@ -2790,7 +2790,7 @@ impl Game {
                 }
 
                 _ => {
-                    let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
+                    let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                     let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                     self.log_zone_error(
                         zone,
@@ -2799,7 +2799,7 @@ impl Game {
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,
                     );
-                    self.db.zone_table[zone].cmd[cmd_no].command.set('*');
+                    self.db.zone_table[zone].cmd[cmd_no].command = '*';
                 }
             }
         }
