@@ -866,7 +866,7 @@ fn postmaster_receive_mail(
         return;
     }
     while game.db.mails.has_mail(ch.get_idnum()) {
-        let obj = game.db.create_obj(
+        let oid = game.db.create_obj(
             NOTHING,
             "mail paper letter",
             "a piece of mail",
@@ -884,9 +884,9 @@ fn postmaster_receive_mail(
         } else {
             "Mail system error - please report.  Error #11.\r\n".to_string()
         };
-        *RefCell::borrow_mut(&obj.action_description) = mail_content;
+        game.db.obj_mut(oid).action_description = Rc::from(RefCell::from(mail_content));
 
-        DB::obj_to_char(&obj, ch);
+        game.db.obj_to_char(oid, ch);
 
         game.act(
             "$n gives you a piece of mail.",

@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use log::{error, info};
 use regex::Regex;
+use crate::depot::DepotId;
 use crate::VictimRef;
 use crate::act_social::{do_action, do_insult};
 use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
@@ -38,7 +39,7 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ExtraDescrData, ObjData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
+    CharData, ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON,
     ITEM_FOUNTAIN, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, LVL_IMPL,
     NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING,
@@ -64,22 +65,22 @@ pub const SHOW_OBJ_SHORT: i32 = 1;
 pub const SHOW_OBJ_ACTION: i32 = 2;
 
 impl Game {
-    fn show_obj_to_char(&mut self, obj: &ObjData, ch: &CharData, mode: i32) {
+    fn show_obj_to_char(&mut self, oid: DepotId, ch: &CharData, mode: i32) {
         match mode {
             SHOW_OBJ_LONG => {
-                self.send_to_char(ch, format!("{}", obj.description).as_str());
+                self.send_to_char(ch, format!("{}", self.db.obj(oid).description).as_str());
             }
 
             SHOW_OBJ_SHORT => {
-                self.send_to_char(ch, format!("{}", obj.short_description).as_str());
+                self.send_to_char(ch, format!("{}", self.db.obj(oid).short_description).as_str());
             }
 
-            SHOW_OBJ_ACTION => match obj.get_obj_type() {
+            SHOW_OBJ_ACTION => match self.db.obj(oid).get_obj_type() {
                 ITEM_NOTE => {
-                    if !RefCell::borrow(&obj.action_description).is_empty() {
+                    if !RefCell::borrow(&self.db.obj(oid).action_description).is_empty() {
                         let notebuf = format!(
                             "There is something written on it:\r\n\r\n{}",
-                            RefCell::borrow(&obj.action_description)
+                            RefCell::borrow(&self.db.obj(oid).action_description)
                         );
                         page_string(self, ch.desc.borrow().unwrap(), notebuf.as_str(), true);
                     } else {
@@ -102,44 +103,44 @@ impl Game {
             }
         }
 
-        self.show_obj_modifiers(obj, ch);
+        self.show_obj_modifiers(oid, ch);
         self.send_to_char(ch, "\r\n");
     }
 
-    fn show_obj_modifiers(&mut self, obj: &ObjData, ch: &CharData) {
-        if obj.obj_flagged(ITEM_INVISIBLE) {
+    fn show_obj_modifiers(&mut self, oid: DepotId, ch: &CharData) {
+        if self.db.obj(oid).obj_flagged(ITEM_INVISIBLE) {
             self.send_to_char(ch, " (invisible)");
         }
 
-        if obj.obj_flagged(ITEM_BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
+        if self.db.obj(oid).obj_flagged(ITEM_BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
             self.send_to_char(ch, " ..It glows blue!");
         }
 
-        if obj.obj_flagged(ITEM_MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
+        if self.db.obj(oid).obj_flagged(ITEM_MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
             self.send_to_char(ch, " ..It glows yellow!");
         }
 
-        if obj.obj_flagged(ITEM_GLOW) {
+        if self.db.obj(oid).obj_flagged(ITEM_GLOW) {
             self.send_to_char(ch, " ..It has a soft glowing aura!");
         }
 
-        if obj.obj_flagged(ITEM_HUM) {
+        if self.db.obj(oid).obj_flagged(ITEM_HUM) {
             self.send_to_char(ch, " ..It emits a faint humming sound!");
         }
     }
 }
 fn list_obj_to_char(
     game: &mut Game,
-    list: &Vec<Rc<ObjData>>,
+    list: &Vec<DepotId>,
     ch: &CharData,
     mode: i32,
     show: bool,
 ) {
     let mut found = true;
 
-    for obj in list {
-        if game.can_see_obj(ch, obj) {
-            game.show_obj_to_char(obj, ch, mode);
+    for oid in list {
+        if game.can_see_obj(ch, game.db.obj(*oid)) {
+            game.show_obj_to_char(*oid, ch, mode);
             found = true;
         }
     }
@@ -242,7 +243,7 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
 
     found = false;
     for j in 0..NUM_WEARS {
-        if i.get_eq(j).is_some() && game.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
+        if i.get_eq(j).is_some() && game.can_see_obj(ch, game.db.obj(i.get_eq(j).unwrap())) {
             found = true;
         }
     }
@@ -251,9 +252,9 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
         game.send_to_char(ch, "\r\n"); /* act() does capitalization. */
         game.act("$n is using:", false, Some(i), None, Some(VictimRef::Char(ch)), TO_VICT);
         for j in 0..NUM_WEARS {
-            if i.get_eq(j).is_some() && game.can_see_obj(ch, i.get_eq(j).as_ref().unwrap()) {
+            if i.get_eq(j).is_some() && game.can_see_obj(ch, game.db.obj(i.get_eq(j).unwrap())) {
                 game.send_to_char(ch, WEAR_WHERE[j as usize]);
-                game.show_obj_to_char(i.get_eq(j).as_ref().unwrap(), ch, SHOW_OBJ_SHORT);
+                game.show_obj_to_char(i.get_eq(j).unwrap(), ch, SHOW_OBJ_SHORT);
             }
         }
     }
@@ -267,9 +268,9 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        for tmp_obj in i.carrying.borrow().iter() {
-            if game.can_see_obj(ch, tmp_obj) && rand_number(0, 20) < ch.get_level() as u32 {
-                game.show_obj_to_char(tmp_obj, ch, SHOW_OBJ_SHORT);
+        for tmp_obj_id in i.carrying.borrow().clone() {
+            if game.can_see_obj(ch, game.db.obj(tmp_obj_id)) && rand_number(0, 20) < ch.get_level() as u32 {
+                game.show_obj_to_char(tmp_obj_id, ch, SHOW_OBJ_SHORT);
                 found = true;
             }
         }
@@ -657,7 +658,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
 
 fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let mut dummy: Option<Rc<CharData>> = None;
-    let mut obj: Option<Rc<ObjData>> = None;
+    let mut oid: Option<DepotId> = None;
     let bits;
 
     if arg.is_empty() {
@@ -669,26 +670,26 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
         &mut dummy,
-        &mut obj,
+        &mut oid,
     );
     if bits == 0 {
         game.send_to_char(
             ch,
             format!("There doesn't seem to be {} {} here.\r\n", an!(arg), arg).as_str(),
         );
-    } else if obj.as_ref().unwrap().get_obj_type() != ITEM_DRINKCON
-        && obj.as_ref().unwrap().get_obj_type() != ITEM_FOUNTAIN
-        && obj.as_ref().unwrap().get_obj_type() != ITEM_CONTAINER
+    } else if game.db.obj(oid.unwrap()).get_obj_type() != ITEM_DRINKCON
+        && game.db.obj(oid.unwrap()).get_obj_type() != ITEM_FOUNTAIN
+        && game.db.obj(oid.unwrap()).get_obj_type() != ITEM_CONTAINER
     {
         game.send_to_char(ch, "There's nothing inside that!\r\n");
     } else {
-        if obj.as_ref().unwrap().get_obj_type() == ITEM_CONTAINER {
-            if obj.as_ref().unwrap().objval_flagged(CONT_CLOSED) {
+        if game.db.obj(oid.unwrap()).get_obj_type() == ITEM_CONTAINER {
+            if game.db.obj(oid.unwrap()).objval_flagged(CONT_CLOSED) {
                 game.send_to_char(ch, "It is closed.\r\n");
             } else {
                 game.send_to_char(
                     ch,
-                    fname(obj.as_ref().unwrap().name.borrow().as_str()).as_ref(),
+                    fname(game.db.obj(oid.unwrap()).name.as_ref()).as_ref(),
                 );
                 match bits {
                     FIND_OBJ_INV => {
@@ -705,7 +706,7 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
 
                 list_obj_to_char(
                     game,
-                    &obj.as_ref().unwrap().contains.borrow(),
+                    &game.db.obj(oid.unwrap()).contains.clone(),
                     ch,
                     SHOW_OBJ_SHORT,
                     true,
@@ -713,20 +714,20 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
             }
         } else {
             /* item must be a fountain or drink container */
-            if obj.as_ref().unwrap().get_obj_val(1) <= 0 {
+            if game.db.obj(oid.unwrap()).get_obj_val(1) <= 0 {
                 game.send_to_char(ch, "It is empty.\r\n");
             } else {
-                if obj.as_ref().unwrap().get_obj_val(0) <= 0
-                    || obj.as_ref().unwrap().get_obj_val(1) > obj.as_ref().unwrap().get_obj_val(0)
+                if game.db.obj(oid.unwrap()).get_obj_val(0) <= 0
+                    || game.db.obj(oid.unwrap()).get_obj_val(1) > game.db.obj(oid.unwrap()).get_obj_val(0)
                 {
                     game.send_to_char(ch, "Its contents seem somewhat murky.\r\n");
                     /* BUG */
                 } else {
                     let mut buf2 = String::new();
-                    let amt = obj.as_ref().unwrap().get_obj_val(1) * 3
-                        / obj.as_ref().unwrap().get_obj_val(0);
+                    let amt = game.db.obj(oid.unwrap()).get_obj_val(1) * 3
+                        / game.db.obj(oid.unwrap()).get_obj_val(0);
                     sprinttype(
-                        obj.as_ref().unwrap().get_obj_val(2),
+                        game.db.obj(oid.unwrap()).get_obj_val(2),
                         &COLOR_LIQUID,
                         &mut buf2,
                     );
@@ -744,9 +745,9 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<String> {
+fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<Rc<str>> {
     for i in list {
-        if isname(word, i.keyword.as_str()) {
+        if isname(word, i.keyword.as_ref()) {
             return Some(i.description.clone());
         }
     }
@@ -765,7 +766,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let mut i = 0;
     let mut found = false;
     let mut found_char: Option<Rc<CharData>> = None;
-    let mut found_obj: Option<Rc<ObjData>> = None;
+    let mut found_obj_id: Option<DepotId> = None;
 
     if ch.desc.borrow().is_none() {
         return;
@@ -781,7 +782,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP | FIND_CHAR_ROOM) as i64,
         ch,
         &mut found_char,
-        &mut found_obj,
+        &mut found_obj_id,
     );
 
     /* Is the target a character? */
@@ -825,7 +826,7 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         if i == fnum {
             page_string(game,
                 ch.desc.borrow().unwrap(),
-                desc.as_ref().unwrap().as_str(),
+                desc.as_ref().unwrap(),
                 false,
             );
             return;
@@ -834,8 +835,8 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some() && game.can_see_obj(ch, ch.get_eq(j).as_ref().unwrap()) {
-            let desc = find_exdesc(&arg, &ch.get_eq(j).as_ref().unwrap().ex_descriptions);
+        if ch.get_eq(j).is_some() && game.can_see_obj(ch, game.db.obj(ch.get_eq(j).unwrap())) {
+            let desc = find_exdesc(&arg, &game.db.obj(ch.get_eq(j).unwrap()).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
@@ -847,9 +848,9 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc in the char's inventory? */
-    for obj in ch.carrying.borrow().iter() {
-        if game.can_see_obj(ch, obj) {
-            let desc = find_exdesc(&arg, &obj.ex_descriptions);
+    for oid in ch.carrying.borrow().clone() {
+        if game.can_see_obj(ch, game.db.obj(oid)) {
+            let desc = find_exdesc(&arg, &game.db.obj(oid).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
@@ -861,13 +862,12 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc of an object in the room? */
-    let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
-    for obj in list.iter() {
-        if game.can_see_obj(ch, obj) {
-            if let Some(desc) = find_exdesc(&arg, &obj.ex_descriptions) {
+    for oid in game.db.world[ch.in_room() as usize].contents.clone() {
+        if game.can_see_obj(ch, game.db.obj(oid)) {
+            if let Some(desc) = find_exdesc(&arg, &game.db.obj(oid).ex_descriptions) {
                 i += 1;
                 if i == fnum {
-                    game.send_to_char(ch, desc.as_str());
+                    game.send_to_char(ch, desc.as_ref());
                     found = true;
                 }
             }
@@ -877,9 +877,9 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     /* If an object was found back in generic_find */
     if bits != 0 {
         if !found {
-            game.show_obj_to_char(found_obj.as_ref().unwrap(), ch, SHOW_OBJ_ACTION);
+            game.show_obj_to_char(found_obj_id.unwrap(), ch, SHOW_OBJ_ACTION);
         } else {
-            game.show_obj_modifiers(found_obj.as_ref().unwrap(), ch);
+            game.show_obj_modifiers(found_obj_id.unwrap(), ch);
             game.send_to_char(ch, "\r\n");
         }
     } else if !found {
@@ -952,20 +952,20 @@ pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
     /* look_at_target() eats the number. */
     look_at_target(game, ch, &arg);
     let mut tmp_char = None;
-    let mut tmp_object = None;
+    let mut tmp_object_id = None;
     game.generic_find(
         &arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
         &mut tmp_char,
-        &mut tmp_object,
+        &mut tmp_object_id,
     );
 
-    if tmp_object.is_some() {
-        let tmp_object = tmp_object.unwrap();
-        if tmp_object.get_obj_type() == ITEM_DRINKCON
-            || tmp_object.get_obj_type() == ITEM_FOUNTAIN
-            || tmp_object.get_obj_type() == ITEM_CONTAINER
+    if tmp_object_id.is_some() {
+        let tmp_object_id = tmp_object_id.unwrap();
+        if game.db.obj(tmp_object_id).get_obj_type() == ITEM_DRINKCON
+            || game.db.obj(tmp_object_id).get_obj_type() == ITEM_FOUNTAIN
+            || game.db.obj(tmp_object_id).get_obj_type() == ITEM_CONTAINER
         {
             game.send_to_char(ch, "When you look inside, you see:\r\n");
             look_in_obj(game, ch, &arg);
@@ -1190,9 +1190,9 @@ pub fn do_equipment(
     game.send_to_char(ch, "You are using:\r\n");
     for i in 0..NUM_WEARS {
         if ch.get_eq(i).is_some() {
-            if game.can_see_obj(ch, ch.get_eq(i).as_ref().unwrap()) {
+            if game.can_see_obj(ch, game.db.obj(ch.get_eq(i).unwrap())) {
                 game.send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
-                game.show_obj_to_char(ch.get_eq(i).as_ref().unwrap(), ch, SHOW_OBJ_SHORT);
+                game.show_obj_to_char(ch.get_eq(i).unwrap(), ch, SHOW_OBJ_SHORT);
                 found = true;
             } else {
                 game.send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
@@ -1917,56 +1917,56 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-fn print_object_location(game: &mut Game, num: i32, obj: &Rc<ObjData>, ch: &Rc<CharData>, recur: bool) {
+fn print_object_location(game: &mut Game, num: i32, oid: DepotId, ch: &Rc<CharData>, recur: bool) {
     if num > 0 {
         game.send_to_char(
             ch,
-            format!("O{:3}. {:25} - ", num, obj.short_description).as_str(),
+            format!("O{:3}. {:25} - ", num, game.db.obj(oid).short_description).as_ref(),
         );
     } else {
         game.send_to_char(ch, format!("{:33}", " - ").as_str());
     }
 
-    if obj.in_room.get() != NOWHERE {
+    if game.db.obj(oid).in_room != NOWHERE {
         game.send_to_char(
             ch,
             format!(
                 "[{:5}] {}\r\n",
-                game.db.get_room_vnum(obj.in_room()),
-                game.db.world[obj.in_room() as usize].name
+                game.db.get_room_vnum(game.db.obj(oid).in_room()),
+                game.db.world[game.db.obj(oid).in_room() as usize].name
             )
             .as_str(),
         );
-    } else if obj.carried_by.borrow().is_some() {
+    } else if game.db.obj(oid).carried_by.is_some() {
         game.send_to_char(
             ch,
             format!(
                 "carried by {}\r\n",
-                game.pers(obj.carried_by.borrow().as_ref().unwrap(), ch)
+                game.pers(game.db.obj(oid).carried_by.as_ref().unwrap(), ch)
             )
             .as_str(),
         );
-    } else if obj.worn_by.borrow().is_some() {
+    } else if game.db.obj(oid).worn_by.is_some() {
         game.send_to_char(
             ch,
             format!(
                 "worn by {}\r\n",
-                game.pers(obj.worn_by.borrow().as_ref().unwrap(), ch)
+                game.pers(game.db.obj(oid).worn_by.as_ref().unwrap(), ch)
             )
             .as_str(),
         );
-    } else if obj.in_obj.borrow().is_some() {
+    } else if game.db.obj(oid).in_obj.is_some() {
         game.send_to_char(
             ch,
             format!(
                 "inside {}{}\r\n",
-                obj.in_obj.borrow().as_ref().unwrap().short_description,
+                game.db.obj(game.db.obj(oid).in_obj.unwrap()).short_description,
                 if recur { ", which is" } else { " " }
             )
             .as_str(),
         );
         if recur {
-            print_object_location(game, 0, obj.in_obj.borrow().as_ref().unwrap(), ch, recur);
+            print_object_location(game, 0, game.db.obj(oid).in_obj.unwrap(), ch, recur);
         }
     } else {
         game.send_to_char(ch, "in an unknown location\r\n");
@@ -2050,9 +2050,8 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
             }
         }
         num = 0;
-        let list = clone_vec2(&game.db.object_list);
-        for k in list.iter() {
-            if game.can_see_obj(ch, k) && isname(arg, &k.name.borrow()) {
+        for k in game.db.object_list.ids() {
+            if game.can_see_obj(ch, game.db.obj(k)) && isname(arg, game.db.obj(k).name.as_ref()) {
                 found = true;
                 print_object_location(
                     game,

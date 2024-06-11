@@ -18,6 +18,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use chrono::{TimeZone, Utc};
@@ -30,7 +31,7 @@ use rand::Rng;
 use crate::class::CLASS_ABBREVS;
 use crate::constants::STR_APP;
 use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
-use crate::handler::{affect_from_char, affected_by_spell, fname};
+use crate::handler::{ affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
@@ -723,10 +724,10 @@ impl CharData {
     pub fn is_warrior(&self) -> bool {
         self.is_npc() && self.get_class() == CLASS_WARRIOR
     }
-    pub fn get_eq(&self, pos: i8) -> Option<Rc<ObjData>> {
-        self.equipment.borrow()[pos as usize].clone()
+    pub fn get_eq(&self, pos: i8) -> Option<DepotId> {
+        self.equipment.borrow()[pos as usize]
     }
-    pub fn set_eq(&self, pos: i8, val: Option<Rc<ObjData>>) {
+    pub fn set_eq(&self, pos: i8, val: Option<DepotId>) {
         self.equipment.borrow_mut()[pos as usize] = val;
     }
     pub fn is_good(&self) -> bool {
@@ -790,45 +791,45 @@ impl Game {
 
 impl ObjData {
     pub fn get_obj_type(&self) -> u8 {
-        self.obj_flags.borrow().type_flag
+        self.obj_flags.type_flag
     }
     pub fn set_obj_type(&mut self, val: u8) {
-        self.obj_flags.borrow_mut().type_flag = val;
+        self.obj_flags.type_flag = val;
     }
 
     pub fn get_obj_extra(&self) -> i32 {
-        self.obj_flags.borrow().extra_flags
+        self.obj_flags.extra_flags
     }
-    pub fn set_obj_extra(&self, val: i32) {
-        self.obj_flags.borrow_mut().extra_flags =val;
+    pub fn set_obj_extra(&mut self, val: i32) {
+        self.obj_flags.extra_flags =val;
     }
-    pub fn set_obj_extra_bit(&self, val: i32) {
-        self.obj_flags.borrow_mut()
+    pub fn set_obj_extra_bit(&mut self, val: i32) {
+        self.obj_flags
             .extra_flags
              |= val;
     }
-    pub fn remove_obj_extra_bit(&self, val: i32) {
-        self.obj_flags.borrow_mut()
+    pub fn remove_obj_extra_bit(&mut self, val: i32) {
+        self.obj_flags
             .extra_flags
              &= !val;
     }
     pub fn get_obj_wear(&self) -> i32 {
-        self.obj_flags.borrow().wear_flags
+        self.obj_flags.wear_flags
     }
     pub fn set_obj_wear(&mut self, val: i32) {
-        self.obj_flags.borrow_mut().wear_flags = val;
+        self.obj_flags.wear_flags = val;
     }
     pub fn get_obj_val(&self, val: usize) -> i32 {
-        self.obj_flags.borrow().value[val]
+        self.obj_flags.value[val]
     }
-    pub fn set_obj_val(&self, val: usize, v: i32) {
-        self.obj_flags.borrow_mut().value[val] = v;
+    pub fn set_obj_val(&mut self, val: usize, v: i32) {
+        self.obj_flags.value[val] = v;
     }
-    pub fn decr_obj_val(&self, val: usize) {
-        self.obj_flags.borrow_mut().value[val] -=  1;
+    pub fn decr_obj_val(&mut self, val: usize) {
+        self.obj_flags.value[val] -=  1;
     }
-    pub fn incr_obj_val(&self, val: usize) {
-        self.obj_flags.borrow_mut().value[val] +=  1;
+    pub fn incr_obj_val(&mut self, val: usize) {
+        self.obj_flags.value[val] +=  1;
     }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
@@ -836,56 +837,56 @@ impl ObjData {
     pub fn objval_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_val(1), flag)
     }
-    pub fn remove_objval_bit(&self, val: i32, flag: i32) {
-        self.obj_flags.borrow_mut().value[val as usize] &= !flag
+    pub fn remove_objval_bit(&mut self, val: i32, flag: i32) {
+        self.obj_flags.value[val as usize] &= !flag
     }
-    pub fn set_objval_bit(&self, val: i32, flag: i32) {
-        self.obj_flags.borrow_mut().value[val as usize]  |= flag
+    pub fn set_objval_bit(&mut self, val: i32, flag: i32) {
+        self.obj_flags.value[val as usize]  |= flag
     }
     pub fn get_obj_weight(&self) -> i32 {
-        self.obj_flags.borrow().weight
+        self.obj_flags.weight
     }
-    pub fn set_obj_weight(&self, val: i32) {
-        self.obj_flags.borrow_mut().weight = val;
+    pub fn set_obj_weight(&mut self, val: i32) {
+        self.obj_flags.weight = val;
     }
-    pub fn incr_obj_weight(&self, val: i32) {
-        self.obj_flags.borrow_mut().weight += val;
+    pub fn incr_obj_weight(&mut self, val: i32) {
+        self.obj_flags.weight += val;
     }
     pub fn get_obj_cost(&self) -> i32 {
-        self.obj_flags.borrow().cost
+        self.obj_flags.cost
     }
     pub fn set_obj_cost(&mut self, val: i32) {
-        self.obj_flags.borrow_mut().cost = val;
+        self.obj_flags.cost = val;
     }
     pub fn get_obj_rent(&self) -> i32 {
-        self.obj_flags.borrow().cost_per_day
+        self.obj_flags.cost_per_day
     }
     pub fn set_obj_rent(&mut self, val: i32) {
-        self.obj_flags.borrow_mut().cost_per_day = val;
+        self.obj_flags.cost_per_day = val;
     }
     pub fn get_obj_rnum(&self) -> ObjVnum {
         self.item_number
     }
     pub fn get_obj_affect(&self) -> i64 {
-        self.obj_flags.borrow().bitvector
+        self.obj_flags.bitvector
     }
-    pub fn set_obj_affect(&self, val: i64) {
-        self.obj_flags.borrow_mut().bitvector = val;
+    pub fn set_obj_affect(&mut self, val: i64) {
+        self.obj_flags.bitvector = val;
     }
-    pub fn set_in_room(&self, val: RoomRnum) {
-        self.in_room.set(val);
+    pub fn set_in_room(&mut self, val: RoomRnum) {
+        self.in_room = val;
     }
     pub fn is_corpse(&self) -> bool {
         self.get_obj_type() == ITEM_CONTAINER && self.get_obj_val(3) == 1
     }
     pub fn get_obj_timer(&self) -> i32 {
-        self.obj_flags.borrow().timer
+        self.obj_flags.timer
     }
-    pub fn set_obj_timer(&self, val: i32) {
-        self.obj_flags.borrow_mut().timer = val;
+    pub fn set_obj_timer(&mut self, val: i32) {
+        self.obj_flags.timer = val;
     }
-    pub fn decr_obj_timer(&self, val: i32) {
-        self.obj_flags.borrow_mut().timer -= val;
+    pub fn decr_obj_timer(&mut self, val: i32) {
+        self.obj_flags.timer -= val;
     }
 }
 
@@ -1040,17 +1041,17 @@ impl Game {
             Rc::from("someone")
         }
     }
-    pub fn objs<'a>(&self, obj: &'a ObjData, vict: &CharData) -> &'a str {
+    pub fn objs<'a>(&self, obj: &'a ObjData, vict: &CharData) -> Rc<str> {
         if self.can_see_obj(vict, obj) {
-            obj.short_description.as_str()
+            obj.short_description.clone()
         } else {
-            "something"
+            Rc::from("something")
         }
     }
 
     pub fn objn(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
         if self.can_see_obj(vict, obj) {
-            fname(obj.name.borrow().as_str())
+            fname(obj.name.as_ref())
         } else {
             Rc::from("something")
         }
@@ -1066,14 +1067,14 @@ pub fn self_(sub: &CharData, obj: &CharData) -> bool {
 
 impl ObjData {
     pub fn in_room(&self) -> RoomRnum {
-        self.in_room.get()
+        self.in_room
     }
 }
 
 impl DB {
-    pub fn get_obj_spec(&self, obj: &Rc<ObjData>) -> Option<Special> {
-        if self.valid_obj_rnum(obj) {
-            self.obj_index[obj.get_obj_rnum() as usize].func
+    pub fn get_obj_spec(&self, oid: DepotId) -> Option<Special> {
+        if self.valid_obj_rnum(self.obj(oid)) {
+            self.obj_index[self.obj(oid).get_obj_rnum() as usize].func
         } else {
             None
         }
@@ -1125,7 +1126,7 @@ pub fn hssh(ch: &CharData) -> &str {
 // }
 
 pub fn sana(obj: &ObjData) -> &str {
-    if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
+    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
         "an"
     } else {
         "a"
@@ -1548,7 +1549,7 @@ impl Game {
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                affect_from_char(ch, SPELL_CHARM as i16);
+                self.db.affect_from_char(ch, SPELL_CHARM as i16);
             }
         } else {
             self.act(

@@ -23,9 +23,9 @@ use crate::act_wizard::perform_immort_vis;
 use crate::alias::write_aliases;
 use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED};
 use crate::constants::DEX_APP_SKILL;
-use crate::db::{BUG_FILE, DB, IDEA_FILE, TYPO_FILE};
+use crate::db::{BUG_FILE,  IDEA_FILE, TYPO_FILE};
 use crate::fight::die;
-use crate::handler::{affect_from_char, affect_to_char, isname, obj_from_char, FIND_CHAR_ROOM};
+use crate::handler::{ isname, FIND_CHAR_ROOM};
 use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
@@ -120,7 +120,7 @@ pub fn do_save(game: &mut Game, ch: &Rc<CharData>, _argument: &str, cmd: usize, 
 
     write_aliases(ch);
     game.save_char(ch);
-    crash_crashsave(&game.db, ch);
+    crash_crashsave(&mut game.db, ch);
 
     if game.db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
         let in_room =  game.db.get_room_vnum(ch.in_room());
@@ -147,7 +147,7 @@ pub fn do_sneak(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
     }
     game.send_to_char(ch, "Okay, you'll try to move silently for a while.\r\n");
     if ch.aff_flagged(AFF_SNEAK) {
-        affect_from_char(ch, SKILL_SNEAK as i16);
+        game.db.affect_from_char(ch, SKILL_SNEAK as i16);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
@@ -166,7 +166,7 @@ pub fn do_sneak(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         bitvector: AFF_SNEAK,
     };
 
-    affect_to_char(ch, &af);
+    game.db.affect_to_char(ch, &af);
 }
 
 pub fn do_hide(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
@@ -246,26 +246,26 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     {
         percent = 101; /* Failure */
     }
-    let mut obj;
+    let mut oid;
     let mut the_eq_pos = -1;
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            obj = game.get_obj_in_list_vis(ch, &mut obj_name, None, vict.carrying.borrow());
-            obj.is_none()
+            oid = game.get_obj_in_list_vis(ch, &mut obj_name, None, &vict.carrying.borrow());
+            oid.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
                     && isname(
                         &obj_name,
-                        vict.get_eq(eq_pos).as_ref().unwrap().name.borrow().as_ref(),
+                        game.db.obj(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
                     )
-                    && game.can_see_obj(ch, vict.get_eq(eq_pos).as_ref().unwrap())
+                    && game.can_see_obj(ch, game.db.obj(vict.get_eq(eq_pos).unwrap()))
                 {
-                    obj = vict.get_eq(eq_pos);
+                    oid = vict.get_eq(eq_pos);
                     the_eq_pos = eq_pos;
                 }
             }
-            if obj.is_none() {
+            if oid.is_none() {
                 game.act(
                     "$E hasn't got that item.",
                     false,
@@ -281,12 +281,12 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     game.send_to_char(ch, "Steal the equipment now?  Impossible!\r\n");
                     return;
                 } else {
-                    let obj = obj.as_ref().unwrap();
+                    let oid = oid.unwrap();
                     game.act(
                         "You unequip $p and steal it.",
                         false,
                         Some(ch),
-                        Some(obj),
+                        Some(oid),
                         None,
                         TO_CHAR,
                     );
@@ -294,18 +294,19 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                         "$n steals $p from $N.",
                         false,
                         Some(ch),
-                        Some(obj),
+                        Some(oid),
                         Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
-                    DB::obj_to_char(game.unequip_char(vict, the_eq_pos).as_ref().unwrap(), ch);
+                    let eqid = game.unequip_char(vict, the_eq_pos).unwrap();
+                    game.db.obj_to_char(eqid, ch);
                 }
             }
         } else {
             /* obj found in inventory */
-            let obj = obj.as_ref().unwrap();
+            let oid = oid.unwrap();
 
-            percent += obj.get_obj_weight(); /* Make heavy harder */
+            percent += game.db.obj(oid).get_obj_weight(); /* Make heavy harder */
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
                 game.send_to_char(ch, "Oops..\r\n");
@@ -328,9 +329,9 @@ pub fn do_steal(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             } else {
                 /* Steal the item */
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
-                    if ch.is_carrying_w() + obj.get_obj_weight() < ch.can_carry_w() as i32 {
-                        obj_from_char(obj);
-                        DB::obj_to_char(obj, ch);
+                    if ch.is_carrying_w() + game.db.obj(oid).get_obj_weight() < ch.can_carry_w() as i32 {
+                        game.db.obj_from_char(oid);
+                        game.db.obj_to_char(oid, ch);
                         game.send_to_char(ch, "Got it!\r\n");
                     }
                 } else {
@@ -872,11 +873,11 @@ pub fn do_use(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
     }
     let mut mag_item = ch.get_eq(WEAR_HOLD as i8);
 
-    if mag_item.is_none() || !isname(&arg, &mag_item.as_ref().unwrap().name.borrow()) {
+    if mag_item.is_none() || !isname(&arg, game.db.obj(mag_item.unwrap()).name.as_ref()) {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 if {
-                    mag_item = game.get_obj_in_list_vis(ch, &arg, None, ch.carrying.borrow());
+                    mag_item = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
                     mag_item.is_none()
                 } {
                     game.send_to_char(
@@ -899,22 +900,22 @@ pub fn do_use(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, su
             }
         }
     }
-    let mag_item = mag_item.as_ref().unwrap();
+    let mag_item = mag_item.unwrap();
     match subcmd {
         SCMD_QUAFF => {
-            if mag_item.get_obj_type() != ITEM_POTION {
+            if game.db.obj(mag_item).get_obj_type() != ITEM_POTION {
                 game.send_to_char(ch, "You can only quaff potions.\r\n");
                 return;
             }
         }
         SCMD_RECITE => {
-            if mag_item.get_obj_type() != ITEM_SCROLL {
+            if game.db.obj(mag_item).get_obj_type() != ITEM_SCROLL {
                 game.send_to_char(ch, "You can only recite scrolls.\r\n");
                 return;
             }
         }
         SCMD_USE => {
-            if mag_item.get_obj_type() != ITEM_WAND && mag_item.get_obj_type() != ITEM_STAFF {
+            if game.db.obj(mag_item).get_obj_type() != ITEM_WAND && game.db.obj(mag_item).get_obj_type() != ITEM_STAFF {
                 game.send_to_char(ch, "You can't seem to figure out how to use it.\r\n");
                 return;
             }

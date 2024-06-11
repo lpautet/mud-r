@@ -15,7 +15,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::act_movement::perform_move;
 use crate::act_social::do_action;
-use crate::db::DB;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
@@ -69,21 +68,22 @@ impl Game {
                     let mut best_obj = None;
                     {
                         let contents = clone_vec2(&self.db.world[ch.in_room() as usize].contents);
-                        for obj in contents.iter() {
+                        for oid in contents.into_iter() {
+                            let obj = self.db.obj(oid);
                             if self.can_get_obj(ch, obj) && obj.get_obj_cost() > max {
-                                best_obj = Some(obj.clone());
+                                best_obj = Some(oid);
                                 max = obj.get_obj_cost();
                             }
                         }
                     }
                     if best_obj.is_some() {
-                        self.db.obj_from_room(best_obj.as_ref().unwrap());
-                        DB::obj_to_char(best_obj.as_ref().unwrap(), ch);
+                        self.db.obj_from_room(best_obj.unwrap());
+                        self.db.obj_to_char(best_obj.unwrap(), ch);
                         self.act(
                             "$n gets $p.",
                             false,
                             Some(ch),
-                            Some(best_obj.as_ref().unwrap()),
+                            Some(best_obj.unwrap()),
                             None,
                             TO_ROOM,
                         );

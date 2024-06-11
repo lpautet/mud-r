@@ -11,6 +11,7 @@
 
 use std::borrow::Borrow;
 use std::rc::Rc;
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::act_informative::look_at_room;
@@ -48,8 +49,8 @@ fn has_boat(game: &mut Game, ch: &Rc<CharData>) -> bool {
 
     /* non-wearable boats in inventory will do it */
 
-    for obj in ch.carrying.borrow().iter() {
-        if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(game, ch, obj, "") < 0) {
+    for oid in ch.carrying.borrow().iter() {
+        if game.db.obj(*oid).get_obj_type() == ITEM_BOAT && (find_eq_pos(game, ch, *oid, "") < 0) {
             return true;
         }
     }
@@ -57,7 +58,7 @@ fn has_boat(game: &mut Game, ch: &Rc<CharData>) -> bool {
     /* and any boat you're wearing will do it too */
 
     for i in 0..NUM_WEARS {
-        if ch.get_eq(i).is_some() && ch.get_eq(i).as_ref().unwrap().get_obj_type() == ITEM_BOAT {
+        if ch.get_eq(i).is_some() && game.db.obj(ch.get_eq(i).unwrap()).get_obj_type() == ITEM_BOAT {
             return true;
         }
     }
@@ -404,13 +405,13 @@ fn find_door(game: &mut Game, ch: &Rc<CharData>, type_: &str, dir: &str, cmdname
 
 fn has_key(db: &DB, ch: &Rc<CharData>, key: ObjVnum) -> bool {
     for o in ch.carrying.borrow().iter() {
-        if db.get_obj_vnum(o) == key {
+        if db.get_obj_vnum(db.obj(*o)) == key {
             return true;
         }
     }
 
-    if ch.get_eq(WEAR_HOLD as i8).borrow().is_some() {
-        if db.get_obj_vnum(ch.get_eq(WEAR_HOLD as i8).borrow().as_ref().unwrap()) == key {
+    if ch.get_eq(WEAR_HOLD as i8).is_some() {
+        if db.get_obj_vnum(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap())) == key {
             return true;
         }
     }
@@ -432,43 +433,43 @@ const FLAGS_DOOR: [i32; 5] = [
     NEED_CLOSED | NEED_LOCKED,
 ];
 
-fn open_door(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Option<usize>) {
-    if obj.is_some() {
-        obj.as_ref().unwrap().remove_objval_bit(1, CONT_CLOSED);
+fn open_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+    if oid.is_some() {
+        db.obj_mut(oid.unwrap()).remove_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()].as_mut().unwrap().exit_info  &= !EX_CLOSED;
     }
 }
 
-fn close_door(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Option<usize>) {
-    if obj.is_some() {
-        obj.as_ref().unwrap().set_objval_bit(1, CONT_CLOSED);
+fn close_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+    if oid.is_some() {
+        db.obj_mut(oid.unwrap()).set_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()].as_mut().unwrap().exit_info |= EX_CLOSED;
     }
 }
 
-fn lock_door(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Option<usize>) {
-    if obj.is_some() {
-        obj.as_ref().unwrap().set_objval_bit(1, CONT_LOCKED);
+fn lock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+    if oid.is_some() {
+        db.obj_mut(oid.unwrap()).set_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()].as_mut().unwrap().exit_info |= EX_LOCKED;
     }
 }
 
-fn unlock_door(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Option<usize>) {
-    if obj.is_some() {
-        obj.as_ref().unwrap().remove_objval_bit(1, CONT_LOCKED);
+fn unlock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+    if oid.is_some() {
+        db.obj_mut(oid.unwrap()).remove_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()].as_mut().unwrap().exit_info &= !EX_LOCKED;
     }
 }
 
-fn togle_lock(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Option<usize>) {
-    if obj.is_some() {
-        obj.as_ref()
-            .unwrap()
-            .set_obj_val(1, obj.as_ref().unwrap().get_obj_val(1) ^ CONT_LOCKED);
+fn togle_lock(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+    if oid.is_some() {
+        let v = db.obj(oid.unwrap()).get_obj_val(1) ^ CONT_LOCKED;
+        db.obj_mut(oid.unwrap())
+            .set_obj_val(1, v);
     } else {
         db.world[room as usize].dir_option[door.unwrap()].as_mut().unwrap().exit_info ^= EX_LOCKED;
     }
@@ -477,7 +478,7 @@ fn togle_lock(db: &mut DB, room: RoomRnum, obj: Option<&Rc<ObjData>>, door: Opti
 fn do_doorcmd(
     game: &mut Game,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
     door: Option<usize>,
     scmd: i32,
 ) {
@@ -489,7 +490,7 @@ fn do_doorcmd(
     let mut  back_keyword  = None;
 
     buf = format!("$n {}s ", CMD_DOOR[scmd as usize]);
-    if obj.is_none() && {
+    if oid.is_none() && {
         other_room = game.db.exit(ch, door.unwrap()).as_ref().unwrap().to_room;
         other_room != NOWHERE
     } {
@@ -507,48 +508,48 @@ fn do_doorcmd(
 
     match scmd {
         SCMD_OPEN => {
-            open_door(&mut game.db, ch.in_room(), obj, door);
+            open_door(&mut game.db, ch.in_room(), oid, door);
             if back_to_room.is_some() {
                 open_door(
                     &mut game.db,
                     other_room,
-                    obj,
+                    oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
             game.send_to_char(ch, OK);
         }
         SCMD_CLOSE => {
-            close_door(&mut game.db, ch.in_room(), obj, door);
+            close_door(&mut game.db, ch.in_room(), oid, door);
             if back_to_room.is_some() {
                 close_door(
                     &mut game.db,
                     other_room,
-                    obj,
+                    oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
             game.send_to_char(ch, OK);
         }
         SCMD_LOCK => {
-            lock_door(&mut game.db, ch.in_room(), obj, door);
+            lock_door(&mut game.db, ch.in_room(), oid, door);
             if back_to_room.is_some() {
                 lock_door(
                     &mut game.db,
                     other_room,
-                    obj,
+                    oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
             game.send_to_char(ch, OK);
         }
         SCMD_UNLOCK => {
-            unlock_door(&mut game.db, ch.in_room(), obj, door);
+            unlock_door(&mut game.db, ch.in_room(), oid, door);
             if back_to_room.is_some() {
                 unlock_door(
                     &mut game.db,
                     other_room,
-                    obj,
+                    oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
@@ -556,12 +557,12 @@ fn do_doorcmd(
         }
 
         SCMD_PICK => {
-            togle_lock(&mut game.db, ch.in_room(), obj, door);
+            togle_lock(&mut game.db, ch.in_room(), oid, door);
             if back_to_room.is_some() {
                 togle_lock(
                     &mut game.db,
                     other_room,
-                    obj,
+                    oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
@@ -575,8 +576,8 @@ fn do_doorcmd(
     buf.push_str(
         format!(
             "{}{}.",
-            if obj.is_some() { "" } else { "the " },
-            if obj.is_some() {
+            if oid.is_some() { "" } else { "the " },
+            if oid.is_some() {
                 "$p"
             } else {
                 if !game.db
@@ -594,18 +595,18 @@ fn do_doorcmd(
         )
         .as_str(),
     );
-    if obj.is_none() || obj.as_ref().unwrap().in_room() != NOWHERE {
+    if oid.is_none() || game.db.obj(oid.unwrap()).in_room() != NOWHERE {
         let x = game.db.exit(ch, door.unwrap()).unwrap().keyword.clone();
         game.act(
             &buf,
             false,
             Some(ch),
-            if obj.is_none() {
+            if oid.is_none() {
                 None
             } else {
-                Some(obj.unwrap())
+                Some(oid.unwrap())
             },
-            if obj.is_some() {
+            if oid.is_some() {
                 None
             } else {
                 Some(VictimRef::Str(&x))
@@ -658,7 +659,7 @@ fn ok_pick(game: &mut Game, ch: &Rc<CharData>, keynum: ObjVnum, pickproof: bool,
 fn door_is_openable(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     if obj.is_some() {
@@ -675,7 +676,7 @@ fn door_is_openable(
 fn door_is_open(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     if obj.is_some() {
@@ -691,7 +692,7 @@ fn door_is_open(
 fn door_is_unlocked(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     if obj.is_some() {
@@ -707,7 +708,7 @@ fn door_is_unlocked(
 fn door_is_pickproof(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     if obj.is_some() {
@@ -723,7 +724,7 @@ fn door_is_pickproof(
 fn door_is_closed(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     !door_is_open(db, ch, obj, door)
@@ -732,13 +733,13 @@ fn door_is_closed(
 fn door_is_locked(
     db: &DB,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    obj: Option<&ObjData>,
     door: Option<usize>,
 ) -> bool {
     !door_is_unlocked(db, ch, obj, door)
 }
 
-fn door_key(db: &DB, ch: &Rc<CharData>, obj: Option<&Rc<ObjData>>, door: Option<usize>) -> ObjVnum {
+fn door_key(db: &DB, ch: &Rc<CharData>, obj: Option<&ObjData>, door: Option<usize>) -> ObjVnum {
     if obj.is_some() {
         obj.as_ref().unwrap().get_obj_val(2) as ObjVnum
     } else {
@@ -764,14 +765,14 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     let mut type_ = String::new();
     let mut dir = String::new();
     let mut victim = None;
-    let mut obj = None;
+    let mut oid = None;
     two_arguments(argument, &mut type_, &mut dir);
     if !game.generic_find(
         &type_,
         (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
         ch,
         &mut victim,
-        &mut obj,
+        &mut oid,
     ) != 0
     {
         let dooroi = find_door(game, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
@@ -782,9 +783,9 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         };
     }
 
-    if obj.is_some() || dooro.is_some() {
-        let keynum = door_key(&game.db, ch, obj.as_ref(), dooro);
-        if !door_is_openable(&game.db, ch, obj.as_ref(), dooro) {
+    if oid.is_some() || dooro.is_some() {
+        let keynum = door_key(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro);
+        if !door_is_openable(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro) {
             game.act(
                 "You can't $F that!",
                 false,
@@ -793,19 +794,19 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
                 Some(VictimRef::Str(&CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
-        } else if !door_is_open(&game.db, ch, obj.as_ref(), dooro)
+        } else if !door_is_open(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
             game.send_to_char(ch, "But it's already closed!\r\n");
-        } else if !door_is_closed(&game.db, ch, obj.as_ref(), dooro)
+        } else if !door_is_closed(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
             game.send_to_char(ch, "But it's currently open!\r\n");
-        } else if !(door_is_locked(&game.db, ch, obj.as_ref(), dooro))
+        } else if !(door_is_locked(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
             game.send_to_char(ch, "Oh.. it wasn't locked, after all..\r\n");
-        } else if !(door_is_unlocked(&game.db, ch, obj.as_ref(), dooro))
+        } else if !(door_is_unlocked(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
             game.send_to_char(ch, "It seems to be locked.\r\n");
@@ -818,10 +819,10 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             game,
             ch,
             keynum,
-            door_is_pickproof(&game.db, ch, obj.as_ref(), dooro),
+            door_is_pickproof(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro),
             subcmd,
         ) {
-            do_doorcmd(game, ch, obj.as_ref(), dooro, subcmd);
+            do_doorcmd(game, ch, oid, dooro, subcmd);
         }
     }
     return;

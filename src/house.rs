@@ -19,14 +19,15 @@ use log::{error, info};
 
 use crate::constants::{DIRS, REV_DIR};
 use crate::db::{DB, HCONTROL_FILE};
+use crate::depot::DepotId;
 use crate::interpreter::{half_chop, is_abbrev, one_argument, search_block};
 use crate::objsave::{obj_from_store, obj_to_store};
 use crate::structs::{
-    CharData, ObjData, ObjFileElem, RoomRnum, RoomVnum, LVL_GRGOD, LVL_IMMORT, NOWHERE,
+    CharData,  ObjFileElem, RoomRnum, RoomVnum, LVL_GRGOD, LVL_IMMORT, NOWHERE,
     NUM_OF_DIRS, ROOM_ATRIUM, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PRIVATE,
 };
 use crate::util::{ctime, time_now, NRM};
-use crate::{ Game};
+use crate::Game;
 
 pub const MAX_HOUSES: usize = 100;
 pub const MAX_GUESTS: usize = 10;
@@ -151,8 +152,8 @@ fn house_load(db: &mut DB, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            let newobj = obj_from_store(db, &object, &mut i).clone().unwrap();
-            db.obj_to_room(&newobj, rnum);
+            let newobjid = obj_from_store(db, &object, &mut i).clone().unwrap();
+            db.obj_to_room(newobjid, rnum);
         }
     }
 
@@ -161,34 +162,35 @@ fn house_load(db: &mut DB, vnum: RoomVnum) -> bool {
 
 /* Save all objects for a house (recursive; initial call must be followed
 by a call to House_restore_weight)  Assumes file is open already. */
-fn house_save(db: &DB, objects: &Vec<Rc<ObjData>>, fp: &mut File) -> bool {
-    for obj in objects {
-        for cobj in obj.contains.borrow().iter() {
-            house_save(db, &cobj.contains.borrow(), fp);
+fn house_save(db: &mut DB, oids: Vec<DepotId>, fp: &mut File) -> bool {
+    for oid in oids {
+        for coid in db.obj(oid).contains.clone() {
+            house_save(db, db.obj(coid).contains.clone(), fp);
         }
-        let result = obj_to_store(db, obj, fp, 0);
+        let result = obj_to_store(db, db.obj(oid), fp, 0);
         if !result {
             return false;
         }
-        if obj.in_obj.borrow().is_some() {
-            let oio = obj.in_obj.borrow();
-            let tmp = oio.as_ref().unwrap();
-            tmp.set_obj_weight(tmp.get_obj_weight() - obj.get_obj_weight());
+        if db.obj(oid).in_obj.is_some() {
+            let tmp_id = db.obj(oid).in_obj.unwrap();
+            let val = db.obj(tmp_id).get_obj_weight() - db.obj(oid).get_obj_weight();
+            db.obj_mut(tmp_id).set_obj_weight(val);
         }
     }
     return true;
 }
 
 /* restore weight of containers after House_save has changed them for saving */
-fn house_restore_weight(objects: &Vec<Rc<ObjData>>) {
-    for obj in objects {
-        for cobj in obj.contains.borrow().iter() {
-            house_restore_weight(&cobj.contains.borrow());
+fn house_restore_weight(db: &mut DB, oids: Vec<DepotId>) {
+    for oid in oids {
+        for coid in db.obj(oid).contains.clone() {
+            house_restore_weight(db, db.obj(coid).contains.clone());
         }
 
-        if obj.in_obj.borrow().is_some() {
-            obj.in_obj.borrow().as_ref().unwrap().set_obj_weight(
-                obj.in_obj.borrow().as_ref().unwrap().get_obj_weight() + obj.get_obj_weight(),
+        if db.obj(oid).in_obj.is_some() {
+            let val = db.obj(db.obj(oid).in_obj.unwrap()).get_obj_weight() + db.obj(oid).get_obj_weight();
+            db.obj_mut(db.obj(oid).in_obj.unwrap()).set_obj_weight(
+               val ,
             );
         }
     }
@@ -218,13 +220,13 @@ pub fn house_crashsave(db: &mut DB, vnum: RoomVnum) {
     let mut fp = fp.unwrap();
     if !house_save(
         db,
-        &db.world[rnum as usize].contents,
+        db.world[rnum as usize].contents.clone(),
         &mut fp,
     ) {
         return;
     }
 
-    house_restore_weight(&db.world[rnum as usize].contents);
+    house_restore_weight(db, db.world[rnum as usize].contents.clone());
     db.remove_room_flags_bit(rnum, ROOM_HOUSE_CRASH);
 }
 

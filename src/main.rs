@@ -21,7 +21,7 @@ use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
-use depot::{Depot, DepotId};
+use depot::{Depot, DepotId, HasId};
 use log::{debug, error, info, warn, LevelFilter};
 
 use log4rs::append::console::ConsoleAppender;
@@ -98,6 +98,7 @@ pub const TO_CHAR: i32 = 4;
 pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 
 pub struct DescriptorData {
+    id: DepotId,
     stream: Option<TcpStream>,
     // file descriptor for socket
     host: Rc<str>,
@@ -148,9 +149,20 @@ pub struct DescriptorData {
     /* And who is snooping this char	*/
 }
 
+impl HasId for DescriptorData {
+    fn id(&self) -> DepotId {
+        self.id
+    }
+
+    fn set_id(&mut self, id: DepotId) {
+        self.id = id;
+    }
+}
+
 impl Default for DescriptorData {
     fn default() -> Self {
         DescriptorData {
+            id: Default::default(),
             stream: None,
             host: Rc::from(EMPTY_STRING),
             bad_pws: 0,
@@ -1451,7 +1463,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        free_char(d.character.borrow().as_ref().unwrap());
+                        self.db.free_char(d.character.borrow().as_ref().unwrap());
                     }
                 }
             }
@@ -1685,14 +1697,17 @@ impl Game {
         &mut self,
         orig: &str,
         ch: Option<&CharData>,
-        obj: Option<&ObjData>,
+        oid: Option<DepotId>,
         vict_obj: Option<VictimRef>,
         to: &CharData,
     ) {
+
         let mut uppercasenext = false;
         let mut orig = orig.to_string();
         let mut i: Rc<str>;
         let mut buf = String::new();
+
+        let obj = oid.map(|e|   self.db.obj(e));
 
         loop {
             if orig.starts_with('$') {
@@ -1770,7 +1785,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let VictimRef::Obj(p) = vict_obj.unwrap() {
-                                self.objn(p, to)
+                                self.objn(self.db.obj(p), to)
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
                             }
@@ -1788,7 +1803,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let VictimRef::Obj(p) = vict_obj.unwrap() {
-                                Rc::from(self.objs(p, to))
+                                Rc::from(self.objs(self.db.obj(p), to))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1806,7 +1821,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let VictimRef::Obj(p) = vict_obj.unwrap() {
-                                Rc::from(sana(p))
+                                Rc::from(sana(self.db.obj(p)))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1906,7 +1921,7 @@ macro_rules! sendok {
 #[derive(Clone, Copy)]
 pub enum VictimRef<'a> {
     Char(&'a CharData),
-    Obj(&'a ObjData),
+    Obj(DepotId),
     Str(&'a str),
 }
 
@@ -1916,7 +1931,7 @@ impl Game {
         str: &str,
         hide_invisible: bool,
         ch: Option<&CharData>,
-        obj: Option<&ObjData>,
+        oid: Option<DepotId>,
         vict_obj: Option<VictimRef>,
         _type: i32,
     ) {
@@ -1944,7 +1959,7 @@ impl Game {
 
         if _type == TO_CHAR {
             if ch.is_some() && sendok!(ch.as_ref().unwrap(), to_sleeping) {
-                self.perform_act(str, ch, obj, vict_obj, ch.unwrap());
+                self.perform_act(str, ch, oid, vict_obj, ch.unwrap());
             }
             return;
         }
@@ -1953,7 +1968,7 @@ impl Game {
             if vict_obj.is_some() {
                 if let VictimRef::Char(to) = vict_obj.unwrap() {
                     if sendok!(to, to_sleeping) {
-                        self.perform_act(str, ch, obj, vict_obj, to);
+                        self.perform_act(str, ch, oid, vict_obj, to);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -1965,8 +1980,8 @@ impl Game {
         let char_list;
         if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
             char_list = &self.db.world[ch.as_ref().unwrap().in_room() as usize].peoples;
-        } else if obj.is_some() && obj.unwrap().in_room() != NOWHERE {
-            char_list = &self.db.world[obj.unwrap().in_room() as usize].peoples;
+        } else if oid.is_some() && self.db.obj(oid.unwrap()).in_room() != NOWHERE {
+            char_list = &self.db.world[self.db.obj(oid.unwrap()).in_room() as usize].peoples;
         } else {
             error!("SYSERR: no valid target to act()!");
             return;
@@ -2000,7 +2015,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), obj, vict_obj, to);
+            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), oid, vict_obj, to);
         }
     }
 }

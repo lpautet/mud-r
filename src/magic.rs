@@ -13,13 +13,14 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
 use crate::db::{DB, VIRTUAL};
 use crate::fight::update_pos;
-use crate::handler::{affect_from_char, affect_join, affect_remove, affected_by_spell};
+use crate::handler::affected_by_spell;
 use crate::spells::{
     spell_recall, MAX_SPELLS, SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS,
     SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY,
@@ -32,14 +33,14 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectedType, CharData, MobVnum, ObjData, AFF_BLIND, AFF_CHARM, AFF_CURSE, AFF_DETECT_ALIGN,
+    AffectedType, CharData, MobVnum, AFF_BLIND, AFF_CHARM, AFF_CURSE, AFF_DETECT_ALIGN,
     AFF_DETECT_INVIS, AFF_DETECT_MAGIC, AFF_GROUP, AFF_INFRAVISION, AFF_INVISIBLE, AFF_POISON,
     AFF_PROTECT_EVIL, AFF_SANCTUARY, AFF_SENSE_LIFE, AFF_SLEEP, AFF_WATERWALK, APPLY_AC,
     APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR,
     ITEM_BLESS, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_INVISIBLE, ITEM_NODROP, ITEM_NOINVIS,
     ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING,
 };
-use crate::util::{add_follower, clone_vec, clone_vec2, dice, rand_number};
+use crate::util::{add_follower, clone_vec2, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
 
 /*
@@ -101,7 +102,7 @@ pub fn affect_update(game: &mut Game) {
                         }
                     }
                 }
-                affect_remove(i, af);
+                game.db.affect_remove(i, af);
                 false
             }
         });
@@ -554,7 +555,7 @@ pub fn mag_affects(
 
     for i in 0..MAX_SPELL_AFFECTS as usize {
         if af[i].bitvector != 0 || af[i].location != APPLY_NONE as u8 {
-            affect_join(
+            game.db.affect_join(
                 victim.as_ref().unwrap(),
                 &mut af[i],
                 accum_duration,
@@ -782,7 +783,7 @@ pub fn mag_summons(
     game: &mut Game,
     _level: i32,
     ch: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
@@ -806,7 +807,7 @@ pub fn mag_summons(
             pfail = 50; /* 50% failure, should be based on something later. */
         }
         SPELL_ANIMATE_DEAD => {
-            if obj.is_none() || !obj.unwrap().is_corpse() {
+            if oid.is_none() || !game.db.obj(oid.unwrap()).is_corpse() {
                 game.act(
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
@@ -870,11 +871,11 @@ pub fn mag_summons(
         add_follower(game, mob, ch);
 
         if handle_corpse {
-            for tobj in clone_vec(&obj.as_ref().unwrap().contains) {
-                DB::obj_from_obj(&tobj);
-                DB::obj_to_char(&tobj, mob);
+            for tobjid in game.db.obj(oid.unwrap()).contains.clone().into_iter() {
+                game.db.obj_from_obj(tobjid);
+                game.db.obj_to_char(tobjid, mob);
             }
-            game.extract_obj(obj.as_ref().unwrap());
+            game.extract_obj(oid.unwrap());
         }
     }
 }
@@ -972,7 +973,7 @@ pub fn mag_unaffects(
         return;
     }
 
-    affect_from_char(victim, spell as i16);
+    game.db.affect_from_char(victim, spell as i16);
     if !to_vict.is_empty() {
         game.act(to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
@@ -985,66 +986,66 @@ pub fn mag_alter_objs(
     game: &mut Game,
     _level: i32,
     ch: &Rc<CharData>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
     let mut to_char = "";
     let to_room = "";
 
-    if obj.is_none() {
+    if oid.is_none() {
         return;
     }
-    let obj = obj.unwrap();
+    let oid = oid.unwrap();
 
     match spellnum {
         SPELL_BLESS => {
-            if !obj.obj_flagged(ITEM_BLESS) && (obj.get_obj_weight() <= 5 * ch.get_level() as i32) {
-                obj.set_obj_extra_bit(ITEM_BLESS);
+            if ! game.db.obj(oid).obj_flagged(ITEM_BLESS) && ( game.db.obj(oid).get_obj_weight() <= 5 * ch.get_level() as i32) {
+                 game.db.obj_mut(oid).set_obj_extra_bit(ITEM_BLESS);
                 to_char = "$p glows briefly.";
             }
         }
         SPELL_CURSE => {
-            if !obj.obj_flagged(ITEM_NODROP) {
-                obj.set_obj_extra_bit(ITEM_NODROP);
-                if obj.get_obj_type() == ITEM_WEAPON {
-                    obj.decr_obj_val(2);
+            if ! game.db.obj(oid).obj_flagged(ITEM_NODROP) {
+                 game.db.obj_mut(oid).set_obj_extra_bit(ITEM_NODROP);
+                if  game.db.obj(oid).get_obj_type() == ITEM_WEAPON {
+                     game.db.obj_mut(oid).decr_obj_val(2);
                 }
                 to_char = "$p briefly glows red.";
             }
         }
         SPELL_INVISIBLE => {
-            if !obj.obj_flagged(ITEM_NOINVIS | ITEM_INVISIBLE) {
-                obj.set_obj_extra_bit(ITEM_INVISIBLE);
+            if ! game.db.obj(oid).obj_flagged(ITEM_NOINVIS | ITEM_INVISIBLE) {
+                 game.db.obj_mut(oid).set_obj_extra_bit(ITEM_INVISIBLE);
                 to_char = "$p vanishes.";
             }
         }
         SPELL_POISON => {
-            if ((obj.get_obj_type() == ITEM_DRINKCON)
-                || (obj.get_obj_type() == ITEM_FOUNTAIN)
-                || (obj.get_obj_type() == ITEM_FOOD))
-                && obj.get_obj_val(3) == 0
+            if (( game.db.obj(oid).get_obj_type() == ITEM_DRINKCON)
+                || ( game.db.obj(oid).get_obj_type() == ITEM_FOUNTAIN)
+                || ( game.db.obj(oid).get_obj_type() == ITEM_FOOD))
+                &&  game.db.obj(oid).get_obj_val(3) == 0
             {
-                obj.set_obj_val(3, 1);
+                 game.db.obj_mut(oid).set_obj_val(3, 1);
                 to_char = "$p steams briefly.";
             }
         }
         SPELL_REMOVE_CURSE => {
-            if obj.obj_flagged(ITEM_NODROP) {
-                obj.remove_obj_extra_bit(ITEM_NODROP);
+            if  game.db.obj(oid).obj_flagged(ITEM_NODROP) {
+                 game.db.obj_mut(oid).remove_obj_extra_bit(ITEM_NODROP);
             }
-            if obj.get_obj_type() == ITEM_WEAPON {
-                obj.incr_obj_val(2);
+            if  game.db.obj(oid).get_obj_type() == ITEM_WEAPON {
+                 game.db.obj_mut(oid).incr_obj_val(2);
                 to_char = "$p briefly glows blue.";
             }
         }
 
         SPELL_REMOVE_POISON => {
-            if (obj.get_obj_type() == ITEM_DRINKCON)
-                || ((obj.get_obj_type() == ITEM_FOUNTAIN)
-                    || (obj.get_obj_type() == ITEM_FOOD) && obj.get_obj_val(3) != 0)
+            if ( game.db.obj(oid).get_obj_type() == ITEM_DRINKCON)
+                || (( game.db.obj(oid).get_obj_type() == ITEM_FOUNTAIN)
+                    || ( game.db.obj(oid).get_obj_type() == ITEM_FOOD) &&  game.db.obj(oid).get_obj_val(3) != 0)
             {
-                obj.set_obj_val(3, 0);
+                 game.db.obj_mut(oid).set_obj_val(3, 0);
                 to_char = "$p steams briefly.";
             }
         }
@@ -1054,13 +1055,13 @@ pub fn mag_alter_objs(
     if to_char.is_empty() {
         game.send_to_char(ch, NOEFFECT);
     } else {
-        game.act(to_char, true, Some(ch), Some(obj), None, TO_CHAR);
+        game.act(to_char, true, Some(ch), Some(oid), None, TO_CHAR);
     }
 
     if !to_room.is_empty() {
-        game.act(to_room, true, Some(ch), Some(obj), None, TO_ROOM);
+        game.act(to_room, true, Some(ch), Some(oid), None, TO_ROOM);
     } else if !to_char.is_empty() {
-        game.act(to_char, true, Some(ch), Some(obj), None, TO_ROOM);
+        game.act(to_char, true, Some(ch), Some(oid), None, TO_ROOM);
     }
 }
 
@@ -1090,12 +1091,12 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
         return;
     }
     let tobj = tobj.unwrap();
-    DB::obj_to_char(&tobj, ch);
+    game.db.obj_to_char(tobj, ch);
     game.act(
         "$n creates $p.",
         false,
         Some(ch),
-        Some(tobj.as_ref()),
+        Some(tobj),
         None,
         TO_ROOM,
     );
@@ -1103,7 +1104,7 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
         "You create $p.",
         false,
         Some(ch),
-        Some(tobj.as_ref()),
+        Some(tobj),
         None,
         TO_CHAR,
     );

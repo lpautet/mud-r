@@ -260,7 +260,7 @@ pub fn do_backstab(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         game.send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }
-    if ch.get_eq(WEAR_WIELD as i8).as_ref().unwrap().get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
+    if game.db.obj(ch.get_eq(WEAR_WIELD as i8).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
         game.send_to_char(
             ch,
             "Only piercing weapons can be used for backstabbing.\r\n",

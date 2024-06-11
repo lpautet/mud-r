@@ -20,6 +20,7 @@ use chrono::{TimeZone, Utc};
 use hmac::Hmac;
 use log::{error, info};
 use sha2::Sha256;
+use crate::depot::DepotId;
 use crate::VictimRef;
 use crate::act_informative::look_at_room;
 use crate::class::{
@@ -35,7 +36,7 @@ use crate::db::{
     clear_char, parse_c_string, store_to_char, DB, FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
 };
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
-use crate::handler::{affect_remove, affect_total, get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{ get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::house::{hcontrol_list_houses, house_can_enter};
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
@@ -50,7 +51,7 @@ use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    CharData, CharFileU, ObjData, RoomRnum, RoomVnum, ZoneRnum, AFF_HIDE, AFF_INVISIBLE,
+    CharData, CharFileU, RoomRnum, RoomVnum, ZoneRnum, AFF_HIDE, AFF_INVISIBLE,
     CLASS_UNDEFINED, DRUNK, FULL, ITEM_ARMOR, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD,
     ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY, ITEM_NOTE, ITEM_POTION, ITEM_SCROLL,
     ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
@@ -149,7 +150,7 @@ fn find_target_room(game: &mut Game, ch: &Rc<CharData>, rawroomstr: &str) -> Roo
         }
     } else {
         let target_mob;
-        let target_obj;
+        let target_obj_id;
         let mut mobobjstr = roomstr;
 
         let mut num = get_number(&mut mobobjstr);
@@ -165,46 +166,38 @@ fn find_target_room(game: &mut Game, ch: &Rc<CharData>, rawroomstr: &str) -> Roo
                 return NOWHERE;
             }
         } else if {
-            target_obj = game.get_obj_vis(ch, &mut mobobjstr, Some(&mut num));
-            target_obj.is_some()
+            target_obj_id = game.get_obj_vis(ch, &mut mobobjstr, Some(&mut num));
+            target_obj_id.is_some()
         } {
-            if target_obj.as_ref().unwrap().in_room() != NOWHERE {
-                location = target_obj.as_ref().unwrap().in_room();
-            } else if target_obj.as_ref().unwrap().carried_by.borrow().is_some()
-                && target_obj
-                    .as_ref()
-                    .unwrap()
+            if game.db.obj(target_obj_id.unwrap()).in_room() != NOWHERE {
+                location = game.db.obj(target_obj_id.unwrap()).in_room();
+            } else if game.db.obj(target_obj_id.unwrap()).carried_by.borrow().is_some()
+                && game.db.obj(target_obj_id
+                    .unwrap())
                     .carried_by
-                    .borrow()
                     .as_ref()
                     .unwrap()
                     .in_room()
                     != NOWHERE
             {
-                location = target_obj
-                    .as_ref()
-                    .unwrap()
+                location = game.db.obj(target_obj_id
+                    .unwrap())
                     .carried_by
-                    .borrow()
                     .as_ref()
                     .unwrap()
                     .in_room();
-            } else if target_obj.as_ref().unwrap().worn_by.borrow().is_some()
-                && target_obj
-                    .as_ref()
-                    .unwrap()
+            } else if game.db.obj(target_obj_id.unwrap()).worn_by.borrow().is_some()
+                && game.db.obj(target_obj_id
+                    .unwrap())
                     .worn_by
-                    .borrow()
                     .as_ref()
                     .unwrap()
                     .in_room()
                     != NOWHERE
             {
-                location = target_obj
-                    .as_ref()
-                    .unwrap()
+                location = game.db.obj(target_obj_id
+                    .unwrap())
                     .worn_by
-                    .borrow()
                     .as_ref()
                     .unwrap()
                     .in_room();
@@ -627,8 +620,8 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
         game.send_to_char(ch, format!("Contents:{}", CCGRN!(ch, C_NRM)).as_str());
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
-        for (i, j) in rm_contents.iter().enumerate() {
-            if !game.can_see_obj(ch, j) {
+        for (i, oid) in rm_contents.iter().enumerate() {
+            if !game.can_see_obj(ch, game.db.obj(*oid)) {
                 continue;
             }
 
@@ -637,7 +630,7 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
                 format!(
                     "{} {}",
                     if found != 0 { "," } else { "" },
-                    j.short_description
+                    game.db.obj(*oid).short_description
                 )
                 .as_str(),
             );
@@ -708,25 +701,25 @@ fn do_stat_room(game: &mut Game, ch: &Rc<CharData>) {
     }
 }
 
-fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
-    let vnum = game.db.get_obj_vnum(j);
+fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, oid:DepotId) {
+    let vnum = game.db.get_obj_vnum(game.db.obj(oid));
     game.send_to_char(
         ch,
         format!(
             "Name: '{}{}{}', Aliases: {}\r\n",
             CCYEL!(ch, C_NRM),
-            if !j.short_description.is_empty() {
-                &j.short_description
+            if !game.db.obj(oid).short_description.is_empty() {
+                &game.db.obj(oid).short_description
             } else {
                 "<None>"
             },
             CCNRM!(ch, C_NRM),
-            j.name.borrow()
+            game.db.obj(oid).name
         )
         .as_str(),
     );
     let mut buf = String::new();
-    sprinttype(j.get_obj_type() as i32, &ITEM_TYPES, &mut buf);
+    sprinttype(game.db.obj(oid).get_obj_type() as i32, &ITEM_TYPES, &mut buf);
     game.send_to_char(
         ch,
         format!(
@@ -734,9 +727,9 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
             CCGRN!(ch, C_NRM),
             vnum,
             CCNRM!(ch, C_NRM),
-            j.get_obj_rnum(),
+            game.db.obj(oid).get_obj_rnum(),
             buf,
-            if game.db.get_obj_spec(j).is_some() {
+            if game.db.get_obj_spec(oid).is_some() {
                 "Exists"
             } else {
                 "none"
@@ -745,32 +738,32 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         .as_str(),
     );
 
-    if !j.ex_descriptions.is_empty() {
+    if !game.db.obj(oid).ex_descriptions.is_empty() {
         game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
 
-        for desc in j.ex_descriptions.iter() {
+        for desc in game.db.obj(oid).ex_descriptions.clone().iter() {
             game.send_to_char(ch, format!(" {}", desc.keyword).as_str());
             game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
         }
     }
     buf.clear();
-    sprintbit(j.get_obj_wear() as i64, &WEAR_BITS, &mut buf);
+    sprintbit(game.db.obj(oid).get_obj_wear() as i64, &WEAR_BITS, &mut buf);
     game.send_to_char(ch, format!("Can be worn on: {}\r\n", buf).as_str());
     buf.clear();
-    sprintbit(j.get_obj_affect(), &AFFECTED_BITS, &mut buf);
+    sprintbit(game.db.obj(oid).get_obj_affect(), &AFFECTED_BITS, &mut buf);
     game.send_to_char(ch, format!("Set char bits : {}\r\n", buf).as_str());
     buf.clear();
-    sprintbit(j.get_obj_extra() as i64, &EXTRA_BITS, &mut buf);
+    sprintbit(game.db.obj(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut buf);
     game.send_to_char(ch, format!("Extra flags   : {}\r\n", buf).as_str());
 
     game.send_to_char(
         ch,
         format!(
             "Weight: {}, Value: {}, Cost/day: {}, Timer: {}\r\n",
-            j.get_obj_weight(),
-            j.get_obj_cost(),
-            j.get_obj_rent(),
-            j.get_obj_timer()
+            game.db.obj(oid).get_obj_weight(),
+            game.db.obj(oid).get_obj_cost(),
+            game.db.obj(oid).get_obj_rent(),
+            game.db.obj(oid).get_obj_timer()
         )
         .as_str(),
     );
@@ -778,11 +771,11 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         ch,
         format!(
             "In room: {} ({}), ",
-            game.db.get_room_vnum(j.in_room()),
-            if j.in_room() == NOWHERE {
+            game.db.get_room_vnum(game.db.obj(oid).in_room()),
+            if game.db.obj(oid).in_room() == NOWHERE {
                 "Nowhere"
             } else {
-                game.db.world[j.in_room() as usize].name.as_str()
+                game.db.world[game.db.obj(oid).in_room() as usize].name.as_str()
             }
         )
         .as_str(),
@@ -792,13 +785,13 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
      * NOTE: In order to make it this far, we must already be able to see the
      *       character holding the object. Therefore, we do not need CAN_SEE().
      */
-    let jio = j.in_obj.borrow();
+    let jio = game.db.obj(oid).in_obj.borrow();
     game.send_to_char(
         ch,
         format!(
             "In object: {}, ",
-            if j.in_obj.borrow().is_some() {
-                &jio.as_ref().unwrap().short_description
+            if game.db.obj(oid).in_obj.borrow().is_some() {
+                game.db.obj(jio.unwrap()).short_description.as_ref()
             } else {
                 "None"
             }
@@ -809,8 +802,8 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         ch,
         format!(
             "Carried by: {}, ",
-            if j.carried_by.borrow().is_some() {
-                j.carried_by.borrow().as_ref().unwrap().get_name()
+            if game.db.obj(oid).carried_by.borrow().is_some() {
+                game.db.obj(oid).carried_by.borrow().as_ref().unwrap().get_name()
             } else {
                 Rc::from("Nobody")
             }
@@ -821,8 +814,8 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         ch,
         format!(
             "Worn by: {}\r\n",
-            if j.worn_by.borrow().is_some() {
-                j.worn_by.borrow().as_ref().unwrap().get_name()
+            if game.db.obj(oid).worn_by.borrow().is_some() {
+                game.db.obj(oid).worn_by.borrow().as_ref().unwrap().get_name()
             } else {
                 Rc::from("Nobody")
             }
@@ -830,14 +823,14 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
         .as_str(),
     );
 
-    match j.get_obj_type() {
+    match game.db.obj(oid).get_obj_type() {
         ITEM_LIGHT => {
-            if j.get_obj_val(2) == -1 {
+            if game.db.obj(oid).get_obj_val(2) == -1 {
                 game.send_to_char(ch, "Hours left: Infinite\r\n");
             } else {
                 game.send_to_char(
                     ch,
-                    format!("Hours left: [{}]\r\n", j.get_obj_val(2)).as_str(),
+                    format!("Hours left: [{}]\r\n", game.db.obj(oid).get_obj_val(2)).as_str(),
                 );
             }
         }
@@ -846,10 +839,10 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 ch,
                 format!(
                     "Spells: (Level {}) {}, {}, {}\r\n",
-                    j.get_obj_val(0),
-                    skill_name(&game.db, j.get_obj_val(1)),
-                    skill_name(&game.db, j.get_obj_val(2)),
-                    skill_name(&game.db, j.get_obj_val(3))
+                    game.db.obj(oid).get_obj_val(0),
+                    skill_name(&game.db, game.db.obj(oid).get_obj_val(1)),
+                    skill_name(&game.db, game.db.obj(oid).get_obj_val(2)),
+                    skill_name(&game.db, game.db.obj(oid).get_obj_val(3))
                 )
                 .as_str(),
             );
@@ -859,10 +852,10 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 ch,
                 format!(
                     "Spell: {} at level {}, {} (of {}) charges remaining\r\n",
-                    skill_name(&game.db, j.get_obj_val(3)),
-                    j.get_obj_val(0),
-                    j.get_obj_val(2),
-                    j.get_obj_val(1)
+                    skill_name(&game.db, game.db.obj(oid).get_obj_val(3)),
+                    game.db.obj(oid).get_obj_val(0),
+                    game.db.obj(oid).get_obj_val(2),
+                    game.db.obj(oid).get_obj_val(1)
                 )
                 .as_str(),
             );
@@ -872,59 +865,59 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 ch,
                 format!(
                     "Todam: {}d{}, Message type: {}\r\n",
-                    j.get_obj_val(1),
-                    j.get_obj_val(2),
-                    j.get_obj_val(3)
+                    game.db.obj(oid).get_obj_val(1),
+                    game.db.obj(oid).get_obj_val(2),
+                    game.db.obj(oid).get_obj_val(3)
                 )
                 .as_str(),
             );
         }
         ITEM_ARMOR => {
-            game.send_to_char(ch, format!("AC-apply: [{}]\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("AC-apply: [{}]\r\n", game.db.obj(oid).get_obj_val(0)).as_str());
         }
         ITEM_TRAP => {
             game.send_to_char(
                 ch,
                 format!(
                     "Spell: {}, - Hitpoints: {}\r\n",
-                    j.get_obj_val(0),
-                    j.get_obj_val(1)
+                    game.db.obj(oid).get_obj_val(0),
+                    game.db.obj(oid).get_obj_val(1)
                 )
                 .as_str(),
             );
         }
         ITEM_CONTAINER => {
             buf.clear();
-            sprintbit(j.get_obj_val(1) as i64, &CONTAINER_BITS, &mut buf);
+            sprintbit(game.db.obj(oid).get_obj_val(1) as i64, &CONTAINER_BITS, &mut buf);
             game.send_to_char(
                 ch,
                 format!(
                     "Weight capacity: {}, Lock Type: {}, Key Num: {}, Corpse: {}\r\n",
-                    j.get_obj_val(0),
+                    game.db.obj(oid).get_obj_val(0),
                     buf,
-                    j.get_obj_val(2),
-                    yesno!(j.get_obj_val(3) != 0)
+                    game.db.obj(oid).get_obj_val(2),
+                    yesno!(game.db.obj(oid).get_obj_val(3) != 0)
                 )
                 .as_str(),
             );
         }
         ITEM_DRINKCON | ITEM_FOUNTAIN => {
             buf.clear();
-            sprinttype(j.get_obj_val(2), &DRINKS, &mut buf);
+            sprinttype(game.db.obj(oid).get_obj_val(2), &DRINKS, &mut buf);
             game.send_to_char(
                 ch,
                 format!(
                     "Capacity: {}, Contains: {}, Poisoned: {}, Liquid: {}\r\n",
-                    j.get_obj_val(0),
-                    j.get_obj_val(1),
-                    yesno!(j.get_obj_val(3) != 0),
+                    game.db.obj(oid).get_obj_val(0),
+                    game.db.obj(oid).get_obj_val(1),
+                    yesno!(game.db.obj(oid).get_obj_val(3) != 0),
                     buf
                 )
                 .as_str(),
             );
         }
         ITEM_NOTE => {
-            game.send_to_char(ch, format!("Tongue: {}\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("Tongue: {}\r\n", game.db.obj(oid).get_obj_val(0)).as_str());
         }
         ITEM_KEY => { /* Nothing */ }
         ITEM_FOOD => {
@@ -932,24 +925,24 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
                 ch,
                 format!(
                     "Makes full: {}, Poisoned: {}\r\n",
-                    j.get_obj_val(0),
-                    yesno!(j.get_obj_val(3) != 0)
+                    game.db.obj(oid).get_obj_val(0),
+                    yesno!(game.db.obj(oid).get_obj_val(3) != 0)
                 )
                 .as_str(),
             );
         }
         ITEM_MONEY => {
-            game.send_to_char(ch, format!("Coins: {}\r\n", j.get_obj_val(0)).as_str());
+            game.send_to_char(ch, format!("Coins: {}\r\n", game.db.obj(oid).get_obj_val(0)).as_str());
         }
         _ => {
             game.send_to_char(
                 ch,
                 format!(
                     "Values 0-3: [{}] [{}] [{}] [{}]\r\n",
-                    j.get_obj_val(0),
-                    j.get_obj_val(1),
-                    j.get_obj_val(2),
-                    j.get_obj_val(3)
+                    game.db.obj(oid).get_obj_val(0),
+                    game.db.obj(oid).get_obj_val(1),
+                    game.db.obj(oid).get_obj_val(2),
+                    game.db.obj(oid).get_obj_val(3)
                 )
                 .as_str(),
             );
@@ -961,33 +954,35 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
      * more or less useless and just takes up valuable screen space.
      */
 
-    if !j.contains.borrow().is_empty() {
+    if !game.db.obj(oid).contains.is_empty() {
         game.send_to_char(ch, format!("\r\nContents:{}", CCGRN!(ch, C_NRM)).as_str());
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
 
-        for (i2, j2) in j.contains.borrow().iter().enumerate() {
+        for (i2, j2) in game.db.obj(oid).contains.clone().iter().enumerate() {
+            let messg = format!(
+                "{} {}",
+                if found != 0 { "," } else { "" },
+                game.db.obj(*j2).short_description
+            );
             column += game.send_to_char(
                 ch,
-                format!(
-                    "{} {}",
-                    if found != 0 { "," } else { "" },
-                    j2.short_description
-                )
-                .as_str(),
+                
+                messg.as_str(),
             );
             if column >= 62 {
+                let messg = format!(
+                    "{}\r\n",
+                    if i2 < game.db.obj(oid).contains.len() - 1 {
+                        ","
+                    } else {
+                        ""
+                    }
+                );
                 game.send_to_char(
                     ch,
-                    format!(
-                        "{}\r\n",
-                        if i2 < j.contains.borrow().len() - 1 {
-                            ","
-                        } else {
-                            ""
-                        }
-                    )
-                    .as_str(),
+                    
+                    messg.as_str(),
                 );
                 found = 0;
                 column = 0;
@@ -1000,15 +995,15 @@ fn do_stat_object(game: &mut Game, ch: &Rc<CharData>, j: &Rc<ObjData>) {
     game.send_to_char(ch, "Affections:");
 
     for i in 0..MAX_OBJ_AFFECT as usize {
-        if j.affected[i].get().modifier != 0 {
+        if game.db.obj(oid).affected[i].modifier != 0 {
             buf.clear();
-            sprinttype(j.affected[i].get().location as i32, &APPLY_TYPES, &mut buf);
+            sprinttype(game.db.obj(oid).affected[i].location as i32, &APPLY_TYPES, &mut buf);
             game.send_to_char(
                 ch,
                 format!(
                     "{} {} to {}",
                     if found != 0 { "," } else { "" },
-                    j.affected[i].get().modifier,
+                    game.db.obj(oid).affected[i].modifier,
                     buf
                 )
                 .as_str(),
@@ -1514,12 +1509,12 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         if buf2.is_empty() {
             game.send_to_char(ch, "Stats on which object?\r\n");
         } else {
-            let object;
+            let oid;
             if {
-                object = game.get_obj_vis(ch, &mut buf2, None);
-                object.is_some()
+                oid = game.get_obj_vis(ch, &mut buf2, None);
+                oid.is_some()
             } {
-                do_stat_object(game, ch, object.as_ref().unwrap());
+                do_stat_object(game, ch, oid.unwrap());
             } else {
                 game.send_to_char(ch, "No such object around.\r\n");
             }
@@ -1527,43 +1522,43 @@ pub fn do_stat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     } else {
         let mut name = buf1;
         let mut number = get_number(&mut name);
-        let mut object;
+        let mut oid;
         let mut victim;
         if {
-            object = game.get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
-            object.is_some()
+            oid = game.get_obj_in_equip_vis(ch, &name, Some(&mut number), &ch.equipment);
+            oid.is_some()
         } {
-            do_stat_object(game, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, oid.unwrap());
         } else if {
-            object = game.get_obj_in_list_vis(ch, &name, Some(&mut number), ch.carrying.borrow());
-            object.is_some()
+            oid = game.get_obj_in_list_vis(ch, &name, Some(&mut number), &ch.carrying.borrow());
+            oid.is_some()
         } {
-            do_stat_object(game, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, oid.unwrap());
         } else if {
             victim = game.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
         } {
             do_stat_character(game, ch, victim.as_ref().unwrap());
         } else if {
-            object = game.get_obj_in_list_vis2(
+            oid = game.get_obj_in_list_vis2(
                 ch,
                 &mut name,
                 Some(&mut number),
                 &game.db.world[ch.in_room() as usize].contents,
             );
-            object.is_some()
+            oid.is_some()
         } {
-            do_stat_object(game, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, oid.unwrap());
         } else if {
             victim = game.get_char_vis(ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
             do_stat_character(game, ch, victim.as_ref().unwrap());
         } else if {
-            object = game.get_obj_vis(ch, &mut name, Some(&mut number));
-            object.is_some()
+            oid = game.get_obj_vis(ch, &mut name, Some(&mut number));
+            oid.is_some()
         } {
-            do_stat_object(game, ch, object.as_ref().unwrap());
+            do_stat_object(game, ch, oid.unwrap());
         } else {
             game.send_to_char(ch, "Nothing around by that name.\r\n");
         }
@@ -1876,11 +1871,11 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let obj = game.db.read_object(r_num, REAL).unwrap();
+        let oid = game.db.read_object(r_num, REAL).unwrap();
         if LOAD_INTO_INVENTORY {
-            DB::obj_to_char(&obj, ch);
+            game.db.obj_to_char(oid, ch);
         } else {
-            game.db.obj_to_room(&obj, ch.in_room());
+            game.db.obj_to_room(oid, ch.in_room());
         }
         game.act(
             "$n makes a strange magical gesture.",
@@ -1894,7 +1889,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "$n has created $p!",
             false,
             Some(ch),
-            Some(obj.as_ref()),
+            Some(oid),
             None,
             TO_ROOM,
         );
@@ -1902,7 +1897,7 @@ pub fn do_load(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
             "You create $p.",
             false,
             Some(ch),
-            Some(obj.as_ref()),
+            Some(oid),
             None,
             TO_CHAR,
         );
@@ -1950,9 +1945,9 @@ pub fn do_vstat(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let obj = game.db.read_object(r_num, REAL);
-        do_stat_object(game, ch, obj.as_ref().unwrap());
-        game.extract_obj(obj.as_ref().unwrap());
+        let oid = game.db.read_object(r_num, REAL);
+        do_stat_object(game, ch, oid.unwrap());
+        game.extract_obj(oid.unwrap());
     } else {
         game.send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
@@ -1963,7 +1958,7 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     let mut buf = String::new();
     one_argument(argument, &mut buf);
     let vict;
-    let obj;
+    let oid;
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
         if {
@@ -2001,24 +1996,24 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             }
             game.db.extract_char(vict);
         } else if {
-            obj = game.get_obj_in_list_vis2(
+            oid = game.get_obj_in_list_vis2(
                 ch,
                 &mut buf,
                 None,
                 &game.db.world[ch.in_room() as usize].contents,
             );
-            obj.is_some()
+            oid.is_some()
         } {
-            let obj = obj.unwrap();
+            let oid = oid.unwrap();
             game.act(
                 "$n destroys $p.",
                 false,
                 Some(ch),
-                Some(obj.as_ref()),
+                Some(oid),
                 None,
                 TO_ROOM,
             );
-            game.extract_obj(&obj);
+            game.extract_obj(oid);
         } else {
             game.send_to_char(ch, "Nothing here by that name.\r\n");
             return;
@@ -2046,13 +2041,13 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
             /* Dump inventory. */
             while vict.carrying.borrow().len() > 0 {
-                game.extract_obj(&vict.carrying.borrow()[0].clone());
+                game.extract_obj(vict.carrying.borrow()[0]);
             }
 
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
                 if vict.get_eq(i).is_some() {
-                    game.extract_obj(vict.get_eq(i).as_ref().unwrap())
+                    game.extract_obj(vict.get_eq(i).unwrap())
                 }
             }
 
@@ -2062,8 +2057,8 @@ pub fn do_purge(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
         /* Clear the ground. */
         while game.db.world[ch.in_room() as usize].contents.len() > 0 {
-            let o = game.db.world[ch.in_room() as usize].contents[0].clone();
-            game.extract_obj(&o);
+            let oid = game.db.world[ch.in_room() as usize].contents[0];
+            game.extract_obj(oid);
         }
     }
 }
@@ -2266,7 +2261,7 @@ pub fn do_restore(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             }
         }
         update_pos(vict);
-        affect_total(vict);
+        game.db.affect_total(vict);
         game.send_to_char(ch, OK);
         game.act(
             "You have been fully healed by $N!",
@@ -3083,7 +3078,7 @@ pub fn do_wizutil(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             SCMD_UNAFFECT => {
                 if vict.affected.borrow().len() != 0 {
                     while vict.affected.borrow().len() != 0 {
-                        affect_remove(vict, &vict.affected.borrow()[0]);
+                        game.db.affect_remove(vict, &vict.affected.borrow()[0]);
                     }
                     game.send_to_char(
                         vict,
@@ -3930,31 +3925,31 @@ fn perform_set(
         }
         4 => {
             vict.points.borrow_mut().max_hit = range!(value, 1, 5000) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         5 => {
             vict.points.borrow_mut().max_mana = range!(value, 1, 5000) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         6 => {
             vict.points.borrow_mut().max_move = range!(value, 1, 5000) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         7 => {
             vict.points.borrow_mut().hit = range!(value, -9, vict.points.borrow().max_hit) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         8 => {
             vict.points.borrow_mut().mana = range!(value, 0, vict.points.borrow().max_mana) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         9 => {
             vict.points.borrow_mut().movem = range!(value, 0, vict.points.borrow().max_move) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         10 => {
             vict.set_alignment(range!(value, -1000, 1000));
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         11 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -3964,14 +3959,14 @@ fn perform_set(
             }
             vict.real_abils.borrow_mut().str = value as i8;
             vict.real_abils.borrow_mut().str_add = 0;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         12 => {
             vict.real_abils.borrow_mut().str_add = range!(value, 0, 100) as i8;
             if value > 0 {
                 vict.real_abils.borrow_mut().str = 18;
             }
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         13 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -3980,7 +3975,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.borrow_mut().intel = value as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         14 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -3989,7 +3984,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.borrow_mut().wis = value as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         15 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -3998,7 +3993,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.borrow_mut().dex = value as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         16 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4007,7 +4002,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.borrow_mut().con = value as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         17 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4016,11 +4011,11 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.borrow_mut().cha = value as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         18 => {
             vict.points.borrow_mut().armor = range!(value, -100, 100) as i16;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         19 => {
             vict.set_gold(range!(value, 0, 100000000));
@@ -4033,11 +4028,11 @@ fn perform_set(
         }
         22 => {
             vict.points.borrow_mut().hitroll = range!(value, -20, 20) as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         23 => {
             vict.points.borrow_mut().damroll = range!(value, -20, 20) as i8;
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
         24 => {
             if ch.get_level() < LVL_IMPL as u8 && !Rc::ptr_eq(ch, vict) {
@@ -4279,12 +4274,12 @@ fn perform_set(
         49 => {
             /* Blame/Thank Rick Glover. :) */
             vict.set_height(value as u8);
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
 
         50 => {
             vict.set_weight(value as u8);
-            affect_total(vict);
+            game.db.affect_total(vict);
         }
 
         _ => {

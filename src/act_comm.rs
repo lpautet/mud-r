@@ -310,14 +310,14 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     if !penname.is_empty() {
         /* there were two arguments */
         if {
-            paper = game.get_obj_in_list_vis(ch, &papername, None, ch.carrying.borrow());
+            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying.borrow());
             paper.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", papername).as_str());
             return;
         }
         if {
-            pen = game.get_obj_in_list_vis(ch, &penname, None, ch.carrying.borrow());
+            pen = game.get_obj_in_list_vis(ch, &penname, None, &ch.carrying.borrow());
             pen.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", penname).as_str());
@@ -326,7 +326,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     } else {
         /* there was one arg.. let's see what we can find */
         if {
-            paper = game.get_obj_in_list_vis(ch, &papername, None, ch.carrying.borrow());
+            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying.borrow());
             paper.is_none()
         } {
             game.send_to_char(
@@ -335,11 +335,11 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             );
             return;
         }
-        if paper.as_ref().unwrap().get_obj_type() == ITEM_PEN {
+        if game.db.obj(paper.unwrap()).get_obj_type() == ITEM_PEN {
             /* oops, a pen.. */
             pen = paper;
             paper = None;
-        } else if paper.as_ref().unwrap().get_obj_type() != ITEM_NOTE {
+        } else if game.db.obj(paper.unwrap()).get_obj_type() != ITEM_NOTE {
             game.send_to_char(ch, "That thing has nothing to do with writing.\r\n");
             return;
         }
@@ -356,7 +356,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             );
             return;
         }
-        if !game.can_see_obj(ch, ch.get_eq(WEAR_HOLD as i8).as_ref().unwrap()) {
+        if !game.can_see_obj(ch, game.db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
             game.send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
             return;
         }
@@ -366,11 +366,11 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             pen = ch.get_eq(WEAR_HOLD as i8);
         }
     }
-    let pen = pen.as_ref().unwrap();
-    let paper = paper.as_ref().unwrap();
+    let pen = pen.unwrap();
+    let paper = paper.unwrap();
 
     /* ok.. now let's see what kind of stuff we've found */
-    if pen.get_obj_type() != ITEM_PEN {
+    if game.db.obj(pen).get_obj_type() != ITEM_PEN {
         game.act(
             "$p is no good for writing with.",
             false,
@@ -379,7 +379,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             None,
             TO_CHAR,
         );
-    } else if paper.get_obj_type() != ITEM_NOTE {
+    } else if game.db.obj(paper).get_obj_type() != ITEM_NOTE {
         game.act(
             "You can't write on $p.",
             false,
@@ -388,7 +388,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             None,
             TO_CHAR,
         );
-    } else if !paper.action_description.borrow().is_empty() {
+    } else if !game.db.obj(paper).action_description.borrow().is_empty() {
         game.send_to_char(ch, "There's something written on it already.\r\n");
     } else {
         /* we can write - hooray! */
@@ -403,7 +403,7 @@ pub fn do_write(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         );
         string_write(
             game.descriptor_list.get_mut(ch.desc.borrow().unwrap()),
-            paper.action_description.clone(),
+            game.db.obj(paper).action_description.clone(),
             MAX_NOTE_LENGTH as usize,
             0,
         );

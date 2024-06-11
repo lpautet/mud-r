@@ -52,12 +52,13 @@ use std::{fs, mem, process, slice};
 use log::error;
 
 use crate::db::{parse_c_string, DB};
+use crate::depot::DepotId;
 use crate::handler::isname;
 use crate::interpreter::{delete_doubledollar, find_command, is_number, one_argument};
 use crate::modify::{page_string, string_write};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    MeRef, CharData, ObjData, ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL,
+    MeRef, CharData,ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL,
     NOTHING,
 };
 use crate::util::{ctime, time_now};
@@ -196,21 +197,21 @@ fn find_slot(b: &mut BoardSystem) -> Option<usize> {
 
 /* search the room ch is standing in to find which board he's looking at */
 fn find_board(db: &DB, ch: &Rc<CharData>) -> Option<usize> {
-    for obj in db.world[ch.in_room() as usize]
+    for oid in db.world[ch.in_room() as usize]
         .contents
         .iter()
     {
         for i in 0..NUM_OF_BOARDS {
-            if db.boards.boardinfo[i].rnum.get() == obj.get_obj_rnum() {
+            if db.boards.boardinfo[i].rnum.get() == db.obj(*oid).get_obj_rnum() {
                 return Some(i);
             }
         }
     }
 
     if ch.get_level() >= LVL_IMMORT as u8 {
-        for obj in ch.carrying.borrow().iter() {
+        for oid in ch.carrying.borrow().iter() {
             for i in 0..NUM_OF_BOARDS {
-                if db.boards.boardinfo[i].rnum.get() == obj.get_obj_rnum() {
+                if db.boards.boardinfo[i].rnum.get() == db.obj(*oid).get_obj_rnum() {
                     return Some(i);
                 }
             }
@@ -387,7 +388,7 @@ fn board_show_board(
     board_type: usize,
     ch: &Rc<CharData>,
     arg: &str,
-    board: &Rc<ObjData>,
+    board_id: DepotId,
 ) -> bool {
     if ch.desc.borrow().is_none() {
         return false;
@@ -395,7 +396,7 @@ fn board_show_board(
     let mut tmp = String::new();
     one_argument(arg, &mut tmp);
 
-    if tmp.is_empty() || !isname(&tmp, board.name.borrow().as_str()) {
+    if tmp.is_empty() || !isname(&tmp, game.db.obj(board_id).name.as_ref()) {
         return false;
     }
 
@@ -459,16 +460,16 @@ fn board_display_msg(
     board_type: usize,
     ch: &Rc<CharData>,
     arg: &str,
-    board: &Rc<ObjData>,
+    board_id: DepotId,
 ) -> bool {
     let mut number = String::new();
     one_argument(arg, &mut number);
     if number.is_empty() {
         return false;
     }
-    if isname(&number, &board.name.borrow()) {
+    if isname(&number, &game.db.obj(board_id).name) {
         /* so "read board" works */
-        return board_show_board(game,  board_type, ch, arg, board);
+        return board_show_board(game,  board_type, ch, arg, board_id);
     }
     if !is_number(&number) {
         /* read 2.mail, look 2.sword */

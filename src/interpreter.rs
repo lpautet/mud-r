@@ -3232,12 +3232,12 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
         if ch.get_eq(j).is_some()
             && game
                 .db
-                .get_obj_spec(ch.get_eq(j).as_ref().unwrap())
+                .get_obj_spec(ch.get_eq(j).unwrap())
                 .is_some()
         {
             let eq = ch.get_eq(j);
-            let obj = eq.as_ref().unwrap();
-            if game.db.get_obj_spec(eq.as_ref().unwrap()).as_ref().unwrap()(game, ch, MeRef::Obj(obj), cmd, arg)
+            let oid = eq.unwrap();
+            if game.db.get_obj_spec(eq.unwrap()).as_ref().unwrap()(game, ch, MeRef::Obj(oid), cmd, arg)
             {
                 return true;
             }
@@ -3246,8 +3246,8 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
 
     /* special in inventory? */
     for i in ch.carrying.borrow().iter() {
-        if game.db.get_obj_spec(i).is_some() {
-            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, MeRef::Obj(i), cmd, arg) {
+        if game.db.get_obj_spec(*i).is_some() {
+            if game.db.get_obj_spec(*i).as_ref().unwrap()(game, ch, MeRef::Obj(*i), cmd, arg) {
                 return true;
             }
         }
@@ -3268,8 +3268,8 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
 
     let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in peoples_in_room.iter() {
-        if game.db.get_obj_spec(i).is_some() {
-            if game.db.get_obj_spec(i).as_ref().unwrap()(game, ch, MeRef::Obj(i), cmd, arg) {
+        if game.db.get_obj_spec(*i).is_some() {
+            if game.db.get_obj_spec(*i).as_ref().unwrap()(game, ch, MeRef::Obj(*i), cmd, arg) {
                 return true;
             }
         }

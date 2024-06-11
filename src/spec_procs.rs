@@ -37,7 +37,7 @@ use crate::structs::{
     MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
     PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{add_follower, clone_vec, clone_vec2, rand_number};
+use crate::util::{add_follower, clone_vec2, rand_number};
 use crate::{ Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 /* ********************************************************************
@@ -193,16 +193,16 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument:
 
 pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
-    for k in &list {
+    for k in list {
         game.act(
             "$p vanishes in a puff of smoke!",
             false,
             None,
-            Some(&k),
+            Some(k),
             None,
             TO_ROOM,
         );
-        game.extract_obj(&k);
+        game.extract_obj(k);
     }
 
     if !cmd_is(cmd, "drop") {
@@ -212,17 +212,17 @@ pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: 
     do_drop(game, ch, argument, cmd as usize, SCMD_DROP as i32);
     let mut value = 0;
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
-    for k in &list {
+    for k in list {
         game.act(
             "$p vanishes in a puff of smoke!",
             false,
             None,
-            Some(&k),
+            Some(k),
             None,
             TO_ROOM,
         );
-        value += max(1, min(50, k.get_obj_cost() / 10));
-        game.extract_obj(&k);
+        value += max(1, min(50, game.db.obj(k).get_obj_cost() / 10));
+        game.extract_obj(k);
     }
 
     if value != 0 {
@@ -673,9 +673,9 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument:
     }
 
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
-    for i in &list
+    for i in list
     {
-        if !i.is_corpse() {
+        if game.db.obj(i).is_corpse() {
             continue;
         }
 
@@ -687,11 +687,11 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument:
             None,
             TO_ROOM,
         );
-        for temp in clone_vec(&i.contains).iter() {
-            DB::obj_from_obj(temp);
+        for temp in game.db.obj(i).contains.clone().into_iter() {
+            game.db.obj_from_obj(temp);
             game.db.obj_to_room(temp, ch.in_room());
         }
-        game.extract_obj(&i);
+        game.extract_obj(i);
         return true;
     }
 
@@ -708,11 +708,11 @@ pub fn janitor(
     if cmd != 0 || !ch.awake() {
         return false;
     }
-    for i in clone_vec2(&game.db.world[ch.in_room() as usize].contents).iter() {
-        if !i.can_wear(ITEM_WEAR_TAKE) {
+    for i in game.db.world[ch.in_room() as usize].contents.clone().into_iter() { 
+        if !game.db.obj(i).can_wear(ITEM_WEAR_TAKE) {
             continue;
         }
-        if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {
+        if game.db.obj(i).get_obj_type() != ITEM_DRINKCON && game.db.obj(i).get_obj_cost() >= 15 {
             continue;
         }
         game.act(
@@ -724,7 +724,7 @@ pub fn janitor(
             TO_ROOM,
         );
         game.db.obj_from_room(i);
-        DB::obj_to_char(i, ch);
+        game.db.obj_to_char(i, ch);
         return true;
     }
 

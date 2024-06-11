@@ -10,6 +10,7 @@
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::act_informative::look_at_room;
@@ -17,18 +18,18 @@ use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object
 use crate::config::PK_ALLOWED;
 use crate::constants::{AFFECTED_BITS, APPLY_TYPES, EXTRA_BITS, ITEM_TYPES};
 use crate::fight::compute_armor_class;
-use crate::handler::{affect_to_char, isname};
+use crate::handler::isname;
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectedType, CharData, ObjData, RoomRnum, AFF_CHARM, AFF_POISON, AFF_SANCTUARY, APPLY_DAMROLL,
+    AffectedType, CharData, RoomRnum, AFF_CHARM, AFF_POISON, AFF_SANCTUARY, APPLY_DAMROLL,
     APPLY_HITROLL, APPLY_NONE, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ARMOR, ITEM_DRINKCON,
     ITEM_FOOD, ITEM_FOUNTAIN, ITEM_MAGIC, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
     ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE,
     MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
     ROOM_DEATH, ROOM_GODROOM, ROOM_PRIVATE, SEX_MALE,
 };
-use crate::util::{add_follower, age, circle_follow, clone_vec2, rand_number, sprintbit, sprinttype, BRF};
+use crate::util::{add_follower, age, circle_follow, rand_number, sprintbit, sprinttype, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 pub const DEFAULT_STAFF_LVL: i32 = 12;
@@ -273,31 +274,32 @@ pub fn spell_create_water(
     _level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    obj_id: Option<DepotId>,
 ) {
-    if ch.is_none() || obj.is_none() {
+    if ch.is_none() || obj_id.is_none() {
         return;
     }
     let ch = ch.unwrap();
-    let obj = obj.unwrap();
+    let obj_id = obj_id.unwrap();
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
-    if obj.get_obj_type() == ITEM_DRINKCON {
-        if obj.get_obj_val(2) != LIQ_WATER && obj.get_obj_val(1) != 0 {
-            name_from_drinkcon(Some(obj));
-            obj.set_obj_val(2, LIQ_SLIME);
-            name_to_drinkcon(Some(obj), LIQ_SLIME);
+    if  game.db.obj(obj_id).get_obj_type() == ITEM_DRINKCON {
+        if  game.db.obj(obj_id).get_obj_val(2) != LIQ_WATER &&  game.db.obj(obj_id).get_obj_val(1) != 0 {
+            name_from_drinkcon(&mut game.db, Some(obj_id));
+             game.db.obj_mut(obj_id).set_obj_val(2, LIQ_SLIME);
+            name_to_drinkcon(&mut game.db, Some(obj_id), LIQ_SLIME);
         } else {
-            let water = max(obj.get_obj_val(0) - obj.get_obj_val(1), 0);
+            let water = max( game.db.obj(obj_id).get_obj_val(0) -  game.db.obj(obj_id).get_obj_val(1), 0);
             if water > 0 {
-                if obj.get_obj_val(1) >= 0 {
-                    name_from_drinkcon(Some(obj));
+                if  game.db.obj(obj_id).get_obj_val(1) >= 0 {
+                    name_from_drinkcon(&mut game.db, Some(obj_id));
                 }
-                obj.set_obj_val(2, LIQ_WATER);
-                obj.set_obj_val(1, obj.get_obj_val(1) + water);
-                name_to_drinkcon(Some(obj), LIQ_WATER);
-                weight_change_object(game, obj, water);
-                game.act("$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+                 game.db.obj_mut(obj_id).set_obj_val(2, LIQ_WATER);
+                 let v = game.db.obj(obj_id).get_obj_val(1) + water;
+                 game.db.obj_mut(obj_id).set_obj_val(1,v  );
+                name_to_drinkcon(&mut game.db, Some(obj_id), LIQ_WATER);
+                weight_change_object(game, obj_id, water);
+                game.act("$p is filled.", false, Some(ch), Some(obj_id), None, TO_CHAR);
             }
         }
     }
@@ -308,7 +310,7 @@ pub fn spell_recall(
     _level: i32,
     _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    _obj: Option<&Rc<ObjData>>,
+    _obj: Option<DepotId>,
 ) {
     if victim.is_none() || victim.unwrap().is_npc() {
         return;
@@ -335,7 +337,7 @@ pub fn spell_teleport(
     _level: i32,
     _ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    _obj: Option<&Rc<ObjData>>,
+    _obj: Option<DepotId>,
 ) {
     let mut to_room;
 
@@ -382,7 +384,7 @@ pub fn spell_summon(
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    _obj: Option<&Rc<ObjData>>,
+    _obj: Option<DepotId>,
 ) {
     if ch.is_none() || victim.is_none() {
         return;
@@ -475,7 +477,7 @@ pub fn spell_locate_object(
     level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
 ) {
     /*
      * FIXME: This is broken.  The spell parser routines took the argument
@@ -483,14 +485,13 @@ pub fn spell_locate_object(
      * Since we're passed the object and not the keyword we can only guess
      * at what the player originally meant to search for. -gg
      */
-    let obj = obj.unwrap();
+    let oid = oid.unwrap();
     let mut name = String::new();
-    name.push_str(&obj.name.borrow());
+    name.push_str(& game.db.obj(oid).name);
     let mut j = level / 2;
 
-    let list = clone_vec2(&game.db.object_list);
-    for i in list.iter() {
-        if !isname(&name, &i.name.borrow()) {
+    for i in game.db.object_list.ids() {
+        if !isname(&name, game.db.obj(i).name.as_ref()) {
             continue;
         }
 
@@ -498,45 +499,45 @@ pub fn spell_locate_object(
             ch.unwrap(),
             format!(
                 "{}{}",
-                &i.short_description[0..0].to_uppercase(),
-                &i.short_description[1..]
+                &game.db.obj(i).short_description[0..0].to_uppercase(),
+                &game.db.obj(i).short_description[1..]
             )
             .as_str(),
         );
 
-        if i.carried_by.borrow().is_some() {
+        if game.db.obj(i).carried_by.is_some() {
             game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is being carried by {}.\r\n",
-                    game.pers(i.carried_by.borrow().as_ref().unwrap(), ch.unwrap())
+                    game.pers(game.db.obj(i).carried_by.as_ref().unwrap(), ch.unwrap())
                 )
                 .as_str(),
             );
-        } else if i.in_room() != NOWHERE {
+        } else if game.db.obj(i).in_room() != NOWHERE {
             game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is in {}.\r\n",
-                    game.db.world[i.in_room() as usize].name
+                    game.db.world[game.db.obj(i).in_room() as usize].name
                 )
                 .as_str(),
             );
-        } else if i.in_obj.borrow().is_some() {
+        } else if game.db.obj(i).in_obj.is_some() {
             game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is in {}.\r\n",
-                    i.in_obj.borrow().as_ref().unwrap().short_description
+                    game.db.obj(game.db.obj(i).in_obj.unwrap()).short_description
                 )
                 .as_str(),
             );
-        } else if i.worn_by.borrow().is_some() {
+        } else if game.db.obj(i).worn_by.is_some() {
             game.send_to_char(
                 ch.unwrap(),
                 format!(
                     " is being worn by {}.\r\n",
-                    game.pers(i.worn_by.borrow().as_ref().unwrap(), ch.unwrap())
+                    game.pers(game.db.obj(i).worn_by.as_ref().unwrap(), ch.unwrap())
                 )
                 .as_str(),
             );
@@ -557,7 +558,7 @@ pub fn spell_charm(
     level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    _obj: Option<&Rc<ObjData>>,
+    _oid: Option<DepotId>,
 ) {
     if victim.is_none() || ch.is_none() {
         return;
@@ -603,7 +604,7 @@ pub fn spell_charm(
         if victim.get_int() != 0 {
             af.duration /= victim.get_int() as i16;
         }
-        affect_to_char(victim, &af);
+        game.db.affect_to_char(victim, &af);
 
         game.act(
             "Isn't $n just such a nice fellow?",
@@ -624,63 +625,63 @@ pub fn spell_identify(
     _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
 ) {
-    if obj.is_some() {
-        let obj = obj.unwrap();
+    if oid.is_some() {
+        let oid = oid.unwrap();
         let mut bitbuf = String::new();
 
-        sprinttype(obj.get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
+        sprinttype(game.db.obj(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
         game.send_to_char(
             ch.unwrap(),
             format!(
                 "You feel informed:\r\nObject '{}', Item type: {}\r\n",
-                obj.short_description, bitbuf
+                game.db.obj(oid).short_description, bitbuf
             )
             .as_str(),
         );
 
-        if obj.get_obj_affect() != 0 {
-            sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
+        if game.db.obj(oid).get_obj_affect() != 0 {
+            sprintbit(game.db.obj(oid).get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
             game.send_to_char(
                 ch.unwrap(),
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
         }
 
-        sprintbit(obj.get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
+        sprintbit(game.db.obj(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
         game.send_to_char(ch.unwrap(), format!("Item is: {}\r\n", bitbuf).as_str());
 
         game.send_to_char(
             ch.unwrap(),
             format!(
                 "Weight: {}, Value: {}, Rent: {}\r\n",
-                obj.get_obj_weight(),
-                obj.get_obj_cost(),
-                obj.get_obj_rent()
+                game.db.obj(oid).get_obj_weight(),
+                game.db.obj(oid).get_obj_cost(),
+                game.db.obj(oid).get_obj_rent()
             )
             .as_str(),
         );
 
-        match obj.get_obj_type() {
+        match game.db.obj(oid).get_obj_type() {
             ITEM_SCROLL | ITEM_POTION => {
-                if obj.get_obj_val(1) >= 1 {
-                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(1)));
+                if game.db.obj(oid).get_obj_val(1) >= 1 {
+                    bitbuf.push_str(skill_name(&game.db, game.db.obj(oid).get_obj_val(1)));
                 }
 
-                if obj.get_obj_val(2) >= 1 {
-                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(2)));
+                if game.db.obj(oid).get_obj_val(2) >= 1 {
+                    bitbuf.push_str(skill_name(&game.db, game.db.obj(oid).get_obj_val(2)));
                 }
 
-                if obj.get_obj_val(3) >= 1 {
-                    bitbuf.push_str(skill_name(&game.db, obj.get_obj_val(3)));
+                if game.db.obj(oid).get_obj_val(3) >= 1 {
+                    bitbuf.push_str(skill_name(&game.db, game.db.obj(oid).get_obj_val(3)));
                 }
 
                 game.send_to_char(
                     ch.unwrap(),
                     format!(
                         "This {} casts: {}\r\n",
-                        ITEM_TYPES[obj.get_obj_type() as usize],
+                        ITEM_TYPES[game.db.obj(oid).get_obj_type() as usize],
                         bitbuf
                     )
                     .as_str(),
@@ -691,11 +692,11 @@ pub fn spell_identify(
                     ch.unwrap(),
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
-                        ITEM_TYPES[obj.get_obj_type() as usize],
-                        skill_name(&game.db, obj.get_obj_val(3)),
-                        obj.get_obj_val(1),
-                        if obj.get_obj_val(1) == 1 { "" } else { "s" },
-                        obj.get_obj_val(2)
+                        ITEM_TYPES[game.db.obj(oid).get_obj_type() as usize],
+                        skill_name(&game.db, game.db.obj(oid).get_obj_val(3)),
+                        game.db.obj(oid).get_obj_val(1),
+                        if game.db.obj(oid).get_obj_val(1) == 1 { "" } else { "s" },
+                        game.db.obj(oid).get_obj_val(2)
                     )
                     .as_str(),
                 );
@@ -705,9 +706,9 @@ pub fn spell_identify(
                     ch.unwrap(),
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
-                        obj.get_obj_val(1),
-                        obj.get_obj_val(2),
-                        (obj.get_obj_val(2) + 1) * obj.get_obj_val(1) / 2
+                        game.db.obj(oid).get_obj_val(1),
+                        game.db.obj(oid).get_obj_val(2),
+                        (game.db.obj(oid).get_obj_val(2) + 1) * game.db.obj(oid).get_obj_val(1) / 2
                     )
                     .as_str(),
                 );
@@ -715,22 +716,22 @@ pub fn spell_identify(
             ITEM_ARMOR => {
                 game.send_to_char(
                     ch.unwrap(),
-                    format!("AC-apply is {}\r\n", obj.get_obj_val(0)).as_str(),
+                    format!("AC-apply is {}\r\n", game.db.obj(oid).get_obj_val(0)).as_str(),
                 );
             }
             _ => {}
         }
         let mut found = false;
         for i in 0..MAX_OBJ_AFFECT as usize {
-            if obj.affected[i].get().location != APPLY_NONE as u8
-                && obj.affected[i].get().modifier != 0
+            if game.db.obj(oid).affected[i].location != APPLY_NONE as u8
+                && game.db.obj(oid).affected[i].modifier != 0
             {
                 if !found {
                     game.send_to_char(ch.unwrap(), "Can affect you as :\r\n");
                     found = true;
                 }
                 sprinttype(
-                    obj.affected[i].get().location as i32,
+                    game.db.obj(oid).affected[i].location as i32,
                     &APPLY_TYPES,
                     &mut bitbuf,
                 );
@@ -739,7 +740,7 @@ pub fn spell_identify(
                     format!(
                         "   Affects: {} By {}\r\n",
                         bitbuf,
-                        obj.affected[i].get().modifier
+                        game.db.obj(oid).affected[i].modifier
                     )
                     .as_str(),
                 );
@@ -821,50 +822,51 @@ pub fn spell_enchant_weapon(
     level: i32,
     ch: Option<&Rc<CharData>>,
     _victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
 ) {
-    if ch.is_none() || obj.is_none() {
+    if ch.is_none() || oid.is_none() {
         return;
     }
-    let ch = ch.unwrap();
-    let obj = obj.unwrap();
+    let ch: &Rc<CharData> = ch.unwrap();
+    let oid = oid.unwrap();
 
     /* Either already enchanted or not a weapon. */
+    let obj = game.db.obj_mut(oid);
     if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ITEM_MAGIC) {
         return;
     }
 
     /* Make sure no other affections. */
     for i in 0..MAX_OBJ_AFFECT as usize {
-        if obj.affected[i].get().location != APPLY_NONE as u8 {
+        if obj.affected[i].location != APPLY_NONE as u8 {
             return;
         }
     }
 
     obj.set_obj_extra_bit(ITEM_MAGIC);
 
-    let mut af0 = obj.affected[0].get();
+    let mut af0 = obj.affected[0];
     af0.location = APPLY_HITROLL as u8;
     af0.modifier = 1 + if level >= 18 { 1 } else { 0 };
-    obj.affected[0].set(af0);
+    obj.affected[0] = af0;
 
-    let mut af1 = obj.affected[1].get();
+    let mut af1 = obj.affected[1];
     af1.location = APPLY_DAMROLL as u8;
     af1.modifier = 1 + if level >= 20 { 1 } else { 0 };
-    obj.affected[1].set(af1);
+    obj.affected[1] = af1;
 
     if ch.is_good() {
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
-        game.act("$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act("$p glows blue.", false, Some(ch), Some(oid), None, TO_CHAR);
     } else if ch.is_evil() {
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
-        game.act("$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act("$p glows red.", false, Some(ch), Some(oid), None, TO_CHAR);
     } else {
         game.act(
             "$p glows yellow.",
             false,
             Some(ch),
-            Some(obj),
+            Some(oid),
             None,
             TO_CHAR,
         );
@@ -876,7 +878,7 @@ pub fn spell_detect_poison(
     _level: i32,
     ch: Option<&Rc<CharData>>,
     victim: Option<&Rc<CharData>>,
-    obj: Option<&Rc<ObjData>>,
+    oid: Option<DepotId>,
 ) {
     if victim.is_some() {
         let victim = victim.unwrap();
@@ -909,17 +911,17 @@ pub fn spell_detect_poison(
             }
         }
 
-        if obj.is_some() {
-            let obj = obj.unwrap();
+        if oid.is_some() {
+            let oid = oid.unwrap();
 
-            match obj.get_obj_type() {
+            match game.db.obj(oid).get_obj_type() {
                 ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
-                    if obj.get_obj_val(3) != 0 {
+                    if game.db.obj(oid).get_obj_val(3) != 0 {
                         game.act(
                             "You sense that $p has been contaminated.",
                             false,
                             Some(ch),
-                            Some(obj),
+                            Some(oid),
                             None,
                             TO_CHAR,
                         );
@@ -928,7 +930,7 @@ pub fn spell_detect_poison(
                             "You sense that $p is safe for consumption.",
                             false,
                             Some(ch),
-                            Some(obj),
+                            Some(oid),
                             None,
                             TO_CHAR,
                         );

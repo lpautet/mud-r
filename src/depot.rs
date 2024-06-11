@@ -6,6 +6,17 @@ pub struct DepotId {
     seq: u32,
 }
 
+impl Default for DepotId {
+    fn default() -> Self {
+        Self { index: Default::default(), seq: Default::default() }
+    }
+}
+
+pub trait HasId {
+    fn id(&self) -> DepotId;
+    fn set_id(&mut self, id: DepotId);
+}
+
 struct Slot<T> {
     free: bool,
     seq: u32,
@@ -14,7 +25,7 @@ struct Slot<T> {
 
 pub struct Depot<T>
 where
-    T: Default,
+    T: Default + HasId
 {
     slots: Vec<Slot<T>>,
     size: usize,
@@ -23,7 +34,7 @@ where
 
 impl<T> Depot<T>
 where
-    T: Default,
+    T: Default + HasId
 {
     pub fn new() -> Depot<T> {
         Depot {
@@ -31,6 +42,11 @@ where
             size: 0,
             seq: 0,
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.size = 0;
+        self.slots.clear()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -60,10 +76,12 @@ where
             self.slots[idx as usize].value = item;
         }
         self.size += 1;
-        DepotId {
+        let ret = DepotId {
             index: idx,
             seq: self.seq,
-        }
+        };
+        self.get_mut(ret).set_id(ret);
+        ret
     }
 
     pub fn remove(&mut self, id: DepotId) -> T {
@@ -140,7 +158,7 @@ where
 
 pub struct DepotRefIterator<'a, T>
 where
-    T: Default,
+    T: Default + HasId
 {
     depot: &'a Depot<T>,
     index: usize,
@@ -148,7 +166,7 @@ where
 
 impl<'a, T> Iterator for DepotRefIterator<'a, T>
 where
-    T: Default,
+    T: Default + HasId
 {
     type Item = &'a T;
 
@@ -189,7 +207,7 @@ where
 
 pub struct DepotIdIterator<'a, T>
 where
-    T: Default,
+    T: Default + HasId
 {
     depot: &'a Depot<T>,
     index: usize,
@@ -198,7 +216,7 @@ where
 
 impl<'a, T> Iterator for DepotIdIterator<'a, T>
 where
-    T: Default,
+    T: Default + HasId
 {
     type Item = DepotId;
 

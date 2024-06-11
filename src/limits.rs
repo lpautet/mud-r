@@ -16,7 +16,6 @@ use crate::config::{
     FREE_RENT, IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN,
     MAX_EXP_LOSS,
 };
-use crate::db::DB;
 use crate::fight::update_pos;
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
@@ -384,7 +383,7 @@ impl Game {
                 );
                 self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
                 self.save_char(ch);
-                crash_crashsave(&self.db, ch);
+                crash_crashsave(&mut self.db, ch);
                 self.db.char_from_room(ch);
                 self.db.char_to_room(ch, 1);
             } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
@@ -458,34 +457,35 @@ impl Game {
 
         /* objects */
         let mut old_object_list = vec![];
-        for o in self.db.object_list.iter() {
-            old_object_list.push(o.clone());
+        for o in self.db.object_list.ids() {
+            old_object_list.push(o);
         }
-        for j in old_object_list.iter() {
+        for j in old_object_list.into_iter() {
             /* If this is a corpse */
-            if j.is_corpse() {
+            if self.db.obj(j).is_corpse() {
                 /* timer count down */
-                if j.get_obj_timer() > 0 {
-                    j.decr_obj_timer(1)
+                if self.db.obj(j).get_obj_timer() > 0 {
+                    self.db.obj_mut(j).decr_obj_timer(1);
                 }
 
-                if j.get_obj_timer() == 0 {
-                    if j.carried_by.borrow().is_some() {
+                if self.db.obj(j).get_obj_timer() == 0 {
+                    if self.db.obj(j).carried_by.is_some() {
+                        let ch = self.db.obj(j).carried_by.as_ref().unwrap().clone();
                         self.act(
                             "$p decays in your hands.",
                             false,
-                            Some(j.carried_by.borrow().as_ref().unwrap().as_ref()),
+                           Some( ch.as_ref()),
                             Some(j),
                             None,
                             TO_CHAR,
                         );
-                    } else if j.in_room() != NOWHERE
-                        && self.db.world[j.in_room() as usize]
+                    } else if self.db.obj(j).in_room() != NOWHERE
+                        && self.db.world[self.db.obj(j).in_room() as usize]
                             .peoples
                             .len()
                             != 0
                     {
-                        let ch = self.db.world[j.in_room() as usize].peoples[0].clone();
+                        let ch = self.db.world[self.db.obj(j).in_room() as usize].peoples[0].clone();
                         self.act(
                             "A quivering horde of maggots consumes $p.",
                             true,
@@ -507,22 +507,22 @@ impl Game {
                         );
                     }
                     let mut old_contains = vec![];
-                    for c in j.contains.borrow().iter() {
-                        old_contains.push(c.clone());
+                    for c in self.db.obj(j).contains.clone().into_iter() {
+                        old_contains.push(c);
                     }
 
-                    for jj in old_contains.iter() {
-                        DB::obj_from_obj(jj);
+                    for jj in old_contains.into_iter() {
+                        self.db.obj_from_obj(jj);
 
-                        if j.in_obj.borrow().is_some() {
-                            self.db.obj_to_obj(jj, j.in_obj.borrow().as_ref().unwrap());
-                        } else if j.carried_by.borrow().is_some() {
+                        if self.db.obj(j).in_obj.is_some() {
+                            self.db.obj_to_obj(jj, self.db.obj(j).in_obj.unwrap());
+                        } else if self.db.obj(j).carried_by.is_some() {
                             self.db.obj_to_room(
                                 jj,
-                                j.carried_by.borrow().as_ref().unwrap().in_room(),
+                                self.db.obj(j).carried_by.as_ref().unwrap().in_room(),
                             );
-                        } else if j.in_room() != NOWHERE {
-                            self.db.obj_to_room(jj, j.in_room());
+                        } else if self.db.obj(j).in_room() != NOWHERE {
+                            self.db.obj_to_room(jj, self.db.obj(j).in_room());
                         } else {
                             //   core_dump();
                         }

@@ -32,7 +32,8 @@ use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, DRINKNAMES, EXTRA_BITS_COUNT, ROOM_BITS_COUNT,
     WEAR_BITS_COUNT,
 };
-use crate::handler::{affect_remove, fname, isname};
+use crate::depot::{Depot, DepotId};
+use crate::handler::{fname, isname};
 use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::{one_argument, one_word, search_block};
 use crate::mail::MailSystem;
@@ -58,8 +59,7 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
-   dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number,
-    time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR,
+    clone_vec2, dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR
 };
 use crate::{check_player_special, get_last_tell_mut, Game};
 
@@ -121,7 +121,7 @@ pub struct DB {
     /* index table for mobile file	 */
     pub mob_protos: Vec<CharData>,
     /* prototypes for mobs		 */
-    pub object_list: Vec<Rc<ObjData>>,
+    pub object_list: Depot<ObjData>,
     /* global linked list of objs	 */
     pub obj_index: Vec<IndexData>,
     /* index table for object file	 */
@@ -276,7 +276,10 @@ pub struct BanListElement {
 
 impl DB {
     pub fn get_name_by_id(&self, id: i64) -> Option<String> {
-        self.player_table.iter().find(|p| p.id == id).map(|p| p.name.clone())
+        self.player_table
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.name.clone())
     }
 
     pub fn get_id_by_name(&self, name: &str) -> i64 {
@@ -459,8 +462,9 @@ impl DB {
     /* Free the world, in a memory allocation sense. */
     pub fn destroy_db(&mut self) {
         /* Active Mobiles & Players */
-        for chtmp in self.character_list.iter() {
-            free_char(chtmp);
+        let list = clone_vec2(&self.character_list);
+        for chtmp in list.iter() {
+            self.free_char(chtmp);
         }
         self.character_list.clear();
 
@@ -487,7 +491,7 @@ impl DB {
         /* Mobiles */
         for cnt in 0..self.mob_protos.len() {
             while !self.mob_protos[cnt].affected.borrow().is_empty() {
-                affect_remove(
+                self.affect_remove(
                     &self.mob_protos[cnt],
                     &self.mob_protos[cnt].affected.borrow()[0],
                 );
@@ -509,7 +513,7 @@ impl DB {
             character_list: vec![],
             mob_index: vec![],
             mob_protos: vec![],
-            object_list: vec![],
+            object_list: Depot::new(),
             obj_index: vec![],
             obj_proto: vec![],
             zone_table: vec![],
@@ -739,7 +743,6 @@ impl DB {
             ..=1020 => SKY_CLOUDY,
             _ => SKY_CLOUDLESS,
         };
-
     }
 }
 
@@ -850,10 +853,7 @@ impl DB {
             };
             pie.name = pie.name.to_lowercase();
             self.player_table.push(pie);
-            self.top_idnum = max(
-                self.top_idnum,
-                dummy.char_specials_saved.idnum as i32,
-            );
+            self.top_idnum = max(self.top_idnum, dummy.char_specials_saved.idnum as i32);
         }
     }
 }
@@ -1040,8 +1040,7 @@ impl DB {
                 );
             }
             DB_BOOT_ZON => {
-                self.zone_table
-                    .reserve_exact(rec_count as usize);
+                self.zone_table.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<ZoneData>() * rec_count as usize;
                 info!("   {} zones, {} bytes.", rec_count, size[0]);
             }
@@ -1262,12 +1261,7 @@ impl DB {
 
         rd.room_flags = asciiflag_conv(flags) as i32;
         let msg = format!("object #{}", virtual_nr); /* sprintf: OK (until 399-bit integers) */
-        check_bitvector_names(
-            rd.room_flags as i64,
-            ROOM_BITS_COUNT,
-            msg.as_str(),
-            "room",
-        );
+        check_bitvector_names(rd.room_flags as i64, ROOM_BITS_COUNT, msg.as_str(), "room");
 
         rd.sector_type = t[2];
 
@@ -1287,8 +1281,8 @@ impl DB {
                 }
                 'E' => {
                     rd.ex_descriptions.push(ExtraDescrData {
-                        keyword: fread_string(reader, buf2.as_str()),
-                        description: fread_string(reader, buf2.as_str()),
+                        keyword: Rc::from(fread_string(reader, buf2.as_str()).as_str()),
+                        description: Rc::from(fread_string(reader, buf2.as_str())),
                     });
                 }
                 'S' => {
@@ -1349,22 +1343,19 @@ impl DB {
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
     fn check_start_rooms(&mut self) {
-        self.r_mortal_start_room
-            = self.real_room(MORTAL_START_ROOM);
+        self.r_mortal_start_room = self.real_room(MORTAL_START_ROOM);
         if self.r_mortal_start_room == NOWHERE {
             error!("SYSERR:  Mortal start room does not exist.  Change in config.c.");
             process::exit(1);
         }
-        self.r_immort_start_room
-             = self.real_room(IMMORT_START_ROOM);
+        self.r_immort_start_room = self.real_room(IMMORT_START_ROOM);
         if self.r_immort_start_room == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
                 self.r_immort_start_room = self.r_mortal_start_room;
             }
         }
-        self.r_frozen_start_room
-            = self.real_room(FROZEN_START_ROOM);
+        self.r_frozen_start_room = self.real_room(FROZEN_START_ROOM);
         if self.r_frozen_start_room == NOWHERE {
             if !self.mini_mud {
                 error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
@@ -1422,42 +1413,75 @@ fn renum_zone_table(game: &mut Game) {
             oldc = game.db.zone_table[idx].cmd[cmd_no].arg3;
             match game.db.zone_table[idx].cmd[cmd_no].command.get() {
                 'M' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_mobile(game.db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_mobile(game.db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game.db.real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game
+                        .db
+                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
+                        as i32;
                     c = game.db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'O' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
                     if game.db.zone_table[idx].cmd[cmd_no].arg3 != NOWHERE as i32 {
-                        game.db.zone_table[idx].cmd[cmd_no].arg3 = game.db.real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum) as i32;
+                        game.db.zone_table[idx].cmd[cmd_no].arg3 = game
+                            .db
+                            .real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
+                            as i32;
                         c = game.db.zone_table[idx].cmd[cmd_no].arg3;
                     }
                 }
                 'G' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'E' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'P' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum)
+                        as i32;
                     c = game.db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'D' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'R' => {
                     /* rem obj from room */
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game.db.real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
+                        .db
+                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
+                        as i32;
                     a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg2 = game.db.real_object(game.db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum) as i32;
+                    game.db.zone_table[idx].cmd[cmd_no].arg2 = game
+                        .db
+                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum)
+                        as i32;
                     b = game.db.zone_table[idx].cmd[cmd_no].arg2;
                 }
                 _ => {}
@@ -1809,9 +1833,10 @@ impl DB {
         });
 
         let mut obj = ObjData {
+            id: Default::default(),
             item_number: 0,
-            in_room: Cell::new(0),
-            obj_flags: RefCell::from(ObjFlagData {
+            in_room: 0,
+            obj_flags: ObjFlagData {
                 value: [0, 0, 0, 0],
                 type_flag: 0,
                 wear_flags: 0,
@@ -1821,43 +1846,43 @@ impl DB {
                 cost_per_day: 0,
                 timer: 0,
                 bitvector: 0,
-            }),
+            },
             affected: [
-                Cell::from(ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
+                },
             ],
-            name: RefCell::from("".to_string()),
-            description: "".to_string(),
-            short_description: "".to_string(),
+            name: Rc::from(""),
+            description: Rc::from(""),
+            short_description: Rc::from(""),
             action_description: Rc::new(RefCell::new(String::new())),
             ex_descriptions: vec![],
-            carried_by: RefCell::new(None),
-            worn_by: RefCell::new(None),
-            worn_on: Cell::new(0),
-            in_obj: RefCell::new(None),
-            contains: RefCell::new(vec![]),
+            carried_by: None,
+            worn_by: None,
+            worn_on: 0,
+            in_obj: None,
+            contains: vec![],
         };
 
         clear_object(&mut obj);
@@ -1866,8 +1891,8 @@ impl DB {
         let buf2 = format!("object #{}", nr); /* sprintf: OK (for 'buf2 >= 19') */
 
         /* *** string data *** */
-        *obj.name.borrow_mut() = fread_string(reader, &buf2);
-        if obj.name.borrow().is_empty() {
+        obj.name = Rc::from(fread_string(reader, &buf2).as_str());
+        if obj.name.is_empty() {
             error!("SYSERR: Null obj name or format error at or near {}", buf2);
             process::exit(1);
         }
@@ -1879,10 +1904,10 @@ impl DB {
                 tmpstr.insert(0, char::to_ascii_lowercase(&c));
             }
         }
-        obj.short_description = tmpstr;
+        obj.short_description = Rc::from(tmpstr.as_str());
 
         let tmpptr = fread_string(reader, &buf2);
-        obj.description = tmpptr;
+        obj.description = Rc::from(tmpptr.as_str());
         obj.action_description = Rc::new(RefCell::from(fread_string(reader, &buf2)));
 
         /* *** numeric data *** */
@@ -1963,8 +1988,8 @@ impl DB {
 
         /* *** extra descriptions and affect fields *** */
         for j in 0..MAX_OBJ_AFFECT {
-            obj.affected[j as usize].get().location = APPLY_NONE as u8;
-            obj.affected[j as usize].get().modifier = 0;
+            obj.affected[j as usize].location = APPLY_NONE as u8;
+            obj.affected[j as usize].modifier = 0;
         }
 
         let buf2 = ", after numeric constants\n...expecting 'E', 'A', '$', or next object number";
@@ -1978,8 +2003,8 @@ impl DB {
             match line.chars().next().unwrap() {
                 'E' => {
                     let new_descr = ExtraDescrData {
-                        keyword: fread_string(reader, buf2),
-                        description: fread_string(reader, buf2),
+                        keyword: Rc::from(fread_string(reader, buf2).as_str()),
+                        description: Rc::from(fread_string(reader, buf2).as_str()),
                     };
                     obj.ex_descriptions.push(new_descr);
                 }
@@ -2003,8 +2028,8 @@ impl DB {
                     }
                     let f = f.unwrap();
 
-                    obj.affected[j].get().location = f[1].parse::<i32>().unwrap() as u8;
-                    obj.affected[j].get().modifier = f[2].parse().unwrap();
+                    obj.affected[j].location = f[1].parse::<i32>().unwrap() as u8;
+                    obj.affected[j].modifier = f[2].parse().unwrap();
                     j += 1;
                 }
                 '$' | '#' => {
@@ -2266,8 +2291,8 @@ impl DB {
     }
 
     /*************************************************************************
-    *  procedures for resetting, both play-time and boot-time	 	 *
-    *************************************************************************/
+     *  procedures for resetting, both play-time and boot-time	 	 *
+     *************************************************************************/
 }
 impl Game {
     pub fn vnum_mobile(&mut self, searchname: &str, ch: &Rc<CharData>) -> i32 {
@@ -2295,7 +2320,7 @@ impl Game {
         let mut found = 0;
         for nr in 0..self.db.obj_proto.len() {
             let op = &self.db.obj_proto[nr];
-            if isname(searchname, &op.name.borrow()) {
+            if isname(searchname, &op.name) {
                 found += 1;
                 self.send_to_char(
                     ch,
@@ -2312,6 +2337,12 @@ impl Game {
     }
 }
 impl DB {
+    pub fn obj(&self, o_id: DepotId) -> &ObjData {
+        self.object_list.get(o_id)
+    }
+    pub fn obj_mut(&mut self, o_id: DepotId) -> &mut ObjData {
+        self.object_list.get_mut(o_id)
+    }
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
     // {
@@ -2365,7 +2396,7 @@ impl DB {
         mob.player.borrow_mut().time.played = 0;
         mob.player.borrow_mut().time.logon = time_now();
 
-        self.mob_index[i as usize].number+= 1;
+        self.mob_index[i as usize].number += 1;
 
         let rc = Rc::from(mob);
         self.character_list.push(rc.clone());
@@ -2385,27 +2416,25 @@ impl DB {
         weight: i32,
         cost: i32,
         rent: i32,
-    ) -> Rc<ObjData> {
-        let mut obj = ObjData::new();
+    ) -> DepotId {
+        let mut obj = ObjData::default();
 
         clear_object(&mut obj);
         obj.item_number = num;
-        obj.name = RefCell::from(name.to_string());
-        obj.description = description.to_string();
-        obj.short_description = short_description.to_string();
+        obj.name = Rc::from(name);
+        obj.description = Rc::from(description);
+        obj.short_description = Rc::from(short_description);
         obj.set_obj_type(obj_type);
         obj.set_obj_wear(obj_wear);
         obj.set_obj_weight(weight);
         obj.set_obj_cost(cost);
         obj.set_obj_rent(rent);
-        let ret = Rc::from(obj);
-        self.object_list.push(ret.clone());
-
-        ret
+        self.object_list.push(obj)
     }
 
     /* create a new object from a prototype */
-    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<Rc<ObjData>> /* and obj_rnum */ {
+    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<DepotId> /* and obj_rnum */
+    {
         let i = if _type == VIRTUAL {
             self.real_object(nr)
         } else {
@@ -2422,12 +2451,11 @@ impl DB {
         }
 
         let obj = self.obj_proto[i as usize].make_copy();
-        let rc = Rc::from(obj);
-        self.object_list.push(rc.clone());
+        let id = self.object_list.push(obj);
 
-        self.obj_index[i as usize].number+= 1;
+        self.obj_index[i as usize].number += 1;
 
-        Some(rc)
+        Some(id)
     }
 }
 
@@ -2453,10 +2481,7 @@ impl Game {
                     zone.age += 1;
                 }
 
-                if zone.age >= zone.lifespan
-                    && zone.age < ZO_DEAD
-                    && zone.reset_mode != 0
-                {
+                if zone.age >= zone.lifespan && zone.age < ZO_DEAD && zone.reset_mode != 0 {
                     /* enqueue zone */
                     self.db.reset_q.push(i as RoomRnum);
 
@@ -2469,9 +2494,7 @@ impl Game {
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
         let update_list = self.db.reset_q.clone();
         for update_u in update_list {
-            if self.db.zone_table[update_u as usize].reset_mode == 2
-                || is_empty(self, update_u)
-            {
+            if self.db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, update_u) {
                 self.reset_zone(update_u as usize);
                 self.mudlog(
                     CMP,
@@ -2489,7 +2512,14 @@ impl Game {
     }
 
     /* execute the reset command table of a given zone */
-    fn log_zone_error(&mut self, zone: usize, zcmd_command: char, zcmd_line: i32, message: &str, last_cmd: &mut i32) {
+    fn log_zone_error(
+        &mut self,
+        zone: usize,
+        zcmd_command: char,
+        zcmd_line: i32,
+        message: &str,
+        last_cmd: &mut i32,
+    ) {
         self.mudlog(
             NRM,
             LVL_GOD as i32,
@@ -2502,9 +2532,7 @@ impl Game {
             true,
             format!(
                 "SYSERR: ...offending cmd: '{}' cmd in zone #{}, line {}",
-                zcmd_command,
-                zone,
-                zcmd_line
+                zcmd_command, zone, zcmd_line
             )
             .as_str(),
         );
@@ -2513,11 +2541,11 @@ impl Game {
 
     pub(crate) fn reset_zone(&mut self, zone: usize) {
         let mut last_cmd = 0;
-        let mut obj;
+        let mut oid;
         let mut mob = None;
         let cmd_count = self.db.zone_table[zone].cmd.len();
         for cmd_no in 0..cmd_count {
-           // let zcmd = &self.db.zone_table[zone].cmd[cmd_no];
+            // let zcmd = &self.db.zone_table[zone].cmd[cmd_no];
             if self.db.zone_table[zone].cmd[cmd_no].command.get() == 'S' {
                 break;
             }
@@ -2531,7 +2559,7 @@ impl Game {
              *  will still be correct. - ae.
              */
             let command = self.db.zone_table[zone].cmd[cmd_no].command.get();
-            match  command {
+            match command {
                 '*' => {
                     /* ignore command */
                     last_cmd = 0;
@@ -2539,12 +2567,13 @@ impl Game {
 
                 'M' => {
                     /* read a mobile */
-                    if self.db.mob_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
+                    if self.db.mob_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    {
                         let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
                         mob = self.db.read_mobile(nr, REAL);
                         let room = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                        self.db
-                            .char_to_room(mob.as_ref().unwrap(), room);
+                        self.db.char_to_room(mob.as_ref().unwrap(), room);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2553,18 +2582,19 @@ impl Game {
 
                 'O' => {
                     /* read an object */
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
+                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    {
                         if self.db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            obj = self.db.read_object(nr, REAL);
+                            oid = self.db.read_object(nr, REAL);
                             let room_nr = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                            self.db
-                                .obj_to_room(obj.as_ref().unwrap(), room_nr);
+                            self.db.obj_to_room(oid.unwrap(), room_nr);
                             last_cmd = 1;
                         } else {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            obj = self.db.read_object(nr, REAL);
-                            obj.as_ref().unwrap().in_room.set(NOWHERE);
+                            oid = self.db.read_object(nr, REAL);
+                            self.db.obj_mut(oid.unwrap()).in_room = NOWHERE;
                             last_cmd = 1;
                         }
                     } else {
@@ -2574,16 +2604,21 @@ impl Game {
 
                 'P' => {
                     /* object to object */
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
+                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    {
                         let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        obj = self.db.read_object(nr, REAL);
-                        let obj_to = self.db.get_obj_num(self.db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
+                        oid = self.db.read_object(nr, REAL);
+                        let obj_to = self
+                            .db
+                            .get_obj_num(self.db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
                             let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
                             let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
-                                zcmd_command,zcmd_line,
+                                zcmd_command,
+                                zcmd_line,
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
                             );
@@ -2591,7 +2626,7 @@ impl Game {
                             continue;
                         }
                         self.db
-                            .obj_to_obj(obj.as_ref().unwrap(), obj_to.as_ref().unwrap());
+                            .obj_to_obj(oid.unwrap(), obj_to.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2605,7 +2640,8 @@ impl Game {
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            zcmd_command,zcmd_line,
+                            zcmd_command,
+                            zcmd_line,
                             "attempt to give obj to non-existant mob, command disabled",
                             &mut last_cmd,
                         );
@@ -2613,10 +2649,12 @@ impl Game {
                         self.db.zone_table[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
+                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    {
                         let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        obj = self.db.read_object(nr, REAL);
-                        DB::obj_to_char(obj.as_ref().unwrap(), mob.as_ref().unwrap());
+                        oid = self.db.read_object(nr, REAL);
+                        self.db.obj_to_char(oid.unwrap(), mob.as_ref().unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2630,7 +2668,8 @@ impl Game {
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            zcmd_command,zcmd_line,
+                            zcmd_command,
+                            zcmd_line,
                             "trying to equip non-existant mob, command disabled",
                             &mut last_cmd,
                         );
@@ -2638,25 +2677,26 @@ impl Game {
                         self.db.zone_table[zone].cmd[cmd_no].command.set('*');
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number < self.db.zone_table[zone].cmd[cmd_no].arg2 {
-                        if self.db.zone_table[zone].cmd[cmd_no].arg3 < 0 || self.db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32 {
+                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    {
+                        if self.db.zone_table[zone].cmd[cmd_no].arg3 < 0
+                            || self.db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
+                        {
                             let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command.get();
                             let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                             self.log_zone_error(
                                 zone,
-                                zcmd_command,zcmd_line,
+                                zcmd_command,
+                                zcmd_line,
                                 "invalid equipment pos number",
                                 &mut last_cmd,
                             );
                         } else {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            obj = self.db.read_object(nr, REAL);
+                            oid = self.db.read_object(nr, REAL);
                             let pos = self.db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(
-                                mob.as_ref().unwrap(),
-                                obj.as_ref().unwrap(),
-                                pos,
-                            );
+                            self.equip_char(mob.as_ref().unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2666,14 +2706,14 @@ impl Game {
 
                 'R' => {
                     /* rem obj from room */
-                    obj = self.db.get_obj_in_list_num(
+                    oid = self.db.get_obj_in_list_num(
                         self.db.zone_table[zone].cmd[cmd_no].arg2 as i16,
                         self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                             .contents
                             .as_ref(),
                     );
-                    if obj.is_some() {
-                        self.extract_obj(obj.as_ref().unwrap());
+                    if oid.is_some() {
+                        self.extract_obj(oid.unwrap());
                     }
                     last_cmd = 1;
                 }
@@ -2682,7 +2722,8 @@ impl Game {
                     /* set state of door */
                     if self.db.zone_table[zone].cmd[cmd_no].arg2 < 0
                         || self.db.zone_table[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
-                        || (self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                        || (self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                            .dir_option
                             [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
@@ -2690,7 +2731,8 @@ impl Game {
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
                             zone,
-                            zcmd_command,zcmd_line,
+                            zcmd_command,
+                            zcmd_line,
                             "door does not exist, command disabled",
                             &mut last_cmd,
                         );
@@ -2698,12 +2740,14 @@ impl Game {
                     } else {
                         match self.db.zone_table[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2711,12 +2755,14 @@ impl Game {
                             }
 
                             1 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2724,12 +2770,14 @@ impl Game {
                             }
 
                             2 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2746,7 +2794,8 @@ impl Game {
                     let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                     self.log_zone_error(
                         zone,
-                        zcmd_command,zcmd_line,
+                        zcmd_command,
+                        zcmd_line,
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,
                     );
@@ -2771,9 +2820,7 @@ fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
         if i.character.as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if game.db.world[i.character.as_ref().unwrap().in_room() as usize].zone
-            != zone_nr
-        {
+        if game.db.world[i.character.as_ref().unwrap().in_room() as usize].zone != zone_nr {
             continue;
         }
         return false;
@@ -2787,10 +2834,7 @@ fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        return self
-            .player_table
-            .iter()
-            .position(|pie| pie.name == name);
+        return self.player_table.iter().position(|pie| pie.name == name);
     }
 
     /* Load a char, TRUE if loaded, FALSE if not */
@@ -2816,7 +2860,6 @@ impl DB {
     }
 }
 impl Game {
-
     /*
      * write the vital data of a player to the player file
      *
@@ -2835,13 +2878,17 @@ impl Game {
 
         copy_to_stored(
             &mut st.host,
-            self.descriptor_list.get(ch.desc.borrow().unwrap()).host.as_ref(),
+            self.descriptor_list
+                .get(ch.desc.borrow().unwrap())
+                .host
+                .as_ref(),
         );
 
         unsafe {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
-            self.db.player_fl
+            self.db
+                .player_fl
                 .as_mut()
                 .unwrap()
                 .write_all_at(
@@ -3009,7 +3056,7 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 impl Game {
     pub fn char_to_store(&mut self, ch: &Rc<CharData>, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
-        let mut char_eq: [Option<Rc<ObjData>>; NUM_WEARS as usize] =
+        let mut char_eq: [Option<DepotId>; NUM_WEARS as usize] =
             [(); NUM_WEARS as usize].map(|_| None);
 
         for i in 0..NUM_WEARS {
@@ -3044,7 +3091,7 @@ impl Game {
          */
 
         while !ch.affected.borrow().is_empty() {
-            affect_remove(ch, &ch.affected.borrow()[0]);
+            self.db.affect_remove(ch, &ch.affected.borrow()[0]);
         }
 
         *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow();
@@ -3108,7 +3155,7 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(ch, char_eq[i as usize].as_ref().unwrap(), i);
+                self.equip_char(ch, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */
@@ -3191,17 +3238,19 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
     return buf;
 }
 
+impl DB {
 /* release memory allocated for a char struct */
-pub fn free_char(ch: &Rc<CharData>) {
+pub fn free_char(&mut self, ch: &Rc<CharData>) {
     ch.player_specials.borrow_mut().aliases.clear();
 
     while !ch.affected.borrow().is_empty() {
-        affect_remove(ch, &ch.affected.borrow()[0]);
+        self.affect_remove(ch, &ch.affected.borrow()[0]);
     }
 
     if ch.desc.borrow().is_some() {
         *ch.desc.borrow_mut() = None;
     }
+}
 }
 
 /*
@@ -3239,9 +3288,7 @@ impl Game {
 
         for in_use_id in self.descriptor_list.ids() {
             let in_use = self.descriptor_list.get_mut(in_use_id);
-            if in_use.showstr_count == 0
-                || in_use.showstr_vector[0].as_ref() != buf.as_ref()
-            {
+            if in_use.showstr_count == 0 || in_use.showstr_vector[0].as_ref() != buf.as_ref() {
                 continue;
             }
 
@@ -3312,7 +3359,7 @@ pub fn clear_char(ch: &mut CharData) {
 fn clear_object(obj: &mut ObjData) {
     obj.item_number = NOTHING;
     obj.set_in_room(NOWHERE);
-    obj.worn_on.set(NOWHERE);
+    obj.worn_on = NOWHERE;
 }
 
 /*
@@ -3416,9 +3463,7 @@ impl DB {
 
     // /* returns the real number of the room with given virtual number */
     pub fn real_room(&self, vnum: RoomRnum) -> RoomRnum {
-        let r = self
-            .world
-            .binary_search_by_key(&vnum, |idx| idx.number);
+        let r = self.world.binary_search_by_key(&vnum, |idx| idx.number);
         if r.is_err() {
             return NOWHERE;
         }
@@ -3504,11 +3549,11 @@ impl DB {
 
         match obj.get_obj_type() {
             ITEM_DRINKCON => {
-                let space_pos = obj.name.borrow().rfind(' ');
+                let space_pos = obj.name.rfind(' ');
                 let onealias = if space_pos.is_some() {
-                    (&obj.name.borrow().as_str()[space_pos.unwrap() + 1..]).to_string()
+                    (&obj.name[space_pos.unwrap() + 1..]).to_string()
                 } else {
-                    obj.name.borrow().as_str().to_string()
+                    obj.name.to_string()
                 };
                 if search_block(&onealias, &DRINKNAMES, true).is_none() {
                     error = true;
@@ -3516,7 +3561,7 @@ impl DB {
                         "SYSERR: Object #{} ({}) doesn't have drink type as last alias. ({})",
                         self.get_obj_vnum(obj),
                         obj.short_description,
-                        obj.name.borrow()
+                        obj.name
                     );
                 }
                 if obj.get_obj_val(1) > obj.get_obj_val(0) {
@@ -3672,8 +3717,6 @@ fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &
     return error;
 }
 
-const NONE_OBJDATA: Option<Rc<ObjData>> = None;
-
 impl CharData {
     pub fn new() -> CharData {
         CharData {
@@ -3796,7 +3839,7 @@ impl CharData {
                 damsizedice: 0,
             },
             affected: RefCell::new(vec![]),
-            equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
+            equipment: RefCell::new([None; NUM_WEARS as usize]),
             carrying: RefCell::new(vec![]),
             desc: RefCell::new(None),
             // next_fighting: RefCell::new(None),
@@ -3886,7 +3929,7 @@ impl CharData {
                 damsizedice: self.mob_specials.damsizedice,
             },
             affected: RefCell::new(vec![]),
-            equipment: RefCell::new([NONE_OBJDATA; NUM_WEARS as usize]),
+            equipment: RefCell::new([None; NUM_WEARS as usize]),
             carrying: RefCell::new(vec![]),
             desc: RefCell::new(None),
             // next_fighting: RefCell::new(None),
@@ -3896,13 +3939,14 @@ impl CharData {
     }
 }
 
-impl ObjData {
-    pub(crate) fn new() -> ObjData {
+impl Default for ObjData {
+    fn default() -> ObjData {
         ObjData {
+            id: Default::default(),
             item_number: 0,
-            in_room: Cell::new(0),
-            obj_flags: RefCell::from(ObjFlagData {
-                value: [0, 0,0, 0],
+            in_room: 0,
+            obj_flags: ObjFlagData {
+                value: [0, 0, 0, 0],
                 type_flag: 0,
                 wear_flags: 0,
                 extra_flags: 0,
@@ -3911,101 +3955,104 @@ impl ObjData {
                 cost_per_day: 0,
                 timer: 0,
                 bitvector: 0,
-            }),
+            },
             affected: [
-                Cell::from(ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+               ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+              ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
+                },
             ],
-            name: RefCell::from("".to_string()),
-            description: "".to_string(),
-            short_description: "".to_string(),
+            name: Rc::from(""),
+            description: Rc::from(""),
+            short_description: Rc::from(""),
             action_description: Rc::new(RefCell::new(String::new())),
             ex_descriptions: vec![],
-            carried_by: RefCell::new(None),
-            worn_by: RefCell::new(None),
-            worn_on: Cell::new(0),
-            in_obj: RefCell::new(None),
-            contains: RefCell::new(vec![]),
+            carried_by: None,
+            worn_by: None,
+            worn_on: 0,
+            in_obj:None,
+            contains: vec![],
         }
     }
+}
+impl ObjData {
     fn make_copy(&self) -> ObjData {
         let mut ret = ObjData {
+            id: Default::default(),
             item_number: self.item_number,
-            in_room: Cell::from(self.in_room.get()),
-            obj_flags: RefCell::from(ObjFlagData {
+            in_room: self.in_room,
+            obj_flags: ObjFlagData {
                 value: [
-                    self.obj_flags.borrow().value[0],
-                    self.obj_flags.borrow().value[1],
-                    self.obj_flags.borrow().value[2],
-                    self.obj_flags.borrow().value[3],
+                    self.obj_flags.value[0],
+                    self.obj_flags.value[1],
+                    self.obj_flags.value[2],
+                    self.obj_flags.value[3],
                 ],
-                type_flag: self.obj_flags.borrow().type_flag,
-                wear_flags: self.obj_flags.borrow().wear_flags,
-                extra_flags: self.obj_flags.borrow().extra_flags,
-                weight: self.obj_flags.borrow().weight,
-                cost: self.obj_flags.borrow().cost,
-                cost_per_day: self.obj_flags.borrow().cost_per_day,
-                timer: self.obj_flags.borrow().timer,
-                bitvector: self.obj_flags.borrow().bitvector,
-            }),
+                type_flag: self.obj_flags.type_flag,
+                wear_flags: self.obj_flags.wear_flags,
+                extra_flags: self.obj_flags.extra_flags,
+                weight: self.obj_flags.weight,
+                cost: self.obj_flags.cost,
+                cost_per_day: self.obj_flags.cost_per_day,
+                timer: self.obj_flags.timer,
+                bitvector: self.obj_flags.bitvector,
+            },
             affected: [
-                Cell::from(ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+            ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+            ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+             ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
-                Cell::from(ObjAffectedType {
+                },
+             ObjAffectedType {
                     location: 0,
                     modifier: 0,
-                }),
+                },
             ],
             name: self.name.clone(),
             description: self.description.clone(),
             short_description: self.short_description.clone(),
             action_description: self.action_description.clone(),
             ex_descriptions: vec![],
-            carried_by: RefCell::new(None),
-            worn_by: RefCell::new(None),
-            worn_on: Cell::new(0),
-            in_obj: RefCell::new(None),
-            contains: RefCell::new(vec![]),
+            carried_by: None,
+            worn_by: None,
+            worn_on: 0,
+            in_obj: None,
+            contains: vec![],
         };
         for x in &self.ex_descriptions {
             ret.ex_descriptions.push(ExtraDescrData {

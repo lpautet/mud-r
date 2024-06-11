@@ -12,14 +12,14 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::interpreter::AliasData;
 use crate::Game;
 
 pub enum MeRef<'a> {
     None,
     Char(&'a Rc<CharData>),
-    Obj(&'a Rc<ObjData>),
+    Obj(DepotId),
 }
 
 pub type Special =
@@ -355,9 +355,9 @@ pub struct CharData {
     /* NPC specials		  */
     pub affected: RefCell<Vec<AffectedType>>,
     /* affected by what spells       */
-    pub equipment: RefCell<[Option<Rc<ObjData>>; NUM_WEARS as usize]>,
+    pub equipment: RefCell<[Option<DepotId>; NUM_WEARS as usize]>,
     /* Equipment array               */
-    pub carrying: RefCell<Vec<Rc<ObjData>>>,
+    pub carrying: RefCell<Vec<DepotId>>,
     /* Head of list                  */
     pub desc: RefCell<Option<DepotId>>,
     /* NULL for mobiles              */          
@@ -645,36 +645,47 @@ pub struct ObjAffectedType {
 
 /* ================== Memory Structure for Objects ================== */
 pub struct ObjData {
+    pub id: DepotId,
     pub item_number: ObjVnum,
     /* Where in data-base			*/
-    pub in_room: Cell<RoomRnum>,
+    pub in_room: RoomRnum,
     /* In what room -1 when conta/carr	*/
-    pub obj_flags: RefCell<ObjFlagData>,
+    pub obj_flags: ObjFlagData,
     /* Object information               */
-    pub affected: [Cell<ObjAffectedType>; MAX_OBJ_AFFECT as usize],
+    pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize],
     /* affects */
-    pub(crate) name: RefCell<String>,
+    pub(crate) name: Rc<str>,
     /* Title of object :get etc.        */
-    pub description: String,
+    pub description: Rc<str>,
     /* When in room                     */
-    pub(crate) short_description: String,
+    pub(crate) short_description: Rc<str>,
     /* when worn/carry/in cont.         */
     pub action_description: Rc<RefCell<String>>,
     /* What to write when used          */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* extra descriptions     */
-    pub carried_by: RefCell<Option<Rc<CharData>>>,
+    pub carried_by: Option<Rc<CharData>>,
     /* Carried by :NULL in room/conta   */
-    pub worn_by: RefCell<Option<Rc<CharData>>>,
+    pub worn_by: Option<Rc<CharData>>,
     /* Worn by?			      */
-    pub worn_on: Cell<i16>,
+    pub worn_on: i16,
     /* Worn where?		      */
-    pub in_obj: RefCell<Option<Rc<ObjData>>>,
+    pub in_obj: Option<DepotId>,
     /* In what object NULL when none    */
-    pub contains: RefCell<Vec<Rc<ObjData>>>,
+    pub contains: Vec<DepotId>,
     /* Contains objects                 */
 }
 /* ======================================================================= */
+
+impl HasId for ObjData {
+    fn id(&self) -> DepotId {
+        self.id
+    }
+
+    fn set_id(&mut self, id: DepotId) {
+        self.id = id;
+    }
+}
 
 /* ==================== File Structure for Player ======================= */
 /*             BEWARE: Changing it will ruin the playerfile		  */
@@ -907,7 +918,7 @@ pub struct RoomData {
     pub light: u8,
     /* Number of lightsources in room     */
     pub func: Option<Special>,
-    pub contents: Vec<Rc<ObjData>>,
+    pub contents: Vec<DepotId>,
     /* List of items in room              */
     pub peoples: Vec<Rc<CharData>>,
     /* List of NPC / PC in room           */
@@ -915,10 +926,11 @@ pub struct RoomData {
 /* ====================================================================== */
 
 /* Extra description: used in objects, mobiles, and rooms */
+#[derive(Clone)]
 pub struct ExtraDescrData {
-    pub keyword: String,
+    pub keyword: Rc<str>,
     /* Keyword in look/examine          */
-    pub description: String,
+    pub description: Rc<str>,
     /* What to see                      */
     //  pub next: Option<Box<ExtraDescrData>>,
     /* Next in list                     */
@@ -1020,8 +1032,8 @@ pub struct IndexData {
 impl ExtraDescrData {
     pub fn new() -> ExtraDescrData {
         ExtraDescrData {
-            keyword: "".to_string(),
-            description: "".to_string(),
+            keyword: Rc::from(""),
+            description: Rc::from(""),
         }
     }
 }

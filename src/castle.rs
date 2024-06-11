@@ -378,7 +378,7 @@ fn block_way(
  * Routine to check if an object is trash...
  * Used by James the Butler and the Cleaning Lady.
  */
-fn is_trash(i: &Rc<ObjData>) -> bool {
+fn is_trash(i: &ObjData) -> bool {
     if !i.objwear_flagged(ITEM_WEAR_TAKE) {
         return false;
     }
@@ -1004,7 +1004,7 @@ fn castle_cleaner(game: &mut Game, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> 
     }
 
     for i in clone_vec2(&game.db.world[ch.in_room() as usize].contents).iter() {
-        if !is_trash(i) {
+        if !is_trash(game.db.obj(*i)) {
             continue;
         }
 
@@ -1026,8 +1026,8 @@ fn castle_cleaner(game: &mut Game, ch: &Rc<CharData>, cmd: i32, gripe: bool) -> 
                 TO_ROOM,
             );
         }
-        game.db.obj_from_room(i);
-        DB::obj_to_char(i, ch);
+        game.db.obj_from_room(*i);
+        game.db.obj_to_char(*i, ch);
         return true;
     }
 

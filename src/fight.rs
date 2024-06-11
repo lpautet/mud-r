@@ -10,7 +10,6 @@
 ************************************************************************ */
 
 use log::error;
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
@@ -24,7 +23,7 @@ use crate::config::{
 };
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
-use crate::handler::{affect_from_char, affect_remove, affected_by_spell, object_list_new_owner};
+use crate::handler::affected_by_spell;
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
@@ -122,7 +121,7 @@ macro_rules! is_weapon {
 impl Game {
     pub fn appear(&mut self, ch: &CharData) {
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
-            affect_from_char(ch, SPELL_INVISIBLE as i16);
+            self.db.affect_from_char(ch, SPELL_INVISIBLE as i16);
         }
 
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
@@ -302,7 +301,7 @@ impl Game {
         self.db.combat_list.push(ch.clone());
 
         if ch.aff_flagged(AFF_SLEEP) {
-            affect_from_char(ch, SPELL_SLEEP as i16);
+            self.db.affect_from_char(ch, SPELL_SLEEP as i16);
         }
 
         ch.set_fighting(Some(vict.clone()));
@@ -326,17 +325,17 @@ impl DB {
 impl Game {
 
     pub fn make_corpse(&mut self, ch: &Rc<CharData>) {
-        let mut corpse = ObjData::new();
+        let mut corpse = ObjData::default();
 
         corpse.item_number = NOTHING;
         corpse.set_in_room(NOWHERE);
-        corpse.name = RefCell::from("corpse".to_string());
+        corpse.name = Rc::from("corpse");
 
         let buf2 = format!("The corpse of {} is lying here.", ch.get_name());
-        corpse.description = buf2;
+        corpse.description = Rc::from(buf2.as_str());
 
         let buf2 = format!("the corpse of {}", ch.get_name());
-        corpse.short_description = buf2;
+        corpse.short_description = Rc::from(buf2.as_str());
 
         corpse.set_obj_type(ITEM_CONTAINER);
         corpse.set_obj_wear(ITEM_WEAR_TAKE);
@@ -351,22 +350,21 @@ impl Game {
             corpse.set_obj_timer(MAX_PC_CORPSE_TIME);
         }
 
-        let corpse = Rc::from(corpse);
-        self.db.object_list.push(corpse.clone());
+        let corpse_id = self.db.object_list.push(corpse);
 
         /* transfer character's inventory to the corpse */
         for o in ch.carrying.borrow().iter() {
-            corpse.contains.borrow_mut().push(o.clone());
+            self.db.obj_mut(corpse_id).contains.push(*o);
         }
-        for o in corpse.contains.borrow().iter() {
-            *o.in_obj.borrow_mut() = Some(corpse.clone());
-            object_list_new_owner(&corpse, None);
+        for oid in self.db.obj(corpse_id).contains.clone().into_iter() {
+            self.db.obj_mut(oid).in_obj = Some(corpse_id);
+            self.db.object_list_new_owner(oid, None);
         }
         /* transfer character's equipment to the corpse */
         for i in 0..NUM_WEARS {
             if ch.get_eq(i).is_some() {
-                let obj = self.unequip_char(ch, i).as_ref().unwrap().clone();
-                self.db.obj_to_obj(&obj, &corpse);
+                let oid = self.unequip_char(ch, i).unwrap();
+                self.db.obj_to_obj(oid, corpse_id);
             }
         }
         /* transfer gold */
@@ -380,7 +378,7 @@ impl Game {
              */
             if ch.is_npc() || ch.desc.borrow().is_some() {
                 let money = self.db.create_money(ch.get_gold());
-                self.db.obj_to_obj(money.as_ref().unwrap(), &corpse);
+                self.db.obj_to_obj(money.unwrap(), corpse_id);
             }
             ch.set_gold(0);
         }
@@ -388,7 +386,7 @@ impl Game {
         ch.set_is_carrying_w(0);
         ch.set_is_carrying_n(0);
 
-        self.db.obj_to_room(&corpse, ch.in_room());
+        self.db.obj_to_room(corpse_id, ch.in_room());
     }
 }
 
@@ -430,7 +428,7 @@ impl Game {
         }
 
         ch.affected.borrow_mut().retain(|af| {
-            affect_remove(ch, af);
+            self.db.affect_remove(ch, af);
             false
         });
 
@@ -704,8 +702,8 @@ impl Game {
         attacktype: i32,
     ) -> i32 {
         let weap_b = ch.get_eq(WEAR_WIELD as i8).clone();
-        let weap = weap_b.as_ref();
-        let weapref = if weap.is_none() { None } else { Some(weap.unwrap().as_ref())};
+        let weap = weap_b;
+        let weapref = if weap.is_none() { None } else { Some(weap.unwrap())};
 
         for i in 0..self.db.fight_messages.len() {
             if self.db.fight_messages[i].a_type == attacktype {
@@ -1170,8 +1168,8 @@ impl Game {
 
         let w_type;
         /* Find the weapon type (for display purposes only) */
-        if wielded.is_some() && wielded.as_ref().unwrap().get_obj_type() == ITEM_WEAPON {
-            w_type = wielded.as_ref().unwrap().get_obj_val(3) + TYPE_HIT;
+        if wielded.is_some() && self.db.obj(wielded.unwrap()).get_obj_type() == ITEM_WEAPON {
+            w_type = self.db.obj(wielded.unwrap()).get_obj_val(3) + TYPE_HIT;
         } else {
             if ch.is_npc() && ch.mob_specials.attack_type != 0 {
                 w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
@@ -1230,11 +1228,11 @@ impl Game {
             dam += ch.get_damroll() as i32;
 
             /* Maybe holding arrow? */
-            if wielded.is_some() && wielded.as_ref().unwrap().get_obj_type() == ITEM_WEAPON {
+            if wielded.is_some() && self.db.obj(wielded.unwrap()).get_obj_type() == ITEM_WEAPON {
                 /* Add weapon-based damage if a weapon is being wielded */
                 dam += dice(
-                    wielded.as_ref().unwrap().get_obj_val(1),
-                    wielded.as_ref().unwrap().get_obj_val(2),
+                    self.db.obj(wielded.unwrap()).get_obj_val(1),
+                    self.db.obj(wielded.unwrap()).get_obj_val(2),
                 );
             } else {
                 /* If no weapon, add bare hand damage instead */
