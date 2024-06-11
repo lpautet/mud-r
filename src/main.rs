@@ -2015,7 +2015,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), oid, vict_obj.clone(), to);
+            self.perform_act(str, ch, oid, vict_obj.clone(), to);
         }
     }
 }
