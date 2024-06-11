@@ -1721,10 +1721,10 @@ impl Game {
                         i = self.pers(ch.unwrap(), to);
                     }
                     'N' => {
-                        i = if vict_obj.is_none() {
+                        i = if vict_obj.clone().is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Char(p)) = vict_obj {
                                 self.pers(p, to)
                             } else {
                                 Rc::from("<INV_CHAR_REF>")
@@ -1738,7 +1738,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Char(p)) = vict_obj {
                                 Rc::from(hmhr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
@@ -1752,7 +1752,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Char(p)) = vict_obj {
                                 Rc::from(hshr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
@@ -1766,7 +1766,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Char(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Char(p)) = vict_obj {
                                 Rc::from(hssh(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
@@ -1784,7 +1784,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Obj(p)) = vict_obj {
                                 self.objn(self.db.obj(p), to)
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
@@ -1802,7 +1802,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Obj(p)) = vict_obj {
                                 Rc::from(self.objs(self.db.obj(p), to))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
@@ -1820,7 +1820,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Obj(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Obj(p)) = vict_obj {
                                 Rc::from(sana(self.db.obj(p)))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
@@ -1831,8 +1831,8 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Str(p) = vict_obj.unwrap() {
-                                Rc::from(p)
+                            if let Some(VictimRef::Str(ref p)) = vict_obj {
+                                Rc::from(p.as_ref())
                             } else {
                                 Rc::from("<INV_STR_REF>")
                             }
@@ -1842,7 +1842,7 @@ impl Game {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            if let VictimRef::Str(p) = vict_obj.unwrap() {
+                            if let Some(VictimRef::Str(ref p)) = vict_obj {
                                 fname(p)
                             } else {
                                 Rc::from("<INV_STR_REF>")
@@ -1918,11 +1918,11 @@ macro_rules! sendok {
     };
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum VictimRef<'a> {
     Char(&'a CharData),
     Obj(DepotId),
-    Str(&'a str),
+    Str(Rc<str>),
 }
 
 impl Game {
@@ -1966,9 +1966,9 @@ impl Game {
 
         if _type == TO_VICT {
             if vict_obj.is_some() {
-                if let VictimRef::Char(to) = vict_obj.unwrap() {
+                if let Some(VictimRef::Char(to)) = vict_obj {
                     if sendok!(to, to_sleeping) {
-                        self.perform_act(str, ch, oid, vict_obj, to);
+                        self.perform_act(str, ch, oid, vict_obj.clone(), to);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -2015,7 +2015,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), oid, vict_obj, to);
+            self.perform_act(str, Some(ch.as_ref().unwrap().borrow()), oid, vict_obj.clone(), to);
         }
     }
 }

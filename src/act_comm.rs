@@ -655,7 +655,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(&argument.to_string())),
+                Some(VictimRef::Str(Rc::from(argument.to_string()))),
                 TO_CHAR,
             );
         } else {
@@ -664,7 +664,7 @@ pub fn do_qcomm(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, 
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(&argument.to_string())),
+                Some(VictimRef::Str(Rc::from(argument.to_string()))),
                 TO_CHAR,
             );
         }

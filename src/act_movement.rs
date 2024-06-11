@@ -596,7 +596,11 @@ fn do_doorcmd(
         .as_str(),
     );
     if oid.is_none() || game.db.obj(oid.unwrap()).in_room() != NOWHERE {
-        let x = game.db.exit(ch, door.unwrap()).unwrap().keyword.clone();
+        let vict_obj = if oid.is_some() {
+            None
+        } else {
+            Some(VictimRef::Str(game.db.exit(ch, door.unwrap()).unwrap().keyword.clone()))
+        };
         game.act(
             &buf,
             false,
@@ -606,11 +610,7 @@ fn do_doorcmd(
             } else {
                 Some(oid.unwrap())
             },
-            if oid.is_some() {
-                None
-            } else {
-                Some(VictimRef::Str(&x))
-            },
+            vict_obj,
             TO_ROOM,
         );
     }
@@ -784,29 +784,29 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     }
 
     if oid.is_some() || dooro.is_some() {
-        let keynum = door_key(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro);
-        if !door_is_openable(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro) {
+        let keynum = door_key(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro);
+        if !door_is_openable(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro) {
             game.act(
                 "You can't $F that!",
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(&CMD_DOOR[subcmd as usize])),
+                Some(VictimRef::Str(Rc::from(CMD_DOOR[subcmd as usize]))),
                 TO_CHAR,
             );
-        } else if !door_is_open(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro)
+        } else if !door_is_open(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
             game.send_to_char(ch, "But it's already closed!\r\n");
-        } else if !door_is_closed(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro)
+        } else if !door_is_closed(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
             game.send_to_char(ch, "But it's currently open!\r\n");
-        } else if !(door_is_locked(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro))
+        } else if !(door_is_locked(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
             game.send_to_char(ch, "Oh.. it wasn't locked, after all..\r\n");
-        } else if !(door_is_unlocked(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro))
+        } else if !(door_is_unlocked(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
             game.send_to_char(ch, "It seems to be locked.\r\n");
@@ -819,7 +819,7 @@ pub fn do_gen_door(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             game,
             ch,
             keynum,
-            door_is_pickproof(&game.db, ch, Some(game.db.obj(oid.unwrap())), dooro),
+            door_is_pickproof(&game.db, ch, oid.map(|o| game.db.obj(o)), dooro),
             subcmd,
         ) {
             do_doorcmd(game, ch, oid, dooro, subcmd);
