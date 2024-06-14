@@ -139,9 +139,9 @@ pub struct DescriptorData {
     /* Circular array position.		*/
     output: String,
     input: LinkedList<TxtBlock>,
-    character: Option<Rc<CharData>>,
+    character: Option<DepotId>,
     /* linked to char			*/
-    original: Option<Rc<CharData>>,
+    original: Option<DepotId>,
     /* original char if switched		*/
     snooping: Option<DepotId>,
     /* Who is this char snooping	*/
@@ -590,7 +590,7 @@ impl Game {
                             self.act(
                                 "$n has returned.",
                                 true,
-                                Some(character.as_ref()),
+                                Some(character.id()),
                                 None,
                                 None,
                                 TO_ROOM,
@@ -1434,7 +1434,7 @@ impl Game {
                         self.act(
                             "$n has lost $s link.",
                             true,
-                            Some(&link_challenged),
+                            Some(link_challenged.id()),
                             None,
                             None,
                             TO_ROOM,
@@ -1463,7 +1463,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        self.db.free_char(d.character.borrow().as_ref().unwrap());
+                        self.db.free_char(d.character.as_ref().unwrap().id());
                     }
                 }
             }
@@ -1632,10 +1632,11 @@ impl Game {
  **************************************************************** */
 
 impl Game {
-    pub fn send_to_char(&mut self, ch: &CharData, messg: &str) -> usize {
-        if ch.desc.borrow().is_some() && messg != "" {
+    pub fn send_to_char(&mut self, chid: DepotId, messg: &str) -> usize {
+        if self.db.ch(chid).desc.borrow().is_some() && messg != "" {
+            let desc_id = self.db.ch(chid).desc.borrow().unwrap();
             return self.write_to_output(
-                ch.desc.borrow().unwrap(),
+                desc_id,
                 messg,
             );
         }
@@ -1696,10 +1697,10 @@ impl Game {
     fn perform_act(
         &mut self,
         orig: &str,
-        ch: Option<&CharData>,
+        chid: Option<DepotId>,
         oid: Option<DepotId>,
         vict_obj: Option<VictimRef>,
-        to: &CharData,
+        to_id: DepotId,
     ) {
 
         let mut uppercasenext = false;
@@ -1718,21 +1719,21 @@ impl Game {
                     '\0'
                 } {
                     'n' => {
-                        i = self.pers(ch.unwrap(), to);
+                        i = self.pers(self.db.ch(chid.unwrap()), self.db.ch(to_id));
                     }
                     'N' => {
                         i = if vict_obj.clone().is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                self.pers(p, to)
+                                self.pers(p, self.db.ch(to_id))
                             } else {
                                 Rc::from("<INV_CHAR_REF>")
                             }
                         };
                     }
                     'm' => {
-                        i = Rc::from(hmhr(ch.unwrap()));
+                        i = Rc::from(hmhr(self.db.ch(chid.unwrap())));
                     }
                     'M' => {
                         i = if vict_obj.is_none() {
@@ -1746,7 +1747,7 @@ impl Game {
                         };
                     }
                     's' => {
-                        i = Rc::from(hshr(ch.unwrap()));
+                        i = Rc::from(hshr(self.db.ch(chid.unwrap())));
                     }
                     'S' => {
                         i = if vict_obj.is_none() {
@@ -1760,7 +1761,7 @@ impl Game {
                         };
                     }
                     'e' => {
-                        i = Rc::from(hssh(ch.unwrap()));
+                        i = Rc::from(hssh(self.db.ch(chid.unwrap())));
                     }
                     'E' => {
                         i = if vict_obj.is_none() {
@@ -1777,7 +1778,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            self.objn(obj.unwrap(), to)
+                            self.objn(obj.unwrap(), self.db.ch(to_id))
                         };
                     }
                     'O' => {
@@ -1785,7 +1786,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                self.objn(self.db.obj(p), to)
+                                self.objn(self.db.obj(p), self.db.ch(to_id))
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
                             }
@@ -1795,7 +1796,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(self.objs(obj.unwrap(), to))
+                            Rc::from(self.objs(obj.unwrap(), self.db.ch(to_id)))
                         };
                     }
                     'P' => {
@@ -1803,7 +1804,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(self.objs(self.db.obj(p), to))
+                                Rc::from(self.objs(self.db.obj(p), self.db.ch(to_id)))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1903,8 +1904,9 @@ impl Game {
         // TODO orig.pop();
         buf.push_str("\r\n");
 
+        let desc_id = self.db.ch(to_id).desc.borrow().unwrap();
         self.write_to_output(
-            to.desc.borrow().unwrap(),
+            desc_id,
             format!("{}", buf).as_str(),
         );
     }
@@ -1920,7 +1922,7 @@ macro_rules! sendok {
 
 #[derive(Clone)]
 pub enum VictimRef<'a> {
-    Char(&'a CharData),
+    Char(DepotId),
     Obj(DepotId),
     Str(Rc<str>),
 }
@@ -1930,7 +1932,7 @@ impl Game {
         &mut self,
         str: &str,
         hide_invisible: bool,
-        ch: Option<&CharData>,
+        chid: Option<DepotId>,
         oid: Option<DepotId>,
         vict_obj: Option<VictimRef>,
         _type: i32,
@@ -1958,8 +1960,8 @@ impl Game {
         }
 
         if _type == TO_CHAR {
-            if ch.is_some() && sendok!(ch.as_ref().unwrap(), to_sleeping) {
-                self.perform_act(str, ch, oid, vict_obj, ch.unwrap());
+            if chid.is_some() && sendok!(self.db.ch(chid.unwrap()), to_sleeping) {
+                self.perform_act(str, chid, oid, vict_obj, chid.unwrap());
             }
             return;
         }
@@ -1968,7 +1970,7 @@ impl Game {
             if vict_obj.is_some() {
                 if let Some(VictimRef::Char(to)) = vict_obj {
                     if sendok!(to, to_sleeping) {
-                        self.perform_act(str, ch, oid, vict_obj.clone(), to);
+                        self.perform_act(str, chid, oid, vict_obj.clone(), to.id());
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -1978,8 +1980,8 @@ impl Game {
         }
         /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
         let char_list;
-        if ch.is_some() && ch.as_ref().unwrap().in_room() != NOWHERE {
-            char_list = &self.db.world[ch.as_ref().unwrap().in_room() as usize].peoples;
+        if chid.is_some() && self.db.ch(chid.unwrap()).in_room() != NOWHERE {
+            char_list = &self.db.world[self.db.ch(chid.unwrap()).in_room() as usize].peoples;
         } else if oid.is_some() && self.db.obj(oid.unwrap()).in_room() != NOWHERE {
             char_list = &self.db.world[self.db.obj(oid.unwrap()).in_room() as usize].peoples;
         } else {
@@ -1990,11 +1992,11 @@ impl Game {
         let list = clone_vec2(char_list);
         for to in list.iter() {
             if !sendok!(to.as_ref(), to_sleeping)
-                || (ch.is_some() && std::ptr::eq(to.as_ref(), ch.unwrap()))
+                || (chid.is_some() && to.as_ref().id() ==  chid.unwrap())
             {
                 continue;
             }
-            if hide_invisible && ch.is_some() && !self.can_see(to.as_ref(), ch.as_ref().unwrap()) {
+            if hide_invisible && chid.is_some() && !self.can_see(to.as_ref(), self.db.ch(chid.unwrap())) {
                 continue;
             }
             if _type != TO_ROOM && vict_obj.is_none() {
@@ -2015,7 +2017,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(str, ch, oid, vict_obj.clone(), to);
+            self.perform_act(str, chid, oid, vict_obj.clone(), to.id());
         }
     }
 }

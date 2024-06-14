@@ -12,7 +12,6 @@
 use std::cmp::max;
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::rc::Rc;
 use std::{fs, mem, slice};
 
 use log::{error, info};
@@ -261,7 +260,7 @@ fn house_delete_file(vnum: RoomVnum) {
 }
 
 /* List all objects in a house file */
-// fn house_listrent(db: &DB, ch: &Rc<CharData>, vnum: RoomVnum) {
+// fn house_listrent(db: &DB, chid: DepotId, vnum: RoomVnum) {
 //     let mut filename = String::new();
 //     if !house_get_filename(vnum, &mut filename) {
 //         return;
@@ -443,13 +442,13 @@ const HCONTROL_FORMAT: &str =
        hcontrol pay <house vnum>\r\n\
        hcontrol show\r\n";
 
-pub fn hcontrol_list_houses(game: &mut Game, ch: &Rc<CharData>) {
+pub fn hcontrol_list_houses(game: &mut Game, chid: DepotId) {
     if game.db.num_of_houses == 0 {
-        game.send_to_char(ch, "No houses have been defined.\r\n");
+        game.send_to_char(chid, "No houses have been defined.\r\n");
         return;
     }
     game.send_to_char(
-        ch,
+        chid,
         "Address  Atrium  Build Date  Guests  Owner        Last Paymt\r\n\
 -------  ------  ----------  ------  ------------ ----------\r\n",
     );
@@ -480,7 +479,7 @@ pub fn hcontrol_list_houses(game: &mut Game, ch: &Rc<CharData>) {
         /* Now we need a copy of the owner's name to capitalize. -gg 6/21/98 */
 
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "{:7} {:7}  {:10}    {:2}    {:12} {}\r\n",
                 house_control[i].vnum,
@@ -493,13 +492,13 @@ pub fn hcontrol_list_houses(game: &mut Game, ch: &Rc<CharData>) {
             .as_str(),
         );
 
-        house_list_guests(game, ch, i, true);
+        house_list_guests(game, chid, i, true);
     }
 }
 
-fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
+fn hcontrol_build_house(game: &mut Game, chid: DepotId, arg: &mut str) {
     if game.db.num_of_houses >= MAX_HOUSES {
-        game.send_to_char(ch, "Max houses already defined.\r\n");
+        game.send_to_char(chid, "Max houses already defined.\r\n");
         return;
     }
 
@@ -508,12 +507,12 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
     let arg2 = one_argument(arg, &mut arg1);
     let arg = arg2;
     if arg.is_empty() {
-        game.send_to_char(ch, format!("{}", HCONTROL_FORMAT).as_str());
+        game.send_to_char(chid, format!("{}", HCONTROL_FORMAT).as_str());
         return;
     }
     let virt_house = arg.parse::<i16>();
     if virt_house.is_err() {
-        game.send_to_char(ch, "No such room exists.\r\n");
+        game.send_to_char(chid, "No such room exists.\r\n");
         return;
     }
     let virt_house = virt_house.unwrap();
@@ -522,11 +521,11 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
         real_house = game.db.real_room(virt_house);
         real_house == NOWHERE
     } {
-        game.send_to_char(ch, "No such room exists.\r\n");
+        game.send_to_char(chid, "No such room exists.\r\n");
         return;
     }
     if find_house(&game.db, virt_house).is_some() {
-        game.send_to_char(ch, "House already exists.\r\n");
+        game.send_to_char(chid, "House already exists.\r\n");
         return;
     }
 
@@ -534,7 +533,7 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
     let arg2 = one_argument(arg, &mut arg1);
     let arg = arg2;
     if arg1.is_empty() {
-        game.send_to_char(ch, HCONTROL_FORMAT);
+        game.send_to_char(chid, HCONTROL_FORMAT);
         return;
     }
     let exit_num;
@@ -543,7 +542,7 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
         exit_num.is_none()
     } {
         game.send_to_char(
-            ch,
+            chid,
             format!("'{}' is not a valid direction.\r\n", arg1).as_str(),
         );
         return;
@@ -551,7 +550,7 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
     let exit_num = exit_num.unwrap();
     if toroom(&game.db, real_house as usize, exit_num) == NOWHERE {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "There is no exit {} from room {}.\r\n",
                 DIRS[exit_num], virt_house
@@ -565,14 +564,14 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
     let virt_atrium = game.db.get_room_vnum(real_atrium);
 
     if toroom(&game.db, real_atrium as usize, REV_DIR[exit_num] as usize) != real_house {
-        game.send_to_char(ch, "A house's exit must be a two-way door.\r\n");
+        game.send_to_char(chid, "A house's exit must be a two-way door.\r\n");
         return;
     }
 
     /* third arg: player's name */
     one_argument(arg, &mut arg1);
     if arg1.is_empty() {
-        game.send_to_char(ch, HCONTROL_FORMAT);
+        game.send_to_char(chid, HCONTROL_FORMAT);
         return;
     }
     let owner;
@@ -580,7 +579,7 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
         owner = game.db.get_id_by_name(&arg1);
         owner < 0
     } {
-        game.send_to_char(ch, format!("Unknown player '{}'.\r\n", arg1).as_str());
+        game.send_to_char(chid, format!("Unknown player '{}'.\r\n", arg1).as_str());
         return;
     }
     let temp_house = HouseControlRec {
@@ -610,13 +609,13 @@ fn hcontrol_build_house(game: &mut Game, ch: &Rc<CharData>, arg: &mut str) {
     game.db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
     house_crashsave(&mut game.db, virt_house);
 
-    game.send_to_char(ch, "House built.  Mazel tov!\r\n");
+    game.send_to_char(chid, "House built.  Mazel tov!\r\n");
     house_save_control(&mut game.db);
 }
 
-fn hcontrol_destroy_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
+fn hcontrol_destroy_house(game: &mut Game, chid: DepotId, arg: &str) {
     if arg.is_empty() {
-        game.send_to_char(ch, HCONTROL_FORMAT);
+        game.send_to_char(chid, HCONTROL_FORMAT);
         return;
     }
     let argi = arg.parse::<i16>();
@@ -626,7 +625,7 @@ fn hcontrol_destroy_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         i = find_house(&game.db, argi);
         i.is_none()
     } {
-        game.send_to_char(ch, "Unknown house.\r\n");
+        game.send_to_char(chid, "Unknown house.\r\n");
         return;
     }
     let i = i.unwrap();
@@ -663,7 +662,7 @@ fn hcontrol_destroy_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
 
     game.db.num_of_houses -= 1;
 
-    game.send_to_char(ch, "House deleted.\r\n");
+    game.send_to_char(chid, "House deleted.\r\n");
     house_save_control(&mut game.db);
 
     /*
@@ -682,17 +681,19 @@ fn hcontrol_destroy_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 }
 
-fn hcontrol_pay_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
+fn hcontrol_pay_house(game: &mut Game, chid: DepotId, arg: &str) {
+    let ch = game.db.ch(chid);
+
     let argi = arg.parse::<i16>();
     let argi = if argi.is_err() { -1 } else { argi.unwrap() };
     let i;
     if arg.is_empty() {
-        game.send_to_char(ch, HCONTROL_FORMAT);
+        game.send_to_char(chid, HCONTROL_FORMAT);
     } else if {
         i = find_house(&game.db, argi);
         i.is_none()
     } {
-        game.send_to_char(ch, "Unknown house.\r\n");
+        game.send_to_char(chid, "Unknown house.\r\n");
     } else {
         game.mudlog(
             NRM,
@@ -704,12 +705,12 @@ fn hcontrol_pay_house(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         let i = i.unwrap();
         game.db.house_control[i].last_payment = time_now();
         house_save_control(&mut game.db);
-        game.send_to_char(ch, "Payment recorded.\r\n");
+        game.send_to_char(chid, "Payment recorded.\r\n");
     }
 }
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
-pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_hcontrol(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut argument = argument.to_string();
@@ -717,42 +718,44 @@ pub fn do_hcontrol(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     half_chop(&mut argument, &mut arg1, &mut arg2);
 
     if is_abbrev(&arg1, "build") {
-        hcontrol_build_house( game, ch, &mut arg2);
+        hcontrol_build_house( game, chid, &mut arg2);
     } else if is_abbrev(&arg1, "destroy") {
-        hcontrol_destroy_house(game, ch, &arg2);
+        hcontrol_destroy_house(game, chid, &arg2);
     } else if is_abbrev(&arg1, "pay") {
-        hcontrol_pay_house(game, ch, &arg2);
+        hcontrol_pay_house(game, chid, &arg2);
     } else if is_abbrev(&arg1, "show") {
-        hcontrol_list_houses(game, ch);
+        hcontrol_list_houses(game, chid);
     } else {
-        game.send_to_char(ch, HCONTROL_FORMAT);
+        game.send_to_char(chid, HCONTROL_FORMAT);
     }
 }
 
 /* The house command, used by mortal house owners to assign guests */
-pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_house(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
+
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let i;
     let id;
     if !game.db.room_flagged(ch.in_room(), ROOM_HOUSE) {
-        game.send_to_char(ch, "You must be in your house to set guests.\r\n");
+        game.send_to_char(chid, "You must be in your house to set guests.\r\n");
     } else if {
         i = find_house(&game.db, game.db.get_room_vnum(ch.in_room()));
         i.is_none()
     } {
-        game.send_to_char(ch, "Um.. this house seems to be screwed up.\r\n");
+        game.send_to_char(chid, "Um.. this house seems to be screwed up.\r\n");
     } else if ch.get_idnum() != game.db.house_control[i.unwrap()].owner {
-        game.send_to_char(ch, "Only the primary owner can set guests.\r\n");
+        game.send_to_char(chid, "Only the primary owner can set guests.\r\n");
     } else if arg.is_empty() {
-        house_list_guests(game, ch, i.unwrap(), false);
+        house_list_guests(game, chid, i.unwrap(), false);
     } else if {
         id = game.db.get_id_by_name(&arg);
         id < 0
     } {
-        game.send_to_char(ch, "No such player.\r\n");
+        game.send_to_char(chid, "No such player.\r\n");
     } else if id == ch.get_idnum() {
-        game.send_to_char(ch, "It's your house!\r\n");
+        game.send_to_char(chid, "It's your house!\r\n");
     } else {
         let i = i.unwrap();
         for j in 0..game.db.house_control[i as usize].num_of_guests {
@@ -763,20 +766,20 @@ pub fn do_house(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 }
                 game.db.house_control[i as usize].num_of_guests += 1;
                 house_save_control(&mut game.db);
-                game.send_to_char(ch, "Guest deleted.\r\n");
+                game.send_to_char(chid, "Guest deleted.\r\n");
                 return;
             }
         }
 
         if game.db.house_control[i as usize].num_of_guests == MAX_GUESTS as i32 {
-            game.send_to_char(ch, "You have too many guests.\r\n");
+            game.send_to_char(chid, "You have too many guests.\r\n");
             return;
         }
         game.db.house_control[i as usize].num_of_guests += 1;
         let j = game.db.house_control[i as usize].num_of_guests;
         game.db.house_control[i as usize].guests[j as usize] = id;
         house_save_control(&mut game.db);
-        game.send_to_char(ch, "Guest added.\r\n");
+        game.send_to_char(chid, "Guest added.\r\n");
     }
 }
 
@@ -796,7 +799,7 @@ pub fn house_save_all(db: &mut DB) {
 }
 
 /* note: arg passed must be house vnum, so there. */
-pub fn house_can_enter(db: &DB, ch: &Rc<CharData>, house: RoomVnum) -> bool {
+pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
     let mut i = None;
 
     if ch.get_level() >= LVL_GRGOD as u8 || {
@@ -822,16 +825,17 @@ pub fn house_can_enter(db: &DB, ch: &Rc<CharData>, house: RoomVnum) -> bool {
     false
 }
 
-fn house_list_guests(game: &mut Game, ch: &Rc<CharData>, i: usize, quiet: bool) {
+fn house_list_guests(game: &mut Game, chid: DepotId, i: usize, quiet: bool) {
+    let ch = game.db.ch(chid);
     let house_control = game.db.house_control;
     if house_control[i].num_of_guests == 0 {
         if !quiet {
-            game.send_to_char(ch, "  Guests: None\r\n");
+            game.send_to_char(chid, "  Guests: None\r\n");
         }
         return;
     }
 
-    game.send_to_char(ch, "  Guests: ");
+    game.send_to_char(chid, "  Guests: ");
     let mut num_printed = 0;
     for j in 0..house_control[i].num_of_guests as usize {
         /* Avoid <UNDEF>. -gg 6/21/98 */
@@ -845,7 +849,7 @@ fn house_list_guests(game: &mut Game, ch: &Rc<CharData>, i: usize, quiet: bool) 
         let temp = temp.unwrap();
         num_printed += 1;
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "{}{} ",
                 temp.chars().next().unwrap().to_uppercase(),
@@ -856,8 +860,8 @@ fn house_list_guests(game: &mut Game, ch: &Rc<CharData>, i: usize, quiet: bool) 
     }
 
     if num_printed == 0 {
-        game.send_to_char(ch, "all dead");
+        game.send_to_char(chid, "all dead");
     }
 
-    game.send_to_char(ch, "\r\n");
+    game.send_to_char(chid, "\r\n");
 }

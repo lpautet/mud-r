@@ -13,7 +13,7 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::class::saving_throws;
@@ -71,10 +71,10 @@ pub fn mag_savingthrow(ch: &Rc<CharData>, type_: i32, modifier: i32) -> bool {
     false
 }
 
-/* affect_update: called from comm.c (causes spells to wear off) */
+/* affect_update: called from main.rs (causes spells to wear off) */
 pub fn affect_update(game: &mut Game) {
-    let list = clone_vec2(&game.db.character_list);
-    for i in list.iter() {
+    for id in game.db.character_list.ids() {
+        let i = &game.db.chr(id).clone();
         let mut last_type_notification = -1;
         i.affected.borrow_mut().retain_mut(|af| {
             if af.duration >= 1 {
@@ -139,13 +139,13 @@ pub fn affect_update(game: &mut Game) {
 // if (verbose) {
 // switch (rand_number(0, 2)) {
 // case 0:
-// game.send_to_char(ch, "A wart sprouts on your nose.\r\n");
+// game.send_to_char(ch.id(), "A wart sprouts on your nose.\r\n");
 // break;
 // case 1:
-// game.send_to_char(ch, "Your hair falls out in clumps.\r\n");
+// game.send_to_char(ch.id(), "Your hair falls out in clumps.\r\n");
 // break;
 // case 2:
-// game.send_to_char(ch, "A huge corn develops on your big toe.\r\n");
+// game.send_to_char(ch.id(), "A huge corn develops on your big toe.\r\n");
 // break;
 // }
 // }
@@ -160,7 +160,7 @@ pub fn affect_update(game: &mut Game) {
 // extract_obj(obj2);
 // }
 // if (verbose) {
-// game.send_to_char(ch, "A puff of smoke rises from your pack.\r\n");
+// game.send_to_char(ch.id(), "A puff of smoke rises from your pack.\r\n");
 // act("A puff of smoke rises from $n's pack.", TRUE, ch, NULL, NULL, TO_ROOM);
 // }
 // return (TRUE);
@@ -240,7 +240,7 @@ pub fn mag_damage(
                 game.act(
                     "The gods protect $N.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     Some(VictimRef::Char(victim)),
                     TO_CHAR,
@@ -257,7 +257,7 @@ pub fn mag_damage(
                 game.act(
                     "The gods protect $N.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     Some(VictimRef::Char(victim)),
                     TO_CHAR,
@@ -371,7 +371,7 @@ pub fn mag_affects(
             if victim.as_ref().unwrap().mob_flagged(MOB_NOBLIND)
                 || mag_savingthrow(victim.as_ref().unwrap(), savetype, 0)
             {
-                game.send_to_char(ch, "You fail.\r\n");
+                game.send_to_char(ch.id(), "You fail.\r\n");
                 return;
             }
 
@@ -390,7 +390,7 @@ pub fn mag_affects(
         }
         SPELL_CURSE => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch, NOEFFECT);
+                game.send_to_char(ch.id(), NOEFFECT);
                 return;
             }
 
@@ -450,7 +450,7 @@ pub fn mag_affects(
         }
         SPELL_POISON => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch, NOEFFECT);
+                game.send_to_char(ch.id(), NOEFFECT);
                 return;
             }
 
@@ -494,7 +494,7 @@ pub fn mag_affects(
                     victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
-                game.act("$n goes to sleep.", true, Some(victim.unwrap().as_ref()), None, None, TO_ROOM);
+                game.act("$n goes to sleep.", true, Some(victim.unwrap().as_ref().id()), None, None, TO_ROOM);
                 victim.as_ref().unwrap().set_pos(POS_SLEEPING);
             }
         }
@@ -536,7 +536,7 @@ pub fn mag_affects(
     {
         for i in 0..MAX_SPELL_AFFECTS as usize {
             if victim.as_ref().unwrap().aff_flagged(af[i].bitvector) {
-                game.send_to_char(ch, NOEFFECT);
+                game.send_to_char(ch.id(), NOEFFECT);
                 return;
             }
         }
@@ -549,7 +549,7 @@ pub fn mag_affects(
     if affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
         && !(accum_duration || accum_affect)
     {
-        game.send_to_char(ch, NOEFFECT);
+        game.send_to_char(ch.id(), NOEFFECT);
         return;
     }
 
@@ -567,10 +567,10 @@ pub fn mag_affects(
     }
 
     if !to_vict.is_empty() {
-        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(VictimRef::Char(ch)), TO_CHAR);
+        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap())}, None, Some(VictimRef::Char(ch)), TO_ROOM);
+        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 /*
@@ -700,10 +700,10 @@ pub fn mag_areas(
     }
 
     if !to_char.is_empty() {
-        game.act(to_char, false, Some(ch), None, None, TO_CHAR);
+        game.act(to_char, false, Some(ch.id()), None, None, TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, false, Some(ch), None, None, TO_ROOM);
+        game.act(to_room, false, Some(ch.id()), None, None, TO_ROOM);
     }
     let peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
     for tch in peoples.iter() {
@@ -811,7 +811,7 @@ pub fn mag_summons(
                 game.act(
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     None,
                     TO_CHAR,
@@ -831,11 +831,11 @@ pub fn mag_summons(
     }
 
     if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(ch, "You are too giddy to have any followers!\r\n");
+        game.send_to_char(ch.id(), "You are too giddy to have any followers!\r\n");
         return;
     }
     if rand_number(0, 101) < pfail {
-        game.send_to_char(ch, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
+        game.send_to_char(ch.id(), MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
         return;
     }
     for _ in 0..num {
@@ -863,7 +863,7 @@ pub fn mag_summons(
         game.act(
             MAG_SUMMON_MSGS[msg],
             false,
-            Some(ch),
+            Some(ch.id()),
             None,
             Some(VictimRef::Char(mob)),
             TO_ROOM,
@@ -873,7 +873,7 @@ pub fn mag_summons(
         if handle_corpse {
             for tobjid in game.db.obj(oid.unwrap()).contains.clone().into_iter() {
                 game.db.obj_from_obj(tobjid);
-                game.db.obj_to_char(tobjid, mob);
+                game.db.obj_to_char(tobjid, mob.id());
             }
             game.extract_obj(oid.unwrap());
         }
@@ -968,17 +968,17 @@ pub fn mag_unaffects(
 
     if !affected_by_spell(victim, spell as i16) {
         if msg_not_affected {
-            game.send_to_char(ch, NOEFFECT);
+            game.send_to_char(ch.id(), NOEFFECT);
         }
         return;
     }
 
     game.db.affect_from_char(victim, spell as i16);
     if !to_vict.is_empty() {
-        game.act(to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
+        game.act(to_vict, false, Some(victim.id()), None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_ROOM);
+        game.act(to_room, false, Some(victim.id()), None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 
@@ -1053,15 +1053,15 @@ pub fn mag_alter_objs(
     }
 
     if to_char.is_empty() {
-        game.send_to_char(ch, NOEFFECT);
+        game.send_to_char(ch.id(), NOEFFECT);
     } else {
-        game.act(to_char, true, Some(ch), Some(oid), None, TO_CHAR);
+        game.act(to_char, true, Some(ch.id()), Some(oid), None, TO_CHAR);
     }
 
     if !to_room.is_empty() {
-        game.act(to_room, true, Some(ch), Some(oid), None, TO_ROOM);
+        game.act(to_room, true, Some(ch.id()), Some(oid), None, TO_ROOM);
     } else if !to_char.is_empty() {
-        game.act(to_char, true, Some(ch), Some(oid), None, TO_ROOM);
+        game.act(to_char, true, Some(ch.id()), Some(oid), None, TO_ROOM);
     }
 }
 
@@ -1077,13 +1077,13 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
             z = 10;
         }
         _ => {
-            game.send_to_char(ch, "Spell unimplemented, it would seem.\r\n");
+            game.send_to_char(ch.id(), "Spell unimplemented, it would seem.\r\n");
             return;
         }
     }
     let tobj = game.db.read_object(z, VIRTUAL);
     if tobj.is_none() {
-        game.send_to_char(ch, "I seem to have goofed.\r\n");
+        game.send_to_char(ch.id(), "I seem to have goofed.\r\n");
         error!(
             "SYSERR: spell_creations, spell {}, obj {}: obj not found",
             spellnum, z
@@ -1091,11 +1091,11 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
         return;
     }
     let tobj = tobj.unwrap();
-    game.db.obj_to_char(tobj, ch);
+    game.db.obj_to_char(tobj, ch.id());
     game.act(
         "$n creates $p.",
         false,
-        Some(ch),
+        Some(ch.id()),
         Some(tobj),
         None,
         TO_ROOM,
@@ -1103,7 +1103,7 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
     game.act(
         "You create $p.",
         false,
-        Some(ch),
+        Some(ch.id()),
         Some(tobj),
         None,
         TO_CHAR,

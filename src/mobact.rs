@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::act_movement::perform_move;
 use crate::act_social::do_action;
+use crate::depot::HasId;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
@@ -28,8 +29,8 @@ use crate::VictimRef;
 
 impl Game {
     pub fn mobile_activity(&mut self) {
-        let characters = clone_vec2(&self.db.character_list);
-        for ch in characters.iter() {
+        for chid in self.db.character_list.ids() {
+            let ch = &self.db.chr(chid).clone();
             if !self.db.is_mob(ch) {
                 continue;
             }
@@ -52,7 +53,7 @@ impl Game {
             }
 
             /* If the mob has no specproc, do the default actions */
-            if ch.fighting().is_some() || !ch.awake() {
+            if ch.fighting_id().is_some() || !ch.awake() {
                 continue;
             }
 
@@ -78,11 +79,11 @@ impl Game {
                     }
                     if best_obj.is_some() {
                         self.db.obj_from_room(best_obj.unwrap());
-                        self.db.obj_to_char(best_obj.unwrap(), ch);
+                        self.db.obj_to_char(best_obj.unwrap(), ch.id());
                         self.act(
                             "$n gets $p.",
                             false,
-                            Some(ch),
+                            Some(ch.id()),
                             Some(best_obj.unwrap()),
                             None,
                             TO_ROOM,
@@ -170,7 +171,7 @@ impl Game {
                         self.act(
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
-                            Some(ch),
+                            Some(ch.id()),
                             None,
                             None,
                             TO_ROOM,
@@ -234,7 +235,7 @@ impl Game {
                     self.act(
                         "$n jumps to the aid of $N!",
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         None,
                         Some(VictimRef::Char(vict)),
                         TO_ROOM,

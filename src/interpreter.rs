@@ -54,7 +54,7 @@ use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
@@ -68,7 +68,7 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    MeRef, CharData, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
+    CharData, MeRef, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
     NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING,
     POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
@@ -250,7 +250,7 @@ pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
 * infrequently used and dangerously destructive commands should have low
 * priority.
 */
-type Command = fn(game: &mut Game, ch: &Rc<CharData>, argument: &str, cmd: usize, subcmd: i32);
+type Command = fn(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd: i32);
 
 pub struct CommandInfo {
     pub(crate) command: &'static str,
@@ -260,14 +260,7 @@ pub struct CommandInfo {
     subcmd: i32,
 }
 
-pub fn do_nothing(
-    _game: &mut Game,
-    _ch: &Rc<CharData>,
-    _argument: &str,
-    _cmd: usize,
-    _subcmd: i32,
-) {
-}
+pub fn do_nothing(_game: &mut Game, _chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {}
 
 pub const CMD_INFO: [CommandInfo; 308] = [
     CommandInfo {
@@ -2775,7 +2768,8 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(game: &mut Game, ch: &Rc<CharData>, argument: &str) {
+pub fn command_interpreter(game: &mut Game, chid: DepotId, argument: &str) {
+    let ch = game.db.ch(chid);
     let line: &str;
     let mut arg = String::new();
 
@@ -2813,17 +2807,26 @@ pub fn command_interpreter(game: &mut Game, ch: &Rc<CharData>, argument: &str) {
     }
 
     if cmd.command == "\n" {
-        game.send_to_char(ch, "Huh?!?\r\n");
+        game.send_to_char(ch.id(), "Huh?!?\r\n");
     } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
-        game.send_to_char(ch, "You try, but the mind-numbing cold prevents you...\r\n");
+        game.send_to_char(
+            ch.id(),
+            "You try, but the mind-numbing cold prevents you...\r\n",
+        );
     } else if cmd.command_pointer as usize == do_nothing as usize {
-        game.send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
+        game.send_to_char(
+            ch.id(),
+            "Sorry, that command hasn't been implemented yet.\r\n",
+        );
     } else if ch.is_npc() && cmd.minimum_level >= LVL_IMMORT {
-        game.send_to_char(ch, "You can't use immortal commands while switched.\r\n");
+        game.send_to_char(
+            ch.id(),
+            "You can't use immortal commands while switched.\r\n",
+        );
     } else if ch.get_pos() < cmd.minimum_position {
         match ch.get_pos() {
             POS_DEAD => {
-                game.send_to_char(ch, "Lie still; you are DEAD!!! :-(\r\n");
+                game.send_to_char(ch.id(), "Lie still; you are DEAD!!! :-(\r\n");
             }
             POS_INCAP | POS_MORTALLYW => {
                 game.send_to_char(
@@ -2832,19 +2835,22 @@ pub fn command_interpreter(game: &mut Game, ch: &Rc<CharData>, argument: &str) {
                 );
             }
             POS_STUNNED => {
-                game.send_to_char(ch, "All you can do right now is think about the stars!\r\n");
+                game.send_to_char(
+                    ch.id(),
+                    "All you can do right now is think about the stars!\r\n",
+                );
             }
             POS_SLEEPING => {
-                game.send_to_char(ch, "In your dreams, or what?\r\n");
+                game.send_to_char(ch.id(), "In your dreams, or what?\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(ch, "Nah... You feel too relaxed to do that..\r\n");
+                game.send_to_char(ch.id(), "Nah... You feel too relaxed to do that..\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(ch, "Maybe you should get on your feet first?\r\n");
+                game.send_to_char(ch.id(), "Maybe you should get on your feet first?\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
+                game.send_to_char(ch.id(), "No way!  You're fighting for your life!\r\n");
             }
             _ => {}
         }
@@ -2873,12 +2879,15 @@ pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
     if arg.is_empty() {
         /* no argument specified -- list currently defined aliases */
-        game.send_to_char(ch, "Currently defined aliases:\r\n");
+        game.send_to_char(ch.id(), "Currently defined aliases:\r\n");
         if ch.player_specials.borrow().aliases.len() == 0 {
-            game.send_to_char(ch, " None.\r\n");
+            game.send_to_char(ch.id(), " None.\r\n");
         } else {
             for a in ch.player_specials.borrow().aliases.iter() {
-                game.send_to_char(ch, format!("{:15} {}\r\n", a.alias, a.replacement).as_str());
+                game.send_to_char(
+                    ch.id(),
+                    format!("{:15} {}\r\n", a.alias, a.replacement).as_str(),
+                );
             }
         }
     } else {
@@ -2886,7 +2895,7 @@ pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         /* is this an alias we've already defined? */
         let a = ch
             .player_specials
-            .borrow_mut()
+            .borrow()
             .aliases
             .iter()
             .position(|e| e.alias.as_ref() == &arg);
@@ -2896,14 +2905,14 @@ pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         /* if no replacement string is specified, assume we want to delete */
         if repl.is_empty() {
             if a.is_none() {
-                game.send_to_char(ch, "No such alias.\r\n");
+                game.send_to_char(ch.id(), "No such alias.\r\n");
             } else {
-                game.send_to_char(ch, "Alias deleted.\r\n");
+                game.send_to_char(ch.id(), "Alias deleted.\r\n");
             }
         } else {
             /* otherwise, either add or redefine an alias */
             if arg == "alias" {
-                game.send_to_char(ch, "You can't alias 'alias'.\r\n");
+                game.send_to_char(ch.id(), "You can't alias 'alias'.\r\n");
                 return;
             }
             delete_doubledollar(&mut repl);
@@ -2920,7 +2929,7 @@ pub fn do_alias(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 a.type_ = ALIAS_SIMPLE;
             }
             ch.player_specials.borrow_mut().aliases.push(a);
-            game.send_to_char(ch, "Alias added.\r\n");
+            game.send_to_char(ch.id(), "Alias added.\r\n");
         }
     }
 }
@@ -3218,7 +3227,8 @@ pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
 }
 
-pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool {
+pub fn special(game: &mut Game, chid: DepotId, cmd: i32, arg: &str) -> bool {
+    let ch = game.db.ch(chid);
     /* special in room? */
     if game.db.get_room_spec(ch.in_room()).is_some() {
         let f = game.db.get_room_spec(ch.in_room()).unwrap();
@@ -3229,16 +3239,16 @@ pub fn special(game: &mut Game, ch: &Rc<CharData>, cmd: i32, arg: &str) -> bool 
 
     /* special in equipment list? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some()
-            && game
-                .db
-                .get_obj_spec(ch.get_eq(j).unwrap())
-                .is_some()
-        {
+        if ch.get_eq(j).is_some() && game.db.get_obj_spec(ch.get_eq(j).unwrap()).is_some() {
             let eq = ch.get_eq(j);
             let oid = eq.unwrap();
-            if game.db.get_obj_spec(eq.unwrap()).as_ref().unwrap()(game, ch, MeRef::Obj(oid), cmd, arg)
-            {
+            if game.db.get_obj_spec(eq.unwrap()).as_ref().unwrap()(
+                game,
+                ch,
+                MeRef::Obj(oid),
+                cmd,
+                arg,
+            ) {
                 return true;
             }
         }
@@ -3361,16 +3371,14 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
             && game.descriptor_list.get_mut(k_id).original.is_some()
         {
             /* Character taking over their own body, while an immortal was switched to it. */
-            let ch = game.descriptor_list
-            .get_mut(k_id)
-            .character.as_ref().unwrap().clone();
-            do_return(
-                game,
-                &ch,
-                "",
-                0,
-                0,
-            );
+            let ch = game
+                .descriptor_list
+                .get_mut(k_id)
+                .character
+                .as_ref()
+                .unwrap()
+                .clone();
+            do_return(game, &ch, "", 0, 0);
         } else if game.descriptor_list.get_mut(k_id).character.is_some()
             && game
                 .descriptor_list
@@ -3411,8 +3419,8 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
      * choose one if one is available (while still deleting the other
      * duplicates, though theoretically none should be able to exist).
      */
-    let list = clone_vec2(&game.db.character_list);
-    for ch in list.iter() {
+    for chid in game.db.character_list.ids() {
+        let ch = &game.db.chr(chid).clone();
         if ch.is_npc() {
             continue;
         }
@@ -3460,7 +3468,8 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
             .get_mut(d_id)
             .character
             .as_ref()
-            .unwrap().clone();
+            .unwrap()
+            .clone();
         *character.desc.borrow_mut() = Some(d_id);
         game.descriptor_list.get_mut(d_id).original = None;
         character.char_specials.borrow_mut().timer.set(0);
@@ -3472,58 +3481,52 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
     match mode {
         RECON => {
             game.write_to_output(d_id, "Reconnecting.\r\n");
-            let ch =  game.descriptor_list
-            .get(d_id)
-            .character
-            .as_ref()
-            .unwrap().clone();
+            let ch = game
+                .descriptor_list
+                .get(d_id)
+                .character
+                .as_ref()
+                .unwrap()
+                .clone();
             game.act(
                 "$n has reconnected.",
                 true,
-                Some(
-                   &ch
-                ),
+                Some(ch.id()),
                 None,
                 None,
                 TO_ROOM,
             );
-            let v2 = game.descriptor_list
-            .get_mut(d_id)
-            .character
-            .as_ref()
-            .unwrap()
-            .get_invis_lev() as i32;
-        let msg = format!(
-            "{} [{}] has reconnected.",
-            game.descriptor_list
+            let v2 = game
+                .descriptor_list
                 .get_mut(d_id)
                 .character
                 .as_ref()
                 .unwrap()
-                .get_name(),
-            game.descriptor_list.get_mut(d_id).host
-        );
-            game.mudlog(
-                NRM,
-                max(
-                    LVL_IMMORT as i32,
-                    v2),
-                true,
-                
-                msg.as_str(),
+                .get_invis_lev() as i32;
+            let msg = format!(
+                "{} [{}] has reconnected.",
+                game.descriptor_list
+                    .get_mut(d_id)
+                    .character
+                    .as_ref()
+                    .unwrap()
+                    .get_name(),
+                game.descriptor_list.get_mut(d_id).host
             );
+            game.mudlog(NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         USURP => {
             game.write_to_output(d_id, "You take over your own body, already in use!\r\n");
             let ch = game.desc(d_id).character.as_ref().unwrap().clone();
             game.act("$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!",
-             true, Some(&ch), None, None, TO_ROOM);
-             let v2 = game.descriptor_list
-             .get_mut(d_id)
-             .character
-             .as_ref()
-             .unwrap()
-             .get_invis_lev() as i32;
+             true, Some(ch.id()), None, None, TO_ROOM);
+            let v2 = game
+                .descriptor_list
+                .get_mut(d_id)
+                .character
+                .as_ref()
+                .unwrap()
+                .get_invis_lev() as i32;
             let msg = format!(
                 "{} has re-logged in ... disconnecting old socket.",
                 game.descriptor_list
@@ -3533,45 +3536,29 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
                     .unwrap()
                     .get_name()
             );
-     
-            game.mudlog(
-                NRM,
-                max(
-                    LVL_IMMORT as i32,
-                    v2),
-                true,
-                
-                msg.as_str(),
-            );
+
+            game.mudlog(NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         UNSWITCH => {
             game.write_to_output(d_id, "Reconnecting to unswitched char.");
-            let v2 = game.descriptor_list
-            .get_mut(d_id)
-            .character
-            .as_ref()
-            .unwrap()
-            .get_invis_lev() as i32;
-        let msg = format!(
-            "{} [{}] has reconnected.",
-            game.descriptor_list
+            let v2 = game
+                .descriptor_list
                 .get_mut(d_id)
                 .character
                 .as_ref()
                 .unwrap()
-                .get_name(),
-            game.descriptor_list.get_mut(d_id).host
-        );
-            game.mudlog(
-                NRM,
-                max(
-                    LVL_IMMORT as i32,
-                    v2,
-                ),
-                true,
-                
-                msg.as_str(),
+                .get_invis_lev() as i32;
+            let msg = format!(
+                "{} [{}] has reconnected.",
+                game.descriptor_list
+                    .get_mut(d_id)
+                    .character
+                    .as_ref()
+                    .unwrap()
+                    .get_name(),
+                game.descriptor_list.get_mut(d_id).host
             );
+            game.mudlog(NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         _ => {}
     }
@@ -3586,7 +3573,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
         ConGetName => {
             /* wait for input of name */
             if game.descriptor_list.get_mut(d_id).character.is_none() {
-                let mut ch = CharData::new();
+                let mut ch = CharData::default();
                 clear_char(&mut ch);
                 *ch.desc.borrow_mut() = Some(d_id);
                 game.descriptor_list.get_mut(d_id).character = Some(Rc::from(ch));
@@ -3607,7 +3594,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     game.write_to_output(d_id, "Invalid name, please try another.\r\nName: ");
                     return;
                 }
-                let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+                let character_id = game.desc(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
                 let mut tmp_store = CharFileU::new();
                 let player_i = game.db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
@@ -3626,12 +3614,13 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                             );
                             return;
                         }
-                        let mut new_char = CharData::new();
+                        let mut new_char = CharData::default();
                         clear_char(&mut new_char);
                         new_char.desc = RefCell::new(Some(d_id));
                         new_char.player.borrow_mut().name = tmp_name.unwrap().to_string();
                         new_char.pfilepos.set(player_i.unwrap() as i32);
-                        game.descriptor_list.get_mut(d_id).character = Some(Rc::new(CharData::new()));
+                        game.descriptor_list.get_mut(d_id).character =
+                            Some(Rc::new(CharData::default()));
                         game.write_to_output(
                             d_id,
                             format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
@@ -3654,7 +3643,12 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         game.write_to_output(d_id, "Invalid name, please try another.\r\nName: ");
                         return;
                     }
-                    let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap();
+                    let character = game
+                        .descriptor_list
+                        .get_mut(d_id)
+                        .character
+                        .as_ref()
+                        .unwrap();
                     character.player.borrow_mut().name = String::from(tmp_name.unwrap());
 
                     game.write_to_output(
@@ -3671,15 +3665,15 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 if isbanned(&game.db, &game.descriptor_list.get_mut(d_id).host) >= BAN_NEW {
                     let msg = format!(
                         "Request for new char {} denied from [{}] (siteban)",
-                        game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_pc_name(),
+                        game.descriptor_list
+                            .get_mut(d_id)
+                            .character
+                            .as_ref()
+                            .unwrap()
+                            .get_pc_name(),
                         game.descriptor_list.get_mut(d_id).host
                     );
-                    game.mudlog(
-                        NRM,
-                        LVL_GOD as i32,
-                        true,
-                        msg.as_str(),
-                    );
+                    game.mudlog(NRM, LVL_GOD as i32, true, msg.as_str());
                     game.write_to_output(
                         d_id,
                         "Sorry, new characters are not allowed from your site!\r\n",
@@ -3694,22 +3688,27 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     );
                     let msg = format!(
                         "Request for new char {} denied from [{}] (wizlock)",
-                        game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_pc_name(),
+                        game.descriptor_list
+                            .get_mut(d_id)
+                            .character
+                            .as_ref()
+                            .unwrap()
+                            .get_pc_name(),
                         game.descriptor_list.get_mut(d_id).host
                     );
-                    game.mudlog(
-                        NRM,
-                        LVL_GOD as i32,
-                        true,
-                        msg.as_str(),
-                    );
+                    game.mudlog(NRM, LVL_GOD as i32, true, msg.as_str());
                     game.descriptor_list.get_mut(d_id).set_state(ConClose);
                     return;
                 }
 
                 let msg = format!(
                     "New character.\r\nGive me a password for {}: ",
-                    game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_pc_name()
+                    game.descriptor_list
+                        .get_mut(d_id)
+                        .character
+                        .as_ref()
+                        .unwrap()
+                        .get_pc_name()
                 );
                 game.write_to_output(d_id, msg.as_str());
                 game.echo_off(d_id);
@@ -3745,7 +3744,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             } else {
                 let matching_pwd: bool;
                 {
-                    let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+                    let character_id = game.desc(d_id).character.unwrap();
+                    let character = game.db.ch(character_id);
                     let mut passwd2 = [0 as u8; 16];
                     let salt = character.get_pc_name();
                     let passwd = character.get_passwd();
@@ -3759,13 +3759,12 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     matching_pwd = passwd == passwd2;
 
                     if !matching_pwd {
-                        let msg = format!("Bad PW: {} [{}]", character.get_name(), game.desc_mut(d_id).host);
-                        game.mudlog(
-                            BRF,
-                            LVL_GOD as i32,
-                            true,
-                            msg.as_str(),
+                        let msg = format!(
+                            "Bad PW: {} [{}]",
+                            character.get_name(),
+                            game.desc_mut(d_id).host
                         );
+                        game.mudlog(BRF, LVL_GOD as i32, true, msg.as_str());
 
                         character.incr_bad_pws();
                         let ch = game.desc_mut(d_id).character.as_ref().unwrap().clone();
@@ -3787,7 +3786,13 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     character.reset_bad_pws();
                     game.desc_mut(d_id).bad_pws = 0;
                     if isbanned(&game.db, &game.descriptor_list.get(d_id).host) == BAN_SELECT
-                        && !game.descriptor_list.get(d_id).character.as_ref().unwrap().plr_flagged(PLR_SITEOK)
+                        && !game
+                            .descriptor_list
+                            .get(d_id)
+                            .character
+                            .as_ref()
+                            .unwrap()
+                            .plr_flagged(PLR_SITEOK)
                     {
                         game.write_to_output(
                             d_id,
@@ -3807,7 +3812,15 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         );
                         return;
                     }
-                    if game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_level() < game.db.circle_restrict {
+                    if game
+                        .descriptor_list
+                        .get_mut(d_id)
+                        .character
+                        .as_ref()
+                        .unwrap()
+                        .get_level()
+                        < game.db.circle_restrict
+                    {
                         game.write_to_output(
                             d_id,
                             "The game is temporarily restricted.. try again later.\r\n",
@@ -3846,7 +3859,11 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 }
 
                 {
-                    let msg = format!("{} [{}] has connected.", character.get_name(), game.descriptor_list.get_mut(d_id).host);
+                    let msg = format!(
+                        "{} [{}] has connected.",
+                        character.get_name(),
+                        game.descriptor_list.get_mut(d_id).host
+                    );
                     game.mudlog(
                         BRF,
                         max(LVL_IMMORT as i32, character.get_invis_lev() as i32),
@@ -3874,7 +3891,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             }
         }
         ConNewpasswd | ConChpwdGetnew => {
-            let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+            let character_id = game.desc(d_id).character.unwrap();
+            let character = game.db.ch(character_id);
             if arg.is_empty()
                 || arg.len() > MAX_PWD_LENGTH
                 || arg.len() < 3
@@ -3898,7 +3916,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             }
         }
         ConCnfpasswd | ConChpwdVrfy => {
-            let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+            let character_id = game.desc(d_id).character.unwrap();
+            let character = game.db.ch(character_id);
             let pwd_equals: bool;
             {
                 let salt = character.get_pc_name();
@@ -3930,7 +3949,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             }
         }
         ConQsex => {
-            let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+            let character_id = game.desc(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
             /* query sex of new user         */
             match arg.chars().next().unwrap() {
                 'm' | 'M' => {
@@ -3949,7 +3969,9 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             game.descriptor_list.get_mut(d_id).set_state(ConQclass);
         }
         ConQclass => {
-            let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+            let character_id = game.desc(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
+         
             let load_result = parse_class(arg.chars().next().unwrap());
             if load_result == CLASS_UNDEFINED {
                 game.write_to_output(d_id, "\r\nThat's not a class.\r\nClass: ");
@@ -3979,7 +4001,12 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     NRM,
                     LVL_IMMORT as i32,
                     true,
-                    format!("{} [{}] new player.", character.get_pc_name(), game.desc(d_id).host).as_str(),
+                    format!(
+                        "{} [{}] new player.",
+                        character.get_pc_name(),
+                        game.desc(d_id).host
+                    )
+                    .as_str(),
                 );
             }
         }
@@ -3991,7 +4018,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
         ConMenu => {
             let load_result;
             /* get selection from main menu  */
-            let character = game.desc(d_id).character.as_ref().unwrap().clone();
+            let character_id = game.desc(d_id).character.unwrap();
+            let character = game.db.ch(character_id);
             match if arg.chars().last().is_some() {
                 arg.chars().last().unwrap()
             } else {
@@ -4004,8 +4032,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
 
                 '1' => {
                     {
-                        reset_char(character.as_ref());
-                        read_aliases(&character);
+                        reset_char(character);
+                        read_aliases(character);
                         if character.prf_flagged(PLR_INVSTART) {
                             character.set_invis_lev(character.get_level() as i16);
                         }
@@ -4033,8 +4061,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         }
 
                         game.send_to_char(character.as_ref(), format!("{}", WELC_MESSG).as_str());
-                        game.db.character_list.push(character.clone());
-                        game.db.char_to_room(&character, load_room);
+                        game.db.character_list.push(character);
+                        game.db.char_to_room(character_id, load_room);
                         let ch = game.desc(d_id).character.as_ref().unwrap().clone();
                         load_result = crash_load(game, &ch);
 
@@ -4047,7 +4075,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         game.act(
                             "$n has entered the game.",
                             true,
-                            Some(&character),
+                            Some(character.id()),
                             None,
                             None,
                             TO_ROOM as i32,
@@ -4059,16 +4087,16 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         game.send_to_char(character.as_ref(), format!("{}", START_MESSG).as_str());
                         look_at_room(game, &character, false);
                     }
-                    if game
-                        .db
-                        .mails
-                        .has_mail(game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_idnum())
-                    {
+                    if game.db.mails.has_mail(
+                        game.descriptor_list
+                            .get_mut(d_id)
+                            .character
+                            .as_ref()
+                            .unwrap()
+                            .get_idnum(),
+                    ) {
                         let ch = game.desc(d_id).character.as_ref().unwrap().clone();
-                        game.send_to_char(
-                            &ch,
-                            "You have mail waiting.\r\n",
-                        );
+                        game.send_to_char(&ch, "You have mail waiting.\r\n");
                     }
                     if load_result == 2 {
                         /* rented items lost */
@@ -4079,7 +4107,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 }
 
                 '2' => {
-                    if  character.player.borrow().description.borrow().is_empty() {
+                    if character.player.borrow().description.borrow().is_empty() {
                         let cp = character.player.borrow();
                         let player_description = RefCell::borrow(&cp.description);
                         game.write_to_output(
@@ -4121,7 +4149,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
         ConChpwdGetold => {
             let matching_pwd: bool;
             {
-                let character = game.desc(d_id).character.as_ref().unwrap().clone();
+                let character_id = game.desc(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
                 let mut passwd2 = [0 as u8; 16];
                 let salt = character.get_pc_name();
                 let passwd = character.get_passwd();
@@ -4148,7 +4177,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
             game.echo_on(d_id);
             let matching_pwd: bool;
             {
-                let character = game.desc(d_id).character.as_ref().unwrap().clone();
+                let character_id = game.desc(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
                 let mut passwd2 = [0 as u8; 16];
                 let salt = character.get_pc_name();
                 let passwd = character.get_passwd();
@@ -4175,7 +4205,9 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
 
         ConDelcnf2 => {
             if arg == "yes" || arg == "YES" {
-                if game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().plr_flagged(PLR_FROZEN) {
+                let d_chid = game.desc(d_id).character.unwrap();
+                let d_ch = game.ch(d_chid);
+                if d_ch.plr_flagged(PLR_FROZEN) {
                     game.write_to_output(
                         d_id,
                         "You try to kill yourself, but the ice stops you.\r\n\
@@ -4184,35 +4216,25 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     game.descriptor_list.get_mut(d_id).set_state(ConClose);
                     return;
                 }
-                if game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_level() < LVL_GRGOD as u8 {
-                    game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().set_plr_flag_bit(PLR_DELETED);
+                let d_ch = game.ch(d_chid);
+                if d_ch.get_level() < LVL_GRGOD as u8 {
+                    d_ch.set_plr_flag_bit(PLR_DELETED);
                 }
-                let ch = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
-                game.save_char(&ch);
-                crash_delete_file(&game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_name());
-                delete_aliases(&game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_name());
+                game.save_char(d_chid);
+                crash_delete_file(&d_ch.get_name());
+                delete_aliases(d_ch.get_name());
                 let txt = format!(
                     "Character '{}' deleted!\r\n\
                             Goodbye.\r\n",
-                            game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_name()
+                    d_ch.get_name()
                 );
-                game.write_to_output(
-                    d_id,
-                    
-                    txt.as_str(),
-                );
+                game.write_to_output(d_id, txt.as_str());
                 let txt = format!(
                     "{} (lev {}) has self-deleted.",
-                    game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_name(),
-                    game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().get_level()
+                    d_ch.get_name(),
+                    d_ch.get_level()
                 );
-                game.mudlog(
-                    NRM,
-                    LVL_GOD as i32,
-                    true,
-                    
-                    txt.as_str(),
-                );
+                game.mudlog(NRM, LVL_GOD as i32, true, txt.as_str());
                 game.descriptor_list.get_mut(d_id).set_state(ConClose);
                 return;
             } else {
@@ -4234,7 +4256,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
         _ => {
             let char_name;
             if game.descriptor_list.get_mut(d_id).character.is_some() {
-                let character = game.descriptor_list.get_mut(d_id).character.as_ref().unwrap().clone();
+                let character_id = game.descriptor_list.get_mut(d_id).character.unwrap();
+                let character = game.db.ch(character_id);
                 char_name = String::from(character.get_name().as_ref());
             } else {
                 char_name = "<unknown>".to_string();

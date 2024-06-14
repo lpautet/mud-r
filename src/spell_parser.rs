@@ -14,7 +14,7 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 use log::error;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::config::OK;
@@ -353,9 +353,9 @@ fn say_spell(
             buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
         }
     } else if tobj_id.is_some() && game.db.obj(tobj_id.unwrap()).in_room() == ch.in_room()
-        || Rc::ptr_eq(
-            game.db.obj(tobj_id.unwrap()).carried_by.as_ref().unwrap(),
-            ch,
+        || std::ptr::eq(
+            game.db.ch(game.db.obj(tobj_id.unwrap()).carried_by.unwrap()),
+            ch.as_ref(),
         )
     {
         buf1.push_str(
@@ -386,9 +386,9 @@ fn say_spell(
             None
         };
         if ch.get_class() == i.get_class() {
-            game.perform_act(&buf1, Some(ch), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i);
+            game.perform_act(&buf1, Some(ch.id()), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i.id());
         } else {
-            game.perform_act(&buf2, Some(ch), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i);
+            game.perform_act(&buf2, Some(ch.id()), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i.id());
         }
     }
 
@@ -408,7 +408,7 @@ fn say_spell(
             .as_str(),
         );
         let tch2 = tch.unwrap().clone();
-        game.act(&buf1, false, Some(ch), None, Some(VictimRef::Char(&tch2)), TO_VICT);
+        game.act(&buf1, false, Some(ch.id()), None, Some(VictimRef::Char(&tch2)), TO_VICT);
     }
 }
 
@@ -488,7 +488,7 @@ pub fn call_magic(
         game.act(
             "$n's magic fizzles out and dies.",
             false,
-            Some(caster),
+            Some(caster.id()),
             None,
             None,
             TO_ROOM,
@@ -505,7 +505,7 @@ pub fn call_magic(
         game.act(
             "White light from no particular source suddenly fills the room, then vanishes.",
             false,
-            Some(caster),
+            Some(caster.id()),
             None,
             None,
             TO_ROOM,
@@ -619,7 +619,8 @@ pub fn call_magic(
  * the DikuMUD format did not specify staff and wand levels in the world
  * files (this is a CircleMUD enhancement).
  */
-pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argument: &str) {
+pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &str) {
+    let ch = game.db.ch(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -638,7 +639,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
             game.act(
                 "You tap $p three times on the ground.",
                 false,
-                Some(ch),
+                Some(ch.id()),
                 Some(oid),
                 None,
                 TO_CHAR,
@@ -648,7 +649,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -657,7 +658,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     "$n taps $p three times on the ground.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -665,11 +666,11 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
             }
 
             if game.db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(ch, "It seems powerless.\r\n");
+                game.send_to_char(ch.id(), "It seems powerless.\r\n");
                 game.act(
                     "Nothing seems to happen.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -723,7 +724,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         "You point $p at yourself.",
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         None,
                         TO_CHAR,
@@ -731,7 +732,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         "$n points $p at $mself.",
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         None,
                         TO_ROOM,
@@ -740,7 +741,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         "You point $p at $N.",
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         Some(VictimRef::Char(tch.as_ref().unwrap())),
                         TO_CHAR,
@@ -750,7 +751,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                         game.act(
                             str.as_str(),
                             false,
-                            Some(ch),
+                            Some(ch.id()),
                             Some(oid),
                             Some(VictimRef::Char(tch.as_ref().unwrap())),
                             TO_ROOM,
@@ -759,7 +760,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                         game.act(
                             "$n points $p at $N.",
                             true,
-                            Some(ch),
+                            Some(ch.id()),
                             Some(oid),
                             Some(VictimRef::Char(tch.as_ref().unwrap())),
                             TO_ROOM,
@@ -770,7 +771,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     "You point $p at $P.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     Some(VictimRef::Obj(tobjid.unwrap())),
                     TO_CHAR,
@@ -780,7 +781,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         str.as_str(),
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         Some(VictimRef::Obj(tobjid.unwrap())),
                         TO_ROOM,
@@ -789,7 +790,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         "$n points $p at $P.",
                         true,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         Some(VictimRef::Obj(tobjid.unwrap())),
                         TO_ROOM,
@@ -803,7 +804,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     "You point $p outward.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_CHAR,
@@ -811,7 +812,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     "$n points $p outward.",
                     true,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -820,7 +821,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     "At what should $p be pointed?",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_CHAR,
@@ -829,11 +830,11 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
             }
 
             if game.db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(ch, "It seems powerless.\r\n");
+                game.send_to_char(ch.id(), "It seems powerless.\r\n");
                 game.act(
                     "Nothing seems to happen.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -871,7 +872,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                     game.act(
                         "There is nothing to here to affect with $p.",
                         false,
-                        Some(ch),
+                        Some(ch.id()),
                         Some(oid),
                         None,
                         TO_CHAR,
@@ -885,7 +886,7 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
             game.act(
                 "You recite $p which dissolves.",
                 true,
-                Some(ch),
+                Some(ch.id()),
                 Some(oid),
                 None,
                 TO_CHAR,
@@ -895,14 +896,14 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
                 );
             } else {
                 game
-                    .act("$n recites $p.", false, Some(ch), Some(oid), None, TO_ROOM);
+                    .act("$n recites $p.", false, Some(ch.id()), Some(oid), None, TO_ROOM);
             }
 
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -925,20 +926,20 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
         }
         ITEM_POTION => {
             game
-                .act("You quaff $p.", false, Some(ch), Some(oid), None, TO_CHAR);
+                .act("You quaff $p.", false, Some(ch.id()), Some(oid), None, TO_CHAR);
             if !RefCell::borrow(&game.db.obj(oid).action_description).is_empty() {
                 let str = game.db.obj(oid).action_description.borrow().clone();
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     Some(oid),
                     None,
                     TO_ROOM,
                 );
             } else {
                 game
-                    .act("$n quaffs $p.", true, Some(ch), Some(oid), None, TO_ROOM);
+                    .act("$n quaffs $p.", true, Some(ch.id()), Some(oid), None, TO_ROOM);
             }
 
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -978,8 +979,8 @@ pub fn mag_objectmagic(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, argumen
  */
 pub fn cast_spell(
     game: &mut Game,
-    ch: &Rc<CharData>,
-    tch: Option<&Rc<CharData>>,
+    ch: DepotId,
+    tch: Option<DepotId>,
     tobj_id: Option<DepotId>,
     spellnum: i32,
 ) -> i32 {
@@ -995,19 +996,19 @@ pub fn cast_spell(
     if ch.get_pos() < sinfo.min_position {
         match ch.get_pos() {
             POS_SLEEPING => {
-                game.send_to_char(ch, "You dream about great magical powers.\r\n");
+                game.send_to_char(ch.id(), "You dream about great magical powers.\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(ch, "You cannot concentrate while resting.\r\n");
+                game.send_to_char(ch.id(), "You cannot concentrate while resting.\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(ch, "You can't do this sitting!\r\n");
+                game.send_to_char(ch.id(), "You can't do this sitting!\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(ch, "Impossible!  You can't concentrate enough!\r\n");
+                game.send_to_char(ch.id(), "Impossible!  You can't concentrate enough!\r\n");
             }
             _ => {
-                game.send_to_char(ch, "You can't do much of anything like this!\r\n");
+                game.send_to_char(ch.id(), "You can't do much of anything like this!\r\n");
             }
         }
         return 0;
@@ -1016,15 +1017,15 @@ pub fn cast_spell(
         && tch.is_some()
         && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch.unwrap())
     {
-        game.send_to_char(ch, "You are afraid you might hurt your master!\r\n");
+        game.send_to_char(ch.id(), "You are afraid you might hurt your master!\r\n");
         return 0;
     }
     if (tch.is_none() || !Rc::ptr_eq(ch, tch.unwrap())) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
-        game.send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
+        game.send_to_char(ch.id(), "You can only cast this spell upon yourself!\r\n");
         return 0;
     }
     if tch.is_some() && Rc::ptr_eq(ch, tch.unwrap()) && is_set!(sinfo.targets, TAR_NOT_SELF) {
-        game.send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
+        game.send_to_char(ch.id(), "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
     if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
@@ -1034,7 +1035,7 @@ pub fn cast_spell(
         );
         return 0;
     }
-    game.send_to_char(ch, OK);
+    game.send_to_char(ch.id(), OK);
     say_spell(game, ch, spellnum, tch, tobj_id);
 
     return call_magic(
@@ -1063,7 +1064,7 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let mut i = argument.splitn(3, '\'');
 
     if i.next().is_none() {
-        game.send_to_char(ch, "Cast what where?\r\n");
+        game.send_to_char(ch.id(), "Cast what where?\r\n");
         return;
     }
     let s = i.next();
@@ -1081,17 +1082,17 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let spellnum = find_skill_num(db, s);
 
     if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
-        game.send_to_char(ch, "Cast what?!?\r\n");
+        game.send_to_char(ch.id(), "Cast what?!?\r\n");
         return;
     }
     let spellnum = spellnum.unwrap();
     let sinfo = db.spell_info[spellnum as usize];
     if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
-        game.send_to_char(ch, "You do not know that spell!\r\n");
+        game.send_to_char(ch.id(), "You do not know that spell!\r\n");
         return;
     }
     if ch.get_skill(spellnum) == 0 {
-        game.send_to_char(ch, "You are unfamiliar with that spell.\r\n");
+        game.send_to_char(ch.id(), "You are unfamiliar with that spell.\r\n");
         return;
     }
     let arg;
@@ -1169,14 +1170,14 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     } else {
         /* if target string is empty */
         if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) {
-            if ch.fighting().is_some() {
+            if ch.fighting_id().is_some() {
                 tch = Some(ch.clone());
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) {
-            if ch.fighting().is_some() {
-                tch = ch.fighting();
+            if ch.fighting_id().is_some() {
+                tch = ch.fighting_id();
                 target = true;
             }
         }
@@ -1213,12 +1214,12 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         return;
     }
     if !target {
-        game.send_to_char(ch, "Cannot find the target of your spell!\r\n");
+        game.send_to_char(ch.id(), "Cannot find the target of your spell!\r\n");
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
     if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(ch, "You haven't the energy to cast that spell!\r\n");
+        game.send_to_char(ch.id(), "You haven't the energy to cast that spell!\r\n");
         return;
     }
 
@@ -1226,7 +1227,7 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     if rand_number(0, 101) > ch.get_skill(spellnum) as u32 {
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         if tch.is_none() || game.skill_message(0, ch, tch.as_ref().unwrap(), spellnum) == 0 {
-            game.send_to_char(ch, "You lost your concentration!\r\n");
+            game.send_to_char(ch.id(), "You lost your concentration!\r\n");
         }
         if mana > 0 {
             ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));

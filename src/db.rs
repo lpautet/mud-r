@@ -59,7 +59,8 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
-    clone_vec2, dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR
+     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number,
+    time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR,
 };
 use crate::{check_player_special, get_last_tell_mut, Game};
 
@@ -115,7 +116,7 @@ pub struct HelpIndexElement {
 
 pub struct DB {
     pub world: Vec<RoomData>,
-    pub character_list: Vec<Rc<CharData>>,
+    pub character_list: Depot<Rc<CharData>>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
@@ -189,7 +190,7 @@ pub struct DB {
     pub extractions_pending: i32,
     pub timer: u128,
     pub cmd_sort_info: Vec<usize>,
-    pub combat_list: Vec<Rc<CharData>>,
+    pub combat_list: Vec<DepotId>,
     pub shop_index: Vec<ShopData>,
     pub spell_sort_info: [i32; MAX_SKILLS + 1],
     pub spell_info: [SpellInfoType; TOP_SPELL_DEFINE + 1],
@@ -334,7 +335,7 @@ impl DB {
  * 'reload' command even when the string was not replaced.
  * To fix later, if desired. -gg 6/24/99
  */
-pub fn do_reboot(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_reboot(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -423,12 +424,12 @@ pub fn do_reboot(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize
             game.db.index_boot(DB_BOOT_HLP);
         }
         _ => {
-            game.send_to_char(ch, "Unknown reload option.\r\n");
+            game.send_to_char(chid, "Unknown reload option.\r\n");
             return;
         }
     }
 
-    game.send_to_char(ch, OK);
+    game.send_to_char(chid, OK);
 }
 
 pub(crate) fn boot_world(game: &mut Game) {
@@ -462,9 +463,8 @@ impl DB {
     /* Free the world, in a memory allocation sense. */
     pub fn destroy_db(&mut self) {
         /* Active Mobiles & Players */
-        let list = clone_vec2(&self.character_list);
-        for chtmp in list.iter() {
-            self.free_char(chtmp);
+        for chtmp_id in self.character_list.ids() {
+            self.free_char(chtmp_id);
         }
         self.character_list.clear();
 
@@ -510,7 +510,7 @@ impl DB {
     pub fn new() -> DB {
         DB {
             world: vec![],
-            character_list: vec![],
+            character_list: Depot::new(),
             mob_index: vec![],
             mob_protos: vec![],
             object_list: Depot::new(),
@@ -1717,7 +1717,7 @@ impl DB {
             func: None,
         });
 
-        let mut mobch = CharData::new();
+        let mut mobch = CharData::default();
         clear_char(&mut mobch);
 
         /*
@@ -2295,14 +2295,14 @@ impl DB {
      *************************************************************************/
 }
 impl Game {
-    pub fn vnum_mobile(&mut self, searchname: &str, ch: &Rc<CharData>) -> i32 {
+    pub fn vnum_mobile(&mut self, searchname: &str, chid: DepotId) -> i32 {
         let mut found = 0;
         for nr in 0..self.db.mob_protos.len() {
             let mp = &self.db.mob_protos[nr];
             if isname(searchname, &mp.player.borrow().name) {
                 found += 1;
                 self.send_to_char(
-                    ch,
+                    chid,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found,
@@ -2316,14 +2316,14 @@ impl Game {
         return found;
     }
 
-    pub fn vnum_object(&mut self, searchname: &str, ch: &Rc<CharData>) -> i32 {
+    pub fn vnum_object(&mut self, searchname: &str, chid: DepotId) -> i32 {
         let mut found = 0;
         for nr in 0..self.db.obj_proto.len() {
             let op = &self.db.obj_proto[nr];
             if isname(searchname, &op.name) {
                 found += 1;
                 self.send_to_char(
-                    ch,
+                    chid,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found, self.db.obj_index[nr].vnum, op.short_description
@@ -2343,6 +2343,17 @@ impl DB {
     pub fn obj_mut(&mut self, o_id: DepotId) -> &mut ObjData {
         self.object_list.get_mut(o_id)
     }
+    pub fn ch(&self, c_id: DepotId) -> &CharData {
+        self.character_list.get(c_id).as_ref()
+    }
+    pub fn chr(&self, c_id: DepotId) -> &Rc<CharData> {
+        self.character_list.get(c_id)
+    }
+    pub fn ch_mut(&mut self, o_id: DepotId) -> &mut CharData {
+        unsafe {
+        &mut *(self.character_list.get_mut(o_id).as_ref() as *const CharData  as *mut CharData)
+        }
+    }
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
     // {
@@ -2357,7 +2368,7 @@ impl DB {
     // }
 
     /* create a new mobile from a prototype */
-    pub(crate) fn read_mobile(&mut self, nr: MobVnum, _type: i32) -> Option<Rc<CharData>> /* and mob_rnum */
+    pub(crate) fn read_mobile(&mut self, nr: MobVnum, _type: i32) -> Option<DepotId> /* and mob_rnum */
     {
         let i;
         if _type == VIRTUAL {
@@ -2399,9 +2410,7 @@ impl DB {
         self.mob_index[i as usize].number += 1;
 
         let rc = Rc::from(mob);
-        self.character_list.push(rc.clone());
-
-        Some(rc)
+        Some(self.character_list.push(rc.clone()))
     }
 
     /* create an object, and add it to the object list */
@@ -2433,8 +2442,7 @@ impl DB {
     }
 
     /* create a new object from a prototype */
-    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<DepotId> /* and obj_rnum */
-    {
+    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<DepotId> /* and obj_rnum */ {
         let i = if _type == VIRTUAL {
             self.real_object(nr)
         } else {
@@ -2542,7 +2550,7 @@ impl Game {
     pub(crate) fn reset_zone(&mut self, zone: usize) {
         let mut last_cmd = 0;
         let mut oid;
-        let mut mob = None;
+        let mut mob_id = None;
         let cmd_count = self.db.zone_table[zone].cmd.len();
         for cmd_no in 0..cmd_count {
             // let zcmd = &self.db.zone_table[zone].cmd[cmd_no];
@@ -2571,9 +2579,9 @@ impl Game {
                         < self.db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
-                        mob = self.db.read_mobile(nr, REAL);
+                        mob_id = self.db.read_mobile(nr, REAL);
                         let room = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                        self.db.char_to_room(mob.as_ref().unwrap(), room);
+                        self.db.char_to_room(mob_id.unwrap(), room);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2625,8 +2633,7 @@ impl Game {
                             self.db.zone_table[zone].cmd[cmd_no].command = '*';
                             continue;
                         }
-                        self.db
-                            .obj_to_obj(oid.unwrap(), obj_to.unwrap());
+                        self.db.obj_to_obj(oid.unwrap(), obj_to.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2635,7 +2642,7 @@ impl Game {
 
                 'G' => {
                     /* obj_to_char */
-                    if mob.is_none() {
+                    if mob_id.is_none() {
                         let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
@@ -2654,7 +2661,7 @@ impl Game {
                     {
                         let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                         oid = self.db.read_object(nr, REAL);
-                        self.db.obj_to_char(oid.unwrap(), mob.as_ref().unwrap());
+                        self.db.obj_to_char(oid.unwrap(), mob_id.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2663,7 +2670,7 @@ impl Game {
 
                 'E' => {
                     /* object to equipment list */
-                    if mob.is_none() {
+                    if mob_id.is_none() {
                         let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
@@ -2696,7 +2703,7 @@ impl Game {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             oid = self.db.read_object(nr, REAL);
                             let pos = self.db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(mob.as_ref().unwrap(), oid.unwrap(), pos);
+                            self.equip_char(mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2814,13 +2821,13 @@ fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
         if i.state() != ConPlaying {
             continue;
         }
-        if i.character.as_ref().unwrap().in_room() == NOWHERE {
+        if game.db.ch(i.character.unwrap()).in_room() == NOWHERE {
             continue;
         }
-        if i.character.as_ref().unwrap().get_level() >= LVL_IMMORT as u8 {
+        if game.db.ch(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if game.db.world[i.character.as_ref().unwrap().in_room() as usize].zone != zone_nr {
+        if game.db.world[game.db.ch(i.character.unwrap()).in_room() as usize].zone != zone_nr {
             continue;
         }
         return false;
@@ -2867,15 +2874,16 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, ch: &Rc<CharData>) {
+    pub fn save_char(&mut self, chid: DepotId) {
+        let ch = self.db.ch(chid);
         let mut st: CharFileU = CharFileU::new();
 
         if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
             return;
         }
 
-        self.char_to_store(ch, &mut st);
-
+        self.char_to_store(chid, &mut st);
+        let ch = self.db.ch(chid);
         copy_to_stored(
             &mut st.host,
             self.descriptor_list
@@ -2887,13 +2895,14 @@ impl Game {
         unsafe {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
+                let offset = ch.get_pfilepos() as usize * mem::size_of::<CharFileU>();
             self.db
                 .player_fl
                 .as_mut()
                 .unwrap()
                 .write_all_at(
                     player_slice,
-                    (ch.get_pfilepos() as usize * mem::size_of::<CharFileU>()) as u64,
+                     offset as u64,
                 )
                 .expect("Error while writing player record to file");
         }
@@ -3054,18 +3063,20 @@ pub fn store_to_char(st: &CharFileU, ch: &CharData) {
 
 /* copy vital data from a players char-structure to the file structure */
 impl Game {
-    pub fn char_to_store(&mut self, ch: &Rc<CharData>, st: &mut CharFileU) {
+    pub fn char_to_store(&mut self, chid: DepotId, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
         let mut char_eq: [Option<DepotId>; NUM_WEARS as usize] =
             [(); NUM_WEARS as usize].map(|_| None);
 
         for i in 0..NUM_WEARS {
+            let ch = self.db.ch(chid);
             if ch.get_eq(i).is_some() {
-                char_eq[i as usize] = self.unequip_char(ch, i);
+                char_eq[i as usize] = self.unequip_char(chid, i);
             } else {
                 char_eq[i as usize] = None;
             }
         }
+        let ch = self.db.ch(chid);
         if ch.affected.borrow().len() > MAX_AFFECT {
             error!("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
         }
@@ -3113,7 +3124,7 @@ impl Game {
         st.abilities = *ch.real_abils.borrow();
         st.points = *ch.points.borrow();
         st.char_specials_saved = ch.char_specials.borrow().saved;
-        st.player_specials_saved = RefCell::borrow(&ch.player_specials).saved;
+        st.player_specials_saved = ch.player_specials.borrow().saved;
 
         st.points.armor = 100;
         st.points.hitroll = 0;
@@ -3124,7 +3135,7 @@ impl Game {
         } else {
             st.title[0] = 0;
         }
-        if !RefCell::borrow(&ch.player.borrow().description).is_empty() {
+        if !ch.player.borrow().description.borrow().is_empty() {
             if RefCell::borrow(&ch.player.borrow().description).len() >= st.description.len() {
                 error!(
                     "SYSERR: char_to_store: {}'s description length: {}, max: {}!  Truncated.",
@@ -3155,7 +3166,7 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(ch, char_eq[i as usize].unwrap(), i);
+                self.equip_char(chid, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */
@@ -3239,18 +3250,18 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
 }
 
 impl DB {
-/* release memory allocated for a char struct */
-pub fn free_char(&mut self, ch: &Rc<CharData>) {
-    ch.player_specials.borrow_mut().aliases.clear();
+    /* release memory allocated for a char struct */
+    pub fn free_char(&mut self, chid: DepotId) {
+        self.ch(chid).player_specials.borrow_mut().aliases.clear();
 
-    while !ch.affected.borrow().is_empty() {
-        self.affect_remove(ch, &ch.affected.borrow()[0]);
-    }
+        while !self.ch(chid).affected.borrow().is_empty() {
+            self.affect_remove(self.ch(chid), &self.ch(chid).affected.borrow()[0]);
+        }
 
-    if ch.desc.borrow().is_some() {
-        *ch.desc.borrow_mut() = None;
+        if self.ch(chid).desc.borrow().is_some() {
+            *self.ch(chid).desc.borrow_mut() = None;
+        }
     }
-}
 }
 
 /*
@@ -3717,9 +3728,10 @@ fn check_bitvector_names(bits: i64, namecount: usize, whatami: &str, whatbits: &
     return error;
 }
 
-impl CharData {
-    pub fn new() -> CharData {
+impl Default for CharData {
+    fn default() -> CharData {
         CharData {
+            id: Default::default(),
             pfilepos: Cell::new(0),
             nr: 0,
             in_room: Cell::new(0),
@@ -3847,8 +3859,11 @@ impl CharData {
             master: RefCell::new(None),
         }
     }
+}
+impl CharData {
     fn make_copy(&self) -> CharData {
         CharData {
+            id: Default::default(),
             pfilepos: Cell::new(self.get_pfilepos()),
             nr: self.nr,
             in_room: Cell::new(self.in_room()),
@@ -3969,11 +3984,11 @@ impl Default for ObjData {
                     location: 0,
                     modifier: 0,
                 },
-               ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },
-              ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },
@@ -3990,7 +4005,7 @@ impl Default for ObjData {
             carried_by: None,
             worn_by: None,
             worn_on: 0,
-            in_obj:None,
+            in_obj: None,
             contains: vec![],
         }
     }
@@ -4026,19 +4041,19 @@ impl ObjData {
                     location: 0,
                     modifier: 0,
                 },
-            ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },
-            ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },
-             ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },
-             ObjAffectedType {
+                ObjAffectedType {
                     location: 0,
                     modifier: 0,
                 },

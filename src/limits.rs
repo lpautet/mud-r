@@ -16,6 +16,7 @@ use crate::config::{
     FREE_RENT, IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN,
     MAX_EXP_LOSS,
 };
+use crate::depot::HasId;
 use crate::fight::update_pos;
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
@@ -220,7 +221,8 @@ pub fn set_title(ch: &CharData, title: Option<String>) {
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
 
-pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
+pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game) {
+    let ch = game.db.ch(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
 
@@ -260,9 +262,9 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(ch, "You rise a level!\r\n");
+                game.send_to_char(ch.id(), "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                game.send_to_char(ch.id(), format!("You rise {} levels!\r\n", num_levels).as_str());
                 set_title(ch, None);
 
                 if ch.get_level() >= LVL_IMMORT as u8 {
@@ -280,7 +282,8 @@ pub fn gain_exp(ch: &Rc<CharData>, gain: i32, game: &mut Game) {
     }
 }
 
-pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
+pub fn gain_exp_regardless(game: &mut Game, chid: DepotId, gain: i32) {
+    let ch = game.db.ch(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
 
@@ -314,9 +317,9 @@ pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(ch, "You rise a level!\r\n");
+                game.send_to_char(ch.id(), "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                game.send_to_char(ch.id(), format!("You rise {} levels!\r\n", num_levels).as_str());
             }
             set_title(ch, None);
             if ch.get_level() >= LVL_IMMORT as u8 {
@@ -327,7 +330,8 @@ pub fn gain_exp_regardless(game: &mut Game, ch: &Rc<CharData>, gain: i32) {
 }
 
 impl Game {
-    pub(crate) fn gain_condition(&mut self, ch: &CharData, condition: i32, value: i32) {
+    pub(crate) fn gain_condition(&mut self, chid: DepotId, condition: i32, value: i32) {
+        let ch = game.db.ch(chid);
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
             return;
@@ -369,14 +373,14 @@ impl Game {
         if ch.char_specials.borrow().timer.get() > IDLE_VOID {
             if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
                 ch.set_was_in(ch.in_room());
-                if ch.fighting().is_some() {
-                    self.db.stop_fighting(ch.fighting().as_ref().unwrap());
+                if ch.fighting_id().is_some() {
+                    self.db.stop_fighting(ch.fighting_id().as_ref().unwrap());
                     self.db.stop_fighting(ch);
                 }
                 self.act(
                     "$n disappears into the void.",
                     true,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     None,
                     TO_ROOM,
@@ -420,8 +424,8 @@ impl Game {
     /* Update PCs, NPCs, and objects */
     pub fn point_update(&mut self) {
         /* characters */
-        let characters = clone_vec2(&self.db.character_list);
-        for i in characters.iter() {
+        for id in self.db.character_list.ids() {
+            let i = &self.db.chr(id).clone();
             self.gain_condition(i, FULL, -1);
             self.gain_condition(i, DRUNK, -1);
             self.gain_condition(i, THIRST, -1);
@@ -470,11 +474,12 @@ impl Game {
 
                 if self.db.obj(j).get_obj_timer() == 0 {
                     if self.db.obj(j).carried_by.is_some() {
-                        let ch = self.db.obj(j).carried_by.as_ref().unwrap().clone();
+                        let chid = self.db.obj(j).carried_by.unwrap();
+                        let ch = self.db.ch(chid);
                         self.act(
                             "$p decays in your hands.",
                             false,
-                           Some( ch.as_ref()),
+                           Some(ch.id() ),
                             Some(j),
                             None,
                             TO_CHAR,
@@ -490,7 +495,7 @@ impl Game {
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                ch.as_ref(),
+                                ch.id(),
                             ),
                             Some(j),
                             None,
@@ -500,7 +505,7 @@ impl Game {
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(
-                                ch.as_ref()),
+                                ch.id()),
                             Some(j),
                             None,
                             TO_CHAR,
@@ -519,7 +524,7 @@ impl Game {
                         } else if self.db.obj(j).carried_by.is_some() {
                             self.db.obj_to_room(
                                 jj,
-                                self.db.obj(j).carried_by.as_ref().unwrap().in_room(),
+                                self.db.ch(self.db.obj(j).carried_by.unwrap()).in_room(),
                             );
                         } else if self.db.obj(j).in_room() != NOWHERE {
                             self.db.obj_to_room(jj, self.db.obj(j).in_room());

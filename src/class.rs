@@ -20,7 +20,6 @@
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
-use std::rc::Rc;
 
 use log::{error, info};
 
@@ -28,6 +27,7 @@ use crate::act_wizard::snoop_check;
 use crate::config::SITEOK_EVERYONE;
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
+use crate::depot::DepotId;
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
 use crate::spell_parser::spell_level;
 use crate::spells::{
@@ -3518,7 +3518,8 @@ pub fn roll_real_abils(ch: &CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
+pub fn do_start(game: &mut Game, chid: DepotId) {
+    let ch = game.db.ch(chid);
     ch.set_level(1);
     ch.set_exp(1);
 
@@ -3547,15 +3548,15 @@ pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
         _ => {}
     }
 
-    advance_level(ch, game);
-
+    advance_level(chid, game);
+    let ch = game.db.ch(chid);
     game.mudlog(
         BRF,
         max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
         true,
         format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
     );
-
+    let ch = game.db.ch(chid);
     ch.set_hit(ch.get_max_hit());
     ch.set_mana(ch.get_max_mana());
     ch.set_move(ch.get_max_move());
@@ -3573,7 +3574,8 @@ pub fn do_start(game: &mut Game, ch: &Rc<CharData>) {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(ch: &Rc<CharData>, game: &mut Game) {
+pub fn advance_level(chid: DepotId, game: &mut Game) {
+    let ch = game.db.ch(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;
@@ -3627,8 +3629,8 @@ pub fn advance_level(ch: &Rc<CharData>, game: &mut Game) {
         ch.set_prf_flags_bits(PRF_HOLYLIGHT);
     }
 
-    snoop_check(game, ch.clone());
-    game.save_char(ch);
+    snoop_check(game, chid);
+    game.save_char(chid);
 }
 
 /*

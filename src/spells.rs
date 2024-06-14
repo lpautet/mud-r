@@ -10,7 +10,7 @@
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::act_informative::look_at_room;
@@ -299,7 +299,7 @@ pub fn spell_create_water(
                  game.db.obj_mut(obj_id).set_obj_val(1,v  );
                 name_to_drinkcon(&mut game.db, Some(obj_id), LIQ_WATER);
                 weight_change_object(game, obj_id, water);
-                game.act("$p is filled.", false, Some(ch), Some(obj_id), None, TO_CHAR);
+                game.act("$p is filled.", false, Some(ch.id()), Some(obj_id), None, TO_CHAR);
             }
         }
     }
@@ -318,13 +318,13 @@ pub fn spell_recall(
 
     let victim = victim.unwrap();
 
-    game.act("$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    game.act("$n disappears.", true, Some(victim.id()), None, None, TO_ROOM);
     game.db.char_from_room(victim);
     game.db.char_to_room(victim, game.db.r_mortal_start_room);
     game.act(
         "$n appears in the middle of the room.",
         true,
-        Some(victim),
+        Some(victim.id()),
         None,
         None,
         TO_ROOM,
@@ -359,7 +359,7 @@ pub fn spell_teleport(
     game.act(
         "$n slowly fades out of existence and is gone.",
         false,
-        Some(victim),
+        Some(victim.id()),
         None,
         None,
         TO_ROOM,
@@ -369,7 +369,7 @@ pub fn spell_teleport(
     game.act(
         "$n slowly fades into existence.",
         false,
-        Some(victim),
+        Some(victim.id()),
         None,
         None,
         TO_ROOM,
@@ -392,14 +392,14 @@ pub fn spell_summon(
     let victim = victim.unwrap();
     let ch = ch.unwrap();
     if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
-        game.send_to_char(ch, SUMMON_FAIL);
+        game.send_to_char(ch.id(), SUMMON_FAIL);
         return;
     }
 
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
             game.act("As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
-                   false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
+                   false, Some(ch.id()), None, Some(VictimRef::Char(victim)), TO_CHAR);
             return;
         }
         if !victim.is_npc()
@@ -437,14 +437,14 @@ pub fn spell_summon(
     if victim.mob_flagged(MOB_NOSUMMON)
         || victim.is_npc() && mag_savingthrow(victim, SAVING_SPELL, 0)
     {
-        game.send_to_char(ch, SUMMON_FAIL);
+        game.send_to_char(ch.id(), SUMMON_FAIL);
         return;
     }
 
     game.act(
         "$n disappears suddenly.",
         true,
-        Some(victim),
+        Some(victim.id()),
         None,
         None,
         TO_ROOM,
@@ -456,7 +456,7 @@ pub fn spell_summon(
     game.act(
         "$n arrives suddenly.",
         true,
-        Some(victim),
+        Some(victim.id()),
         None,
         None,
         TO_ROOM,
@@ -464,7 +464,7 @@ pub fn spell_summon(
     game.act(
         "$n has summoned you!",
         false,
-        Some(ch),
+        Some(ch.id()),
         None,
         Some(VictimRef::Char(victim)),
         TO_VICT,
@@ -510,7 +510,7 @@ pub fn spell_locate_object(
                 ch.unwrap(),
                 format!(
                     " is being carried by {}.\r\n",
-                    game.pers(game.db.obj(i).carried_by.as_ref().unwrap(), ch.unwrap())
+                    game.pers(game.db.ch(game.db.obj(i).carried_by.unwrap()), ch.unwrap())
                 )
                 .as_str(),
             );
@@ -537,7 +537,7 @@ pub fn spell_locate_object(
                 ch.unwrap(),
                 format!(
                     " is being worn by {}.\r\n",
-                    game.pers(game.db.obj(i).worn_by.as_ref().unwrap(), ch.unwrap())
+                    game.pers(game.db.ch(game.db.obj(i).worn_by.unwrap()), ch.unwrap())
                 )
                 .as_str(),
             );
@@ -567,24 +567,24 @@ pub fn spell_charm(
     let ch = ch.unwrap();
 
     if Rc::ptr_eq(victim, ch) {
-        game.send_to_char(ch, "You like yourself even better!\r\n");
+        game.send_to_char(ch.id(), "You like yourself even better!\r\n");
     } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
-        game.send_to_char(ch, "You fail because SUMMON protection is on!\r\n");
+        game.send_to_char(ch.id(), "You fail because SUMMON protection is on!\r\n");
     } else if victim.aff_flagged(AFF_SANCTUARY) {
-        game.send_to_char(ch, "Your victim is protected by sanctuary!\r\n");
+        game.send_to_char(ch.id(), "Your victim is protected by sanctuary!\r\n");
     } else if victim.mob_flagged(MOB_NOCHARM) {
-        game.send_to_char(ch, "Your victim resists!\r\n");
+        game.send_to_char(ch.id(), "Your victim resists!\r\n");
     } else if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(ch, "You can't have any followers of your own!\r\n");
+        game.send_to_char(ch.id(), "You can't have any followers of your own!\r\n");
     } else if victim.aff_flagged(AFF_CHARM) || level < victim.get_level() as i32 {
-        game.send_to_char(ch, "You fail.\r\n");
+        game.send_to_char(ch.id(), "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
-        game.send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
+        game.send_to_char(ch.id(), "You fail - shouldn't be doing it anyway.\r\n");
     } else if circle_follow(victim, Some(ch)) {
-        game.send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
+        game.send_to_char(ch.id(), "Sorry, following in circles can not be allowed.\r\n");
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
-        game.send_to_char(ch, "Your victim resists!\r\n");
+        game.send_to_char(ch.id(), "Your victim resists!\r\n");
     } else {
         if victim.master.borrow().is_some() {
             game.stop_follower(victim);
@@ -609,7 +609,7 @@ pub fn spell_charm(
         game.act(
             "Isn't $n just such a nice fellow?",
             false,
-            Some(ch),
+            Some(ch.id()),
             None,
             Some(VictimRef::Char(victim)),
             TO_VICT,
@@ -857,15 +857,15 @@ pub fn spell_enchant_weapon(
 
     if ch.is_good() {
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
-        game.act("$p glows blue.", false, Some(ch), Some(oid), None, TO_CHAR);
+        game.act("$p glows blue.", false, Some(ch.id()), Some(oid), None, TO_CHAR);
     } else if ch.is_evil() {
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
-        game.act("$p glows red.", false, Some(ch), Some(oid), None, TO_CHAR);
+        game.act("$p glows red.", false, Some(ch.id()), Some(oid), None, TO_CHAR);
     } else {
         game.act(
             "$p glows yellow.",
             false,
-            Some(ch),
+            Some(ch.id()),
             Some(oid),
             None,
             TO_CHAR,
@@ -885,16 +885,16 @@ pub fn spell_detect_poison(
         let ch = ch.unwrap();
         if Rc::ptr_eq(ch, victim) {
             if victim.aff_flagged(AFF_POISON) {
-                game.send_to_char(ch, "You can sense poison in your blood.\r\n");
+                game.send_to_char(ch.id(), "You can sense poison in your blood.\r\n");
             } else {
-                game.send_to_char(ch, "You feel healthy.\r\n");
+                game.send_to_char(ch.id(), "You feel healthy.\r\n");
             }
         } else {
             if victim.aff_flagged(AFF_POISON) {
                 game.act(
                     "You sense that $E is poisoned.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     Some(VictimRef::Char(victim)),
                     TO_CHAR,
@@ -903,7 +903,7 @@ pub fn spell_detect_poison(
                 game.act(
                     "You sense that $E is healthy.",
                     false,
-                    Some(ch),
+                    Some(ch.id()),
                     None,
                     Some(VictimRef::Char(victim)),
                     TO_CHAR,
@@ -920,7 +920,7 @@ pub fn spell_detect_poison(
                         game.act(
                             "You sense that $p has been contaminated.",
                             false,
-                            Some(ch),
+                            Some(ch.id()),
                             Some(oid),
                             None,
                             TO_CHAR,
@@ -929,7 +929,7 @@ pub fn spell_detect_poison(
                         game.act(
                             "You sense that $p is safe for consumption.",
                             false,
-                            Some(ch),
+                            Some(ch.id()),
                             Some(oid),
                             None,
                             TO_CHAR,
@@ -937,7 +937,7 @@ pub fn spell_detect_poison(
                     }
                 }
                 _ => {
-                    game.send_to_char(ch, "You sense that it should not be consumed.\r\n");
+                    game.send_to_char(ch.id(), "You sense that it should not be consumed.\r\n");
                 }
             }
         }

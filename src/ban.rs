@@ -19,11 +19,12 @@ use log::{error, info};
 use regex::Regex;
 
 use crate::db::{BanListElement, BAN_FILE, DB, XNAME_FILE};
+use crate::depot::DepotId;
 use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
-use crate::structs::{CharData, LVL_GOD};
+use crate::structs::LVL_GOD;
 use crate::util::{ctime, time_now, NRM};
-use crate::{ Game};
+use crate::Game;
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 
@@ -117,14 +118,15 @@ macro_rules! ban_list_format {
     };
 }
 
-pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if argument.is_empty() {
         if game.db.ban_list.is_empty() {
-            game.send_to_char(ch, "No sites are banned.\r\n");
+            game.send_to_char(chid, "No sites are banned.\r\n");
             return;
         }
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 ban_list_format!(),
                 "Banned Site Name", "Ban Type", "Banned On", "Banned By"
@@ -132,7 +134,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             .as_str(),
         );
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 ban_list_format!(),
                 "---------------------------------",
@@ -150,9 +152,8 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             } else {
                 timestr = "Unknown".to_string();
             }
-
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     ban_list_format!(),
                     game.db.ban_list[idx].site, BAN_TYPES[game.db.ban_list[idx].type_ as usize], timestr, game.db.ban_list[idx].name
@@ -166,17 +167,17 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
     let mut site = String::new();
     two_arguments(argument, &mut flag, &mut site);
     if site.is_empty() || flag.is_empty() {
-        game.send_to_char(ch, "Usage: ban {all | select | new} site_name\r\n");
+        game.send_to_char(chid, "Usage: ban {all | select | new} site_name\r\n");
         return;
     }
     if !(flag == "select" || flag == "all" || flag == "new") {
-        game.send_to_char(ch, "Flag must be ALL, SELECT, or NEW.\r\n");
+        game.send_to_char(chid, "Flag must be ALL, SELECT, or NEW.\r\n");
         return;
     }
     let ban_node = game.db.ban_list.iter().find(|b| b.site.as_ref() == site);
     if ban_node.is_some() {
         game.send_to_char(
-            ch,
+            chid,
             "That site has already been banned -- unban it to change the ban type.\r\n",
         );
         return;
@@ -198,6 +199,7 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
 
     game.db.ban_list.push(ban_node);
 
+    let ch = game.db.ch(chid);
     game.mudlog(
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -210,15 +212,15 @@ pub fn do_ban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         )
         .as_str(),
     );
-    game.send_to_char(ch, "Site banned.\r\n");
+    game.send_to_char(chid, "Site banned.\r\n");
     write_ban_list(&game.db);
 }
 
-pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_unban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut site = String::new();
     one_argument(argument, &mut site);
     if site.is_empty() {
-        game.send_to_char(ch, "A site to unban might help.\r\n");
+        game.send_to_char(chid, "A site to unban might help.\r\n");
         return;
     }
     let p = game.db
@@ -227,12 +229,13 @@ pub fn do_unban(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         .position(|b| b.site.as_ref() == site);
 
     if p.is_none() {
-        game.send_to_char(ch, "That site is not currently banned.\r\n");
+        game.send_to_char(chid, "That site is not currently banned.\r\n");
         return;
     }
 
     let ban_node = game.db.ban_list.remove(p.unwrap());
-    game.send_to_char(ch, "Site unbanned.\r\n");
+    game.send_to_char(chid, "Site unbanned.\r\n");
+    let ch = game.db.ch(chid);
     game.mudlog(
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -262,13 +265,14 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
      * prompt won't have characters yet.
      */
     for dt in game.descriptor_list.iter() {
-        let character = dt.character.as_ref();
+        let character_id = dt.character;
 
-        if character.is_none() {
+        if character_id.is_none() {
             continue;
         }
 
-        let character = character.unwrap();
+        let character_id = character_id.unwrap();
+        let character = game.db.ch(character_id);
 
         if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
             return dt.state() == ConPlaying;

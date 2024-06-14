@@ -244,7 +244,7 @@ fn auto_equip(game: &mut Game, ch: &Rc<CharData>, oid: DepotId, location: i32) {
 
     if location <= 0 {
         /* Inventory */
-        game.db.obj_to_char(oid, ch);
+        game.db.obj_to_char(oid, ch.id());
     }
 }
 
@@ -277,7 +277,7 @@ pub fn crash_delete_file(name: &str) -> bool {
     return true;
 }
 
-pub fn crash_delete_crashfile(ch: &Rc<CharData>) -> bool {
+pub fn crash_delete_crashfile(ch: &CharData) -> bool {
     let mut filename = String::new();
 
     if !get_filename(&mut filename, CRASH_FILE, ch.get_name().as_ref()) {
@@ -387,14 +387,15 @@ pub fn update_obj_file(db: &DB) {
     }
 }
 
-pub fn crash_listrent(game: &mut Game, ch: &Rc<CharData>, name: &str) {
+pub fn crash_listrent(game: &mut Game, chid: DepotId, name: &str) {
+    let ch = game.db.ch(chid);
     let mut filename = String::new();
     if !get_filename(&mut filename, CRASH_FILE, name) {
         return;
     }
     let fl = OpenOptions::new().read(true).open(&filename);
     if fl.is_err() {
-        game.send_to_char(ch, format!("{} has no rent file.\r\n", name).as_str());
+        game.send_to_char(ch.id(), format!("{} has no rent file.\r\n", name).as_str());
         return;
     }
     let mut rent = RentInfo::new();
@@ -408,26 +409,26 @@ pub fn crash_listrent(game: &mut Game, ch: &Rc<CharData>, name: &str) {
 
     /* Oops, can't get the data, punt. */
     if r.is_err() {
-        game.send_to_char(ch, "Error reading rent information.\r\n");
+        game.send_to_char(ch.id(), "Error reading rent information.\r\n");
         return;
     }
 
-    game.send_to_char(ch, format!("{}\r\n", filename).as_str());
+    game.send_to_char(ch.id(), format!("{}\r\n", filename).as_str());
     match rent.rentcode {
         RENT_RENTED => {
-            game.send_to_char(ch, "Rent\r\n");
+            game.send_to_char(ch.id(), "Rent\r\n");
         }
         RENT_CRASH => {
-            game.send_to_char(ch, "Crash\r\n");
+            game.send_to_char(ch.id(), "Crash\r\n");
         }
         RENT_CRYO => {
-            game.send_to_char(ch, "Cryo\r\n");
+            game.send_to_char(ch.id(), "Cryo\r\n");
         }
         RENT_TIMEDOUT | RENT_FORCED => {
-            game.send_to_char(ch, "TimedOut\r\n");
+            game.send_to_char(ch.id(), "TimedOut\r\n");
         }
         _ => {
-            game.send_to_char(ch, "Undef\r\n");
+            game.send_to_char(ch.id(), "Undef\r\n");
         }
     }
 
@@ -450,7 +451,7 @@ pub fn crash_listrent(game: &mut Game, ch: &Rc<CharData>, name: &str) {
             let oid = game.db.read_object(object.item_number, VIRTUAL);
             let obj = game.db.obj(oid.unwrap());
             // #if USE_AUTOEQ
-            // game.send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
+            // game.send_to_char(ch.id(), " [%5d] (%5dau) <%2d> %-20s\r\n",
             // object.item_number, obj.get_obj_rent(),
             // object.location, obj->short_description);
             // #else
@@ -548,7 +549,7 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
         let err = fl.err().unwrap();
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: READING OBJECT FILE {} (5) {}", filename, err);
-            game.send_to_char(ch,
+            game.send_to_char(ch.id(),
                          "\r\n********************* NOTICE *********************\r\nThere was a problem loading your objects from disk.\r\nContact a God for assistance.\r\n");
         }
         game.mudlog(
@@ -717,7 +718,7 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        game.db.obj_to_char(*obj2, ch);
+                        game.db.obj_to_char(*obj2, ch.id());
                     }
                     cont_row[j].clear();
                 }
@@ -727,7 +728,7 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
                 /* Content list existing. */
                 if game.db.obj(oid).get_obj_type() == ITEM_CONTAINER {
                     /* Remove object, fill it, equip again. */
-                    oid = game.unequip_char(ch, (location - 1) as i8).unwrap();
+                    oid = game.unequip_char(ch.id(), (location - 1) as i8).unwrap();
                     game.db.obj_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
                     for oid2 in cont_row[0].iter() {
                         game.db.obj_to_obj(*oid2, oid);
@@ -736,7 +737,7 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
                 } else {
                     /* Object isn't container, empty the list. */
                     for oid2 in cont_row[0].iter() {
-                        game.db.obj_to_char(*oid2, ch);
+                        game.db.obj_to_char(*oid2, ch.id());
                     }
                     cont_row[0].clear();
                 }
@@ -751,7 +752,7 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        game.db.obj_to_char(*obj2, ch);
+                        game.db.obj_to_char(*obj2, ch.id());
                     }
                     cont_row[j].clear();
                 }
@@ -766,11 +767,11 @@ pub fn crash_load(game: &mut Game, ch: &Rc<CharData>) -> i32 {
                     for oid2 in cont_row[j].iter() {
                         game.db.obj_to_obj(*oid2, oid);
                     }
-                    game.db.obj_to_char(oid, ch); /* Add to inventory first. */
+                    game.db.obj_to_char(oid, ch.id()); /* Add to inventory first. */
                 } else {
                     /* Object isn't container, empty content list. */
                     for oid2 in cont_row[j].iter() {
-                        game.db.obj_to_char(*oid2, ch);
+                        game.db.obj_to_char(*oid2, ch.id());
                     }
                     cont_row[j].clear();
                 }
@@ -873,8 +874,8 @@ fn crash_extract_norent_eq(game: &mut Game, ch: &Rc<CharData>) {
             continue;
         }
         if crash_is_unrentable(game.db.obj(ch.get_eq(j).unwrap())) {
-            let eqid = game.unequip_char(ch, j).unwrap();
-            game.db.obj_to_char(eqid, ch);
+            let eqid = game.unequip_char(ch.id(), j).unwrap();
+            game.db.obj_to_char(eqid, ch.id());
         } else {
             crash_extract_norents(game, ch.get_eq(j).unwrap());
         }
@@ -935,7 +936,8 @@ fn crash_calculate_rent(db: &DB, oid: Option<DepotId>, cost: &mut i32) {
     }
 }
 
-pub fn crash_crashsave(db: &mut DB, ch: &Rc<CharData>) {
+pub fn crash_crashsave(db: &mut DB, chid: DepotId) {
+    let ch = game.db.ch(chid);
     if ch.is_npc() {
         return;
     }
@@ -1030,8 +1032,8 @@ pub fn crash_idlesave(game: &mut Game, ch: &Rc<CharData>) {
         for j in 0..NUM_WEARS {
             /* Unequip players with low gold. */
             if ch.get_eq(j).is_some() {
-                let eqid = game.unequip_char(ch, j).unwrap();
-                game.db.obj_to_char(eqid, ch);
+                let eqid = game.unequip_char(ch.id(), j).unwrap();
+                game.db.obj_to_char(eqid, ch.id());
             }
         }
 
@@ -1093,7 +1095,8 @@ pub fn crash_idlesave(game: &mut Game, ch: &Rc<CharData>) {
     }
 }
 
-pub fn crash_rentsave(game: &mut Game, ch: &Rc<CharData>, cost: i32) {
+pub fn crash_rentsave(game: &mut Game, chid: DepotId, cost: i32) {
+    let ch = game.db.ch(chid);
     if ch.is_npc() {
         return;
     }
@@ -1228,7 +1231,7 @@ on hand and in the bank.'\r\n",
     game.act(
         &buf,
         false,
-        Some(recep),
+        Some(recep.id()),
         None,
         Some(VictimRef::Char(ch)),
         TO_VICT,
@@ -1249,7 +1252,7 @@ fn crash_report_unrentables(
         game.act(
             &buf,
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1284,7 +1287,7 @@ fn crash_report_rent(
             game.act(
                 &buf,
                 false,
-                Some(recep),
+                Some(recep.id()),
                 None,
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
@@ -1355,7 +1358,7 @@ fn crash_offer_rent(
         game.act(
             "$n tells you, 'But you are not carrying anything!  Just quit!'",
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1370,7 +1373,7 @@ fn crash_offer_rent(
         game.act(
             &buf,
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1385,7 +1388,7 @@ fn crash_offer_rent(
         game.act(
             &buf,
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1403,7 +1406,7 @@ fn crash_offer_rent(
         game.act(
             &buf,
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1413,7 +1416,7 @@ fn crash_offer_rent(
             game.act(
                 "$n tells you, '...which I see you can't afford.'",
                 false,
-                Some(recep),
+                Some(recep.id()),
                 None,
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
@@ -1469,7 +1472,7 @@ fn gen_receptionist(
         game.act(
             "$n says, 'I don't deal with people I can't see!'",
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             None,
             TO_ROOM,
@@ -1481,7 +1484,7 @@ fn gen_receptionist(
         game.act(
             "$n tells you, 'Rent is free here.  Just quit, and your objects will be saved!'",
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1509,7 +1512,7 @@ fn gen_receptionist(
         game.act(
             &buf,
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -1519,7 +1522,7 @@ fn gen_receptionist(
             game.act(
                 "$n tells you, '...which I see you can't afford.'",
                 false,
-                Some(recep),
+                Some(recep.id()),
                 None,
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
@@ -1534,7 +1537,7 @@ fn gen_receptionist(
             game.act(
                 "$n stores your belongings and helps you into your private chamber.",
                 false,
-                Some(recep),
+                Some(recep.id()),
                 None,
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
@@ -1559,7 +1562,7 @@ fn gen_receptionist(
 A white mist appears in the room, chilling you to the bone...\r\n\
 You begin to lose consciousness...",
                 false,
-                Some(recep),
+                Some(recep.id()),
                 None,
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
@@ -1577,7 +1580,7 @@ You begin to lose consciousness...",
         game.act(
             "$n helps $N into $S private chamber.",
             false,
-            Some(recep),
+            Some(recep.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_NOTVICT,
@@ -1590,7 +1593,7 @@ You begin to lose consciousness...",
         game.act(
             "$N gives $n an offer.",
             false,
-            Some(ch),
+            Some(ch.id()),
             None,
             Some(VictimRef::Char(recep)),
             TO_ROOM,

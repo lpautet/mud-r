@@ -10,6 +10,8 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
+use crate::depot::{DepotId, HasId};
+use crate::VictimRef;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -18,8 +20,6 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::depot::DepotId;
-use crate::VictimRef;
 
 use chrono::{TimeZone, Utc};
 use log::{error, info};
@@ -31,7 +31,7 @@ use rand::Rng;
 use crate::class::CLASS_ABBREVS;
 use crate::constants::STR_APP;
 use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
-use crate::handler::{ affected_by_spell, fname};
+use crate::handler::{affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
@@ -585,14 +585,10 @@ impl CharData {
     pub fn set_idnum(&self, val: i64) {
         self.char_specials.borrow_mut().saved.idnum = val;
     }
-    pub fn fighting(&self) -> Option<Rc<CharData>> {
-        self.char_specials
-            .borrow()
-            .fighting
-            .as_ref()
-            .map(|f| f.clone())
+    pub fn fighting_id(&self) -> Option<DepotId> {
+        self.char_specials.borrow().fighting
     }
-    pub fn set_fighting(&self, val: Option<Rc<CharData>>) {
+    pub fn set_fighting(&self, val: Option<DepotId>) {
         self.char_specials.borrow_mut().fighting = val;
     }
     pub fn get_alignment(&self) -> i32 {
@@ -801,17 +797,13 @@ impl ObjData {
         self.obj_flags.extra_flags
     }
     pub fn set_obj_extra(&mut self, val: i32) {
-        self.obj_flags.extra_flags =val;
+        self.obj_flags.extra_flags = val;
     }
     pub fn set_obj_extra_bit(&mut self, val: i32) {
-        self.obj_flags
-            .extra_flags
-             |= val;
+        self.obj_flags.extra_flags |= val;
     }
     pub fn remove_obj_extra_bit(&mut self, val: i32) {
-        self.obj_flags
-            .extra_flags
-             &= !val;
+        self.obj_flags.extra_flags &= !val;
     }
     pub fn get_obj_wear(&self) -> i32 {
         self.obj_flags.wear_flags
@@ -826,10 +818,10 @@ impl ObjData {
         self.obj_flags.value[val] = v;
     }
     pub fn decr_obj_val(&mut self, val: usize) {
-        self.obj_flags.value[val] -=  1;
+        self.obj_flags.value[val] -= 1;
     }
     pub fn incr_obj_val(&mut self, val: usize) {
-        self.obj_flags.value[val] +=  1;
+        self.obj_flags.value[val] += 1;
     }
     pub fn obj_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_extra(), flag)
@@ -841,7 +833,7 @@ impl ObjData {
         self.obj_flags.value[val as usize] &= !flag
     }
     pub fn set_objval_bit(&mut self, val: i32, flag: i32) {
-        self.obj_flags.value[val as usize]  |= flag
+        self.obj_flags.value[val as usize] |= flag
     }
     pub fn get_obj_weight(&self) -> i32 {
         self.obj_flags.weight
@@ -1030,9 +1022,9 @@ impl Game {
     }
     pub fn can_see_obj_carrier(&self, sub: &CharData, obj: &ObjData) -> bool {
         (obj.carried_by.borrow().is_none()
-            || self.can_see(sub, obj.carried_by.borrow().as_ref().unwrap().borrow()))
+            || self.can_see(sub, self.db.ch(obj.carried_by.unwrap())))
             && (obj.worn_by.borrow().is_none()
-                || self.can_see(sub, obj.worn_by.borrow().as_ref().unwrap().borrow()))
+                || self.can_see(sub, self.db.ch(obj.worn_by.unwrap())))
     }
     pub fn pers(&self, ch: &CharData, vict: &CharData) -> Rc<str> {
         if self.can_see(vict, ch) {
@@ -1250,19 +1242,15 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &mut Game, ch: &CharData) {
-    game.mudlog(
-        BRF,
-        LVL_IMMORT as i32,
-        true,
-        format!(
-            "{} hit death trap #{} ({})",
-            ch.get_name(),
-            game.db.get_room_vnum(ch.in_room()),
-            game.db.world[ch.in_room() as usize].name
-        )
-        .as_str(),
+pub fn log_death_trap(game: &mut Game, chid: DepotId) {
+    let ch_in_room = ch.in_room();
+    let mesg = format!(
+        "{} hit death trap #{} ({})",
+        ch.get_name(),
+        game.db.get_room_vnum(ch.in_room()),
+        game.db.world[ch.in_room() as usize].name
     );
+    game.mudlog(BRF, LVL_IMMORT as i32, true, mesg.as_str());
 }
 
 /*
@@ -1492,8 +1480,8 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
-pub fn circle_follow(ch: &Rc<CharData>, victim: Option<&Rc<CharData>>) -> bool {
-    if victim.is_none() {
+pub fn circle_follow(chid: DepotId, victim_id: Option<DepotId>) -> bool {
+    if victim_id.is_none() {
         return false;
     }
     let mut k = victim.unwrap().clone();
@@ -1518,7 +1506,8 @@ pub fn circle_follow(ch: &Rc<CharData>, victim: Option<&Rc<CharData>>) -> bool {
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
 impl Game {
-    pub fn stop_follower(&mut self, ch: &Rc<CharData>) {
+    pub fn stop_follower(&mut self, chid: DepotId) {
+        let ch = game.db.ch(chid);
         if ch.master.borrow().is_none() {
             return;
         }
@@ -1527,7 +1516,7 @@ impl Game {
             self.act(
                 "You realize that $N is a jerk!",
                 false,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_CHAR,
@@ -1535,7 +1524,7 @@ impl Game {
             self.act(
                 "$n realizes that $N is a jerk!",
                 false,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_NOTVICT,
@@ -1543,7 +1532,7 @@ impl Game {
             self.act(
                 "$n hates your guts!",
                 false,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_VICT,
@@ -1555,7 +1544,7 @@ impl Game {
             self.act(
                 "You stop following $N.",
                 false,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_CHAR,
@@ -1563,7 +1552,7 @@ impl Game {
             self.act(
                 "$n stops following $N.",
                 true,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
                 TO_NOTVICT,
@@ -1572,7 +1561,7 @@ impl Game {
             self.act(
                 "$n stops following you.",
                 true,
-                Some(ch),
+                Some(ch.id()),
                 None,
                 Some(VictimRef::Char(vr.as_ref().unwrap())),
                 TO_VICT,
@@ -1607,7 +1596,8 @@ pub fn num_followers_charmed(ch: &Rc<CharData>) -> i32 {
 
 impl Game {
     /* Called when a character that follows/is followed dies */
-    pub fn die_follower(&mut self, ch: &Rc<CharData>) {
+    pub fn die_follower(&mut self, chid: DepotId) {
+        let ch = self.db.ch(chid);
         if ch.master.borrow().is_some() {
             self.stop_follower(ch);
         }
@@ -1620,7 +1610,9 @@ impl Game {
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
-pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
+pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
+    let ch = game.db.ch(chid);
+    let leader = game.db.ch(leader_id);
     if ch.master.borrow().is_some() {
         // core_dump();
         return;
@@ -1636,7 +1628,7 @@ pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
     game.act(
         "You now follow $N.",
         false,
-        Some(ch),
+        Some(ch.id()),
         None,
         Some(VictimRef::Char(leader)),
         TO_CHAR,
@@ -1645,19 +1637,19 @@ pub fn add_follower(game: &mut Game, ch: &Rc<CharData>, leader: &Rc<CharData>) {
         game.act(
             "$n starts following you.",
             true,
-            Some(ch),
+            Some(ch.id()),
             None,
             Some(VictimRef::Char(leader)),
-                        TO_VICT,
+            TO_VICT,
         );
     }
     game.act(
         "$n starts to follow $N.",
         true,
-        Some(ch),
+        Some(ch.id()),
         None,
         Some(VictimRef::Char(leader)),
-                TO_NOTVICT,
+        TO_NOTVICT,
     );
 }
 

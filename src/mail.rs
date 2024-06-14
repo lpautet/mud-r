@@ -24,6 +24,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::{mem, process, slice};
 
+use crate::depot::HasId;
 use crate::VictimRef;
 use log::{error, info};
 
@@ -137,7 +138,7 @@ impl MailSystem {
 fn mail_recip_ok(game: &mut Game, name: &str) -> bool {
     let mut ret = false;
     let mut tmp_store = CharFileU::new();
-    let mut victim = CharData::new();
+    let mut victim = CharData::default();
     clear_char(&mut victim);
     if game.db.load_char(name, &mut tmp_store).is_some() {
         store_to_char(&tmp_store, &mut victim);
@@ -146,7 +147,7 @@ fn mail_recip_ok(game: &mut Game, name: &str) -> bool {
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
-        game.extract_char_final(victim);
+        game.extract_char_final(victim.id());
     }
     ret
 }
@@ -733,7 +734,7 @@ fn postmaster_send_mail(
         game.act(
             &buf,
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -748,7 +749,7 @@ fn postmaster_send_mail(
         game.act(
             "$n tells you, 'You need to specify an addressee!'",
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -765,7 +766,7 @@ $n tells you, '...which I see you can't afford.'",
         game.act(
             &buf,
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -777,7 +778,7 @@ $n tells you, '...which I see you can't afford.'",
         game.act(
             "$n tells you, 'No one by that name is registered here!'",
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -787,7 +788,7 @@ $n tells you, '...which I see you can't afford.'",
     game.act(
         "$n starts to write some mail.",
         true,
-        Some(ch),
+        Some(ch.id()),
         None,
         None,
         TO_ROOM,
@@ -801,7 +802,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     game.act(
         &buf,
         false,
-        Some(mailman),
+        Some(mailman.id()),
         None,
         Some(VictimRef::Char(ch)),
         TO_VICT,
@@ -829,7 +830,7 @@ fn postmaster_check_mail(
         game.act(
             "$n tells you, 'You have mail waiting.'",
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -838,7 +839,7 @@ fn postmaster_check_mail(
         game.act(
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -858,7 +859,7 @@ fn postmaster_receive_mail(
         game.act(
             buf,
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -886,12 +887,12 @@ fn postmaster_receive_mail(
         };
         game.db.obj_mut(oid).action_description = Rc::from(RefCell::from(mail_content));
 
-        game.db.obj_to_char(oid, ch);
+        game.db.obj_to_char(oid, ch.id());
 
         game.act(
             "$n gives you a piece of mail.",
             false,
-            Some(mailman),
+            Some(mailman.id()),
             None,
             Some(VictimRef::Char(ch)),
             TO_VICT,
@@ -899,7 +900,7 @@ fn postmaster_receive_mail(
         game.act(
             "$N gives $n a piece of mail.",
             false,
-            Some(ch),
+            Some(ch.id()),
             None,
             Some(VictimRef::Char(mailman)),
             TO_ROOM,

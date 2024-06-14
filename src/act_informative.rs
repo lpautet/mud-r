@@ -12,10 +12,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use log::{error, info};
-use regex::Regex;
-use crate::depot::DepotId;
-use crate::VictimRef;
 use crate::act_social::{do_action, do_insult};
 use crate::class::{find_class_bitvector, level_exp, title_female, title_male};
 use crate::config::NOPERSON;
@@ -24,6 +20,7 @@ use crate::constants::{
     WEAR_WHERE, WEEKDAYS,
 };
 use crate::db::DB;
+use crate::depot::{DepotId, HasId};
 use crate::fight::compute_armor_class;
 use crate::handler::{
     affected_by_spell, fname, get_number, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP,
@@ -39,7 +36,7 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
+    ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE,
     AFF_SANCTUARY, CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON,
     ITEM_FOUNTAIN, ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, LVL_IMPL,
     NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING,
@@ -57,22 +54,28 @@ use crate::util::{
     age, clone_vec2, rand_number, real_time_passed, sprintbit, sprinttype, time_now,
     SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN,
 };
+use crate::VictimRef;
 use crate::{_clrlevel, an, clr, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT};
 use crate::{CCNRM, TO_VICT};
+use log::{error, info};
+use regex::Regex;
 
 pub const SHOW_OBJ_LONG: i32 = 0;
 pub const SHOW_OBJ_SHORT: i32 = 1;
 pub const SHOW_OBJ_ACTION: i32 = 2;
 
 impl Game {
-    fn show_obj_to_char(&mut self, oid: DepotId, ch: &CharData, mode: i32) {
+    fn show_obj_to_char(&mut self, oid: DepotId, chid: DepotId, mode: i32) {
         match mode {
             SHOW_OBJ_LONG => {
-                self.send_to_char(ch, format!("{}", self.db.obj(oid).description).as_str());
+                self.send_to_char(chid, format!("{}", self.db.obj(oid).description).as_str());
             }
 
             SHOW_OBJ_SHORT => {
-                self.send_to_char(ch, format!("{}", self.db.obj(oid).short_description).as_str());
+                self.send_to_char(
+                    chid,
+                    format!("{}", self.db.obj(oid).short_description).as_str(),
+                );
             }
 
             SHOW_OBJ_ACTION => match self.db.obj(oid).get_obj_type() {
@@ -82,18 +85,19 @@ impl Game {
                             "There is something written on it:\r\n\r\n{}",
                             RefCell::borrow(&self.db.obj(oid).action_description)
                         );
-                        page_string(self, ch.desc.borrow().unwrap(), notebuf.as_str(), true);
+                        let d_id = self.db.ch(chid).desc.borrow().unwrap();
+                        page_string(self, d_id, notebuf.as_str(), true);
                     } else {
-                        self.send_to_char(ch, "It's blank.\r\n");
+                        self.send_to_char(chid, "It's blank.\r\n");
                     }
                     return;
                 }
                 ITEM_DRINKCON => {
-                    self.send_to_char(ch, "It looks like a drink container.");
+                    self.send_to_char(chid, "It looks like a drink container.");
                 }
 
                 _ => {
-                    self.send_to_char(ch, "You see nothing special..");
+                    self.send_to_char(chid, "You see nothing special..");
                 }
             },
 
@@ -103,53 +107,51 @@ impl Game {
             }
         }
 
-        self.show_obj_modifiers(oid, ch);
-        self.send_to_char(ch, "\r\n");
+        self.show_obj_modifiers(oid, chid);
+        self.send_to_char(chid, "\r\n");
     }
 
-    fn show_obj_modifiers(&mut self, oid: DepotId, ch: &CharData) {
+    fn show_obj_modifiers(&mut self, oid: DepotId, chid: DepotId) {
         if self.db.obj(oid).obj_flagged(ITEM_INVISIBLE) {
-            self.send_to_char(ch, " (invisible)");
+            self.send_to_char(chid, " (invisible)");
         }
+        let ch = self.db.ch(chid);
 
         if self.db.obj(oid).obj_flagged(ITEM_BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
-            self.send_to_char(ch, " ..It glows blue!");
+            self.send_to_char(chid, " ..It glows blue!");
         }
+        let ch = self.db.ch(chid);
 
         if self.db.obj(oid).obj_flagged(ITEM_MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
-            self.send_to_char(ch, " ..It glows yellow!");
+            self.send_to_char(chid, " ..It glows yellow!");
         }
 
         if self.db.obj(oid).obj_flagged(ITEM_GLOW) {
-            self.send_to_char(ch, " ..It has a soft glowing aura!");
+            self.send_to_char(chid, " ..It has a soft glowing aura!");
         }
 
         if self.db.obj(oid).obj_flagged(ITEM_HUM) {
-            self.send_to_char(ch, " ..It emits a faint humming sound!");
+            self.send_to_char(chid, " ..It emits a faint humming sound!");
         }
     }
 }
-fn list_obj_to_char(
-    game: &mut Game,
-    list: &Vec<DepotId>,
-    ch: &CharData,
-    mode: i32,
-    show: bool,
-) {
+fn list_obj_to_char(game: &mut Game, list: &Vec<DepotId>, chid: DepotId, mode: i32, show: bool) {
     let mut found = true;
 
     for oid in list {
-        if game.can_see_obj(ch, game.db.obj(*oid)) {
-            game.show_obj_to_char(*oid, ch, mode);
+        if game.can_see_obj(game.db.ch(chid), game.db.obj(*oid)) {
+            game.show_obj_to_char(*oid, chid, mode);
             found = true;
         }
     }
     if !found && show {
-        game.send_to_char(ch, " Nothing.\r\n");
+        game.send_to_char(chid, " Nothing.\r\n");
     }
 }
 
-fn diag_char_to_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn diag_char_to_char(game: &mut Game, i_id: DepotId, chid: DepotId) {
+    let i = game.db.ch(i_id);
+    let ch = game.db.ch(chid);
     struct Item {
         percent: i8,
         text: &'static str,
@@ -207,7 +209,7 @@ fn diag_char_to_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
 
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "{}{} {}\r\n",
             pers.chars().next().unwrap().to_uppercase(),
@@ -218,7 +220,9 @@ fn diag_char_to_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     );
 }
 
-fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn look_at_char(game: &mut Game, i_id: DepotId, chid: DepotId) {
+    let i = game.db.ch(i_id);
+    let ch = game.db.ch(chid);
     let mut found;
     //struct obj_data *tmp_obj;
 
@@ -227,19 +231,23 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
 
     if !RefCell::borrow(&i.player.borrow().description).is_empty() {
-        game.send_to_char(ch, RefCell::borrow(&i.player.borrow().description).as_str());
+        let messg = i.player.borrow().description.borrow().clone();
+        game.send_to_char(chid, messg.as_str());
     } else {
         game.act(
             "You see nothing special about $m.",
             false,
-            Some(i),
+            Some(i_id),
             None,
-            Some(VictimRef::Char(ch)),
+            Some(VictimRef::Char(chid)),
             TO_VICT,
         );
     }
 
-    diag_char_to_char(game, i, ch);
+    diag_char_to_char(game, i_id, chid);
+
+    let i = game.db.ch(i_id);
+    let ch = game.db.ch(chid);
 
     found = false;
     for j in 0..NUM_WEARS {
@@ -249,39 +257,55 @@ fn look_at_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
     }
 
     if found {
-        game.send_to_char(ch, "\r\n"); /* act() does capitalization. */
-        game.act("$n is using:", false, Some(i), None, Some(VictimRef::Char(ch)), TO_VICT);
+        game.send_to_char(chid, "\r\n"); /* act() does capitalization. */
+        game.act(
+            "$n is using:",
+            false,
+            Some(i_id),
+            None,
+            Some(VictimRef::Char(chid)),
+            TO_VICT,
+        );
         for j in 0..NUM_WEARS {
+            let ch = game.db.ch(chid);
+            let i = game.db.ch(i_id);
             if i.get_eq(j).is_some() && game.can_see_obj(ch, game.db.obj(i.get_eq(j).unwrap())) {
-                game.send_to_char(ch, WEAR_WHERE[j as usize]);
-                game.show_obj_to_char(i.get_eq(j).unwrap(), ch, SHOW_OBJ_SHORT);
+                game.send_to_char(chid, WEAR_WHERE[j as usize]);
+                let i = game.db.ch(i_id);
+                game.show_obj_to_char(i.get_eq(j).unwrap(), chid, SHOW_OBJ_SHORT);
             }
         }
     }
-    if !Rc::ptr_eq(i, ch) && (ch.is_thief() || ch.get_level() >= LVL_IMMORT as u8) {
+    let ch = game.db.ch(chid);
+    if i_id != chid && (ch.is_thief() || ch.get_level() >= LVL_IMMORT as u8) {
         found = false;
         game.act(
             "\r\nYou attempt to peek at $s inventory:",
             false,
-            Some(i),
+            Some(i_id),
             None,
-            Some(VictimRef::Char(ch)),
+            Some(VictimRef::Char(chid)),
             TO_VICT,
         );
-        for tmp_obj_id in i.carrying.borrow().clone() {
-            if game.can_see_obj(ch, game.db.obj(tmp_obj_id)) && rand_number(0, 20) < ch.get_level() as u32 {
-                game.show_obj_to_char(tmp_obj_id, ch, SHOW_OBJ_SHORT);
+        let i = game.db.ch(i_id);
+        let list = i.carrying.borrow().clone();
+        for tmp_obj_id in list {
+            let ch = game.db.ch(chid);
+            if game.can_see_obj(ch, game.db.obj(tmp_obj_id))
+                && rand_number(0, 20) < ch.get_level() as u32
+            {
+                game.show_obj_to_char(tmp_obj_id, chid, SHOW_OBJ_SHORT);
                 found = true;
             }
         }
     }
 
     if !found {
-        game.send_to_char(ch, "You can't see anything.\r\n");
+        game.send_to_char(chid, "You can't see anything.\r\n");
     }
 }
 
-fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
+fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
     const POSITIONS: [&str; 9] = [
         " is lying here, dead.",
         " is lying here, mortally wounded.",
@@ -294,132 +318,147 @@ fn list_one_char(game: &mut Game, i: &Rc<CharData>, ch: &Rc<CharData>) {
         " is standing here.",
     ];
 
-    if i.is_npc() && !i.player.borrow().long_descr.is_empty() && i.get_pos() == i.get_default_pos()
-    {
-        if i.aff_flagged(AFF_INVISIBLE) {
-            game.send_to_char(ch, "*");
+    if {
+        let i = game.db.ch(id);
+        i.is_npc() && !i.player.borrow().long_descr.is_empty() && i.get_pos() == i.get_default_pos()
+    } {
+        if game.db.ch(id).aff_flagged(AFF_INVISIBLE) {
+            game.send_to_char(chid, "*");
         }
 
-        if ch.aff_flagged(AFF_DETECT_ALIGN) {
-            if i.is_evil() {
-                game.send_to_char(ch, "(Red Aura) ");
-            } else if i.is_good() {
-                game.send_to_char(ch, "(Blue Aura) ");
+        if game.db.ch(chid).aff_flagged(AFF_DETECT_ALIGN) {
+            if game.db.ch(id).is_evil() {
+                game.send_to_char(chid, "(Red Aura) ");
+            } else if game.db.ch(id).is_good() {
+                game.send_to_char(chid, "(Blue Aura) ");
             }
         }
-        game.send_to_char(ch, i.player.borrow().long_descr.as_str());
+        let messg = game.db.ch(id).player.borrow().long_descr.clone();
+        game.send_to_char(chid, messg.as_str());
 
-        if i.aff_flagged(AFF_SANCTUARY) {
+        if game.db.ch(id).aff_flagged(AFF_SANCTUARY) {
             game.act(
                 "...$e glows with a bright light!",
                 false,
-                Some(i),
+                Some(id),
                 None,
-                Some(VictimRef::Char(ch)),
+                Some(VictimRef::Char(chid)),
                 TO_VICT,
             );
         }
-        if i.aff_flagged(AFF_BLIND) {
+        if game.db.ch(id).aff_flagged(AFF_BLIND) {
             game.act(
                 "...$e is groping around blindly!",
                 false,
-                Some(i),
+                Some(id),
                 None,
-                Some(VictimRef::Char(ch)),
+                Some(VictimRef::Char(chid)),
                 TO_VICT,
             );
         }
         return;
     }
 
-    if i.is_npc() {
+    if game.db.ch(id).is_npc() {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "{}{}",
-                i.player.borrow().short_descr.as_str()[0..1].to_uppercase(),
-                &i.player.borrow().short_descr.as_str()[1..]
+                game.db.ch(id).player.borrow().short_descr.as_str()[0..1].to_uppercase(),
+                &game.db.ch(id).player.borrow().short_descr.as_str()[1..]
             )
             .as_str(),
         );
     } else {
         game.send_to_char(
-            ch,
-            format!("{} {}", i.player.borrow().name.as_str(), i.get_title()).as_str(),
+            chid,
+            format!(
+                "{} {}",
+                game.db.ch(id).player.borrow().name.as_str(),
+                game.db.ch(id).get_title()
+            )
+            .as_str(),
         );
     }
 
-    if i.aff_flagged(AFF_INVISIBLE) {
-        game.send_to_char(ch, " (invisible)");
+    if game.db.ch(id).aff_flagged(AFF_INVISIBLE) {
+        game.send_to_char(chid, " (invisible)");
     }
-    if i.aff_flagged(AFF_HIDE) {
-        game.send_to_char(ch, " (hidden)");
+    if game.db.ch(id).aff_flagged(AFF_HIDE) {
+        game.send_to_char(chid, " (hidden)");
     }
-    if !i.is_npc() && i.desc.borrow().is_none() {
-        game.send_to_char(ch, " (linkless)");
+    if !game.db.ch(id).is_npc() && game.db.ch(id).desc.borrow().is_none() {
+        game.send_to_char(chid, " (linkless)");
     }
-    if !i.is_npc() && i.plr_flagged(PLR_WRITING) {
-        game.send_to_char(ch, " (writing)");
+    if !game.db.ch(id).is_npc() && game.db.ch(id).plr_flagged(PLR_WRITING) {
+        game.send_to_char(chid, " (writing)");
     }
-    if i.get_pos() != POS_FIGHTING {
-        game.send_to_char(ch, POSITIONS[i.get_pos() as usize]);
+    if game.db.ch(id).get_pos() != POS_FIGHTING {
+        game.send_to_char(chid, POSITIONS[game.db.ch(id).get_pos() as usize]);
     } else {
-        if i.fighting().is_some() {
-            game.send_to_char(ch, " is here, fighting ");
-            if Rc::ptr_eq(i.fighting().as_ref().unwrap(), &ch) {
-                game.send_to_char(ch, "YOU!");
+        if game.db.ch(id).fighting_id().is_some() {
+            game.send_to_char(chid, " is here, fighting ");
+            if game.db.ch(game.db.ch(id).fighting_id().unwrap()).id() == chid {
+                game.send_to_char(chid, "YOU!");
             } else {
-                if i.in_room() == i.fighting().as_ref().unwrap().in_room() {
+                if game.db.ch(id).in_room()
+                    == game.db.ch(game.db.ch(id).fighting_id().unwrap()).in_room()
+                {
                     game.send_to_char(
-                        ch,
+                        chid,
                         format!(
                             "{}!",
-                            game.pers(i.fighting().as_ref().unwrap(), ch.as_ref())
+                            game.pers(
+                                game.db.ch(game.db.ch(id).fighting_id().unwrap()),
+                                game.db.ch(chid)
+                            )
                         )
                         .as_str(),
                     );
                 } else {
-                    game.send_to_char(ch, "someone who has already left!");
+                    game.send_to_char(chid, "someone who has already left!");
                 }
             }
         } else {
             /* NIL fighting pointer */
-            game.send_to_char(ch, " is here struggling with thin air.");
+            game.send_to_char(chid, " is here struggling with thin air.");
         }
     }
 
-    if ch.aff_flagged(AFF_DETECT_ALIGN) {
-        if i.is_evil() {
-            game.send_to_char(ch, " (Red Aura)");
-        } else if i.is_good() {
-            game.send_to_char(ch, " (Blue Aura)");
+    if game.db.ch(chid).aff_flagged(AFF_DETECT_ALIGN) {
+        if game.db.ch(id).is_evil() {
+            game.send_to_char(chid, " (Red Aura)");
+        } else if game.db.ch(id).is_good() {
+            game.send_to_char(chid, " (Blue Aura)");
         }
     }
-    game.send_to_char(ch, "\r\n");
+    game.send_to_char(chid, "\r\n");
 
-    if i.aff_flagged(AFF_SANCTUARY) {
+    if game.db.ch(id).aff_flagged(AFF_SANCTUARY) {
         game.act(
             "...$e glows with a bright light!",
             false,
-            Some(i),
+            Some(id),
             None,
-            Some(VictimRef::Char(ch)),
+            Some(VictimRef::Char(chid)),
             TO_VICT,
         );
     }
 }
 
-fn list_char_to_char(game: &mut Game, list: &Vec<Rc<CharData>>, ch: &Rc<CharData>) {
-    for i in list {
-        if !Rc::ptr_eq(i, &ch) {
-            if game.can_see(ch.as_ref(), i) {
-                list_one_char(game, i, &ch);
+fn list_char_to_char(game: &mut Game, list: &Vec<DepotId>, chid: DepotId) {
+    for id in list {
+        if *id != chid {
+            let ch = game.db.ch(chid);
+            let obj = game.db.ch(*id);
+            if game.can_see(ch, obj) {
+                list_one_char(game, *id, chid);
             } else if game.db.is_dark(ch.in_room())
                 && !ch.can_see_in_dark()
-                && i.aff_flagged(AFF_INFRAVISION)
+                && obj.aff_flagged(AFF_INFRAVISION)
             {
                 game.send_to_char(
-                    ch.as_ref(),
+                    chid,
                     "You see a pair of glowing red eyes looking your way.\r\n",
                 );
             }
@@ -427,21 +466,32 @@ fn list_char_to_char(game: &mut Game, list: &Vec<Rc<CharData>>, ch: &Rc<CharData
     }
 }
 
-fn do_auto_exits(game: &mut Game, ch: &CharData) {
+fn do_auto_exits(game: &mut Game, chid: DepotId) {
+    let ch = game.db.ch(chid);
     let mut slen = 0;
-    game.send_to_char(ch, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
+    game.send_to_char(chid, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
     for door in 0..NUM_OF_DIRS {
-        if game.db.exit(ch, door).is_none() || game.db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
+        let ch = game.db.ch(chid);
+        if game.db.exit(ch, door).is_none()
+            || game.db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE
+        {
             continue;
         }
-        if game.db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED) {
+        if game
+            .db
+            .exit(ch, door)
+            .as_ref()
+            .unwrap()
+            .exit_flagged(EX_CLOSED)
+        {
             continue;
         }
-        game.send_to_char(ch, format!("{} ", DIRS[door].to_lowercase()).as_str());
+        game.send_to_char(chid, format!("{} ", DIRS[door].to_lowercase()).as_str());
         slen += 1;
     }
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "{}]{}\r\n",
             if slen != 0 { "" } else { "None!" },
@@ -451,18 +501,28 @@ fn do_auto_exits(game: &mut Game, ch: &CharData) {
     );
 }
 
-pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_exits(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_BLIND) {
-        game.send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
+        game.send_to_char(chid, "You can't see a damned thing, you're blind!\r\n");
         return;
     }
-    game.send_to_char(ch, "Obvious exits:\r\n");
+    game.send_to_char(chid, "Obvious exits:\r\n");
     let mut len = 0;
     for door in 0..NUM_OF_DIRS {
-        if game.db.exit(ch, door).is_none() || game.db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
+        let ch = game.db.ch(chid);
+        if game.db.exit(ch, door).is_none()
+            || game.db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE
+        {
             continue;
         }
-        if game.db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED) {
+        if game
+            .db
+            .exit(ch, door)
+            .as_ref()
+            .unwrap()
+            .exit_flagged(EX_CLOSED)
+        {
             continue;
         }
         len += 1;
@@ -471,7 +531,7 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         let exit = oexit.as_ref().unwrap();
         if ch.get_level() >= LVL_IMMORT as u8 {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "{} - [{:5}] {}\r\n",
                     DIRS[door as usize],
@@ -482,7 +542,7 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
             );
         } else {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "{} - {}\r\n",
                     DIRS[door as usize],
@@ -498,23 +558,26 @@ pub fn do_exits(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
     }
 
     if len == 0 {
-        game.send_to_char(ch, " None.\r\n");
+        game.send_to_char(chid, " None.\r\n");
     }
 }
 
-pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
+pub fn look_at_room(game: &mut Game, chid: DepotId, ignore_brief: bool) {
+    let ch = game.db.ch(chid);
     if ch.desc.borrow().is_none() {
         return;
     }
 
     if game.db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
-        game.send_to_char(ch, "It is pitch black...\r\n");
+        game.send_to_char(chid, "It is pitch black...\r\n");
         return;
     } else if ch.aff_flagged(AFF_BLIND) {
-        game.send_to_char(ch, "You see nothing but infinite darkness...\r\n");
+        game.send_to_char(chid, "You see nothing but infinite darkness...\r\n");
         return;
     }
-    game.send_to_char(ch, format!("{}", CCCYN!(ch, C_NRM)).as_str());
+    game.send_to_char(chid, format!("{}", CCCYN!(ch, C_NRM)).as_str());
+
+    let ch = game.db.ch(chid);
 
     if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
         let mut buf = String::new();
@@ -524,7 +587,7 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
             &mut buf,
         );
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "[{}] {} [{}]",
                 game.db.get_room_vnum(ch.in_room()),
@@ -535,39 +598,48 @@ pub fn look_at_room(game: &mut Game, ch: &Rc<CharData>, ignore_brief: bool) {
         );
     } else {
         game.send_to_char(
-            ch,
+            chid,
             format!("{}", game.db.world[ch.in_room() as usize].name).as_str(),
         );
     }
 
-    game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+    let ch = game.db.ch(chid);
+    game.send_to_char(chid, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
+    let ch = game.db.ch(chid);
 
     if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
         || ignore_brief
         || game.db.room_flagged(ch.in_room(), ROOM_DEATH)
     {
         game.send_to_char(
-            ch,
+            chid,
             format!("{}", game.db.world[ch.in_room() as usize].description).as_str(),
         );
     }
 
     /* autoexits */
+    let ch = game.db.ch(chid);
     if !ch.is_npc() && ch.prf_flagged(PRF_AUTOEXIT) {
-        do_auto_exits(game, ch);
+        do_auto_exits(game, chid);
     }
 
     /* now list characters & objects */
-    game.send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+    let ch = game.db.ch(chid);
+    game.send_to_char(chid, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+    let ch = game.db.ch(chid);
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
-    list_obj_to_char(game, &list, ch, SHOW_OBJ_LONG, false);
-    game.send_to_char(ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
+    list_obj_to_char(game, &list, chid, SHOW_OBJ_LONG, false);
+    let ch = game.db.ch(chid);
+    game.send_to_char(chid, format!("{}", CCYEL!(ch, C_NRM)).as_str());
+    let ch = game.db.ch(chid);
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-    list_char_to_char(game, &list, ch);
-    game.send_to_char(ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+    list_char_to_char(game, &list, chid);
+    let ch = game.db.ch(chid);
+    game.send_to_char(chid, format!("{}", CCNRM!(ch, C_NRM)).as_str());
 }
 
-fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
+fn look_in_direction(game: &mut Game, chid: DepotId, dir: i32) {
+    let ch = game.db.ch(chid);
     if game.db.exit(ch, dir as usize).is_some() {
         if !game
             .db
@@ -578,7 +650,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
             .is_empty()
         {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "{}",
                     game.db
@@ -590,8 +662,9 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 .as_str(),
             );
         } else {
-            game.send_to_char(ch, "You see nothing special.\r\n");
+            game.send_to_char(chid, "You see nothing special.\r\n");
         }
+        let ch = game.db.ch(chid);
         if game
             .db
             .exit(ch, dir as usize)
@@ -607,7 +680,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 .is_empty()
         {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "The {} is closed.\r\n",
                     fname(
@@ -636,7 +709,7 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 .is_empty()
         {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "The {} is open.\r\n",
                     fname(
@@ -651,55 +724,55 @@ fn look_in_direction(game: &mut Game, ch: &Rc<CharData>, dir: i32) {
                 .as_str(),
             );
         } else {
-            game.send_to_char(ch, "Nothing special there...\r\n");
+            game.send_to_char(chid, "Nothing special there...\r\n");
         }
     }
 }
 
-fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
-    let mut dummy: Option<Rc<CharData>> = None;
-    let mut oid: Option<DepotId> = None;
+fn look_in_obj(game: &mut Game, chid: DepotId, arg: &str) {
+    let mut dummy = None;
+    let mut oid = None;
     let bits;
 
     if arg.is_empty() {
-        game.send_to_char(ch, "Look in what?\r\n");
+        game.send_to_char(chid, "Look in what?\r\n");
         return;
     }
     bits = game.generic_find(
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
-        ch,
+        chid,
         &mut dummy,
         &mut oid,
     );
     if bits == 0 {
         game.send_to_char(
-            ch,
+            chid,
             format!("There doesn't seem to be {} {} here.\r\n", an!(arg), arg).as_str(),
         );
     } else if game.db.obj(oid.unwrap()).get_obj_type() != ITEM_DRINKCON
         && game.db.obj(oid.unwrap()).get_obj_type() != ITEM_FOUNTAIN
         && game.db.obj(oid.unwrap()).get_obj_type() != ITEM_CONTAINER
     {
-        game.send_to_char(ch, "There's nothing inside that!\r\n");
+        game.send_to_char(chid, "There's nothing inside that!\r\n");
     } else {
         if game.db.obj(oid.unwrap()).get_obj_type() == ITEM_CONTAINER {
             if game.db.obj(oid.unwrap()).objval_flagged(CONT_CLOSED) {
-                game.send_to_char(ch, "It is closed.\r\n");
+                game.send_to_char(chid, "It is closed.\r\n");
             } else {
                 game.send_to_char(
-                    ch,
+                    chid,
                     fname(game.db.obj(oid.unwrap()).name.as_ref()).as_ref(),
                 );
                 match bits {
                     FIND_OBJ_INV => {
-                        game.send_to_char(ch, " (carried): \r\n");
+                        game.send_to_char(chid, " (carried): \r\n");
                     }
                     FIND_OBJ_ROOM => {
-                        game.send_to_char(ch, " (here): \r\n");
+                        game.send_to_char(chid, " (here): \r\n");
                     }
                     FIND_OBJ_EQUIP => {
-                        game.send_to_char(ch, " (used): \r\n");
+                        game.send_to_char(chid, " (used): \r\n");
                     }
                     _ => {}
                 }
@@ -707,7 +780,7 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 list_obj_to_char(
                     game,
                     &game.db.obj(oid.unwrap()).contains.clone(),
-                    ch,
+                    chid,
                     SHOW_OBJ_SHORT,
                     true,
                 );
@@ -715,12 +788,13 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
         } else {
             /* item must be a fountain or drink container */
             if game.db.obj(oid.unwrap()).get_obj_val(1) <= 0 {
-                game.send_to_char(ch, "It is empty.\r\n");
+                game.send_to_char(chid, "It is empty.\r\n");
             } else {
                 if game.db.obj(oid.unwrap()).get_obj_val(0) <= 0
-                    || game.db.obj(oid.unwrap()).get_obj_val(1) > game.db.obj(oid.unwrap()).get_obj_val(0)
+                    || game.db.obj(oid.unwrap()).get_obj_val(1)
+                        > game.db.obj(oid.unwrap()).get_obj_val(0)
                 {
-                    game.send_to_char(ch, "Its contents seem somewhat murky.\r\n");
+                    game.send_to_char(chid, "Its contents seem somewhat murky.\r\n");
                     /* BUG */
                 } else {
                     let mut buf2 = String::new();
@@ -732,7 +806,7 @@ fn look_in_obj(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                         &mut buf2,
                     );
                     game.send_to_char(
-                        ch,
+                        chid,
                         format!(
                             "It's {}full of a {} liquid.\r\n",
                             FULLNESS[amt as usize], buf2
@@ -762,50 +836,52 @@ fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<Rc<str>> {
  * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
  * suggested fix to this problem.
  */
-fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
+fn look_at_target(game: &mut Game, chid: DepotId, arg: &str) {
+    let ch = game.db.ch(chid);
     let mut i = 0;
     let mut found = false;
-    let mut found_char: Option<Rc<CharData>> = None;
-    let mut found_obj_id: Option<DepotId> = None;
+    let mut found_char_id = None;
+    let mut found_obj_id = None;
 
     if ch.desc.borrow().is_none() {
         return;
     }
 
     if arg.is_empty() {
-        game.send_to_char(ch, "Look at what?\r\n");
+        game.send_to_char(chid, "Look at what?\r\n");
         return;
     }
 
     let bits = game.generic_find(
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP | FIND_CHAR_ROOM) as i64,
-        ch,
-        &mut found_char,
+        chid,
+        &mut found_char_id,
         &mut found_obj_id,
     );
 
     /* Is the target a character? */
-    if found_char.is_some() {
-        let found_char = found_char.as_ref().unwrap();
-        look_at_char(game, found_char, ch);
-        if !Rc::ptr_eq(ch, found_char) {
-            if game.can_see(found_char, ch) {
+    if found_char_id.is_some() {
+        let found_char_id = found_char_id.unwrap();
+        look_at_char(game, found_char_id, chid);
+        if chid != found_char_id {
+            let ch = game.db.ch(chid);
+            if game.can_see(game.db.ch(found_char_id), ch) {
                 game.act(
                     "$n looks at you.",
                     true,
-                    Some(ch),
+                    Some(chid),
                     None,
-                    Some(VictimRef::Char(found_char)),
+                    Some(VictimRef::Char(found_char_id)),
                     TO_VICT,
                 );
             }
             game.act(
                 "$n looks at $N.",
                 true,
-                Some(ch),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(found_char)),
+                Some(VictimRef::Char(found_char_id)),
                 TO_NOTVICT,
             );
         }
@@ -815,32 +891,31 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     let fnum = get_number(&mut arg);
     /* Strip off "number." from 2.foo and friends. */
     if fnum == 0 {
-        game.send_to_char(ch, "Look at what?\r\n");
+        game.send_to_char(chid, "Look at what?\r\n");
         return;
     }
 
+    let ch = game.db.ch(chid);
     /* Does the argument match an extra desc in the room? */
     let desc = find_exdesc(&arg, &game.db.world[ch.in_room() as usize].ex_descriptions);
     if desc.is_some() {
         i += 1;
         if i == fnum {
-            page_string(game,
-                ch.desc.borrow().unwrap(),
-                desc.as_ref().unwrap(),
-                false,
-            );
+            let d_id = ch.desc.borrow().unwrap();
+            page_string(game, d_id, desc.as_ref().unwrap(), false);
             return;
         }
     }
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
+        let ch = game.db.ch(chid);
         if ch.get_eq(j).is_some() && game.can_see_obj(ch, game.db.obj(ch.get_eq(j).unwrap())) {
             let desc = find_exdesc(&arg, &game.db.obj(ch.get_eq(j).unwrap()).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
-                    game.send_to_char(ch, desc.as_ref().unwrap());
+                    game.send_to_char(chid, desc.as_ref().unwrap());
                     found = true;
                 }
             }
@@ -848,13 +923,15 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc in the char's inventory? */
-    for oid in ch.carrying.borrow().clone() {
-        if game.can_see_obj(ch, game.db.obj(oid)) {
+    let ch = game.db.ch(chid);
+    let list = ch.carrying.borrow().clone();
+    for oid in list.into_iter() {
+        if game.can_see_obj(game.db.ch(chid), game.db.obj(oid)) {
             let desc = find_exdesc(&arg, &game.db.obj(oid).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
-                    game.send_to_char(ch, desc.as_ref().unwrap());
+                    game.send_to_char(chid, desc.as_ref().unwrap());
                     found = true;
                 }
             }
@@ -862,12 +939,13 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     }
 
     /* Does the argument match an extra desc of an object in the room? */
+    let ch = game.db.ch(chid);
     for oid in game.db.world[ch.in_room() as usize].contents.clone() {
-        if game.can_see_obj(ch, game.db.obj(oid)) {
+        if game.can_see_obj(game.db.ch(chid), game.db.obj(oid)) {
             if let Some(desc) = find_exdesc(&arg, &game.db.obj(oid).ex_descriptions) {
                 i += 1;
                 if i == fnum {
-                    game.send_to_char(ch, desc.as_ref());
+                    game.send_to_char(chid, desc.as_ref());
                     found = true;
                 }
             }
@@ -877,28 +955,30 @@ fn look_at_target(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     /* If an object was found back in generic_find */
     if bits != 0 {
         if !found {
-            game.show_obj_to_char(found_obj_id.unwrap(), ch, SHOW_OBJ_ACTION);
+            game.show_obj_to_char(found_obj_id.unwrap(), chid, SHOW_OBJ_ACTION);
         } else {
-            game.show_obj_modifiers(found_obj_id.unwrap(), ch);
-            game.send_to_char(ch, "\r\n");
+            game.show_obj_modifiers(found_obj_id.unwrap(), chid);
+            game.send_to_char(chid, "\r\n");
         }
     } else if !found {
-        game.send_to_char(ch, "You do not see that here.\r\n");
+        game.send_to_char(chid, "You do not see that here.\r\n");
     }
 }
 
-pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_look(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.desc.borrow().is_none() {
         return;
     }
     if ch.get_pos() < POS_SLEEPING {
-        game.send_to_char(ch, "You can't see anything but stars!\r\n");
+        game.send_to_char(chid, "You can't see anything but stars!\r\n");
     } else if ch.aff_flagged(AFF_BLIND) {
-        game.send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
+        game.send_to_char(chid, "You can't see a damned thing, you're blind!\r\n");
     } else if game.db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
-        game.send_to_char(ch, "It is pitch black...\r\n");
+        game.send_to_char(chid, "It is pitch black...\r\n");
+        let ch = game.db.ch(chid);
         let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-        list_char_to_char(game, &list, ch);
+        list_char_to_char(game, &list, chid);
         /* glowing red eyes */
     } else {
         let mut argument = argument.to_string();
@@ -909,55 +989,54 @@ pub fn do_look(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
         if subcmd == SCMD_READ {
             if arg.is_empty() {
-                game.send_to_char(ch, "Read what?\r\n");
+                game.send_to_char(chid, "Read what?\r\n");
             } else {
-                look_at_target(game, ch, &mut arg);
+                look_at_target(game, chid, &mut arg);
             }
             return;
         }
         let look_type;
         if arg.is_empty() {
             /* "look" alone, without an argument at all */
-            look_at_room(game, ch, true);
+            look_at_room(game, chid, true);
         } else if is_abbrev(arg.as_ref(), "in") {
-            look_in_obj(game, ch, arg2.as_str());
+            look_in_obj(game, chid, arg2.as_str());
             /* did the char type 'look <direction>?' */
         } else if {
             look_type = search_block(arg.as_str(), &DIRS, false);
             look_type
         } != None
         {
-            look_in_direction(game, ch, look_type.unwrap() as i32);
+            look_in_direction(game, chid, look_type.unwrap() as i32);
         } else if is_abbrev(arg.as_ref(), "at") {
-            look_at_target(game, ch, arg2.as_ref());
+            look_at_target(game, chid, arg2.as_ref());
         } else {
-            look_at_target(game, ch, arg.as_ref());
+            look_at_target(game, chid, arg.as_ref());
         }
     }
 }
 
-pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_examine(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     // struct char_data *tmp_char;
     // struct obj_data *tmp_object;
     // char tempsave[MAX_INPUT_LENGTH], arg[MAX_INPUT_LENGTH];
-
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
     if arg.is_empty() {
-        game.send_to_char(ch, "Examine what?\r\n");
+        game.send_to_char(chid, "Examine what?\r\n");
         return;
     }
 
     /* look_at_target() eats the number. */
-    look_at_target(game, ch, &arg);
-    let mut tmp_char = None;
+    look_at_target(game, chid, &arg);
+    let mut tmp_char_id = None;
     let mut tmp_object_id = None;
     game.generic_find(
         &arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM | FIND_OBJ_EQUIP) as i64,
-        ch,
-        &mut tmp_char,
+        chid,
+        &mut tmp_char_id,
         &mut tmp_object_id,
     );
 
@@ -967,43 +1046,45 @@ pub fn do_examine(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usiz
             || game.db.obj(tmp_object_id).get_obj_type() == ITEM_FOUNTAIN
             || game.db.obj(tmp_object_id).get_obj_type() == ITEM_CONTAINER
         {
-            game.send_to_char(ch, "When you look inside, you see:\r\n");
-            look_in_obj(game, ch, &arg);
+            game.send_to_char(chid, "When you look inside, you see:\r\n");
+            look_in_obj(game, chid, &arg);
         }
     }
 }
 
-pub fn do_gold(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_gold(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.get_gold() == 0 {
-        game.send_to_char(ch, "You're broke!\r\n");
+        game.send_to_char(chid, "You're broke!\r\n");
     } else if ch.get_gold() == 1 {
-        game.send_to_char(ch, "You have one miserable little gold coin.\r\n");
+        game.send_to_char(chid, "You have one miserable little gold coin.\r\n");
     } else {
         game.send_to_char(
-            ch,
+            chid,
             format!("You have {} gold coins.\r\n", ch.get_gold()).as_str(),
         );
     }
 }
 
-pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_score(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.is_npc() {
         return;
     }
 
     game.send_to_char(
-        ch,
+        chid,
         format!("You are {} years old.\r\n", ch.get_age()).as_str(),
     );
-
+    let ch = game.db.ch(chid);
     if age(ch).month == 0 && age(ch).day == 0 {
-        game.send_to_char(ch, "  It's your birthday today.\r\n");
+        game.send_to_char(chid, "  It's your birthday today.\r\n");
     } else {
-        game.send_to_char(ch, "\r\n");
+        game.send_to_char(chid, "\r\n");
     }
-
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "You have {}({}) hit, {}({}) mana and {}({}) movement points.\r\n",
             ch.get_hit(),
@@ -1015,9 +1096,9 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         )
         .as_str(),
     );
-
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "Your armor class is {}/10, and your alignment is {}.\r\n",
             compute_armor_class(ch),
@@ -1025,9 +1106,9 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         )
         .as_str(),
     );
-
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "You have scored {} exp, and have {} gold coins.\r\n",
             ch.get_exp(),
@@ -1035,10 +1116,10 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         )
         .as_str(),
     );
-
+    let ch = game.db.ch(chid);
     if ch.get_level() < LVL_IMMORT as u8 {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "You need {} exp to reach your next level.\r\n",
                 level_exp(ch.get_class(), (ch.get_level() + 1) as i16) - ch.get_exp()
@@ -1046,13 +1127,13 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
             .as_str(),
         );
     }
-
+    let ch = game.db.ch(chid);
     let playing_time = real_time_passed(
         (time_now() - ch.player.borrow().time.logon) + ch.player.borrow().time.played as u64,
         0,
     );
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "You have been playing for {} day{} and {} hour{}.\r\n",
             playing_time.day,
@@ -1062,9 +1143,9 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         )
         .as_str(),
     );
-
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "This ranks you as {} {} (level {}).\r\n",
             ch.get_name(),
@@ -1073,36 +1154,36 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
         )
         .as_str(),
     );
-
+    let ch = game.db.ch(chid);
     match ch.get_pos() {
         POS_DEAD => {
-            game.send_to_char(ch, "You are DEAD!\r\n");
+            game.send_to_char(chid, "You are DEAD!\r\n");
         }
         POS_MORTALLYW => {
-            game.send_to_char(ch, "You are mortally wounded!  You should seek help!\r\n");
+            game.send_to_char(chid, "You are mortally wounded!  You should seek help!\r\n");
         }
         POS_INCAP => {
-            game.send_to_char(ch, "You are incapacitated, slowly fading away...\r\n");
+            game.send_to_char(chid, "You are incapacitated, slowly fading away...\r\n");
         }
         POS_STUNNED => {
-            game.send_to_char(ch, "You are stunned!  You can't move!\r\n");
+            game.send_to_char(chid, "You are stunned!  You can't move!\r\n");
         }
         POS_SLEEPING => {
-            game.send_to_char(ch, "You are sleeping.\r\n");
+            game.send_to_char(chid, "You are sleeping.\r\n");
         }
         POS_RESTING => {
-            game.send_to_char(ch, "You are resting.\r\n");
+            game.send_to_char(chid, "You are resting.\r\n");
         }
         POS_SITTING => {
-            game.send_to_char(ch, "You are sitting.\r\n");
+            game.send_to_char(chid, "You are sitting.\r\n");
         }
         POS_FIGHTING => {
-            let v = game.pers(ch.fighting().as_ref().unwrap(), ch);
+            let v = game.pers(game.db.ch(ch.fighting_id().unwrap()), ch);
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "You are fighting {}.\r\n",
-                    if ch.fighting().is_some() {
+                    if ch.fighting_id().is_some() {
                         v.as_ref()
                     } else {
                         "thin air"
@@ -1112,101 +1193,95 @@ pub fn do_score(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize
             );
         }
         POS_STANDING => {
-            game.send_to_char(ch, "You are standing.\r\n");
+            game.send_to_char(chid, "You are standing.\r\n");
         }
         _ => {
-            game.send_to_char(ch, "You are floating.\r\n");
+            game.send_to_char(chid, "You are floating.\r\n");
         }
     }
-
+    let ch = game.db.ch(chid);
     if ch.get_cond(DRUNK) > 10 {
-        game.send_to_char(ch, "You are intoxicated.\r\n");
+        game.send_to_char(chid, "You are intoxicated.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.get_cond(FULL) == 0 {
-        game.send_to_char(ch, "You are hungry.\r\n");
+        game.send_to_char(chid, "You are hungry.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.get_cond(THIRST) == 0 {
-        game.send_to_char(ch, "You are thirsty.\r\n");
+        game.send_to_char(chid, "You are thirsty.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_BLIND) {
-        game.send_to_char(ch, "You have been blinded!\r\n");
+        game.send_to_char(chid, "You have been blinded!\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_INVISIBLE) {
-        game.send_to_char(ch, "You are invisible.\r\n");
+        game.send_to_char(chid, "You are invisible.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_DETECT_INVIS) {
         game.send_to_char(
-            ch,
+            chid,
             "You are sensitive to the presence of invisible things.\r\n",
         );
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_SANCTUARY) {
-        game.send_to_char(ch, "You are protected by Sanctuary.\r\n");
+        game.send_to_char(chid, "You are protected by Sanctuary.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_POISON) {
-        game.send_to_char(ch, "You are poisoned!\r\n");
+        game.send_to_char(chid, "You are poisoned!\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(ch, "You have been charmed!\r\n");
+        game.send_to_char(chid, "You have been charmed!\r\n");
     }
-
+    let ch = game.db.ch(chid);
     if affected_by_spell(ch, SPELL_ARMOR as i16) {
-        game.send_to_char(ch, "You feel protected.\r\n");
+        game.send_to_char(chid, "You feel protected.\r\n");
     }
-
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_INFRAVISION) {
-        game.send_to_char(ch, "Your eyes are glowing red.\r\n");
+        game.send_to_char(chid, "Your eyes are glowing red.\r\n");
     }
+    let ch = game.db.ch(chid);
     if ch.aff_flagged(PRF_SUMMONABLE) {
-        game.send_to_char(ch, "You are summonable by other players.\r\n");
+        game.send_to_char(chid, "You are summonable by other players.\r\n");
     }
 }
 
-pub fn do_inventory(
-    game: &mut Game,
-    ch: &Rc<CharData>,
-    _argument: &str,
-    _cmd: usize,
-    _subcmd: i32,
-) {
-    game.send_to_char(ch, "You are carrying:\r\n");
-    list_obj_to_char(
-        game,
-        ch.carrying.borrow().as_ref(),
-        ch,
-        SHOW_OBJ_SHORT,
-        true,
-    );
+pub fn do_inventory(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    game.send_to_char(chid, "You are carrying:\r\n");
+    let list = game.db.ch(chid).carrying.borrow().clone();
+    list_obj_to_char(game, &list, chid, SHOW_OBJ_SHORT, true);
 }
 
-pub fn do_equipment(
-    game: &mut Game,
-    ch: &Rc<CharData>,
-    _argument: &str,
-    _cmd: usize,
-    _subcmd: i32,
-) {
+pub fn do_equipment(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let mut found = false;
-    game.send_to_char(ch, "You are using:\r\n");
+    game.send_to_char(chid, "You are using:\r\n");
     for i in 0..NUM_WEARS {
+        let ch = game.db.ch(chid);
         if ch.get_eq(i).is_some() {
             if game.can_see_obj(ch, game.db.obj(ch.get_eq(i).unwrap())) {
-                game.send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
-                game.show_obj_to_char(ch.get_eq(i).unwrap(), ch, SHOW_OBJ_SHORT);
+                let oid = ch.get_eq(i).unwrap();
+                game.send_to_char(chid, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                game.show_obj_to_char(oid, chid, SHOW_OBJ_SHORT);
                 found = true;
             } else {
-                game.send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
-                game.send_to_char(ch, "Something.\r\n");
+                game.send_to_char(chid, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                game.send_to_char(chid, "Something.\r\n");
                 found = true;
             }
         }
     }
     if !found {
-        game.send_to_char(ch, " Nothing.\r\n");
+        game.send_to_char(chid, " Nothing.\r\n");
     }
 }
 
-pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_time(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     /* day in [1..35] */
     let day = game.db.time_info.day + 1;
 
@@ -1214,7 +1289,7 @@ pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     let weekday = ((35 * game.db.time_info.month) + day) % 7;
 
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "It is {} o'clock {}, on {}.\r\n",
             if game.db.time_info.hours % 12 == 0 {
@@ -1258,7 +1333,7 @@ pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     }
 
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "The {}{} Day of the {}, Year {}.\r\n",
             day, suf, MONTH_NAME[game.db.time_info.month as usize], game.db.time_info.year
@@ -1267,7 +1342,8 @@ pub fn do_time(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize,
     );
 }
 
-pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_weather(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     const SKY_LOOK: [&str; 4] = [
         "cloudless",
         "cloudy",
@@ -1284,14 +1360,11 @@ pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
                 "your foot tells you bad weather is due"
             }
         );
-        game.send_to_char(
-            ch,
-            
-            messg.as_str(),
-        );
+        game.send_to_char(chid, messg.as_str());
+        let ch = game.db.ch(chid);
         if ch.get_level() >= LVL_GOD as u8 {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "Pressure: {} (change: {}), Sky: {} ({})\r\n",
                     game.db.weather_info.pressure,
@@ -1303,23 +1376,30 @@ pub fn do_weather(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usi
             );
         }
     } else {
-        game.send_to_char(ch, "You have no feeling about the weather at all.\r\n");
+        game.send_to_char(chid, "You have no feeling about the weather at all.\r\n");
     }
 }
 
-pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_help(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.desc.borrow().is_none() {
         return;
     }
 
     let argument = argument.trim_start();
+    let d_id = ch.desc.borrow().unwrap();
 
     if argument.len() == 0 {
-        page_string(game, ch.desc.borrow().unwrap(), &game.db.help.clone(), false);
+        page_string(
+            game,
+            d_id,
+            &game.db.help.clone(),
+            false,
+        );
         return;
     }
     if game.db.help_table.len() == 0 {
-        game.send_to_char(ch, "No help available.\r\n");
+        game.send_to_char(chid, "No help available.\r\n");
         return;
     }
 
@@ -1329,15 +1409,16 @@ pub fn do_help(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     loop {
         let mut mid = (bot + top) / 2;
         if bot > top {
-            game.send_to_char(ch, "There is no help on that word.\r\n");
+            game.send_to_char(chid, "There is no help on that word.\r\n");
             return;
         } else if game.db.help_table[mid].keyword.starts_with(argument) {
             /* trace backwards to find first matching entry. Thanks Jeff Fink! */
             while mid > 0 && game.db.help_table[mid - 1].keyword.starts_with(argument) {
                 mid -= 1;
             }
-            page_string(game,
-                ch.desc.borrow().unwrap(),
+            page_string(
+                game,
+                d_id,
                 &game.db.help_table[mid].entry.clone(),
                 false,
             );
@@ -1356,7 +1437,7 @@ const WHO_FORMAT: &str =
     "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n";
 
 /* FIXME: This whole thing just needs rewritten. */
-pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_who(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let argument = argument.trim_start();
     let mut buf = argument.to_string();
     let mut low = 0 as i16;
@@ -1424,18 +1505,18 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     showclass = find_class_bitvector(&arg);
                 }
                 _ => {
-                    game.send_to_char(ch, WHO_FORMAT);
+                    game.send_to_char(chid, WHO_FORMAT);
                     return;
                 }
             }
         } else {
             /* endif */
-            game.send_to_char(ch, WHO_FORMAT);
+            game.send_to_char(chid, WHO_FORMAT);
             return;
         }
     } /* end while (parser) */
 
-    game.send_to_char(ch, "Players\r\n-------\r\n");
+    game.send_to_char(chid, "Players\r\n-------\r\n");
     let mut num_can_see = 0;
 
     for d_id in game.descriptor_list.ids() {
@@ -1443,16 +1524,17 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
             continue;
         }
 
-        let tch;
+        let tch_id;
         if game.desc(d_id).original.is_some() {
-            tch = game.desc(d_id).original.as_ref();
+            tch_id = game.desc(d_id).original;
         } else if {
-            tch = game.desc(d_id).character.as_ref();
-            tch.is_none()
+            tch_id = game.desc(d_id).character;
+            tch_id.is_none()
         } {
             continue;
         }
-        let tch = tch.unwrap().clone();
+        let tch_id = tch_id.unwrap().clone();
+        let tch = game.db.ch(tch_id);
 
         if !name_search.is_empty()
             && tch.get_name().as_ref() != &name_search
@@ -1460,6 +1542,7 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         {
             continue;
         }
+        let ch = game.db.ch(chid);
         if !game.can_see(ch, &tch) || tch.get_level() < low as u8 || tch.get_level() > high as u8 {
             continue;
         }
@@ -1469,7 +1552,9 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
         if questwho && !tch.prf_flagged(PRF_QUEST) {
             continue;
         }
-        if localwho && game.db.world[ch.in_room() as usize].zone != game.db.world[tch.in_room() as usize].zone
+        if localwho
+            && game.db.world[ch.in_room() as usize].zone
+                != game.db.world[tch.in_room() as usize].zone
         {
             continue;
         }
@@ -1504,11 +1589,7 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                     ""
                 }
             );
-            game.send_to_char(
-                ch,
-                
-                messg.as_str(),
-            );
+            game.send_to_char(chid, messg.as_str());
         } else {
             num_can_see += 1;
             let messg = format!(
@@ -1523,55 +1604,65 @@ pub fn do_who(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _
                 tch.get_name(),
                 tch.get_title()
             );
-            game.send_to_char(
-                ch,
-                
-                messg.as_str(),
-            );
+            game.send_to_char(chid, messg.as_str());
+            let tch = game.db.ch(tch_id);
 
             if tch.get_invis_lev() != 0 {
-                game.send_to_char(ch, format!(" (i{})", tch.get_invis_lev()).as_str());
+                game.send_to_char(chid, format!(" (i{})", tch.get_invis_lev()).as_str());
             } else if tch.aff_flagged(AFF_INVISIBLE) {
-                game.send_to_char(ch, " (invis)");
+                game.send_to_char(chid, " (invis)");
             }
+            let tch = game.db.ch(tch_id);
 
             if tch.plr_flagged(PLR_MAILING) {
-                game.send_to_char(ch, " (mailing)");
+                game.send_to_char(chid, " (mailing)");
             } else if tch.plr_flagged(PLR_WRITING) {
-                game.send_to_char(ch, " (writing)");
+                game.send_to_char(chid, " (writing)");
             }
+            let tch = game.db.ch(tch_id);
 
             if tch.plr_flagged(PRF_DEAF) {
-                game.send_to_char(ch, " (deaf)");
+                game.send_to_char(chid, " (deaf)");
             }
+            let tch = game.db.ch(tch_id);
+
             if tch.prf_flagged(PRF_NOTELL) {
-                game.send_to_char(ch, " (notell)");
+                game.send_to_char(chid, " (notell)");
             }
+            let tch = game.db.ch(tch_id);
+
             if tch.prf_flagged(PRF_QUEST) {
-                game.send_to_char(ch, " (quest)");
+                game.send_to_char(chid, " (quest)");
             }
+            let tch = game.db.ch(tch_id);
+
             if tch.plr_flagged(PLR_THIEF) {
-                game.send_to_char(ch, " (THIEF)");
+                game.send_to_char(chid, " (THIEF)");
             }
+            let tch = game.db.ch(tch_id);
+
             if tch.plr_flagged(PLR_KILLER) {
-                game.send_to_char(ch, " (KILLER)");
+                game.send_to_char(chid, " (KILLER)");
             }
+            let tch = game.db.ch(tch_id);
+
             if tch.get_level() >= LVL_IMMORT as u8 {
-                game.send_to_char(ch, CCNRM!(ch, C_SPR));
+                let ch = game.db.ch(chid);
+                game.send_to_char(chid, CCNRM!(ch, C_SPR));
             }
-            game.send_to_char(ch, "\r\n");
+            game.send_to_char(chid, "\r\n");
         } /* endif shortlist */
     } /* end of for */
     if short_list && (num_can_see % 4) != 0 {
-        game.send_to_char(ch, "\r\n");
+        game.send_to_char(chid, "\r\n");
     }
     if num_can_see == 0 {
-        game.send_to_char(ch, "\r\nNobody at all!\r\n");
+        game.send_to_char(chid, "\r\nNobody at all!\r\n");
     } else if num_can_see == 1 {
-        game.send_to_char(ch, "\r\nOne lonely character displayed.\r\n");
+        game.send_to_char(chid, "\r\nOne lonely character displayed.\r\n");
     } else {
         game.send_to_char(
-            ch,
+            chid,
             format!("\r\n{} characters displayed.\r\n", num_can_see).as_str(),
         );
     }
@@ -1581,7 +1672,7 @@ const USERS_FORMAT: &str =
     "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n";
 
 /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
-pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut buf = argument.to_string();
     let mut arg = String::new();
     let mut outlaws = false;
@@ -1641,18 +1732,18 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                     showclass = find_class_bitvector(&arg);
                 }
                 _ => {
-                    game.send_to_char(ch, USERS_FORMAT);
+                    game.send_to_char(chid, USERS_FORMAT);
                     return;
                 }
             } /* end of switch */
         } else {
             /* endif */
-            game.send_to_char(ch, USERS_FORMAT);
+            game.send_to_char(chid, USERS_FORMAT);
             return;
         }
     } /* end while (parser) */
     game.send_to_char(
-        ch,
+        chid,
         "Num Class   Name         State          Idl Login@   Site\r\n\
 --- ------- ------------ -------------- --- -------- ------------------------\r\n",
     );
@@ -1668,14 +1759,15 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         if game.desc(d_id).state() == ConPlaying {
             let character;
             if game.desc(d_id).original.is_some() {
-                character = game.desc(d_id).original.as_ref();
+                character = game.desc(d_id).original;
             } else if {
-                character = game.desc(d_id).character.as_ref();
+                character = game.desc(d_id).character;
                 character.is_none()
             } {
                 continue;
             }
-            let tch = character.as_ref().unwrap();
+            let tch_id = character.unwrap();
+            let tch = game.db.ch(tch_id);
 
             if !host_search.is_empty() && !game.desc(d_id).host.contains(&host_search) {
                 continue;
@@ -1683,7 +1775,9 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             if !name_search.is_empty() && tch.get_name().as_ref() != &name_search {
                 continue;
             }
-            if !game.can_see(ch, tch) || tch.get_level() < low as u8 || tch.get_level() > high as u8 {
+            let ch = game.db.ch(chid);
+            if !game.can_see(ch, tch) || tch.get_level() < low as u8 || tch.get_level() > high as u8
+            {
                 continue;
             }
             if outlaws && !tch.plr_flagged(PLR_KILLER) && !tch.plr_flagged(PLR_THIEF) {
@@ -1699,14 +1793,14 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             if game.desc(d_id).original.is_some() {
                 classname = format!(
                     "[{:2} {}]",
-                    game.desc(d_id).original.as_ref().unwrap().get_level(),
-                    game.desc(d_id).original.as_ref().unwrap().class_abbr()
+                    game.db.ch(game.desc(d_id).original.unwrap()).get_level(),
+                    game.db.ch(game.desc(d_id).original.unwrap()).class_abbr()
                 );
             } else {
                 classname = format!(
                     "[{:2} {}]",
-                    game.desc(d_id).character.as_ref().unwrap().get_level(),
-                    game.desc(d_id).character.as_ref().unwrap().class_abbr()
+                    game.db.ch(game.desc(d_id).character.unwrap()).get_level(),
+                    game.db.ch(game.desc(d_id).character.unwrap()).class_abbr()
                 );
             }
         } else {
@@ -1725,12 +1819,13 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         let idletime;
         if game.desc(d_id).character.is_some()
             && game.desc(d_id).state() == ConPlaying
-            && game.desc(d_id).character.as_ref().unwrap().get_level() < LVL_GOD as u8
+            && game.db.ch(game.desc(d_id).character.unwrap()).get_level() < LVL_GOD as u8
         {
             idletime = format!(
                 "{:3}",
-                game.desc(d_id).character.as_ref()
-                    .unwrap()
+                game.db.ch(game.desc(d_id)
+                    .character
+                    .unwrap())
                     .char_specials
                     .borrow()
                     .timer
@@ -1746,20 +1841,36 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
             "{:3} {:7} {:12} {:14} {:3} {:8} ",
             game.desc(d_id).desc_num,
             classname,
-            if game.desc(d_id).original.is_some() && !game.desc(d_id).original.as_ref().unwrap().player.borrow().name.is_empty()
-            {
-                game.desc(d_id).original.as_ref().unwrap().player.borrow().name.clone()
-            } else if game.desc(d_id).character.is_some()
-                && !game.desc(d_id)
-                    .character.as_ref()
-                    .unwrap()
+            if game.desc(d_id).original.is_some()
+                && !game.db.ch(game
+                    .desc(d_id)
+                    .original
+                    .unwrap())
                     .player
                     .borrow()
                     .name
                     .is_empty()
             {
-                game.desc(d_id).character.as_ref()
-                    .unwrap()
+                game.db.ch(game.desc(d_id)
+                    .original
+                    .unwrap())
+                    .player
+                    .borrow()
+                    .name
+                    .clone()
+            } else if game.desc(d_id).character.is_some()
+                && !game.db.ch(game
+                    .desc(d_id)
+                    .character
+                    .unwrap())
+                    .player
+                    .borrow()
+                    .name
+                    .is_empty()
+            {
+                game.db.ch(game.desc(d_id)
+                    .character
+                    .unwrap())
                     .player
                     .borrow()
                     .name
@@ -1779,6 +1890,7 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         }
 
         if game.desc(d_id).state() != ConPlaying {
+            let ch = game.db.ch(chid);
             line.push_str(&format!(
                 "{}{}{}",
                 CCGRN!(ch, C_SPR),
@@ -1786,59 +1898,62 @@ pub fn do_users(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
                 CCNRM!(ch, C_SPR)
             ));
         }
+        let ch = game.db.ch(chid);
         if game.desc(d_id).state() != ConPlaying
-            || (game.desc(d_id).state() == ConPlaying && game.can_see(ch, game.desc(d_id).character.as_ref().unwrap()))
+            || (game.desc(d_id).state() == ConPlaying
+                && game.can_see(ch, game.db.ch(game.desc(d_id).character.unwrap())))
         {
-            game.send_to_char(ch, &line);
+            game.send_to_char(chid, &line);
             num_can_see += 1;
         }
     }
 
     game.send_to_char(
-        ch,
+        chid,
         format!("\r\n{} visible sockets connected.\r\n", num_can_see).as_str(),
     );
 }
 
 /* Generic page_string function for displaying text */
-pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_gen_ps(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = game.db.ch(chid);
     let d_id = ch.desc.borrow().unwrap();
     match subcmd {
         SCMD_CREDITS => {
             page_string(game, d_id, game.db.credits.clone().as_ref(), false);
         }
         SCMD_NEWS => {
-            page_string(game,d_id, &game.db.news.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.news.clone().as_ref(), false);
         }
         SCMD_INFO => {
-            page_string(game,d_id, &game.db.info.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.info.clone().as_ref(), false);
         }
         SCMD_WIZLIST => {
-            page_string(game,d_id, &game.db.wizlist.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.wizlist.clone().as_ref(), false);
         }
         SCMD_IMMLIST => {
-            page_string(game,d_id, &game.db.immlist.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.immlist.clone().as_ref(), false);
         }
         SCMD_HANDBOOK => {
-            page_string(game,d_id, &game.db.handbook.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.handbook.clone().as_ref(), false);
         }
         SCMD_POLICIES => {
-            page_string(game,d_id, &game.db.policies.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.policies.clone().as_ref(), false);
         }
         SCMD_MOTD => {
-            page_string(game,d_id, &game.db.motd.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.motd.clone().as_ref(), false);
         }
         SCMD_IMOTD => {
-            page_string(game,d_id, &game.db.imotd.clone().as_ref(), false);
+            page_string(game, d_id, &game.db.imotd.clone().as_ref(), false);
         }
         SCMD_CLEAR => {
-            game.send_to_char(ch, "\x21[H\x21[J");
+            game.send_to_char(chid, "\x21[H\x21[J");
         }
         SCMD_VERSION => {
-            game.send_to_char(ch, format!("{}\r\n", CIRCLEMUD_VERSION).as_str());
+            game.send_to_char(chid, format!("{}\r\n", CIRCLEMUD_VERSION).as_str());
         }
         SCMD_WHOAMI => {
-            game.send_to_char(ch, format!("{}\r\n", ch.get_name()).as_str());
+            game.send_to_char(chid, format!("{}\r\n", ch.get_name()).as_str());
         }
         _ => {
             error!("SYSERR: Unhandled case in do_gen_ps. ({})", subcmd);
@@ -1847,28 +1962,31 @@ pub fn do_gen_ps(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
     }
 }
 
-fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
+fn perform_mortal_where(game: &mut Game, chid: DepotId, arg: &str) {
+    let ch = game.db.ch(chid);
     if arg.is_empty() {
-        game.send_to_char(ch, "Players in your Zone\r\n--------------------\r\n");
+        game.send_to_char(chid, "Players in your Zone\r\n--------------------\r\n");
         for d_id in game.descriptor_list.ids() {
             if game.desc(d_id).state() != ConPlaying
                 || (game.desc(d_id).character.is_some()
-                    && Rc::ptr_eq(game.desc(d_id).character.as_ref().unwrap(), ch))
+                    && game.desc(d_id).character.unwrap() == chid)
             {
                 continue;
             }
             let i;
             if {
                 i = if game.desc(d_id).original.is_some() {
-                    game.desc(d_id).original.as_ref()
+                    game.desc(d_id).original
                 } else {
-                    game.desc(d_id).character.as_ref()
+                    game.desc(d_id).character
                 };
                 i.is_none()
             } {
                 continue;
             }
-            let i = i.as_ref().unwrap();
+            let i_id = i.unwrap();
+            let i = game.db.ch(i_id);
+            let ch = game.db.ch(chid);
             if i.in_room() == NOWHERE || !game.can_see(ch, i) {
                 continue;
             }
@@ -1881,16 +1999,12 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 i.get_name(),
                 game.db.world[i.in_room() as usize].name
             );
-            game.send_to_char(
-                ch,
-                
-                messg.as_str(),
-            );
+            game.send_to_char(chid, messg.as_str());
         }
     } else {
         /* print only FIRST char, not all. */
         for i in game.db.character_list.iter() {
-            if i.in_room() == NOWHERE || Rc::ptr_eq(i, ch) {
+            if i.in_room() == NOWHERE || i.id() == chid {
                 continue;
             }
             if !game.can_see(ch, i)
@@ -1903,7 +2017,7 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                 continue;
             }
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "{:25} - {}\r\n",
                     i.get_name(),
@@ -1913,23 +2027,23 @@ fn perform_mortal_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
             );
             return;
         }
-        game.send_to_char(ch, "Nobody around by that name.\r\n");
+        game.send_to_char(chid, "Nobody around by that name.\r\n");
     }
 }
 
-fn print_object_location(game: &mut Game, num: i32, oid: DepotId, ch: &Rc<CharData>, recur: bool) {
+fn print_object_location(game: &mut Game, num: i32, oid: DepotId, chid: DepotId, recur: bool) {
     if num > 0 {
         game.send_to_char(
-            ch,
+            chid,
             format!("O{:3}. {:25} - ", num, game.db.obj(oid).short_description).as_ref(),
         );
     } else {
-        game.send_to_char(ch, format!("{:33}", " - ").as_str());
+        game.send_to_char(chid, format!("{:33}", " - ").as_str());
     }
 
     if game.db.obj(oid).in_room != NOWHERE {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "[{:5}] {}\r\n",
                 game.db.get_room_vnum(game.db.obj(oid).in_room()),
@@ -1938,44 +2052,48 @@ fn print_object_location(game: &mut Game, num: i32, oid: DepotId, ch: &Rc<CharDa
             .as_str(),
         );
     } else if game.db.obj(oid).carried_by.is_some() {
+        let ch = game.db.ch(chid);
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "carried by {}\r\n",
-                game.pers(game.db.obj(oid).carried_by.as_ref().unwrap(), ch)
+                game.pers(game.db.ch(game.db.obj(oid).carried_by.unwrap()), ch)
             )
             .as_str(),
         );
     } else if game.db.obj(oid).worn_by.is_some() {
+        let ch = game.db.ch(chid);
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "worn by {}\r\n",
-                game.pers(game.db.obj(oid).worn_by.as_ref().unwrap(), ch)
+                game.pers(game.db.ch(game.db.obj(oid).worn_by.unwrap()), ch)
             )
             .as_str(),
         );
     } else if game.db.obj(oid).in_obj.is_some() {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "inside {}{}\r\n",
-                game.db.obj(game.db.obj(oid).in_obj.unwrap()).short_description,
+                game.db
+                    .obj(game.db.obj(oid).in_obj.unwrap())
+                    .short_description,
                 if recur { ", which is" } else { " " }
             )
             .as_str(),
         );
         if recur {
-            print_object_location(game, 0, game.db.obj(oid).in_obj.unwrap(), ch, recur);
+            print_object_location(game, 0, game.db.obj(oid).in_obj.unwrap(), chid, recur);
         }
     } else {
-        game.send_to_char(ch, "in an unknown location\r\n");
+        game.send_to_char(chid, "in an unknown location\r\n");
     }
 }
 
-fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
+fn perform_immort_where(game: &mut Game, chid: DepotId, arg: &str) {
     if arg.is_empty() {
-        game.send_to_char(ch, "Players\r\n-------\r\n");
+        game.send_to_char(chid, "Players\r\n-------\r\n");
         for d_id in game.descriptor_list.ids() {
             if game.desc(d_id).state() == ConPlaying {
                 let oi = if game.desc(d_id).original.is_some() {
@@ -1987,25 +2105,23 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                     continue;
                 }
 
-                let i = oi.as_ref().unwrap();
+                let i_id = *oi.unwrap();
+                let i = game.db.ch(i_id);
+                let ch = game.db.ch(chid);
                 if game.can_see(ch, i) && (i.in_room() != NOWHERE) {
                     if game.desc(d_id).original.is_some() {
                         let messg = format!(
                             "{:20} - [{:5}] {} (in {})\r\n",
                             i.get_name(),
                             game.db.get_room_vnum(
-                                game.desc(d_id).character.as_ref().unwrap().in_room.get()
+                                game.db.ch(game.desc(d_id).character.unwrap()).in_room.get()
                             ),
-                            game.db.world
-                                [game.desc(d_id).character.as_ref().unwrap().in_room.get() as usize]
+                            game.db.world[game.db.ch(game.desc(d_id).character.unwrap()).in_room.get()
+                                as usize]
                                 .name,
-                            game.desc(d_id).character.as_ref().unwrap().get_name()
+                            game.db.ch(game.desc(d_id).character.unwrap()).get_name()
                         );
-                        game.send_to_char(
-                            ch,
-                            
-                            messg.as_str(),
-                        );
+                        game.send_to_char(chid, messg.as_str());
                     } else {
                         let messg = format!(
                             "{:20} - [{:5}] {}\r\n",
@@ -2013,11 +2129,7 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                             game.db.get_room_vnum(i.in_room()),
                             game.db.world[i.in_room() as usize].name
                         );
-                        game.send_to_char(
-                            ch,
-                            
-                            messg.as_str(),
-                        );
+                        game.send_to_char(chid, messg.as_str());
                     }
                 }
             }
@@ -2025,11 +2137,10 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
     } else {
         let mut found = false;
         let mut num = 0;
-        let list = clone_vec2(&game.db.character_list);
-        for i in list.iter() {
-            if game.can_see(ch, i)
-                && i.in_room() != NOWHERE
-                && isname(arg, &i.player.borrow().name)
+        for id in game.db.character_list.ids() {
+            let i = game.db.ch(id);
+            let ch = game.db.ch(chid);
+            if game.can_see(ch, i) && i.in_room() != NOWHERE && isname(arg, &i.player.borrow().name)
             {
                 found = true;
                 let messg = format!(
@@ -2042,15 +2153,12 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                     game.db.get_room_vnum(i.in_room()),
                     game.db.world[i.in_room() as usize].name
                 );
-                game.send_to_char(
-                    ch,
-                    
-                    messg.as_str(),
-                );
+                game.send_to_char(chid, messg.as_str());
             }
         }
         num = 0;
         for k in game.db.object_list.ids() {
+            let ch = game.db.ch(chid);
             if game.can_see_obj(ch, game.db.obj(k)) && isname(arg, game.db.obj(k).name.as_ref()) {
                 found = true;
                 print_object_location(
@@ -2060,31 +2168,33 @@ fn perform_immort_where(game: &mut Game, ch: &Rc<CharData>, arg: &str) {
                         num
                     },
                     k,
-                    ch,
+                    chid,
                     true,
                 );
             }
         }
         if !found {
-            game.send_to_char(ch, "Couldn't find any such thing.\r\n");
+            game.send_to_char(chid, "Couldn't find any such thing.\r\n");
         }
     }
 }
 
-pub fn do_where(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_where(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_where(game, ch, &arg);
+        perform_immort_where(game, chid, &arg);
     } else {
-        perform_mortal_where(game, ch, &arg);
+        perform_mortal_where(game, chid, &arg);
     }
 }
 
-pub fn do_levels(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_levels(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.is_npc() {
-        game.send_to_char(ch, "You ain't nothin' but a hound-dog.\r\n");
+        game.send_to_char(chid, "You ain't nothin' but a hound-dog.\r\n");
         return;
     }
     let mut buf = String::new();
@@ -2120,80 +2230,90 @@ pub fn do_levels(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
         )
         .as_str(),
     );
-    page_string(game, ch.desc.borrow().unwrap(), buf.as_str(), true);
+    let d_id = ch.desc.borrow().unwrap();
+    page_string(game, d_id, buf.as_str(), true);
 }
 
-pub fn do_consider(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_consider(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
-    let victim = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
-    if victim.is_none() {
-        game.send_to_char(ch, "Consider killing who?\r\n");
+    let victim_id = game.get_char_vis(chid, &mut buf, None, FIND_CHAR_ROOM);
+    if victim_id.is_none() {
+        game.send_to_char(chid, "Consider killing who?\r\n");
         return;
     }
-    let victim = victim.unwrap();
-    if Rc::ptr_eq(&victim, ch) {
-        game.send_to_char(ch, "Easy!  Very easy indeed!\r\n");
+    let victim_id = victim_id.unwrap();
+    if victim_id == chid {
+        game.send_to_char(chid, "Easy!  Very easy indeed!\r\n");
         return;
     }
+    let victim = game.db.ch(victim_id);
     if !victim.is_npc() {
-        game.send_to_char(ch, "Would you like to borrow a cross and a shovel?\r\n");
+        game.send_to_char(chid, "Would you like to borrow a cross and a shovel?\r\n");
         return;
     }
+    let victim = game.db.ch(victim_id);
     let diff = victim.get_level() as i32 - ch.get_level() as i32;
 
     if diff <= -10 {
-        game.send_to_char(ch, "Now where did that chicken go?\r\n");
+        game.send_to_char(chid, "Now where did that chicken go?\r\n");
     } else if diff <= -5 {
-        game.send_to_char(ch, "You could do it with a needle!\r\n");
+        game.send_to_char(chid, "You could do it with a needle!\r\n");
     } else if diff <= -2 {
-        game.send_to_char(ch, "Easy.\r\n");
+        game.send_to_char(chid, "Easy.\r\n");
     } else if diff <= -1 {
-        game.send_to_char(ch, "Fairly easy.\r\n");
+        game.send_to_char(chid, "Fairly easy.\r\n");
     } else if diff == 0 {
-        game.send_to_char(ch, "The perfect match!\r\n");
+        game.send_to_char(chid, "The perfect match!\r\n");
     } else if diff <= 1 {
-        game.send_to_char(ch, "You would need some luck!\r\n");
+        game.send_to_char(chid, "You would need some luck!\r\n");
     } else if diff <= 2 {
-        game.send_to_char(ch, "You would need a lot of luck!\r\n");
+        game.send_to_char(chid, "You would need a lot of luck!\r\n");
     } else if diff <= 3 {
-        game.send_to_char(ch, "You would need a lot of luck and great equipment!\r\n");
+        game.send_to_char(
+            chid,
+            "You would need a lot of luck and great equipment!\r\n",
+        );
     } else if diff <= 5 {
-        game.send_to_char(ch, "Do you feel lucky, punk?\r\n");
+        game.send_to_char(chid, "Do you feel lucky, punk?\r\n");
     } else if diff <= 10 {
-        game.send_to_char(ch, "Are you mad!?\r\n");
+        game.send_to_char(chid, "Are you mad!?\r\n");
     } else if diff <= 100 {
-        game.send_to_char(ch, "You ARE mad!\r\n");
+        game.send_to_char(chid, "You ARE mad!\r\n");
     }
 }
 
-pub fn do_diagnose(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_diagnose(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
-    let vict;
+    let vict_id;
     if !buf.is_empty() {
         if {
-            vict = game.get_char_vis(ch, &mut buf, None, FIND_CHAR_ROOM);
-            vict.is_none()
+            vict_id = game.get_char_vis(chid, &mut buf, None, FIND_CHAR_ROOM);
+            vict_id.is_none()
         } {
-            game.send_to_char(ch, NOPERSON);
+            game.send_to_char(chid, NOPERSON);
         } else {
-            diag_char_to_char(game, vict.as_ref().unwrap(), ch);
+            diag_char_to_char(game, vict_id.unwrap(), chid);
         }
     } else {
-        if ch.fighting().is_some() {
-            diag_char_to_char(game, ch.fighting().as_ref().unwrap(), ch);
+        if ch.fighting_id().is_some() {
+            let fighting_id = ch.fighting_id().unwrap();
+            diag_char_to_char(game, fighting_id, chid);
         } else {
-            game.send_to_char(ch, "Diagnose who?\r\n");
+            game.send_to_char(chid, "Diagnose who?\r\n");
         }
     }
 }
 
 const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
-pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_color(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     let mut arg = String::new();
     if ch.is_npc() {
         return;
@@ -2203,7 +2323,7 @@ pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
 
     if arg.is_empty() {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "Your current color level is {}.\r\n",
                 CTYPES[COLOR_LEV!(ch) as usize]
@@ -2217,7 +2337,10 @@ pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
         tp = search_block(&arg, &CTYPES, false);
         tp.is_none()
     } {
-        game.send_to_char(ch, "Usage: color { Off | Sparse | Normal | Complete }\r\n");
+        game.send_to_char(
+            chid,
+            "Usage: color { Off | Sparse | Normal | Complete }\r\n",
+        );
         return;
     }
     let tp = tp.unwrap() as i64;
@@ -2230,7 +2353,7 @@ pub fn do_color(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize,
     );
 
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "Your {}color{} is now {}.\r\n",
             CCRED!(ch, C_SPR),
@@ -2263,7 +2386,8 @@ macro_rules! yesno {
     };
 }
 
-pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_toggle(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     // char buf2[4];
     let mut buf2 = String::new();
     if ch.is_npc() {
@@ -2278,7 +2402,7 @@ pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
 
     if ch.get_level() >= LVL_IMMORT as u8 {
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "      No Hassle: {:3}    Holylight: {:3}    Room Flags:{:3}\r\n",
                 onoff!(ch.prf_flagged(PRF_NOHASSLE)),
@@ -2289,8 +2413,9 @@ pub fn do_toggle(game: &mut Game, ch: &Rc<CharData>, _argument: &str, _cmd: usiz
         );
     }
 
+    let ch = game.db.ch(chid);
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "Hit Pnt Display: {:3}    Brief Mode: {:3}    Summon Protect: {:3}\r\n\
  Move Display: {:3}    Compact Mode: {:3}    On Quest: {:3}\r\n\
@@ -2330,27 +2455,29 @@ pub fn sort_commands(db: &mut DB) {
         .sort_by(|a, b| str::cmp(CMD_INFO[*a].command, CMD_INFO[*b].command));
 }
 
-pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_commands(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = game.db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
-    let vict;
+    let vict_id;
     let victo;
     if !arg.is_empty() {
-        victo = game.get_char_vis(ch, &mut arg, None, FIND_CHAR_WORLD);
-        if victo.is_none() || victo.as_ref().unwrap().is_npc() {
-            game.send_to_char(ch, "Who is that?\r\n");
+        victo = game.get_char_vis(chid, &mut arg, None, FIND_CHAR_WORLD);
+        if victo.is_none() || game.db.ch(victo.unwrap()).is_npc() {
+            game.send_to_char(chid, "Who is that?\r\n");
             return;
         }
-        vict = victo.as_ref().unwrap();
+        vict_id = victo.unwrap();
+        let vict = game.db.ch(vict_id);
         if ch.get_level() < vict.get_level() {
             game.send_to_char(
-                ch,
+                chid,
                 "You can't see the commands of people above your level.\r\n",
             );
             return;
         }
     } else {
-        vict = ch;
+        vict_id = chid;
     }
 
     let mut socials = false;
@@ -2361,14 +2488,15 @@ pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
         wizhelp = true;
     }
 
+    let vict = game.db.ch(vict_id);
     let vic_name = vict.get_name();
     game.send_to_char(
-        ch,
+        chid,
         format!(
             "The following {}{} are available to {}:\r\n",
             if wizhelp { "privileged " } else { "" },
             if socials { "socials" } else { "commands" },
-            if Rc::ptr_eq(vict, ch) {
+            if vict_id == chid {
                 "you"
             } else {
                 vic_name.as_ref()
@@ -2379,9 +2507,10 @@ pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
 
     /* cmd_num starts at 1, not 0, to remove 'RESERVED' */
     let mut no = 1;
+    let vict_level = game.db.ch(vict_id).get_level();
     for cmd_num in 1..CMD_INFO.len() {
         let i: usize = game.db.cmd_sort_info[cmd_num];
-        if CMD_INFO[i].minimum_level < 0 || vict.get_level() < CMD_INFO[i].minimum_level as u8 {
+        if CMD_INFO[i].minimum_level < 0 || vict_level < CMD_INFO[i].minimum_level as u8 {
             continue;
         }
         if (CMD_INFO[i].minimum_level >= LVL_IMMORT) != wizhelp {
@@ -2395,7 +2524,7 @@ pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
             continue;
         }
         game.send_to_char(
-            ch,
+            chid,
             format!(
                 "{:11}{}",
                 CMD_INFO[i].command,
@@ -2407,6 +2536,6 @@ pub fn do_commands(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usi
     }
 
     if no % 7 != 1 {
-        game.send_to_char(ch, "\r\n");
+        game.send_to_char(chid, "\r\n");
     }
 }

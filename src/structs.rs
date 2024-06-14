@@ -18,12 +18,12 @@ use crate::Game;
 
 pub enum MeRef<'a> {
     None,
-    Char(&'a Rc<CharData>),
+    Char(DepotId),
     Obj(DepotId),
 }
 
 pub type Special =
-    fn(game: &mut Game, ch: &Rc<CharData>, me: MeRef, cmd: i32, argument: &str) -> bool;
+    fn(game: &mut Game, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
@@ -329,6 +329,7 @@ pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData {
+    pub id: Cell<DepotId>,
     pub(crate) pfilepos: Cell<i32>,
     /* playerfile pos		  */
     pub nr: MobRnum,
@@ -363,9 +364,30 @@ pub struct CharData {
     /* NULL for mobiles              */          
     pub followers: RefCell<Vec<FollowType>>,
     /* List of chars followers       */
-    pub master: RefCell<Option<Rc<CharData>>>,
+    pub master: RefCell<Option<DepotId>>,
     /* Who is char following?        */
 }
+
+impl HasId for CharData {
+    fn id(&self) -> DepotId {
+        self.id.get()
+    }
+
+    fn set_id(&mut self, id: DepotId) {
+        self.id.set(id);
+    }
+}
+
+impl HasId for Rc<CharData> {
+    fn id(&self) -> DepotId {
+        self.id.get()
+    }
+
+    fn set_id(&mut self, id: DepotId) {
+        self.id.set(id);
+    }
+}
+
 /* ====================================================================== */
 
 /* Char's points.  Used in char_file_u *DO*NOT*CHANGE* */
@@ -398,14 +420,14 @@ pub struct CharPointData {
 /* Structure used for chars following other chars */
 #[derive(Clone)]
 pub struct FollowType {
-    pub follower: Rc<CharData>,
+    pub follower: DepotId,
 }
 
 /* Special playing constants shared by PCs and NPCs which aren't in pfile */
 pub struct CharSpecialData {
-    pub fighting: Option<Rc<CharData>>,
+    pub fighting: Option<DepotId>,
     /* Opponent				*/
-    pub hunting: Option<Rc<CharData>>,
+    pub hunting: Option<DepotId>,
     /* Char hunted by this char		*/
     pub position: u8,
     /* Standing, fighting, sleeping, etc.	*/
@@ -664,9 +686,9 @@ pub struct ObjData {
     /* What to write when used          */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* extra descriptions     */
-    pub carried_by: Option<Rc<CharData>>,
+    pub carried_by: Option<DepotId>,
     /* Carried by :NULL in room/conta   */
-    pub worn_by: Option<Rc<CharData>>,
+    pub worn_by: Option<DepotId>,
     /* Worn by?			      */
     pub worn_on: i16,
     /* Worn where?		      */
@@ -920,7 +942,7 @@ pub struct RoomData {
     pub func: Option<Special>,
     pub contents: Vec<DepotId>,
     /* List of items in room              */
-    pub peoples: Vec<Rc<CharData>>,
+    pub peoples: Vec<DepotId>,
     /* List of NPC / PC in room           */
 }
 /* ====================================================================== */

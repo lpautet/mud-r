@@ -179,21 +179,21 @@ Skill being one of the following:\r\n",
                 /* This is valid. */
                 continue;
             }
-            game.send_to_char(ch, format!("{:18}", game.db.spell_info[i].name).as_str());
+            game.send_to_char(ch.id(), format!("{:18}", game.db.spell_info[i].name).as_str());
             qend += 1;
             if qend % 4 == 3 {
-                game.send_to_char(ch, "\r\n");
+                game.send_to_char(ch.id(), "\r\n");
             }
         }
         if qend % 4 != 0 {
-            game.send_to_char(ch, "\r\n");
+            game.send_to_char(ch.id(), "\r\n");
         }
 
         return;
     }
     let vict = game.get_char_vis(ch, &mut name, None, FIND_CHAR_WORLD);
     if vict.is_none() {
-        game.send_to_char(ch, NOPERSON);
+        game.send_to_char(ch.id(), NOPERSON);
         return;
     }
     let vict = vict.unwrap();
@@ -201,11 +201,11 @@ Skill being one of the following:\r\n",
 
     /* If there is no chars in argument */
     if argument.is_empty() {
-        game.send_to_char(ch, "Skill name expected.\r\n");
+        game.send_to_char(ch.id(), "Skill name expected.\r\n");
         return;
     }
     if !argument.starts_with('\'') {
-        game.send_to_char(ch, "Skill must be enclosed in: ''\r\n");
+        game.send_to_char(ch.id(), "Skill must be enclosed in: ''\r\n");
         return;
     }
     /* Locate the last quote and lowercase the magic words (if any) */
@@ -222,7 +222,7 @@ Skill being one of the following:\r\n",
     }
 
     if &argument[qend..qend] != "\'" {
-        game.send_to_char(ch, "Skill must be enclosed in: ''\r\n");
+        game.send_to_char(ch.id(), "Skill must be enclosed in: ''\r\n");
         return;
     }
     let help = argument.to_lowercase();
@@ -230,33 +230,33 @@ Skill being one of the following:\r\n",
 
     let skill = find_skill_num(&game.db, help);
     if skill.is_none() {
-        game.send_to_char(ch, "Unrecognized skill.\r\n");
+        game.send_to_char(ch.id(), "Unrecognized skill.\r\n");
         return;
     }
     let buf = String::new();
     let skill = skill.unwrap();
 
     if buf.is_empty() {
-        game.send_to_char(ch, "Learned value expected.\r\n");
+        game.send_to_char(ch.id(), "Learned value expected.\r\n");
         return;
     }
     let value = buf.parse::<i8>();
     if value.is_err() {
-        game.send_to_char(ch, "Invalid value.\r\n");
+        game.send_to_char(ch.id(), "Invalid value.\r\n");
         return;
     }
 
     let value = value.unwrap();
     if value < 0 {
-        game.send_to_char(ch, "Minimum value for learned is 0.\r\n");
+        game.send_to_char(ch.id(), "Minimum value for learned is 0.\r\n");
         return;
     }
     if value > 100 {
-        game.send_to_char(ch, "Max value for learned is 100.\r\n");
+        game.send_to_char(ch.id(), "Max value for learned is 100.\r\n");
         return;
     }
     if vict.is_npc() {
-        game.send_to_char(ch, "You can't set NPC skills.\r\n");
+        game.send_to_char(ch.id(), "You can't set NPC skills.\r\n");
         return;
     }
 
