@@ -463,6 +463,7 @@ impl Game {
 pub fn die(chid: DepotId, game: &mut Game) {
     let ch = game.db.ch(chid);
     gain_exp(chid, -(ch.get_exp() / 2), game);
+    let ch = game.db.ch(chid);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
     }
@@ -571,7 +572,7 @@ pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game) {
     } else {
         game.send_to_char(chid, "You receive one lousy experience point.\r\n");
     }
-    gain_exp(ch, exp, game);
+    gain_exp(chid, exp, game);
     change_alignment(&mut game.db, chid, victim_id);
 }
 
@@ -608,7 +609,6 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 impl Game {
     /* message for doing damage with a weapon */
     pub fn dam_message(&mut self, dam: i32, chid: DepotId, victim_id: DepotId, mut w_type: i32) {
-        let victim = self.db.ch(victim_id);
         struct DamWeaponType {
             to_room: &'static str,
             to_char: &'static str,
@@ -953,19 +953,24 @@ impl Game {
         }
 
         /* You can't damage an immortal! */
+        let victim = self.db.ch(victim_id);
         if !victim.is_npc() && victim.get_level() >= LVL_IMMORT as u8 {
             dam = 0;
         }
 
         if victim_id != chid {
             /* Start the attacker fighting the victim */
+            let ch = self.db.ch(chid);
             if ch.get_pos() > POS_STUNNED && ch.fighting_id().is_none() {
                 self.set_fighting(chid, victim_id);
             }
 
             /* Start the victim fighting the attacker */
+            let victim = self.db.ch(victim_id);
             if victim.get_pos() > POS_STUNNED && victim.fighting_id().is_none() {
                 self.set_fighting(victim_id, chid);
+                let ch = self.db.ch(chid);
+                let victim = self.db.ch(victim_id);
                 if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
                     remember(victim, ch);
                 }
@@ -973,6 +978,7 @@ impl Game {
         }
 
         /* If you attack a pet, it hates your guts */
+        let victim = self.db.ch(victim_id);
         if victim.master.borrow().is_some()
             && victim.master.borrow().unwrap() == chid
         {
@@ -980,11 +986,13 @@ impl Game {
         }
 
         /* If the attacker is invisible, he becomes visible */
+        let ch = self.db.ch(chid);
         if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
             self.appear(chid);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
+        let victim = self.db.ch(victim_id);
         if victim.aff_flagged(AFF_SANCTUARY) && dam >= 2 {
             dam /= 2;
         }
@@ -992,6 +1000,7 @@ impl Game {
         /* Check for PK if this is not a PK MUD */
         if PK_ALLOWED {
             check_killer(chid, victim_id, self);
+            let ch = self.db.ch(chid);
             if ch.plr_flagged(PLR_KILLER) && chid != victim_id {
                 dam = 0;
             }
@@ -999,13 +1008,14 @@ impl Game {
 
         /* Set the maximum damage per round and subtract the hit points */
         dam = max(min(dam, 100), 0);
+        let victim = self.db.ch(victim_id);
         victim.decr_hit(dam as i16);
 
         /* Gain exp for the hit */
         if chid != victim_id {
-            gain_exp(ch, victim.get_level() as i32 * dam, self);
+            gain_exp(chid, victim.get_level() as i32 * dam, self);
         }
-
+        let victim = self.db.ch(victim_id);
         update_pos(victim);
 
         /*
@@ -1032,6 +1042,7 @@ impl Game {
         }
 
         /* Use game.send_to_char -- act() doesn't send message if you are DEAD. */
+        let victim = self.db.ch(victim_id);
         match victim.get_pos() {
             POS_MORTALLYW => {
                 self.act(
@@ -1093,7 +1104,7 @@ impl Game {
                 if dam > (victim.get_max_hit() / 4) as i32 {
                     self.send_to_char(victim_id, "That really did HURT!\r\n");
                 }
-
+                let victim = self.db.ch(victim_id);
                 if victim.get_hit() < victim.get_max_hit() / 4 {
                     self.send_to_char(
                         victim_id,
@@ -1104,10 +1115,12 @@ impl Game {
                         )
                         .as_str(),
                     );
+                    let victim = self.db.ch(victim_id);
                     if chid != victim_id && victim.mob_flagged(MOB_WIMPY) {
                         do_flee(self, victim_id, "", 0, 0);
                     }
                 }
+                let victim = self.db.ch(victim_id);
                 if !victim.is_npc()
                     && victim.get_wimp_lev() != 0
                     && chid != victim_id
@@ -1121,8 +1134,10 @@ impl Game {
         }
 
         /* Help out poor linkless people who are attacked */
+        let victim = self.db.ch(victim_id);
         if !victim.is_npc() && victim.desc.borrow().is_none() && victim.get_pos() > POS_STUNNED {
             do_flee(self, victim_id, "", 0, 0);
+            let victim = self.db.ch(victim_id);
             if victim.fighting_id().is_none() {
                 self.act(
                     "$n is rescued by divine forces.",
@@ -1132,6 +1147,7 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
+                let victim = self.db.ch(victim_id);
                 victim.set_was_in(victim.in_room());
                 self.db.char_from_room(victim_id);
                 self.db.char_to_room(victim_id, 0);
@@ -1139,20 +1155,24 @@ impl Game {
         }
 
         /* stop someone from fighting if they're stunned or worse */
+        let victim = self.db.ch(victim_id);
         if victim.get_pos() <= POS_STUNNED && victim.fighting_id().is_some() {
             self.db.stop_fighting(victim_id);
         }
 
         /* Uh oh.  Victim died. */
+        let victim = self.db.ch(victim_id);
         if victim.get_pos() == POS_DEAD {
             if chid !=  victim_id && (victim.is_npc() || victim.desc.borrow().is_some()) {
+                let ch = self.db.ch(chid);
                 if ch.aff_flagged(AFF_GROUP) {
                     group_gain(chid, victim_id, self);
                 } else {
                     solo_gain(chid, victim_id, self);
                 }
-
+                let victim = self.db.ch(victim_id);
                 if !victim.is_npc() {
+                    let ch = self.db.ch(chid);
                     self.mudlog(
                         BRF,
                         LVL_IMMORT as i32,
@@ -1165,6 +1185,8 @@ impl Game {
                         )
                         .as_str(),
                     );
+                    let ch = self.db.ch(chid);
+                    let victim = self.db.ch(victim_id);
                     if ch.mob_flagged(MOB_MEMORY) {
                         forget(ch, victim);
                     }

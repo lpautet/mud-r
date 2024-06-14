@@ -412,7 +412,6 @@ impl DB {
 
     /* place a character in a room */
     pub(crate) fn char_to_room(&mut self, chid: DepotId, room: RoomRnum) {
-        let ch = self.ch(chid);
         if room == NOWHERE || room >= self.world.len() as i16 {
             error!(
                 "SYSERR: Illegal value(s) passed to char_to_room. (Room: {}/{} Ch: {}",
@@ -423,7 +422,7 @@ impl DB {
             return;
         }
         self.world[room as usize].peoples.push(chid);
-        let ch = self.db.ch(chid);
+        let ch = self.ch(chid);
         ch.set_in_room(room);
 
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
@@ -437,6 +436,7 @@ impl DB {
         }
 
         /* Stop fighting now, if we left. */
+        let ch = self.ch(chid);
         if ch.fighting_id().is_some() && ch.in_room() != self.ch(ch.fighting_id().unwrap()).in_room() {
             self.stop_fighting(ch.fighting_id().unwrap());
             self.stop_fighting(chid);
@@ -1000,7 +1000,7 @@ impl Game {
                 }
             }
         }
-
+        let ch = self.db.ch(chid);
         if ch.desc.borrow().is_some() {
             /*
              * This time we're extracting the body someone has switched into
@@ -1043,32 +1043,39 @@ impl Game {
                         self.descriptor_list.get_mut(d).set_state(ConClose);
                     }
                 }
-                self.desc_mut(ch.desc.borrow().unwrap()).set_state(ConMenu);
-
-                self.write_to_output(ch.desc.borrow().unwrap(), MENU);
+                let ch = self.db.ch(chid);
+                let desc_id = ch.desc.borrow().unwrap();
+                self.desc_mut(desc_id).set_state(ConMenu);
+                let ch = self.db.ch(chid);
+                let desc_id = ch.desc.borrow().unwrap();
+                self.write_to_output(desc_id, MENU);
             }
         }
 
         /* On with the character's assets... */
-
+        let ch = self.db.ch(chid);
         if ch.followers.borrow().len() != 0 || ch.master.borrow().is_some() {
             self.die_follower(chid);
         }
 
         /* transfer objects to room, if any */
+        let ch = self.db.ch(chid);
         for oid in clone_vec(&ch.carrying) {
             self.db.obj_from_char(oid);
+            let ch = self.db.ch(chid);
             self.db.obj_to_room(oid, ch.in_room());
         }
 
         /* transfer equipment to room, if any */
         for i in 0..NUM_WEARS {
+            let ch = self.db.ch(chid);
             if ch.get_eq(i).is_some() {
                 let oid = self.unequip_char(chid, i).unwrap();
+                let ch = self.db.ch(chid);
                 self.db.obj_to_room(oid, ch.in_room())
             }
         }
-
+        let ch = self.db.ch(chid);
         if ch.fighting_id().is_some() {
             self.db.stop_fighting(chid);
         }
@@ -1077,7 +1084,7 @@ impl Game {
         for c in self.db.combat_list.iter() {
             old_combat_list.push(c.clone());
         }
-        for k_id in old_combat_list.into() {
+        for k_id in old_combat_list {
             if self.db.ch(k_id).fighting_id().unwrap() == chid {
                 self.db.stop_fighting(k_id);
             }
@@ -1091,14 +1098,17 @@ impl Game {
             }
         }
         self.db.char_from_room(chid);
-
+        let ch = self.db.ch(chid);
         if ch.is_npc() {
             if ch.get_mob_rnum() != NOTHING {
-                self.db.mob_index[ch.get_mob_rnum() as usize].number -= 1;
+                let rnum = ch.get_mob_rnum();
+                self.db.mob_index[ rnum as usize].number -= 1;
             }
+            let ch = self.db.ch(chid);
             ch.clear_memory()
         } else {
             self.save_char(chid);
+            let ch = self.db.ch(chid);
             crash_delete_crashfile(ch);
         }
 

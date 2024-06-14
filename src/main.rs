@@ -1921,7 +1921,7 @@ macro_rules! sendok {
 }
 
 #[derive(Clone)]
-pub enum VictimRef<'a> {
+pub enum VictimRef {
     Char(DepotId),
     Obj(DepotId),
     Str(Rc<str>),

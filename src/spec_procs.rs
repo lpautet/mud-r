@@ -12,7 +12,7 @@
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
-use crate::depot::HasId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::act_comm::do_say;

@@ -826,7 +826,6 @@ pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
 }
 
 fn house_list_guests(game: &mut Game, chid: DepotId, i: usize, quiet: bool) {
-    let ch = game.db.ch(chid);
     let house_control = game.db.house_control;
     if house_control[i].num_of_guests == 0 {
         if !quiet {

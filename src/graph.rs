@@ -9,8 +9,6 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::rc::Rc;
-
 use log::error;
 
 use crate::constants::DIRS;
@@ -20,7 +18,7 @@ use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
-    CharData, RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
+     RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
 use crate::Game;

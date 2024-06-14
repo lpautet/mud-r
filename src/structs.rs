@@ -16,7 +16,7 @@ use crate::depot::{DepotId, HasId};
 use crate::interpreter::AliasData;
 use crate::Game;
 
-pub enum MeRef<'a> {
+pub enum MeRef {
     None,
     Char(DepotId),
     Obj(DepotId),

@@ -409,7 +409,7 @@ pub fn do_practice(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     if !arg.is_empty() {
         game.send_to_char(chid, "You can only practice skills in your guild.\r\n");
     } else {
-        list_skills(game, ch);
+        list_skills(game, chid);
     }
 }
 

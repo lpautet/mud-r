@@ -439,16 +439,18 @@ pub fn do_flee(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _su
                 None,
                 TO_ROOM,
             );
+            let ch = game.db.ch(chid);
             was_fighting = ch.fighting_id();
             let r = do_simple_move(game, chid, attempt as i32, true);
             if r {
                 game.send_to_char(chid, "You flee head over heels.\r\n");
+                let ch = game.db.ch(chid);
                 if was_fighting.is_some() && !ch.is_npc() {
                     let was_fighting = game.db.ch(was_fighting.unwrap());
                     let mut loss = was_fighting.get_max_hit()
                         - was_fighting.get_hit();
                     loss *= was_fighting.get_level() as i16;
-                    gain_exp(ch, -loss as i32, game);
+                    gain_exp(chid, -loss as i32, game);
                 }
             } else {
                 game.act(
