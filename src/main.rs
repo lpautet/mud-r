@@ -563,7 +563,8 @@ impl Game {
                  */
                 {
                     if self.descriptor_list.get_mut(d_id).character.is_some() {
-                        let character = self.descriptor_list.get_mut(d_id).character.as_ref().unwrap();
+                        let character_id = self.descriptor_list.get_mut(d_id).character.unwrap();
+                        let character = self.db.ch(character_id);
                         let wait_state = character.get_wait_state();
                         if wait_state > 0 {
                             character.decr_wait_state(1);
@@ -579,7 +580,8 @@ impl Game {
 
                     if self.descriptor_list.get_mut(d_id).character.borrow().is_some() {
                         /* Reset the idle timer & pull char back from void if necessary */
-                        let character = self.descriptor_list.get_mut(d_id).character.borrow().as_ref().unwrap().clone();
+                        let character_id = self.descriptor_list.get(d_id).character.borrow().unwrap();
+                        let character = self.db.ch(character_id);
                         character.char_specials.borrow().timer.set(0);
                         if self.descriptor_list.get_mut(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
                             if character.in_room.get() != NOWHERE {
@@ -616,7 +618,7 @@ impl Game {
                     if aliased {
                         /* To prevent recursive aliases. */
                         self.descriptor_list.get_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
-                    } else if perform_alias(self.descriptor_list.get_mut(d_id), &mut comm) {
+                    } else if perform_alias(&game.db, self.descriptor_list.get_mut(d_id), &mut comm) {
                         /* Run it through aliasing system */
                         get_from_q(
                             &mut self.descriptor_list.get_mut(d_id).input,
@@ -632,7 +634,7 @@ impl Game {
                         .as_ref()
                         .unwrap()
                         .clone();
-                    command_interpreter(self, &ch, &comm);
+                    command_interpreter(self, chid, &comm);
                 }
             }
 
@@ -650,7 +652,7 @@ impl Game {
             for d_id in self.descriptor_list.ids() {
                 let d = self.descriptor_list.get_mut(d_id);
                 if !d.has_prompt && d.output.is_empty() {
-                    let text = &make_prompt(d);
+                    let text = &make_prompt(&game.db, d);
                     write_to_descriptor(d.stream.as_mut().unwrap(), text);
                     d.has_prompt = true;
                 }
@@ -820,7 +822,7 @@ impl Game {
     }
 }
 
-fn make_prompt(d: &DescriptorData) -> String {
+fn make_prompt(db: &DB, d: &DescriptorData) -> String {
     let mut prompt = "".to_string();
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
@@ -832,9 +834,10 @@ fn make_prompt(d: &DescriptorData) -> String {
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
             d.showstr_page, d.showstr_count
         ));
-    } else if d.connected == ConPlaying && !d.character.borrow().as_ref().unwrap().is_npc() {
+    } else if d.connected == ConPlaying && !db.ch(d.character.borrow().unwrap()).is_npc() {
         let ohc = d.character.borrow();
-        let character = ohc.as_ref().unwrap();
+        let character_id = ohc.unwrap();
+        let character = db.ch(character_id);
         if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
             let il = character.get_invis_lev();
             prompt.push_str(&*format!("i{} ", il));
@@ -1052,7 +1055,7 @@ impl Game {
         }
 
         /* add a prompt */
-        i.push_str(&make_prompt(t));
+        i.push_str(&make_prompt(&game.db, t));
 
         /*
          * now, send the output.  If this is an 'interruption', use the prepended
@@ -1669,7 +1672,8 @@ impl Game {
             if i.state() != ConPlaying || i.character.borrow().is_none() {
                 continue;
             }
-            let character = i.character.borrow();
+            let character_id = i.character.borrow();
+            let character = character_id.map(|i| self.db.ch(i));
             if !character.as_ref().unwrap().awake() || !self.db.outside(character.as_ref().unwrap())
             {
                 continue;
@@ -1681,7 +1685,8 @@ impl Game {
 
     pub fn send_to_room(&mut self, room: RoomRnum, msg: &str) {
         let list = clone_vec2(&self.db.world[room as usize].peoples);
-        for i in list {
+        for i_id in list {
+            let i = self.db.ch(i_id);
             if i.desc.borrow().is_none() {
                 continue;
             }
@@ -1726,7 +1731,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                self.pers(p, self.db.ch(to_id))
+                                self.pers(self.db.ch(p), self.db.ch(to_id))
                             } else {
                                 Rc::from("<INV_CHAR_REF>")
                             }
@@ -1740,7 +1745,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hmhr(p))
+                                Rc::from(hmhr(self.db.ch(p)))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1754,7 +1759,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hshr(p))
+                                Rc::from(hshr(self.db.ch(p)))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1768,7 +1773,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hssh(p))
+                                Rc::from(hssh(self.db.ch(p)))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1990,13 +1995,14 @@ impl Game {
         }
 
         let list = clone_vec2(char_list);
-        for to in list.iter() {
-            if !sendok!(to.as_ref(), to_sleeping)
-                || (chid.is_some() && to.as_ref().id() ==  chid.unwrap())
+        for to_id in list {
+            let to = self.db.ch(to_id);
+            if !sendok!(to, to_sleeping)
+                || (chid.is_some() && to_id ==  chid.unwrap())
             {
                 continue;
             }
-            if hide_invisible && chid.is_some() && !self.can_see(to.as_ref(), self.db.ch(chid.unwrap())) {
+            if hide_invisible && chid.is_some() && !self.can_see(to, self.db.ch(chid.unwrap())) {
                 continue;
             }
             if _type != TO_ROOM && vict_obj.is_none() {

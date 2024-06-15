@@ -308,15 +308,16 @@ pub fn spell_create_water(
 pub fn spell_recall(
     game: &mut Game,
     _level: i32,
-    _ch: Option<&Rc<CharData>>,
-    victim: Option<&Rc<CharData>>,
+    _chid: Option<DepotId>,
+    victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    if victim.is_none() || victim.unwrap().is_npc() {
+    if victim_id.is_none() || victim_id.unwrap().is_npc() {
         return;
     }
 
-    let victim = victim.unwrap();
+    let victim_id = victim_id.unwrap();
+    let victim = game.db.ch(victim_id);
 
     game.act("$n disappears.", true, Some(victim.id()), None, None, TO_ROOM);
     game.db.char_from_room(victim);

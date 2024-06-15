@@ -995,7 +995,8 @@ pub fn crash_crashsave(db: &mut DB, chid: DepotId) {
     ch.remove_plr_flag(PLR_CRASH);
 }
 
-pub fn crash_idlesave(game: &mut Game, ch: &Rc<CharData>) {
+pub fn crash_idlesave(game: &mut Game, chid: DepotId) {
+    let ch = game.db.ch(chid);
     let mut rent = RentInfo::new();
 
     if ch.is_npc() {

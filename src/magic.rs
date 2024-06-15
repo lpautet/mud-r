@@ -10,7 +10,6 @@
 ************************************************************************ */
 
 use std::cmp::{max, min};
-use std::rc::Rc;
 
 use log::error;
 use crate::depot::{DepotId, HasId};
@@ -50,7 +49,7 @@ use crate::{Game, TO_CHAR, TO_ROOM};
  * saving throw instead of the random number of the character as
  * in some other systems.
  */
-pub fn mag_savingthrow(ch: &Rc<CharData>, type_: i32, modifier: i32) -> bool {
+pub fn mag_savingthrow(ch: &CharData, type_: i32, modifier: i32) -> bool {
     /* NPCs use warrior tables according to some book */
     let mut class_sav = CLASS_WARRIOR;
 
@@ -73,10 +72,11 @@ pub fn mag_savingthrow(ch: &Rc<CharData>, type_: i32, modifier: i32) -> bool {
 
 /* affect_update: called from main.rs (causes spells to wear off) */
 pub fn affect_update(game: &mut Game) {
-    for id in game.db.character_list.ids() {
-        let i = &game.db.chr(id).clone();
+    for i_id in game.db.character_list.ids() {
+        let i = game.db.ch(i_id);
         let mut last_type_notification = -1;
-        i.affected.borrow_mut().retain_mut(|af| {
+        let mut list = i.affected.borrow().clone();
+        list.retain_mut(|af| {
             if af.duration >= 1 {
                 af.duration -= 1;
                 last_type_notification = -1;
@@ -91,7 +91,7 @@ pub fn affect_update(game: &mut Game) {
                     if af._type != last_type_notification {
                         if game.db.spell_info[af._type as usize].wear_off_msg.is_some() {
                             game.send_to_char(
-                                i,
+                                i_id,
                                 format!(
                                     "{}\r\n",
                                     game.db.spell_info[af._type as usize].wear_off_msg.unwrap()
@@ -102,10 +102,13 @@ pub fn affect_update(game: &mut Game) {
                         }
                     }
                 }
+                let i = game.db.ch(i_id);
                 game.db.affect_remove(i, af);
                 false
             }
         });
+        let i = game.db.ch(i_id);
+        *i.affected.borrow_mut() = list;
     }
 }
 
@@ -139,13 +142,13 @@ pub fn affect_update(game: &mut Game) {
 // if (verbose) {
 // switch (rand_number(0, 2)) {
 // case 0:
-// game.send_to_char(ch.id(), "A wart sprouts on your nose.\r\n");
+// game.send_to_char(chid, "A wart sprouts on your nose.\r\n");
 // break;
 // case 1:
-// game.send_to_char(ch.id(), "Your hair falls out in clumps.\r\n");
+// game.send_to_char(chid, "Your hair falls out in clumps.\r\n");
 // break;
 // case 2:
-// game.send_to_char(ch.id(), "A huge corn develops on your big toe.\r\n");
+// game.send_to_char(chid, "A huge corn develops on your big toe.\r\n");
 // break;
 // }
 // }
@@ -160,7 +163,7 @@ pub fn affect_update(game: &mut Game) {
 // extract_obj(obj2);
 // }
 // if (verbose) {
-// game.send_to_char(ch.id(), "A puff of smoke rises from your pack.\r\n");
+// game.send_to_char(chid, "A puff of smoke rises from your pack.\r\n");
 // act("A puff of smoke rises from $n's pack.", TRUE, ch, NULL, NULL, TO_ROOM);
 // }
 // return (TRUE);
@@ -176,11 +179,13 @@ pub fn affect_update(game: &mut Game) {
 pub fn mag_damage(
     game: &mut Game,
     level: i32,
-    ch: &Rc<CharData>,
-    victim: &Rc<CharData>,
+    chid: DepotId,
+    victim_id: DepotId,
     spellnum: i32,
     savetype: i32,
 ) -> i32 {
+    let ch = game.db.ch(chid);
+    let victim = game.db.ch(victim_id);
     let mut dam = 0;
     let mut victim = victim;
 
@@ -240,9 +245,9 @@ pub fn mag_damage(
                 game.act(
                     "The gods protect $N.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     None,
-                    Some(VictimRef::Char(victim)),
+                    Some(VictimRef::Char(victim_id)),
                     TO_CHAR,
                 );
                 return 0;
@@ -257,9 +262,9 @@ pub fn mag_damage(
                 game.act(
                     "The gods protect $N.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     None,
-                    Some(VictimRef::Char(victim)),
+                    Some(VictimRef::Char(victim_id)),
                     TO_CHAR,
                 );
                 return 0;
@@ -295,7 +300,7 @@ pub fn mag_damage(
     }
 
     /* and finally, inflict the damage */
-    return game.damage(ch, victim, dam, spellnum);
+    return game.damage(chid, victim_id, dam, spellnum);
 }
 
 /*
@@ -311,12 +316,14 @@ const MAX_SPELL_AFFECTS: i32 = 5; /* change if more needed */
 pub fn mag_affects(
     game: &mut Game,
     level: i32,
-    ch: &Rc<CharData>,
-    victim: Option<&Rc<CharData>>,
+    chid: DepotId,
+    victim_id: Option<DepotId>,
     spellnum: i32,
     savetype: i32,
 ) {
-    let mut victim = victim;
+    let mut victim = victim_id.map(|v| game.db.ch(v));
+    let mut victim_id = victim_id;
+    let ch = game.db.ch(chid);
     let mut af = [AffectedType {
         _type: 0,
         duration: 0,
@@ -371,7 +378,7 @@ pub fn mag_affects(
             if victim.as_ref().unwrap().mob_flagged(MOB_NOBLIND)
                 || mag_savingthrow(victim.as_ref().unwrap(), savetype, 0)
             {
-                game.send_to_char(ch.id(), "You fail.\r\n");
+                game.send_to_char(chid, "You fail.\r\n");
                 return;
             }
 
@@ -390,7 +397,7 @@ pub fn mag_affects(
         }
         SPELL_CURSE => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch.id(), NOEFFECT);
+                game.send_to_char(chid, NOEFFECT);
                 return;
             }
 
@@ -437,9 +444,9 @@ pub fn mag_affects(
 
         SPELL_INVISIBLE => {
             if victim.is_none() {
-                victim = Some(ch);
+                victim_id = Some(chid);
+                victim = Some(game.db.ch(victim_id.unwrap()));
             }
-
             af[0].duration = 12 + (ch.get_level() as i16 / 4);
             af[0].modifier = -40;
             af[0].location = APPLY_AC as u8;
@@ -450,10 +457,9 @@ pub fn mag_affects(
         }
         SPELL_POISON => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch.id(), NOEFFECT);
+                game.send_to_char(chid, NOEFFECT);
                 return;
             }
-
             af[0].location = APPLY_STR as u8;
             af[0].duration = ch.get_level() as i16;
             af[0].modifier = -2;
@@ -491,10 +497,11 @@ pub fn mag_affects(
 
             if victim.as_ref().unwrap().get_pos() > POS_SLEEPING {
                 game.send_to_char(
-                    victim.as_ref().unwrap(),
+                    victim_id.unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
-                game.act("$n goes to sleep.", true, Some(victim.unwrap().as_ref().id()), None, None, TO_ROOM);
+                game.act("$n goes to sleep.", true, Some(victim_id.unwrap()), None, None, TO_ROOM);
+                let  victim = victim_id.map(|v| game.db.ch(v));
                 victim.as_ref().unwrap().set_pos(POS_SLEEPING);
             }
         }
@@ -531,12 +538,13 @@ pub fn mag_affects(
      * perform the affect.  This prevents people from un-sancting mobs
      * by sancting them and waiting for it to fade, for example.
      */
+    let victim = victim_id.map(|v| game.db.ch(v));
     if victim.as_ref().unwrap().is_npc()
         && !affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
     {
         for i in 0..MAX_SPELL_AFFECTS as usize {
             if victim.as_ref().unwrap().aff_flagged(af[i].bitvector) {
-                game.send_to_char(ch.id(), NOEFFECT);
+                game.send_to_char(chid, NOEFFECT);
                 return;
             }
         }
@@ -549,7 +557,7 @@ pub fn mag_affects(
     if affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
         && !(accum_duration || accum_affect)
     {
-        game.send_to_char(ch.id(), NOEFFECT);
+        game.send_to_char(chid, NOEFFECT);
         return;
     }
 
@@ -567,10 +575,11 @@ pub fn mag_affects(
     }
 
     if !to_vict.is_empty() {
-        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(ch)), TO_CHAR);
+        game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(chid)), TO_CHAR);
     }
+    let victim = victim_id.map(|v| game.db.ch(v));
     if !to_room.is_empty() {
-        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(ch)), TO_ROOM);
+        game.act(to_room, true, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(chid)), TO_ROOM);
     }
 }
 /*
@@ -580,20 +589,20 @@ pub fn mag_affects(
 fn perform_mag_groups(
     game: &mut Game,
     level: i32,
-    ch: &Rc<CharData>,
-    tch: &Rc<CharData>,
+    chid: DepotId,
+    tch_id: DepotId,
     spellnum: i32,
     savetype: i32,
 ) {
     match spellnum {
         SPELL_GROUP_HEAL => {
-            mag_points(game,level, ch, Some(tch), SPELL_HEAL, savetype);
+            mag_points(game,level, chid, Some(tch_id), SPELL_HEAL, savetype);
         }
         SPELL_GROUP_ARMOR => {
-            mag_affects(game, level, ch, Some(tch), SPELL_ARMOR, savetype);
+            mag_affects(game, level, chid, Some(tch_id), SPELL_ARMOR, savetype);
         }
         SPELL_GROUP_RECALL => {
-            spell_recall(game, level, Some(ch), Some(tch), None);
+            spell_recall(game, level, Some(chid), Some(tch_id), None);
         }
         _ => {}
     }
@@ -610,39 +619,44 @@ fn perform_mag_groups(
  * To add new group spells, you shouldn't have to change anything in
  * mag_groups -- just add a new case to perform_mag_groups.
  */
-pub fn mag_groups(game: &mut Game, level: i32, ch: Option<&Rc<CharData>>, spellnum: i32, savetype: i32) {
-    if ch.is_none() {
+pub fn mag_groups(game: &mut Game, level: i32, chid: Option<DepotId>, spellnum: i32, savetype: i32) {
+    if chid.is_none() {
         return;
     }
-    let ch = ch.unwrap();
+    let chid = chid.unwrap();
+    let ch = game.db.ch(chid);
 
     if !ch.aff_flagged(AFF_GROUP) {
         return;
     }
-    let k;
+    let k_id;
     if ch.master.borrow().is_some() {
-        k = ch.master.borrow().as_ref().unwrap().clone();
+        k_id = ch.master.borrow().unwrap();
     } else {
-        k = ch.clone();
+        k_id = chid;
     }
-    for f in k.followers.borrow().iter() {
-        let tch = f.follower.clone();
+    let k = game.db.ch(k_id);
+    let list = k.followers.borrow().clone();
+    for f in list {
+        let tch_id = f.follower;
+        let tch =game.db.ch(tch_id);
+        let ch = game.db.ch(chid);
         if tch.in_room() != ch.in_room() {
             continue;
         }
         if !tch.aff_flagged(AFF_GROUP) {
             continue;
         }
-        if Rc::ptr_eq(ch, &tch) {
+        if chid == tch_id {
             continue;
         }
-        perform_mag_groups(game, level, ch, &tch, spellnum, savetype);
+        perform_mag_groups(game, level, chid, tch_id, spellnum, savetype);
     }
-
-    if !Rc::ptr_eq(&k, ch) && k.aff_flagged(AFF_GROUP) {
-        perform_mag_groups(game, level, ch, &k, spellnum, savetype);
+    let k = game.db.ch(k_id);
+    if k_id != chid && k.aff_flagged(AFF_GROUP) {
+        perform_mag_groups(game, level, chid, k_id, spellnum, savetype);
     }
-    perform_mag_groups(game, level, ch, ch, spellnum, savetype);
+    perform_mag_groups(game, level, chid, chid, spellnum, savetype);
 }
 
 /*
@@ -650,12 +664,13 @@ pub fn mag_groups(game: &mut Game, level: i32, ch: Option<&Rc<CharData>>, spelln
  *
  * No spells of this class currently implemented.
  */
-pub fn mag_masses(db: &DB, _level: i32, ch: &Rc<CharData>, spellnum: i32, _savetype: i32) {
-    for tch in db.world[ch.in_room() as usize]
+pub fn mag_masses(db: &DB, _level: i32, chid: DepotId, spellnum: i32, _savetype: i32) {
+    let ch = db.ch(chid);
+    for tch_id in db.world[ch.in_room() as usize]
         .peoples
-        .iter()
+        .clone()
     {
-        if Rc::ptr_eq(tch, ch) {
+        if tch_id == chid {
             continue;
         }
 
@@ -676,17 +691,17 @@ pub fn mag_masses(db: &DB, _level: i32, ch: &Rc<CharData>, spellnum: i32, _savet
 pub fn mag_areas(
     game: &mut Game,
     level: i32,
-    ch: Option<&Rc<CharData>>,
+    chid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
     let mut to_char = "";
     let mut to_room = "";
 
-    if ch.is_none() {
+    if chid.is_none() {
         return;
     }
-    let ch = ch.unwrap();
+    let chid = chid.unwrap();
     /*
      * to add spells to this fn, just add the message here plus an entry
      * in mag_damage for the damaging part of the spell.
@@ -700,13 +715,15 @@ pub fn mag_areas(
     }
 
     if !to_char.is_empty() {
-        game.act(to_char, false, Some(ch.id()), None, None, TO_CHAR);
+        game.act(to_char, false, Some(chid), None, None, TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, false, Some(ch.id()), None, None, TO_ROOM);
+        game.act(to_room, false, Some(chid), None, None, TO_ROOM);
     }
+    let ch = game.db.ch(chid);
     let peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-    for tch in peoples.iter() {
+    for tch_id in peoples {
+        let tch = game.db.ch(tch_id);
         /*
          * The skips: 1: the caster
          *            2: immortals
@@ -714,12 +731,13 @@ pub fn mag_areas(
          *            4: pets (charmed NPCs)
          */
 
-        if Rc::ptr_eq(ch, tch) {
+        if chid ==  tch_id {
             continue;
         }
         if !tch.is_npc() && tch.get_level() >= LVL_IMMORT as u8 {
             continue;
         }
+        let ch = game.db.ch(chid);
         if !PK_ALLOWED && !ch.is_npc() && !tch.is_npc() {
             continue;
         }
@@ -728,7 +746,7 @@ pub fn mag_areas(
         }
 
         /* Doesn't matter if they die here so we don't check. -gg 6/24/98 */
-        mag_damage(game, level, ch, tch, spellnum, 1);
+        mag_damage(game, level, chid, tch_id, spellnum, 1);
     }
 }
 
@@ -782,11 +800,12 @@ const MOB_ZOMBIE: i32 = 11;
 pub fn mag_summons(
     game: &mut Game,
     _level: i32,
-    ch: Option<&Rc<CharData>>,
+    chid: Option<DepotId>,
     oid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
+
     let pfail;
     let msg;
     let num = 1;
@@ -794,10 +813,12 @@ pub fn mag_summons(
     let fmsg;
     let mob_num: MobVnum;
 
-    if ch.is_none() {
+    if chid.is_none() {
         return;
     }
-    let ch = ch.unwrap();
+    let chid = chid.unwrap();
+    let ch = game.db.ch(chid);
+
 
     match spellnum {
         SPELL_CLONE => {
@@ -811,7 +832,7 @@ pub fn mag_summons(
                 game.act(
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     None,
                     None,
                     TO_CHAR,
@@ -831,49 +852,52 @@ pub fn mag_summons(
     }
 
     if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(ch.id(), "You are too giddy to have any followers!\r\n");
+        game.send_to_char(chid, "You are too giddy to have any followers!\r\n");
         return;
     }
     if rand_number(0, 101) < pfail {
-        game.send_to_char(ch.id(), MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
+        game.send_to_char(chid, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
         return;
     }
     for _ in 0..num {
-        let mob;
+        let mob_id;
         if {
-            mob = game.db.read_mobile(mob_num, VIRTUAL);
-            mob.is_none()
+            mob_id = game.db.read_mobile(mob_num, VIRTUAL);
+            mob_id.is_none()
         } {
             game.send_to_char(
-                ch,
+                chid,
                 "You don't quite remember how to make that creature.\r\n",
             );
             return;
         }
-        let mob = mob.as_ref().unwrap();
-        game.db.char_to_room(mob, ch.in_room());
+        let mob_id = mob_id.unwrap();
+        let ch = game.db.ch(chid);
+        game.db.char_to_room(mob_id, ch.in_room());
+        let mob = game.db.ch(mob_id);
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
         mob.set_aff_flags_bits(AFF_CHARM);
         if spellnum == SPELL_CLONE {
             /* Don't mess up the prototype; use new string copies. */
+            let ch = game.db.ch(chid);
             mob.player.borrow_mut().name = ch.get_name().to_string();
             mob.player.borrow_mut().short_descr = ch.get_name().to_string();
         }
         game.act(
             MAG_SUMMON_MSGS[msg],
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
-            Some(VictimRef::Char(mob)),
+            Some(VictimRef::Char(mob_id)),
             TO_ROOM,
         );
-        add_follower(game, mob, ch);
+        add_follower(game, mob_id, chid);
 
         if handle_corpse {
             for tobjid in game.db.obj(oid.unwrap()).contains.clone().into_iter() {
                 game.db.obj_from_obj(tobjid);
-                game.db.obj_to_char(tobjid, mob.id());
+                game.db.obj_to_char(tobjid, mob_id);
             }
             game.extract_obj(oid.unwrap());
         }
@@ -883,36 +907,37 @@ pub fn mag_summons(
 pub fn mag_points(
     game: &mut Game,
     level: i32,
-    _ch: &Rc<CharData>,
-    victim: Option<&Rc<CharData>>,
+    _chid: DepotId,
+    victim_id: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
     let healing;
     let move_ = 0;
 
-    if victim.is_none() {
+    if victim_id.is_none() {
         return;
     }
-    let victim = victim.unwrap();
+    let victim_id = victim_id.unwrap();
 
     match spellnum {
         SPELL_CURE_LIGHT => {
             healing = dice(1, 8) + 1 + (level / 4);
-            game.send_to_char(victim, "You feel better.\r\n");
+            game.send_to_char(victim_id, "You feel better.\r\n");
         }
         SPELL_CURE_CRITIC => {
             healing = dice(3, 8) + 3 + (level / 4);
-            game.send_to_char(victim, "You feel a lot better!\r\n");
+            game.send_to_char(victim_id, "You feel a lot better!\r\n");
         }
         SPELL_HEAL => {
             healing = 100 + dice(3, 8);
-            game.send_to_char(victim, "A warm feeling floods your body.\r\n");
+            game.send_to_char(victim_id, "A warm feeling floods your body.\r\n");
         }
         _ => {
             return;
         }
     }
+    let victim = game.db.ch(victim_id);
     victim.set_hit(min(victim.get_max_hit(), victim.get_hit() + healing as i16));
     victim.set_move(min(victim.get_max_move(), victim.get_move() + move_));
     update_pos(victim);
@@ -921,11 +946,12 @@ pub fn mag_points(
 pub fn mag_unaffects(
     game: &mut Game,
     _level: i32,
-    ch: &Rc<CharData>,
-    victim: &Rc<CharData>,
+    chid: DepotId,
+    victim_id: DepotId,
     spellnum: i32,
     _type_: i32,
 ) {
+    let victim = game.db.ch(victim_id);
     let spell;
     let mut msg_not_affected = true;
     let to_vict;
@@ -968,28 +994,29 @@ pub fn mag_unaffects(
 
     if !affected_by_spell(victim, spell as i16) {
         if msg_not_affected {
-            game.send_to_char(ch.id(), NOEFFECT);
+            game.send_to_char(chid, NOEFFECT);
         }
         return;
     }
 
     game.db.affect_from_char(victim, spell as i16);
     if !to_vict.is_empty() {
-        game.act(to_vict, false, Some(victim.id()), None, Some(VictimRef::Char(ch)), TO_CHAR);
+        game.act(to_vict, false, Some(victim_id), None, Some(VictimRef::Char(chid)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(to_room, false, Some(victim.id()), None, Some(VictimRef::Char(ch)), TO_ROOM);
+        game.act(to_room, false, Some(victim_id), None, Some(VictimRef::Char(chid)), TO_ROOM);
     }
 }
 
 pub fn mag_alter_objs(
     game: &mut Game,
     _level: i32,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     oid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
 ) {
+    let ch = game.db.ch(chid);
     let mut to_char = "";
     let to_room = "";
 
@@ -1053,23 +1080,23 @@ pub fn mag_alter_objs(
     }
 
     if to_char.is_empty() {
-        game.send_to_char(ch.id(), NOEFFECT);
+        game.send_to_char(chid, NOEFFECT);
     } else {
-        game.act(to_char, true, Some(ch.id()), Some(oid), None, TO_CHAR);
+        game.act(to_char, true, Some(chid), Some(oid), None, TO_CHAR);
     }
 
     if !to_room.is_empty() {
-        game.act(to_room, true, Some(ch.id()), Some(oid), None, TO_ROOM);
+        game.act(to_room, true, Some(chid), Some(oid), None, TO_ROOM);
     } else if !to_char.is_empty() {
-        game.act(to_char, true, Some(ch.id()), Some(oid), None, TO_ROOM);
+        game.act(to_char, true, Some(chid), Some(oid), None, TO_ROOM);
     }
 }
 
-pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, spellnum: i32) {
-    if ch.is_none() {
+pub fn mag_creations(game: &mut Game, _level: i32, chid: Option<DepotId>, spellnum: i32) {
+    if chid.is_none() {
         return;
     }
-    let ch = ch.unwrap();
+    let chid = chid.unwrap();
     /* level = MAX(MIN(level, LVL_IMPL), 1); - Hm, not used. */
     let z;
     match spellnum {
@@ -1077,13 +1104,13 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
             z = 10;
         }
         _ => {
-            game.send_to_char(ch.id(), "Spell unimplemented, it would seem.\r\n");
+            game.send_to_char(chid, "Spell unimplemented, it would seem.\r\n");
             return;
         }
     }
     let tobj = game.db.read_object(z, VIRTUAL);
     if tobj.is_none() {
-        game.send_to_char(ch.id(), "I seem to have goofed.\r\n");
+        game.send_to_char(chid, "I seem to have goofed.\r\n");
         error!(
             "SYSERR: spell_creations, spell {}, obj {}: obj not found",
             spellnum, z
@@ -1091,11 +1118,11 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
         return;
     }
     let tobj = tobj.unwrap();
-    game.db.obj_to_char(tobj, ch.id());
+    game.db.obj_to_char(tobj, chid);
     game.act(
         "$n creates $p.",
         false,
-        Some(ch.id()),
+        Some(chid),
         Some(tobj),
         None,
         TO_ROOM,
@@ -1103,7 +1130,7 @@ pub fn mag_creations(game: &mut Game, _level: i32, ch: Option<&Rc<CharData>>, sp
     game.act(
         "You create $p.",
         false,
-        Some(ch.id()),
+        Some(chid),
         Some(tobj),
         None,
         TO_CHAR,
