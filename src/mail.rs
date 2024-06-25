@@ -682,7 +682,7 @@ From: {}\r\n\
 
 pub fn postmaster(game: &mut Game, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = game.db.ch(chid);
-    if ch.desc.borrow().is_none() || ch.is_npc() {
+    if ch.desc.is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
     }
 
@@ -810,14 +810,15 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         Some(VictimRef::Char(chid)),
         TO_VICT,
     );
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
     /* Start writing! */
-    let desc_id = ch.desc.borrow().unwrap();
+    let desc_id = ch.desc.unwrap();
     string_write(
-        game.desc_mut(desc_id),
+        game,
+        desc_id,
         Rc::new(RefCell::new(String::new())),
         MAX_MAIL_SIZE,
         recipient,
@@ -861,7 +862,6 @@ fn postmaster_receive_mail(
     _arg: &str,
 ) {
     let ch = game.db.ch(chid);
-    let mailman = game.db.ch(mailman_id);
     if !game.db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
         game.act(

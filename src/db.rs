@@ -8,7 +8,7 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
@@ -116,7 +116,7 @@ pub struct HelpIndexElement {
 
 pub struct DB {
     pub world: Vec<RoomData>,
-    pub character_list: Depot<Rc<CharData>>,
+    pub character_list: Depot<CharData>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
@@ -490,11 +490,11 @@ impl DB {
 
         /* Mobiles */
         for cnt in 0..self.mob_protos.len() {
-            while !self.mob_protos[cnt].affected.borrow().is_empty() {
-                self.affect_remove(
-                    &self.mob_protos[cnt],
-                    &self.mob_protos[cnt].affected.borrow()[0],
-                );
+            while !self.mob_protos[cnt].affected.is_empty() {
+        //        self.affect_remove(
+          //          &self.mob_protos[cnt],
+            //        &self.mob_protos[cnt].affected[0],
+              //  );
             }
         }
         self.mob_protos.clear();
@@ -1514,12 +1514,12 @@ impl DB {
     fn parse_simple_mob(&mut self, reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
         let mut line = String::new();
 
-        mobch.real_abils.borrow_mut().str = 11;
-        mobch.real_abils.borrow_mut().intel = 11;
-        mobch.real_abils.borrow_mut().wis = 11;
-        mobch.real_abils.borrow_mut().dex = 11;
-        mobch.real_abils.borrow_mut().con = 11;
-        mobch.real_abils.borrow_mut().cha = 11;
+        mobch.real_abils.str = 11;
+        mobch.real_abils.intel = 11;
+        mobch.real_abils.wis = 11;
+        mobch.real_abils.dex = 11;
+        mobch.real_abils.con = 11;
+        mobch.real_abils.cha = 11;
 
         if get_line(reader, &mut line) == 0 {
             error!(
@@ -1630,37 +1630,37 @@ impl DB {
 
             "Str" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().str = num_arg as i8;
+                mobch.real_abils.str = num_arg as i8;
             }
 
             "StrAdd" => {
                 num_arg = max(0, min(100, num_arg));
-                mobch.real_abils.borrow_mut().str_add = num_arg as i8;
+                mobch.real_abils.str_add = num_arg as i8;
             }
 
             "Int" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().intel = num_arg as i8;
+                mobch.real_abils.intel = num_arg as i8;
             }
 
             "Wis" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().wis = num_arg as i8;
+                mobch.real_abils.wis = num_arg as i8;
             }
 
             "Dex" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().dex = num_arg as i8;
+                mobch.real_abils.dex = num_arg as i8;
             }
 
             "Con" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().con = num_arg as i8;
+                mobch.real_abils.con = num_arg as i8;
             }
 
             "Cha" => {
                 num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.borrow_mut().cha = num_arg as i8;
+                mobch.real_abils.cha = num_arg as i8;
             }
 
             _ => {
@@ -1729,7 +1729,7 @@ impl DB {
         let buf2 = format!("mob vnum {}", nr);
 
         /***** String data *****/
-        mobch.player.borrow_mut().name = fread_string(reader, buf2.as_str());
+        mobch.player.name = Rc::from(fread_string(reader, buf2.as_str()).as_str());
         let mut tmpstr = fread_string(reader, buf2.as_str());
         if !tmpstr.is_empty() {
             let f1 = fname(tmpstr.as_str());
@@ -1739,9 +1739,9 @@ impl DB {
                 tmpstr.insert(0, char::to_ascii_lowercase(&c));
             }
         }
-        mobch.player.borrow_mut().short_descr = tmpstr;
-        mobch.player.borrow_mut().long_descr = fread_string(reader, buf2.as_str());
-        mobch.player.borrow_mut().description =
+        mobch.player.short_descr = tmpstr.into();
+        mobch.player.long_descr = Rc::from(fread_string(reader, buf2.as_str()).as_str());
+        mobch.player.description =
             Rc::new(RefCell::from(fread_string(reader, buf2.as_str())));
         mobch.set_title(None);
 
@@ -1809,14 +1809,14 @@ impl DB {
             }
         }
 
-        *mobch.aff_abils.borrow_mut() = *mobch.real_abils.borrow();
+        mobch.aff_abils = mobch.real_abils;
 
         for j in 0..NUM_WEARS {
-            mobch.equipment.borrow_mut()[j as usize] = None;
+            mobch.equipment[j as usize] = None;
         }
 
         mobch.nr = self.mob_protos.len() as MobRnum;
-        mobch.desc = RefCell::new(None);
+        mobch.desc = None;
 
         self.mob_protos.push(mobch);
     }
@@ -2299,7 +2299,7 @@ impl Game {
         let mut found = 0;
         for nr in 0..self.db.mob_protos.len() {
             let mp = &self.db.mob_protos[nr];
-            if isname(searchname, &mp.player.borrow().name) {
+            if isname(searchname, &mp.player.name) {
                 found += 1;
                 self.send_to_char(
                     chid,
@@ -2307,7 +2307,7 @@ impl Game {
                         "{:3}. [{:5}] {}\r\n",
                         found,
                         self.db.mob_index[nr].vnum,
-                        mp.player.borrow().short_descr
+                        mp.player.short_descr
                     )
                     .as_str(),
                 );
@@ -2344,15 +2344,10 @@ impl DB {
         self.object_list.get_mut(o_id)
     }
     pub fn ch(&self, c_id: DepotId) -> &CharData {
-        self.character_list.get(c_id).as_ref()
-    }
-    pub fn chr(&self, c_id: DepotId) -> &Rc<CharData> {
         self.character_list.get(c_id)
     }
     pub fn ch_mut(&mut self, o_id: DepotId) -> &mut CharData {
-        unsafe {
-        &mut *(self.character_list.get_mut(o_id).as_ref() as *const CharData  as *mut CharData)
-        }
+        self.character_list.get_mut(o_id)
     }
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
@@ -2381,36 +2376,35 @@ impl DB {
             i = nr;
         }
 
-        let mob = self.mob_protos[i as usize].make_copy();
+        let mut mob = self.mob_protos[i as usize].make_copy();
 
-        if mob.points.borrow().max_hit == 0 {
+        if mob.points.max_hit == 0 {
             let max_hit = dice(
-                mob.points.borrow().hit as i32,
-                mob.points.borrow().mana as i32,
-            ) + mob.points.borrow().movem as i32;
-            mob.points.borrow_mut().max_hit = max_hit as i16;
+                mob.points.hit as i32,
+                mob.points.mana as i32,
+            ) + mob.points.movem as i32;
+            mob.points.max_hit = max_hit as i16;
         } else {
             let max_hit = rand_number(
-                mob.points.borrow().hit as u32,
-                mob.points.borrow().mana as u32,
+                mob.points.hit as u32,
+                mob.points.mana as u32,
             ) as i16;
-            mob.points.borrow_mut().max_hit = max_hit;
+            mob.points.max_hit = max_hit;
         }
 
         {
-            let mut mp = mob.points.borrow_mut();
+            let mut mp = mob.points;
             mp.hit = mp.max_hit;
             mp.mana = mp.max_mana;
             mp.movem = mp.max_move;
         }
-        mob.player.borrow_mut().time.birth = time_now();
-        mob.player.borrow_mut().time.played = 0;
-        mob.player.borrow_mut().time.logon = time_now();
+        mob.player.time.birth = time_now();
+        mob.player.time.played = 0;
+        mob.player.time.logon = time_now();
 
         self.mob_index[i as usize].number += 1;
 
-        let rc = Rc::from(mob);
-        Some(self.character_list.push(rc.clone()))
+        Some(self.character_list.push(mob))
     }
 
     /* create an object, and add it to the object list */
@@ -2878,7 +2872,7 @@ impl Game {
         let ch = self.db.ch(chid);
         let mut st: CharFileU = CharFileU::new();
 
-        if ch.is_npc() || ch.desc.borrow().is_none() || ch.get_pfilepos() < 0 {
+        if ch.is_npc() || ch.desc.is_none() || ch.get_pfilepos() < 0 {
             return;
         }
 
@@ -2887,7 +2881,7 @@ impl Game {
         copy_to_stored(
             &mut st.host,
             self.descriptor_list
-                .get(ch.desc.borrow().unwrap())
+                .get(ch.desc.unwrap())
                 .host
                 .as_ref(),
         );
@@ -3002,50 +2996,50 @@ impl CharFileU {
 }
 
 /* copy data from the file structure to a char struct */
-pub fn store_to_char(st: &CharFileU, ch: &CharData) {
+pub fn store_to_char(st: &CharFileU, ch: &mut CharData) {
     ch.set_sex(st.sex);
     ch.set_class(st.chclass);
     ch.set_level(st.level);
 
-    ch.player.borrow_mut().short_descr = String::new();
-    ch.player.borrow_mut().long_descr = String::new();
-    ch.player.borrow_mut().title = Some(parse_c_string(&st.title));
-    ch.player.borrow_mut().description = Rc::new(RefCell::from(parse_c_string(&st.description)));
+    ch.player.short_descr = Rc::from("");
+    ch.player.long_descr = Rc::from("");
+    ch.player.title = Some(Rc::from(parse_c_string(&st.title).as_str()));
+    ch.player.description = Rc::new(RefCell::from(parse_c_string(&st.description)));
 
-    ch.player.borrow_mut().hometown = st.hometown;
-    ch.player.borrow_mut().time.birth = st.birth;
-    ch.player.borrow_mut().time.played = st.played;
-    ch.player.borrow_mut().time.logon = time_now();
+    ch.player.hometown = st.hometown;
+    ch.player.time.birth = st.birth;
+    ch.player.time.played = st.played;
+    ch.player.time.logon = time_now();
 
-    ch.player.borrow_mut().weight = st.weight;
-    ch.player.borrow_mut().height = st.height;
+    ch.player.weight = st.weight;
+    ch.player.height = st.height;
 
-    *ch.real_abils.borrow_mut() = st.abilities;
-    *ch.aff_abils.borrow_mut() = st.abilities;
-    *ch.points.borrow_mut() = st.points;
-    ch.char_specials.borrow_mut().saved = st.char_specials_saved;
-    RefCell::borrow_mut(&ch.player_specials).saved = st.player_specials_saved;
-    ch.player_specials.borrow_mut().poofin = Rc::from("");
-    ch.player_specials.borrow_mut().poofout = Rc::from("");
+    ch.real_abils = st.abilities;
+    ch.aff_abils = st.abilities;
+    ch.points = st.points;
+    ch.char_specials.saved = st.char_specials_saved;
+    ch.player_specials.saved = st.player_specials_saved;
+    ch.player_specials.poofin = Rc::from("");
+    ch.player_specials.poofout = Rc::from("");
     ch.set_last_tell(NOBODY as i64);
 
-    if ch.points.borrow().max_mana < 100 {
-        ch.points.borrow_mut().max_mana = 100;
+    if ch.points.max_mana < 100 {
+        ch.points.max_mana = 100;
     }
 
-    ch.char_specials.borrow_mut().carry_weight = 0;
-    ch.char_specials.borrow_mut().carry_items = 0;
-    ch.points.borrow_mut().armor = 100;
-    ch.points.borrow_mut().hitroll = 0;
-    ch.points.borrow_mut().damroll = 0;
+    ch.char_specials.carry_weight = 0;
+    ch.char_specials.carry_items = 0;
+    ch.points.armor = 100;
+    ch.points.hitroll = 0;
+    ch.points.damroll = 0;
 
-    ch.player.borrow_mut().name = parse_c_string(&st.name);
-    ch.player.borrow_mut().passwd.copy_from_slice(&st.pwd);
+    ch.player.name = Rc::from(parse_c_string(&st.name).as_str());
+    ch.player.passwd.copy_from_slice(&st.pwd);
 
     /* Add all spell effects */
     for i in 0..MAX_AFFECT {
         if st.affected[i]._type != 0 {
-            ch.affected.borrow_mut().push(st.affected[i]);
+            ch.affected.push(st.affected[i]);
         }
     }
 
@@ -3076,13 +3070,13 @@ impl Game {
                 char_eq[i as usize] = None;
             }
         }
-        let ch = self.db.ch(chid);
-        if ch.affected.borrow().len() > MAX_AFFECT {
+        let ch = self.db.ch_mut(chid);
+        if ch.affected.len() > MAX_AFFECT {
             error!("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
         }
 
         for i in 0..MAX_AFFECT {
-            let a = ch.affected.borrow();
+            let a = &ch.affected;
             let af = a.get(i);
             if af.is_some() {
                 let af = af.unwrap();
@@ -3101,30 +3095,32 @@ impl Game {
          * effects are doubled when the char logs back in.
          */
 
-        while !ch.affected.borrow().is_empty() {
-            self.db.affect_remove(ch, &ch.affected.borrow()[0]);
+        while { let ch = self.db.ch(chid); !ch.affected.is_empty() }{
+            let ch = self.db.ch(chid);
+            let af = ch.affected[0];
+            self.db.affect_remove(chid, af);
         }
+        let ch = self.db.ch_mut(chid);
+        ch.aff_abils = ch.real_abils;
 
-        *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow();
-
-        st.birth = ch.player.borrow().time.birth;
-        st.played = ch.player.borrow().time.played;
-        st.played += (time_now() - ch.player.borrow().time.logon) as i32;
+        st.birth = ch.player.time.birth;
+        st.played = ch.player.time.played;
+        st.played += (time_now() - ch.player.time.logon) as i32;
         st.last_logon = time_now();
 
-        ch.player.borrow_mut().time.played = st.played;
-        ch.player.borrow_mut().time.logon = time_now();
+        ch.player.time.played = st.played;
+        ch.player.time.logon = time_now();
 
-        st.hometown = ch.player.borrow().hometown;
+        st.hometown = ch.player.hometown;
         st.weight = ch.get_weight();
         st.height = ch.get_height();
         st.sex = ch.get_sex();
         st.chclass = ch.get_class();
         st.level = ch.get_level();
-        st.abilities = *ch.real_abils.borrow();
-        st.points = *ch.points.borrow();
-        st.char_specials_saved = ch.char_specials.borrow().saved;
-        st.player_specials_saved = ch.player_specials.borrow().saved;
+        st.abilities = ch.real_abils;
+        st.points = ch.points;
+        st.char_specials_saved = ch.char_specials.saved;
+        st.player_specials_saved = ch.player_specials.saved;
 
         st.points.armor = 100;
         st.points.hitroll = 0;
@@ -3135,21 +3131,21 @@ impl Game {
         } else {
             st.title[0] = 0;
         }
-        if !ch.player.borrow().description.borrow().is_empty() {
-            if RefCell::borrow(&ch.player.borrow().description).len() >= st.description.len() {
+        if !ch.player.description.borrow().is_empty() {
+            if RefCell::borrow(&ch.player.description).len() >= st.description.len() {
                 error!(
                     "SYSERR: char_to_store: {}'s description length: {}, max: {}!  Truncated.",
                     ch.get_pc_name(),
-                    RefCell::borrow(&ch.player.borrow().description).len(),
+                    RefCell::borrow(&ch.player.description).len(),
                     st.description.len()
                 );
-                RefCell::borrow_mut(&ch.player.borrow().description)
+                RefCell::borrow_mut(&ch.player.description)
                     .truncate(&st.description.len() - 3);
-                RefCell::borrow_mut(&ch.player.borrow().description).push_str("\r\n");
+                RefCell::borrow_mut(&ch.player.description).push_str("\r\n");
             }
             copy_to_stored(
                 &mut st.description,
-                &RefCell::borrow(&ch.player.borrow().description),
+                &RefCell::borrow(&ch.player.description),
             );
         } else {
             st.description[0] = 0;
@@ -3160,7 +3156,7 @@ impl Game {
         /* add spell and eq affections back in now */
         for i in 0..MAX_AFFECT {
             if st.affected[i]._type != 0 {
-                ch.affected.borrow_mut().push(st.affected[i]);
+                ch.affected.push(st.affected[i]);
             }
         }
 
@@ -3252,14 +3248,14 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
 impl DB {
     /* release memory allocated for a char struct */
     pub fn free_char(&mut self, chid: DepotId) {
-        self.ch(chid).player_specials.borrow_mut().aliases.clear();
+        self.ch_mut(chid).player_specials.aliases.clear();
 
-        while !self.ch(chid).affected.borrow().is_empty() {
-            self.affect_remove(self.ch(chid), &self.ch(chid).affected.borrow()[0]);
+        while !self.ch(chid).affected.is_empty() {
+            self.affect_remove(chid, self.ch(chid).affected[0]);
         }
 
-        if self.ch(chid).desc.borrow().is_some() {
-            *self.ch(chid).desc.borrow_mut() = None;
+        if self.ch(chid).desc.is_some() {
+            self.ch_mut(chid).desc = None;
         }
     }
 }
@@ -3324,19 +3320,19 @@ fn file_to_string(name: &str) -> io::Result<String> {
 }
 
 /* clear some of the the working variables of a char */
-pub fn reset_char(ch: &CharData) {
+pub fn reset_char(ch: &mut CharData) {
     for i in 0..NUM_WEARS {
         ch.set_eq(i, None);
     }
 
-    ch.followers.borrow_mut().clear();
-    *ch.master.borrow_mut() = None;
+    ch.followers.clear();
+    ch.master = None;
     ch.set_in_room(NOWHERE);
-    ch.carrying.borrow_mut().clear();
+    ch.carrying.clear();
     ch.set_fighting(None);
-    ch.char_specials.borrow_mut().position = POS_STANDING;
-    ch.char_specials.borrow_mut().carry_weight = 0;
-    ch.char_specials.borrow_mut().carry_items = 0;
+    ch.char_specials.position = POS_STANDING;
+    ch.char_specials.carry_weight = 0;
+    ch.char_specials.carry_items = 0;
 
     if ch.get_hit() <= 0 {
         ch.set_hit(1);
@@ -3362,8 +3358,8 @@ pub fn clear_char(ch: &mut CharData) {
     ch.mob_specials.default_pos = POS_STANDING;
 
     ch.set_ac(100); /* Basic Armor */
-    if ch.points.borrow().max_mana < 100 {
-        ch.points.borrow_mut().max_mana = 100;
+    if ch.points.max_mana < 100 {
+        ch.points.max_mana = 100;
     }
 }
 
@@ -3378,7 +3374,7 @@ fn clear_object(obj: &mut ObjData) {
  * (and then never again for that character).
  */
 impl DB {
-    pub(crate) fn init_char(&mut self, ch: &CharData) {
+    pub(crate) fn init_char(&mut self, ch: &mut CharData) {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
             ch.set_level(LVL_IMPL as u8);
@@ -3394,14 +3390,14 @@ impl DB {
         }
 
         ch.set_title(None);
-        ch.player.borrow_mut().short_descr = String::new();
-        ch.player.borrow_mut().long_descr = String::new();
-        ch.player.borrow_mut().description = Rc::new(RefCell::new(String::new()));
+        ch.player.short_descr = Rc::from("");
+        ch.player.long_descr = Rc::from("");
+        ch.player.description = Rc::new(RefCell::new(String::new()));
 
         let now = time_now();
-        ch.player.borrow_mut().time.birth = now;
-        ch.player.borrow_mut().time.logon = now;
-        ch.player.borrow_mut().time.played = 0;
+        ch.player.time.birth = now;
+        ch.player.time.logon = now;
+        ch.player.time.played = 0;
 
         ch.set_home(1);
         ch.set_ac(100);
@@ -3441,9 +3437,9 @@ impl DB {
 
         for i in 1..MAX_SKILLS {
             if ch.get_level() < LVL_IMPL as u8 {
-                RefCell::borrow_mut(&ch.player_specials).saved.skills[i] = 0;
+                ch.player_specials.saved.skills[i] = 0;
             } else {
-                RefCell::borrow_mut(&ch.player_specials).saved.skills[i] = 100;
+                ch.player_specials.saved.skills[i] = 100;
             }
         }
 
@@ -3453,13 +3449,13 @@ impl DB {
             ch.set_save(i, 0);
         }
 
-        ch.real_abils.borrow_mut().intel = 25;
-        ch.real_abils.borrow_mut().wis = 25;
-        ch.real_abils.borrow_mut().dex = 25;
-        ch.real_abils.borrow_mut().str = 25;
-        ch.real_abils.borrow_mut().str_add = 100;
-        ch.real_abils.borrow_mut().con = 25;
-        ch.real_abils.borrow_mut().cha = 25;
+        ch.real_abils.intel = 25;
+        ch.real_abils.wis = 25;
+        ch.real_abils.dex = 25;
+        ch.real_abils.str = 25;
+        ch.real_abils.str_add = 100;
+        ch.real_abils.con = 25;
+        ch.real_abils.cha = 25;
 
         let cond_value = if ch.get_level() == LVL_IMPL as u8 {
             -1
@@ -3732,18 +3728,18 @@ impl Default for CharData {
     fn default() -> CharData {
         CharData {
             id: Default::default(),
-            pfilepos: Cell::new(0),
+            pfilepos: 0,
             nr: 0,
-            in_room: Cell::new(0),
-            was_in_room: Cell::new(0),
-            wait: Cell::new(0),
-            player: RefCell::new(CharPlayerData {
+            in_room: 0,
+            was_in_room: 0,
+            wait: 0,
+            player: CharPlayerData {
                 passwd: [0; 16],
-                name: "".to_string(),
-                short_descr: "".to_string(),
-                long_descr: "".to_string(),
+                name: Rc::from(""),
+                short_descr: Rc::from(""),
+                long_descr: Rc::from(""),
                 description: Rc::new(RefCell::new(String::new())),
-                title: Option::from("".to_string()),
+                title: Option::from(Rc::from("")),
                 sex: 0,
                 chclass: 0,
                 level: 0,
@@ -3755,8 +3751,8 @@ impl Default for CharData {
                 },
                 weight: 0,
                 height: 0,
-            }),
-            real_abils: RefCell::new(CharAbilityData {
+            },
+            real_abils: CharAbilityData {
                 str: 0,
                 str_add: 0,
                 intel: 0,
@@ -3764,8 +3760,8 @@ impl Default for CharData {
                 dex: 0,
                 con: 0,
                 cha: 0,
-            }),
-            aff_abils: RefCell::new(CharAbilityData {
+            },
+            aff_abils:CharAbilityData {
                 str: 0,
                 str_add: 0,
                 intel: 0,
@@ -3773,8 +3769,8 @@ impl Default for CharData {
                 dex: 0,
                 con: 0,
                 cha: 0,
-            }),
-            points: RefCell::new(CharPointData {
+            },
+            points: CharPointData {
                 mana: 0,
                 max_mana: 0,
                 hit: 0,
@@ -3787,14 +3783,14 @@ impl Default for CharData {
                 exp: 0,
                 hitroll: 0,
                 damroll: 0,
-            }),
-            char_specials: RefCell::new(CharSpecialData {
+            },
+            char_specials: CharSpecialData {
                 fighting: None,
                 hunting: None,
                 position: 0,
                 carry_weight: 0,
                 carry_items: 0,
-                timer: Cell::new(0),
+                timer: 0,
                 saved: CharSpecialDataSaved {
                     alignment: 0,
                     idnum: 0,
@@ -3802,8 +3798,8 @@ impl Default for CharData {
                     affected_by: 0,
                     apply_saving_throw: [0; 5],
                 },
-            }),
-            player_specials: RefCell::new(PlayerSpecialData {
+            },
+            player_specials: PlayerSpecialData {
                 saved: PlayerSpecialDataSaved {
                     skills: [0; MAX_SKILLS + 1],
                     padding0: 0,
@@ -3842,7 +3838,7 @@ impl Default for CharData {
                 poofout: Rc::from(""),
                 aliases: vec![],
                 last_tell: 0,
-            }),
+            },
             mob_specials: MobSpecialData {
                 memory: RefCell::new(vec![]),
                 attack_type: 0,
@@ -3850,13 +3846,13 @@ impl Default for CharData {
                 damnodice: 0,
                 damsizedice: 0,
             },
-            affected: RefCell::new(vec![]),
-            equipment: RefCell::new([None; NUM_WEARS as usize]),
-            carrying: RefCell::new(vec![]),
-            desc: RefCell::new(None),
+            affected: vec![],
+            equipment: [None; NUM_WEARS as usize],
+            carrying: vec![],
+            desc: None,
             // next_fighting: RefCell::new(None),
-            followers: RefCell::new(vec![]),
-            master: RefCell::new(None),
+            followers: vec![],
+            master:None,
         }
     }
 }
@@ -3864,39 +3860,39 @@ impl CharData {
     fn make_copy(&self) -> CharData {
         CharData {
             id: Default::default(),
-            pfilepos: Cell::new(self.get_pfilepos()),
+            pfilepos: self.get_pfilepos(),
             nr: self.nr,
-            in_room: Cell::new(self.in_room()),
-            was_in_room: Cell::new(self.was_in_room.get()),
-            wait: Cell::new(self.wait.get()),
-            player: RefCell::new(CharPlayerData {
-                passwd: self.player.borrow().passwd,
-                name: self.player.borrow().name.clone(),
-                short_descr: self.player.borrow().short_descr.clone(),
-                long_descr: self.player.borrow().long_descr.clone(),
-                description: self.player.borrow().description.clone(),
-                title: Option::from("".to_string()),
-                sex: self.player.borrow().sex,
-                chclass: self.player.borrow().chclass,
-                level: self.player.borrow().level,
-                hometown: self.player.borrow().hometown,
-                time: self.player.borrow().time,
-                weight: self.player.borrow().weight,
-                height: self.player.borrow().height,
-            }),
-            real_abils: RefCell::new(*self.real_abils.borrow()),
-            aff_abils: RefCell::new(*self.aff_abils.borrow()),
-            points: RefCell::new(*self.points.borrow()),
-            char_specials: RefCell::new(CharSpecialData {
+            in_room: self.in_room(),
+            was_in_room: self.was_in_room,
+            wait: self.wait,
+            player: CharPlayerData {
+                passwd: self.player.passwd,
+                name: self.player.name.clone(),
+                short_descr: self.player.short_descr.clone(),
+                long_descr: self.player.long_descr.clone(),
+                description: self.player.description.clone(),
+                title: Option::from(Rc::from("")),
+                sex: self.player.sex,
+                chclass: self.player.chclass,
+                level: self.player.level,
+                hometown: self.player.hometown,
+                time: self.player.time,
+                weight: self.player.weight,
+                height: self.player.height,
+            },
+            real_abils: self.real_abils,
+            aff_abils: self.aff_abils,
+            points:self.points,
+            char_specials: CharSpecialData {
                 fighting: None,
                 hunting: None,
-                position: self.char_specials.borrow().position,
-                carry_weight: self.char_specials.borrow().carry_weight,
-                carry_items: self.char_specials.borrow().carry_items,
-                timer: Cell::from(self.char_specials.borrow().timer.get()),
-                saved: self.char_specials.borrow().saved,
-            }),
-            player_specials: RefCell::new(PlayerSpecialData {
+                position: self.char_specials.position,
+                carry_weight: self.char_specials.carry_weight,
+                carry_items: self.char_specials.carry_items,
+                timer: self.char_specials.timer,
+                saved: self.char_specials.saved,
+            },
+            player_specials: PlayerSpecialData {
                 saved: PlayerSpecialDataSaved {
                     skills: [0; MAX_SKILLS + 1],
                     padding0: 0,
@@ -3935,7 +3931,7 @@ impl CharData {
                 poofout: Rc::from(""),
                 aliases: vec![],
                 last_tell: 0,
-            }),
+            },
             mob_specials: MobSpecialData {
                 memory: RefCell::new(vec![]),
                 attack_type: self.mob_specials.attack_type,
@@ -3943,13 +3939,13 @@ impl CharData {
                 damnodice: self.mob_specials.damnodice,
                 damsizedice: self.mob_specials.damsizedice,
             },
-            affected: RefCell::new(vec![]),
-            equipment: RefCell::new([None; NUM_WEARS as usize]),
-            carrying: RefCell::new(vec![]),
-            desc: RefCell::new(None),
+            affected: vec![],
+            equipment: [None; NUM_WEARS as usize],
+            carrying: vec![],
+            desc: None,
             // next_fighting: RefCell::new(None),
-            followers: RefCell::new(vec![]),
-            master: RefCell::new(None),
+            followers: vec![],
+            master: None,
         }
     }
 }

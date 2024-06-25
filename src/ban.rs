@@ -187,7 +187,7 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
         site: Rc::from(site.to_lowercase().as_str()),
         type_: 0,
         date: time_now(),
-        name: Rc::from(ch.get_name()),
+        name: ch.get_name().clone(),
     };
 
     let p = BAN_TYPES.iter().position(|t| *t == flag);

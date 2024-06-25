@@ -123,9 +123,9 @@ impl Game {
     pub fn appear(&mut self, chid: DepotId) {
         let ch = self.db.ch(chid);
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
-            self.db.affect_from_char(ch, SPELL_INVISIBLE as i16);
+            self.db.affect_from_char(chid, SPELL_INVISIBLE as i16);
         }
-
+        let ch = self.db.ch_mut(chid);
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
 
         if ch.get_level() < LVL_IMMORT as u8 {
@@ -247,7 +247,7 @@ impl DB {
     }
 }
 
-pub fn update_pos(victim: &CharData) {
+pub fn update_pos(victim: &mut CharData) {
     if victim.get_hit() > 0 && victim.get_pos() > POS_STUNNED {
         return;
     } else if victim.get_hit() > 0 {
@@ -272,7 +272,7 @@ pub fn check_killer(chid: DepotId, vict_id:DepotId, game: &mut Game) {
     if ch.plr_flagged(PLR_KILLER) || ch.is_npc() || vict.is_npc() || std::ptr::eq(ch, vict) {
         return;
     }
-
+    let ch = game.db.ch_mut(chid);
     ch.set_plr_flag_bit(PLR_KILLER);
 
     game.send_to_char(chid, "If you want to be a PLAYER KILLER, so be it...\r\n");
@@ -307,11 +307,11 @@ impl Game {
         self.db.combat_list.push(chid);
 
         if self.db.ch(chid).aff_flagged(AFF_SLEEP) {
-            self.db.affect_from_char(self.db.ch(chid), SPELL_SLEEP as i16);
+            self.db.affect_from_char(chid, SPELL_SLEEP as i16);
         }
 
-        self.db.ch(chid).set_fighting(Some(victid));
-        self.db.ch(chid).set_pos(POS_FIGHTING);
+        self.db.ch_mut(chid).set_fighting(Some(victid));
+        self.db.ch_mut(chid).set_pos(POS_FIGHTING);
 
         if !PK_ALLOWED {
             check_killer(chid, victid, self);
@@ -322,7 +322,7 @@ impl DB {
     /* remove a char from the list of fighting chars */
     pub fn stop_fighting(&mut self, chid: DepotId) {
         self.combat_list.retain(|c| *c != chid);
-        let ch = self.ch(chid);
+        let ch = self.ch_mut(chid);
         ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
 
@@ -362,7 +362,7 @@ impl Game {
 
         /* transfer character's inventory to the corpse */
         let ch = self.db.ch(chid);
-        let list = ch.carrying.borrow().clone();
+        let list = ch.carrying.clone();
         for o in list {
             self.db.obj_mut(corpse_id).contains.push(o);
         }
@@ -388,18 +388,18 @@ impl Game {
              * bug. The duplication has been fixed (knock on wood) but the
              * test below shall live on, for a while. -gg 3/3/2002
              */
-            if ch.is_npc() || ch.desc.borrow().is_some() {
+            if ch.is_npc() || ch.desc.is_some() {
                 let money = self.db.create_money(ch.get_gold());
                 self.db.obj_to_obj(money.unwrap(), corpse_id);
             }
-            let ch = self.db.ch(chid);
+            let ch = self.db.ch_mut(chid);
             ch.set_gold(0);
         }
-        let ch = self.db.ch(chid);
-        ch.carrying.borrow_mut().clear();
+        let ch = self.db.ch_mut(chid);
+        ch.carrying.clear();
         ch.set_is_carrying_w(0);
         ch.set_is_carrying_n(0);
-
+        let ch = self.db.ch(chid);
         self.db.obj_to_room(corpse_id, ch.in_room());
     }
 }
@@ -413,7 +413,7 @@ pub fn change_alignment(db: &mut DB, chid: DepotId, victim_id: DepotId) {
     let ch = db.ch(chid);
     let victim = db.ch(victim_id);
     let alignment = ch.get_alignment() + (-victim.get_alignment() - ch.get_alignment()) / 16;
-    db.ch(chid).set_alignment(alignment);
+    db.ch_mut(chid).set_alignment(alignment);
 }
 
 impl Game {
@@ -448,13 +448,14 @@ impl Game {
             self.db.stop_fighting(chid);
         }
         let ch = self.db.ch(chid);
-        ch.affected.borrow_mut().retain(|af| {
-            self.db.affect_remove(ch, af);
+        let mut list = ch.affected.clone();
+        list.retain(|af| {
+            self.db.affect_remove(chid, *af);
             false
         });
-
+        let ch = self.db.ch_mut(chid);
+        ch.affected = list;
         self.death_cry(chid);
-
         self.make_corpse(chid);
         self.db.extract_char(chid);
     }
@@ -463,7 +464,7 @@ impl Game {
 pub fn die(chid: DepotId, game: &mut Game) {
     let ch = game.db.ch(chid);
     gain_exp(chid, -(ch.get_exp() / 2), game);
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
     }
@@ -496,10 +497,10 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game) {
     let ch = game.db.ch(chid);
     let victim = game.db.ch(victim_id);
     let k_id;
-    if ch.master.borrow().is_none() {
+    if ch.master.is_none() {
         k_id = chid;
     } else {
-        k_id = ch.master.borrow().unwrap();
+        k_id = ch.master.unwrap();
     }
     let k = game.db.ch(k_id);
     let mut tot_members;
@@ -509,7 +510,7 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game) {
         tot_members = 0;
     }
 
-    for f in k.followers.borrow().iter() {
+    for f in k.followers.iter() {
         let follower = game.db.ch(f.follower);
         if follower.aff_flagged(AFF_GROUP) && follower.in_room() == ch.in_room() {
             tot_members += 1;
@@ -535,7 +536,7 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game) {
         perform_group_gain(k_id, base, victim_id, game);
     }
     let k = game.db.ch(k_id);
-    let list = k.followers.borrow().clone();
+    let list = k.followers.clone();
     for f in list {
         let follower = game.db.ch(f.follower);
         let ch = game.db.ch(chid);
@@ -979,8 +980,8 @@ impl Game {
 
         /* If you attack a pet, it hates your guts */
         let victim = self.db.ch(victim_id);
-        if victim.master.borrow().is_some()
-            && victim.master.borrow().unwrap() == chid
+        if victim.master.is_some()
+            && victim.master.unwrap() == chid
         {
             self.stop_follower(victim_id);
         }
@@ -1008,14 +1009,14 @@ impl Game {
 
         /* Set the maximum damage per round and subtract the hit points */
         dam = max(min(dam, 100), 0);
-        let victim = self.db.ch(victim_id);
+        let victim = self.db.ch_mut(victim_id);
         victim.decr_hit(dam as i16);
 
         /* Gain exp for the hit */
         if chid != victim_id {
             gain_exp(chid, victim.get_level() as i32 * dam, self);
         }
-        let victim = self.db.ch(victim_id);
+        let victim = self.db.ch_mut(victim_id);
         update_pos(victim);
 
         /*
@@ -1135,7 +1136,7 @@ impl Game {
 
         /* Help out poor linkless people who are attacked */
         let victim = self.db.ch(victim_id);
-        if !victim.is_npc() && victim.desc.borrow().is_none() && victim.get_pos() > POS_STUNNED {
+        if !victim.is_npc() && victim.desc.is_none() && victim.get_pos() > POS_STUNNED {
             do_flee(self, victim_id, "", 0, 0);
             let victim = self.db.ch(victim_id);
             if victim.fighting_id().is_none() {
@@ -1147,7 +1148,7 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                let victim = self.db.ch(victim_id);
+                let victim = self.db.ch_mut(victim_id);
                 victim.set_was_in(victim.in_room());
                 self.db.char_from_room(victim_id);
                 self.db.char_to_room(victim_id, 0);
@@ -1163,7 +1164,7 @@ impl Game {
         /* Uh oh.  Victim died. */
         let victim = self.db.ch(victim_id);
         if victim.get_pos() == POS_DEAD {
-            if chid !=  victim_id && (victim.is_npc() || victim.desc.borrow().is_some()) {
+            if chid !=  victim_id && (victim.is_npc() || victim.desc.is_some()) {
                 let ch = self.db.ch(chid);
                 if ch.aff_flagged(AFF_GROUP) {
                     group_gain(chid, victim_id, self);
@@ -1366,6 +1367,7 @@ impl Game {
             }
 
             if ch.is_npc() {
+                let ch = self.db.ch_mut(chid);
                 if ch.get_wait_state() > 0 {
                     ch.decr_wait_state(PULSE_VIOLENCE as i32);
                     continue;

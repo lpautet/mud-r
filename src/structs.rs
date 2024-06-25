@@ -9,7 +9,7 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::depot::{DepotId, HasId};
@@ -329,62 +329,52 @@ pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData {
-    pub id: Cell<DepotId>,
-    pub(crate) pfilepos: Cell<i32>,
+    pub id: DepotId,
+    pub(crate) pfilepos: i32,
     /* playerfile pos		  */
     pub nr: MobRnum,
     /* Mob's rnum			  */
-    pub in_room: Cell<RoomRnum>,
+    pub in_room: RoomRnum,
     /* Location (real room number)	  */
-    pub was_in_room: Cell<RoomRnum>,
+    pub was_in_room: RoomRnum,
     /* location for linkdead people  */
-    pub wait: Cell<i32>,
+    pub wait: i32,
     /* wait for how many loops	  */
-    pub player: RefCell<CharPlayerData>,
+    pub player: CharPlayerData,
     /* Normal data                   */
-    pub real_abils: RefCell<CharAbilityData>,
+    pub real_abils: CharAbilityData,
     /* Abilities without modifiers   */
-    pub aff_abils: RefCell<CharAbilityData>,
+    pub aff_abils: CharAbilityData,
     /* Abils with spells/stones/etc  */
-    pub points: RefCell<CharPointData>,
+    pub points: CharPointData,
     /* Points                        */
-    pub char_specials: RefCell<CharSpecialData>,
+    pub char_specials: CharSpecialData,
     /* PC/NPC specials	  */
-    pub player_specials: RefCell<PlayerSpecialData>,
+    pub player_specials: PlayerSpecialData,
     /* PC specials		  */
     pub mob_specials: MobSpecialData,
     /* NPC specials		  */
-    pub affected: RefCell<Vec<AffectedType>>,
+    pub affected: Vec<AffectedType>,
     /* affected by what spells       */
-    pub equipment: RefCell<[Option<DepotId>; NUM_WEARS as usize]>,
+    pub equipment: [Option<DepotId>; NUM_WEARS as usize],
     /* Equipment array               */
-    pub carrying: RefCell<Vec<DepotId>>,
+    pub carrying: Vec<DepotId>,
     /* Head of list                  */
-    pub desc: RefCell<Option<DepotId>>,
+    pub desc: Option<DepotId>,
     /* NULL for mobiles              */          
-    pub followers: RefCell<Vec<FollowType>>,
+    pub followers: Vec<FollowType>,
     /* List of chars followers       */
-    pub master: RefCell<Option<DepotId>>,
+    pub master: Option<DepotId>,
     /* Who is char following?        */
 }
 
 impl HasId for CharData {
     fn id(&self) -> DepotId {
-        self.id.get()
+        self.id
     }
 
     fn set_id(&mut self, id: DepotId) {
-        self.id.set(id);
-    }
-}
-
-impl HasId for Rc<CharData> {
-    fn id(&self) -> DepotId {
-        self.id.get()
-    }
-
-    fn set_id(&mut self, id: DepotId) {
-        self.id.set(id);
+        self.id = id;
     }
 }
 
@@ -435,7 +425,7 @@ pub struct CharSpecialData {
     /* Carried weight			*/
     pub carry_items: u8,
     /* Number of items carried		*/
-    pub timer: Cell<i32>,
+    pub timer: i32,
     /* Timer for update			*/
     pub saved: CharSpecialDataSaved,
     /* constants saved in plrfile	*/
@@ -569,15 +559,15 @@ pub struct TimeInfoData {
 pub struct CharPlayerData {
     pub passwd: [u8; MAX_PWD_LENGTH],
     /* character's password      */
-    pub name: String,
+    pub name: Rc<str>,
     /* PC / NPC s name (kill ...  )         */
-    pub short_descr: String,
+    pub short_descr: Rc<str>,
     /* for NPC 'actions'                    */
-    pub long_descr: String,
+    pub long_descr: Rc<str>,
     /* for 'look'			       */
     pub description: Rc<RefCell<String>>,
     /* Extra descriptions                   */
-    pub title: Option<String>,
+    pub title: Option<Rc<str>>,
     /* PC / NPC's title                     */
     pub sex: u8,
     /* PC / NPC's sex                       */

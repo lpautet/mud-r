@@ -61,8 +61,8 @@ pub fn do_gsay(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
         game.send_to_char(chid, "Yes, but WHAT do you want to group-say?\r\n");
     } else {
         let k_id: DepotId;
-        if ch.master.borrow().is_some() {
-            k_id = ch.master.borrow().unwrap();
+        if ch.master.is_some() {
+            k_id = ch.master.unwrap();
         } else {
             k_id = chid;
         }
@@ -80,7 +80,7 @@ pub fn do_gsay(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
             );
         }
         let k = game.db.ch(k_id);
-        let list = k.followers.borrow().clone();
+        let list = k.followers.clone();
         for f in list.iter() {
             if game.db.ch(f.follower).aff_flagged(AFF_GROUP) && f.follower != chid {
                 game.act(
@@ -143,7 +143,9 @@ fn perform_tell(game: &mut Game, chid: DepotId, vict_id: DepotId, arg: &str) {
     let vict = game.db.ch(vict_id);
 
     if !vict.is_npc() && !ch.is_npc() {
-        vict.set_last_tell(ch.get_idnum());
+        let val = ch.get_idnum();
+        let vict = game.db.ch_mut(vict_id);
+        vict.set_last_tell(val);
     }
 }
 
@@ -159,7 +161,7 @@ fn is_tell_ok(game: &mut Game, chid: DepotId, vict_id: DepotId) -> bool {
         );
     } else if game.db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
         game.send_to_char(chid, "The walls seem to absorb your words.\r\n");
-    } else if !vict.is_npc() && vict.desc.borrow().is_none() {
+    } else if !vict.is_npc() && vict.desc.is_none() {
         /* linkless */
         game.act(
             "$E's linkless at the moment.",
@@ -358,7 +360,7 @@ pub fn do_write(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 
     two_arguments(&argument, &mut papername, &mut penname);
 
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
@@ -373,14 +375,14 @@ pub fn do_write(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     if !penname.is_empty() {
         /* there were two arguments */
         if {
-            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying.borrow());
+            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(chid, format!("You have no {}.\r\n", papername).as_str());
             return;
         }
         if {
-            pen = game.get_obj_in_list_vis(ch, &penname, None, &ch.carrying.borrow());
+            pen = game.get_obj_in_list_vis(ch, &penname, None, &ch.carrying);
             pen.is_none()
         } {
             game.send_to_char(chid, format!("You have no {}.\r\n", penname).as_str());
@@ -389,7 +391,7 @@ pub fn do_write(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     } else {
         /* there was one arg.. let's see what we can find */
         if {
-            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying.borrow());
+            paper = game.get_obj_in_list_vis(ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(
@@ -465,8 +467,10 @@ pub fn do_write(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             TO_ROOM,
         );
         let ch = game.db.ch(chid);
+        let desc_id = ch.desc.unwrap();
         string_write(
-            game.descriptor_list.get_mut(ch.desc.borrow().unwrap()),
+            game,
+            desc_id,
             game.db.obj(paper).action_description.clone(),
             MAX_NOTE_LENGTH as usize,
             0,
@@ -592,7 +596,7 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     ];
 
     /* to keep pets, etc from being ordered to shout */
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
@@ -641,6 +645,7 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
             game.send_to_char(chid, "You're too exhausted to holler.\r\n");
             return;
         } else {
+            let ch = game.db.ch_mut(chid);
             ch.set_move(ch.get_move() - HOLLER_MOVE_COST as i16);
         }
     }
@@ -648,6 +653,7 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     let color_on = COM_MSGS[subcmd as usize][3];
 
     /* first, set up strings to be given to the communicator */
+    let ch = game.db.ch(chid);
     if ch.prf_flagged(PRF_NOREPEAT) {
         game.send_to_char(chid, OK);
     } else {
@@ -671,7 +677,7 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     for d_id in game.descriptor_list.ids() {
         let ch = game.db.ch(chid);
         if game.desc(d_id).state() == ConPlaying
-            && d_id == ch.desc.borrow().unwrap()
+            && d_id == ch.desc.unwrap()
             && game.desc(d_id).character.is_some()
             && !game.db.ch(game
                 .desc(d_id)
@@ -771,7 +777,7 @@ pub fn do_qcomm(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subc
         for id in game.descriptor_list.ids() {
             let ch = game.db.ch(chid);
             if game.descriptor_list.get(id).state() == ConPlaying
-                && id == ch.desc.borrow().unwrap()
+                && id == ch.desc.unwrap()
                 && game.descriptor_list.get(id).character.is_some()
                 && game.db.ch(game
                     .descriptor_list

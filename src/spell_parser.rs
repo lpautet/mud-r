@@ -11,10 +11,9 @@
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
-use std::rc::Rc;
 
 use log::error;
-use crate::depot::{DepotId, HasId};
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::config::OK;
@@ -293,7 +292,7 @@ const SYLS: [Syllable; 55] = [
 
 pub const UNUSED_SPELLNAME: &str = "!UNUSED!"; /* So we can get &UNUSED_SPELLNAME */
 
-fn mag_manacost(ch: &Rc<CharData>, sinfo: &SpellInfoType) -> i16 {
+fn mag_manacost(ch: &CharData, sinfo: &SpellInfoType) -> i16 {
     return max(
         (sinfo.mana_max
             - (sinfo.mana_change
@@ -305,11 +304,12 @@ fn mag_manacost(ch: &Rc<CharData>, sinfo: &SpellInfoType) -> i16 {
 
 fn say_spell(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     spellnum: i32,
-    tch: Option<&Rc<CharData>>,
+    tch_id: Option<DepotId>,
     tobj_id: Option<DepotId>,
 ) {
+    let ch = game.db.ch(chid);
     let mut lbuf = String::new();
     let mut buf = String::new();
     lbuf.push_str(skill_name(&game.db, spellnum));
@@ -332,8 +332,8 @@ fn say_spell(
     }
     let mut buf1 = String::new();
     let mut buf2 = String::new();
-    if tch.is_some() && tch.as_ref().unwrap().in_room() == ch.in_room() {
-        if Rc::ptr_eq(tch.as_ref().unwrap(), ch) {
+    if tch_id.is_some() && game.db.ch(tch_id.unwrap()).in_room() == ch.in_room() {
+        if tch_id.unwrap() == chid {
             buf1.push_str(
                 format!(
                     "$n closes $s eyes and utters the words, '{}'.",
@@ -353,10 +353,9 @@ fn say_spell(
             buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
         }
     } else if tobj_id.is_some() && game.db.obj(tobj_id.unwrap()).in_room() == ch.in_room()
-        || std::ptr::eq(
-            game.db.ch(game.db.obj(tobj_id.unwrap()).carried_by.unwrap()),
-            ch.as_ref(),
-        )
+        || 
+            game.db.obj(tobj_id.unwrap()).carried_by.unwrap() ==
+            chid
     {
         buf1.push_str(
             format!(
@@ -372,34 +371,35 @@ fn say_spell(
     }
 
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-    for i in list.iter() {
-        if Rc::ptr_eq(i, ch)
-            || (tch.is_some() && Rc::ptr_eq(i, tch.as_ref().unwrap()))
-            || i.desc.borrow().is_none()
-            || !i.awake()
+    for i in list {
+        if i == chid
+            || (tch_id.is_some() && i == tch_id.unwrap())
+            || game.db.ch(i).desc.is_none()
+            || !game.db.ch(i).awake()
         {
             continue;
         }
-        let tch2 = if tch.is_some() {
-            Some(tch.unwrap().clone())
+        let tch2 = if tch_id.is_some() {
+            Some(tch_id.unwrap())
         } else {
             None
         };
-        if ch.get_class() == i.get_class() {
-            game.perform_act(&buf1, Some(ch.id()), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i.id());
+        let ch = game.db.ch(chid);
+        if ch.get_class() == game.db.ch(i).get_class() {
+            game.perform_act(&buf1, Some(chid), tobj_id, Some(VictimRef::Char(tch2.unwrap())), i);
         } else {
-            game.perform_act(&buf2, Some(ch.id()), tobj_id, Some(VictimRef::Char(tch2.as_ref().unwrap().as_ref())), i.id());
+            game.perform_act(&buf2, Some(chid), tobj_id, Some(VictimRef::Char(tch2.unwrap())), i);
         }
     }
-
-    if tch.is_some()
-        && !Rc::ptr_eq(tch.as_ref().unwrap(), ch)
-        && tch.as_ref().unwrap().in_room() == ch.in_room()
+    let ch = game.db.ch(chid);
+    if tch_id.is_some()
+        && tch_id.unwrap() != chid
+        && game.db.ch(tch_id.unwrap()).in_room() == ch.in_room()
     {
         buf1.push_str(
             format!(
                 "$n stares at you and utters the words, '{}'.",
-                if ch.get_class() == tch.as_ref().unwrap().get_class() {
+                if ch.get_class() == game.db.ch(tch_id.unwrap()).get_class() {
                     skill_name(&game.db, spellnum)
                 } else {
                     &buf
@@ -407,8 +407,8 @@ fn say_spell(
             )
             .as_str(),
         );
-        let tch2 = tch.unwrap().clone();
-        game.act(&buf1, false, Some(ch.id()), None, Some(VictimRef::Char(&tch2)), TO_VICT);
+        let tch2 = tch_id.unwrap();
+        game.act(&buf1, false, Some(chid), None, Some(VictimRef::Char(tch2)), TO_VICT);
     }
 }
 
@@ -466,8 +466,8 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  */
 pub fn call_magic(
     game: &mut Game,
-    caster: &Rc<CharData>,
-    cvict: Option<&Rc<CharData>>,
+    caster_id: DepotId,
+    cvict_id: Option<DepotId>,
     ovict: Option<DepotId>,
     spellnum: i32,
     level: i32,
@@ -483,29 +483,29 @@ pub fn call_magic(
         sinfo_routines = sinfo.routines;
         sinfo_violent = sinfo.violent;
     }
-    if game.db.room_flagged(caster.in_room(), ROOM_NOMAGIC) {
-        game.send_to_char(caster, "Your magic fizzles out and dies.\r\n");
+    if game.db.room_flagged(game.db.ch(caster_id).in_room(), ROOM_NOMAGIC) {
+        game.send_to_char(caster_id, "Your magic fizzles out and dies.\r\n");
         game.act(
             "$n's magic fizzles out and dies.",
             false,
-            Some(caster.id()),
+            Some(caster_id),
             None,
             None,
             TO_ROOM,
         );
         return 0;
     }
-    if game.db.room_flagged(caster.in_room(), ROOM_PEACEFUL)
+    if game.db.room_flagged(game.db.ch(caster_id).in_room(), ROOM_PEACEFUL)
         && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
         game.send_to_char(
-            caster,
+            caster_id,
             "A flash of white light fills the room, dispelling your violent magic!\r\n",
         );
         game.act(
             "White light from no particular source suddenly fills the room, then vanishes.",
             false,
-            Some(caster.id()),
+            Some(caster_id),
             None,
             None,
             TO_ROOM,
@@ -530,8 +530,8 @@ pub fn call_magic(
         if mag_damage(
             game,
             level,
-            caster,
-            cvict.as_ref().unwrap(),
+            caster_id,
+            cvict_id.unwrap(),
             spellnum,
             savetype,
         ) == -1
@@ -540,63 +540,63 @@ pub fn call_magic(
         }
     }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
-        mag_affects(game, level, caster, cvict, spellnum, savetype);
+        mag_affects(game, level, caster_id, cvict_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_UNAFFECTS) {
         mag_unaffects(
             game,
             level,
-            caster,
-            cvict.as_ref().unwrap(),
+            caster_id,
+            cvict_id.unwrap(),
             spellnum,
             savetype,
         );
     }
 
     if is_set!(sinfo_routines, MAG_POINTS) {
-        mag_points(game, level, caster, cvict, spellnum, savetype);
+        mag_points(game, level, caster_id, cvict_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_ALTER_OBJS) {
-        mag_alter_objs(game, level, caster, ovict, spellnum, savetype);
+        mag_alter_objs(game, level, caster_id, ovict, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
-        mag_groups(game, level, Some(caster), spellnum, savetype);
+        mag_groups(game, level, Some(caster_id), spellnum, savetype);
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
-        mag_masses(&game.db, level, caster, spellnum, savetype);
+        mag_masses(&game.db, level, caster_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_AREAS) {
-        mag_areas(game, level, Some(caster), spellnum, savetype);
+        mag_areas(game, level, Some(caster_id), spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
-        mag_summons(game, level, Some(caster), ovict, spellnum, savetype);
+        mag_summons(game, level, Some(caster_id), ovict, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {
-        mag_creations(game, level, Some(caster), spellnum);
+        mag_creations(game, level, Some(caster_id), spellnum);
     }
 
     if is_set!(sinfo_routines, MAG_MANUAL) {
         match spellnum {
-            SPELL_CHARM => spell_charm(game, level, Some(caster), cvict, ovict),
-            SPELL_CREATE_WATER => spell_create_water(game, level, Some(caster), cvict, ovict),
-            SPELL_DETECT_POISON => spell_detect_poison(game, level, Some(caster), cvict, ovict),
+            SPELL_CHARM => spell_charm(game, level, Some(caster_id), cvict_id, ovict),
+            SPELL_CREATE_WATER => spell_create_water(game, level, Some(caster_id), cvict_id, ovict),
+            SPELL_DETECT_POISON => spell_detect_poison(game, level, Some(caster_id), cvict_id, ovict),
             SPELL_ENCHANT_WEAPON => {
-                spell_enchant_weapon(game, level, Some(caster), cvict, ovict)
+                spell_enchant_weapon(game, level, Some(caster_id), cvict_id, ovict)
             }
-            SPELL_IDENTIFY => spell_identify(game, level, Some(caster), cvict, ovict),
-            SPELL_LOCATE_OBJECT => spell_locate_object(game, level, Some(caster), cvict, ovict),
-            SPELL_SUMMON => spell_summon(game, level, Some(caster), cvict, ovict),
+            SPELL_IDENTIFY => spell_identify(game, level, Some(caster_id), cvict_id, ovict),
+            SPELL_LOCATE_OBJECT => spell_locate_object(game, level, Some(caster_id), cvict_id, ovict),
+            SPELL_SUMMON => spell_summon(game, level, Some(caster_id), cvict_id, ovict),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(game, level, Some(caster), cvict, ovict);
+                spell_recall(game, level, Some(caster_id), cvict_id, ovict);
             }
             SPELL_TELEPORT => {
-                spell_teleport(game, level, Some(caster), cvict, ovict);
+                spell_teleport(game, level, Some(caster_id), cvict_id, ovict);
             }
             _ => {}
         }
@@ -620,17 +620,16 @@ pub fn call_magic(
  * files (this is a CircleMUD enhancement).
  */
 pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &str) {
-    let ch = game.db.ch(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
-    let mut tch = None;
+    let mut tch_id = None;
     let mut tobjid = None;
     let k = game.generic_find(
         &arg,
         (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
-        ch,
-        &mut tch,
+        chid,
+        &mut tch_id,
         &mut tobjid,
     );
 
@@ -639,7 +638,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
             game.act(
                 "You tap $p three times on the ground.",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 Some(oid),
                 None,
                 TO_CHAR,
@@ -649,7 +648,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -658,7 +657,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     "$n taps $p three times on the ground.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -666,17 +665,18 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
             }
 
             if game.db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(ch.id(), "It seems powerless.\r\n");
+                game.send_to_char(chid, "It seems powerless.\r\n");
                 game.act(
                     "Nothing seems to happen.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
                 );
             } else {
                 game.db.obj_mut(oid).decr_obj_val(2);
+                let ch = game.db.ch_mut(chid);
                 ch.set_wait_state(PULSE_VIOLENCE as i32);
                 /* Level to cast spell at. */
                 let k = if game.db.obj(oid).get_obj_val(0) != 0 {
@@ -691,23 +691,24 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                  * Problem : People like that behavior.
                  * Solution: We special case the area/mass spells here.
                  */
+                let ch = game.db.ch(chid);
                 if has_spell_routine(&game.db, game.db.obj(oid).get_obj_val(3), MAG_MASSES | MAG_AREAS) {
                     let mut i = game.db.world[ch.in_room() as usize]
                         .peoples
                         .len();
                     while i > 0 {
                         i -= 1;
-                        call_magic(game, ch, None, None, game.db.obj(oid).get_obj_val(3), k, CAST_STAFF);
+                        call_magic(game, chid, None, None, game.db.obj(oid).get_obj_val(3), k, CAST_STAFF);
                     }
                 } else {
                     let peoples_in_room =
                         clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-                    for tch in peoples_in_room.iter() {
-                        if !Rc::ptr_eq(ch, tch) {
+                    for tch_id in peoples_in_room {
+                        if chid != tch_id {
                             call_magic(
                                 game,
-                                ch,
-                                Some(tch),
+                                chid,
+                                Some(tch_id),
                                 None,
                                 game.db.obj(oid).get_obj_val(3),
                                 k,
@@ -720,11 +721,11 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
         }
         ITEM_WAND => {
             if k == FIND_CHAR_ROOM {
-                if Rc::ptr_eq(tch.as_ref().unwrap(), ch) {
+                if tch_id.unwrap() == chid {
                     game.act(
                         "You point $p at yourself.",
                         false,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
                         None,
                         TO_CHAR,
@@ -732,7 +733,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     game.act(
                         "$n points $p at $mself.",
                         false,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
                         None,
                         TO_ROOM,
@@ -741,9 +742,9 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     game.act(
                         "You point $p at $N.",
                         false,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
-                        Some(VictimRef::Char(tch.as_ref().unwrap())),
+                        Some(VictimRef::Char(tch_id.unwrap())),
                         TO_CHAR,
                     );
                     if !RefCell::borrow(&game.db.obj(oid).action_description).is_empty() {
@@ -751,18 +752,18 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                         game.act(
                             str.as_str(),
                             false,
-                            Some(ch.id()),
+                            Some(chid),
                             Some(oid),
-                            Some(VictimRef::Char(tch.as_ref().unwrap())),
+                            Some(VictimRef::Char(tch_id.unwrap())),
                             TO_ROOM,
                         );
                     } else {
                         game.act(
                             "$n points $p at $N.",
                             true,
-                            Some(ch.id()),
+                            Some(chid),
                             Some(oid),
-                            Some(VictimRef::Char(tch.as_ref().unwrap())),
+                            Some(VictimRef::Char(tch_id.unwrap())),
                             TO_ROOM,
                         );
                     }
@@ -771,7 +772,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     "You point $p at $P.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     Some(VictimRef::Obj(tobjid.unwrap())),
                     TO_CHAR,
@@ -781,7 +782,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     game.act(
                         str.as_str(),
                         false,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
                         Some(VictimRef::Obj(tobjid.unwrap())),
                         TO_ROOM,
@@ -790,7 +791,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     game.act(
                         "$n points $p at $P.",
                         true,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
                         Some(VictimRef::Obj(tobjid.unwrap())),
                         TO_ROOM,
@@ -804,7 +805,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     "You point $p outward.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_CHAR,
@@ -812,7 +813,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     "$n points $p outward.",
                     true,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -821,7 +822,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     "At what should $p be pointed?",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_CHAR,
@@ -830,11 +831,11 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
             }
 
             if game.db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(ch.id(), "It seems powerless.\r\n");
+                game.send_to_char(chid, "It seems powerless.\r\n");
                 game.act(
                     "Nothing seems to happen.",
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
@@ -842,13 +843,13 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 return;
             }
             game.db.obj_mut(oid).decr_obj_val(2);
-
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if game.db.obj(oid).get_obj_val(0) != 0 {
                 call_magic(
                     game,
-                    ch,
-                    tch.as_ref(),
+                    chid,
+                    tch_id,
                     tobjid,
                     game.db.obj(oid).get_obj_val(3),
                     game.db.obj(oid).get_obj_val(0),
@@ -857,8 +858,8 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
             } else {
                 call_magic(
                     game,
-                    ch,
-                    tch.as_ref(),
+                    chid,
+                    tch_id,
                     tobjid,
                     game.db.obj(oid).get_obj_val(3),
                     DEFAULT_WAND_LVL,
@@ -872,7 +873,7 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     game.act(
                         "There is nothing to here to affect with $p.",
                         false,
-                        Some(ch.id()),
+                        Some(chid),
                         Some(oid),
                         None,
                         TO_CHAR,
@@ -880,13 +881,13 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                     return;
                 }
             } else {
-                tch = Some(ch.clone());
+                tch_id = Some(chid);
             }
 
             game.act(
                 "You recite $p which dissolves.",
                 true,
-                Some(ch.id()),
+                Some(chid),
                 Some(oid),
                 None,
                 TO_CHAR,
@@ -896,22 +897,22 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
                 );
             } else {
                 game
-                    .act("$n recites $p.", false, Some(ch.id()), Some(oid), None, TO_ROOM);
+                    .act("$n recites $p.", false, Some(chid), Some(oid), None, TO_ROOM);
             }
-
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             for i in 1..3 {
                 if call_magic(
                     game,
-                    ch,
-                    tch.as_ref(),
+                    chid,
+                    tch_id,
                     tobjid,
                     game.db.obj(oid).get_obj_val(i),
                     game.db.obj(oid).get_obj_val(0),
@@ -926,28 +927,28 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
         }
         ITEM_POTION => {
             game
-                .act("You quaff $p.", false, Some(ch.id()), Some(oid), None, TO_CHAR);
+                .act("You quaff $p.", false, Some(chid), Some(oid), None, TO_CHAR);
             if !RefCell::borrow(&game.db.obj(oid).action_description).is_empty() {
                 let str = game.db.obj(oid).action_description.borrow().clone();
                 game.act(
                     str.as_str(),
                     false,
-                    Some(ch.id()),
+                    Some(chid),
                     Some(oid),
                     None,
                     TO_ROOM,
                 );
             } else {
                 game
-                    .act("$n quaffs $p.", true, Some(ch.id()), Some(oid), None, TO_ROOM);
+                    .act("$n quaffs $p.", true, Some(chid), Some(oid), None, TO_ROOM);
             }
-
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             for i in 1..3 {
                 if call_magic(
                     game,
-                    ch,
-                    Some(ch),
+                    chid,
+                    Some(chid),
                     None,
                     game.db.obj(oid).get_obj_val(i),
                     game.db.obj(oid).get_obj_val(0),
@@ -979,11 +980,12 @@ pub fn mag_objectmagic(game: &mut Game, chid: DepotId, oid: DepotId, argument: &
  */
 pub fn cast_spell(
     game: &mut Game,
-    ch: DepotId,
-    tch: Option<DepotId>,
+    chid: DepotId,
+    tch_id: Option<DepotId>,
     tobj_id: Option<DepotId>,
     spellnum: i32,
 ) -> i32 {
+    let ch = game.db.ch(chid);
     let db = &game.db;
     if spellnum < 0 || spellnum > TOP_SPELL_DEFINE as i32 {
         error!(
@@ -996,52 +998,52 @@ pub fn cast_spell(
     if ch.get_pos() < sinfo.min_position {
         match ch.get_pos() {
             POS_SLEEPING => {
-                game.send_to_char(ch.id(), "You dream about great magical powers.\r\n");
+                game.send_to_char(chid, "You dream about great magical powers.\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(ch.id(), "You cannot concentrate while resting.\r\n");
+                game.send_to_char(chid, "You cannot concentrate while resting.\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(ch.id(), "You can't do this sitting!\r\n");
+                game.send_to_char(chid, "You can't do this sitting!\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(ch.id(), "Impossible!  You can't concentrate enough!\r\n");
+                game.send_to_char(chid, "Impossible!  You can't concentrate enough!\r\n");
             }
             _ => {
-                game.send_to_char(ch.id(), "You can't do much of anything like this!\r\n");
+                game.send_to_char(chid, "You can't do much of anything like this!\r\n");
             }
         }
         return 0;
     }
     if ch.aff_flagged(AFF_CHARM)
-        && tch.is_some()
-        && Rc::ptr_eq(ch.master.borrow().as_ref().unwrap(), tch.unwrap())
+        && tch_id.is_some()
+        && ch.master.unwrap() == tch_id.unwrap()
     {
-        game.send_to_char(ch.id(), "You are afraid you might hurt your master!\r\n");
+        game.send_to_char(chid, "You are afraid you might hurt your master!\r\n");
         return 0;
     }
-    if (tch.is_none() || !Rc::ptr_eq(ch, tch.unwrap())) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
-        game.send_to_char(ch.id(), "You can only cast this spell upon yourself!\r\n");
+    if (tch_id.is_none() || chid != tch_id.unwrap()) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
+        game.send_to_char(chid, "You can only cast this spell upon yourself!\r\n");
         return 0;
     }
-    if tch.is_some() && Rc::ptr_eq(ch, tch.unwrap()) && is_set!(sinfo.targets, TAR_NOT_SELF) {
-        game.send_to_char(ch.id(), "You cannot cast this spell upon yourself!\r\n");
+    if tch_id.is_some() && chid == tch_id.unwrap() && is_set!(sinfo.targets, TAR_NOT_SELF) {
+        game.send_to_char(chid, "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
     if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
         game.send_to_char(
-            ch,
+            chid,
             "You can't cast this spell if you're not in a group!\r\n",
         );
         return 0;
     }
-    game.send_to_char(ch.id(), OK);
-    say_spell(game, ch, spellnum, tch, tobj_id);
-
+    game.send_to_char(chid, OK);
+    say_spell(game, chid, spellnum, tch_id, tobj_id);
+    let ch = game.db.ch(chid);
     return call_magic(
         game,
-        ch,
-        tch,
+        chid,
+        tch_id,
         tobj_id,
         spellnum,
         ch.get_level() as i32,
@@ -1055,7 +1057,8 @@ pub fn cast_spell(
  * the spell can be cast, checks for sufficient mana and subtracts it, and
  * passes control to cast_spell().
  */
-pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_cast(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = game.db.ch(chid);
     if ch.is_npc() {
         return;
     }
@@ -1064,13 +1067,13 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let mut i = argument.splitn(3, '\'');
 
     if i.next().is_none() {
-        game.send_to_char(ch.id(), "Cast what where?\r\n");
+        game.send_to_char(chid, "Cast what where?\r\n");
         return;
     }
     let s = i.next();
     if s.is_none() {
         game.send_to_char(
-            ch,
+            chid,
             "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
         );
         return;
@@ -1082,17 +1085,17 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     let spellnum = find_skill_num(db, s);
 
     if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
-        game.send_to_char(ch.id(), "Cast what?!?\r\n");
+        game.send_to_char(chid, "Cast what?!?\r\n");
         return;
     }
     let spellnum = spellnum.unwrap();
     let sinfo = db.spell_info[spellnum as usize];
     if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
-        game.send_to_char(ch.id(), "You do not know that spell!\r\n");
+        game.send_to_char(chid, "You do not know that spell!\r\n");
         return;
     }
     if ch.get_skill(spellnum) == 0 {
-        game.send_to_char(ch.id(), "You are unfamiliar with that spell.\r\n");
+        game.send_to_char(chid, "You are unfamiliar with that spell.\r\n");
         return;
     }
     let arg;
@@ -1106,23 +1109,23 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
     }
     let mut t = t.unwrap().to_string();
     let mut target = false;
-    let mut tch: Option<Rc<CharData>> = None;
-    let mut tobj_id: Option<DepotId> = None;
+    let mut tch_id= None;
+    let mut tobj_id= None;
     if is_set!(sinfo.targets, TAR_IGNORE) {
         target = true;
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                tch = game.get_char_vis(ch, &mut t, None, FIND_CHAR_ROOM);
-                tch.is_some()
+                tch_id = game.get_char_vis(chid, &mut t, None, FIND_CHAR_ROOM);
+                tch_id.is_some()
             } {
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
             if {
-                tch = game.get_char_vis(ch, &mut t, None, FIND_CHAR_WORLD);
-                tch.is_some()
+                tch_id = game.get_char_vis(chid, &mut t, None, FIND_CHAR_WORLD);
+                tch_id.is_some()
             } {
                 target = true;
             }
@@ -1130,7 +1133,7 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
             if {
-                tobj_id = game.get_obj_in_list_vis(ch, &t, None, &ch.carrying.borrow());
+                tobj_id = game.get_obj_in_list_vis(ch, &t, None, &ch.carrying);
                 tobj_id.is_some()
             } {
                 target = true;
@@ -1151,7 +1154,7 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
                     ch,
                     &t,
                     None,
-                    &db.world[ch.in_room.get() as usize]
+                    &db.world[ch.in_room as usize]
                         .contents
                 );
                 tobj_id.is_some()
@@ -1171,24 +1174,24 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         /* if target string is empty */
         if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) {
             if ch.fighting_id().is_some() {
-                tch = Some(ch.clone());
+                tch_id = Some(chid);
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) {
             if ch.fighting_id().is_some() {
-                tch = ch.fighting_id();
+                tch_id = ch.fighting_id();
                 target = true;
             }
         }
         /* if no target specified, and the spell isn't violent, default to self */
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && !sinfo.violent {
-            tch = Some(ch.clone());
+            tch_id = Some(chid);
             target = true;
         }
         if !target {
             game.send_to_char(
-                ch,
+                chid,
                 format!(
                     "Upon {} should the spell be cast?\r\n",
                     if is_set!(
@@ -1206,38 +1209,41 @@ pub fn do_cast(game: &mut Game, ch: &Rc<CharData>, argument: &str, _cmd: usize, 
         }
     }
 
-    if target && Rc::ptr_eq(tch.as_ref().unwrap(), ch) && sinfo.violent {
+    if target && tch_id.unwrap() == chid && sinfo.violent {
         game.send_to_char(
-            ch,
+            chid,
             "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
         );
         return;
     }
     if !target {
-        game.send_to_char(ch.id(), "Cannot find the target of your spell!\r\n");
+        game.send_to_char(chid, "Cannot find the target of your spell!\r\n");
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
     if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(ch.id(), "You haven't the energy to cast that spell!\r\n");
+        game.send_to_char(chid, "You haven't the energy to cast that spell!\r\n");
         return;
     }
 
     /* You throws the dice and you takes your chances.. 101% is total failure */
     if rand_number(0, 101) > ch.get_skill(spellnum) as u32 {
+        let ch = game.db.ch_mut(chid);
         ch.set_wait_state(PULSE_VIOLENCE as i32);
-        if tch.is_none() || game.skill_message(0, ch, tch.as_ref().unwrap(), spellnum) == 0 {
-            game.send_to_char(ch.id(), "You lost your concentration!\r\n");
+        if tch_id.is_none() || game.skill_message(0, chid, tch_id.unwrap(), spellnum) == 0 {
+            game.send_to_char(chid, "You lost your concentration!\r\n");
         }
         if mana > 0 {
+            let ch = game.db.ch_mut(chid);
             ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));
         }
-        if sinfo.violent && tch.is_some() && tch.as_ref().unwrap().is_npc() {
-            game.hit(tch.as_ref().unwrap(), ch, TYPE_UNDEFINED);
+        if sinfo.violent && tch_id.is_some() && game.db.ch(tch_id.unwrap()).is_npc() {
+            game.hit(tch_id.unwrap(), chid, TYPE_UNDEFINED);
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
-        if cast_spell(game, ch, tch.as_ref(), tobj_id, spellnum) != 0 {
+        if cast_spell(game, chid, tch_id, tobj_id, spellnum) != 0 {
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if mana > 0 {
                 ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - mana)));

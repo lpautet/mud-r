@@ -10,7 +10,6 @@
 ************************************************************************ */
 
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::process;
 use std::rc::Rc;
@@ -36,7 +35,7 @@ use crate::structs::{
     LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
     PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
-use crate::util::{clone_vec, rand_number, SECS_PER_MUD_YEAR};
+use crate::util::{rand_number, SECS_PER_MUD_YEAR};
 use crate::{is_set, Game, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
@@ -94,7 +93,7 @@ pub fn isname(txt: &str, namelist: &str) -> bool {
     }
 }
 
-fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
+fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
     let mut _mod = _mod;
     if add {
         ch.set_aff_flags(bitv);
@@ -136,7 +135,7 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
         APPLY_LEVEL => { /* ??? GET_LEVEL(ch) += mod; */ }
 
         APPLY_AGE => {
-            ch.player.borrow_mut().time.birth -= _mod as u64 * SECS_PER_MUD_YEAR;
+            ch.player.time.birth -= _mod as u64 * SECS_PER_MUD_YEAR;
         }
 
         APPLY_CHAR_WEIGHT => {
@@ -211,23 +210,29 @@ fn affect_modify(ch: &CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
 impl DB {
     /* This updates a character by subtracting everything he is affected by */
     /* restoring original abilities, and then affecting all again           */
-    pub fn affect_total(&self, ch: &CharData) {
+    pub fn affect_total(&mut self, chid: DepotId) {
         for i in 0..NUM_WEARS {
+            let ch = self.ch(chid);
             if ch.get_eq(i).is_some() {
-                let eq = self.obj(ch.get_eq(i).unwrap());
                 for j in 0..MAX_OBJ_AFFECT {
+                    let ch = self.ch(chid);
+                    let eq = self.obj(ch.get_eq(i).unwrap());
+                    let loc = eq.affected[j as usize].location as i8;
+                    let mod_ = eq.affected[j as usize].modifier as i16;
+                    let bitv = eq.get_obj_affect();
+                    let ch = self.ch_mut(chid);
                     affect_modify(
                         ch,
-                        eq.affected[j as usize].location as i8,
-                        eq.affected[j as usize].modifier as i16,
-                        eq.get_obj_affect(),
+                        loc,
+                        mod_,
+                        bitv,
                         false,
                     );
                 }
             }
         }
-
-        for af in ch.affected.borrow().iter() {
+        let ch = self.ch_mut(chid);
+        for af in ch.affected.clone() {
             affect_modify(
                 ch,
                 af.location as i8,
@@ -237,24 +242,30 @@ impl DB {
             );
         }
 
-        *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow_mut();
+        ch.aff_abils = ch.real_abils;
 
         for i in 0..NUM_WEARS {
+            let ch = self.ch(chid);
             if ch.get_eq(i).is_some() {
-                let eq = self.obj(ch.get_eq(i).unwrap());
                 for j in 0..MAX_OBJ_AFFECT {
+                    let ch = self.ch(chid);
+                    let eq = self.obj(ch.get_eq(i).unwrap());
+                    let loc = eq.affected[j as usize].location as i8;
+                    let mod_ = eq.affected[j as usize].modifier as i16;
+                    let bitv = eq.get_obj_affect();
+                    let ch = self.ch_mut(chid);
                     affect_modify(
                         ch,
-                        eq.affected[j as usize].location as i8,
-                        eq.affected[j as usize].modifier as i16,
-                        eq.get_obj_affect(),
+                        loc,
+                        mod_,
+                        bitv,
                         true,
                     )
                 }
             }
         }
-
-        for af in ch.affected.borrow().iter() {
+        let ch = self.ch_mut(chid);
+        for af in ch.affected.clone() {
             affect_modify(
                 ch,
                 af.location as i8,
@@ -292,8 +303,9 @@ impl DB {
 
     /* Insert an affect_type in a char_data structure
     Automatically sets apropriate bits and apply's */
-    pub fn affect_to_char(&self, ch: &CharData, af: &AffectedType) {
-        ch.affected.borrow_mut().push(af.clone());
+    pub fn affect_to_char(&mut self, chid: DepotId, af: AffectedType) {
+        let ch = self.ch_mut(chid);
+        ch.affected.push(af);
 
         affect_modify(
             ch,
@@ -302,7 +314,7 @@ impl DB {
             af.bitvector,
             true,
         );
-        self.affect_total(ch);
+        self.affect_total(chid);
     }
 
     /*
@@ -310,7 +322,9 @@ impl DB {
      * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
      * affect_location_apply
      */
-    pub fn affect_remove(&self, ch: &CharData, af: &AffectedType) {
+    pub fn affect_remove(&mut self, chid: DepotId, af: AffectedType) {
+        let ch = self.ch_mut(chid);
+
         affect_modify(
             ch,
             af.location as i8,
@@ -318,19 +332,23 @@ impl DB {
             af.bitvector,
             false,
         );
-        self.affect_total(ch);
+        self.affect_total(chid);
     }
 
     /* Call affect_remove with every spell of spelltype "skill" */
-    pub fn affect_from_char(&self, ch: &CharData, type_: i16) {
-        ch.affected.borrow_mut().retain(|hjp| {
+    pub fn affect_from_char(&mut self, chid: DepotId, type_: i16) {
+        let ch = self.ch_mut(chid);
+        let mut list = ch.affected.clone();
+        list.retain(|hjp| {
             if hjp._type == type_ {
-                self.affect_remove(ch, hjp);
+                self.affect_remove(chid, *hjp);
                 false
             } else {
                 true
             }
         });
+        let ch = self.ch_mut(chid);
+        ch.affected = list;
     }
 }
 /*
@@ -338,7 +356,7 @@ impl DB {
  * FALSE indicates not affected.
  */
 pub fn affected_by_spell(ch: &CharData, type_: i16) -> bool {
-    for hjp in ch.affected.borrow().iter() {
+    for hjp in ch.affected.iter() {
         if hjp._type == type_ {
             return true;
         }
@@ -349,15 +367,18 @@ pub fn affected_by_spell(ch: &CharData, type_: i16) -> bool {
 
 impl DB {
     pub fn affect_join(
-        &self,
-        ch: &CharData,
-        af: &mut AffectedType,
+        &mut self,
+        chid: DepotId,
+        af:  &AffectedType,
         add_dur: bool,
         avg_dur: bool,
         add_mod: bool,
         avg_mod: bool,
     ) {
-        ch.affected.borrow_mut().retain_mut(|hjp| {
+        let mut af = *af;
+        let ch = self.ch_mut(chid);
+        let mut list = ch.affected.clone();
+        list.retain_mut(|hjp| {
             if (hjp._type == af._type) && (hjp.location == af.location) {
                 if add_dur {
                     af.duration += hjp.duration;
@@ -373,13 +394,15 @@ impl DB {
                     af.modifier /= 2;
                 }
 
-                self.affect_remove(ch, hjp);
+                self.affect_remove(chid, *hjp);
                 false
             } else {
                 true
             }
         });
-        self.affect_to_char(ch, af);
+        let ch = self.ch_mut(chid);
+        ch.affected = list;
+        self.affect_to_char(chid, af);
     }
 
     /* move a player out of a room */
@@ -422,8 +445,9 @@ impl DB {
             return;
         }
         self.world[room as usize].peoples.push(chid);
-        let ch = self.ch(chid);
+        let ch = self.ch_mut(chid);
         ch.set_in_room(room);
+        let ch = self.ch(chid);
 
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             let light = self.obj(ch.get_eq(WEAR_LIGHT as i8).unwrap());
@@ -445,7 +469,7 @@ impl DB {
 
     /* give an object to a char   */
     pub fn obj_to_char(&mut self, oid: DepotId, chid: DepotId) {
-        self.ch(chid).carrying.borrow_mut().push(oid);
+        self.ch_mut(chid).carrying.push(oid);
         let object = self.obj_mut(oid);
         object.carried_by = Some(chid);
         object.set_in_room(NOWHERE);
@@ -466,7 +490,7 @@ impl DB {
         let obj_weight = obj.get_obj_weight();
         let carried_by_id = obj.carried_by.unwrap();
         let carried_by_ch = self.ch_mut(carried_by_id);
-        carried_by_ch.carrying.borrow_mut().retain(|x| *x != oid);
+        carried_by_ch.carrying.retain(|x| *x != oid);
 
         /* set flag for crash-save system, but not on mobs! */
         if !carried_by_ch.is_npc() {
@@ -578,6 +602,7 @@ impl Game {
                 return;
             }
         }
+        let ch = self.db.ch_mut(chid);
         ch.set_eq(pos, Some(oid));
         {
             let obj = self.db.obj_mut(oid);
@@ -586,9 +611,11 @@ impl Game {
         }
         let ch = self.db.ch(chid);
         if self.db.obj(oid).get_obj_type() == ITEM_ARMOR as u8 {
-            ch.set_ac(ch.get_ac() - self.db.apply_ac(ch, pos as i16) as i16);
+            let val = self.db.apply_ac(ch, pos as i16);
+            let ch = self.db.ch_mut(chid);
+            ch.set_ac(ch.get_ac() - val  as i16);
         }
-
+        let ch = self.db.ch(chid);
         if ch.in_room() != NOWHERE {
             let obj = self.db.obj(oid);
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
@@ -606,23 +633,25 @@ impl Game {
             );
         }
 
-        let obj = self.db.obj(oid);
-        let ch = self.db.ch(chid);
         for j in 0..MAX_OBJ_AFFECT {
+            let obj = self.db.obj(oid);
+            let loc = obj.affected[j as usize].location as i8;
+            let mod_ = obj.affected[j as usize].modifier as i16;
+            let bitv = obj.get_obj_affect();
             affect_modify(
-                ch,
-                obj.affected[j as usize].location as i8,
-                obj.affected[j as usize].modifier as i16,
-                obj.get_obj_affect(),
+                self.db.ch_mut(chid),
+                loc,
+                mod_,
+                bitv,
                 true,
             );
         }
 
-        self.db.affect_total(ch);
+        self.db.affect_total(chid);
     }
 
     pub fn unequip_char(&mut self, chid: DepotId, pos: i8) -> Option<DepotId> {
-        let ch = &self.db.chr(chid).clone();
+        let ch = self.db.ch(chid);
         if pos < 0 || pos > NUM_WEARS || ch.get_eq(pos).is_none() {
             //core_dump();
             return None;
@@ -631,16 +660,19 @@ impl Game {
         let oid = ch.get_eq(pos).unwrap();
         self.db.obj_mut(oid).worn_by = None;
         self.db.obj_mut(oid).worn_on = -1;
-
+        let ch = self.db.ch(chid);
         if self.db.obj(oid).get_obj_type() == ITEM_ARMOR as u8 {
-            ch.set_ac(ch.get_ac() + self.db.apply_ac(ch.as_ref(), pos as i16) as i16);
+            let val = self.db.apply_ac(ch, pos as i16);
+            let ch = self.db.ch_mut(chid);
+            ch.set_ac(ch.get_ac() + val as i16);
         }
-
+        let ch = self.db.ch(chid);
         if ch.in_room() != NOWHERE {
             let obj = self.db.obj(oid);
             if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
                 if obj.get_obj_val(2) != 0 {
-                    self.db.world[ch.in_room() as usize].light -= 1;
+                    let ch_in_room = ch.in_room();
+                    self.db.world[ch_in_room as usize].light -= 1;
                 }
             }
         } else {
@@ -649,21 +681,24 @@ impl Game {
                 ch.get_name()
             );
         }
-
+        let ch = self.db.ch_mut(chid);
         ch.set_eq(pos, None);
 
-        let obj = self.db.obj_mut(oid);
         for j in 0..MAX_OBJ_AFFECT {
+            let obj = self.db.obj(oid);
+            let loc = obj.affected[j as usize].location as i8;
+            let mod_ = obj.affected[j as usize].modifier as i16;
+            let bitv = obj.get_obj_affect();
             affect_modify(
-                ch.as_ref(),
-                obj.affected[j as usize].location as i8,
-                obj.affected[j as usize].modifier as i16,
-                obj.get_obj_affect(),
+                self.db.ch_mut(chid),
+                loc,
+               mod_,
+                bitv,
                 false,
             );
         }
 
-        self.db.affect_total(ch);
+        self.db.affect_total(chid);
 
         Some(oid)
     }
@@ -728,7 +763,7 @@ impl DB {
 
         let list = self.world[room as usize].peoples.clone();
         for i_id in list {
-            if isname(&name, self.ch(i_id).player.borrow().name.as_str()) {
+            if isname(&name, self.ch(i_id).player.name.as_ref()) {
                 *number -= 1;
                 if *number == 0 {
                     return Some(i_id);
@@ -740,10 +775,10 @@ impl DB {
     }
 
     /* search all over the world for a char num, and return a pointer if found */
-    pub fn get_char_num(&self, nr: MobRnum) -> Option<Rc<CharData>> {
+    pub fn get_char_num(&self, nr: MobRnum) -> Option<DepotId> {
         for i in self.character_list.iter() {
             if i.get_mob_rnum() == nr {
-                return Some(i.clone());
+                return Some(i.id());
             }
         }
 
@@ -967,8 +1002,8 @@ impl Game {
             }
         }
         let ch = self.db.ch(chid);
-        if !ch.carrying.borrow().is_empty() {
-            let list = ch.carrying.borrow().clone();
+        if !ch.carrying.is_empty() {
+            let list = ch.carrying.clone();
             self.db.update_object_list(list, 2);
         }
     }
@@ -994,7 +1029,7 @@ impl Game {
                 if self.desc(d_id).original.borrow().is_some()
                     && self.desc(d_id).original.borrow().unwrap() == chid
                 {
-                    let ch = self.desc(d_id).character.borrow().as_ref().unwrap().clone();
+                    let chid = self.desc(d_id).character.borrow().as_ref().unwrap().clone();
                     do_return(self, chid, "", 0, 0);
                     break;
                 }
@@ -1054,13 +1089,13 @@ impl Game {
 
         /* On with the character's assets... */
         let ch = self.db.ch(chid);
-        if ch.followers.borrow().len() != 0 || ch.master.borrow().is_some() {
+        if ch.followers.len() != 0 || ch.master.is_some() {
             self.die_follower(chid);
         }
 
         /* transfer objects to room, if any */
         let ch = self.db.ch(chid);
-        for oid in clone_vec(&ch.carrying) {
+        for oid in ch.carrying.clone() {
             self.db.obj_from_char(oid);
             let ch = self.db.ch(chid);
             self.db.obj_to_room(oid, ch.in_room());
@@ -1090,11 +1125,12 @@ impl Game {
             }
         }
         /* we can't forget the hunters either... */
-        for temp in self.db.character_list.iter() {
-            if temp.char_specials.borrow().hunting.is_some()
-                && temp.char_specials.borrow().hunting.unwrap() == chid
+        for temp_id in self.db.character_list.ids() {
+            let temp = self.db.ch_mut(temp_id);
+            if temp.char_specials.hunting.is_some()
+                && temp.char_specials.hunting.unwrap() == chid
             {
-                temp.char_specials.borrow_mut().hunting = None;
+                temp.char_specials.hunting = None;
             }
         }
         self.db.char_from_room(chid);
@@ -1132,7 +1168,7 @@ impl DB {
      *    get really confused otherwise.
      */
     pub fn extract_char(&mut self, chid: DepotId) {
-        let ch = self.ch(chid);
+        let ch = self.ch_mut(chid);
         if ch.is_npc() {
             ch.set_mob_flags_bit(MOB_NOTDEADYET);
         } else {
@@ -1166,9 +1202,9 @@ impl Game {
 
         for vict_id in self.db.character_list.ids() {
             if self.db.ch(vict_id).mob_flagged(MOB_NOTDEADYET) {
-                self.db.ch(vict_id).remove_mob_flags_bit(MOB_NOTDEADYET);
+                self.db.ch_mut(vict_id).remove_mob_flags_bit(MOB_NOTDEADYET);
             } else if self.db.ch(vict_id).plr_flagged(PLR_NOTDEADYET) {
-                self.db.ch(vict_id).remove_plr_flag(PLR_NOTDEADYET);
+                self.db.ch_mut(vict_id).remove_plr_flag(PLR_NOTDEADYET);
             } else {
                 /* Last non-free'd character to continue chain from. */
                 continue;
@@ -1219,7 +1255,7 @@ impl Game {
             if inroom == FIND_CHAR_ROOM && ch.in_room() != i.in_room() {
                 continue;
             }
-            if i.player.borrow().name != *name {
+            if i.player.name.as_ref() != name {
                 continue;
             }
             if !self.can_see(ch, i) {
@@ -1263,7 +1299,7 @@ impl Game {
 
         for i_id in self.db.world[ch.in_room() as usize].peoples.clone() {
             let i = self.db.ch(i_id);
-            if isname(name, i.player.borrow().name.as_str()) {
+            if isname(name, i.player.name.as_ref()) {
                 if self.can_see(ch, i) {
                     *number -= 1;
                     if *number == 0 {
@@ -1305,7 +1341,7 @@ impl Game {
             if ch.in_room() == i.in_room() {
                 continue;
             }
-            if !isname(name, i.player.borrow().name.as_str()) {
+            if !isname(name, i.player.name.as_ref()) {
                 continue;
             }
             if !self.can_see(ch, i) {
@@ -1428,7 +1464,7 @@ impl Game {
         }
 
         /* scan items carried */
-        let i = self.get_obj_in_list_vis(ch, &name, Some(number), &ch.carrying.borrow());
+        let i = self.get_obj_in_list_vis(ch, &name, Some(number), &ch.carrying);
         if i.is_some() {
             return i;
         }
@@ -1463,7 +1499,7 @@ impl Game {
         ch: &CharData,
         arg: &str,
         number: Option<&mut i32>,
-        equipment: &RefCell<[Option<DepotId>]>,
+        equipment: &[Option<DepotId>],
     ) -> Option<DepotId> {
         let mut num;
         let t: &mut i32;
@@ -1499,7 +1535,7 @@ impl Game {
         ch: &CharData,
         arg: &str,
         number: Option<&mut i32>,
-        equipment: &RefCell<[Option<DepotId>]>,
+        equipment: &[Option<DepotId>],
     ) -> Option<i8> {
         let equipment = equipment.borrow();
         let mut num;
@@ -1746,7 +1782,7 @@ impl Game {
                 ch,
                 &name,
                 Some(&mut number),
-                &ch.carrying.borrow().clone(),
+                &ch.carrying.clone(),
             );
             if tar_obj.is_some() {
                 return FIND_OBJ_INV;

@@ -75,7 +75,7 @@ pub fn affect_update(game: &mut Game) {
     for i_id in game.db.character_list.ids() {
         let i = game.db.ch(i_id);
         let mut last_type_notification = -1;
-        let mut list = i.affected.borrow().clone();
+        let mut list = i.affected.clone();
         list.retain_mut(|af| {
             if af.duration >= 1 {
                 af.duration -= 1;
@@ -102,13 +102,12 @@ pub fn affect_update(game: &mut Game) {
                         }
                     }
                 }
-                let i = game.db.ch(i_id);
-                game.db.affect_remove(i, af);
+                game.db.affect_remove(i_id, *af);
                 false
             }
         });
-        let i = game.db.ch(i_id);
-        *i.affected.borrow_mut() = list;
+        let i = game.db.ch_mut(i_id);
+        i.affected = list;
     }
 }
 
@@ -321,7 +320,7 @@ pub fn mag_affects(
     spellnum: i32,
     savetype: i32,
 ) {
-    let mut victim = victim_id.map(|v| game.db.ch(v));
+    let victim = victim_id.map(|v| game.db.ch(v));
     let mut victim_id = victim_id;
     let ch = game.db.ch(chid);
     let mut af = [AffectedType {
@@ -445,7 +444,6 @@ pub fn mag_affects(
         SPELL_INVISIBLE => {
             if victim.is_none() {
                 victim_id = Some(chid);
-                victim = Some(game.db.ch(victim_id.unwrap()));
             }
             af[0].duration = 12 + (ch.get_level() as i16 / 4);
             af[0].modifier = -40;
@@ -501,8 +499,8 @@ pub fn mag_affects(
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
                 game.act("$n goes to sleep.", true, Some(victim_id.unwrap()), None, None, TO_ROOM);
-                let  victim = victim_id.map(|v| game.db.ch(v));
-                victim.as_ref().unwrap().set_pos(POS_SLEEPING);
+                let mut victim = victim_id.map(|v| game.db.ch_mut(v));
+                victim.as_mut().unwrap().set_pos(POS_SLEEPING);
             }
         }
         SPELL_STRENGTH => {
@@ -564,7 +562,7 @@ pub fn mag_affects(
     for i in 0..MAX_SPELL_AFFECTS as usize {
         if af[i].bitvector != 0 || af[i].location != APPLY_NONE as u8 {
             game.db.affect_join(
-                victim.as_ref().unwrap(),
+                victim_id.unwrap(),
                 &mut af[i],
                 accum_duration,
                 false,
@@ -573,7 +571,7 @@ pub fn mag_affects(
             );
         }
     }
-
+    let victim = victim_id.map(|v| game.db.ch(v));
     if !to_vict.is_empty() {
         game.act(to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(chid)), TO_CHAR);
     }
@@ -630,13 +628,13 @@ pub fn mag_groups(game: &mut Game, level: i32, chid: Option<DepotId>, spellnum: 
         return;
     }
     let k_id;
-    if ch.master.borrow().is_some() {
-        k_id = ch.master.borrow().unwrap();
+    if ch.master.is_some() {
+        k_id = ch.master.unwrap();
     } else {
         k_id = chid;
     }
     let k = game.db.ch(k_id);
-    let list = k.followers.borrow().clone();
+    let list = k.followers.clone();
     for f in list {
         let tch_id = f.follower;
         let tch =game.db.ch(tch_id);
@@ -874,15 +872,18 @@ pub fn mag_summons(
         let mob_id = mob_id.unwrap();
         let ch = game.db.ch(chid);
         game.db.char_to_room(mob_id, ch.in_room());
-        let mob = game.db.ch(mob_id);
+        let mob = game.db.ch_mut(mob_id);
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
         mob.set_aff_flags_bits(AFF_CHARM);
         if spellnum == SPELL_CLONE {
             /* Don't mess up the prototype; use new string copies. */
             let ch = game.db.ch(chid);
-            mob.player.borrow_mut().name = ch.get_name().to_string();
-            mob.player.borrow_mut().short_descr = ch.get_name().to_string();
+            let name = ch.get_name().clone();
+            let descr = ch.get_name().clone();
+            let mob = game.db.ch_mut(mob_id);
+            mob.player.name = name;
+            mob.player.short_descr = descr;
         }
         game.act(
             MAG_SUMMON_MSGS[msg],
@@ -937,7 +938,7 @@ pub fn mag_points(
             return;
         }
     }
-    let victim = game.db.ch(victim_id);
+    let victim = game.db.ch_mut(victim_id);
     victim.set_hit(min(victim.get_max_hit(), victim.get_hit() + healing as i16));
     victim.set_move(min(victim.get_max_move(), victim.get_move() + move_));
     update_pos(victim);
@@ -999,7 +1000,7 @@ pub fn mag_unaffects(
         return;
     }
 
-    game.db.affect_from_char(victim, spell as i16);
+    game.db.affect_from_char(victim_id, spell as i16);
     if !to_vict.is_empty() {
         game.act(to_vict, false, Some(victim_id), None, Some(VictimRef::Char(chid)), TO_CHAR);
     }

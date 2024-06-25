@@ -85,7 +85,7 @@ impl Game {
                             "There is something written on it:\r\n\r\n{}",
                             RefCell::borrow(&self.db.obj(oid).action_description)
                         );
-                        let d_id = self.db.ch(chid).desc.borrow().unwrap();
+                        let d_id = self.db.ch(chid).desc.unwrap();
                         page_string(self, d_id, notebuf.as_str(), true);
                     } else {
                         self.send_to_char(chid, "It's blank.\r\n");
@@ -226,12 +226,12 @@ fn look_at_char(game: &mut Game, i_id: DepotId, chid: DepotId) {
     let mut found;
     //struct obj_data *tmp_obj;
 
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
-    if !RefCell::borrow(&i.player.borrow().description).is_empty() {
-        let messg = i.player.borrow().description.borrow().clone();
+    if !RefCell::borrow(&i.player.description).is_empty() {
+        let messg = i.player.description.borrow().clone();
         game.send_to_char(chid, messg.as_str());
     } else {
         game.act(
@@ -288,7 +288,7 @@ fn look_at_char(game: &mut Game, i_id: DepotId, chid: DepotId) {
             TO_VICT,
         );
         let i = game.db.ch(i_id);
-        let list = i.carrying.borrow().clone();
+        let list = i.carrying.clone();
         for tmp_obj_id in list {
             let ch = game.db.ch(chid);
             if game.can_see_obj(ch, game.db.obj(tmp_obj_id))
@@ -320,7 +320,7 @@ fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
 
     if {
         let i = game.db.ch(id);
-        i.is_npc() && !i.player.borrow().long_descr.is_empty() && i.get_pos() == i.get_default_pos()
+        i.is_npc() && !i.player.long_descr.is_empty() && i.get_pos() == i.get_default_pos()
     } {
         if game.db.ch(id).aff_flagged(AFF_INVISIBLE) {
             game.send_to_char(chid, "*");
@@ -333,8 +333,8 @@ fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
                 game.send_to_char(chid, "(Blue Aura) ");
             }
         }
-        let messg = game.db.ch(id).player.borrow().long_descr.clone();
-        game.send_to_char(chid, messg.as_str());
+        let messg = game.db.ch(id).player.long_descr.clone();
+        game.send_to_char(chid, &messg);
 
         if game.db.ch(id).aff_flagged(AFF_SANCTUARY) {
             game.act(
@@ -364,8 +364,8 @@ fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
             chid,
             format!(
                 "{}{}",
-                game.db.ch(id).player.borrow().short_descr.as_str()[0..1].to_uppercase(),
-                &game.db.ch(id).player.borrow().short_descr.as_str()[1..]
+                game.db.ch(id).player.short_descr[0..1].to_uppercase(),
+                &game.db.ch(id).player.short_descr[1..]
             )
             .as_str(),
         );
@@ -374,7 +374,7 @@ fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
             chid,
             format!(
                 "{} {}",
-                game.db.ch(id).player.borrow().name.as_str(),
+                game.db.ch(id).player.name,
                 game.db.ch(id).get_title()
             )
             .as_str(),
@@ -387,7 +387,7 @@ fn list_one_char(game: &mut Game, id: DepotId, chid: DepotId) {
     if game.db.ch(id).aff_flagged(AFF_HIDE) {
         game.send_to_char(chid, " (hidden)");
     }
-    if !game.db.ch(id).is_npc() && game.db.ch(id).desc.borrow().is_none() {
+    if !game.db.ch(id).is_npc() && game.db.ch(id).desc.is_none() {
         game.send_to_char(chid, " (linkless)");
     }
     if !game.db.ch(id).is_npc() && game.db.ch(id).plr_flagged(PLR_WRITING) {
@@ -564,7 +564,7 @@ pub fn do_exits(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
 
 pub fn look_at_room(game: &mut Game, chid: DepotId, ignore_brief: bool) {
     let ch = game.db.ch(chid);
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
@@ -843,7 +843,7 @@ fn look_at_target(game: &mut Game, chid: DepotId, arg: &str) {
     let mut found_char_id = None;
     let mut found_obj_id = None;
 
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
@@ -901,7 +901,7 @@ fn look_at_target(game: &mut Game, chid: DepotId, arg: &str) {
     if desc.is_some() {
         i += 1;
         if i == fnum {
-            let d_id = ch.desc.borrow().unwrap();
+            let d_id = ch.desc.unwrap();
             page_string(game, d_id, desc.as_ref().unwrap(), false);
             return;
         }
@@ -924,7 +924,7 @@ fn look_at_target(game: &mut Game, chid: DepotId, arg: &str) {
 
     /* Does the argument match an extra desc in the char's inventory? */
     let ch = game.db.ch(chid);
-    let list = ch.carrying.borrow().clone();
+    let list = ch.carrying.clone();
     for oid in list.into_iter() {
         if game.can_see_obj(game.db.ch(chid), game.db.obj(oid)) {
             let desc = find_exdesc(&arg, &game.db.obj(oid).ex_descriptions);
@@ -967,7 +967,7 @@ fn look_at_target(game: &mut Game, chid: DepotId, arg: &str) {
 
 pub fn do_look(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
     let ch = game.db.ch(chid);
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
     if ch.get_pos() < POS_SLEEPING {
@@ -1129,7 +1129,7 @@ pub fn do_score(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
     }
     let ch = game.db.ch(chid);
     let playing_time = real_time_passed(
-        (time_now() - ch.player.borrow().time.logon) + ch.player.borrow().time.played as u64,
+        (time_now() - ch.player.time.logon) + ch.player.time.played as u64,
         0,
     );
     game.send_to_char(
@@ -1254,7 +1254,7 @@ pub fn do_score(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
 
 pub fn do_inventory(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     game.send_to_char(chid, "You are carrying:\r\n");
-    let list = game.db.ch(chid).carrying.borrow().clone();
+    let list = game.db.ch(chid).carrying.clone();
     list_obj_to_char(game, &list, chid, SHOW_OBJ_SHORT, true);
 }
 
@@ -1382,12 +1382,12 @@ pub fn do_weather(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, 
 
 pub fn do_help(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = game.db.ch(chid);
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
     let argument = argument.trim_start();
-    let d_id = ch.desc.borrow().unwrap();
+    let d_id = ch.desc.unwrap();
 
     if argument.len() == 0 {
         page_string(
@@ -1827,9 +1827,7 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     .character
                     .unwrap())
                     .char_specials
-                    .borrow()
                     .timer
-                    .get()
                     * SECS_PER_MUD_HOUR as i32
                     / SECS_PER_REAL_MIN as i32
             );
@@ -1847,7 +1845,6 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     .original
                     .unwrap())
                     .player
-                    .borrow()
                     .name
                     .is_empty()
             {
@@ -1855,7 +1852,6 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     .original
                     .unwrap())
                     .player
-                    .borrow()
                     .name
                     .clone()
             } else if game.desc(d_id).character.is_some()
@@ -1864,7 +1860,6 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     .character
                     .unwrap())
                     .player
-                    .borrow()
                     .name
                     .is_empty()
             {
@@ -1872,11 +1867,10 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     .character
                     .unwrap())
                     .player
-                    .borrow()
                     .name
                     .clone()
             } else {
-                "UNDEFINED".to_string()
+                Rc::from("UNDEFINED")
             },
             state,
             idletime,
@@ -1917,7 +1911,7 @@ pub fn do_users(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 /* Generic page_string function for displaying text */
 pub fn do_gen_ps(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
     let ch = game.db.ch(chid);
-    let d_id = ch.desc.borrow().unwrap();
+    let d_id = ch.desc.unwrap();
     match subcmd {
         SCMD_CREDITS => {
             page_string(game, d_id, game.db.credits.clone().as_ref(), false);
@@ -2013,7 +2007,7 @@ fn perform_mortal_where(game: &mut Game, chid: DepotId, arg: &str) {
             {
                 continue;
             }
-            if !isname(arg, &i.player.borrow().name) {
+            if !isname(arg, &i.player.name) {
                 continue;
             }
             game.send_to_char(
@@ -2114,9 +2108,9 @@ fn perform_immort_where(game: &mut Game, chid: DepotId, arg: &str) {
                             "{:20} - [{:5}] {} (in {})\r\n",
                             i.get_name(),
                             game.db.get_room_vnum(
-                                game.db.ch(game.desc(d_id).character.unwrap()).in_room.get()
+                                game.db.ch(game.desc(d_id).character.unwrap()).in_room
                             ),
-                            game.db.world[game.db.ch(game.desc(d_id).character.unwrap()).in_room.get()
+                            game.db.world[game.db.ch(game.desc(d_id).character.unwrap()).in_room
                                 as usize]
                                 .name,
                             game.db.ch(game.desc(d_id).character.unwrap()).get_name()
@@ -2140,7 +2134,7 @@ fn perform_immort_where(game: &mut Game, chid: DepotId, arg: &str) {
         for id in game.db.character_list.ids() {
             let i = game.db.ch(id);
             let ch = game.db.ch(chid);
-            if game.can_see(ch, i) && i.in_room() != NOWHERE && isname(arg, &i.player.borrow().name)
+            if game.can_see(ch, i) && i.in_room() != NOWHERE && isname(arg, &i.player.name)
             {
                 found = true;
                 let messg = format!(
@@ -2230,7 +2224,7 @@ pub fn do_levels(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _
         )
         .as_str(),
     );
-    let d_id = ch.desc.borrow().unwrap();
+    let d_id = ch.desc.unwrap();
     page_string(game, d_id, buf.as_str(), true);
 }
 
@@ -2344,6 +2338,7 @@ pub fn do_color(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         return;
     }
     let tp = tp.unwrap() as i64;
+    let ch = game.db.ch_mut(chid);
     ch.remove_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2);
     ch.set_prf_flags_bits(PRF_COLOR_1 * (tp & 1) | (PRF_COLOR_2 * (tp & 2) >> 1));
     info!(
@@ -2351,7 +2346,7 @@ pub fn do_color(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         PRF_COLOR_1 * (tp & 1),
         (PRF_COLOR_2 * (tp & 2) >> 1)
     );
-
+    let ch = game.db.ch(chid);
     game.send_to_char(
         chid,
         format!(

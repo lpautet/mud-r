@@ -151,7 +151,7 @@ pub fn do_hit(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcm
             TO_ROOM,
         );
     } else if ch.aff_flagged(AFF_CHARM)
-        && ch.master.borrow().unwrap() == vict_id.unwrap()
+        && ch.master.unwrap() == vict_id.unwrap()
     {
         game.act(
             "$N is just such a good friend, you simply can't hit $M.",
@@ -176,7 +176,7 @@ pub fn do_hit(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcm
             let ch = game.db.ch(chid);
             let vict = game.db.ch(vict_id);
             if ch.aff_flagged(AFF_CHARM)
-                && !game.db.ch(ch.master.borrow().unwrap()).is_npc()
+                && !game.db.ch(ch.master.unwrap()).is_npc()
                 && !vict.is_npc()
             {
                 return; /* you can't order a charmed pet to attack a
@@ -188,7 +188,7 @@ pub fn do_hit(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcm
             && (ch.fighting_id().is_none() || vict_id != ch.fighting_id().unwrap())
         {
             game.hit(chid, vict_id, TYPE_UNDEFINED);
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
         } else {
             game.send_to_char(chid, "You do the best you can!\r\n");
@@ -326,7 +326,7 @@ pub fn do_backstab(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     } else {
         game.hit(chid, vict_id, SKILL_BACKSTAB);
     }
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
@@ -370,8 +370,8 @@ pub fn do_order(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 TO_ROOM,
             );
             let vict = game.db.ch(vict_id);
-            if vict.master.borrow().is_some()
-                && vict.master.borrow().unwrap() != chid
+            if vict.master.is_some()
+                && vict.master.unwrap() != chid
                 || !vict.aff_flagged(AFF_CHARM)
             {
                 game.act(
@@ -392,7 +392,7 @@ pub fn do_order(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             let buf = format!("$n issues the order '{}'.", message);
             game.act(&buf, false, Some(chid), None, None, TO_ROOM);
             let ch = game.db.ch(chid);
-            let list = ch.followers.borrow().clone();
+            let list = ch.followers.clone();
             for k_id in list {
                 let follower = game.db.ch(k_id.follower);
                 let ch = game.db.ch(chid);
@@ -516,7 +516,7 @@ pub fn do_bash(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
 
     if percent > prob as u32 {
         game.damage(chid, vict_id, 0, SKILL_BASH);
-        let ch = game.db.ch(chid);
+        let ch = game.db.ch_mut(chid);
         ch.set_pos(POS_SITTING);
     } else {
         /*
@@ -527,15 +527,17 @@ pub fn do_bash(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
          */
         if game.damage(chid, vict_id, 1, SKILL_BASH) > 0 {
             /* -1 = dead, 0 = miss */
-            let vict = game.db.ch(vict_id);
+            let vict = game.db.ch_mut(vict_id);
             vict.set_wait_state(PULSE_VIOLENCE as i32);
             let ch = game.db.ch(chid);
+            let vict = game.db.ch(vict_id);
             if ch.in_room() == vict.in_room() {
+                let vict = game.db.ch_mut(vict_id);
                 vict.set_pos(POS_SITTING);
             }
         }
     }
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
 }
 
@@ -628,7 +630,7 @@ pub fn do_rescue(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
 
     game.set_fighting(chid, tmp_ch_id);
     game.set_fighting(tmp_ch_id, chid);
-    let vict = game.db.ch(vict_id);
+    let vict = game.db.ch_mut(vict_id);
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
@@ -668,6 +670,6 @@ pub fn do_kick(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
     } else {
         game.damage(chid, vict_id, (ch.get_level() / 2) as i32, SKILL_KICK);
     }
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);
 }

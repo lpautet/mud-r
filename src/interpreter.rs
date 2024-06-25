@@ -9,7 +9,7 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::LinkedList;
 use std::rc::Rc;
@@ -2771,7 +2771,7 @@ const RESERVED: [&str; 9] = [
  * then calls the appropriate function.
  */
 pub fn command_interpreter(game: &mut Game, chid: DepotId, argument: &str) {
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     let line: &str;
     let mut arg = String::new();
 
@@ -2878,10 +2878,10 @@ pub fn do_alias(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         /* no argument specified -- list currently defined aliases */
         game.send_to_char(chid, "Currently defined aliases:\r\n");
         let ch = game.db.ch(chid);
-        if ch.player_specials.borrow().aliases.len() == 0 {
+        if ch.player_specials.aliases.len() == 0 {
             game.send_to_char(chid, " None.\r\n");
         } else {
-            let list = ch.player_specials.borrow().aliases.clone();
+            let list = ch.player_specials.aliases.clone();
             for a in list {
                 game.send_to_char(
                     chid,
@@ -2894,12 +2894,12 @@ pub fn do_alias(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         /* is this an alias we've already defined? */
         let a = ch
             .player_specials
-            .borrow()
             .aliases
             .iter()
             .position(|e| e.alias.as_ref() == &arg);
         if a.is_some() {
-            ch.player_specials.borrow_mut().aliases.remove(a.unwrap());
+            let ch = game.db.ch_mut(chid);
+            ch.player_specials.aliases.remove(a.unwrap());
         }
         /* if no replacement string is specified, assume we want to delete */
         if repl.is_empty() {
@@ -2927,7 +2927,8 @@ pub fn do_alias(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             } else {
                 a.type_ = ALIAS_SIMPLE;
             }
-            ch.player_specials.borrow_mut().aliases.push(a);
+            let ch = game.db.ch_mut(chid);
+            ch.player_specials.aliases.push(a);
             game.send_to_char(chid, "Alias added.\r\n");
         }
     }
@@ -3005,7 +3006,7 @@ pub fn perform_alias(db: &DB, d: &mut DescriptorData, orig: &mut String) -> bool
         return false;
     }
     /* bail out immediately if the guy doesn't have any aliases */
-    if character.player_specials.borrow().aliases.len() == 0 {
+    if character.player_specials.aliases.len() == 0 {
         return false;
     }
 
@@ -3019,7 +3020,7 @@ pub fn perform_alias(db: &DB, d: &mut DescriptorData, orig: &mut String) -> bool
     }
     let a;
     /* if the first arg is not an alias, return without doing anything */
-    let dcps = character.player_specials.borrow();
+    let dcps = &character.player_specials;
     if {
         a = find_alias(&dcps.aliases, &first_arg);
         a.is_none()
@@ -3256,7 +3257,7 @@ pub fn special(game: &mut Game, chid: DepotId, cmd: i32, arg: &str) -> bool {
 
     /* special in inventory? */
     let ch = game.db.ch(chid);
-    for i in ch.carrying.borrow().iter() {
+    for i in ch.carrying.iter() {
         if game.db.get_obj_spec(*i).is_some() {
             if game.db.get_obj_spec(*i).as_ref().unwrap()(game, chid, MeRef::Obj(*i), cmd, arg) {
                 return true;
@@ -3286,8 +3287,8 @@ pub fn special(game: &mut Game, chid: DepotId, cmd: i32, arg: &str) -> bool {
     let ch = game.db.ch(chid);
     let peoples_in_room = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in peoples_in_room {
-        if game.db.get_obj_spec(*i).is_some() {
-            if game.db.get_obj_spec(*i).as_ref().unwrap()(game, chid, MeRef::Obj(*i), cmd, arg) {
+        if game.db.get_obj_spec(i).is_some() {
+            if game.db.get_obj_spec(i).as_ref().unwrap()(game, chid, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3357,7 +3358,7 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
             }
 
             if k.character.is_some() {
-                *game.db.ch(k.character.unwrap()).desc.borrow_mut() = None;
+                game.db.ch_mut(k.character.unwrap()).desc = None;
             }
             k.character = None;
             k.original = None;
@@ -3382,11 +3383,11 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
                 //target = Some(Rc::new(RefCell::new(k.character.as_ref().unwrap())));
                 mode = USURP;
             }
-            *game
+            game
                 .db
-                .ch(game.desc(k_id).character.unwrap())
+                .ch_mut(game.desc(k_id).character.unwrap())
                 .desc
-                .borrow_mut() = None;
+                 = None;
             game.descriptor_list.get_mut(k_id).character = None;
             game.descriptor_list.get_mut(k_id).original = None;
             game.write_to_output(k_id, "\r\nMultiple login detected -- disconnecting.\r\n");
@@ -3429,7 +3430,7 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
         }
 
         /* we've found a duplicate - blow him away, dumping his eq in limbo. */
-        if ch.in_room != Cell::from(NOWHERE) {
+        if ch.in_room != NOWHERE {
             game.db.char_from_room(chid);
         }
         game.db.char_to_room(chid, 1);
@@ -3453,10 +3454,10 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
             .as_ref()
             .unwrap()
             .clone();
-        let character = game.db.ch(character_id);
-        *character.desc.borrow_mut() = Some(d_id);
+        let character = game.db.ch_mut(character_id);
+        character.desc = Some(d_id);
         game.descriptor_list.get_mut(d_id).original = None;
-        character.char_specials.borrow_mut().timer.set(0);
+        character.char_specials.timer = 0;
         character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
         character.remove_aff_flags(AFF_GROUP);
     }
@@ -3525,10 +3526,10 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
     match game.descriptor_list.get_mut(d_id).state() {
         ConGetName => {
             /* wait for input of name */
-            if game.descriptor_list.get_mut(d_id).character.is_none() {
+            if game.descriptor_list.get(d_id).character.is_none() {
                 let mut ch = CharData::default();
                 clear_char(&mut ch);
-                *ch.desc.borrow_mut() = Some(d_id);
+                ch.desc = Some(d_id);
                 game.descriptor_list.get_mut(d_id).character = Some(Rc::from(ch));
             }
 
@@ -3552,6 +3553,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 let mut tmp_store = CharFileU::new();
                 let player_i = game.db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
+                    let character = game.db.ch_mut(character_id);
                     store_to_char(&tmp_store, character);
                     character.set_pfilepos(player_i.unwrap() as i32);
 
@@ -3569,9 +3571,9 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         }
                         let mut new_char = CharData::default();
                         clear_char(&mut new_char);
-                        new_char.desc = RefCell::new(Some(d_id));
-                        new_char.player.borrow_mut().name = tmp_name.unwrap().to_string();
-                        new_char.pfilepos.set(player_i.unwrap() as i32);
+                        new_char.desc = Some(d_id);
+                        new_char.player.name = tmp_name.unwrap().to_string();
+                        new_char.pfilepos = player_i.unwrap() as i32;
                         game.descriptor_list.get_mut(d_id).character =
                             Some(Rc::new(CharData::default()));
                         game.write_to_output(
@@ -3598,7 +3600,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                     }
                     let character_id = game.descriptor_list.get_mut(d_id).character.unwrap();
                     let character = game.db.ch(character_id);
-                    character.player.borrow_mut().name = String::from(tmp_name.unwrap());
+                    character.player.name = Rc::from(tmp_name.unwrap());
 
                     game.write_to_output(
                         d_id,
@@ -3886,14 +3888,14 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
         }
         ConQsex => {
             let character_id = game.desc(d_id).character.unwrap();
-            let character = game.db.ch(character_id);
+            let character = game.db.ch_mut(character_id);
             /* query sex of new user         */
             match arg.chars().next().unwrap() {
                 'm' | 'M' => {
-                    character.player.borrow_mut().sex = SEX_MALE;
+                    character.player.sex = SEX_MALE;
                 }
                 'f' | 'F' => {
-                    character.player.borrow_mut().sex = SEX_FEMALE;
+                    character.player.sex = SEX_FEMALE;
                 }
                 _ => {
                     game.write_to_output(d_id, "That is not a sex..\r\nWhat IS your sex? ");
@@ -3923,6 +3925,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 }
 
                 /* Now GET_NAME() will work properly. */
+                let character = game.db.ch_mut(character_id);
                 game.db.init_char(character);
                 game.save_char(character_id);
             }
@@ -3968,7 +3971,8 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
 
                 '1' => {
                     {
-                        reset_char(character);
+                        reset_char(game.db.ch_mut(character_id));
+                        let character = game.db.ch_mut(character_id);
                         read_aliases(character);
                         if character.prf_flagged(PLR_INVSTART) {
                             character.set_invis_lev(character.get_level() as i16);
@@ -4000,7 +4004,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                         game.db.character_list.push(character);
                         game.db.char_to_room(character_id, load_room);
                         let ch = game.desc(d_id).character.as_ref().unwrap().clone();
-                        load_result = crash_load(game, &ch);
+                        load_result = crash_load(game, chid);
 
                         /* Clear their load room if it's not persistant. */
                         if !character.plr_flagged(PLR_LOADROOM) {
@@ -4040,17 +4044,17 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
                 }
 
                 '2' => {
-                    if character.player.borrow().description.borrow().is_empty() {
-                        let cp = character.player.borrow();
+                    if character.player.description.borrow().is_empty() {
+                        let cp = character.player;
                         let player_description = RefCell::borrow(&cp.description);
                         game.write_to_output(
                             d_id,
                             format!("Old description:\r\n{}", player_description).as_str(),
                         );
-                        RefCell::borrow_mut(&character.player.borrow().description).clear();
+                        RefCell::borrow_mut(&character.player.description).clear();
                     }
                     game.write_to_output(d_id, "Enter the new text you'd like others to see when they look at you.\r\nTerminate with a '@' on a new line.\r\n");
-                    let description = character.player.borrow().description.clone();
+                    let description = character.player.description.clone();
                     game.descriptor_list.get_mut(d_id).str = Some(description);
                     game.descriptor_list.get_mut(d_id).max_str = EXDSCR_LENGTH;
                     game.descriptor_list.get_mut(d_id).set_state(ConExdesc);

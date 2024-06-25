@@ -39,7 +39,7 @@ use crate::structs::{
     WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
     WEAR_WRIST_R,
 };
-use crate::util::{clone_vec, rand_number};
+use crate::util::rand_number;
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 fn perform_put(game: &mut Game, chid: DepotId, oid: DepotId, cid: DepotId) {
@@ -185,7 +185,7 @@ pub fn do_put(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
 
                 if {
                     oid =
-                        game.get_obj_in_list_vis(ch, &theobj, None, ch.carrying.borrow().as_ref());
+                        game.get_obj_in_list_vis(ch, &theobj, None, ch.carrying.as_ref());
                     oid.is_none()
                 } {
                     game.send_to_char(
@@ -205,12 +205,12 @@ pub fn do_put(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
                             ch,
                             &theobj,
                             None,
-                            ch.carrying.borrow().as_ref(),
+                            ch.carrying.as_ref(),
                         );
                     }
                 }
             } else {
-                let list = ch.carrying.borrow().clone();
+                let list = ch.carrying.clone();
                 for oid in list {
                     if oid != cid.unwrap()
                         && (obj_dotmode == FIND_ALL
@@ -282,7 +282,7 @@ fn get_check_money(game: &mut Game, chid: DepotId, oid: DepotId) {
     }
 
     game.extract_obj(oid);
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_gold(ch.get_gold() + value);
 
     if value == 1 {
@@ -537,7 +537,7 @@ pub fn do_get(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
                 game.send_to_char(chid, "Get from all of what?\r\n");
                 return;
             }
-            let list = ch.carrying.borrow().clone();
+            let list = ch.carrying.clone();
             for contid in list {
                 let ch = game.db.ch(chid);
                 if game.can_see_obj(ch, game.db.obj(contid))
@@ -603,6 +603,7 @@ fn perform_drop_gold(game: &mut Game, chid: DepotId, amount: i32, mode: u8, rdr:
         game.send_to_char(chid, "You don't have that many coins!\r\n");
     } else {
         if mode != SCMD_JUNK as u8 {
+            let ch = game.db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
 
             let oid = game.db.create_money(amount).unwrap();
@@ -648,7 +649,7 @@ fn perform_drop_gold(game: &mut Game, chid: DepotId, amount: i32, mode: u8, rdr:
                 "You drop some gold which disappears in a puff of smoke!\r\n",
             );
         }
-        let ch = game.db.ch(chid);
+        let ch = game.db.ch_mut(chid);
         ch.set_gold(ch.get_gold() - amount);
     }
 }
@@ -782,7 +783,7 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
                 format!("What do you want to {} {} of?\r\n", sname, multi).as_str(),
             );
         } else if {
-            oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+            oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
             oid.is_none()
         } {
             game.send_to_char(
@@ -793,7 +794,7 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             loop {
                 amount += perform_drop(game, chid, oid.unwrap(), mode, sname, rdr);
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
                 multi -= 1;
                 if multi == 0 {
                     break;
@@ -820,10 +821,10 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
         }
         if dotmode == FIND_ALL {
             let ch = game.db.ch(chid);
-            if ch.carrying.borrow().is_empty() {
+            if ch.carrying.is_empty() {
                 game.send_to_char(chid, "You don't seem to be carrying anything.\r\n");
             } else {
-                let list = ch.carrying.borrow().clone();
+                let list = ch.carrying.clone();
                 for oid in list {
                     amount += perform_drop(game, chid, oid, mode, sname, rdr);
                 }
@@ -838,7 +839,7 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             }
             if {
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
                 game.send_to_char(
@@ -850,12 +851,12 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             while oid.is_some() {
                 amount += perform_drop(game, chid, oid.unwrap(), mode, sname, rdr);
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
             }
         } else {
             if {
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
                 game.send_to_char(
@@ -878,7 +879,7 @@ pub fn do_drop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             None,
             TO_ROOM,
         );
-        let ch = game.db.ch(chid);
+        let ch = game.db.ch_mut(chid);
         ch.set_gold(ch.get_gold() + amount);
     }
 }
@@ -1007,9 +1008,10 @@ fn perform_give_gold(game: &mut Game, chid: DepotId, vict_id: DepotId, amount: i
     let ch = game.db.ch(chid);
 
     if ch.is_npc() || ch.get_level() < LVL_GOD as u8 {
+        let ch = game.db.ch_mut(chid);
         ch.set_gold(ch.get_gold() - amount);
     }
-    let vict = game.db.ch(vict_id);
+    let vict = game.db.ch_mut(vict_id);
     vict.set_gold(vict.get_gold() + amount);
 }
 
@@ -1047,7 +1049,7 @@ pub fn do_give(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                 return;
             } else if {
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
             }
@@ -1060,7 +1062,7 @@ pub fn do_give(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                 amount -= 1;
                 perform_give(game, chid, vict_id.unwrap(), oid.unwrap());
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
             }
         }
     } else {
@@ -1076,7 +1078,7 @@ pub fn do_give(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
         if dotmode == FIND_INDIV {
             if {
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
                 game.send_to_char(
@@ -1092,10 +1094,10 @@ pub fn do_give(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                 return;
             }
             let ch = game.db.ch(chid);
-            if ch.carrying.borrow().len() == 0 {
+            if ch.carrying.len() == 0 {
                 game.send_to_char(chid, "You don't seem to be holding anything.\r\n");
             } else {
-                let list = ch.carrying.borrow().clone() ;
+                let list = ch.carrying.clone() ;
                 for oid in list {
                     let ch = game.db.ch(chid);
                     if game.can_see_obj(ch, game.db.obj(oid))
@@ -1223,7 +1225,7 @@ pub fn do_drink(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, sub
     let mut toid;
     let mut on_ground = false;
     if {
-        toid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+        toid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
         toid.is_none()
     } {
         if {
@@ -1375,8 +1377,7 @@ pub fn do_drink(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, sub
             location: APPLY_NONE as u8,
             bitvector: AFF_POISON,
         };
-        let ch = game.db.ch(chid);
-        game.db.affect_join(ch, &mut af, false, false, false, false);
+        game.db.affect_join(chid, &mut af, false, false, false, false);
     }
     /* empty the container, and no longer poison. */
     let v = game.db.obj(toid).get_obj_val(1) - amount;
@@ -1407,7 +1408,7 @@ pub fn do_eat(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcm
     }
     let food_id;
     if {
-        food_id = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+        food_id = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
         food_id.is_none()
     } {
         game.send_to_char(
@@ -1502,8 +1503,7 @@ pub fn do_eat(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcm
             location: APPLY_NONE as u8,
             bitvector: AFF_POISON,
         };
-        let ch = game.db.ch(chid);
-        game.db.affect_join(ch, &mut af, false, false, false, false);
+        game.db.affect_join(chid, &mut af, false, false, false, false);
     }
     if subcmd == SCMD_EAT {
         game.extract_obj(food_id);
@@ -1536,7 +1536,7 @@ pub fn do_pour(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             return;
         }
         if {
-            from_obj_id = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying.borrow());
+            from_obj_id = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying);
             from_obj_id.is_none()
         } {
             game.send_to_char(chid, "You can't find it!\r\n");
@@ -1558,7 +1558,7 @@ pub fn do_pour(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             return;
         }
         if {
-            to_obj_id = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying.borrow());
+            to_obj_id = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying);
             to_obj_id.is_none()
         } {
             game.send_to_char(chid, "You can't find it!\r\n");
@@ -1663,7 +1663,7 @@ pub fn do_pour(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subc
             return;
         }
         if {
-            to_obj_id = game.get_obj_in_list_vis(ch, &arg2, None, &ch.carrying.borrow());
+            to_obj_id = game.get_obj_in_list_vis(ch, &arg2, None, &ch.carrying);
             to_obj_id.is_none()
         } {
             game.send_to_char(chid, "You can't find it!\r\n");
@@ -2014,7 +2014,7 @@ pub fn do_wear(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
     let mut _where = -1;
     let mut items_worn = 0;
     if dotmode == FIND_ALL {
-        for oid in clone_vec(&ch.carrying) {
+        for oid in ch.carrying.clone() {
             let ch = game.db.ch(chid);
             if game.can_see_obj(ch, game.db.obj(oid)) && {
                 _where = find_eq_pos(game, chid, oid, "");
@@ -2034,7 +2034,7 @@ pub fn do_wear(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
         }
         let mut oid;
         if {
-            oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying.borrow());
+            oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying);
             oid.is_none()
         } {
             game.send_to_char(
@@ -2059,13 +2059,13 @@ pub fn do_wear(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     );
                 }
                 let ch = game.db.ch(chid);
-                oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying.borrow());
+                oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying);
             }
         }
     } else {
         let oid;
         if {
-            oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying.borrow());
+            oid = game.get_obj_in_list_vis(ch, &arg1, None, &ch.carrying);
             oid.is_none()
         } {
             game.send_to_char(
@@ -2102,7 +2102,7 @@ pub fn do_wield(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     if arg.is_empty() {
         game.send_to_char(chid, "Wield what?\r\n");
     } else if {
-        oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+        oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
         oid.is_none()
     } {
         game.send_to_char(
@@ -2132,7 +2132,7 @@ pub fn do_grab(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
     if arg.is_empty() {
         game.send_to_char(chid, "Hold what?\r\n");
     } else if {
-        oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying.borrow());
+        oid = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
         oid.is_none()
     } {
         game.send_to_char(

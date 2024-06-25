@@ -12,7 +12,7 @@
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
-use crate::depot::{DepotId, HasId};
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::act_comm::do_say;
@@ -94,26 +94,26 @@ const MAX_PER_PRAC: usize = 1; /* max percent gain in skill per practice */
 const MIN_PER_PRAC: usize = 2; /* min percent gain in skill per practice */
 const PRAC_TYPE: usize = 3; /* should it say 'spell' or 'skill'?	 */
 
-fn learned(ch: &Rc<CharData>) -> i8 {
+fn learned(ch: &CharData) -> i8 {
     PRAC_PARAMS[LEARNED_LEVEL][ch.get_class() as usize] as i8
 }
 
-fn mingain(ch: &Rc<CharData>) -> i32 {
+fn mingain(ch: &CharData) -> i32 {
     PRAC_PARAMS[MIN_PER_PRAC][ch.get_class() as usize]
 }
 
-fn maxgain(ch: &Rc<CharData>) -> i32 {
+fn maxgain(ch: &CharData) -> i32 {
     PRAC_PARAMS[MAX_PER_PRAC][ch.get_class() as usize]
 }
 
-fn splskl(ch: &Rc<CharData>) -> &str {
+fn splskl(ch: &CharData) -> &str {
     PRAC_TYPES[PRAC_PARAMS[PRAC_TYPE][ch.get_class() as usize] as usize]
 }
 
 pub fn list_skills(game: &mut Game, chid: DepotId) {
     let ch = game.db.ch(chid);
     if ch.get_practices() == 0 {
-        game.send_to_char(ch.id(), "You have no practice sessions remaining.\r\n");
+        game.send_to_char(chid, "You have no practice sessions remaining.\r\n");
         return;
     }
 
@@ -137,11 +137,12 @@ pub fn list_skills(game: &mut Game, chid: DepotId) {
             );
         }
     }
-
-    page_string(game, ch.desc.borrow().unwrap(), &buf, true);
+    let d_id = ch.desc.unwrap();
+    page_string(game, d_id , &buf, true);
 }
 
-pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
+pub fn guild(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
+    let ch = game.db.ch(chid);
     let db = &game.db;
     if ch.is_npc() || !cmd_is(cmd, "practice") {
         return false;
@@ -150,12 +151,12 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument:
     let argument = argument.trim();
 
     if argument.is_empty() {
-        list_skills(game, ch);
+        list_skills(game, chid);
         return true;
     }
 
     if ch.get_practices() <= 0 {
-        game.send_to_char(ch.id(), "You do not seem to be able to practice now.\r\n");
+        game.send_to_char(chid, "You do not seem to be able to practice now.\r\n");
         return true;
     }
 
@@ -166,16 +167,17 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument:
             < db.spell_info[skill_num.unwrap() as usize].min_level[ch.get_class() as usize] as u8
     {
         game.send_to_char(
-            ch,
+            chid,
             format!("You do not know of that {}.\r\n", splskl(ch)).as_str(),
         );
         return true;
     }
     if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
-        game.send_to_char(ch.id(), "You are already learned in that area.\r\n");
+        game.send_to_char(chid, "You are already learned in that area.\r\n");
         return true;
     }
-    game.send_to_char(ch.id(), "You practice for a while...\r\n");
+    game.send_to_char(chid, "You practice for a while...\r\n");
+    let ch = game.db.ch_mut(chid);
     ch.set_practices(ch.get_practices() - 1);
 
     let mut percent = ch.get_skill(skill_num.unwrap());
@@ -187,13 +189,15 @@ pub fn guild(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument:
     ch.set_skill(skill_num.unwrap(), min(learned(ch), percent));
 
     if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
-        game.send_to_char(ch.id(), "You are now learned in that area.\r\n");
+        game.send_to_char(chid, "You are now learned in that area.\r\n");
     }
 
     true
 }
 
-pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
+pub fn dump(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
+    let ch = game.db.ch(chid);
+
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for k in list {
         game.act(
@@ -211,8 +215,9 @@ pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: 
         return false;
     }
 
-    do_drop(game, ch, argument, cmd as usize, SCMD_DROP as i32);
+    do_drop(game, chid, argument, cmd as usize, SCMD_DROP as i32);
     let mut value = 0;
+    let ch = game.db.ch(chid);
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for k in list {
         game.act(
@@ -228,19 +233,20 @@ pub fn dump(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: 
     }
 
     if value != 0 {
-        game.send_to_char(ch.id(), "You are awarded for outstanding performance.\r\n");
+        game.send_to_char(chid, "You are awarded for outstanding performance.\r\n");
         game.act(
             "$n has been awarded for being a good citizen.",
             true,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,
         );
-
+        let ch = game.db.ch(chid);
         if ch.get_level() < 3 {
-            gain_exp(ch, value, game);
+            gain_exp(chid, value, game);
         } else {
+            let ch = game.db.ch_mut(chid);
             ch.set_gold(ch.get_gold() + value);
         }
     }
@@ -266,8 +272,7 @@ impl Mayor {
 const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
 const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 
-pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
-
+pub fn mayor(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if !game.db.mayor.move_ {
         if game.db.time_info.hours == 6 {
             game.db.mayor.move_ = true;
@@ -279,6 +284,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.db.mayor.path_index = 0;
         }
     }
+    let ch = game.db.ch(chid);
     if cmd != 0
         || !game.db.mayor.move_
         || ch.get_pos() < POS_SLEEPING
@@ -298,15 +304,16 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
                 [game.db.mayor.path_index..game.db.mayor.path_index + 1]
                 .parse::<u8>()
                 .unwrap();
-            perform_move(game, ch, dir as i32, true);
+            perform_move(game, chid, dir as i32, true);
         }
 
         'W' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
             game.act(
                 "$n awakens and groans loudly.",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -314,11 +321,12 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
         }
 
         'S' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SLEEPING);
             game.act(
                 "$n lies down and instantly falls asleep.",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -329,19 +337,19 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.act(
                 "$n says 'Hello Honey!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
             );
-            game.act("$n smirks.", false, Some(ch.id()), None, None, TO_ROOM);
+            game.act("$n smirks.", false, Some(chid), None, None, TO_ROOM);
         }
 
         'b' => {
             game.act(
                 "$n says 'What a view!  I must get something done about that dump!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -352,7 +360,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.act(
                 "$n says 'Vandals!  Youngsters nowadays have no respect for anything!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -363,7 +371,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.act(
                 "$n says 'Good day, citizens!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -374,7 +382,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.act(
                 "$n says 'I hereby declare the bazaar open!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -385,7 +393,7 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
             game.act(
                 "$n says 'I hereby declare Midgaard closed!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
@@ -393,13 +401,13 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
         }
 
         'O' => {
-            do_gen_door(game, ch, "gate", 0, SCMD_UNLOCK);
-            do_gen_door(game, ch, "gate", 0, SCMD_OPEN);
+            do_gen_door(game, chid, "gate", 0, SCMD_UNLOCK);
+            do_gen_door(game, chid, "gate", 0, SCMD_OPEN);
         }
 
         'C' => {
-            do_gen_door(game, ch, "gate", 0, SCMD_CLOSE);
-            do_gen_door(game, ch, "gate", 0, SCMD_LOCK);
+            do_gen_door(game, chid, "gate", 0, SCMD_CLOSE);
+            do_gen_door(game, chid, "gate", 0, SCMD_LOCK);
         }
 
         '.' => {
@@ -416,7 +424,10 @@ pub fn mayor(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
 *  General special procedures for mobiles                             *
 ******************************************************************** */
 
-fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
+fn npc_steal(game: &mut Game, chid: DepotId, victim_id: DepotId) {
+    let victim = game.db.ch(victim_id);
+    let ch = game.db.ch(chid);
+
     if victim.is_npc() {
         return;
     }
@@ -432,25 +443,27 @@ fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
         game.act(
             "You discover that $n has $s hands in your wallet.",
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
-            Some(VictimRef::Char(victim)),
+            Some(VictimRef::Char(victim_id)),
             TO_VICT,
         );
         game.act(
             "$n tries to steal gold from $N.",
             true,
-            Some(ch.id()),
+            Some(chid),
             None,
-            Some(VictimRef::Char(victim)),
+            Some(VictimRef::Char(victim_id)),
             TO_NOTVICT,
         );
     } else {
         /* Steal some gold coins */
         let gold = victim.get_gold() * rand_number(1, 10) as i32 / 100;
         if gold > 0 {
+            let ch = game.db.ch_mut(chid);
             ch.set_gold(ch.get_gold() + gold);
-            victim.set_gold(ch.get_gold() - gold);
+            let victim = game.db.ch_mut(victim_id);
+            victim.set_gold(victim.get_gold() - gold);
         }
     }
 }
@@ -458,12 +471,14 @@ fn npc_steal(game: &mut Game, ch: &Rc<CharData>, victim: &Rc<CharData>) {
 /*
  * Quite lethal to low-level characters.
  */
-pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+pub fn snake(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || ch.get_pos() != POS_FIGHTING || ch.fighting_id().is_none() {
         return false;
     }
 
-    if ch.fighting_id().as_ref().unwrap().in_room() != ch.in_room()
+    if game.db.ch(ch.fighting_id().unwrap()).in_room() != ch.in_room()
         || rand_number(0, ch.get_level() as u32) != 0
     {
         return false;
@@ -471,23 +486,25 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
     game.act(
         "$n bites $N!",
         true,
-        Some(ch.id()),
+        Some(chid),
         None,
-        Some(VictimRef::Char(ch.fighting_id().as_ref().unwrap())),
+        Some(VictimRef::Char(ch.fighting_id().unwrap())),
         TO_NOTVICT,
     );
+    let ch = game.db.ch(chid);
     game.act(
         "$n bites you!",
         true,
-        Some(ch.id()),
+        Some(chid),
         None,
-        Some(VictimRef::Char(ch.fighting_id().as_ref().unwrap())),
+        Some(VictimRef::Char(ch.fighting_id().unwrap())),
         TO_VICT,
     );
+    let ch = game.db.ch(chid);
     call_magic(
         game,
-        ch,
-        ch.fighting_id().as_ref(),
+        chid,
+        ch.fighting_id(),
         None,
         SPELL_POISON,
         ch.get_level() as i32,
@@ -496,16 +513,19 @@ pub fn snake(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
     return true;
 }
 
-pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+pub fn thief(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || ch.get_pos() != POS_STANDING {
         return false;
     }
     let list = clone_vec2(&game.db.world[ch.in_room() as usize]
     .peoples);
-    for cons in list.iter()
+    for cons_id in list
     {
+        let cons = game.db.ch(cons_id);
         if !cons.is_npc() && cons.get_level() < LVL_IMMORT as u8 && rand_number(0, 4) == 0 {
-            npc_steal(game, ch, cons);
+            npc_steal(game, chid, cons_id);
             return true;
         }
     }
@@ -514,84 +534,87 @@ pub fn thief(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument
 
 pub fn magic_user(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || ch.get_pos() != POS_FIGHTING {
         return false;
     }
     /* pseudo-randomly choose someone in the room who is fighting me */
-    let mut vict = None;
+    let mut vict_id = None;
     {
-        let peoples = &game.db.world[ch.in_room() as usize].peoples;
-        for v in peoples.iter() {
-            if v.fighting().is_some()
-                && Rc::ptr_eq(v.fighting().as_ref().unwrap(), ch)
+        let peoples = game.db.world[ch.in_room() as usize].peoples.clone();
+        for v_id in peoples {
+            let v = game.db.ch(v_id);
+            if v.fighting_id().is_some()
+                && v.fighting_id().unwrap() == chid
                 && rand_number(0, 4) == 0
             {
-                vict = Some(v.clone());
+                vict_id = Some(v_id);
                 break;
             }
         }
     }
 
-    let mut my_vict = None;
+    let mut my_vict_id = None;
     /* if I didn't pick any of those, then just slam the guy I'm fighting */
-    if vict.is_none() && ch.fighting_id().as_ref().unwrap().in_room() == ch.in_room() {
-        my_vict = ch.fighting_id().clone();
+    if vict_id.is_none() && game.db.ch(ch.fighting_id().unwrap()).in_room() == ch.in_room() {
+        my_vict_id = ch.fighting_id();
     }
-    if my_vict.is_some() {
-        vict = my_vict;
+    if my_vict_id.is_some() {
+        vict_id = my_vict_id;
     }
 
     /* Hm...didn't pick anyone...I'll wait a round. */
-    if vict.is_none() {
+    if vict_id.is_none() {
         return true;
     }
 
     if ch.get_level() > 13 && rand_number(0, 10) == 0 {
-        cast_spell(game, ch, vict.as_ref(), None, SPELL_POISON);
+        cast_spell(game, chid, vict_id, None, SPELL_POISON);
     }
-
+    let ch = game.db.ch(chid);
     if ch.get_level() > 7 && rand_number(0, 8) == 0 {
-        cast_spell(game, ch, vict.as_ref(), None, SPELL_BLINDNESS);
+        cast_spell(game, chid, vict_id, None, SPELL_BLINDNESS);
     }
-
+    let ch = game.db.ch(chid);
     if ch.get_level() > 12 && rand_number(0, 12) == 0 {
         if ch.is_evil() {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_ENERGY_DRAIN);
+            cast_spell(game, chid, vict_id, None, SPELL_ENERGY_DRAIN);
         } else if ch.is_good() {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_DISPEL_EVIL);
+            cast_spell(game, chid, vict_id, None, SPELL_DISPEL_EVIL);
         }
     }
 
     if rand_number(0, 4) != 0 {
         return true;
     }
-
+    let ch = game.db.ch(chid);
     match ch.get_level() {
         4 | 5 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_MAGIC_MISSILE);
+            cast_spell(game, chid, vict_id, None, SPELL_MAGIC_MISSILE);
         }
         6 | 7 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_CHILL_TOUCH);
+            cast_spell(game, chid, vict_id, None, SPELL_CHILL_TOUCH);
         }
         8 | 9 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_BURNING_HANDS);
+            cast_spell(game, chid, vict_id, None, SPELL_BURNING_HANDS);
         }
         10 | 11 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_SHOCKING_GRASP);
+            cast_spell(game, chid, vict_id, None, SPELL_SHOCKING_GRASP);
         }
         12 | 13 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_LIGHTNING_BOLT);
+            cast_spell(game, chid, vict_id, None, SPELL_LIGHTNING_BOLT);
         }
         14 | 15 | 16 | 17 => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_COLOR_SPRAY);
+            cast_spell(game, chid, vict_id, None, SPELL_COLOR_SPRAY);
         }
         _ => {
-            cast_spell(game, ch, vict.as_ref(), None, SPELL_FIREBALL);
+            cast_spell(game, chid, vict_id, None, SPELL_FIREBALL);
         }
     }
     return true;
@@ -602,16 +625,19 @@ pub fn magic_user(
 ******************************************************************** */
 pub fn guild_guard(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    let guard;
+    let ch = game.db.ch(chid);
+
+    let guard_id;
     match me {
-        MeRef::Char(me_ch) => { guard = me_ch },
+        MeRef::Char(me_chid) => { guard_id = me_chid },
         _ => panic!("Unexpected MeRef type in guild_guard"),
     }
+    let guard = game.db.ch(guard_id);
     let buf = "The guard humiliates you, and blocks your way.\r\n";
     let buf2 = "The guard humiliates $n, and blocks $s way.";
 
@@ -635,41 +661,43 @@ pub fn guild_guard(
         if !ch.is_npc() && ch.get_class() == gi.pc_class {
             continue;
         }
-        game.send_to_char(ch.id(), buf);
-        game.act(buf2, false, Some(ch.id()), None, None, TO_ROOM);
+        game.send_to_char(chid, buf);
+        game.act(buf2, false, Some(chid), None, None, TO_ROOM);
 
         return true;
     }
     false
 }
 
-pub fn puff(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+pub fn puff(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 {
         return false;
     }
 
     return match rand_number(0, 60) {
         0 => {
-            do_say(game, ch, "My god!  It's full of stars!", 0, 0);
+            do_say(game, chid, "My god!  It's full of stars!", 0, 0);
             true
         }
         1 => {
-            do_say(game, ch, "How'd all those fish get up here?", 0, 0);
+            do_say(game, chid, "How'd all those fish get up here?", 0, 0);
             true
         }
         2 => {
-            do_say(game, ch, "I'm a very female dragon.", 0, 0);
+            do_say(game, chid, "I'm a very female dragon.", 0, 0);
             true
         }
         3 => {
-            do_say(game, ch, "I've got a peaceful, easy feeling.", 0, 0);
+            do_say(game, chid, "I've got a peaceful, easy feeling.", 0, 0);
             true
         }
         _ => false,
     };
 }
 
-pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+pub fn fido(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || !ch.awake() {
         return false;
     }
@@ -684,13 +712,14 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument:
         game.act(
             "$n savagely devours a corpse.",
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,
         );
         for temp in game.db.obj(i).contains.clone().into_iter() {
             game.db.obj_from_obj(temp);
+            let ch = game.db.ch(chid);
             game.db.obj_to_room(temp, ch.in_room());
         }
         game.extract_obj(i);
@@ -702,11 +731,13 @@ pub fn fido(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, _argument:
 
 pub fn janitor(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || !ch.awake() {
         return false;
     }
@@ -720,13 +751,13 @@ pub fn janitor(
         game.act(
             "$n picks up some trash.",
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,
         );
         game.db.obj_from_room(i);
-        game.db.obj_to_char(i, ch.id());
+        game.db.obj_to_char(i, chid);
         return true;
     }
 
@@ -735,11 +766,13 @@ pub fn janitor(
 
 pub fn cityguard(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
+    let ch = game.db.ch(chid);
+
     if cmd != 0 || !ch.awake() || ch.fighting_id().is_some() {
         return false;
     }
@@ -747,9 +780,10 @@ pub fn cityguard(
     let mut max_evil = 1000;
     let mut min_cha = 6;
     let mut spittle = None;
-    let mut evil = None;
+    let mut evil_id = None;
     let peoples = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
-    for tch in peoples.iter() {
+    for tch_id in peoples {
+        let tch = game.db.ch(tch_id);
         if !game.can_see(ch, tch) {
             continue;
         }
@@ -758,12 +792,12 @@ pub fn cityguard(
             game.act(
                 "$n screams 'HEY!!!  You're one of those PLAYER KILLERS!!!!!!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
             );
-            game.hit(ch, tch, TYPE_UNDEFINED);
+            game.hit(chid, tch_id, TYPE_UNDEFINED);
             return true;
         }
 
@@ -771,21 +805,21 @@ pub fn cityguard(
             game.act(
                 "$n screams 'HEY!!!  You're one of those PLAYER THIEVES!!!!!!'",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
                 None,
                 TO_ROOM,
             );
-            game.hit(ch, tch, TYPE_UNDEFINED);
+            game.hit(chid, tch_id, TYPE_UNDEFINED);
             return true;
         }
 
-        if tch.fighting().is_some()
+        if tch.fighting_id().is_some()
             && tch.get_alignment() < max_evil
-            && (tch.is_npc() || tch.fighting().as_ref().unwrap().is_npc())
+            && (tch.is_npc() || game.db.ch(tch.fighting_id().unwrap()).is_npc())
         {
             max_evil = tch.get_alignment();
-            evil = Some(tch);
+            evil_id = Some(tch_id);
         }
 
         if tch.get_cha() < min_cha {
@@ -794,25 +828,22 @@ pub fn cityguard(
         }
     }
 
-    if evil.is_some()
-        && evil
-            .as_ref()
-            .unwrap()
-            .fighting()
-            .as_ref()
-            .unwrap()
+    if evil_id.is_some()
+        && game.db.ch(game.db.ch(evil_id.unwrap())
+            .fighting_id()
+            .unwrap())
             .get_alignment()
             >= 0
     {
         game.act(
             "$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'",
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,
         );
-        game.hit(ch, evil.as_ref().unwrap(), TYPE_UNDEFINED);
+        game.hit(chid, evil_id.unwrap(), TYPE_UNDEFINED);
         return true;
     }
 
@@ -825,8 +856,8 @@ pub fn cityguard(
 
             do_action(
                 game,
-                ch,
-                &spittle.as_ref().unwrap().get_name(),
+                chid,
+                &spittle.as_ref().unwrap().get_name().clone(),
                 spit_social,
                 0,
             );
@@ -837,30 +868,33 @@ pub fn cityguard(
     return false;
 }
 
-fn pet_price(pet: &Rc<CharData>) -> i32 {
+fn pet_price(pet: &CharData) -> i32 {
     pet.get_level() as i32 * 300
 }
 
 pub fn pet_shops(
     game: &mut Game,
-    ch: &Rc<CharData>,
+    chid: DepotId,
     _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
+    let ch = game.db.ch(chid);
+
     /* Gross. */
     let pet_room = ch.in_room() + 1;
 
     if cmd_is(cmd, "list") {
-        game.send_to_char(ch.id(), "Available pets are:\r\n");
+        game.send_to_char(chid, "Available pets are:\r\n");
         let list = clone_vec2(&game.db.world[pet_room as usize].peoples);
-        for pet in list.iter() {
+        for pet_id in list {
+            let pet = game.db.ch(pet_id);
             /* No, you can't have the Implementor as a pet if he's in there. */
             if !pet.is_npc() {
                 continue;
             }
             game.send_to_char(
-                ch,
+                chid,
                 format!("{:8} - {}\r\n", pet_price(pet), pet.get_name()).as_str(),
             );
         }
@@ -869,49 +903,54 @@ pub fn pet_shops(
         let mut buf = String::new();
         let mut pet_name = String::new();
         two_arguments(argument, &mut buf, &mut pet_name);
-        let pet = game.db.get_char_room(&buf, None, pet_room);
-        if pet.is_none() || !pet.as_ref().unwrap().is_npc() {
-            game.send_to_char(ch.id(), "There is no such pet!\r\n");
+        let pet_id = game.db.get_char_room(&buf, None, pet_room);
+        if pet_id.is_none() || !game.db.ch(pet_id.unwrap()).is_npc() {
+            game.send_to_char(chid, "There is no such pet!\r\n");
             return true;
         }
-        let pet = pet.as_ref().unwrap();
-        if ch.get_gold() < pet_price(pet) {
-            game.send_to_char(ch.id(), "You don't have enough gold!\r\n");
+        let pet_id = pet_id.unwrap();
+        if ch.get_gold() < pet_price(game.db.ch(pet_id)) {
+            game.send_to_char(chid, "You don't have enough gold!\r\n");
             return true;
         }
-        ch.set_gold(ch.get_gold() - pet_price(pet));
+        let pet_price = pet_price(game.db.ch(pet_id));
+        let ch = game.db.ch_mut(chid);
+        ch.set_gold(ch.get_gold() - pet_price );
 
-        let pet = game.db.read_mobile(pet.get_mob_rnum(), REAL).unwrap();
+        let pet_id = game.db.read_mobile(game.db.ch(pet_id).get_mob_rnum(), REAL).unwrap();
+        let pet = game.db.ch_mut(pet_id);
         pet.set_exp(0);
         pet.set_aff_flags_bits(AFF_CHARM);
 
         if !pet_name.is_empty() {
-            let buf = format!("{} {}", pet.player.borrow().name, pet_name);
+            let buf = format!("{} {}", pet.player.name, pet_name);
 
-            pet.player.borrow_mut().name = buf;
-
+            game.db.ch_mut(pet_id).player.name = Rc::from(buf.as_str());
+            let pet = game.db.ch(pet_id);
             let buf = format!(
                 "{}A small sign on a chain around the neck says 'My name is {}'\r\n",
-                RefCell::borrow(&pet.player.borrow().description),
+                RefCell::borrow(&pet.player.description),
                 pet_name
             );
             /* free(pet->player.description); don't free the prototype! */
-            *RefCell::borrow_mut(&pet.player.borrow().description) = buf;
+            *RefCell::borrow_mut(&pet.player.description) = buf;
         }
-        game.db.char_to_room(&pet, ch.in_room());
-        add_follower(game, &pet, ch);
+        let ch = game.db.ch(chid);
+        game.db.char_to_room(pet_id, ch.in_room());
+        add_follower(game, pet_id, chid);
 
         /* Be certain that pets can't get/carry/use/wield/wear items */
+        let pet = game.db.ch_mut(pet_id);
         pet.set_is_carrying_w(1000);
         pet.set_is_carrying_n(100);
 
-        game.send_to_char(ch.id(), "May you enjoy your pet.\r\n");
+        game.send_to_char(chid, "May you enjoy your pet.\r\n");
         game.act(
             "$n buys $N as a pet.",
             false,
-            Some(ch.id()),
+            Some(chid),
             None,
-            Some(VictimRef::Char(&pet)),
+            Some(VictimRef::Char(pet_id)),
             TO_ROOM,
         );
 
@@ -926,35 +965,38 @@ pub fn pet_shops(
 *  Special procedures for objects                                     *
 ******************************************************************** */
 
-pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: &str) -> bool {
+pub fn bank(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
+    let ch = game.db.ch(chid);
+
     return if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {
             game.send_to_char(
-                ch,
+                chid,
                 format!("Your current balance is {} coins.\r\n", ch.get_bank_gold()).as_str(),
             );
         } else {
-            game.send_to_char(ch.id(), "You currently have no money deposited.\r\n");
+            game.send_to_char(chid, "You currently have no money deposited.\r\n");
         }
         true
     } else if cmd_is(cmd, "deposit") {
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
-            game.send_to_char(ch.id(), "How much do you want to deposit?\r\n");
+            game.send_to_char(chid, "How much do you want to deposit?\r\n");
             return true;
         }
         if ch.get_gold() < amount {
-            game.send_to_char(ch.id(), "You don't have that many coins!\r\n");
+            game.send_to_char(chid, "You don't have that many coins!\r\n");
             return true;
         }
+        let ch = game.db.ch_mut(chid);
         ch.set_gold(ch.get_gold() - amount);
         ch.set_bank_gold(ch.get_bank_gold() + amount);
-        game.send_to_char(ch.id(), format!("You deposit {} coins.\r\n", amount).as_str());
+        game.send_to_char(chid, format!("You deposit {} coins.\r\n", amount).as_str());
         game.act(
             "$n makes a bank transaction.",
             true,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,
@@ -964,20 +1006,21 @@ pub fn bank(game: &mut Game, ch: &Rc<CharData>, _me: MeRef, cmd: i32, argument: 
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
-            game.send_to_char(ch.id(), "How much do you want to withdraw?\r\n");
+            game.send_to_char(chid, "How much do you want to withdraw?\r\n");
             return true;
         }
         if ch.get_bank_gold() < amount {
-            game.send_to_char(ch.id(), "You don't have that many coins deposited!\r\n");
+            game.send_to_char(chid, "You don't have that many coins deposited!\r\n");
             return true;
         }
+        let ch = game.db.ch_mut(chid);
         ch.set_gold(ch.get_gold() + amount);
         ch.set_bank_gold(ch.get_bank_gold() - amount);
-        game.send_to_char(ch.id(), format!("You withdraw {} coins.\r\n", amount).as_str());
+        game.send_to_char(chid, format!("You withdraw {} coins.\r\n", amount).as_str());
         game.act(
             "$n makes a bank transaction.",
             true,
-            Some(ch.id()),
+            Some(chid),
             None,
             None,
             TO_ROOM,

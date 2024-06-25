@@ -18,7 +18,6 @@
 
 /* Names first */
 
-use std::cell::RefCell;
 use std::cmp::{max, min};
 
 use log::{error, info};
@@ -3453,7 +3452,7 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
  * the best 3 out of 4 rolls of a 6-sided die.  Each class then decides
  * which priority will be given for the best to worst stats.
  */
-pub fn roll_real_abils(ch: &CharData) {
+pub fn roll_real_abils(ch: &mut CharData) {
     let mut table: [u8; 6] = [0; 6];
     let mut rolls: [u8; 4] = [0; 4];
 
@@ -3474,56 +3473,56 @@ pub fn roll_real_abils(ch: &CharData) {
         }
     }
 
-    ch.real_abils.borrow_mut().str_add = 0;
+    ch.real_abils.str_add = 0;
 
     match ch.get_class() {
         CLASS_MAGIC_USER => {
-            ch.real_abils.borrow_mut().intel = table[0] as i8;
-            ch.real_abils.borrow_mut().wis = table[1] as i8;
-            ch.real_abils.borrow_mut().dex = table[2] as i8;
-            ch.real_abils.borrow_mut().str = table[3] as i8;
-            ch.real_abils.borrow_mut().con = table[4] as i8;
-            ch.real_abils.borrow_mut().cha = table[5] as i8;
+            ch.real_abils.intel = table[0] as i8;
+            ch.real_abils.wis = table[1] as i8;
+            ch.real_abils.dex = table[2] as i8;
+            ch.real_abils.str = table[3] as i8;
+            ch.real_abils.con = table[4] as i8;
+            ch.real_abils.cha = table[5] as i8;
         }
         CLASS_CLERIC => {
-            ch.real_abils.borrow_mut().wis = table[0] as i8;
-            ch.real_abils.borrow_mut().intel = table[1] as i8;
-            ch.real_abils.borrow_mut().str = table[2] as i8;
-            ch.real_abils.borrow_mut().dex = table[3] as i8;
-            ch.real_abils.borrow_mut().con = table[4] as i8;
-            ch.real_abils.borrow_mut().cha = table[5] as i8;
+            ch.real_abils.wis = table[0] as i8;
+            ch.real_abils.intel = table[1] as i8;
+            ch.real_abils.str = table[2] as i8;
+            ch.real_abils.dex = table[3] as i8;
+            ch.real_abils.con = table[4] as i8;
+            ch.real_abils.cha = table[5] as i8;
         }
         CLASS_THIEF => {
-            ch.real_abils.borrow_mut().dex = table[0] as i8;
-            ch.real_abils.borrow_mut().str = table[1] as i8;
-            ch.real_abils.borrow_mut().con = table[2] as i8;
-            ch.real_abils.borrow_mut().intel = table[3] as i8;
-            ch.real_abils.borrow_mut().wis = table[4] as i8;
-            ch.real_abils.borrow_mut().cha = table[5] as i8;
+            ch.real_abils.dex = table[0] as i8;
+            ch.real_abils.str = table[1] as i8;
+            ch.real_abils.con = table[2] as i8;
+            ch.real_abils.intel = table[3] as i8;
+            ch.real_abils.wis = table[4] as i8;
+            ch.real_abils.cha = table[5] as i8;
         }
         CLASS_WARRIOR => {
-            ch.real_abils.borrow_mut().str = table[0] as i8;
-            ch.real_abils.borrow_mut().dex = table[1] as i8;
-            ch.real_abils.borrow_mut().con = table[2] as i8;
-            ch.real_abils.borrow_mut().wis = table[3] as i8;
-            ch.real_abils.borrow_mut().intel = table[4] as i8;
-            ch.real_abils.borrow_mut().cha = table[5] as i8;
-            if ch.real_abils.borrow_mut().str == 18 {
-                ch.real_abils.borrow_mut().str_add = rand_number(0, 100) as i8;
+            ch.real_abils.str = table[0] as i8;
+            ch.real_abils.dex = table[1] as i8;
+            ch.real_abils.con = table[2] as i8;
+            ch.real_abils.wis = table[3] as i8;
+            ch.real_abils.intel = table[4] as i8;
+            ch.real_abils.cha = table[5] as i8;
+            if ch.real_abils.str == 18 {
+                ch.real_abils.str_add = rand_number(0, 100) as i8;
             }
         }
         _ => {}
     }
-    *ch.aff_abils.borrow_mut() = *ch.real_abils.borrow();
+    ch.aff_abils = ch.real_abils;
 }
 
 /* Some initializations for characters, including initial skills */
 pub fn do_start(game: &mut Game, chid: DepotId) {
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_level(1);
     ch.set_exp(1);
 
-    ch.set_title(Some("".to_string()));
+    ch.set_title(Some("".into()));
     roll_real_abils(ch);
 
     ch.set_max_hit(10);
@@ -3556,7 +3555,7 @@ pub fn do_start(game: &mut Game, chid: DepotId) {
         true,
         format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
     );
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_hit(ch.get_max_hit());
     ch.set_mana(ch.get_max_mana());
     ch.set_move(ch.get_max_move());
@@ -3575,7 +3574,7 @@ pub fn do_start(game: &mut Game, chid: DepotId) {
  * each class every time they gain a level.
  */
 pub fn advance_level(chid: DepotId, game: &mut Game) {
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;

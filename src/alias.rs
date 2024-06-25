@@ -33,7 +33,7 @@ pub fn write_aliases(ch: &CharData) {
         _ => (),
     }
 
-    if ch.player_specials.borrow().aliases.len() == 0 {
+    if ch.player_specials.aliases.len() == 0 {
         return;
     }
 
@@ -51,7 +51,7 @@ pub fn write_aliases(ch: &CharData) {
 
     let mut file = file.unwrap();
 
-    for temp in ch.player_specials.borrow().aliases.iter() {
+    for temp in ch.player_specials.aliases.iter() {
         let aliaslen = temp.alias.len();
         let repllen = temp.replacement.len();
 
@@ -67,7 +67,7 @@ pub fn write_aliases(ch: &CharData) {
     }
 }
 
-pub fn read_aliases(ch: &CharData) {
+pub fn read_aliases(ch: &mut CharData) {
     let mut xbuf = String::new();
     get_filename(&mut xbuf, ALIAS_FILE, &ch.get_name());
 
@@ -133,7 +133,7 @@ pub fn read_aliases(ch: &CharData) {
         }
         t2.type_ = r.unwrap();
         info!("adding alias");
-        ch.player_specials.borrow_mut().aliases.push(t2);
+        ch.player_specials.aliases.push(t2);
     }
 }
 

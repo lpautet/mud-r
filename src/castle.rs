@@ -186,7 +186,7 @@ fn member_of_royal_guard(db: &DB, ch: &CharData) -> bool {
 fn find_npc_by_name(db: &DB, ch_at: &CharData, name: &str) -> Option<DepotId> {
     db.world[ch_at.in_room() as usize]
         .peoples.iter()
-        .find(|e| db.ch(**e).is_npc() && db.ch(**e).player.borrow().short_descr.starts_with(name)).map(|e| *e)
+        .find(|e| db.ch(**e).is_npc() && db.ch(**e).player.short_descr.starts_with(name)).map(|e| *e)
 }
 
 /*
@@ -198,7 +198,7 @@ fn find_npc_by_name(db: &DB, ch_at: &CharData, name: &str) -> Option<DepotId> {
 fn find_guard(db: &DB, ch_at: &CharData) -> Option<DepotId> {
     db.world[ch_at.in_room() as usize]
         .peoples.iter()
-        .find(|e| db.ch(**e).fighting_id().is_none() && member_of_royal_guard(db, db.chr(**e))).map(|e| *e)
+        .find(|e| db.ch(**e).fighting_id().is_none() && member_of_royal_guard(db, db.ch(**e))).map(|e| *e)
 }
 
 /*
@@ -343,7 +343,7 @@ fn block_way(
         return false;
     }
 
-    if ch.player.borrow().short_descr.starts_with("King Welmar") {
+    if ch.player.short_descr.starts_with("King Welmar") {
         return false;
     }
 
@@ -394,7 +394,7 @@ fn is_trash(i: &ObjData) -> bool {
 fn fry_victim(game: &mut Game, chid: DepotId) {
     let ch = game.db.ch(chid);
     let db = &game.db;
-    if ch.points.borrow().mana < 10 {
+    if ch.points.mana < 10 {
         return;
     }
     let tchid = get_victim(db, ch);
@@ -463,7 +463,7 @@ fn fry_victim(game: &mut Game, chid: DepotId) {
         }
     }
 
-    game.db.ch_mut(chid).points.borrow_mut().mana -= 10;
+    game.db.ch_mut(chid).points.mana -= 10;
 
     return;
 }
@@ -542,7 +542,6 @@ pub fn king_welmar(
     if !game.db.king_welmar.move_ {
         return false;
     }
-    let ch = game.db.ch(chid);
     match game.db.king_welmar.path[game.db.king_welmar.path_index] as char {
         '0' | '1' | '2' | '3' | '4' | '5' => {
             perform_move(
@@ -567,6 +566,7 @@ pub fn king_welmar(
         'P' => {}
 
         'W' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
             game.act(
                 "$n awakens and stands up.",
@@ -579,6 +579,7 @@ pub fn king_welmar(
         }
 
         'S' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SLEEPING);
             game.act(
                 "$n lies down on $s beautiful bed and instantly falls asleep.",
@@ -591,6 +592,7 @@ pub fn king_welmar(
         }
 
         'r' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
             game.act(
                 "$n sits down on $s great throne.",
@@ -603,6 +605,7 @@ pub fn king_welmar(
         }
 
         's' => {
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
             game.act("$n stands up.", false, Some(chid), None, None, TO_ROOM);
         }
@@ -961,7 +964,7 @@ fn castle_twin_proc(
 
     if king_id.is_some() {
         let king_id = king_id.unwrap();
-        if ch.master.borrow().is_none() {
+        if ch.master.is_none() {
             do_follow(game, chid, "King Welmar", 0, 0); /* strcpy: OK */
             if game.db.ch(king_id).fighting_id().is_some() {
                 do_npc_rescue(game, chid, king_id);

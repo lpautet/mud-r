@@ -50,7 +50,7 @@ fn has_boat(game: &mut Game, chid: DepotId) -> bool {
 
     /* non-wearable boats in inventory will do it */
 
-    let list = ch.carrying.borrow().clone();
+    let list = ch.carrying.clone();
     for oid in list.iter() {
         if game.db.obj(*oid).get_obj_type() == ITEM_BOAT && (find_eq_pos(game, chid, *oid, "") < 0)
         {
@@ -120,7 +120,7 @@ pub fn perform_move(game: &mut Game, chid: DepotId, dir: i32, need_specials_chec
             game.send_to_char(chid, "It seems to be closed.\r\n");
         }
     } else {
-        if ch.followers.borrow().is_empty() {
+        if ch.followers.is_empty() {
             return do_simple_move(game, chid, dir, need_specials_check);
         }
 
@@ -130,7 +130,7 @@ pub fn perform_move(game: &mut Game, chid: DepotId, dir: i32, need_specials_chec
         }
 
         let ch = game.db.ch(chid);
-        let list = ch.followers.borrow().clone();
+        let list = ch.followers.clone();
         for k in list.iter() {
             let follower = game.db.ch(k.follower);
             if follower.in_room() == was_in && follower.get_pos() >= POS_STANDING {
@@ -165,8 +165,8 @@ pub fn do_simple_move(game: &mut Game, chid: DepotId, dir: i32, need_specials_ch
     /* charmed? */
     let ch = game.db.ch(chid);
     if ch.aff_flagged(AFF_CHARM)
-        && ch.master.borrow().is_some()
-        && ch.in_room() == game.db.ch(ch.master.borrow().unwrap()).in_room()
+        && ch.master.is_some()
+        && ch.in_room() == game.db.ch(ch.master.unwrap()).in_room()
     {
         game.send_to_char(
             chid,
@@ -206,7 +206,7 @@ pub fn do_simple_move(game: &mut Game, chid: DepotId, dir: i32, need_specials_ch
         / 2;
 
     if ch.get_move() < need_movement as i16 && !ch.is_npc() {
-        if need_specials_check && ch.master.borrow().is_some() {
+        if need_specials_check && ch.master.is_some() {
             game.send_to_char(chid, "You are too exhausted to follow.\r\n");
         } else {
             game.send_to_char(chid, "You are too exhausted.\r\n");
@@ -255,9 +255,10 @@ pub fn do_simple_move(game: &mut Game, chid: DepotId, dir: i32, need_specials_ch
 
     /* Now we know we're allow to go into the room. */
     if ch.get_level() < LVL_IMMORT as u8 && !ch.is_npc() {
+        let ch = game.db.ch_mut(chid);
         ch.incr_move(-need_movement as i16);
     }
-
+    let ch = game.db.ch(chid);
     if !ch.aff_flagged(AFF_SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
         game.act(buf2.as_str(), true, Some(chid), None, None, TO_ROOM);
@@ -381,7 +382,7 @@ fn find_door(game: &mut Game, chid: DepotId, type_: &str, dir: &str, cmdname: &s
 }
 
 fn has_key(db: &DB, ch: &CharData, key: ObjVnum) -> bool {
-    for o in ch.carrying.borrow().iter() {
+    for o in ch.carrying.iter() {
         if db.get_obj_vnum(db.obj(*o)) == key {
             return true;
         }
@@ -493,7 +494,7 @@ fn do_doorcmd(
                 .map(|e| e.to_room);
             back_to_room.is_some()
         } {
-            if back_to_room.unwrap() != ch.in_room.get() {
+            if back_to_room.unwrap() != ch.in_room {
                 back_to_room = None;
             }
             back_keyword = game.db.world[other_room as usize].dir_option
@@ -884,7 +885,7 @@ pub fn do_stand(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             /* Will be sitting after a successful bash and may still be fighting. */
             ch.set_pos(if ch.fighting_id().is_some() {
                 POS_FIGHTING
@@ -902,7 +903,7 @@ pub fn do_stand(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
         }
         POS_SLEEPING => {
@@ -924,7 +925,7 @@ pub fn do_stand(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
         }
     }
@@ -936,7 +937,7 @@ pub fn do_sit(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _sub
         POS_STANDING => {
             game.send_to_char(chid, "You sit down.\r\n");
             game.act("$n sits down.", false, Some(chid), None, None, TO_ROOM);
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
         }
         POS_SITTING => {
@@ -952,7 +953,7 @@ pub fn do_sit(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _sub
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
         }
         POS_SLEEPING => {
@@ -971,7 +972,7 @@ pub fn do_sit(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _sub
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
         }
     }
@@ -990,13 +991,13 @@ pub fn do_rest(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _su
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_RESTING);
         }
         POS_SITTING => {
             game.send_to_char(chid, "You rest your tired bones.\r\n");
             game.act("$n rests.", true, Some(chid), None, None, TO_ROOM);
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_RESTING);
         }
         POS_RESTING => {
@@ -1021,7 +1022,7 @@ pub fn do_rest(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _su
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
         }
     }
@@ -1040,7 +1041,7 @@ pub fn do_sleep(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SLEEPING);
         }
         POS_SLEEPING => {
@@ -1062,7 +1063,7 @@ pub fn do_sleep(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
                 None,
                 TO_ROOM,
             );
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_pos(POS_SLEEPING);
         }
     }
@@ -1129,7 +1130,7 @@ pub fn do_wake(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                 Some(VictimRef::Char(vict_id.unwrap())),
                 TO_VICT | TO_SLEEP,
             );
-            game.db.ch(vict_id.unwrap()).set_pos(POS_SITTING);
+            game.db.ch_mut(vict_id.unwrap()).set_pos(POS_SITTING);
         }
         if !self_ {
             return;
@@ -1143,7 +1144,7 @@ pub fn do_wake(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
     } else {
         game.send_to_char(chid, "You awaken, and sit up.\r\n");
         game.act("$n awakens.", true, Some(chid), None, None, TO_ROOM);
-        let ch = game.db.ch(chid);
+        let ch = game.db.ch_mut(chid);
         ch.set_pos(POS_SITTING);
     }
 }
@@ -1167,7 +1168,7 @@ pub fn do_follow(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
         return;
     }
 
-    if ch.master.borrow().is_some() && ch.master.borrow().unwrap() == leader.unwrap() {
+    if ch.master.is_some() && ch.master.unwrap() == leader.unwrap() {
         game.act(
             "You are already following $M.",
             false,
@@ -1178,8 +1179,8 @@ pub fn do_follow(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
         );
         return;
     }
-    if ch.aff_flagged(AFF_CHARM) && (ch.master.borrow().is_some()) {
-        let master_id = ch.master.borrow().unwrap();
+    if ch.aff_flagged(AFF_CHARM) && (ch.master.is_some()) {
+        let master_id = ch.master.unwrap();
         game.act(
             "But you only feel like following $N!",
             false,
@@ -1191,20 +1192,20 @@ pub fn do_follow(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
     } else {
         /* Not Charmed follow person */
         if leader.unwrap() == chid {
-            if ch.master.borrow().is_none() {
+            if ch.master.is_none() {
                 game.send_to_char(chid, "You are already following yourself.\r\n");
                 return;
             }
             game.stop_follower(chid);
         } else {
-            if circle_follow(chid, leader) {
+            if circle_follow(&game.db, chid, leader) {
                 game.send_to_char(chid, "Sorry, but following in loops is not allowed.\r\n");
                 return;
             }
-            if ch.master.borrow().is_some() {
+            if ch.master.is_some() {
                 game.stop_follower(chid);
             }
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.remove_aff_flags(AFF_GROUP);
 
             add_follower(game, chid, leader.unwrap());

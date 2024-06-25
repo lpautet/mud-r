@@ -9,6 +9,7 @@
 *  Rust port Copyright (C) 2023 Laurent Pautet                            *
 ************************************************************************ */
 use std::cmp::{max, min};
+use std::rc::Rc;
 
 use crate::class::{advance_level, level_exp, title_female, title_male};
 use crate::config::{
@@ -181,7 +182,7 @@ pub fn move_gain(ch: &CharData) -> u8 {
     gain
 }
 
-pub fn set_title(ch: &CharData, title: Option<String>) {
+pub fn set_title(ch: &mut CharData, title: Option<String>) {
     let mut title = title;
     if title.is_none() || title.clone().unwrap().is_empty() {
         if ch.get_sex() == SEX_FEMALE {
@@ -191,7 +192,7 @@ pub fn set_title(ch: &CharData, title: Option<String>) {
         }
     }
 
-    ch.set_title(title.clone());
+    ch.set_title(title.map(|t| Rc::from(t.as_str())));
 }
 
 // void run_autowiz(void)
@@ -230,18 +231,20 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game) {
     }
 
     if ch.is_npc() {
+        let ch = game.db.ch_mut(chid);
         ch.set_exp(ch.get_exp() + gain);
     }
 
     if gain > 0 {
         let gain = min(MAX_EXP_GAIN, gain); /* put a cap on the max gain per kill */
+        let ch = game.db.ch_mut(chid);
         ch.set_exp(ch.get_exp() + gain);
         while {
             let ch = game.db.ch(chid);
             ch.get_level() < (LVL_IMMORT - IMMORT_LEVEL_OK) as u8
                 && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
         } {
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_level(ch.get_level() + 1);
 
             num_levels += 1;
@@ -271,7 +274,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game) {
                     chid,
                     format!("You rise {} levels!\r\n", num_levels).as_str(),
                 );
-                let ch = game.db.ch(chid);
+                let ch = game.db.ch_mut(chid);
                 set_title(ch, None);
                 let ch = game.db.ch(chid);
                 if ch.get_level() >= LVL_IMMORT as u8 {
@@ -282,6 +285,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game) {
         }
     } else if gain < 0 {
         let gain = max(-MAX_EXP_LOSS, gain); /* Cap max exp lost per death */
+        let ch = game.db.ch_mut(chid);
         ch.set_exp(ch.get_exp() + gain);
         if ch.get_exp() < 0 {
             ch.set_exp(0);
@@ -290,7 +294,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game) {
 }
 
 pub fn gain_exp_regardless(game: &mut Game, chid: DepotId, gain: i32) {
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
 
@@ -305,7 +309,7 @@ pub fn gain_exp_regardless(game: &mut Game, chid: DepotId, gain: i32) {
             ch.get_level() < LVL_IMPL as u8
                 && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
         } {
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             ch.set_level(ch.get_level() + 1);
             num_levels += 1;
             advance_level(chid, game);
@@ -335,7 +339,7 @@ pub fn gain_exp_regardless(game: &mut Game, chid: DepotId, gain: i32) {
                     format!("You rise {} levels!\r\n", num_levels).as_str(),
                 );
             }
-            let ch = game.db.ch(chid);
+            let ch = game.db.ch_mut(chid);
             set_title(ch, None);
             if ch.get_level() >= LVL_IMMORT as u8 {
                 // TODO run_autowiz();
@@ -346,7 +350,7 @@ pub fn gain_exp_regardless(game: &mut Game, chid: DepotId, gain: i32) {
 
 impl Game {
     pub(crate) fn gain_condition(&mut self, chid: DepotId, condition: i32, value: i32) {
-        let ch = self.db.ch(chid);
+        let ch = self.db.ch_mut(chid);
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
             return;
@@ -381,14 +385,14 @@ impl Game {
     }
 
     fn check_idling(&mut self, chid: DepotId) {
-        let ch = self.db.ch(chid);
+        let ch = self.db.ch_mut(chid);
         ch.char_specials
-            .borrow()
-            .timer
-            .set(ch.char_specials.borrow().timer.get() + 1);
-        if ch.char_specials.borrow().timer.get() > IDLE_VOID {
+            .timer += 1;
+        if ch.char_specials.timer > IDLE_VOID {
             if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
-                ch.set_was_in(ch.in_room());
+                let ch_in_room = ch.in_room();
+                self.db.ch_mut(chid).set_was_in(ch_in_room);
+                let ch = self.db.ch(chid);
                 if ch.fighting_id().is_some() {
                     self.db.stop_fighting(ch.fighting_id().unwrap());
                     self.db.stop_fighting(chid);
@@ -406,14 +410,14 @@ impl Game {
                 crash_crashsave(&mut self.db, chid);
                 self.db.char_from_room(chid);
                 self.db.char_to_room(chid, 1);
-            } else if ch.char_specials.borrow().timer.get() > IDLE_RENT_TIME {
+            } else if ch.char_specials.timer > IDLE_RENT_TIME {
                 if ch.in_room() != NOWHERE {
                     self.db.char_from_room(chid);
                 }
                 self.db.char_to_room(chid, 3);
                 let ch = self.db.ch(chid);
-                if ch.desc.borrow().is_some() {
-                    let desc_id = ch.desc.borrow().unwrap();
+                if ch.desc.is_some() {
+                    let desc_id = ch.desc.unwrap();
                     self.desc_mut(desc_id)
                         .set_state(ConDisconnect);
 
@@ -422,10 +426,10 @@ impl Game {
                      * -gg 3/1/98 (Happy anniversary.)
                      */
                     let ch = self.db.ch(chid);
-                    let desc_id = ch.desc.borrow().unwrap();
+                    let desc_id = ch.desc.unwrap();
                     self.desc_mut(desc_id).character = None;
-                    let ch = self.db.ch(chid);
-                    *ch.desc.borrow_mut() = None;
+                    let ch = self.db.ch_mut(chid);
+                    ch.desc = None;
                 }
                 if FREE_RENT {
                     crash_rentsave(self, chid, 0);
@@ -451,7 +455,7 @@ impl Game {
             self.gain_condition(i_id, FULL, -1);
             self.gain_condition(i_id, DRUNK, -1);
             self.gain_condition(i_id, THIRST, -1);
-            let i = self.db.ch(i_id);
+            let i = self.db.ch_mut(i_id);
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
@@ -461,7 +465,7 @@ impl Game {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }
                 }
-                let i = self.db.ch(i_id);
+                let i = self.db.ch_mut(i_id);
                 if i.get_pos() <= POS_STUNNED {
                     update_pos(i);
                 }

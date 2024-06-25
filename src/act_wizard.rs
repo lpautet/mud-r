@@ -866,9 +866,9 @@ fn do_stat_object(game: &mut Game, chid: DepotId, oid: DepotId) {
         format!(
             "Carried by: {}, ",
             if game.db.obj(oid).carried_by.is_some() {
-                game.db.ch(game.db.obj(oid).carried_by.unwrap()).get_name()
+                game.db.ch(game.db.obj(oid).carried_by.unwrap()).get_name().as_ref()
             } else {
-                Rc::from("Nobody")
+                "Nobody"
             }
         )
         .as_str(),
@@ -878,9 +878,9 @@ fn do_stat_object(game: &mut Game, chid: DepotId, oid: DepotId) {
         format!(
             "Worn by: {}\r\n",
             if game.db.obj(oid).worn_by.is_some() {
-                game.db.ch(game.db.obj(oid).worn_by.unwrap()).get_name()
+                game.db.ch(game.db.obj(oid).worn_by.unwrap()).get_name().as_ref()
             } else {
-                Rc::from("Nobody")
+                "Nobody"
             }
         )
         .as_str(),
@@ -1122,7 +1122,7 @@ fn do_stat_character(game: &mut Game, chid: DepotId, k_id: DepotId) {
             chid,
             format!(
                 "Alias: {}, VNum: [{:5}], RNum: [{:5}]\r\n",
-                k.player.borrow().name,
+                k.player.name,
                 game.db.get_mob_vnum(k),
                 k.get_mob_rnum()
             )
@@ -1130,24 +1130,26 @@ fn do_stat_character(game: &mut Game, chid: DepotId, k_id: DepotId) {
         );
     }
     let k = game.db.ch(k_id);
-    let mut title = "<None>".to_string();
-    let mut long_descr = "<None>".to_string();
+    let mut title = &Rc::from("<None>");
+    let mut long_descr = &Rc::from("<None>");
     {
-        let player = k.player.borrow();
+        let player = &k.player;
         if player.title.is_some() {
-            title = player.title.as_ref().unwrap().clone();
+            title = player.title.as_ref().unwrap();
         }
         if !player.long_descr.is_empty() {
-            long_descr = player.long_descr.clone();
+            long_descr = &player.long_descr;
         }
     }
-    game.send_to_char(chid, format!("Title: {}\r\n", title).as_str());
+    let messg_title = format!("Title: {}\r\n", title);
+    let messg_descr = format!("L-Des: {}", long_descr);
 
-    game.send_to_char(chid, format!("L-Des: {}", long_descr).as_str());
+    game.send_to_char(chid, messg_title.as_str());
+    game.send_to_char(chid, messg_descr.as_str());
     let k = game.db.ch(k_id);
     buf.clear();
     sprinttype(
-        k.player.borrow().chclass as i32,
+        k.player.chclass as i32,
         if k.is_npc() {
             &NPC_CLASS_TYPES
         } else {
@@ -1176,16 +1178,16 @@ fn do_stat_character(game: &mut Game, chid: DepotId, k_id: DepotId) {
     let k = game.db.ch(k_id);
 
     if !k.is_npc() {
-        let buf1 = ctime(k.player.borrow().time.birth);
-        let buf2 = ctime(k.player.borrow().time.logon);
+        let buf1 = ctime(k.player.time.birth);
+        let buf2 = ctime(k.player.time.logon);
         game.send_to_char(
             chid,
             format!(
                 "Created: [{}], Last Logon: [{}], Played [{}h {}m], Age [{}]\r\n",
                 buf1,
                 buf2,
-                k.player.borrow().time.played / 3600,
-                ((k.player.borrow().time.played % 3600) / 60),
+                k.player.time.played / 3600,
+                ((k.player.time.played % 3600) / 60),
                 age(k).year
             )
             .as_str(),
@@ -1195,7 +1197,7 @@ fn do_stat_character(game: &mut Game, chid: DepotId, k_id: DepotId) {
             chid,
             format!(
                 "Hometown: [{}], Speaks: [{}/{}/{}], (STL[{}]/per[{}]/NSTL[{}])\r\n",
-                k.player.borrow().hometown,
+                k.player.hometown,
                 k.get_talk_mut(0),
                 k.get_talk_mut(1),
                 k.get_talk_mut(2),
@@ -1296,9 +1298,9 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             "Pos: {}, Fighting: {}",
             buf,
             if k.fighting_id().is_some() {
-                game.db.ch(k.fighting_id().unwrap()).get_name()
+                game.db.ch(k.fighting_id().unwrap()).get_name().as_ref()
             } else {
-                Rc::from("Nobody")
+                "Nobody"
             }
         )
         .as_str(),
@@ -1315,10 +1317,10 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         );
     }
     let k = game.db.ch(k_id);
-    if k.desc.borrow().is_some() {
+    if k.desc.is_some() {
         buf.clear();
         sprinttype(
-            game.descriptor_list.get(k.desc.borrow().unwrap()).state() as i32,
+            game.descriptor_list.get(k.desc.unwrap()).state() as i32,
             &CONNECTED_TYPES,
             &mut buf,
         );
@@ -1348,7 +1350,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             chid,
             format!(
                 ", Idle Timer (in tics) [{}]\r\n",
-                k.char_specials.borrow().timer.get()
+                k.char_specials.timer
             )
             .as_str(),
         );
@@ -1393,7 +1395,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             "Carried: weight: {}, items: {}; Items in: inventory: {}, ",
             k.is_carrying_w(),
             k.is_carrying_n(),
-            k.carrying.borrow().len()
+            k.carrying.len()
         )
         .as_str(),
     );
@@ -1424,20 +1426,20 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         chid,
         format!(
             "Master is: {}, Followers are:",
-            if k.master.borrow().is_some() {
-                game.db.ch(k.master.borrow().unwrap()).get_name()
+            if k.master.is_some() {
+                game.db.ch(k.master.unwrap()).get_name().as_ref()
             } else {
-                Rc::from("<none>")
+                "<none>"
             }
         )
         .as_str(),
     );
     let k = game.db.ch(k_id);
-    if k.followers.borrow().is_empty() {
+    if k.followers.is_empty() {
         game.send_to_char(chid, " <none>\r\n");
     } else {
         let mut found = 0;
-        let list = k.followers.borrow().clone();
+        let list = k.followers.clone();
         for (i, fol) in list.iter().enumerate() {
             let ch = game.db.ch(chid);
             column += game.send_to_char(
@@ -1454,7 +1456,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             if column >= 62 {
                 let msg = format!(
                     "{}\r\n",
-                    if i < k.followers.borrow().len() - 1 {
+                    if i < k.followers.len() - 1 {
                         ","
                     } else {
                         ""
@@ -1482,8 +1484,8 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
     /* Routine to show what spells a char is affected by */
     let k = game.db.ch(k_id);
-    if k.affected.borrow().len() != 0 {
-        let list = k.affected.borrow().clone();
+    if k.affected.len() != 0 {
+        let list = k.affected.clone();
         for aff in list {
             let ch = game.db.ch(chid);
             game.send_to_char(
@@ -1579,7 +1581,7 @@ pub fn do_stat(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
             clear_char(&mut victim);
             if game.db.load_char(&buf2, &mut tmp_store).is_some() {
                 store_to_char(&tmp_store, &mut victim);
-                victim.player.borrow_mut().time.logon = tmp_store.last_logon;
+                victim.player.time.logon = tmp_store.last_logon;
                 let victim = Rc::new(victim);
                 game.db.char_to_room(victim_id.unwrap(), 0);
                 let ch = game.db.ch(chid);
@@ -1618,7 +1620,7 @@ pub fn do_stat(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
         } {
             do_stat_object(game, chid, oid.unwrap());
         } else if {
-            oid = game.get_obj_in_list_vis(ch, &name, Some(&mut number), &ch.carrying.borrow());
+            oid = game.get_obj_in_list_vis(ch, &name, Some(&mut number), &ch.carrying);
             oid.is_some()
         } {
             do_stat_object(game, chid, oid.unwrap());
@@ -1695,10 +1697,10 @@ pub fn snoop_check(game: &mut Game, chid: DepotId) {
      *  not be snooping/snooped someone of a higher/lower level (and
      *  thus, not entitled to be snooping.
      */
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
-    let d_id = ch.desc.borrow().unwrap();
+    let d_id = ch.desc.unwrap();
     if game.desc(d_id).snooping.is_some()
         && game
             .db
@@ -1731,15 +1733,15 @@ pub fn snoop_check(game: &mut Game, chid: DepotId) {
 fn stop_snooping(game: &mut Game, chid: DepotId) {
     let ch = game.db.ch(chid);
 
-    if game.desc(ch.desc.borrow().unwrap()).snooping.is_none() {
+    if game.desc(ch.desc.unwrap()).snooping.is_none() {
         game.send_to_char(chid, "You aren't snooping anyone.\r\n");
     } else {
         game.send_to_char(chid, "You stop snooping.\r\n");
         let ch = game.db.ch(chid);
-        let desc_id = game.desc(ch.desc.borrow().unwrap()).snooping.unwrap();
+        let desc_id = game.desc(ch.desc.unwrap()).snooping.unwrap();
         game.desc_mut(desc_id).snoop_by = None;
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).snooping = None;
     }
 }
@@ -1749,7 +1751,7 @@ pub fn do_snoop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 
     let mut arg = String::new();
 
-    if ch.desc.borrow().is_none() {
+    if ch.desc.is_none() {
         return;
     }
 
@@ -1767,31 +1769,31 @@ pub fn do_snoop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         victim.is_none()
     } {
         game.send_to_char(chid, "No such person around.\r\n");
-    } else if victim.as_ref().unwrap().desc.borrow().is_none() {
+    } else if victim.as_ref().unwrap().desc.is_none() {
         game.send_to_char(chid, "There's no link.. nothing to snoop.\r\n");
     } else if victim_id.unwrap() == chid {
         stop_snooping(game, chid);
     } else if game
-        .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+        .desc(victim.as_ref().unwrap().desc.unwrap())
         .snoop_by
         .is_some()
     {
         game.send_to_char(chid, "Busy already. \r\n");
     } else if game
-        .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+        .desc(victim.as_ref().unwrap().desc.unwrap())
         .snooping
         .unwrap()
-        == ch.desc.borrow().unwrap()
+        == ch.desc.unwrap()
     {
         game.send_to_char(chid, "Don't be stupid.\r\n");
     } else {
         if game
-            .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+            .desc(victim.as_ref().unwrap().desc.unwrap())
             .original
             .is_some()
         {
             voriginal_id = game
-                .desc(victim.as_ref().unwrap().desc.borrow().unwrap())
+                .desc(victim.as_ref().unwrap().desc.unwrap())
                 .original;
             tch_id = voriginal_id;
             tch = tch_id.map(|v| game.db.ch(v));
@@ -1805,15 +1807,15 @@ pub fn do_snoop(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         }
         game.send_to_char(chid, OK);
         let ch = game.db.ch(chid);
-        if game.desc(ch.desc.borrow().unwrap()).snooping.is_some() {
-            let desc_id = ch.desc.borrow().unwrap();
+        if game.desc(ch.desc.unwrap()).snooping.is_some() {
+            let desc_id = ch.desc.unwrap();
             let snooping_desc_id = game.desc(desc_id).snooping.unwrap();
             game.desc_mut(snooping_desc_id).snoop_by = None;
         }
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         let victim = victim_id.map(|v| game.db.ch(v));
-        let new_snooping = Some(victim.as_ref().unwrap().desc.borrow().unwrap()).clone();
+        let new_snooping = Some(victim.as_ref().unwrap().desc.unwrap()).clone();
         game.desc_mut(desc_id).snooping = new_snooping;
     }
 }
@@ -1826,7 +1828,7 @@ pub fn do_switch(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
     one_argument(argument, &mut arg);
     let victim;
     let victim_id;
-    if game.desc(ch.desc.borrow().unwrap()).original.is_some() {
+    if game.desc(ch.desc.unwrap()).original.is_some() {
         game.send_to_char(chid, "You're already switched.\r\n");
     } else if arg.is_empty() {
         game.send_to_char(chid, "Switch with who?\r\n");
@@ -1838,7 +1840,7 @@ pub fn do_switch(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
         game.send_to_char(chid, "No such character.\r\n");
     } else if chid == victim_id.unwrap() {
         game.send_to_char(chid, "Hee hee... we are jolly funny today, eh?\r\n");
-    } else if victim.as_ref().unwrap().desc.borrow().is_some() {
+    } else if victim.as_ref().unwrap().desc.is_some() {
         game.send_to_char(chid, "You can't do that, the body is already in use!\r\n");
     } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
         game.send_to_char(chid, "You aren't holy enough to use a mortal's body.\r\n");
@@ -1862,22 +1864,24 @@ pub fn do_switch(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
     } else {
         game.send_to_char(chid, OK);
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).character = victim_id;
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).original = Some(chid);
         let ch = game.db.ch(chid);
-        let victim = victim_id.map(|v| game.db.ch(v));
-        *victim.as_ref().unwrap().desc.borrow_mut() = ch.desc.borrow().clone();
-        *ch.desc.borrow_mut() = None;
+        let val = ch.desc.clone();
+        let mut victim = victim_id.map(|v| game.db.ch_mut(v));
+        victim.as_mut().unwrap().desc = val;
+        let ch = game.db.ch_mut(chid);
+        ch.desc = None;
     }
 }
 
 pub fn do_return(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = game.db.ch(chid);
 
-    if ch.desc.borrow().is_some() && game.desc(ch.desc.borrow().unwrap()).original.is_some() {
+    if ch.desc.is_some() && game.desc(ch.desc.unwrap()).original.is_some() {
         game.send_to_char(chid, "You return to your original body.\r\n");
         let ch = game.db.ch(chid);
         /*
@@ -1891,14 +1895,14 @@ pub fn do_return(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _
          */
         if game
             .db
-            .ch(game.desc(ch.desc.borrow().unwrap()).original.unwrap())
+            .ch(game.desc(ch.desc.unwrap()).original.unwrap())
             .desc
             .borrow()
             .is_some()
         {
             let dorig_id = game
                 .db
-                .ch(game.desc(ch.desc.borrow().unwrap()).original.unwrap())
+                .ch(game.desc(ch.desc.unwrap()).original.unwrap())
                 .desc
                 .borrow()
                 .unwrap();
@@ -1908,20 +1912,21 @@ pub fn do_return(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _
 
         /* Now our descriptor points to our original body. */
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).character = game.desc(desc_id).original.clone();
         let ch = game.db.ch(chid);
-        let desc_id = ch.desc.borrow().unwrap();
+        let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).original = None;
 
         /* And our body's pointer to descriptor now points to our descriptor. */
         let ch = game.db.ch(chid);
-        *game
+        game
             .db
-            .ch(game.desc(ch.desc.borrow().unwrap()).character.unwrap())
+            .ch_mut(game.desc(ch.desc.unwrap()).character.unwrap())
             .desc
-            .borrow_mut() = ch.desc.borrow().clone();
-        *ch.desc.borrow_mut() = None;
+          = ch.desc.clone();
+          let ch = game.db.ch_mut(chid);
+        ch.desc = None;
     }
 }
 
@@ -2110,14 +2115,14 @@ pub fn do_purge(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
                 );
                 let vict = game.db.ch(vict_id);
-                if vict.desc.borrow().is_some() {
-                    let desc_id = vict.desc.borrow().unwrap();
+                if vict.desc.is_some() {
+                    let desc_id = vict.desc.unwrap();
                     game.desc_mut(desc_id).set_state(ConClose);
                     let vict = game.db.ch(vict_id);
-                    let desc_id = vict.desc.borrow().unwrap();
+                    let desc_id = vict.desc.unwrap();
                     game.desc_mut(desc_id).character = None;
-                    let vict = game.db.ch(vict_id);
-                    *vict.desc.borrow_mut() = None;
+                    let vict = game.db.ch_mut(vict_id);
+                    vict.desc = None;
                 }
             }
             game.db.extract_char(vict_id);
@@ -2162,20 +2167,24 @@ pub fn do_purge(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         let ch = game.db.ch(chid);
         let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
         for vict_id in list {
-            let vict = game.db.chr(vict_id).clone();
+            let vict = game.db.ch(vict_id).clone();
             if !vict.is_npc() {
                 continue;
             }
 
             /* Dump inventory. */
-            while vict.carrying.borrow().len() > 0 {
-                game.extract_obj(vict.carrying.borrow()[0]);
+            while { let vict = game.db.ch(vict_id); vict.carrying.len() > 0 } {
+                let vict = game.db.ch(vict_id).clone();
+                let oid = vict.carrying[0];
+                game.extract_obj(oid);
             }
 
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
+                let vict = game.db.ch(vict_id).clone();
                 if vict.get_eq(i).is_some() {
-                    game.extract_obj(vict.get_eq(i).unwrap())
+                    let oid = vict.get_eq(i).unwrap();
+                    game.extract_obj(oid)
                 }
             }
 
@@ -2228,6 +2237,7 @@ pub fn do_syslog(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
         return;
     }
     let tp = tp.unwrap();
+    let ch = game.db.ch_mut(chid);
     ch.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
     ch.set_prf_flags_bits(PRF_LOG1 * (tp & 1) as i64 | PRF_LOG2 * (tp & 2) as i64 >> 1);
 
@@ -2296,7 +2306,7 @@ pub fn do_advance(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
     let oldlevel = victim.get_level();
     if newlevel < oldlevel {
         do_start(game, victim_id);
-        let victim = game.db.ch(victim_id);
+        let victim = game.db.ch_mut(victim_id);
         victim.set_level(newlevel);
         let victim = game.db.ch(victim_id);
         game.send_to_char(
@@ -2350,7 +2360,7 @@ You feel slightly different.",
         /* If they are no longer an immortal, let's remove some of the
          * nice immortal only flags, shall we?
          */
-        let victim = game.db.ch(victim_id);
+        let victim = game.db.ch_mut(victim_id);
         victim.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
         victim.remove_prf_flags_bits(PRF_NOHASSLE | PRF_HOLYLIGHT);
 
@@ -2386,30 +2396,35 @@ pub fn do_restore(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         game.send_to_char(chid, "They don't need your help.\r\n");
     } else {
         let vict_id = vict_id.unwrap();
-        let vict = game.db.ch(vict_id);
+        let vict = game.db.ch_mut(vict_id);
         vict.set_hit(vict.get_max_hit());
         vict.set_mana(vict.get_max_mana());
         vict.set_move(vict.get_move());
-
+        let ch = game.db.ch(chid);
+        let vict = game.db.ch(vict_id);
         if !vict.is_npc() && ch.get_level() >= LVL_GRGOD as u8 {
             if vict.get_level() >= LVL_IMMORT as u8 {
                 for i in 1..MAX_SKILLS + 1 {
+                    let vict = game.db.ch_mut(vict_id);
                     vict.set_skill(i as i32, 100);
                 }
             }
 
+        let vict = game.db.ch(vict_id);
             if vict.get_level() >= LVL_GRGOD as u8 {
-                vict.real_abils.borrow_mut().str_add = 100;
-                vict.real_abils.borrow_mut().intel = 25;
-                vict.real_abils.borrow_mut().wis = 25;
-                vict.real_abils.borrow_mut().dex = 25;
-                vict.real_abils.borrow_mut().str = 25;
-                vict.real_abils.borrow_mut().con = 25;
-                vict.real_abils.borrow_mut().cha = 25;
+                let vict = game.db.ch_mut(vict_id);
+                vict.real_abils.str_add = 100;
+                vict.real_abils.intel = 25;
+                vict.real_abils.wis = 25;
+                vict.real_abils.dex = 25;
+                vict.real_abils.str = 25;
+                vict.real_abils.con = 25;
+                vict.real_abils.cha = 25;
             }
         }
+        let vict = game.db.ch_mut(vict_id);
         update_pos(vict);
-        game.db.affect_total(vict);
+        game.db.affect_total(vict_id);
         game.send_to_char(chid, OK);
         game.act(
             "You have been fully healed by $N!",
@@ -2428,6 +2443,7 @@ pub fn perform_immort_vis(game: &mut Game, chid: DepotId) {
         game.send_to_char(chid, "You are already fully visible.\r\n");
         return;
     }
+    let ch = game.db.ch_mut(chid);
 
     ch.set_invis_lev(0);
 
@@ -2468,7 +2484,7 @@ fn perform_immort_invis(game: &mut Game, chid: DepotId, level: i32) {
             );
         }
     }
-    let ch: &CharData = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     ch.set_invis_lev(level as i16);
     game.send_to_char(
         chid,
@@ -2518,7 +2534,7 @@ pub fn do_gecho(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 && game.desc(pt_id).character.borrow().is_some()
                 && game.desc(pt_id).character.borrow().unwrap() != chid
             {
-                let ch = game.desc(pt_id).character.as_ref().map(|e| *e);
+                let chid = game.desc(pt_id).character.unwrap();
                 game.send_to_char(chid, format!("{}\r\n", argument).as_str());
             }
         }
@@ -2532,11 +2548,11 @@ pub fn do_gecho(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 }
 
 pub fn do_poofset(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
-    let ch = game.db.ch(chid);
+    let ch = game.db.ch_mut(chid);
     {
         let msg;
 
-        let mut cps = ch.player_specials.borrow_mut();
+        let cps = &mut ch.player_specials;
         match subcmd {
             SCMD_POOFIN => {
                 msg = &mut cps.poofin;
@@ -2989,7 +3005,7 @@ pub fn do_wiznet(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
         );
     }
     for d_id in game.descriptor_list.ids() {
-        if game.desc(d_id).state() == ConPlaying
+        if { let ch = game.db.ch(chid); game.desc(d_id).state() == ConPlaying
             && game.db.ch(game.desc(d_id).character.unwrap()).get_level() >= level as u8
             && !game
                 .db
@@ -2999,24 +3015,26 @@ pub fn do_wiznet(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                 .db
                 .ch(game.desc(d_id).character.borrow().unwrap())
                 .plr_flagged(PLR_WRITING | PLR_MAILING)
-            && d_id == ch.desc.borrow().unwrap()
+            && d_id == ch.desc.unwrap()
             || !game
                 .db
                 .ch(game.desc(d_id).character.borrow().unwrap())
                 .prf_flagged(PRF_NOREPEAT)
-        {
+        } {
             let chid = game.desc(d_id).character.borrow().as_ref().unwrap().clone();
             game.send_to_char(
                 chid,
-                CCCYN!(game.desc(d_id).character.borrow().as_ref().unwrap(), C_NRM),
+                CCCYN!(game.db.ch(game.desc(d_id).character.borrow().unwrap()), C_NRM),
             );
             let dc_id = game.desc(d_id).character.unwrap();
             let dc = game.db.ch(dc_id);
+            let ch = game.db.ch(chid);
             if game.can_see(dc, ch) {
                 game.send_to_char(dc_id, &buf1);
             } else {
                 game.send_to_char(dc_id, &buf2);
             }
+            let dc = game.db.ch(dc_id);
             game.send_to_char(dc_id, CCNRM!(dc, C_NRM));
         }
     }
@@ -3120,9 +3138,10 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
         match subcmd {
             SCMD_REROLL => {
                 game.send_to_char(chid, "Rerolled...\r\n");
+                let vict = game.db.ch_mut(vict_id);
+                roll_real_abils(vict);
                 let ch = game.db.ch(chid);
                 let vict = game.db.ch(vict_id);
-                roll_real_abils(vict);
                 info!("(GC) {} has rerolled {}.", ch.get_name(), vict.get_name());
                 game.send_to_char(
                     chid,
@@ -3144,6 +3163,7 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                     game.send_to_char(chid, "Your victim is not flagged.\r\n");
                     return;
                 }
+                let vict = game.db.ch_mut(vict_id);
                 vict.remove_plr_flag(PLR_THIEF | PLR_KILLER);
                 game.send_to_char(chid, "Pardoned.\r\n");
                 game.send_to_char(vict_id, "You have been pardoned by the Gods!\r\n");
@@ -3157,7 +3177,10 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                 );
             }
             SCMD_NOTITLE => {
+                let vict = game.db.ch_mut(vict_id);
                 let result = vict.plr_tog_chk(PLR_NOTITLE);
+                let ch = game.db.ch(chid);
+                let vict = game.db.ch(vict_id);
                 game.mudlog(
                     NRM,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -3184,7 +3207,10 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                 );
             }
             SCMD_SQUELCH => {
+                let vict = game.db.ch_mut(vict_id);
                 let result = vict.plr_tog_chk(PLR_NOSHOUT);
+                let ch = game.db.ch(chid);
+                let vict = game.db.ch(vict_id);
                 game.mudlog(
                     BRF,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
@@ -3219,8 +3245,12 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                     game.send_to_char(chid, "Your victim is already pretty cold.\r\n");
                     return;
                 }
+                let vict = game.db.ch_mut(vict_id);
                 vict.set_plr_flag_bit(PLR_FROZEN);
-                vict.set_freeze_lev(ch.get_level() as i8);
+                let ch = game.db.ch(chid);
+                let val = ch.get_level();
+                let vict = game.db.ch_mut(vict_id);
+                vict.set_freeze_lev(val as i8);
                 game.send_to_char(vict_id, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
                 game.send_to_char(chid, "Frozen.\r\n");
                 game.act(
@@ -3267,7 +3297,7 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                     true,
                     format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
                 );
-                let vict = game.db.ch(vict_id);
+                let vict = game.db.ch_mut(vict_id);
                 vict.remove_plr_flag(PLR_FROZEN);
                 game.send_to_char(vict_id, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
                 game.send_to_char(chid, "Thawed.\r\n");
@@ -3281,9 +3311,10 @@ pub fn do_wizutil(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, s
                 );
             }
             SCMD_UNAFFECT => {
-                if vict.affected.borrow().len() != 0 {
-                    while vict.affected.borrow().len() != 0 {
-                        game.db.affect_remove(vict, &vict.affected.borrow()[0]);
+                if vict.affected.len() != 0 {
+                    while { let vict = game.db.ch(vict_id); vict.affected.len() != 0 } {
+                        let af = game.db.ch(vict_id).affected[0];
+                        game.db.affect_remove(vict_id, af);
                     }
                     game.send_to_char(
                         vict_id,
@@ -3452,7 +3483,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     print_zone_to_buf(&game.db, &mut buf, i as ZoneRnum);
                 }
             }
-            let desc_id = ch.desc.borrow().unwrap();
+            let desc_id = ch.desc.unwrap();
             page_string(game, desc_id, &buf, true);
         }
 
@@ -3527,7 +3558,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     j += 1;
                 } else if game.can_see(ch, vict) {
                     i += 1;
-                    if vict.desc.borrow().is_some() {
+                    if vict.desc.is_some() {
                         con += 1;
                     }
                 }
@@ -3581,7 +3612,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     }
                 }
             }
-            let desc_id = ch.desc.borrow().unwrap();
+            let desc_id = ch.desc.unwrap();
             page_string(game, desc_id, &buf, true);
         }
 
@@ -3603,7 +3634,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     );
                 }
             }
-            let desc_id = ch.desc.borrow().unwrap();
+            let desc_id = ch.desc.unwrap();
             page_string(game, desc_id, &buf, true);
         }
 
@@ -3625,7 +3656,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                     );
                 }
             }
-            let desc_id = ch.desc.borrow().unwrap();
+            let desc_id = ch.desc.unwrap();
             page_string(game, desc_id, &buf, true);
         }
 
@@ -4097,7 +4128,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
         game.send_to_char(chid, OK);
     }
     let rnum;
-    let vict = game.db.ch(vict_id);
+    let vict = game.db.ch_mut(vict_id);
     match mode {
         0 => {
             if on {
@@ -4115,14 +4146,15 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
         }
         2 => {
             set_title(vict, Some(val_arg.to_string()));
+            let messg = format!(
+                "{}'s title is now: {}\r\n",
+                vict.get_name(),
+                vict.get_title()
+            );
             game.send_to_char(
                 chid,
-                format!(
-                    "{}'s title is now: {}\r\n",
-                    vict.get_name(),
-                    vict.get_title()
-                )
-                .as_str(),
+                
+                messg.as_str(),
             );
         }
         3 => {
@@ -4131,38 +4163,39 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 vict.remove_prf_flags_bits(PRF_SUMMONABLE)
             }
+            let messg = format!("Nosummon {} for {}.\r\n", onoff!(!on), vict.get_name());
             game.send_to_char(
                 chid,
-                format!("Nosummon {} for {}.\r\n", onoff!(!on), vict.get_name()).as_str(),
+                messg.as_str(),
             );
         }
         4 => {
-            vict.points.borrow_mut().max_hit = range!(value, 1, 5000) as i16;
-            game.db.affect_total(vict);
+            vict.points.max_hit = range!(value, 1, 5000) as i16;
+            game.db.affect_total(vict_id);
         }
         5 => {
-            vict.points.borrow_mut().max_mana = range!(value, 1, 5000) as i16;
-            game.db.affect_total(vict);
+            vict.points.max_mana = range!(value, 1, 5000) as i16;
+            game.db.affect_total(vict_id);
         }
         6 => {
-            vict.points.borrow_mut().max_move = range!(value, 1, 5000) as i16;
-            game.db.affect_total(vict);
+            vict.points.max_move = range!(value, 1, 5000) as i16;
+            game.db.affect_total(vict_id);
         }
         7 => {
-            vict.points.borrow_mut().hit = range!(value, -9, vict.points.borrow().max_hit) as i16;
-            game.db.affect_total(vict);
+            vict.points.hit = range!(value, -9, vict.points.borrow().max_hit) as i16;
+            game.db.affect_total(vict_id);
         }
         8 => {
-            vict.points.borrow_mut().mana = range!(value, 0, vict.points.borrow().max_mana) as i16;
-            game.db.affect_total(vict);
+            vict.points.mana = range!(value, 0, vict.points.borrow().max_mana) as i16;
+            game.db.affect_total(vict_id);
         }
         9 => {
-            vict.points.borrow_mut().movem = range!(value, 0, vict.points.borrow().max_move) as i16;
-            game.db.affect_total(vict);
+            vict.points.movem = range!(value, 0, vict.points.borrow().max_move) as i16;
+            game.db.affect_total(vict_id);
         }
         10 => {
             vict.set_alignment(range!(value, -1000, 1000));
-            game.db.affect_total(vict);
+            game.db.affect_total(vict_id);
         }
         11 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4170,16 +4203,16 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().str = value as i8;
-            vict.real_abils.borrow_mut().str_add = 0;
-            game.db.affect_total(vict);
+            vict.real_abils.str = value as i8;
+            vict.real_abils.str_add = 0;
+            game.db.affect_total(vict_id);
         }
         12 => {
-            vict.real_abils.borrow_mut().str_add = range!(value, 0, 100) as i8;
+            vict.real_abils.str_add = range!(value, 0, 100) as i8;
             if value > 0 {
-                vict.real_abils.borrow_mut().str = 18;
+                vict.real_abils.str = 18;
             }
-            game.db.affect_total(vict);
+            game.db.affect_total(vict_id);
         }
         13 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4187,8 +4220,8 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().intel = value as i8;
-            game.db.affect_total(vict);
+            vict.real_abils.intel = value as i8;
+            game.db.affect_total(vict_id);
         }
         14 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4196,8 +4229,8 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().wis = value as i8;
-            game.db.affect_total(vict);
+            vict.real_abils.wis = value as i8;
+            game.db.affect_total(vict_id);
         }
         15 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4205,8 +4238,8 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().dex = value as i8;
-            game.db.affect_total(vict);
+            vict.real_abils.dex = value as i8;
+            game.db.affect_total(vict_id);
         }
         16 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4214,8 +4247,8 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().con = value as i8;
-            game.db.affect_total(vict);
+            vict.real_abils.con = value as i8;
+            game.db.affect_total(vict_id);
         }
         17 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4223,12 +4256,12 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else {
                 value = range!(value, 3, 18);
             }
-            vict.real_abils.borrow_mut().cha = value as i8;
-            game.db.affect_total(vict);
+            vict.real_abils.cha = value as i8;
+            game.db.affect_total(vict_id);
         }
         18 => {
-            vict.points.borrow_mut().armor = range!(value, -100, 100) as i16;
-            game.db.affect_total(vict);
+            vict.points.armor = range!(value, -100, 100) as i16;
+            game.db.affect_total(vict_id);
         }
         19 => {
             vict.set_gold(range!(value, 0, 100000000));
@@ -4237,15 +4270,15 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             vict.set_bank_gold(range!(value, 0, 100000000));
         }
         21 => {
-            vict.points.borrow_mut().exp = range!(value, 0, 50000000);
+            vict.points.exp = range!(value, 0, 50000000);
         }
         22 => {
-            vict.points.borrow_mut().hitroll = range!(value, -20, 20) as i8;
-            game.db.affect_total(vict);
+            vict.points.hitroll = range!(value, -20, 20) as i8;
+            game.db.affect_total(vict_id);
         }
         23 => {
-            vict.points.borrow_mut().damroll = range!(value, -20, 20) as i8;
-            game.db.affect_total(vict);
+            vict.points.damroll = range!(value, -20, 20) as i8;
+            game.db.affect_total(vict_id);
         }
         24 => {
             let ch = game.db.ch(chid);
@@ -4253,6 +4286,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 game.send_to_char(chid, "You aren't godly enough for that!\r\n");
                 return false;
             }
+            let vict = game.db.ch_mut(vict_id);
             vict.set_invis_lev(range!(value, 0, vict.get_level()) as i16);
         }
         25 => {
@@ -4261,6 +4295,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 game.send_to_char(chid, "You aren't godly enough for that!\r\n");
                 return false;
             }
+            let vict = game.db.ch_mut(vict_id);
             if on {
                 vict.set_prf_flags_bits(PRF_NOHASSLE)
             } else {
@@ -4284,6 +4319,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
         29 | 30 | 31 => {
             if val_arg == "off" {
                 vict.set_cond((mode - 29) as i32, -1); /* warning: magic number here */
+                let vict = game.db.ch(vict_id);
                 game.send_to_char(
                     chid,
                     format!(
@@ -4297,6 +4333,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 value = val_arg.parse::<i32>().unwrap();
                 value = range!(value, 0, 24);
                 vict.set_cond((mode - 29) as i32, value as i16); /* and here too */
+                let vict = game.db.ch(vict_id);
                 game.send_to_char(
                     chid,
                     format!(
@@ -4333,7 +4370,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 return false;
             }
             value = range!(value, 0, LVL_IMPL);
-            vict.player.borrow_mut().level = value as u8;
+            game.db.ch_mut(vict_id).player.level = value as u8;
         }
         35 => {
             if {
@@ -4343,6 +4380,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 game.send_to_char(chid, "No room exists with that number.\r\n");
                 return false;
             }
+            let vict = game.db.ch(vict_id);
             if vict.in_room() != NOWHERE {
                 /* Another Eric Green special. */
                 game.db.char_from_room(vict_id);
@@ -4401,8 +4439,10 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             } else if is_number(val_arg) {
                 let rvnum = val_arg.parse::<i32>().unwrap() as RoomRnum;
                 if game.db.real_room(rvnum) != NOWHERE {
+                    let vict = game.db.ch_mut(vict_id);
                     vict.set_plr_flag_bit(PLR_LOADROOM);
                     vict.set_loadroom(rvnum);
+                    let vict = game.db.ch(vict_id);
                     game.send_to_char(
                         chid,
                         format!(
@@ -4430,9 +4470,11 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
         }
         44 => {
             let ch = game.db.ch(chid);
+            let vict = game.db.ch(vict_id);
             if ch.get_idnum() != 1 || !vict.is_npc() {
                 return false;
             }
+            let vict = game.db.ch_mut(vict_id);
             vict.set_idnum(value as i64);
         }
         45 => {
@@ -4441,6 +4483,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
                 game.send_to_char(chid, "Please don't use this command, yet.\r\n");
                 return false;
             }
+            let vict = game.db.ch(vict_id);
             if vict.get_level() >= LVL_GRGOD as u8 {
                 game.send_to_char(chid, "You cannot change that.\r\n");
                 return false;
@@ -4449,6 +4492,7 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             let salt = vict.get_name();
             pbkdf2::pbkdf2::<Hmac<Sha256>>(val_arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
                 .expect("Error while encrypting password");
+            let vict = game.db.ch_mut(vict_id);
             vict.set_passwd(passwd2);
             game.send_to_char(
                 chid,
@@ -4485,19 +4529,19 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
              * division used elsewhere in the code.  Seems to only happen for
              * some values below the starting age (17) anyway. -gg 5/27/98
              */
-            vict.player.borrow_mut().time.birth =
+            game.db.ch_mut(vict_id).player.time.birth =
                 time_now() - ((value as u64 - 17) * SECS_PER_MUD_YEAR);
         }
 
         49 => {
             /* Blame/Thank Rick Glover. :) */
             vict.set_height(value as u8);
-            game.db.affect_total(vict);
+            game.db.affect_total(vict_id);
         }
 
         50 => {
             vict.set_weight(value as u8);
-            game.db.affect_total(vict);
+            game.db.affect_total(vict_id);
         }
 
         _ => {
@@ -4579,7 +4623,7 @@ pub fn do_set(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
                 game.send_to_char(chid, "Sorry, you can't do that.\r\n");
                 return;
             }
-            vict_id = Some(game.db.character_list.push(Rc::from(cbuf)));
+            vict_id = Some(game.db.character_list.push(cbuf));
         } else {
             game.send_to_char(chid, "There is no such player.\r\n");
             return;

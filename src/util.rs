@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
-use crate::depot::{DepotId, HasId};
+use crate::depot::DepotId;
 use crate::VictimRef;
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -93,7 +93,7 @@ macro_rules! toggle_bit {
 
 impl CharData {
     pub fn is_npc(&self) -> bool {
-        return is_set!(self.char_specials.borrow().saved.act, MOB_ISNPC);
+        return is_set!(self.char_specials.saved.act, MOB_ISNPC);
     }
     pub fn memory(&self) -> &RefCell<Vec<i64>> {
         &self.mob_specials.memory
@@ -122,24 +122,24 @@ impl CharData {
     pub fn prf_flags(&self) -> i64 {
         check_player_special!(self, self.player_specials.borrow().saved.pref)
     }
-    pub fn set_prf_flags_bits(&self, flag: i64) {
-        self.player_specials.borrow_mut().saved.pref |= flag;
+    pub fn set_prf_flags_bits(&mut self, flag: i64) {
+        self.player_specials.saved.pref |= flag;
     }
-    pub fn remove_prf_flags_bits(&self, flag: i64) {
-        self.player_specials.borrow_mut().saved.pref &= !flag;
+    pub fn remove_prf_flags_bits(&mut self, flag: i64) {
+        self.player_specials.saved.pref &= !flag;
     }
-    pub fn toggle_prf_flag_bits(&self, flag: i64) -> i64 {
-        self.player_specials.borrow_mut().saved.pref ^= flag;
+    pub fn toggle_prf_flag_bits(&mut self, flag: i64) -> i64 {
+        self.player_specials.saved.pref ^= flag;
         self.player_specials.borrow().saved.pref
     }
-    pub fn toggle_plr_flag_bits(&self, flag: i64) -> i64 {
-        self.char_specials.borrow_mut().saved.act ^= flag;
-        self.char_specials.borrow().saved.act
+    pub fn toggle_plr_flag_bits(&mut self, flag: i64) -> i64 {
+        self.char_specials.saved.act ^= flag;
+        self.char_specials.saved.act
     }
-    pub fn plr_tog_chk(&self, flag: i64) -> i64 {
+    pub fn plr_tog_chk(&mut self, flag: i64) -> i64 {
         self.toggle_plr_flag_bits(flag) & flag
     }
-    pub fn prf_tog_chk(&self, flag: i64) -> i64 {
+    pub fn prf_tog_chk(&mut self, flag: i64) -> i64 {
         self.toggle_prf_flag_bits(flag) & flag
     }
 }
@@ -169,8 +169,8 @@ impl CharData {
     pub fn get_last_tell(&self) -> i64 {
         self.player_specials.borrow().last_tell
     }
-    pub fn set_last_tell(&self, val: i64) {
-        self.player_specials.borrow_mut().last_tell = val;
+    pub fn set_last_tell(&mut self, val: i64) {
+        self.player_specials.last_tell = val;
     }
     pub fn get_invis_lev(&self) -> i16 {
         check_player_special!(self, self.player_specials.borrow().saved.invis_level)
@@ -178,35 +178,35 @@ impl CharData {
     pub fn get_wimp_lev(&self) -> i32 {
         self.player_specials.borrow().saved.wimp_level
     }
-    pub fn set_wimp_lev(&self, val: i32) {
-        self.player_specials.borrow_mut().saved.wimp_level = val;
+    pub fn set_wimp_lev(&mut self, val: i32) {
+        self.player_specials.saved.wimp_level = val;
     }
-    pub fn set_invis_lev(&self, val: i16) {
-        self.player_specials.borrow_mut().saved.invis_level = val;
+    pub fn set_invis_lev(&mut self, val: i16) {
+        self.player_specials.saved.invis_level = val;
     }
     pub fn get_hit(&self) -> i16 {
-        self.points.borrow().hit
+        self.points.hit
     }
     pub fn get_mana(&self) -> i16 {
-        self.points.borrow().mana
+        self.points.mana
     }
     pub fn get_move(&self) -> i16 {
-        self.points.borrow().movem
+        self.points.movem
     }
-    pub fn incr_move(&self, val: i16) {
-        self.points.borrow_mut().movem += val;
+    pub fn incr_move(&mut self, val: i16) {
+        self.points.movem += val;
     }
-    pub fn set_move(&self, val: i16) {
-        self.points.borrow_mut().movem = val;
+    pub fn set_move(&mut self, val: i16) {
+        self.points.movem = val;
     }
-    pub fn set_mana(&self, val: i16) {
-        self.points.borrow_mut().mana = val;
+    pub fn set_mana(&mut self, val: i16) {
+        self.points.mana = val;
     }
-    pub fn set_hit(&self, val: i16) {
-        self.points.borrow_mut().hit = val;
+    pub fn set_hit(&mut self, val: i16) {
+        self.points.hit = val;
     }
-    pub fn decr_hit(&self, val: i16) {
-        self.points.borrow_mut().hit -= val;
+    pub fn decr_hit(&mut self, val: i16) {
+        self.points.hit -= val;
     }
 }
 
@@ -232,28 +232,28 @@ macro_rules! get_room_spec {
 }
 
 impl CharData {
-    pub fn get_pc_name(&self) -> Rc<str> {
-        return Rc::from(self.player.borrow().name.as_str());
+    pub fn get_pc_name(&self) -> &Rc<str> {
+        return &self.player.name;
     }
-    pub fn get_name(&self) -> Rc<str> {
+    pub fn get_name(&self) -> &Rc<str> {
         if self.is_npc() {
-            Rc::from(self.player.borrow().short_descr.as_str())
+            &self.player.short_descr
         } else {
             self.get_pc_name()
         }
     }
 
     pub fn has_title(&self) -> bool {
-        self.player.borrow().title.is_some()
+        self.player.title.is_some()
     }
     pub fn get_title(&self) -> Rc<str> {
-        if self.player.borrow().title.is_none() {
+        if self.player.title.is_none() {
             return Rc::from("");
         }
-        Rc::from(self.player.borrow().title.as_ref().unwrap().as_str())
+        self.player.title.as_ref().unwrap().clone()
     }
-    pub fn set_title(&self, val: Option<String>) {
-        self.player.borrow_mut().title = val;
+    pub fn set_title(&mut self, val: Option<Rc<str>>) {
+        self.player.title = val;
     }
 }
 
@@ -293,121 +293,121 @@ impl DescriptorData {
 
 impl CharData {
     pub(crate) fn get_wait_state(&self) -> i32 {
-        return self.wait.get();
+        return self.wait;
     }
-    pub(crate) fn decr_wait_state(&self, val: i32) {
-        self.wait.set(self.wait.get() - val);
+    pub(crate) fn decr_wait_state(&mut self, val: i32) {
+        self.wait -= val;
     }
-    pub(crate) fn set_wait_state(&self, val: i32) {
-        self.wait.set(val);
+    pub(crate) fn set_wait_state(&mut self, val: i32) {
+        self.wait = val;
     }
     pub fn get_class(&self) -> i8 {
-        self.player.borrow().chclass
+        self.player.chclass
     }
-    pub fn set_class(&self, val: i8) {
-        self.player.borrow_mut().chclass = val;
+    pub fn set_class(&mut self, val: i8) {
+        self.player.chclass = val;
     }
     pub fn get_pfilepos(&self) -> i32 {
-        self.pfilepos.get()
+        self.pfilepos
     }
-    pub fn set_pfilepos(&self, val: i32) {
-        self.pfilepos.set(val);
+    pub fn set_pfilepos(&mut self, val: i32) {
+        self.pfilepos = val;
     }
     pub fn get_level(&self) -> u8 {
-        self.player.borrow().level
+        self.player.level
     }
-    pub fn set_level(&self, val: u8) {
-        self.player.borrow_mut().level = val;
+    pub fn set_level(&mut self, val: u8) {
+        self.player.level = val;
     }
     pub fn get_passwd(&self) -> [u8; 16] {
-        self.player.borrow().passwd
+        self.player.passwd
     }
-    pub fn set_passwd(&self, val: [u8; 16]) {
-        self.player.borrow_mut().passwd = val;
+    pub fn set_passwd(&mut self, val: [u8; 16]) {
+        self.player.passwd = val;
     }
     pub fn get_exp(&self) -> i32 {
-        self.points.borrow().exp
+        self.points.exp
     }
-    pub fn set_exp(&self, val: i32) {
-        self.points.borrow_mut().exp = val;
+    pub fn set_exp(&mut self, val: i32) {
+        self.points.exp = val;
     }
-    pub fn set_gold(&self, val: i32) {
-        self.points.borrow_mut().gold = val
+    pub fn set_gold(&mut self, val: i32) {
+        self.points.gold = val
     }
     pub fn get_gold(&self) -> i32 {
-        self.points.borrow().gold
+        self.points.gold
     }
-    pub fn set_bank_gold(&self, val: i32) {
-        self.points.borrow_mut().bank_gold = val
+    pub fn set_bank_gold(&mut self, val: i32) {
+        self.points.bank_gold = val
     }
     pub fn get_bank_gold(&self) -> i32 {
-        self.points.borrow().bank_gold
+        self.points.bank_gold
     }
     pub fn get_max_move(&self) -> i16 {
-        self.points.borrow().max_move
+        self.points.max_move
     }
     pub fn get_max_mana(&self) -> i16 {
-        self.points.borrow().max_mana
+        self.points.max_mana
     }
     pub fn get_hitroll(&self) -> i8 {
-        self.points.borrow().hitroll
+        self.points.hitroll
     }
-    pub fn set_damroll(&self, val: i8) {
-        self.points.borrow_mut().damroll = val;
+    pub fn set_damroll(&mut self, val: i8) {
+        self.points.damroll = val;
     }
     pub fn get_damroll(&self) -> i8 {
-        self.points.borrow().damroll
+        self.points.damroll
     }
-    pub fn set_hitroll(&self, val: i8) {
-        self.points.borrow_mut().hitroll = val;
+    pub fn set_hitroll(&mut self, val: i8) {
+        self.points.hitroll = val;
     }
     pub fn get_max_hit(&self) -> i16 {
-        self.points.borrow().max_hit
+        self.points.max_hit
     }
-    pub fn set_max_hit(&self, val: i16) {
-        self.points.borrow_mut().max_hit = val;
+    pub fn set_max_hit(&mut self, val: i16) {
+        self.points.max_hit = val;
     }
-    pub fn incr_max_hit(&self, val: i16) {
-        self.points.borrow_mut().max_hit += val;
+    pub fn incr_max_hit(&mut self, val: i16) {
+        self.points.max_hit += val;
     }
-    pub fn set_max_mana(&self, val: i16) {
-        self.points.borrow_mut().max_mana = val;
+    pub fn set_max_mana(&mut self, val: i16) {
+        self.points.max_mana = val;
     }
-    pub fn incr_max_mana(&self, val: i16) {
-        self.points.borrow_mut().max_mana += val;
+    pub fn incr_max_mana(&mut self, val: i16) {
+        self.points.max_mana += val;
     }
-    pub fn set_max_move(&self, val: i16) {
-        self.points.borrow_mut().max_move = val;
+    pub fn set_max_move(&mut self, val: i16) {
+        self.points.max_move = val;
     }
-    pub fn incr_max_move(&self, val: i16) {
-        self.points.borrow_mut().max_move += val;
+    pub fn incr_max_move(&mut self, val: i16) {
+        self.points.max_move += val;
     }
     pub fn get_home(&self) -> i16 {
-        self.player.borrow().hometown
+        self.player.hometown
     }
-    pub fn set_home(&self, val: i16) {
-        self.player.borrow_mut().hometown = val;
+    pub fn set_home(&mut self, val: i16) {
+        self.player.hometown = val;
     }
     pub fn get_ac(&self) -> i16 {
-        self.points.borrow().armor
+        self.points.armor
     }
-    pub fn set_ac(&self, val: i16) {
-        self.points.borrow_mut().armor = val;
+    pub fn set_ac(&mut self, val: i16) {
+        self.points.armor = val;
     }
     pub fn in_room(&self) -> RoomRnum {
-        self.in_room.get()
+        self.in_room
     }
-    pub fn set_in_room(&self, val: RoomRnum) {
-        self.in_room.set(val);
+    pub fn set_in_room(&mut self, val: RoomRnum) {
+        self.in_room = val;
     }
     pub fn get_was_in(&self) -> RoomRnum {
-        self.was_in_room.get()
+        self.was_in_room
     }
     pub fn get_age(&self) -> i16 {
         age(self).year
     }
-    pub fn set_was_in(&self, val: RoomRnum) {
-        self.was_in_room.set(val)
+    pub fn set_was_in(&mut self, val: RoomRnum) {
+        self.was_in_room = val
     }
 }
 
@@ -432,8 +432,8 @@ impl CharData {
     pub fn get_talk_mut(&self, i: usize) -> bool {
         check_player_special!(self, self.player_specials.borrow().saved.talks[i])
     }
-    pub fn set_talk_mut(&self, i: usize, val: bool) {
-        self.player_specials.borrow_mut().saved.talks[i] = val;
+    pub fn set_talk_mut(&mut self, i: usize, val: bool) {
+        self.player_specials.saved.talks[i] = val;
     }
     pub fn get_mob_rnum(&self) -> MobRnum {
         self.nr
@@ -444,35 +444,35 @@ impl CharData {
     pub fn get_cond(&self, i: i32) -> i16 {
         self.player_specials.borrow().saved.conditions[i as usize]
     }
-    pub fn set_cond(&self, i: i32, val: i16) {
-        self.player_specials.borrow_mut().saved.conditions[i as usize] = val;
+    pub fn set_cond(&mut self, i: i32, val: i16) {
+        self.player_specials.saved.conditions[i as usize] = val;
     }
-    pub fn incr_cond(&self, i: i32, val: i16) {
-        self.player_specials.borrow_mut().saved.conditions[i as usize] += val;
+    pub fn incr_cond(&mut self, i: i32, val: i16) {
+        self.player_specials.saved.conditions[i as usize] += val;
     }
     pub fn get_loadroom(&self) -> RoomVnum {
         self.player_specials.borrow().saved.load_room
     }
-    pub fn set_loadroom(&self, val: RoomVnum) {
-        self.player_specials.borrow_mut().saved.load_room = val;
+    pub fn set_loadroom(&mut self, val: RoomVnum) {
+        self.player_specials.saved.load_room = val;
     }
     pub fn get_practices(&self) -> i32 {
         self.player_specials.borrow().saved.spells_to_learn
     }
-    pub fn set_practices(&self, val: i32) {
-        self.player_specials.borrow_mut().saved.spells_to_learn = val;
+    pub fn set_practices(&mut self, val: i32) {
+        self.player_specials.saved.spells_to_learn = val;
     }
-    pub fn incr_practices(&self, val: i32) {
-        self.player_specials.borrow_mut().saved.spells_to_learn += val;
+    pub fn incr_practices(&mut self, val: i32) {
+        self.player_specials.saved.spells_to_learn += val;
     }
     pub fn get_bad_pws(&self) -> u8 {
         self.player_specials.borrow().saved.bad_pws
     }
-    pub fn reset_bad_pws(&self) {
-        self.player_specials.borrow_mut().saved.bad_pws = 0;
+    pub fn reset_bad_pws(&mut self) {
+        self.player_specials.saved.bad_pws = 0;
     }
-    pub fn incr_bad_pws(&self) {
-        self.player_specials.borrow_mut().saved.bad_pws += 1;
+    pub fn incr_bad_pws(&mut self) {
+        self.player_specials.saved.bad_pws += 1;
     }
 }
 
@@ -486,7 +486,7 @@ macro_rules! get_last_tell {
 #[macro_export]
 macro_rules! get_last_tell_mut {
     ($ch:expr) => {
-        (check_player_special!(($ch), RefCell::borrow_mut(&($ch).player_specials).last_tell))
+        (check_player_special!(($ch), ($ch).player_specials).last_tell)
     };
 }
 
@@ -495,7 +495,7 @@ macro_rules! set_skill {
     ($ch:expr, $i:expr, $pct:expr) => {{
         check_player_special!(
             ($ch),
-            RefCell::borrow_mut(&($ch).player_specials).saved.skills[$i as usize]
+            ($ch).player_specials.saved.skills[$i as usize]
         ) = $pct;
     }};
 }
@@ -504,119 +504,119 @@ impl CharData {
     pub fn get_skill(&self, i: i32) -> i8 {
         self.player_specials.borrow().saved.skills[i as usize]
     }
-    pub fn set_skill(&self, i: i32, pct: i8) {
-        self.player_specials.borrow_mut().saved.skills[i as usize] = pct;
+    pub fn set_skill(&mut self, i: i32, pct: i8) {
+        self.player_specials.saved.skills[i as usize] = pct;
     }
     pub fn get_sex(&self) -> u8 {
-        self.player.borrow().sex
+        self.player.sex
     }
-    pub fn set_sex(&self, val: u8) {
-        self.player.borrow_mut().sex = val;
+    pub fn set_sex(&mut self, val: u8) {
+        self.player.sex = val;
     }
     pub fn get_str(&self) -> i8 {
-        self.aff_abils.borrow().str
+        self.aff_abils.str
     }
-    pub fn set_str(&self, val: i8) {
-        self.aff_abils.borrow_mut().str = val;
+    pub fn set_str(&mut self, val: i8) {
+        self.aff_abils.str = val;
     }
-    pub fn incr_str(&self, val: i8) {
-        self.aff_abils.borrow_mut().str += val;
+    pub fn incr_str(&mut self, val: i8) {
+        self.aff_abils.str += val;
     }
-    pub fn incr_dex(&self, val: i8) {
-        self.aff_abils.borrow_mut().dex += val;
+    pub fn incr_dex(&mut self, val: i8) {
+        self.aff_abils.dex += val;
     }
-    pub fn incr_int(&self, val: i8) {
-        self.aff_abils.borrow_mut().intel += val;
+    pub fn incr_int(&mut self, val: i8) {
+        self.aff_abils.intel += val;
     }
-    pub fn incr_wis(&self, val: i8) {
-        self.aff_abils.borrow_mut().wis += val;
+    pub fn incr_wis(&mut self, val: i8) {
+        self.aff_abils.wis += val;
     }
-    pub fn incr_con(&self, val: i8) {
-        self.aff_abils.borrow_mut().con += val;
+    pub fn incr_con(&mut self, val: i8) {
+        self.aff_abils.con += val;
     }
-    pub fn incr_cha(&self, val: i8) {
-        self.aff_abils.borrow_mut().cha += val;
+    pub fn incr_cha(&mut self, val: i8) {
+        self.aff_abils.cha += val;
     }
     pub fn get_add(&self) -> i8 {
-        self.aff_abils.borrow().str_add
+        self.aff_abils.str_add
     }
-    pub fn set_add(&self, val: i8) {
-        self.aff_abils.borrow_mut().str_add = val;
+    pub fn set_add(&mut self, val: i8) {
+        self.aff_abils.str_add = val;
     }
     pub fn get_dex(&self) -> i8 {
-        self.aff_abils.borrow().dex
+        self.aff_abils.dex
     }
-    pub fn set_dex(&self, val: i8) {
-        self.aff_abils.borrow_mut().dex = val;
+    pub fn set_dex(&mut self, val: i8) {
+        self.aff_abils.dex = val;
     }
     pub fn get_int(&self) -> i8 {
-        self.aff_abils.borrow().intel
+        self.aff_abils.intel
     }
-    pub fn set_int(&self, val: i8) {
-        self.aff_abils.borrow_mut().intel = val;
+    pub fn set_int(&mut self, val: i8) {
+        self.aff_abils.intel = val;
     }
     pub fn get_wis(&self) -> i8 {
-        self.aff_abils.borrow().wis
+        self.aff_abils.wis
     }
-    pub fn set_wis(&self, val: i8) {
-        self.aff_abils.borrow_mut().wis = val;
+    pub fn set_wis(&mut self, val: i8) {
+        self.aff_abils.wis = val;
     }
     pub fn get_con(&self) -> i8 {
-        self.aff_abils.borrow().con
+        self.aff_abils.con
     }
-    pub fn set_con(&self, val: i8) {
-        self.aff_abils.borrow_mut().con = val;
+    pub fn set_con(&mut self, val: i8) {
+        self.aff_abils.con = val;
     }
     pub fn get_cha(&self) -> i8 {
-        self.aff_abils.borrow().cha
+        self.aff_abils.cha
     }
-    pub fn set_cha(&self, val: i8) {
-        self.aff_abils.borrow_mut().cha = val;
+    pub fn set_cha(&mut self, val: i8) {
+        self.aff_abils.cha = val;
     }
     pub fn get_pos(&self) -> u8 {
-        self.char_specials.borrow().position
+        self.char_specials.position
     }
-    pub fn set_pos(&self, val: u8) {
-        self.char_specials.borrow_mut().position = val;
+    pub fn set_pos(&mut self, val: u8) {
+        self.char_specials.position = val;
     }
     pub fn get_idnum(&self) -> i64 {
-        self.char_specials.borrow().saved.idnum
+        self.char_specials.saved.idnum
     }
-    pub fn set_idnum(&self, val: i64) {
-        self.char_specials.borrow_mut().saved.idnum = val;
+    pub fn set_idnum(&mut self, val: i64) {
+        self.char_specials.saved.idnum = val;
     }
     pub fn fighting_id(&self) -> Option<DepotId> {
-        self.char_specials.borrow().fighting
+        self.char_specials.fighting
     }
-    pub fn set_fighting(&self, val: Option<DepotId>) {
-        self.char_specials.borrow_mut().fighting = val;
+    pub fn set_fighting(&mut self, val: Option<DepotId>) {
+        self.char_specials.fighting = val;
     }
     pub fn get_alignment(&self) -> i32 {
-        self.char_specials.borrow().saved.alignment
+        self.char_specials.saved.alignment
     }
-    pub fn set_alignment(&self, val: i32) {
-        self.char_specials.borrow_mut().saved.alignment = val;
+    pub fn set_alignment(&mut self, val: i32) {
+        self.char_specials.saved.alignment = val;
     }
     pub fn aff_flagged(&self, flag: i64) -> bool {
         is_set!(self.aff_flags(), flag)
     }
     pub fn get_weight(&self) -> u8 {
-        self.player.borrow().weight
+        self.player.weight
     }
-    pub fn set_weight(&self, val: u8) {
-        self.player.borrow_mut().weight = val;
+    pub fn set_weight(&mut self, val: u8) {
+        self.player.weight = val;
     }
     pub fn get_height(&self) -> u8 {
-        self.player.borrow().height
+        self.player.height
     }
-    pub fn set_height(&self, val: u8) {
-        self.player.borrow_mut().height = val;
+    pub fn set_height(&mut self, val: u8) {
+        self.player.height = val;
     }
     pub fn get_save(&self, i: i32) -> i16 {
-        self.char_specials.borrow().saved.apply_saving_throw[i as usize]
+        self.char_specials.saved.apply_saving_throw[i as usize]
     }
-    pub fn set_save(&self, i: usize, val: i16) {
-        self.char_specials.borrow_mut().saved.apply_saving_throw[i] = val;
+    pub fn set_save(&mut self, i: usize, val: i16) {
+        self.char_specials.saved.apply_saving_throw[i] = val;
     }
     pub fn plr_flagged(&self, flag: i64) -> bool {
         !self.is_npc() && is_set!(self.plr_flags(), flag)
@@ -625,25 +625,25 @@ impl CharData {
         self.is_npc() && is_set!(self.mob_flags(), flag)
     }
     pub fn plr_flags(&self) -> i64 {
-        self.char_specials.borrow().saved.act
+        self.char_specials.saved.act
     }
-    pub fn remove_plr_flag(&self, flag: i64) {
-        self.char_specials.borrow_mut().saved.act &= !flag;
+    pub fn remove_plr_flag(&mut self, flag: i64) {
+        self.char_specials.saved.act &= !flag;
     }
-    pub fn set_plr_flag_bit(&self, flag: i64) {
-        self.char_specials.borrow_mut().saved.act |= flag;
+    pub fn set_plr_flag_bit(&mut self, flag: i64) {
+        self.char_specials.saved.act |= flag;
     }
     pub fn mob_flags(&self) -> i64 {
-        self.char_specials.borrow().saved.act
+        self.char_specials.saved.act
     }
-    pub fn remove_mob_flags_bit(&self, flag: i64) {
-        self.char_specials.borrow_mut().saved.act &= !flag;
+    pub fn remove_mob_flags_bit(&mut self, flag: i64) {
+        self.char_specials.saved.act &= !flag;
     }
-    pub fn set_mob_flags(&self, flags: i64) {
-        self.char_specials.borrow_mut().saved.act = flags;
+    pub fn set_mob_flags(&mut self, flags: i64) {
+        self.char_specials.saved.act = flags;
     }
-    pub fn set_mob_flags_bit(&self, flag: i64) {
-        self.char_specials.borrow_mut().saved.act |= flag;
+    pub fn set_mob_flags_bit(&mut self, flag: i64) {
+        self.char_specials.saved.act |= flag;
     }
 
     pub fn get_default_pos(&self) -> u8 {
@@ -663,17 +663,17 @@ macro_rules! mob_flags {
 
 impl CharData {
     pub fn aff_flags(&self) -> i64 {
-        self.char_specials.borrow().saved.affected_by
+        self.char_specials.saved.affected_by
     }
-    pub fn set_aff_flags(&self, val: i64) {
-        self.char_specials.borrow_mut().saved.affected_by = val;
+    pub fn set_aff_flags(&mut self, val: i64) {
+        self.char_specials.saved.affected_by = val;
     }
-    pub fn set_aff_flags_bits(&self, val: i64) {
-        self.char_specials.borrow_mut().saved.affected_by |= val;
+    pub fn set_aff_flags_bits(&mut self, val: i64) {
+        self.char_specials.saved.affected_by |= val;
     }
 
-    pub fn remove_aff_flags(&self, val: i64) {
-        self.char_specials.borrow_mut().saved.affected_by &= !val;
+    pub fn remove_aff_flags(&mut self, val: i64) {
+        self.char_specials.saved.affected_by &= !val;
     }
     pub fn awake(&self) -> bool {
         self.get_pos() > POS_SLEEPING
@@ -721,10 +721,10 @@ impl CharData {
         self.is_npc() && self.get_class() == CLASS_WARRIOR
     }
     pub fn get_eq(&self, pos: i8) -> Option<DepotId> {
-        self.equipment.borrow()[pos as usize]
+        self.equipment[pos as usize].clone()
     }
-    pub fn set_eq(&self, pos: i8, val: Option<DepotId>) {
-        self.equipment.borrow_mut()[pos as usize] = val;
+    pub fn set_eq(&mut self, pos: i8, val: Option<DepotId>) {
+        self.equipment[pos as usize] = val;
     }
     pub fn is_good(&self) -> bool {
         self.get_alignment() >= 350
@@ -736,31 +736,31 @@ impl CharData {
         !self.is_good() && !self.is_evil()
     }
     pub fn is_carrying_w(&self) -> i32 {
-        self.char_specials.borrow().carry_weight
+        self.char_specials.carry_weight
     }
-    pub fn incr_is_carrying_w(&self, val: i32) {
-        self.char_specials.borrow_mut().carry_weight += val;
+    pub fn incr_is_carrying_w(&mut self, val: i32) {
+        self.char_specials.carry_weight += val;
     }
-    pub fn set_is_carrying_w(&self, val: i32) {
-        self.char_specials.borrow_mut().carry_weight = val;
+    pub fn set_is_carrying_w(&mut self, val: i32) {
+        self.char_specials.carry_weight = val;
     }
     pub fn is_carrying_n(&self) -> u8 {
-        self.char_specials.borrow().carry_items
+        self.char_specials.carry_items
     }
-    pub fn incr_is_carrying_n(&self) {
-        self.char_specials.borrow_mut().carry_weight += 1;
+    pub fn incr_is_carrying_n(&mut self) {
+        self.char_specials.carry_weight += 1;
     }
-    pub fn decr_is_carrying_n(&self) {
-        self.char_specials.borrow_mut().carry_weight -= 1;
+    pub fn decr_is_carrying_n(&mut self) {
+        self.char_specials.carry_weight -= 1;
     }
-    pub fn set_is_carrying_n(&self, val: u8) {
-        self.char_specials.borrow_mut().carry_items = val;
+    pub fn set_is_carrying_n(&mut self, val: u8) {
+        self.char_specials.carry_items = val;
     }
     pub fn get_freeze_lev(&self) -> i8 {
         self.player_specials.borrow().saved.freeze_level
     }
-    pub fn set_freeze_lev(&self, val: i8) {
-        self.player_specials.borrow_mut().saved.freeze_level = val;
+    pub fn set_freeze_lev(&mut self, val: i8) {
+        self.player_specials.saved.freeze_level = val;
     }
 }
 
@@ -773,11 +773,10 @@ impl Game {
                 .borrow()
                 .is_some()
         {
-            self.desc(ch.desc.borrow().unwrap())
+            self.db.ch(self.desc(ch.desc.borrow().unwrap())
                 .original
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .get_level()
         } else {
             ch.get_level()
@@ -1028,12 +1027,12 @@ impl Game {
     }
     pub fn pers(&self, ch: &CharData, vict: &CharData) -> Rc<str> {
         if self.can_see(vict, ch) {
-            ch.get_name()
+            ch.get_name().clone()
         } else {
             Rc::from("someone")
         }
     }
-    pub fn objs<'a>(&self, obj: &'a ObjData, vict: &CharData) -> Rc<str> {
+    pub fn objs(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
         if self.can_see_obj(vict, obj) {
             obj.short_description.clone()
         } else {
@@ -1243,7 +1242,7 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 
 /* log a death trap hit */
 pub fn log_death_trap(game: &mut Game, chid: DepotId) {
-    let ch_in_room = ch.in_room();
+    let ch = game.db.ch(chid);
     let mesg = format!(
         "{} hit death trap #{} ({})",
         ch.get_name(),
@@ -1322,7 +1321,8 @@ impl Game {
                 /* switch */
                 continue;
             }
-            let character = self.desc(d_id).character.as_ref().unwrap().clone();
+            let character_id = self.desc(d_id).character.as_ref().unwrap().clone();
+            let character = self.db.ch(character_id);
             if character.is_npc() {
                 /* switch */
                 continue;
@@ -1351,7 +1351,7 @@ impl Game {
             // 2: 0))
             // continue;
             self.send_to_char(
-                &character,
+                character_id,
                 format!(
                     "{}{}{}",
                     CCGRN!(character, C_NRM),
@@ -1471,7 +1471,7 @@ pub fn mud_time_to_secs(now: &TimeInfoData) -> u64 {
 }
 
 pub fn age(ch: &CharData) -> TimeInfoData {
-    let mut player_age = mud_time_passed(time_now(), ch.player.borrow().time.birth);
+    let mut player_age = mud_time_passed(time_now(), ch.player.time.birth);
 
     player_age.year += 17; /* All players start at 17 */
 
@@ -1480,22 +1480,22 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
-pub fn circle_follow(chid: DepotId, victim_id: Option<DepotId>) -> bool {
+pub fn circle_follow(db: &DB, chid: DepotId, victim_id: Option<DepotId>) -> bool {
     if victim_id.is_none() {
         return false;
     }
-    let mut k = victim.unwrap().clone();
+    let mut k = victim_id.unwrap();
     loop {
-        if Rc::ptr_eq(&k, ch) {
+        if k == chid {
             return true;
         }
 
         let t;
         {
-            if k.master.borrow().is_none() {
+            if db.ch(k).master.is_none() {
                 break;
             } else {
-                t = k.master.borrow().as_ref().unwrap().clone();
+                t = db.ch(k).master.unwrap();
             }
         }
         k = t;
@@ -1507,103 +1507,109 @@ pub fn circle_follow(chid: DepotId, victim_id: Option<DepotId>) -> bool {
 /* This will NOT do if a character quits/dies!!          */
 impl Game {
     pub fn stop_follower(&mut self, chid: DepotId) {
-        let ch = game.db.ch(chid);
-        if ch.master.borrow().is_none() {
+        let ch = self.db.ch(chid);
+        if ch.master.is_none() {
             return;
         }
 
         if ch.aff_flagged(AFF_CHARM) {
+            let vobj = ch.master.unwrap();
             self.act(
                 "You realize that $N is a jerk!",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
+                Some(VictimRef::Char(vobj)),
                 TO_CHAR,
             );
             self.act(
                 "$n realizes that $N is a jerk!",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
+                Some(VictimRef::Char(vobj)),
                 TO_NOTVICT,
             );
             self.act(
                 "$n hates your guts!",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
+                Some(VictimRef::Char(vobj)),
                 TO_VICT,
             );
+            let ch = self.db.ch(chid);
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                self.db.affect_from_char(ch, SPELL_CHARM as i16);
+                self.db.affect_from_char(chid, SPELL_CHARM as i16);
             }
         } else {
+            let vobj = ch.master.unwrap();
             self.act(
                 "You stop following $N.",
                 false,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
+                Some(VictimRef::Char(vobj)),
                 TO_CHAR,
             );
+            let ch = self.db.ch(chid);
+            let vobj = ch.master.unwrap();
             self.act(
                 "$n stops following $N.",
                 true,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(ch.master.borrow().as_ref().unwrap())),
+                Some(VictimRef::Char(vobj)),
                 TO_NOTVICT,
             );
-            let vr = ch.master.borrow();
+            let ch = self.db.ch(chid);
+            let vr = ch.master.unwrap();
             self.act(
                 "$n stops following you.",
                 true,
-                Some(ch.id()),
+                Some(chid),
                 None,
-                Some(VictimRef::Char(vr.as_ref().unwrap())),
+                Some(VictimRef::Char(vr)),
                 TO_VICT,
             );
         }
-
-        ch.master
+        let ch = self.db.ch(chid);
+        self.db.ch_mut(ch.master
             .borrow()
-            .as_ref()
-            .unwrap()
+            .unwrap())
             .followers
-            .borrow_mut()
-            .retain(|c| Rc::ptr_eq(&c.follower, ch));
-
-        *ch.master.borrow_mut() = None;
+            .retain(|c| c.follower == chid);
+        let ch = self.db.ch_mut(chid);
+        ch.master = None;
         ch.remove_aff_flags(AFF_CHARM | AFF_GROUP);
     }
-}
 
-pub fn num_followers_charmed(ch: &Rc<CharData>) -> i32 {
+
+pub fn num_followers_charmed(&self, chid: DepotId) -> i32 {
+    let ch = self.db.ch(chid);
     let mut total = 0;
 
-    for lackey in ch.followers.borrow().iter() {
-        if lackey.follower.aff_flagged(AFF_CHARM)
-            && Rc::ptr_eq(lackey.follower.master.borrow().as_ref().unwrap(), ch)
+    for lackey in ch.followers.iter() {
+        if self.db.ch(lackey.follower).aff_flagged(AFF_CHARM)
+            && self.db.ch(lackey.follower).master.unwrap() == chid
         {
             total += 1;
         }
     }
     total
 }
-
+}
 impl Game {
     /* Called when a character that follows/is followed dies */
     pub fn die_follower(&mut self, chid: DepotId) {
         let ch = self.db.ch(chid);
-        if ch.master.borrow().is_some() {
-            self.stop_follower(ch);
+        if ch.master.is_some() {
+            self.stop_follower(chid);
         }
-
-        for k in ch.followers.borrow().iter() {
-            self.stop_follower(&k.follower);
+        let ch = self.db.ch(chid);
+        let list = ch.followers.clone();
+        for k in  list {
+            self.stop_follower(k.follower);
         }
     }
 }
@@ -1611,44 +1617,46 @@ impl Game {
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
 pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
-    let ch = game.db.ch(chid);
-    let leader = game.db.ch(leader_id);
-    if ch.master.borrow().is_some() {
+    let ch = game.db.ch_mut(chid);
+    if ch.master.is_some() {
         // core_dump();
         return;
     }
 
-    *ch.master.borrow_mut() = Some(leader.clone());
+    ch.master = Some(leader_id);
 
     let k = FollowType {
-        follower: ch.clone(),
+        follower: chid,
     };
-    leader.followers.borrow_mut().push(k);
+    let leader = game.db.ch_mut(leader_id);
+    leader.followers.push(k);
 
     game.act(
         "You now follow $N.",
         false,
-        Some(ch.id()),
+        Some(chid),
         None,
-        Some(VictimRef::Char(leader)),
+        Some(VictimRef::Char(leader_id)),
         TO_CHAR,
     );
+    let ch = game.db.ch(chid);
+    let leader = game.db.ch(leader_id);
     if game.can_see(leader, ch) {
         game.act(
             "$n starts following you.",
             true,
-            Some(ch.id()),
+            Some(chid),
             None,
-            Some(VictimRef::Char(leader)),
+            Some(VictimRef::Char(leader_id)),
             TO_VICT,
         );
     }
     game.act(
         "$n starts to follow $N.",
         true,
-        Some(ch.id()),
+        Some(chid),
         None,
-        Some(VictimRef::Char(leader)),
+        Some(VictimRef::Char(leader_id)),
         TO_NOTVICT,
     );
 }

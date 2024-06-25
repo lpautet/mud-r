@@ -567,8 +567,10 @@ impl Game {
                         let character = self.db.ch(character_id);
                         let wait_state = character.get_wait_state();
                         if wait_state > 0 {
+                            let character = self.db.ch_mut(character_id);
                             character.decr_wait_state(1);
                         }
+                        let character = self.db.ch(character_id);
                         if character.get_wait_state() != 0 {
                             continue;
                         }
@@ -581,23 +583,26 @@ impl Game {
                     if self.descriptor_list.get_mut(d_id).character.borrow().is_some() {
                         /* Reset the idle timer & pull char back from void if necessary */
                         let character_id = self.descriptor_list.get(d_id).character.borrow().unwrap();
-                        let character = self.db.ch(character_id);
-                        character.char_specials.borrow().timer.set(0);
+                        let character = self.db.ch_mut(character_id);
+                        character.char_specials.timer = 0;
                         if self.descriptor_list.get_mut(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
-                            if character.in_room.get() != NOWHERE {
-                                self.db.char_from_room(&character);
+                            if character.in_room != NOWHERE {
+                                self.db.char_from_room(character_id);
                             }
-                            self.db.char_to_room(&character, character.get_was_in());
+                            let character = self.db.ch(character_id);
+                            self.db.char_to_room(character_id, character.get_was_in());
+                            let character = self.db.ch_mut(character_id);
                             character.set_was_in(NOWHERE);
                             self.act(
                                 "$n has returned.",
                                 true,
-                                Some(character.id()),
+                                Some(character_id),
                                 None,
                                 None,
                                 TO_ROOM,
                             );
                         }
+                        let character = self.db.ch_mut(character_id);
                         character.set_wait_state(1);
                     }
                     
@@ -618,7 +623,7 @@ impl Game {
                     if aliased {
                         /* To prevent recursive aliases. */
                         self.descriptor_list.get_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
-                    } else if perform_alias(&game.db, self.descriptor_list.get_mut(d_id), &mut comm) {
+                    } else if perform_alias(&self.db, self.descriptor_list.get_mut(d_id), &mut comm) {
                         /* Run it through aliasing system */
                         get_from_q(
                             &mut self.descriptor_list.get_mut(d_id).input,
@@ -627,7 +632,7 @@ impl Game {
                         );
                     }
                     /* Send it to interpreter */
-                    let ch = self
+                    let chid = self
                         .descriptor_list
                         .get_mut(d_id)
                         .character
@@ -652,7 +657,8 @@ impl Game {
             for d_id in self.descriptor_list.ids() {
                 let d = self.descriptor_list.get_mut(d_id);
                 if !d.has_prompt && d.output.is_empty() {
-                    let text = &make_prompt(&game.db, d);
+                    let text = &make_prompt(self, d_id);
+                    let d = self.descriptor_list.get_mut(d_id);
                     write_to_descriptor(d.stream.as_mut().unwrap(), text);
                     d.has_prompt = true;
                 }
@@ -822,7 +828,8 @@ impl Game {
     }
 }
 
-fn make_prompt(db: &DB, d: &DescriptorData) -> String {
+fn make_prompt(game: &Game, d_id: DepotId) -> String {
+    let d = game.desc(d_id);
     let mut prompt = "".to_string();
 
     /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
@@ -834,10 +841,10 @@ fn make_prompt(db: &DB, d: &DescriptorData) -> String {
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
             d.showstr_page, d.showstr_count
         ));
-    } else if d.connected == ConPlaying && !db.ch(d.character.borrow().unwrap()).is_npc() {
+    } else if d.connected == ConPlaying && !game.db.ch(d.character.borrow().unwrap()).is_npc() {
         let ohc = d.character.borrow();
         let character_id = ohc.unwrap();
-        let character = db.ch(character_id);
+        let character = game.db.ch(character_id);
         if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
             let il = character.get_invis_lev();
             prompt.push_str(&*format!("i{} ", il));
@@ -859,10 +866,10 @@ fn make_prompt(db: &DB, d: &DescriptorData) -> String {
         }
 
         prompt.push_str("> ");
-    } else if d.connected == ConPlaying && d.character.borrow().as_ref().unwrap().is_npc() {
+    } else if d.connected == ConPlaying && game.db.ch(d.character.unwrap()).is_npc() {
         prompt.push_str(&*format!(
             "{}s>",
-            d.character.borrow().as_ref().unwrap().get_name()
+            game.db.ch(d.character.unwrap()).get_name()
         ));
     }
 
@@ -1037,30 +1044,29 @@ impl Game {
         let mut result;
 
         {
-        let t = self.desc_mut(desc_id);
+        let t = self.desc(desc_id);
         /* now, append the 'real' output */
         i.push_str(&t.output);
 
         /* add the extra CRLF if the person isn't in compact mode */
         if t.connected == ConPlaying
-            && t.character.borrow().is_some()
-            && !t.character.borrow().as_ref().unwrap().is_npc()
-            && t.character
-                .borrow()
-                .as_ref()
-                .unwrap()
+            && t.character.is_some()
+            && !self.db.ch(t.character.unwrap()).is_npc()
+            && self.db.ch(t.character
+                .unwrap())
                 .prf_flagged(PRF_COMPACT)
         {
             i.push_str("\r\n");
         }
 
         /* add a prompt */
-        i.push_str(&make_prompt(&game.db, t));
+        i.push_str(&make_prompt(self, desc_id));
 
         /*
          * now, send the output.  If this is an 'interruption', use the prepended
          * CRLF, otherwise send the straight output sans CRLF.
          */
+        let t = self.desc_mut(desc_id);
         if t.has_prompt {
             t.has_prompt = false;
             result = write_to_descriptor(t.stream.as_mut().unwrap(), &i);
@@ -1420,14 +1426,14 @@ impl Game {
         }
 
         match d.character.as_ref() {
-            Some(character) => {
+            Some(character_id) => {
                 /* If we're switched, this resets the mobile taken. */
-                *character.desc.borrow_mut() = None;
+                self.db.ch_mut(*character_id).desc = None;
 
                 match d.state() {
                     ConPlaying | ConDisconnect => {
-                        let original = d.original.borrow();
-                        let link_challenged = if original.is_some() {
+                        let original = d.original;
+                        let link_challenged_id = if original.is_some() {
                             original.as_ref().unwrap().clone()
                         } else {
                             d.character.borrow().as_ref().unwrap().clone()
@@ -1437,21 +1443,21 @@ impl Game {
                         self.act(
                             "$n has lost $s link.",
                             true,
-                            Some(link_challenged.id()),
+                            Some(link_challenged_id),
                             None,
                             None,
                             TO_ROOM,
                         );
-                        self.save_char(&link_challenged);
+                        self.save_char(link_challenged_id);
                         self.mudlog(
                             NRM,
-                            max(LVL_IMMORT as i32, link_challenged.get_invis_lev() as i32),
+                            max(LVL_IMMORT as i32, self.db.ch(link_challenged_id).get_invis_lev() as i32),
                             true,
-                            format!("Closing link to: {}.", link_challenged.get_name()).as_str(),
+                            format!("Closing link to: {}.", self.db.ch(link_challenged_id).get_name()).as_str(),
                         );
                     }
                     _ => {
-                        let name = d.character.borrow().as_ref().unwrap().get_name();
+                        let name = self.db.ch(d.character.borrow().unwrap()).get_name();
                         self.mudlog(
                             CMP,
                             LVL_IMMORT as i32,
@@ -1466,7 +1472,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        self.db.free_char(d.character.as_ref().unwrap().id());
+                        self.db.free_char(d.character.unwrap());
                     }
                 }
             }
@@ -1481,16 +1487,15 @@ impl Game {
         }
 
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
-        if d.original.borrow().is_some()
-            && d.original
+        if d.original.is_some()
+            && self.db.ch(d.original
                 .borrow()
-                .as_ref()
-                .unwrap()
+                .unwrap())
                 .desc
                 .borrow()
                 .is_some()
         {
-            *d.original.borrow().as_ref().unwrap().desc.borrow_mut() = None;
+            self.db.ch_mut(d.original.unwrap()).desc = None;
         }
     }
 
@@ -1636,8 +1641,8 @@ impl Game {
 
 impl Game {
     pub fn send_to_char(&mut self, chid: DepotId, messg: &str) -> usize {
-        if self.db.ch(chid).desc.borrow().is_some() && messg != "" {
-            let desc_id = self.db.ch(chid).desc.borrow().unwrap();
+        if self.db.ch(chid).desc.is_some() && messg != "" {
+            let desc_id = self.db.ch(chid).desc.unwrap();
             return self.write_to_output(
                 desc_id,
                 messg,
@@ -1687,10 +1692,11 @@ impl Game {
         let list = clone_vec2(&self.db.world[room as usize].peoples);
         for i_id in list {
             let i = self.db.ch(i_id);
-            if i.desc.borrow().is_none() {
+            if i.desc.is_none() {
                 continue;
             }
-            self.write_to_output(i.desc.borrow().unwrap(), msg);
+            let desc_id = i.desc.unwrap();
+            self.write_to_output(desc_id, msg);
         }
     }
 }
@@ -1909,7 +1915,7 @@ impl Game {
         // TODO orig.pop();
         buf.push_str("\r\n");
 
-        let desc_id = self.db.ch(to_id).desc.borrow().unwrap();
+        let desc_id = self.db.ch(to_id).desc.unwrap();
         self.write_to_output(
             desc_id,
             format!("{}", buf).as_str(),
@@ -1919,7 +1925,7 @@ impl Game {
 
 macro_rules! sendok {
     ($ch:expr, $to_sleeping:expr) => {
-        (($ch).desc.borrow().is_some()
+        (($ch).desc.is_some()
             && ($to_sleeping != 0 || ($ch).awake())
             && (($ch).is_npc() || !($ch).plr_flagged(PLR_WRITING)))
     };
@@ -1973,9 +1979,9 @@ impl Game {
 
         if _type == TO_VICT {
             if vict_obj.is_some() {
-                if let Some(VictimRef::Char(to)) = vict_obj {
-                    if sendok!(to, to_sleeping) {
-                        self.perform_act(str, chid, oid, vict_obj.clone(), to.id());
+                if let Some(VictimRef::Char(to_id)) = vict_obj {
+                    if sendok!(self.db.ch(to_id), to_sleeping) {
+                        self.perform_act(str, chid, oid, vict_obj.clone(), to_id);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -2010,8 +2016,8 @@ impl Game {
             }
             let same_chr;
             if vict_obj.is_some() {
-                if let Some(VictimRef::Char(p)) = vict_obj {
-                    same_chr = std::ptr::eq(to.as_ref(), p);
+                if let Some(VictimRef::Char(p_id)) = vict_obj {
+                    same_chr = to_id == p_id;
                 } else {
                     error!("Error in act: invalid CharData ref");
                     continue;
