@@ -13,7 +13,6 @@
 use crate::depot::DepotId;
 use crate::VictimRef;
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufRead, BufReader};
@@ -95,7 +94,7 @@ impl CharData {
     pub fn is_npc(&self) -> bool {
         return is_set!(self.char_specials.saved.act, MOB_ISNPC);
     }
-    pub fn memory(&self) -> &RefCell<Vec<i64>> {
+    pub fn memory(&self) -> &Vec<i64> {
         &self.mob_specials.memory
     }
 }
@@ -120,7 +119,7 @@ impl CharData {
         return is_set!(self.prf_flags(), flag);
     }
     pub fn prf_flags(&self) -> i64 {
-        check_player_special!(self, self.player_specials.borrow().saved.pref)
+        check_player_special!(self, self.player_specials.saved.pref)
     }
     pub fn set_prf_flags_bits(&mut self, flag: i64) {
         self.player_specials.saved.pref |= flag;
@@ -130,7 +129,7 @@ impl CharData {
     }
     pub fn toggle_prf_flag_bits(&mut self, flag: i64) -> i64 {
         self.player_specials.saved.pref ^= flag;
-        self.player_specials.borrow().saved.pref
+        self.player_specials.saved.pref
     }
     pub fn toggle_plr_flag_bits(&mut self, flag: i64) -> i64 {
         self.char_specials.saved.act ^= flag;
@@ -161,22 +160,22 @@ pub use check_player_special;
 
 impl CharData {
     pub fn poofin(&self) -> Rc<str> {
-        self.player_specials.borrow().poofin.clone()
+        self.player_specials.poofin.clone()
     }
     pub fn poofout(&self) -> Rc<str> {
-        self.player_specials.borrow().poofout.clone()
+        self.player_specials.poofout.clone()
     }
     pub fn get_last_tell(&self) -> i64 {
-        self.player_specials.borrow().last_tell
+        self.player_specials.last_tell
     }
     pub fn set_last_tell(&mut self, val: i64) {
         self.player_specials.last_tell = val;
     }
     pub fn get_invis_lev(&self) -> i16 {
-        check_player_special!(self, self.player_specials.borrow().saved.invis_level)
+        check_player_special!(self, self.player_specials.saved.invis_level)
     }
     pub fn get_wimp_lev(&self) -> i32 {
-        self.player_specials.borrow().saved.wimp_level
+        self.player_specials.saved.wimp_level
     }
     pub fn set_wimp_lev(&mut self, val: i32) {
         self.player_specials.saved.wimp_level = val;
@@ -430,7 +429,7 @@ macro_rules! get_talk {
 
 impl CharData {
     pub fn get_talk_mut(&self, i: usize) -> bool {
-        check_player_special!(self, self.player_specials.borrow().saved.talks[i])
+        check_player_special!(self, self.player_specials.saved.talks[i])
     }
     pub fn set_talk_mut(&mut self, i: usize, val: bool) {
         self.player_specials.saved.talks[i] = val;
@@ -442,7 +441,7 @@ impl CharData {
         self.nr = val;
     }
     pub fn get_cond(&self, i: i32) -> i16 {
-        self.player_specials.borrow().saved.conditions[i as usize]
+        self.player_specials.saved.conditions[i as usize]
     }
     pub fn set_cond(&mut self, i: i32, val: i16) {
         self.player_specials.saved.conditions[i as usize] = val;
@@ -451,13 +450,13 @@ impl CharData {
         self.player_specials.saved.conditions[i as usize] += val;
     }
     pub fn get_loadroom(&self) -> RoomVnum {
-        self.player_specials.borrow().saved.load_room
+        self.player_specials.saved.load_room
     }
     pub fn set_loadroom(&mut self, val: RoomVnum) {
         self.player_specials.saved.load_room = val;
     }
     pub fn get_practices(&self) -> i32 {
-        self.player_specials.borrow().saved.spells_to_learn
+        self.player_specials.saved.spells_to_learn
     }
     pub fn set_practices(&mut self, val: i32) {
         self.player_specials.saved.spells_to_learn = val;
@@ -466,7 +465,7 @@ impl CharData {
         self.player_specials.saved.spells_to_learn += val;
     }
     pub fn get_bad_pws(&self) -> u8 {
-        self.player_specials.borrow().saved.bad_pws
+        self.player_specials.saved.bad_pws
     }
     pub fn reset_bad_pws(&mut self) {
         self.player_specials.saved.bad_pws = 0;
@@ -502,7 +501,7 @@ macro_rules! set_skill {
 
 impl CharData {
     pub fn get_skill(&self, i: i32) -> i8 {
-        self.player_specials.borrow().saved.skills[i as usize]
+        self.player_specials.saved.skills[i as usize]
     }
     pub fn set_skill(&mut self, i: i32, pct: i8) {
         self.player_specials.saved.skills[i as usize] = pct;
@@ -757,7 +756,7 @@ impl CharData {
         self.char_specials.carry_items = val;
     }
     pub fn get_freeze_lev(&self) -> i8 {
-        self.player_specials.borrow().saved.freeze_level
+        self.player_specials.saved.freeze_level
     }
     pub fn set_freeze_lev(&mut self, val: i8) {
         self.player_specials.saved.freeze_level = val;
@@ -766,16 +765,15 @@ impl CharData {
 
 impl Game {
     pub fn get_real_level(&self, ch: &CharData) -> u8 {
-        if ch.desc.borrow().is_some()
+        if ch.desc.is_some()
             && self
-                .desc(ch.desc.borrow().unwrap())
+                .desc(ch.desc.unwrap())
                 .original
                 .borrow()
                 .is_some()
         {
-            self.db.ch(self.desc(ch.desc.borrow().unwrap())
+            self.db.ch(self.desc(ch.desc.unwrap())
                 .original
-                .borrow()
                 .unwrap())
                 .get_level()
         } else {
@@ -879,14 +877,6 @@ impl ObjData {
     pub fn decr_obj_timer(&mut self, val: i32) {
         self.obj_flags.timer -= val;
     }
-}
-
-pub fn clone_vec<A: Clone>(from: &RefCell<Vec<A>>) -> Vec<A> {
-    let mut ret = vec![];
-    for e in from.borrow().iter() {
-        ret.push(e.clone());
-    }
-    ret
 }
 
 pub fn clone_vec2<A: Clone>(from: &Vec<A>) -> Vec<A> {
@@ -1575,7 +1565,6 @@ impl Game {
         }
         let ch = self.db.ch(chid);
         self.db.ch_mut(ch.master
-            .borrow()
             .unwrap())
             .followers
             .retain(|c| c.follower == chid);

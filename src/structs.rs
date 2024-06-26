@@ -474,7 +474,7 @@ pub struct PlayerSpecialData {
 
 /* Specials used by NPCs, not PCs */
 pub struct MobSpecialData {
-    pub memory: RefCell<Vec<i64>>,
+    pub memory: Vec<i64>,
     /* List of attackers to remember	       */
     pub attack_type: u8,
     /* The Attack Type Bitvector for NPC's     */

@@ -1024,19 +1024,19 @@ impl Game {
          * need to stuff them back into their own body.  This will set ch.desc
          * we're checking below this loop to the proper value.
          */
-        if !ch.is_npc() && ch.desc.borrow().is_none() {
+        if !ch.is_npc() && ch.desc.is_none() {
             for d_id in self.descriptor_list.ids() {
-                if self.desc(d_id).original.borrow().is_some()
-                    && self.desc(d_id).original.borrow().unwrap() == chid
+                if self.desc(d_id).original.is_some()
+                    && self.desc(d_id).original.unwrap() == chid
                 {
-                    let chid = self.desc(d_id).character.borrow().as_ref().unwrap().clone();
+                    let chid = self.desc(d_id).character.as_ref().unwrap().clone();
                     do_return(self, chid, "", 0, 0);
                     break;
                 }
             }
         }
         let ch = self.db.ch(chid);
-        if ch.desc.borrow().is_some() {
+        if ch.desc.is_some() {
             /*
              * This time we're extracting the body someone has switched into
              * (not the body of someone switching as above) so we need to put
@@ -1046,7 +1046,7 @@ impl Game {
              * body after the removal so dump them to the main menu.
              */
             if self
-                .desc(ch.desc.borrow().unwrap())
+                .desc(ch.desc.unwrap())
                 .original
                 .borrow()
                 .is_some()
@@ -1061,17 +1061,16 @@ impl Game {
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
                 for d in self.descriptor_list.ids() {
-                    if d == ch.desc.borrow().unwrap() {
+                    if d == ch.desc.unwrap() {
                         continue;
                     }
 
-                    if self.descriptor_list.get(d).character.borrow().is_some()
+                    if self.descriptor_list.get(d).character.is_some()
                         && ch.get_idnum()
                             == self.db.ch(self
                                 .descriptor_list
                                 .get(d)
                                 .character
-                                .borrow()
                                 .unwrap())
                                 .get_idnum()
                     {
@@ -1079,10 +1078,10 @@ impl Game {
                     }
                 }
                 let ch = self.db.ch(chid);
-                let desc_id = ch.desc.borrow().unwrap();
+                let desc_id = ch.desc.unwrap();
                 self.desc_mut(desc_id).set_state(ConMenu);
                 let ch = self.db.ch(chid);
-                let desc_id = ch.desc.borrow().unwrap();
+                let desc_id = ch.desc.unwrap();
                 self.write_to_output(desc_id, MENU);
             }
         }
@@ -1140,7 +1139,7 @@ impl Game {
                 let rnum = ch.get_mob_rnum();
                 self.db.mob_index[ rnum as usize].number -= 1;
             }
-            let ch = self.db.ch(chid);
+            let ch = self.db.ch_mut(chid);
             ch.clear_memory()
         } else {
             self.save_char(chid);
@@ -1514,7 +1513,7 @@ impl Game {
         if *number == 0 {
             return None;
         }
-        let equipment = equipment.borrow();
+        let equipment = equipment;
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
                 && self.can_see_obj(ch, self.db.obj(equipment[j].unwrap()))
@@ -1537,7 +1536,7 @@ impl Game {
         number: Option<&mut i32>,
         equipment: &[Option<DepotId>],
     ) -> Option<i8> {
-        let equipment = equipment.borrow();
+        let equipment = equipment;
         let mut num;
         let t: &mut i32;
         let mut name = arg.to_string();

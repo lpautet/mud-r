@@ -3374,9 +3374,10 @@ fn clear_object(obj: &mut ObjData) {
  * (and then never again for that character).
  */
 impl DB {
-    pub(crate) fn init_char(&mut self, ch: &mut CharData) {
+    pub(crate) fn init_char(&mut self, chid: DepotId) {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
+            let ch = self.ch_mut(chid);
             ch.set_level(LVL_IMPL as u8);
             ch.set_exp(7000000);
 
@@ -3388,6 +3389,7 @@ impl DB {
             ch.set_mana(ch.get_max_mana());
             ch.set_move(ch.get_max_move());
         }
+        let ch = self.ch_mut(chid);
 
         ch.set_title(None);
         ch.player.short_descr = Rc::from("");
@@ -3421,7 +3423,7 @@ impl DB {
             ch.set_weight(rand_number(100, 160) as u8);
             ch.set_height(rand_number(150, 180) as u8); /* 5'0" - 6'0" */
         }
-
+        let ch = self.ch(chid);
         let i = self.get_ptable_by_name(ch.get_name().as_ref());
         if i.is_none() {
             error!(
@@ -3432,9 +3434,10 @@ impl DB {
             let i = i.unwrap();
             let top_n = self.player_table.len();
             self.player_table[i].id = top_n as i64; //*self.top_idnum.borrow() as i64;
+            let ch = self.ch_mut(chid);
             ch.set_idnum(top_n as i64); /*self.top_idnum.borrow()*/
         }
-
+        let ch = self.ch_mut(chid);
         for i in 1..MAX_SKILLS {
             if ch.get_level() < LVL_IMPL as u8 {
                 ch.player_specials.saved.skills[i] = 0;
@@ -3840,7 +3843,7 @@ impl Default for CharData {
                 last_tell: 0,
             },
             mob_specials: MobSpecialData {
-                memory: RefCell::new(vec![]),
+                memory: vec![],
                 attack_type: 0,
                 default_pos: 0,
                 damnodice: 0,
@@ -3933,7 +3936,7 @@ impl CharData {
                 last_tell: 0,
             },
             mob_specials: MobSpecialData {
-                memory: RefCell::new(vec![]),
+                memory: vec![],
                 attack_type: self.mob_specials.attack_type,
                 default_pos: self.mob_specials.default_pos,
                 damnodice: self.mob_specials.damnodice,

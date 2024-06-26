@@ -23,13 +23,13 @@ use crate::structs::{
     NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
 use crate::util::{ clone_vec2, rand_number};
-use crate::{Game, TO_ROOM};
+use crate::{Game, DB, TO_ROOM};
 use crate::VictimRef;
 
 impl Game {
     pub fn mobile_activity(&mut self) {
         for chid in self.db.character_list.ids() {
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if !self.db.is_mob(ch) {
                 continue;
             }
@@ -54,7 +54,7 @@ impl Game {
             }
 
             /* If the mob has no specproc, do the default actions */
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if ch.fighting_id().is_some() || !ch.awake() {
                 continue;
             }
@@ -96,7 +96,7 @@ impl Game {
 
             /* Mob Movement */
             let door = rand_number(0, 18);
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if !ch.mob_flagged(MOB_SENTINEL)
                 && ch.get_pos() == POS_STANDING
                 && door < NUM_OF_DIRS as u32
@@ -115,7 +115,7 @@ impl Game {
             }
 
             /* Aggressive Mobs */
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
                 let peoples_in_room =
@@ -125,7 +125,7 @@ impl Game {
                     if found {
                         break;
                     }
-                    let ch = self.db.ch(chid).clone();
+                    let ch = self.db.ch(chid);
                     if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
@@ -152,8 +152,8 @@ impl Game {
             }
 
             /* Mob Memory */
-            let ch = self.db.ch(chid).clone();
-            if ch.mob_flagged(MOB_MEMORY) && ch.memory().borrow().len() != 0 {
+            let ch = self.db.ch(chid);
+            if ch.mob_flagged(MOB_MEMORY) && ch.memory().len() != 0 {
                 let mut found = false;
                 let peoples_in_room =
                     clone_vec2(&self.db.world[ch.in_room() as usize].peoples);
@@ -162,12 +162,12 @@ impl Game {
                     if found {
                         break;
                     }
-                    let ch = self.db.ch(chid).clone();
+                    let ch = self.db.ch(chid);
                     if vict.is_npc() || !self.can_see(ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
                     }
-                    let list =  ch.memory().borrow().clone();
+                    let list =  ch.memory().clone();
                     for id in list{
                         let vict = self.db.ch(vict_id);
                         if id != vict.get_idnum() {
@@ -175,7 +175,7 @@ impl Game {
                         }
 
                         /* Can a master successfully control the charmed monster? */
-                        let ch = self.db.ch(chid).clone();
+                        let ch = self.db.ch(chid);
                         let master_id = ch.master.clone();
                         if self.aggressive_mob_on_a_leash(chid, master_id, vict_id) {
                             continue;
@@ -204,7 +204,7 @@ impl Game {
              *
              * 1-4 = 0, 5-7 = 1, 8-10 = 2, 11-13 = 3, 14-16 = 4, 17-19 = 5, etc.
              */
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if ch.aff_flagged(AFF_CHARM)
                 && ch.master.is_some()
                 && self.num_followers_charmed(ch.master.unwrap())
@@ -216,7 +216,7 @@ impl Game {
                     Some(master_id),
                     master_id,
                 ) {
-                    let ch = self.db.ch(chid).clone();
+                    let ch = self.db.ch(chid);
                     if self.can_see(ch, self.db.ch(ch.master.unwrap()))
                         && !self.db.ch(ch
                             .master
@@ -231,7 +231,7 @@ impl Game {
             }
 
             /* Helper Mobs */
-            let ch = self.db.ch(chid).clone();
+            let ch = self.db.ch(chid);
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
                 let peoples_in_room =
@@ -272,27 +272,34 @@ let vict = self.db.ch(vict_id);
 /* Mob Memory Routines */
 
 /* make ch remember victim */
-pub fn remember(ch: &CharData, victim: &CharData) {
+
+pub fn remember(db: &mut DB, chid: DepotId, victim_id: DepotId) {
+    let ch = db.ch(chid);
+    let victim = db.ch(victim_id);
     if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PRF_NOHASSLE) {
         return;
     }
-
-    if !ch.memory().borrow().contains(&victim.get_idnum()) {
-        ch.memory().borrow_mut().push(victim.get_idnum());
+    let victim_idnum = victim.get_idnum();
+    let ch = db.ch_mut(chid);
+    if !ch.memory().contains(&victim_idnum) {
+        ch.mob_specials.memory.push(victim_idnum);
     }
 }
 
 /* make ch forget victim */
-pub fn forget(ch: &CharData, victim: &CharData) {
-    ch.memory()
-        .borrow_mut()
-        .retain(|id| id != &victim.get_idnum());
+pub fn forget(db: &mut DB, chid: DepotId, victim_id: DepotId) {
+    let victim = db.ch(victim_id);
+    let victim_idnum = victim.get_idnum();
+    let ch = db.ch_mut(chid);
+
+    ch.mob_specials.memory
+        .retain(|id| *id != victim_idnum);
 }
 
 impl CharData {
     /* erase ch's memory */
-    pub fn clear_memory(&self) {
-        self.memory().borrow_mut().clear();
+    pub fn clear_memory(&mut self) {
+        self.mob_specials.memory.clear();
     }
 }
 

@@ -582,7 +582,7 @@ impl Game {
 
                     if self.descriptor_list.get_mut(d_id).character.borrow().is_some() {
                         /* Reset the idle timer & pull char back from void if necessary */
-                        let character_id = self.descriptor_list.get(d_id).character.borrow().unwrap();
+                        let character_id = self.descriptor_list.get(d_id).character.unwrap();
                         let character = self.db.ch_mut(character_id);
                         character.char_specials.timer = 0;
                         if self.descriptor_list.get_mut(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
@@ -841,7 +841,7 @@ fn make_prompt(game: &Game, d_id: DepotId) -> String {
             "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
             d.showstr_page, d.showstr_count
         ));
-    } else if d.connected == ConPlaying && !game.db.ch(d.character.borrow().unwrap()).is_npc() {
+    } else if d.connected == ConPlaying && !game.db.ch(d.character.unwrap()).is_npc() {
         let ohc = d.character.borrow();
         let character_id = ohc.unwrap();
         let character = game.db.ch(character_id);
@@ -1457,7 +1457,7 @@ impl Game {
                         );
                     }
                     _ => {
-                        let name = self.db.ch(d.character.borrow().unwrap()).get_name();
+                        let name = self.db.ch(d.character.unwrap()).get_name();
                         self.mudlog(
                             CMP,
                             LVL_IMMORT as i32,
@@ -1489,7 +1489,6 @@ impl Game {
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
         if d.original.is_some()
             && self.db.ch(d.original
-                .borrow()
                 .unwrap())
                 .desc
                 .borrow()

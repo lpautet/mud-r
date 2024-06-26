@@ -384,10 +384,10 @@ pub fn do_trans(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         let list = game.descriptor_list.ids();
         for i in list {
             if game.descriptor_list.get(i).state() == ConPlaying
-                && game.descriptor_list.get(i).character.borrow().is_some()
-                && game.descriptor_list.get(i).character.borrow().unwrap() != chid
+                && game.descriptor_list.get(i).character.is_some()
+                && game.descriptor_list.get(i).character.unwrap() != chid
             {
-                let ic = game.descriptor_list.get(i).character.borrow();
+                let ic = game.descriptor_list.get(i).character;
                 let victim_id = ic.unwrap();
                 let victim = game.db.ch(victim_id);
                 let ch = game.db.ch(chid);
@@ -1279,8 +1279,8 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             "AC: [{}{}/10], Hitroll: [{:2}], Damroll: [{:2}], Saving throws: [{}/{}/{}/{}/{}]\r\n",
             k.get_ac(),
             DEX_APP[k.get_dex() as usize].defensive,
-            k.points.borrow().hitroll,
-            k.points.borrow().damroll,
+            k.points.hitroll,
+            k.points.damroll,
             k.get_save(0),
             k.get_save(1),
             k.get_save(2),
@@ -1904,7 +1904,6 @@ pub fn do_return(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _
                 .db
                 .ch(game.desc(ch.desc.unwrap()).original.unwrap())
                 .desc
-                .borrow()
                 .unwrap();
             game.desc_mut(dorig_id).character = None;
             game.desc_mut(dorig_id).set_state(ConDisconnect);
@@ -2167,21 +2166,21 @@ pub fn do_purge(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         let ch = game.db.ch(chid);
         let list = clone_vec2(&game.db.world[ch.in_room() as usize].peoples);
         for vict_id in list {
-            let vict = game.db.ch(vict_id).clone();
+            let vict = game.db.ch(vict_id);
             if !vict.is_npc() {
                 continue;
             }
 
             /* Dump inventory. */
             while { let vict = game.db.ch(vict_id); vict.carrying.len() > 0 } {
-                let vict = game.db.ch(vict_id).clone();
+                let vict = game.db.ch(vict_id);
                 let oid = vict.carrying[0];
                 game.extract_obj(oid);
             }
 
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
-                let vict = game.db.ch(vict_id).clone();
+                let vict = game.db.ch(vict_id);
                 if vict.get_eq(i).is_some() {
                     let oid = vict.get_eq(i).unwrap();
                     game.extract_obj(oid)
@@ -2531,8 +2530,8 @@ pub fn do_gecho(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     } else {
         for pt_id in game.descriptor_list.ids() {
             if game.desc(pt_id).state() == ConPlaying
-                && game.desc(pt_id).character.borrow().is_some()
-                && game.desc(pt_id).character.borrow().unwrap() != chid
+                && game.desc(pt_id).character.is_some()
+                && game.desc(pt_id).character.unwrap() != chid
             {
                 let chid = game.desc(pt_id).character.unwrap();
                 game.send_to_char(chid, format!("{}\r\n", argument).as_str());
@@ -2598,10 +2597,10 @@ pub fn do_dc(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcm
         return;
     }
     let d_id = d_id.unwrap();
-    if game.desc(d_id).character.borrow().is_some()
+    if game.desc(d_id).character.is_some()
         && game.db.ch(game.desc(d_id).character.unwrap()).get_level() >= ch.get_level()
     {
-        if !game.can_see(ch, game.db.ch(game.desc(d_id).character.borrow().unwrap())) {
+        if !game.can_see(ch, game.db.ch(game.desc(d_id).character.unwrap())) {
             game.send_to_char(chid, "No such connection.\r\n");
         } else {
             game.send_to_char(chid, "Umm.. maybe that's not such a good idea...\r\n");
@@ -2919,17 +2918,17 @@ pub fn do_wiznet(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                 if game.desc(d_id).state() != ConPlaying
                     || game
                         .db
-                        .ch(game.desc(d_id).character.borrow().unwrap())
+                        .ch(game.desc(d_id).character.unwrap())
                         .get_level()
                         < LVL_IMMORT as u8
                 {
                     continue;
                 }
                 let ch = game.db.ch(chid);
-                if !game.can_see(ch, game.db.ch(game.desc(d_id).character.borrow().unwrap())) {
+                if !game.can_see(ch, game.db.ch(game.desc(d_id).character.unwrap())) {
                     continue;
                 }
-                let dco = game.desc(d_id).character.borrow();
+                let dco = game.desc(d_id).character;
                 let dc_id = dco.unwrap();
                 let dc = game.db.ch(dc_id);
                 game.send_to_char(
@@ -3009,22 +3008,22 @@ pub fn do_wiznet(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
             && game.db.ch(game.desc(d_id).character.unwrap()).get_level() >= level as u8
             && !game
                 .db
-                .ch(game.desc(d_id).character.borrow().unwrap())
+                .ch(game.desc(d_id).character.unwrap())
                 .prf_flagged(PRF_NOWIZ)
             && !game
                 .db
-                .ch(game.desc(d_id).character.borrow().unwrap())
+                .ch(game.desc(d_id).character.unwrap())
                 .plr_flagged(PLR_WRITING | PLR_MAILING)
             && d_id == ch.desc.unwrap()
             || !game
                 .db
-                .ch(game.desc(d_id).character.borrow().unwrap())
+                .ch(game.desc(d_id).character.unwrap())
                 .prf_flagged(PRF_NOREPEAT)
         } {
-            let chid = game.desc(d_id).character.borrow().as_ref().unwrap().clone();
+            let chid = game.desc(d_id).character.as_ref().unwrap().clone();
             game.send_to_char(
                 chid,
-                CCCYN!(game.db.ch(game.desc(d_id).character.borrow().unwrap()), C_NRM),
+                CCCYN!(game.db.ch(game.desc(d_id).character.unwrap()), C_NRM),
             );
             let dc_id = game.desc(d_id).character.unwrap();
             let dc = game.db.ch(dc_id);
@@ -3679,7 +3678,7 @@ pub fn do_show(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
             );
             for d_id in game.descriptor_list.ids() {
                 if game.desc(d_id).snooping.borrow().is_none()
-                    || game.desc(d_id).character.borrow().is_none()
+                    || game.desc(d_id).character.is_none()
                 {
                     continue;
                 }
@@ -4182,15 +4181,15 @@ fn perform_set(game: &mut Game, chid: DepotId, vict_id: DepotId, mode: i32, val_
             game.db.affect_total(vict_id);
         }
         7 => {
-            vict.points.hit = range!(value, -9, vict.points.borrow().max_hit) as i16;
+            vict.points.hit = range!(value, -9, vict.points.max_hit) as i16;
             game.db.affect_total(vict_id);
         }
         8 => {
-            vict.points.mana = range!(value, 0, vict.points.borrow().max_mana) as i16;
+            vict.points.mana = range!(value, 0, vict.points.max_mana) as i16;
             game.db.affect_total(vict_id);
         }
         9 => {
-            vict.points.movem = range!(value, 0, vict.points.borrow().max_move) as i16;
+            vict.points.movem = range!(value, 0, vict.points.max_move) as i16;
             game.db.affect_total(vict_id);
         }
         10 => {

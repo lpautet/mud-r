@@ -973,7 +973,7 @@ impl Game {
                 let ch = self.db.ch(chid);
                 let victim = self.db.ch(victim_id);
                 if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
-                    remember(victim, ch);
+                    remember(&mut self.db, victim_id, chid);
                 }
             }
         }
@@ -1187,9 +1187,8 @@ impl Game {
                         .as_str(),
                     );
                     let ch = self.db.ch(chid);
-                    let victim = self.db.ch(victim_id);
                     if ch.mob_flagged(MOB_MEMORY) {
-                        forget(ch, victim);
+                        forget(&mut self.db, chid, victim_id);
                     }
                 }
                 die(victim_id, self);
