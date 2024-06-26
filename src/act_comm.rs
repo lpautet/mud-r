@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023 Laurent Pautet                            *
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
@@ -20,9 +20,9 @@ use crate::modify::string_write;
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-   AFF_GROUP, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY,
-    PLR_NOSHOUT, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS,
-    PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
+    AFF_GROUP, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT,
+    PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
+    PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
 use crate::VictimRef;
 use crate::{
@@ -479,7 +479,7 @@ pub fn do_write(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 }
 
 pub fn do_page(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let  ch = game.db.ch(chid);
+    let ch = game.db.ch(chid);
     let mut arg = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -507,10 +507,7 @@ pub fn do_page(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                             TO_VICT,
                         );
                     } else {
-                        game.send_to_char(
-                            chid,
-                            "You will never be godly enough to do that!\r\n",
-                        );
+                        game.send_to_char(chid, "You will never be godly enough to do that!\r\n");
                     }
                 }
                 return;
@@ -531,7 +528,7 @@ pub fn do_page(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
                 Some(VictimRef::Char(vict_id)),
                 TO_VICT,
             );
-            let  ch = game.db.ch(chid);
+            let ch = game.db.ch(chid);
             if ch.prf_flagged(PRF_NOREPEAT) {
                 game.send_to_char(chid, OK);
             } else {
@@ -679,15 +676,13 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
         if game.desc(d_id).state() == ConPlaying
             && d_id == ch.desc.unwrap()
             && game.desc(d_id).character.is_some()
-            && !game.db.ch(game
-                .desc(d_id)
-                .character
-                .unwrap())
+            && !game
+                .db
+                .ch(game.desc(d_id).character.unwrap())
                 .prf_flagged(CHANNELS[subcmd as usize])
-            && !game.db.ch(game
-                .desc(d_id)
-                .character
-                .unwrap())
+            && !game
+                .db
+                .ch(game.desc(d_id).character.unwrap())
                 .plr_flagged(PLR_WRITING)
             && !game.db.room_flagged(
                 game.db.ch(game.desc(d_id).character.unwrap()).in_room(),
@@ -779,18 +774,12 @@ pub fn do_qcomm(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subc
             if game.descriptor_list.get(id).state() == ConPlaying
                 && id == ch.desc.unwrap()
                 && game.descriptor_list.get(id).character.is_some()
-                && game.db.ch(game
-                    .descriptor_list
-                    .get(id)
-                    .character
-                    .unwrap())
+                && game
+                    .db
+                    .ch(game.descriptor_list.get(id).character.unwrap())
                     .prf_flagged(PRF_QUEST)
             {
-                let vict_id = game
-                    .descriptor_list
-                    .get(id)
-                    .character
-                    .unwrap();
+                let vict_id = game.descriptor_list.get(id).character.unwrap();
                 game.act(
                     &buf,
                     false,

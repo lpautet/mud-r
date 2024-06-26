@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023 Laurent Pautet                            *
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
 use std::cell::RefCell;
@@ -1941,7 +1941,7 @@ pub fn do_gen_ps(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, s
             page_string(game, d_id, &game.db.imotd.clone().as_ref(), false);
         }
         SCMD_CLEAR => {
-            game.send_to_char(chid, "\x21[H\x21[J");
+            game.send_to_char(chid, "\x1b[H\x1b[J");
         }
         SCMD_VERSION => {
             game.send_to_char(chid, format!("{}\r\n", CIRCLEMUD_VERSION).as_str());

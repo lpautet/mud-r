@@ -1,12 +1,12 @@
 /* ************************************************************************
-*   File: castle.c                                      Part of CircleMUD *
-*  Usage: Special procedures for King's Castle area                       *
+*   File: castle.rs                                     Part of CircleMUD *
+*  Usage: handling of multiple bulletin boards                            *
 *                                                                         *
 *  All rights reserved.  See license.doc for complete information.        *
 *                                                                         *
-*  Special procedures for Kings Castle by Pjotr (d90-pem@nada.kth.se)     *
-*  Coded by Sapowox (d90-jkr@nada.kth.se)                                 *
+*  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
 /* IMPORTANT!
