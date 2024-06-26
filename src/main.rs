@@ -137,7 +137,7 @@ pub struct DescriptorData {
     /* History of commands, for ! mostly.	*/
     history_pos: usize,
     /* Circular array position.		*/
-    output: String,
+    output: Vec<u8>,
     input: LinkedList<TxtBlock>,
     character: Option<DepotId>,
     /* linked to char			*/
@@ -182,7 +182,7 @@ impl Default for DescriptorData {
             last_input: "".to_string(),
             history: [(); HISTORY_SIZE].map(|_| String::new()),
             history_pos: 0,
-            output: String::new(),
+            output: vec![],
             input: LinkedList::new(),
             character: None,
             original: None,
@@ -221,7 +221,7 @@ fn main() -> ExitCode {
     let mut dir = DFLT_DIR.to_string();
     let mut port = DFLT_PORT;
 
-    let mut game = Box::new(Game {
+    let mut game = Game {
         descriptor_list: Depot::new(),
         last_desc: 0,
         circle_shutdown: false,
@@ -235,7 +235,7 @@ fn main() -> ExitCode {
             track_through_doors: true,
         },
         max_players: 0,
-    });
+    };
     let mut logname: Option<&str> = LOGNAME;
 
     let mut pos = 1;
@@ -553,8 +553,8 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            let ids = self.descriptor_list.ids();
-            for d_id in ids {
+            let desc_ids = self.descriptor_list.ids();
+            for d_id in desc_ids {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
@@ -562,8 +562,8 @@ impl Game {
                  * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
                  */
                 {
-                    if self.descriptor_list.get_mut(d_id).character.is_some() {
-                        let character_id = self.descriptor_list.get_mut(d_id).character.unwrap();
+                    if self.desc(d_id).character.is_some() {
+                        let character_id = self.desc(d_id).character.unwrap();
                         let character = self.db.ch(character_id);
                         let wait_state = character.get_wait_state();
                         if wait_state > 0 {
@@ -576,16 +576,19 @@ impl Game {
                         }
                     }
 
-                    if !get_from_q(&mut self.descriptor_list.get_mut(d_id).input, &mut comm, &mut aliased) {
+                    if !get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased) {
                         continue;
                     }
 
-                    if self.descriptor_list.get_mut(d_id).character.borrow().is_some() {
+                    if self.desc(d_id).character.borrow().is_some() {
                         /* Reset the idle timer & pull char back from void if necessary */
-                        let character_id = self.descriptor_list.get(d_id).character.unwrap();
+                        let character_id = self.desc(d_id).character.unwrap();
                         let character = self.db.ch_mut(character_id);
                         character.char_specials.timer = 0;
-                        if self.descriptor_list.get_mut(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
+                        let character = self.db.ch(character_id);
+                        if self.desc(d_id).state() == ConPlaying
+                            && character.get_was_in() != NOWHERE
+                        {
                             if character.in_room != NOWHERE {
                                 self.db.char_from_room(character_id);
                             }
@@ -605,40 +608,30 @@ impl Game {
                         let character = self.db.ch_mut(character_id);
                         character.set_wait_state(1);
                     }
-                    
-                    self.descriptor_list.get_mut(d_id).has_prompt = false;
+
+                    self.desc_mut(d_id).has_prompt = false;
                 }
 
-                if self.descriptor_list.get_mut(d_id).str.is_some() {
+                if self.desc(d_id).str.is_some() {
                     /* Writing boards, mail, etc. */
                     string_add(self, d_id, &comm);
-                } else if self.descriptor_list.get_mut(d_id).showstr_count != 0 {
+                } else if self.desc(d_id).showstr_count != 0 {
                     /* Reading something w/ pager */
                     show_string(self, d_id, &comm);
-                } else if self.descriptor_list.get_mut(d_id).state() != ConPlaying {
+                } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
                     nanny(self, d_id, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
                         /* To prevent recursive aliases. */
-                        self.descriptor_list.get_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
-                    } else if perform_alias(&self.db, self.descriptor_list.get_mut(d_id), &mut comm) {
+                        self.desc_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
+                    } else if perform_alias(self, d_id, &mut comm) {
                         /* Run it through aliasing system */
-                        get_from_q(
-                            &mut self.descriptor_list.get_mut(d_id).input,
-                            &mut comm,
-                            &mut aliased,
-                        );
+                        get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased);
                     }
                     /* Send it to interpreter */
-                    let chid = self
-                        .descriptor_list
-                        .get_mut(d_id)
-                        .character
-                        .as_ref()
-                        .unwrap()
-                        .clone();
+                    let chid = self.desc(d_id).character.unwrap();
                     command_interpreter(self, chid, &comm);
                 }
             }
@@ -655,19 +648,19 @@ impl Game {
 
             /* Print prompts for other descriptors who had no other output */
             for d_id in self.descriptor_list.ids() {
-                let d = self.descriptor_list.get_mut(d_id);
+                let d = self.desc(d_id);
                 if !d.has_prompt && d.output.is_empty() {
                     let text = &make_prompt(self, d_id);
-                    let d = self.descriptor_list.get_mut(d_id);
-                    write_to_descriptor(d.stream.as_mut().unwrap(), text);
+                    let d = self.desc_mut(d_id);
+                    write_to_descriptor(d.stream.as_mut().unwrap(), text.as_bytes());
                     d.has_prompt = true;
                 }
             }
 
             /* Kick out folks in the ConClose or ConDisconnect state */
-            let ids = self.descriptor_list.ids();
-            for id in ids {
-                let d = self.descriptor_list.get(id);
+            let desc_ids = self.descriptor_list.ids();
+            for id in desc_ids {
+                let d = self.desc(id);
                 if d.state() == ConClose || d.state() == ConDisconnect {
                     self.close_socket(id);
                 }
@@ -801,30 +794,23 @@ impl Game {
             sockets_connected, sockets_playing
         );
     }
-}
-/*
- * Turn off echoing (specific to telnet client)
- */
-impl Game {
-    fn echo_off(&mut self, desc_id: DepotId) {
-        let mut off_string = String::new();
-        off_string.push(char::from(IAC));
-        off_string.push(char::from(WILL));
-        off_string.push(char::from(TELOPT_ECHO));
 
-        self.write_to_output(desc_id, &off_string);
+    /*
+     * Turn off echoing (specific to telnet client)
+     */
+    fn echo_off(&mut self, desc_id: DepotId) {
+        self.desc_mut(desc_id)
+            .output
+            .extend_from_slice(&[IAC, WILL, TELOPT_ECHO]);
     }
 
     /*
      * Turn on echoing (specific to telnet client)
      */
     fn echo_on(&mut self, desc_id: DepotId) {
-        let mut off_string = String::new();
-        off_string.push(char::from(IAC));
-        off_string.push(char::from(WONT));
-        off_string.push(char::from(TELOPT_ECHO));
-
-        self.write_to_output(desc_id, &off_string);
+        self.desc_mut(desc_id)
+            .output
+            .extend_from_slice(&[IAC, WONT, TELOPT_ECHO]);
     }
 }
 
@@ -906,7 +892,9 @@ fn flush_queues(d: &mut DescriptorData) {
 impl Game {
     /* Add a new string to a player's output queue. */
     fn write_to_output(&mut self, desc_id: DepotId, txt: &str) -> usize {
-        self.desc_mut(desc_id).output.push_str(txt);
+        self.desc_mut(desc_id)
+            .output
+            .extend_from_slice(txt.as_bytes());
         txt.as_bytes().len()
     }
 }
@@ -969,7 +957,7 @@ impl Game {
         if self.descriptor_list.len() >= self.max_players as usize {
             write_to_descriptor(
                 &mut stream,
-                "Sorry, CircleMUD is full right now... please try again later!\r\n",
+                "Sorry, CircleMUD is full right now... please try again later!\r\n".as_bytes(),
             );
             stream.shutdown(Shutdown::Both).ok();
             return;
@@ -1023,7 +1011,6 @@ impl Game {
         let desc_id = self.descriptor_list.push(newd);
         let txt = self.db.greetings.clone();
         self.write_to_output(desc_id, txt.as_ref());
-
     }
 }
 
@@ -1040,27 +1027,25 @@ impl Game {
 impl Game {
     fn process_output(&mut self, desc_id: DepotId) -> i32 {
         /* we may need this \r\n for later -- see below */
-        let mut i = "\r\n".to_string();
+        let mut i = "\r\n".as_bytes().to_vec();
         let mut result;
 
-        {
-        let t = self.desc(desc_id);
+        let t = self.desc_mut(desc_id);
         /* now, append the 'real' output */
-        i.push_str(&t.output);
+        i.append(&mut t.output);
 
         /* add the extra CRLF if the person isn't in compact mode */
+        let t = self.desc(desc_id);
         if t.connected == ConPlaying
             && t.character.is_some()
             && !self.db.ch(t.character.unwrap()).is_npc()
-            && self.db.ch(t.character
-                .unwrap())
-                .prf_flagged(PRF_COMPACT)
+            && self.db.ch(t.character.unwrap()).prf_flagged(PRF_COMPACT)
         {
-            i.push_str("\r\n");
+            i.extend_from_slice("\r\n".as_bytes());
         }
 
         /* add a prompt */
-        i.push_str(&make_prompt(self, desc_id));
+        i.extend_from_slice(make_prompt(self, desc_id).as_bytes());
 
         /*
          * now, send the output.  If this is an 'interruption', use the prepended
@@ -1085,25 +1070,21 @@ impl Game {
             /* Socket buffer full. Try later. */
             return 0;
         }
-    }
 
         /* Handle snooping: prepend "% " and send to snooper. */
         if self.desc(desc_id).snoop_by.is_some() {
             let snooper_id = self.desc_mut(desc_id).snoop_by.unwrap();
-            self.write_to_output(
-                snooper_id,
-                format!("% {}%%", result).as_str(),
-            );
+            self.write_to_output(snooper_id, format!("% {}%%", result).as_str());
         }
-    
 
         /* The common case: all saved output was handed off to the kernel buffer. */
-        let exp_len = (i.as_bytes().len() - 2) as i32;
+        let exp_len = (i.len() - 2) as i32;
         if result >= exp_len {
-            self.desc_mut(desc_id).output.clear();
+            // already cleared by append ...
+            //self.desc_mut(desc_id).output.clear();
         } else {
             /* Not all data in buffer sent.  result < output buffersize. */
-            let _ = self.desc_mut(desc_id).output.split_off(result as usize);
+            self.desc_mut(desc_id).output = i.split_off(result as usize);
         }
         result
     }
@@ -1118,9 +1099,9 @@ impl Game {
  * >=0  If all is well and good.
  *  -1  If an error was encountered, so that the player should be cut off.
  */
-fn write_to_descriptor(stream: &mut TcpStream, text: &str) -> i32 {
-    let mut txt = text;
-    let mut total = txt.as_bytes().len();
+fn write_to_descriptor(stream: &mut TcpStream, txt: &[u8]) -> i32 {
+    let mut txt = txt;
+    let mut total = txt.len();
     let mut write_total = 0;
 
     while total > 0 {
@@ -1269,17 +1250,16 @@ impl Game {
             }
 
             if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-                if write_to_descriptor(self.desc_mut(d_id).stream.as_mut().unwrap(), tmp.as_str()) < 0 {
+                if write_to_descriptor(self.desc_mut(d_id).stream.as_mut().unwrap(), tmp.as_bytes())
+                    < 0
+                {
                     return -1;
                 }
             }
 
             if self.desc(d_id).snoop_by.is_some() {
                 let desc_id = self.desc_mut(d_id).snoop_by.unwrap();
-                self.write_to_output(
-                    desc_id,
-                    format!("% {}\r\n", tmp).as_str(),
-                );
+                self.write_to_output(desc_id, format!("% {}\r\n", tmp).as_str());
             }
             failed_subst = false;
 
@@ -1352,54 +1332,54 @@ impl Game {
 
         return 1;
     }
-/* perform substitution for the '^..^' csh-esque syntax orig is the
- * orig string, i.e. the one being modified.  subst contains the
- * substition string, i.e. "^telm^tell"
- */
-fn perform_subst(&mut self, desc_id: DepotId, orig: &str, subst: &mut String) -> bool {
-    /*
-     * first is the position of the beginning of the first string (the one
-     * to be replaced
+    /* perform substitution for the '^..^' csh-esque syntax orig is the
+     * orig string, i.e. the one being modified.  subst contains the
+     * substition string, i.e. "^telm^tell"
      */
-    let first = subst.as_str()[1..].to_string();
-    let second = first.find('^');
-    /* now find the second '^' */
+    fn perform_subst(&mut self, desc_id: DepotId, orig: &str, subst: &mut String) -> bool {
+        /*
+         * first is the position of the beginning of the first string (the one
+         * to be replaced
+         */
+        let first = subst.as_str()[1..].to_string();
+        let second = first.find('^');
+        /* now find the second '^' */
 
-    if second.is_none() {
-        self.write_to_output(desc_id, "Invalid substitution.\r\n");
-        return true;
+        if second.is_none() {
+            self.write_to_output(desc_id, "Invalid substitution.\r\n");
+            return true;
+        }
+        /* terminate "first" at the position of the '^' and make 'second' point
+         * to the beginning of the second string */
+        let (first, mut second) = first.split_at(second.unwrap());
+        second = &second[1..];
+
+        /* now, see if the contents of the first string appear in the original */
+        let strpos = orig.find(first);
+        if strpos.is_none() {
+            self.write_to_output(desc_id, "Invalid substitution.\r\n");
+            return true;
+        }
+        let strpos = strpos.unwrap();
+        /* now, we construct the new string for output. */
+
+        /* first, everything in the original, up to the string to be replaced */
+        let mut newsub = String::new();
+        newsub.push_str(&orig[0..strpos]);
+
+        /* now, the replacement string */
+        newsub.push_str(second);
+        /* now, if there's anything left in the original after the string to
+         * replaced, copy that too. */
+
+        if strpos + first.len() < orig.len() {
+            newsub.push_str(&orig[orig.len() - strpos - first.len()..]);
+        }
+
+        *subst = newsub;
+
+        return false;
     }
-    /* terminate "first" at the position of the '^' and make 'second' point
-     * to the beginning of the second string */
-    let (first, mut second) = first.split_at(second.unwrap());
-    second = &second[1..];
-
-    /* now, see if the contents of the first string appear in the original */
-    let strpos = orig.find(first);
-    if strpos.is_none() {
-        self.write_to_output(desc_id, "Invalid substitution.\r\n");
-        return true;
-    }
-    let strpos = strpos.unwrap();
-    /* now, we construct the new string for output. */
-
-    /* first, everything in the original, up to the string to be replaced */
-    let mut newsub = String::new();
-    newsub.push_str(&orig[0..strpos]);
-
-    /* now, the replacement string */
-    newsub.push_str(second);
-    /* now, if there's anything left in the original after the string to
-     * replaced, copy that too. */
-
-    if strpos + first.len() < orig.len() {
-        newsub.push_str(&orig[orig.len() - strpos - first.len()..]);
-    }
-
-    *subst = newsub;
-
-    return false;
-}
 }
 impl Game {
     pub fn close_socket(&mut self, d: DepotId) {
@@ -1451,9 +1431,16 @@ impl Game {
                         self.save_char(link_challenged_id);
                         self.mudlog(
                             NRM,
-                            max(LVL_IMMORT as i32, self.db.ch(link_challenged_id).get_invis_lev() as i32),
+                            max(
+                                LVL_IMMORT as i32,
+                                self.db.ch(link_challenged_id).get_invis_lev() as i32,
+                            ),
                             true,
-                            format!("Closing link to: {}.", self.db.ch(link_challenged_id).get_name()).as_str(),
+                            format!(
+                                "Closing link to: {}.",
+                                self.db.ch(link_challenged_id).get_name()
+                            )
+                            .as_str(),
                         );
                     }
                     _ => {
@@ -1487,13 +1474,7 @@ impl Game {
         }
 
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
-        if d.original.is_some()
-            && self.db.ch(d.original
-                .unwrap())
-                .desc
-                .borrow()
-                .is_some()
-        {
+        if d.original.is_some() && self.db.ch(d.original.unwrap()).desc.borrow().is_some() {
             self.db.ch_mut(d.original.unwrap()).desc = None;
         }
     }
@@ -1642,10 +1623,7 @@ impl Game {
     pub fn send_to_char(&mut self, chid: DepotId, messg: &str) -> usize {
         if self.db.ch(chid).desc.is_some() && messg != "" {
             let desc_id = self.db.ch(chid).desc.unwrap();
-            return self.write_to_output(
-                desc_id,
-                messg,
-            );
+            return self.write_to_output(desc_id, messg);
         }
         0
     }
@@ -1658,7 +1636,7 @@ impl Game {
         }
 
         for d_id in self.descriptor_list.ids() {
-            let t = self.descriptor_list.get_mut(d_id);
+            let t = self.desc_mut(d_id);
             if t.state() != ConPlaying {
                 continue;
             }
@@ -1672,7 +1650,7 @@ impl Game {
         }
 
         for d_id in self.descriptor_list.ids() {
-            let i = self.descriptor_list.get_mut(d_id);
+            let i = self.desc_mut(d_id);
             if i.state() != ConPlaying || i.character.borrow().is_none() {
                 continue;
             }
@@ -1712,13 +1690,12 @@ impl Game {
         vict_obj: Option<VictimRef>,
         to_id: DepotId,
     ) {
-
         let mut uppercasenext = false;
         let mut orig = orig.to_string();
         let mut i: Rc<str>;
         let mut buf = String::new();
 
-        let obj = oid.map(|e|   self.db.obj(e));
+        let obj = oid.map(|e| self.db.obj(e));
 
         loop {
             if orig.starts_with('$') {
@@ -1915,10 +1892,7 @@ impl Game {
         buf.push_str("\r\n");
 
         let desc_id = self.db.ch(to_id).desc.unwrap();
-        self.write_to_output(
-            desc_id,
-            format!("{}", buf).as_str(),
-        );
+        self.write_to_output(desc_id, format!("{}", buf).as_str());
     }
 }
 
@@ -2002,9 +1976,7 @@ impl Game {
         let list = clone_vec2(char_list);
         for to_id in list {
             let to = self.db.ch(to_id);
-            if !sendok!(to, to_sleeping)
-                || (chid.is_some() && to_id ==  chid.unwrap())
-            {
+            if !sendok!(to, to_sleeping) || (chid.is_some() && to_id == chid.unwrap()) {
                 continue;
             }
             if hide_invisible && chid.is_some() && !self.can_see(to, self.db.ch(chid.unwrap())) {

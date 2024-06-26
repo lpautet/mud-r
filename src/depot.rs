@@ -58,6 +58,9 @@ where
     }
 
     pub fn push(&mut self, item: T) -> DepotId {
+        if item.id() != DepotId::default() {
+            panic!("GURU MEDITATION inserting with existing ID ! id.index={} id.seq={}", item.id().index, item.id().seq);
+        }
         self.seq += 1;
         let idx: u32;
         let insert_pos = self.slots.iter().position(|s| s.free);

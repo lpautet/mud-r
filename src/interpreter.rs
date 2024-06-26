@@ -79,7 +79,7 @@ use crate::structs::{
 };
 use crate::util::{clone_vec2, BRF, NRM};
 use crate::{
-    _clrlevel, clr, write_to_q, DescriptorData, Game, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM,
+    _clrlevel, clr, write_to_q, Game, CCNRM, CCRED, PLR_DELETED, TO_ROOM,
 };
 
 /*
@@ -3000,9 +3000,10 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
  *   1: String was _not_ modified in place; rather, the expanded aliases
  *      have been placed at the front of the character's input queue.
  */
-pub fn perform_alias(db: &DB, d: &mut DescriptorData, orig: &mut String) -> bool {
+pub fn perform_alias(game: &mut Game, d_id: DepotId, orig: &mut String) -> bool {
+    let d = game.desc(d_id);
     /* Mobs don't have aliases. */
-    let character = db.ch(d.character.unwrap());
+    let character = game.db.ch(d.character.unwrap());
     if character.is_npc() {
         return false;
     }
@@ -3028,13 +3029,14 @@ pub fn perform_alias(db: &DB, d: &mut DescriptorData, orig: &mut String) -> bool
     } {
         return false;
     }
-    let a = a.unwrap();
+    let a = a.unwrap().clone();
     if a.type_ == ALIAS_SIMPLE {
         orig.clear();
         orig.push_str(a.replacement.as_ref());
         return false;
     } else {
-        perform_complex_alias(&mut d.input, ptr, a);
+        let d = game.desc_mut(d_id);
+        perform_complex_alias(&mut d.input, ptr, &a);
         return true;
     }
 }
