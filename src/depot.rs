@@ -87,7 +87,7 @@ where
         ret
     }
 
-    pub fn remove(&mut self, id: DepotId) -> T {
+    pub fn take(&mut self, id: DepotId) -> T {
         
         if id.index as usize >= self.slots.len() {
             panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());

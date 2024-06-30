@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -164,7 +164,7 @@ impl Default for DescriptorData {
         DescriptorData {
             id: Default::default(),
             stream: None,
-            host: Rc::from(EMPTY_STRING),
+            host: Rc::from(""),
             bad_pws: 0,
             idle_tics: 0,
             connected: ConGetName,
@@ -828,35 +828,34 @@ fn make_prompt(game: &Game, d_id: DepotId) -> String {
             d.showstr_page, d.showstr_count
         ));
     } else if d.connected == ConPlaying && !game.db.ch(d.character.unwrap()).is_npc() {
-        let ohc = d.character.borrow();
-        let character_id = ohc.unwrap();
+        let character_id = d.character.unwrap();
         let character = game.db.ch(character_id);
-        if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH as usize {
+        if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH {
             let il = character.get_invis_lev();
-            prompt.push_str(&*format!("i{} ", il));
+            prompt.push_str(format!("i{} ", il).as_str());
         }
 
-        if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+        if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH {
             let hit = character.get_hit();
-            prompt.push_str(&*format!("{}H ", hit));
+            prompt.push_str(format!("{}H ", hit).as_str());
         }
 
-        if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+        if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH {
             let mana = character.get_mana();
-            prompt.push_str(&*format!("{}M ", mana));
+            prompt.push_str(format!("{}M ", mana).as_str());
         }
 
-        if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH as usize {
+        if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH {
             let _move = character.get_move();
-            prompt.push_str(&*format!("{}V ", _move));
+            prompt.push_str(format!("{}V ", _move).as_str());
         }
 
         prompt.push_str("> ");
     } else if d.connected == ConPlaying && game.db.ch(d.character.unwrap()).is_npc() {
-        prompt.push_str(&*format!(
+        prompt.push_str(format!(
             "{}s>",
             game.db.ch(d.character.unwrap()).get_name()
-        ));
+        ).as_str());
     }
 
     prompt
@@ -944,8 +943,6 @@ fn get_bind_addr() -> IpAddr {
     }
     bind_addr
 }
-
-static EMPTY_STRING: &'static str = "";
 
 impl Game {
     fn new_descriptor(&mut self, mut stream: TcpStream, addr: SocketAddr) {
@@ -1135,11 +1132,15 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
     match stream.read(&mut buf) {
         Err(err) => {
             error!("{:?}", err);
-            return Err(err);
+            Err(err)
         }
         Ok(r) => match std::str::from_utf8(&buf[..r]) {
             Err(err) => {
-                error!("UTF-8 ERROR {:?}", err);
+                if err.valid_up_to() == 0 && buf[0] == IAC && r == 3 {
+                    // this is a telnet command, no worries we can ignore that read
+                } else {
+                    error!("UTF-8 ERROR read={} invalid={:?} err={:?}", r, buf[err.valid_up_to()], err);
+                }
                 Ok(0)
             }
             Ok(s) => {
@@ -1383,7 +1384,7 @@ impl Game {
 }
 impl Game {
     pub fn close_socket(&mut self, d: DepotId) {
-        let mut d = self.descriptor_list.remove(d);
+        let mut d = self.descriptor_list.take(d);
 
         d.stream
             .as_mut()

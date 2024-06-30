@@ -4668,6 +4668,6 @@ pub fn do_set(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
         }
     }
     if is_file {
-        game.db.character_list.remove(vict_id.unwrap());
+        game.db.character_list.take(vict_id.unwrap());
     }
 }

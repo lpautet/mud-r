@@ -3447,18 +3447,16 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
     if target_id.is_none() {
         return false;
     }
-    let target = target_id.unwrap();
+    let target_id = target_id.unwrap();
 
     /* Okay, we've found a target.  Connect d to target. */
-    game.desc_mut(d_id).character = Some(target);
+    game.desc_mut(d_id).character = Some(target_id);
     {
         let character_id = game
             .descriptor_list
-            .get_mut(d_id)
+            .get(d_id)
             .character
-            .as_ref()
-            .unwrap()
-            .clone();
+            .unwrap();
         let character = game.db.ch_mut(character_id);
         character.desc = Some(d_id);
         game.desc_mut(d_id).original = None;
@@ -3472,7 +3470,7 @@ fn perform_dupe_check(game: &mut Game, d_id: DepotId) -> bool {
     match mode {
         RECON => {
             game.write_to_output(d_id, "Reconnecting.\r\n");
-            let chid = game.desc(d_id).character.unwrap().clone();
+            let chid = game.desc(d_id).character.unwrap();
             game.act("$n has reconnected.", true, Some(chid), None, None, TO_ROOM);
             let v2 = game
                 .db
@@ -3564,7 +3562,7 @@ pub fn nanny(game: &mut Game, d_id: DepotId, arg: &str) {
 
                     if character.prf_flagged(PLR_DELETED) {
                         /* We get a false positive from the original deleted character. */
-                        game.db.character_list.remove(game.desc(d_id).character.unwrap());
+                        game.db.character_list.take(game.desc(d_id).character.unwrap());
                         game.desc_mut(d_id).character = None;
                         //free_char(d->character);
                         /* Check for multiple creations... */

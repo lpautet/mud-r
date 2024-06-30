@@ -57,7 +57,7 @@ pub fn fname(namelist: &str) -> Rc<str> {
 }
 
 pub fn isname(txt: &str, namelist: &str) -> bool {
-    info!("[DEBUG] {} namelist='{}'", txt, namelist);
+    //info!("[DEBUG] {} namelist='{}'", txt, namelist);
     let mut curname = namelist.to_string();
     loop {
         let mut skip = false;
@@ -907,7 +907,9 @@ impl DB {
 impl Game {
     /* Extract an object from the world */
     pub fn extract_obj(&mut self, oid: DepotId) {
-        let tch = self.db.obj(oid).worn_by.borrow().clone();
+        info!("Extracting {}", self.db.obj(oid).name);
+        println!("Custom backtrace: {}", std::backtrace::Backtrace::force_capture());
+        let tch = self.db.obj(oid).worn_by.clone();
         if tch.is_some() {
             if self
                 .unequip_char(tch.unwrap(), self.db.obj(oid).worn_on as i8)
@@ -930,11 +932,11 @@ impl Game {
         for o in self.db.obj(oid).contains.iter() {
             old_object_list.push(*o);
         }
-        for o in old_object_list.into_iter() {
+        for o in old_object_list {
             self.extract_obj(o);
         }
 
-        self.db.object_list.remove(oid);
+        self.db.object_list.take(oid);
 
         if self.db.obj(oid).get_obj_rnum() != NOTHING {
             let obj_rnum = self.db.obj(oid).get_obj_rnum();
@@ -1013,7 +1015,7 @@ impl Game {
         let ch = self.db.ch(chid);
         if ch.in_room() == NOWHERE {
             error!(
-                "SYSERR: NOWHERE extracting char {}. ( extract_char_final)",
+                "SYSERR: NOWHERE extracting char {}. (extract_char_final)",
                 ch.get_name()
             );
             process::exit(1);
@@ -1211,6 +1213,7 @@ impl Game {
 
             self.extract_char_final(vict_id);
             self.db.extractions_pending -= 1;
+            self.db.character_list.take(vict_id);
         }
 
         if self.db.extractions_pending > 0 {

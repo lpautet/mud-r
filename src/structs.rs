@@ -306,7 +306,7 @@ pub const PRF_DISPAUTO: i64 = 1 << 22; /* Show prompt HP, MP, MV when < 30%.	*/
 
 /* Variables for the output buffering system */
 // pub const MAX_SOCK_BUF: i32 = 12 * 1024; /* Size of kernel's sock buf   */
-pub const MAX_PROMPT_LENGTH: i32 = 96; /* Max length of prompt        */
+pub const MAX_PROMPT_LENGTH: usize = 96; /* Max length of prompt        */
 // pub const GARBAGE_SPACE: i32 = 32; /* Space for **OVERFLOW** etc  */
 // pub const SMALL_BUFSIZE: i32 = 1024; /* Static output buffer size   */
 /* Max amount of output that can be buffered */

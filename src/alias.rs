@@ -99,6 +99,10 @@ pub fn read_aliases(ch: &mut CharData) {
         if line.is_err() {
             break;
         }
+        if buf.len() == 0 {
+            // empty line must mean end of file
+            break;
+        }
         buf.clear();
         line = reader.read_line(&mut buf);
         if line.is_err() {
@@ -128,11 +132,10 @@ pub fn read_aliases(ch: &mut CharData) {
         }
         let r = buf.trim_end().parse::<i32>();
         if r.is_err() {
-            error!("Error with alias type: {}", buf.trim_end());
+            error!("Error with alias '{}' type: '{}' ({})", t2.alias, buf.trim_end(), t2.replacement);
             break;
         }
         t2.type_ = r.unwrap();
-        info!("adding alias");
         ch.player_specials.aliases.push(t2);
     }
 }

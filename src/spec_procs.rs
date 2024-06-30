@@ -705,7 +705,7 @@ pub fn fido(game: &mut Game, chid: DepotId, _me: MeRef, cmd: i32, _argument: &st
     let list = clone_vec2(&game.db.world[ch.in_room() as usize].contents);
     for i in list
     {
-        if game.db.obj(i).is_corpse() {
+        if !game.db.obj(i).is_corpse() {
             continue;
         }
 
