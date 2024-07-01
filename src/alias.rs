@@ -15,7 +15,7 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::rc::Rc;
 
-use log::{error, info};
+use log::error;
 
 use crate::interpreter::AliasData;
 use crate::structs::CharData;

@@ -2589,8 +2589,8 @@ impl Game {
                     {
                         if self.db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
                             let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = self.db.read_object(nr, REAL);
                             let room_nr = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
+                            oid = self.db.read_object(nr, REAL);
                             self.db.obj_to_room(oid.unwrap(), room_nr);
                             last_cmd = 1;
                         } else {

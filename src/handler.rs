@@ -907,12 +907,14 @@ impl DB {
 impl Game {
     /* Extract an object from the world */
     pub fn extract_obj(&mut self, oid: DepotId) {
-        info!("Extracting {}", self.db.obj(oid).name);
-        println!("Custom backtrace: {}", std::backtrace::Backtrace::force_capture());
-        let tch = self.db.obj(oid).worn_by.clone();
-        if tch.is_some() {
+        // if self.db.get_obj_vnum(self.db.obj(oid)) == 3034 { // TODO: remove
+        // info!("Extracting {}", self.db.obj(oid).name);
+        // println!("Custom backtrace: {}", std::backtrace::Backtrace::force_capture());
+        // }
+        let tch_id = self.db.obj(oid).worn_by.clone();
+        if tch_id.is_some() {
             if self
-                .unequip_char(tch.unwrap(), self.db.obj(oid).worn_on as i8)
+                .unequip_char(tch_id.unwrap(), self.db.obj(oid).worn_on as i8)
                 .unwrap()
                 != oid
             {
@@ -936,11 +938,10 @@ impl Game {
             self.extract_obj(o);
         }
 
-        self.db.object_list.take(oid);
+        let obj = self.db.object_list.take(oid);
 
-        if self.db.obj(oid).get_obj_rnum() != NOTHING {
-            let obj_rnum = self.db.obj(oid).get_obj_rnum();
-            self.db.obj_index[obj_rnum as usize].number -= 1;
+        if obj.get_obj_rnum() != NOTHING {
+            self.db.obj_index[obj.get_obj_rnum() as usize].number -= 1;
         }
     }
 }
