@@ -32,7 +32,7 @@ use crate::{
 use std::rc::Rc;
 
 pub fn do_say(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let mut argument = argument.trim_start().to_string();
+    let argument = argument.trim_start();
 
     if argument.is_empty() {
         game.send_to_char(chid, "Yes, but WHAT do you want to say?\r\n");
@@ -43,6 +43,7 @@ pub fn do_say(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(chid, OK);
         } else {
+            let mut argument = argument.to_string();
             delete_doubledollar(&mut argument);
             game.send_to_char(chid, format!("You say, '{}'\r\n", argument).as_str());
         }
@@ -107,9 +108,9 @@ pub fn do_gsay(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
 
 fn perform_tell(game: &mut Game, chid: DepotId, vict_id: DepotId, arg: &str) {
     let vict = game.db.ch(vict_id);
-    let ccred = CCRED!(vict, C_NRM);
-    let ccnrm = CCNRM!(vict, C_NRM);
-    game.send_to_char(vict_id, ccred);
+    let vict_ccred = CCRED!(vict, C_NRM);
+    let vict_ccnrm = CCNRM!(vict, C_NRM);
+    game.send_to_char(vict_id, vict_ccred);
     let buf = format!("$n tells you, '{}'", arg);
     game.act(
         &buf,
@@ -119,15 +120,15 @@ fn perform_tell(game: &mut Game, chid: DepotId, vict_id: DepotId, arg: &str) {
         Some(VictimRef::Char(vict_id)),
         TO_VICT | TO_SLEEP,
     );
-    game.send_to_char(vict_id, ccnrm);
+    game.send_to_char(vict_id, vict_ccnrm);
 
     let ch = game.db.ch(chid);
-    let ccred = CCRED!(ch, C_NRM);
-    let ccnrm = CCNRM!(ch, C_NRM);
     if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
         game.send_to_char(chid, OK);
     } else {
-        game.send_to_char(chid, ccred);
+        let ch_ccred = CCRED!(ch, C_NRM);
+        let ch_ccnrm = CCNRM!(ch, C_NRM);
+        game.send_to_char(chid, ch_ccred);
         let buf = format!("You tell $N, '{}'", arg);
         game.act(
             &buf,
@@ -137,15 +138,15 @@ fn perform_tell(game: &mut Game, chid: DepotId, vict_id: DepotId, arg: &str) {
             Some(VictimRef::Char(vict_id)),
             TO_CHAR | TO_SLEEP,
         );
-        game.send_to_char(chid, ccnrm);
+        game.send_to_char(chid, ch_ccnrm);
     }
     let ch = game.db.ch(chid);
     let vict = game.db.ch(vict_id);
 
     if !vict.is_npc() && !ch.is_npc() {
-        let val = ch.get_idnum();
+        let ch_idnum = ch.get_idnum();
         let vict = game.db.ch_mut(vict_id);
-        vict.set_last_tell(val);
+        vict.set_last_tell(ch_idnum);
     }
 }
 
@@ -192,10 +193,10 @@ fn is_tell_ok(game: &mut Game, chid: DepotId, vict_id: DepotId) -> bool {
             TO_CHAR | TO_SLEEP,
         );
     } else {
-        return true;
+       return true;
     }
 
-    return false;
+    false
 }
 
 /*
@@ -491,7 +492,7 @@ pub fn do_page(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _sub
     } else if arg.is_empty() {
         game.send_to_char(chid, "Whom do you wish to page?\r\n");
     } else {
-        let buf = format!("\007\007*$n* {}", buf2);
+        let buf = format!("\x07\x07*$n* {}", buf2);
         if arg == "all" {
             if ch.get_level() > LVL_GOD as u8 {
                 for d_id in game.descriptor_list.ids() {
@@ -674,7 +675,7 @@ pub fn do_gen_comm(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     for d_id in game.descriptor_list.ids() {
         let ch = game.db.ch(chid);
         if game.desc(d_id).state() == ConPlaying
-            && d_id == ch.desc.unwrap()
+            && d_id != ch.desc.unwrap()
             && game.desc(d_id).character.is_some()
             && !game
                 .db
@@ -772,7 +773,7 @@ pub fn do_qcomm(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subc
         for id in game.descriptor_list.ids() {
             let ch = game.db.ch(chid);
             if game.descriptor_list.get(id).state() == ConPlaying
-                && id == ch.desc.unwrap()
+                && id != ch.desc.unwrap()
                 && game.descriptor_list.get(id).character.is_some()
                 && game
                     .db

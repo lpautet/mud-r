@@ -328,8 +328,6 @@ fn main() -> ExitCode {
         pos += 1;
     }
 
-    //game.db.mini_mud = true;
-
     if pos < args.len() {
         if !args[pos].chars().next().unwrap().is_digit(10) {
             println!(
@@ -891,10 +889,11 @@ fn flush_queues(d: &mut DescriptorData) {
 impl Game {
     /* Add a new string to a player's output queue. */
     fn write_to_output(&mut self, desc_id: DepotId, txt: &str) -> usize {
+        let payload = txt.as_bytes();
         self.desc_mut(desc_id)
             .output
-            .extend_from_slice(txt.as_bytes());
-        txt.as_bytes().len()
+            .extend_from_slice(payload);
+        payload.len()
     }
 }
 
