@@ -386,7 +386,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(game: &mut Game, db: &mut DB, d_id: DepotId, msg: &str, keep_internal: bool) {
+pub fn page_string(game: &mut Game, db: &DB, d_id: DepotId, msg: &str, keep_internal: bool) {
     if msg.is_empty() {
         return;
     }
@@ -408,7 +408,7 @@ pub fn page_string(game: &mut Game, db: &mut DB, d_id: DepotId, msg: &str, keep_
 }
 
 /* The call that displays the next page. */
-pub fn show_string(game: &mut Game, db: &mut DB, d_id: DepotId, input: &str) {
+pub fn show_string(game: &mut Game, db: & DB, d_id: DepotId, input: &str) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 

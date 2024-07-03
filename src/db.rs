@@ -577,108 +577,108 @@ impl DB {
     }
 
     /* body of the booting system */
-    pub fn boot_db(game: &mut Game, db: &mut DB) {
+    pub fn boot_db(&mut self, game: &mut Game) {
         info!("Boot db -- BEGIN.");
 
         info!("Resetting the game time:");
-        db.reset_time();
+        self.reset_time();
 
         info!("Reading news, credits, help, bground, info & motds.");
         let mut buf = Rc::from("");
         game.file_to_string_alloc(NEWS_FILE, &mut buf);
-        db.news = buf.clone();
+        self.news = buf.clone();
         game.file_to_string_alloc(CREDITS_FILE, &mut buf);
-        db.credits = buf.clone();
+        self.credits = buf.clone();
         game.file_to_string_alloc(MOTD_FILE, &mut buf);
-        db.motd = buf.clone();
+        self.motd = buf.clone();
         game.file_to_string_alloc(IMOTD_FILE, &mut buf);
-        db.imotd = buf.clone();
+        self.imotd = buf.clone();
         game.file_to_string_alloc(HELP_PAGE_FILE, &mut buf);
-        db.help = buf.clone();
+        self.help = buf.clone();
         game.file_to_string_alloc(INFO_FILE, &mut buf);
-        db.info = buf.clone();
+        self.info = buf.clone();
         game.file_to_string_alloc(WIZLIST_FILE, &mut buf);
-        db.wizlist = buf.clone();
+        self.wizlist = buf.clone();
         game.file_to_string_alloc(IMMLIST_FILE, &mut buf);
-        db.immlist = buf.clone();
+        self.immlist = buf.clone();
         game.file_to_string_alloc(POLICIES_FILE, &mut buf);
-        db.policies = buf.clone();
+        self.policies = buf.clone();
         game.file_to_string_alloc(HANDBOOK_FILE, &mut buf);
-        db.handbook = buf.clone();
+        self.handbook = buf.clone();
         game.file_to_string_alloc(BACKGROUND_FILE, &mut buf);
-        db.background = buf.clone();
+        self.background = buf.clone();
         game.file_to_string_alloc(GREETINGS_FILE, &mut buf);
-        db.greetings = buf.clone();
-        prune_crlf(&mut db.greetings);
+        self.greetings = buf.clone();
+        prune_crlf(&mut self.greetings);
 
         info!("Loading spell definitions.");
-        mag_assign_spells(db);
+        mag_assign_spells(self);
 
-        boot_world(game, db);
+        boot_world(game, self);
 
         info!("Loading help entries.");
-        db.index_boot(DB_BOOT_HLP);
+        self.index_boot(DB_BOOT_HLP);
 
         info!("Generating player index.");
-        db.build_player_index();
+        self.build_player_index();
 
         info!("Loading fight messages.");
-        db.load_messages();
+        self.load_messages();
 
         info!("Loading social messages.");
-        boot_social_messages(db);
+        boot_social_messages(self);
 
         info!("Assigning function pointers:");
 
-        if !db.no_specials {
+        if !self.no_specials {
             info!("   Mobiles.");
-            assign_mobiles(db);
+            assign_mobiles(self);
             info!("   Shopkeepers.");
-            assign_the_shopkeepers(db);
+            assign_the_shopkeepers(self);
             info!("   Objects.");
-            assign_objects(db);
+            assign_objects(self);
             info!("   Rooms.");
-            assign_rooms(db);
+            assign_rooms(self);
         }
 
         info!("Assigning spell and skill levels.");
-        init_spell_levels(db);
+        init_spell_levels(self);
         //
         info!("Sorting command list and spells.");
-        sort_commands(db);
-        sort_spells(db);
+        sort_commands(self);
+        sort_spells(self);
 
         info!("Booting mail system.");
-        if !db.mails.scan_file() {
+        if !self.mails.scan_file() {
             info!("    Mail boot failed -- Mail system disabled");
-            db.no_mail = true;
+            self.no_mail = true;
         }
         info!("Reading banned site and invalid-name list.");
-        load_banned(db);
-        read_invalid_list(db);
+        load_banned(self);
+        read_invalid_list(self);
 
-        if !db.no_rent_check {
+        if !self.no_rent_check {
             info!("Deleting timed-out crash and rent files:");
-            update_obj_file(db);
+            update_obj_file(self);
             info!("   Done.");
         }
 
         // /* Moved here so the object limit code works. -gg 6/24/98 */
-        if !db.mini_mud {
+        if !self.mini_mud {
             info!("Booting houses.");
-            house_boot(db);
+            house_boot(self);
         }
 
-        let zone_count = db.zone_table.len();
+        let zone_count = self.zone_table.len();
         for i in 0..zone_count {
             info!(
                 "Resetting #{}: {} (rooms {}-{}).",
-                db.zone_table[i].number,
-                db.zone_table[i].name,
-                db.zone_table[i].bot,
-                db.zone_table[i].top
+                self.zone_table[i].number,
+                self.zone_table[i].name,
+                self.zone_table[i].bot,
+                self.zone_table[i].top
             );
-            game.reset_zone(db,i);
+            game.reset_zone(self,i);
         }
 
         // TODO reset_q.head = reset_q.tail = NULL;
@@ -780,7 +780,7 @@ pub fn parse_c_string(cstr: &[u8]) -> String {
 
 impl DB {
     /* generate index table for the player file */
-    fn build_player_index<'a>(&mut self) {
+    fn build_player_index(&mut self) {
         let recs: u64;
 
         let player_file: File;
@@ -2363,10 +2363,10 @@ impl DB {
     // }
 
     /* create a new mobile from a prototype */
-    pub(crate) fn read_mobile(&mut self, nr: MobVnum, _type: i32) -> Option<DepotId> /* and mob_rnum */
+    pub(crate) fn read_mobile(&mut self, nr: MobVnum, read_type: i32) -> Option<DepotId> /* and mob_rnum */
     {
         let i;
-        if _type == VIRTUAL {
+        if read_type == VIRTUAL {
             i = self.real_mobile(nr);
             if i == NOBODY {
                 warn!("WARNING: Mobile vnum {} does not exist in database.", nr);
@@ -2436,8 +2436,8 @@ impl DB {
     }
 
     /* create a new object from a prototype */
-    pub fn read_object(&mut self, nr: ObjVnum, _type: i32) -> Option<DepotId> /* and obj_rnum */ {
-        let i = if _type == VIRTUAL {
+    pub fn read_object(&mut self, nr: ObjVnum, read_type: i32) -> Option<DepotId> /* and obj_rnum */ {
+        let i = if read_type == VIRTUAL {
             self.real_object(nr)
         } else {
             nr
@@ -2446,7 +2446,7 @@ impl DB {
         if i == NOTHING || i >= self.obj_index.len() as i16 {
             warn!(
                 "Object ({}) {} does not exist in database.",
-                if _type == VIRTUAL { 'V' } else { 'R' },
+                if read_type == VIRTUAL { 'V' } else { 'R' },
                 nr
             );
             return None;
@@ -3279,7 +3279,7 @@ impl DB {
  * as to avoid special cases.
  */
 impl Game {
-    fn file_to_string_alloc<'a>(&mut self, name: &'a str, buf: &'a mut Rc<str>) -> i32 {
+    fn file_to_string_alloc(&mut self, name: &str, buf: &mut Rc<str>) -> i32 {
         for in_use in self.descriptor_list.iter() {
             if &in_use.showstr_vector[0].as_ref() == &buf.as_ref() {
                 return -1;
@@ -3788,8 +3788,8 @@ impl Default for CharData {
                 damroll: 0,
             },
             char_specials: CharSpecialData {
-                fighting: None,
-                hunting: None,
+                fighting_chid: None,
+                hunting_chid: None,
                 position: 0,
                 carry_weight: 0,
                 carry_items: 0,
@@ -3887,8 +3887,8 @@ impl CharData {
             aff_abils: self.aff_abils,
             points:self.points,
             char_specials: CharSpecialData {
-                fighting: None,
-                hunting: None,
+                fighting_chid: None,
+                hunting_chid: None,
                 position: self.char_specials.position,
                 carry_weight: self.char_specials.carry_weight,
                 carry_items: self.char_specials.carry_items,

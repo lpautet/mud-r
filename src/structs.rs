@@ -415,9 +415,9 @@ pub struct FollowType {
 
 /* Special playing constants shared by PCs and NPCs which aren't in pfile */
 pub struct CharSpecialData {
-    pub fighting: Option<DepotId>,
+    pub fighting_chid: Option<DepotId>,
     /* Opponent				*/
-    pub hunting: Option<DepotId>,
+    pub hunting_chid: Option<DepotId>,
     /* Char hunted by this char		*/
     pub position: u8,
     /* Standing, fighting, sleeping, etc.	*/

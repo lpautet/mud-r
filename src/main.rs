@@ -404,7 +404,7 @@ impl Game {
         self.max_players = get_max_players();
 
         info!("Opening mother connection.");
-        DB::boot_db(self, db);
+        db.boot_db(self);
 
         // info!("Signal trapping.");
         // signal_setup();

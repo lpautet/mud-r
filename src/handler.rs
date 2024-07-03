@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::borrow::Borrow;
@@ -14,7 +14,7 @@ use std::cmp::{max, min};
 use std::process;
 use std::rc::Rc;
 
-use log::{error, info};
+use log::error;
 
 use crate::act_wizard::do_return;
 use crate::class::invalid_class;
@@ -221,13 +221,7 @@ impl DB {
                     let mod_ = eq.affected[j as usize].modifier as i16;
                     let bitv = eq.get_obj_affect();
                     let ch = self.ch_mut(chid);
-                    affect_modify(
-                        ch,
-                        loc,
-                        mod_,
-                        bitv,
-                        false,
-                    );
+                    affect_modify(ch, loc, mod_, bitv, false);
                 }
             }
         }
@@ -254,13 +248,7 @@ impl DB {
                     let mod_ = eq.affected[j as usize].modifier as i16;
                     let bitv = eq.get_obj_affect();
                     let ch = self.ch_mut(chid);
-                    affect_modify(
-                        ch,
-                        loc,
-                        mod_,
-                        bitv,
-                        true,
-                    )
+                    affect_modify(ch, loc, mod_, bitv, true)
                 }
             }
         }
@@ -336,7 +324,7 @@ impl DB {
     }
 
     /* Call affect_remove with every spell of spelltype "skill" */
-    pub fn affect_from_char(&mut self,  chid: DepotId, type_: i16) {
+    pub fn affect_from_char(&mut self, chid: DepotId, type_: i16) {
         let ch = self.ch_mut(chid);
         let mut list = ch.affected.clone();
         list.retain(|hjp| {
@@ -369,7 +357,7 @@ impl DB {
     pub fn affect_join(
         &mut self,
         chid: DepotId,
-        af:  &AffectedType,
+        af: &AffectedType,
         add_dur: bool,
         avg_dur: bool,
         add_mod: bool,
@@ -461,7 +449,9 @@ impl DB {
 
         /* Stop fighting now, if we left. */
         let ch = self.ch(chid);
-        if ch.fighting_id().is_some() && ch.in_room() != self.ch(ch.fighting_id().unwrap()).in_room() {
+        if ch.fighting_id().is_some()
+            && ch.in_room() != self.ch(ch.fighting_id().unwrap()).in_room()
+        {
             self.stop_fighting(ch.fighting_id().unwrap());
             self.stop_fighting(chid);
         }
@@ -553,67 +543,66 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
 impl Game {
     pub(crate) fn equip_char(&mut self, db: &mut DB, chid: DepotId, oid: DepotId, pos: i8) {
         let ch = db.ch(chid);
-        //int j;
 
         if pos < 0 || pos >= NUM_WEARS {
-            //core_dump();
+            panic!("Invalid position in equip_char: {}", pos);
+        }
+
+        let obj = db.obj(oid);
+
+        if ch.get_eq(pos).is_some() {
+            error!(
+                "SYSERR: Char is already equipped: {}, {}",
+                ch.get_name(),
+                obj.short_description
+            );
             return;
         }
-        {
-            let obj = db.obj(oid);
+        if obj.carried_by.borrow().is_some() {
+            error!("SYSERR: EQUIP: Obj is carried_by when equip.");
+            return;
+        }
+        if obj.in_room() != NOWHERE {
+            error!("SYSERR: EQUIP: Obj is in_room when equip.");
+            return;
+        }
 
-            if ch.get_eq(pos).is_some() {
-                error!(
-                    "SYSERR: Char is already equipped: {}, {}",
-                    ch.get_name(),
-                    obj.short_description
-                );
-                return;
-            }
-            if obj.carried_by.borrow().is_some() {
-                error!("SYSERR: EQUIP: Obj is carried_by when equip.");
-                return;
-            }
-            if obj.in_room() != NOWHERE {
-                error!("SYSERR: EQUIP: Obj is in_room when equip.");
-                return;
-            }
+        if invalid_align(ch, db.obj(oid)) || invalid_class(ch, db.obj(oid)) {
+            self.act(
+                db,
+                "You are zapped by $p and instantly let go of it.",
+                false,
+                Some(chid),
+                Some(oid),
+                None,
+                TO_CHAR,
+            );
+            self.act(
+                db,
+                "$n is zapped by $p and instantly lets go of it.",
+                false,
+                Some(chid),
+                Some(oid),
+                None,
+                TO_ROOM,
+            );
+            /* Changed to drop in inventory instead of the ground. */
+            db.obj_to_char(oid, chid);
+            return;
         }
-        {
-            if invalid_align(ch, db.obj(oid)) || invalid_class(ch, db.obj(oid)) {
-                self.act(db,
-                    "You are zapped by $p and instantly let go of it.",
-                    false,
-                    Some(chid),
-                    Some(oid),
-                    None,
-                    TO_CHAR,
-                );
-                self.act(db,
-                    "$n is zapped by $p and instantly lets go of it.",
-                    false,
-                    Some(chid),
-                    Some(oid),
-                    None,
-                    TO_ROOM,
-                );
-                /* Changed to drop in inventory instead of the ground. */
-                db.obj_to_char(oid, chid);
-                return;
-            }
-        }
+
         let ch = db.ch_mut(chid);
         ch.set_eq(pos, Some(oid));
-        {
-            let obj = db.obj_mut(oid);
-            obj.worn_by = Some(chid);
-            obj.worn_on = pos as i16;
-        }
+
+        let obj = db.obj_mut(oid);
+        obj.worn_by = Some(chid);
+        obj.worn_on = pos as i16;
+
         let ch = db.ch(chid);
         if db.obj(oid).get_obj_type() == ITEM_ARMOR as u8 {
-            let val = db.apply_ac(ch, pos as i16);
+            let armor = db.apply_ac(ch, pos as i16);
             let ch = db.ch_mut(chid);
-            ch.set_ac(ch.get_ac() - val  as i16);
+            ch.set_ac(ch.get_ac() - armor as i16);
         }
         let ch = db.ch(chid);
         if ch.in_room() != NOWHERE {
@@ -638,13 +627,7 @@ impl Game {
             let loc = obj.affected[j as usize].location as i8;
             let mod_ = obj.affected[j as usize].modifier as i16;
             let bitv = obj.get_obj_affect();
-            affect_modify(
-                db.ch_mut(chid),
-                loc,
-                mod_,
-                bitv,
-                true,
-            );
+            affect_modify(db.ch_mut(chid), loc, mod_, bitv, true);
         }
 
         db.affect_total(chid);
@@ -658,13 +641,14 @@ impl Game {
         }
 
         let oid = ch.get_eq(pos).unwrap();
-        db.obj_mut(oid).worn_by = None;
-        db.obj_mut(oid).worn_on = -1;
+        let obj = db.obj_mut(oid);
+        obj.worn_by = None;
+        obj.worn_on = -1;
         let ch = db.ch(chid);
         if db.obj(oid).get_obj_type() == ITEM_ARMOR as u8 {
-            let val = db.apply_ac(ch, pos as i16);
+            let armor = db.apply_ac(ch, pos as i16);
             let ch = db.ch_mut(chid);
-            ch.set_ac(ch.get_ac() + val as i16);
+            ch.set_ac(ch.get_ac() + armor as i16);
         }
         let ch = db.ch(chid);
         if ch.in_room() != NOWHERE {
@@ -689,13 +673,7 @@ impl Game {
             let loc = obj.affected[j as usize].location as i8;
             let mod_ = obj.affected[j as usize].modifier as i16;
             let bitv = obj.get_obj_affect();
-            affect_modify(
-                db.ch_mut(chid),
-                loc,
-               mod_,
-                bitv,
-                false,
-            );
+            affect_modify(db.ch_mut(chid), loc, mod_, bitv, false);
         }
 
         db.affect_total(chid);
@@ -849,8 +827,7 @@ impl DB {
         tmp_obj.incr_obj_weight(obj_weight);
         if tmp_obj.carried_by.is_some() {
             let carried_by_id = tmp_obj.carried_by.unwrap();
-            self.ch_mut(carried_by_id)
-                .incr_is_carrying_w(obj_weight);
+            self.ch_mut(carried_by_id).incr_is_carrying_w(obj_weight);
         }
     }
 
@@ -887,8 +864,7 @@ impl DB {
 
             if temp.carried_by.is_some() {
                 let carried_by_id = temp.carried_by.unwrap();
-                self.ch_mut(carried_by_id)
-                    .incr_is_carrying_w(-obj_weight);
+                self.ch_mut(carried_by_id).incr_is_carrying_w(-obj_weight);
             }
         }
 
@@ -898,7 +874,7 @@ impl DB {
     /* Set all carried_by to point to new owner */
     pub fn object_list_new_owner(&mut self, oid: DepotId, chid: Option<DepotId>) {
         for o in self.obj(oid).contains.clone() {
-            self.object_list_new_owner( o, chid);
+            self.object_list_new_owner(o, chid);
             self.obj_mut(oid).carried_by = chid;
         }
     }
@@ -946,7 +922,7 @@ impl Game {
     }
 }
 impl DB {
-    fn update_object_list(&mut self,list: Vec<DepotId>, _use: i32) {
+    fn update_object_list(&mut self, list: Vec<DepotId>, _use: i32) {
         for oid in list {
             self.update_object(oid, _use);
         }
@@ -963,17 +939,18 @@ impl Game {
     pub(crate) fn update_char_objects(&mut self, db: &mut DB, chid: DepotId) {
         let ch = db.ch(chid);
         let i;
-        let l_id = ch.get_eq(WEAR_LIGHT as i8);
+        let light_oid = ch.get_eq(WEAR_LIGHT as i8);
 
-        if l_id.is_some() {
-            let l_id = l_id.unwrap();
-            if db.obj(l_id).get_obj_type() == ITEM_LIGHT {
-                if db.obj(l_id).get_obj_val(2) > 0 {
-                    db.obj_mut(l_id).decr_obj_val(2);
-                    i = db.obj(l_id).get_obj_val(2);
+        if light_oid.is_some() {
+            let light_oid = light_oid.unwrap();
+            if db.obj(light_oid).get_obj_type() == ITEM_LIGHT {
+                if db.obj(light_oid).get_obj_val(2) > 0 {
+                    db.obj_mut(light_oid).decr_obj_val(2);
+                    i = db.obj(light_oid).get_obj_val(2);
                     if i == 1 {
                         self.send_to_char(db, chid, "Your light begins to flicker and fade.\r\n");
-                        self.act(db, 
+                        self.act(
+                            db,
                             "$n's light begins to flicker and fade.",
                             false,
                             Some(chid),
@@ -983,7 +960,8 @@ impl Game {
                         );
                     } else if i == 0 {
                         self.send_to_char(db, chid, "Your light sputters out and dies.\r\n");
-                        self.act(db, 
+                        self.act(
+                            db,
                             "$n's light sputters out and dies.",
                             false,
                             Some(chid),
@@ -1029,9 +1007,7 @@ impl Game {
          */
         if !ch.is_npc() && ch.desc.is_none() {
             for d_id in self.descriptor_list.ids() {
-                if self.desc(d_id).original.is_some()
-                    && self.desc(d_id).original.unwrap() == chid
-                {
+                if self.desc(d_id).original.is_some() && self.desc(d_id).original.unwrap() == chid {
                     let chid = self.desc(d_id).character.as_ref().unwrap().clone();
                     do_return(self, db, chid, "", 0, 0);
                     break;
@@ -1048,12 +1024,7 @@ impl Game {
              * If this body is not possessed, the owner won't have a
              * body after the removal so dump them to the main menu.
              */
-            if self
-                .desc(ch.desc.unwrap())
-                .original
-                .borrow()
-                .is_some()
-            {
+            if self.desc(ch.desc.unwrap()).original.borrow().is_some() {
                 do_return(self, db, chid, "", 0, 0);
             } else {
                 /*
@@ -1070,11 +1041,8 @@ impl Game {
 
                     if self.descriptor_list.get(d).character.is_some()
                         && ch.get_idnum()
-                            == db.ch(self
-                                .descriptor_list
-                                .get(d)
-                                .character
-                                .unwrap())
+                            == db
+                                .ch(self.descriptor_list.get(d).character.unwrap())
                                 .get_idnum()
                     {
                         self.descriptor_list.get_mut(d).set_state(ConClose);
@@ -1129,10 +1097,8 @@ impl Game {
         /* we can't forget the hunters either... */
         for temp_id in db.character_list.ids() {
             let temp = db.ch_mut(temp_id);
-            if temp.char_specials.hunting.is_some()
-                && temp.char_specials.hunting.unwrap() == chid
-            {
-                temp.char_specials.hunting = None;
+            if temp.char_specials.hunting_chid.is_some() && temp.char_specials.hunting_chid.unwrap() == chid {
+                temp.char_specials.hunting_chid = None;
             }
         }
         db.char_from_room(chid);
@@ -1140,7 +1106,7 @@ impl Game {
         if ch.is_npc() {
             if ch.get_mob_rnum() != NOTHING {
                 let rnum = ch.get_mob_rnum();
-                db.mob_index[ rnum as usize].number -= 1;
+                db.mob_index[rnum as usize].number -= 1;
             }
             let ch = db.ch_mut(chid);
             ch.clear_memory()
@@ -1234,7 +1200,8 @@ impl Game {
 *********************************************************************** */
 impl Game {
     pub fn get_player_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         chid: DepotId,
         name: &mut String,
         number: Option<&mut i32>,
@@ -1261,7 +1228,7 @@ impl Game {
             if i.player.name.as_ref() != name {
                 continue;
             }
-            if !self.can_see(db,ch, i) {
+            if !self.can_see(db, ch, i) {
                 continue;
             }
             *number -= 1;
@@ -1274,7 +1241,8 @@ impl Game {
     }
 
     pub fn get_char_room_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         chid: DepotId,
         name: &mut String,
         number: Option<&mut i32>,
@@ -1297,13 +1265,13 @@ impl Game {
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(db,chid, name, None, FIND_CHAR_ROOM);
+            return self.get_player_vis(db, chid, name, None, FIND_CHAR_ROOM);
         }
 
         for i_id in db.world[ch.in_room() as usize].peoples.clone() {
             let i = db.ch(i_id);
             if isname(name, i.player.name.as_ref()) {
-                if self.can_see(db,ch, i) {
+                if self.can_see(db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(i_id);
@@ -1315,7 +1283,8 @@ impl Game {
     }
 
     pub fn get_char_world_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         name: &mut String,
         number: Option<&mut i32>,
@@ -1337,7 +1306,7 @@ impl Game {
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(db,ch.id(), name, None, 0);
+            return self.get_player_vis(db, ch.id(), name, None, 0);
         }
 
         for i in db.character_list.iter() {
@@ -1347,7 +1316,7 @@ impl Game {
             if !isname(name, i.player.name.as_ref()) {
                 continue;
             }
-            if !self.can_see(db,ch, i) {
+            if !self.can_see(db, ch, i) {
                 continue;
             }
             *number -= 1;
@@ -1360,7 +1329,8 @@ impl Game {
     }
 
     pub fn get_char_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         chid: DepotId,
         name: &mut String,
         number: Option<&mut i32>,
@@ -1376,7 +1346,8 @@ impl Game {
     }
 
     pub fn get_obj_in_list_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         name: &str,
         number: Option<&mut i32>,
@@ -1398,7 +1369,7 @@ impl Game {
 
         for i in list.iter() {
             if isname(&name, db.obj(*i).name.as_ref()) {
-                if self.can_see_obj(db,ch, db.obj(*i)) {
+                if self.can_see_obj(db, ch, db.obj(*i)) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(*i);
@@ -1411,7 +1382,8 @@ impl Game {
     }
 
     pub fn get_obj_in_list_vis2(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         name: &str,
         number: Option<&mut i32>,
@@ -1433,7 +1405,7 @@ impl Game {
 
         for i in list.iter() {
             if isname(&name, db.obj(*i).name.as_ref()) {
-                if self.can_see_obj(db,ch, db.obj(*i)) {
+                if self.can_see_obj(db, ch, db.obj(*i)) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(*i);
@@ -1447,7 +1419,8 @@ impl Game {
 
     /* search the entire world for an object, and return a pointer  */
     pub fn get_obj_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         name: &str,
         number: Option<&mut i32>,
@@ -1467,13 +1440,14 @@ impl Game {
         }
 
         /* scan items carried */
-        let i = self.get_obj_in_list_vis(db,ch, &name, Some(number), &ch.carrying);
+        let i = self.get_obj_in_list_vis(db, ch, &name, Some(number), &ch.carrying);
         if i.is_some() {
             return i;
         }
 
         /* scan room */
-        let i = self.get_obj_in_list_vis2(db,
+        let i = self.get_obj_in_list_vis2(
+            db,
             ch,
             &name,
             Some(number),
@@ -1486,7 +1460,7 @@ impl Game {
         /* ok.. no luck yet. scan the entire obj list   */
         for i in db.object_list.iter() {
             if isname(&name, &i.name.borrow()) {
-                if self.can_see_obj(db,ch, i) {
+                if self.can_see_obj(db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(i.id());
@@ -1498,7 +1472,8 @@ impl Game {
     }
 
     pub fn get_obj_in_equip_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         arg: &str,
         number: Option<&mut i32>,
@@ -1520,7 +1495,7 @@ impl Game {
         let equipment = equipment;
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
-                && self.can_see_obj(db,ch, db.obj(equipment[j].unwrap()))
+                && self.can_see_obj(db, ch, db.obj(equipment[j].unwrap()))
                 && isname(&arg, db.obj(equipment[j].unwrap()).name.as_ref())
             {
                 *number -= 1;
@@ -1534,7 +1509,8 @@ impl Game {
     }
 
     pub fn get_obj_pos_in_equip_vis(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         ch: &CharData,
         arg: &str,
         number: Option<&mut i32>,
@@ -1557,7 +1533,7 @@ impl Game {
 
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
-                && self.can_see_obj(db,ch, db.obj(equipment[j].unwrap()))
+                && self.can_see_obj(db, ch, db.obj(equipment[j].unwrap()))
                 && isname(arg, db.obj(equipment[j].unwrap()).name.as_ref())
             {
                 if {
@@ -1719,7 +1695,8 @@ impl Game {
      * describes what it filled in.
      */
     pub fn generic_find(
-        &self, db: &DB,
+        &self,
+        db: &DB,
         arg: &str,
         bitvector: i64,
         chid: DepotId,
@@ -1763,10 +1740,7 @@ impl Game {
                 }
 
                 if ch.get_eq(i).is_some()
-                    && isname(
-                        name.as_str(),
-                        db.obj(ch.get_eq(i).unwrap()).name.as_ref(),
-                    )
+                    && isname(name.as_str(), db.obj(ch.get_eq(i).unwrap()).name.as_ref())
                 {
                     number -= 1;
                     if number == 0 {
@@ -1781,19 +1755,16 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_OBJ_INV as i64) {
-            *tar_obj = self.get_obj_in_list_vis(db,
-                ch,
-                &name,
-                Some(&mut number),
-                &ch.carrying.clone(),
-            );
+            *tar_obj =
+                self.get_obj_in_list_vis(db, ch, &name, Some(&mut number), &ch.carrying.clone());
             if tar_obj.is_some() {
                 return FIND_OBJ_INV;
             }
         }
 
         if is_set!(bitvector, FIND_OBJ_ROOM as i64) {
-            *tar_obj = self.get_obj_in_list_vis2(db,
+            *tar_obj = self.get_obj_in_list_vis2(
+                db,
                 ch,
                 &name,
                 Some(&mut number),
@@ -1805,7 +1776,7 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_OBJ_WORLD as i64) {
-            *tar_obj = self.get_obj_vis(db,ch, &name, Some(&mut number));
+            *tar_obj = self.get_obj_vis(db, ch, &name, Some(&mut number));
             if tar_obj.is_some() {
                 return FIND_OBJ_WORLD;
             }

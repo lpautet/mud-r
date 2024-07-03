@@ -186,10 +186,10 @@ impl DB {
         while buf.starts_with('M') {
             buf.clear();
             reader.read_line(&mut buf).expect(
-                format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
+                format!("SYSERR: Error #4 reading combat message file{}", MESS_FILE).as_str(),
             );
             a_type = buf.trim().parse::<i32>().expect(
-                format!("SYSERR: Error #4 reading combat message file{}", MESS_FILE).as_str(),
+                format!("SYSERR: Error #5 reading combat message file{}", MESS_FILE).as_str(),
             );
 
             let fml = self
@@ -235,12 +235,12 @@ impl DB {
             ml.messages.push(msg);
 
             let mut r = reader.read_line(&mut buf).expect(
-                format!("SYSERR: Error #2 reading combat message file{}", MESS_FILE).as_str(),
+                format!("SYSERR: Error #6 reading combat message file{}", MESS_FILE).as_str(),
             );
 
             while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
                 r = reader.read_line(&mut buf).expect(
-                    format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
+                    format!("SYSERR: Error #7 reading combat message file{}", MESS_FILE).as_str(),
                 );
             }
         }

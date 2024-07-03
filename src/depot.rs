@@ -96,6 +96,7 @@ where
             panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
         }
         self.slots[id.index as usize].free = true;
+        self.slots[id.index as usize].seq = 0; // so that old DepotId are now invalid
         self.size -= 1;
         return std::mem::take(&mut self.slots[id.index as usize].value);
     }

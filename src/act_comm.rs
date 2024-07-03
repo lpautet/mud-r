@@ -33,13 +33,13 @@ use std::rc::Rc;
 
 pub fn do_say(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let argument = argument.trim_start();
+    let ch = db.ch(chid);
 
     if argument.is_empty() {
         game.send_to_char(db,chid, "Yes, but WHAT do you want to say?\r\n");
     } else {
         let buf = format!("$n says, '{}'", argument);
         game.act(db,&buf, false, Some(chid), None, None, TO_ROOM);
-        let ch = db.ch(chid);
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(db,chid, OK);
         } else {
@@ -81,20 +81,19 @@ pub fn do_gsay(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             );
         }
         let k = db.ch(k_id);
-        let list = k.followers.clone();
-        for f in list.iter() {
-            if db.ch(f.follower).aff_flagged(AFF_GROUP) && f.follower != chid {
+        let followers_ids = k.followers.iter().map(|f| f.follower);
+        for f_id in followers_ids {
+            if db.ch(f_id).aff_flagged(AFF_GROUP) && f_id != chid {
                 game.act(db,
                     &buf,
                     false,
                     Some(chid),
                     None,
-                    Some(VictimRef::Char(f.follower)),
+                    Some(VictimRef::Char(f_id)),
                     TO_VICT | TO_SLEEP,
                 );
             }
         }
-        let ch = db.ch(chid);
         if ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(db,chid, OK);
         } else {
@@ -107,10 +106,9 @@ pub fn do_gsay(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
 }
 
 fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, arg: &str) {
+    let ch = db.ch(chid);
     let vict = db.ch(vict_id);
-    let vict_ccred = CCRED!(vict, C_NRM);
-    let vict_ccnrm = CCNRM!(vict, C_NRM);
-    game.send_to_char(db,vict_id, vict_ccred);
+    game.send_to_char(db,vict_id, CCRED!(vict, C_NRM));
     let buf = format!("$n tells you, '{}'", arg);
     game.act(db,
         &buf,
@@ -120,15 +118,12 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
         Some(VictimRef::Char(vict_id)),
         TO_VICT | TO_SLEEP,
     );
-    game.send_to_char(db,vict_id, vict_ccnrm);
+    game.send_to_char(db,vict_id, CCNRM!(vict, C_NRM));
 
-    let ch = db.ch(chid);
     if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
         game.send_to_char(db,chid, OK);
     } else {
-        let ch_ccred = CCRED!(ch, C_NRM);
-        let ch_ccnrm = CCNRM!(ch, C_NRM);
-        game.send_to_char(db,chid, ch_ccred);
+        game.send_to_char(db,chid, CCRED!(ch, C_NRM));
         let buf = format!("You tell $N, '{}'", arg);
         game.act(db,
             &buf,
@@ -138,11 +133,8 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
             Some(VictimRef::Char(vict_id)),
             TO_CHAR | TO_SLEEP,
         );
-        game.send_to_char(db,chid, ch_ccnrm);
+        game.send_to_char(db,chid, CCNRM!(ch, C_NRM));
     }
-    let ch = db.ch(chid);
-    let vict = db.ch(vict_id);
-
     if !vict.is_npc() && !ch.is_npc() {
         let ch_idnum = ch.get_idnum();
         let vict = db.ch_mut(vict_id);
@@ -252,17 +244,17 @@ pub fn do_reply(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
          *      we could not find link dead people.  Not that they can
          *      hear tells anyway. :) -gg 2/24/98
          */
-        let tch = 
+        let last_tell_chid = 
             db
             .character_list
             .iter()
             .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell())
             .map(|e| e.id());
 
-        if tch.is_none() {
+        if last_tell_chid.is_none() {
             game.send_to_char(db,chid, "They are no longer playing.\r\n");
-        } else if is_tell_ok(game, db, chid, tch.unwrap()) {
-            perform_tell(game, db, chid, tch.unwrap(), argument);
+        } else if is_tell_ok(game, db, chid, last_tell_chid.unwrap()) {
+            perform_tell(game, db, chid, last_tell_chid.unwrap(), argument);
         }
     }
 }
@@ -529,7 +521,6 @@ pub fn do_page(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 Some(VictimRef::Char(vict_id)),
                 TO_VICT,
             );
-            let ch = db.ch(chid);
             if ch.prf_flagged(PRF_NOREPEAT) {
                 game.send_to_char(db,chid, OK);
             } else {
@@ -673,7 +664,6 @@ pub fn do_gen_comm(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
 
     /* now send all the strings out */
     for d_id in game.descriptor_list.ids() {
-        let ch = db.ch(chid);
         if game.desc(d_id).state() == ConPlaying
             && d_id != ch.desc.unwrap()
             && game.desc(d_id).character.is_some()
@@ -711,7 +701,6 @@ pub fn do_gen_comm(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
                 Some(VictimRef::Char(ic_id)),
                 TO_VICT | TO_SLEEP,
             );
-            let ic = db.ch(ic_id);
             if COLOR_LEV!(ic) >= C_NRM {
                 game.send_to_char(db,ic_id, KNRM);
             }
@@ -771,7 +760,6 @@ pub fn do_qcomm(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd
         }
 
         for id in game.descriptor_list.ids() {
-            let ch = db.ch(chid);
             if game.descriptor_list.get(id).state() == ConPlaying
                 && id != ch.desc.unwrap()
                 && game.descriptor_list.get(id).character.is_some()

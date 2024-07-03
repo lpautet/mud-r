@@ -585,10 +585,10 @@ impl CharData {
         self.char_specials.saved.idnum = val;
     }
     pub fn fighting_id(&self) -> Option<DepotId> {
-        self.char_specials.fighting
+        self.char_specials.fighting_chid
     }
     pub fn set_fighting(&mut self, val: Option<DepotId>) {
-        self.char_specials.fighting = val;
+        self.char_specials.fighting_chid = val;
     }
     pub fn get_alignment(&self) -> i32 {
         self.char_specials.saved.alignment
@@ -1291,7 +1291,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * based on syslog by Fen Jul 3, 1992
  */
 impl Game {
-    pub(crate) fn mudlog(&mut self, db: &DB, _type: u8, level: i32, file: bool, msg: &str) {
+    pub(crate) fn mudlog(&mut self, db: &DB, log_type: u8, level: i32, file: bool, msg: &str) {
         if msg == "" {
             return;
         }
@@ -1323,23 +1323,9 @@ impl Game {
             if character.plr_flagged(PLR_WRITING) {
                 continue;
             }
-            let x = if _type > u8::from(character.prf_flagged(PRF_LOG1)) {
-                1
-            } else {
-                0
-            };
-            let x = x + if character.prf_flagged(PRF_LOG2) {
-                2
-            } else {
-                0
-            };
-            if x != 0 {
+            if log_type > { if character.prf_flagged(PRF_LOG1) {1} else {0} } + {if character.prf_flagged(PRF_LOG2) {2} else {0} } {
                 continue;
             }
-            // if  type > prf_flagged!(character, PRF_LOG1)?
-            // 1: 0) + (PRF_FLAGGED(i->character, PRF_LOG2)?
-            // 2: 0))
-            // continue;
             self.send_to_char(db,
                 character_id,
                 format!(
@@ -1503,13 +1489,13 @@ impl Game {
         }
 
         if ch.aff_flagged(AFF_CHARM) {
-            let vobj = ch.master.unwrap();
+            let master_id = ch.master.unwrap();
             self.act(db,
                 "You realize that $N is a jerk!",
                 false,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vobj)),
+                Some(VictimRef::Char(master_id)),
                 TO_CHAR,
             );
             self.act(db,
@@ -1517,7 +1503,7 @@ impl Game {
                 false,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vobj)),
+                Some(VictimRef::Char(master_id)),
                 TO_NOTVICT,
             );
             self.act(db,
@@ -1525,41 +1511,36 @@ impl Game {
                 false,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vobj)),
+                Some(VictimRef::Char(master_id)),
                 TO_VICT,
             );
-            let ch = db.ch(chid);
             if affected_by_spell(ch, SPELL_CHARM as i16) {
                 db.affect_from_char(chid, SPELL_CHARM as i16);
             }
         } else {
-            let vobj = ch.master.unwrap();
+            let master_id: DepotId = ch.master.unwrap();
             self.act(db,
                 "You stop following $N.",
                 false,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vobj)),
+                Some(VictimRef::Char(master_id)),
                 TO_CHAR,
             );
-            let ch = db.ch(chid);
-            let vobj = ch.master.unwrap();
             self.act(db,
                 "$n stops following $N.",
                 true,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vobj)),
+                Some(VictimRef::Char(master_id)),
                 TO_NOTVICT,
             );
-            let ch = db.ch(chid);
-            let vr = ch.master.unwrap();
             self.act(db,
                 "$n stops following you.",
                 true,
                 Some(chid),
                 None,
-                Some(VictimRef::Char(vr)),
+                Some(VictimRef::Char(master_id)),
                 TO_VICT,
             );
         }
