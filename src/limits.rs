@@ -268,10 +268,9 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, db: &mut DB) {
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(db,chid, "You rise a level!\r\n");
+                game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     format!("You rise {} levels!\r\n", num_levels).as_str(),
                 );
                 let ch = db.ch_mut(chid);
@@ -332,10 +331,9 @@ pub fn gain_exp_regardless(game: &mut Game, db: &mut DB, chid: DepotId, gain: i3
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(db,chid, "You rise a level!\r\n");
+                game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     format!("You rise {} levels!\r\n", num_levels).as_str(),
                 );
             }
@@ -370,14 +368,14 @@ impl Game {
 
         match condition {
             FULL => {
-                self.send_to_char(db,chid, "You are hungry.\r\n");
+                self.send_to_char(ch, "You are hungry.\r\n");
             }
             THIRST => {
-                self.send_to_char(db,chid, "You are thirsty.\r\n");
+                self.send_to_char(ch, "You are thirsty.\r\n");
             }
             DRUNK => {
                 if intoxicated {
-                    self.send_to_char(db,chid, "You are now sober.\r\n");
+                    self.send_to_char(ch, "You are now sober.\r\n");
                 }
             }
             _ => {}
@@ -405,7 +403,8 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(db,chid, "You have been idle, and are pulled into a void.\r\n");
+                let ch = db.ch(chid);
+                self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
                 self.save_char(db, chid);
                 crash_crashsave( db, chid);
                 db.char_from_room(chid);

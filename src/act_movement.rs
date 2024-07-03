@@ -85,7 +85,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, need_
     } else if db.exit(ch, dir as usize).is_none()
         || db.exit(ch, dir as usize).as_ref().unwrap().to_room == NOWHERE
     {
-        game.send_to_char(db,chid, "Alas, you cannot go that way...\r\n");
+        game.send_to_char(ch, "Alas, you cannot go that way...\r\n");
     } else if 
         db
         .exit(ch, dir as usize)
@@ -101,8 +101,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, need_
             .keyword
             .is_empty()
         {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!(
                     "The {} seems to be closed.\r\n",
                     fname(
@@ -117,7 +116,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, need_
                 .as_str(),
             );
         } else {
-            game.send_to_char(db,chid, "It seems to be closed.\r\n");
+            game.send_to_char(ch, "It seems to be closed.\r\n");
         }
     } else {
         if ch.followers.is_empty() {
@@ -168,8 +167,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
         && ch.master.is_some()
         && ch.in_room() == db.ch(ch.master.unwrap()).in_room()
     {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "The thought of leaving your master makes you weep.\r\n",
         );
         game.act(db,
@@ -191,7 +189,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
             == SECT_WATER_NOSWIM)
     {
         if !has_boat(game, db,chid) {
-            game.send_to_char(db,chid, "You need a boat to go there.\r\n");
+            game.send_to_char(ch, "You need a boat to go there.\r\n");
             return false;
         }
     }
@@ -207,9 +205,9 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
 
     if ch.get_move() < need_movement as i16 && !ch.is_npc() {
         if need_specials_check && ch.master.is_some() {
-            game.send_to_char(db,chid, "You are too exhausted to follow.\r\n");
+            game.send_to_char(ch, "You are too exhausted to follow.\r\n");
         } else {
-            game.send_to_char(db,chid, "You are too exhausted.\r\n");
+            game.send_to_char(ch, "You are too exhausted.\r\n");
         }
 
         return false;
@@ -222,7 +220,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
             db
                 .get_room_vnum(db.exit(ch, dir as usize).as_ref().unwrap().to_room),
         ) {
-            game.send_to_char(db,chid, "That's private property -- no trespassing!\r\n");
+            game.send_to_char(ch, "That's private property -- no trespassing!\r\n");
             return false;
         }
     }
@@ -234,10 +232,9 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
     ) >= TUNNEL_SIZE
     {
         if TUNNEL_SIZE > 1 {
-            game.send_to_char(db,chid, "There isn't enough room for you to go there!\r\n");
+            game.send_to_char(ch, "There isn't enough room for you to go there!\r\n");
         } else {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 "There isn't enough room there for more than one person!\r\n",
             );
         }
@@ -249,7 +246,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
         ROOM_GODROOM,
     ) && ch.get_level() < LVL_GRGOD as u8
     {
-        game.send_to_char(db,chid, "You aren't godly enough to use that room!\r\n");
+        game.send_to_char(ch, "You aren't godly enough to use that room!\r\n");
         return false;
     }
 
@@ -312,7 +309,7 @@ fn find_door(game: &mut Game, db:  &DB, chid: DepotId, type_: &str, dir: &str, c
             dooro.is_none()
         } {
             /* Partial Match */
-            game.send_to_char(db,chid, "That's not a direction.\r\n");
+            game.send_to_char(ch, "That's not a direction.\r\n");
             return None;
         }
         let door = dooro.unwrap();
@@ -332,15 +329,14 @@ fn find_door(game: &mut Game, db:  &DB, chid: DepotId, type_: &str, dir: &str, c
                 ) {
                     return Some(door as i32);
                 } else {
-                    game.send_to_char(db,chid, format!("I see no {} there.\r\n", type_).as_str());
+                    game.send_to_char(ch, format!("I see no {} there.\r\n", type_).as_str());
                     return None;
                 }
             } else {
                 return Some(door as i32);
             }
         } else {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!(
                     "I really don't see how you can {} anything there.\r\n",
                     cmdname
@@ -352,8 +348,7 @@ fn find_door(game: &mut Game, db:  &DB, chid: DepotId, type_: &str, dir: &str, c
     } else {
         /* try to locate the keyword */
         if type_.is_empty() {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!("What is it you want to {}?\r\n", cmdname).as_str(),
             );
             return None;
@@ -368,8 +363,7 @@ fn find_door(game: &mut Game, db:  &DB, chid: DepotId, type_: &str, dir: &str, c
             }
         }
 
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "There doesn't seem to be {} {} here.\r\n",
                 an!(type_),
@@ -516,7 +510,8 @@ fn do_doorcmd(
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
-            game.send_to_char(db,chid, OK);
+            let ch = db.ch(chid);
+            game.send_to_char(ch, OK);
         }
         SCMD_CLOSE => {
             let ch_in_room = ch.in_room();
@@ -529,7 +524,8 @@ fn do_doorcmd(
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
-            game.send_to_char(db,chid, OK);
+            let ch = db.ch(chid);
+            game.send_to_char(ch, OK);
         }
         SCMD_LOCK => {
             let ch_in_room = ch.in_room();
@@ -542,7 +538,8 @@ fn do_doorcmd(
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
-            game.send_to_char(db,chid, OK);
+            let ch = db.ch(chid);
+            game.send_to_char(ch, OK);
         }
         SCMD_UNLOCK => {
             let ch_in_room = ch.in_room();
@@ -555,7 +552,8 @@ fn do_doorcmd(
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
-            game.send_to_char(db,chid, OK);
+            let ch = db.ch(chid);
+            game.send_to_char(ch, OK);
         }
 
         SCMD_PICK => {
@@ -569,7 +567,8 @@ fn do_doorcmd(
                     Some(REV_DIR[door.unwrap() as usize] as usize),
                 );
             }
-            game.send_to_char(db,chid, "The lock quickly yields to your skills.\r\n");
+            let ch = db.ch(chid);
+            game.send_to_char(ch, "The lock quickly yields to your skills.\r\n");
             buf = "$n skillfully picks the lock on ".to_string();
         }
         _ => {}
@@ -655,11 +654,11 @@ fn ok_pick(game: &mut Game, db: &mut DB, chid: DepotId, keynum: ObjVnum, pickpro
         ch.get_skill(SKILL_PICK_LOCK) as i16 + DEX_APP_SKILL[ch.get_dex() as usize].p_locks;
 
     if keynum == NOTHING {
-        game.send_to_char(db,chid, "Odd - you can't seem to find a keyhole.\r\n");
+        game.send_to_char(ch, "Odd - you can't seem to find a keyhole.\r\n");
     } else if pickproof {
-        game.send_to_char(db,chid, "It resists your attempts to pick it.\r\n");
+        game.send_to_char(ch, "It resists your attempts to pick it.\r\n");
     } else if percent > skill_lvl as u32 {
-        game.send_to_char(db,chid, "You failed to pick the lock.\r\n");
+        game.send_to_char(ch, "You failed to pick the lock.\r\n");
     } else {
         return true;
     }
@@ -728,11 +727,11 @@ fn door_key(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) 
 }
 
 pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = db.ch(chid);
     let mut dooro: Option<usize> = None;
     let argument = argument.trim_start();
     if argument.is_empty() {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "{}{} what?\r\n",
                 CMD_DOOR[subcmd as usize][0..0].to_lowercase(),
@@ -778,24 +777,24 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
         } else if !door_is_open(&db, ch, oid.map(|o| db.obj(o)), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
-            game.send_to_char(db,chid, "But it's already closed!\r\n");
+            game.send_to_char(ch, "But it's already closed!\r\n");
         } else if !door_is_closed(&db, ch, oid.map(|o| db.obj(o)), dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
-            game.send_to_char(db,chid, "But it's currently open!\r\n");
+            game.send_to_char(ch, "But it's currently open!\r\n");
         } else if !(door_is_locked(&db, ch, oid.map(|o| db.obj(o)), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
-            game.send_to_char(db,chid, "Oh.. it wasn't locked, after all..\r\n");
+            game.send_to_char(ch, "Oh.. it wasn't locked, after all..\r\n");
         } else if !(door_is_unlocked(&db, ch, oid.map(|o| db.obj(o)), dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
-            game.send_to_char(db,chid, "It seems to be locked.\r\n");
+            game.send_to_char(ch, "It seems to be locked.\r\n");
         } else if !has_key(&db, ch, keynum)
             && (ch.get_level() < LVL_GOD as u8)
             && ((subcmd == SCMD_LOCK) || (subcmd == SCMD_UNLOCK))
         {
-            game.send_to_char(db,chid, "You don't seem to have the proper key.\r\n");
+            game.send_to_char(ch, "You don't seem to have the proper key.\r\n");
         } else if {
             let pickproof = door_is_pickproof(&db, ch, oid.map(|o| db.obj(o)), dooro);
             ok_pick(game, db,chid, keynum, pickproof, subcmd)
@@ -823,9 +822,9 @@ pub fn do_enter(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 }
             }
         }
-        game.send_to_char(db,chid, format!("There is no {} here.\r\n", buf).as_str());
+        game.send_to_char(ch, format!("There is no {} here.\r\n", buf).as_str());
     } else if db.room_flagged(ch.in_room(), ROOM_INDOORS) {
-        game.send_to_char(db,chid, "You are already indoors.\r\n");
+        game.send_to_char(ch, "You are already indoors.\r\n");
     } else {
         /* try to locate an entrance */
         for door in 0..NUM_OF_DIRS {
@@ -841,14 +840,14 @@ pub fn do_enter(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 }
             }
         }
-        game.send_to_char(db,chid, "You can't seem to find anything to enter.\r\n");
+        game.send_to_char(ch, "You can't seem to find anything to enter.\r\n");
     }
 }
 
 pub fn do_leave(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if db.outside(ch) {
-        game.send_to_char(db,chid, "You are outside.. where do you want to go?\r\n");
+        game.send_to_char(ch, "You are outside.. where do you want to go?\r\n");
     } else {
         for door in 0..NUM_OF_DIRS {
             if db.exit(ch, door).is_some() {
@@ -863,7 +862,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
                 }
             }
         }
-        game.send_to_char(db,chid, "I see no obvious exits to the outside.\r\n");
+        game.send_to_char(ch, "I see no obvious exits to the outside.\r\n");
     }
 }
 
@@ -871,10 +870,10 @@ pub fn do_stand(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(db,chid, "You are already standing.\r\n");
+            game.send_to_char(ch, "You are already standing.\r\n");
         }
         POS_SITTING => {
-            game.send_to_char(db,chid, "You stand up.\r\n");
+            game.send_to_char(ch, "You stand up.\r\n");
             game.act(db,
                 "$n clambers to $s feet.",
                 true,
@@ -892,7 +891,7 @@ pub fn do_stand(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
             });
         }
         POS_RESTING => {
-            game.send_to_char(db,chid, "You stop resting, and stand up.\r\n");
+            game.send_to_char(ch, "You stop resting, and stand up.\r\n");
             game.act(db,
                 "$n stops resting, and clambers on $s feet.",
                 true,
@@ -905,14 +904,13 @@ pub fn do_stand(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
             ch.set_pos(POS_STANDING);
         }
         POS_SLEEPING => {
-            game.send_to_char(db,chid, "You have to wake up first!\r\n");
+            game.send_to_char(ch, "You have to wake up first!\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(db,chid, "Do you not consider fighting as standing?\r\n");
+            game.send_to_char(ch, "Do you not consider fighting as standing?\r\n");
         }
         _ => {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 "You stop floating around, and put your feet on the ground.\r\n",
             );
             game.act(db,
@@ -933,16 +931,16 @@ pub fn do_sit(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(db,chid, "You sit down.\r\n");
+            game.send_to_char(ch, "You sit down.\r\n");
             game.act(db,"$n sits down.", false, Some(chid), None, None, TO_ROOM);
             let ch = db.ch_mut(chid);
             ch.set_pos(POS_SITTING);
         }
         POS_SITTING => {
-            game.send_to_char(db,chid, "You're sitting already.\r\n");
+            game.send_to_char(ch, "You're sitting already.\r\n");
         }
         POS_RESTING => {
-            game.send_to_char(db,chid, "You stop resting, and sit up.\r\n");
+            game.send_to_char(ch, "You stop resting, and sit up.\r\n");
             game.act(db,
                 "$n stops resting.",
                 true,
@@ -955,13 +953,13 @@ pub fn do_sit(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd
             ch.set_pos(POS_SITTING);
         }
         POS_SLEEPING => {
-            game.send_to_char(db,chid, "You have to wake up first.\r\n");
+            game.send_to_char(ch, "You have to wake up first.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(db,chid, "Sit down while fighting? Are you MAD?\r\n");
+            game.send_to_char(ch, "Sit down while fighting? Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(db,chid, "You stop floating around, and sit down.\r\n");
+            game.send_to_char(ch, "You stop floating around, and sit down.\r\n");
             game.act(db,
                 "$n stops floating around, and sits down.",
                 true,
@@ -980,7 +978,7 @@ pub fn do_rest(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(db,chid, "You sit down and rest your tired bones.\r\n");
+            game.send_to_char(ch, "You sit down and rest your tired bones.\r\n");
             game.act(db,
                 "$n sits down and rests.",
                 true,
@@ -993,23 +991,22 @@ pub fn do_rest(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
             ch.set_pos(POS_RESTING);
         }
         POS_SITTING => {
-            game.send_to_char(db,chid, "You rest your tired bones.\r\n");
+            game.send_to_char(ch, "You rest your tired bones.\r\n");
             game.act(db,"$n rests.", true, Some(chid), None, None, TO_ROOM);
             let ch = db.ch_mut(chid);
             ch.set_pos(POS_RESTING);
         }
         POS_RESTING => {
-            game.send_to_char(db,chid, "You are already resting.\r\n");
+            game.send_to_char(ch, "You are already resting.\r\n");
         }
         POS_SLEEPING => {
-            game.send_to_char(db,chid, "You have to wake up first.\r\n");
+            game.send_to_char(ch, "You have to wake up first.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(db,chid, "Rest while fighting?  Are you MAD?\r\n");
+            game.send_to_char(ch, "Rest while fighting?  Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 "You stop floating around, and stop to rest your tired bones.\r\n",
             );
             game.act(db,
@@ -1030,7 +1027,7 @@ pub fn do_sleep(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING | POS_SITTING | POS_RESTING => {
-            game.send_to_char(db,chid, "You go to sleep.\r\n");
+            game.send_to_char(ch, "You go to sleep.\r\n");
             game.act(db,
                 "$n lies down and falls asleep.",
                 true,
@@ -1043,14 +1040,13 @@ pub fn do_sleep(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
             ch.set_pos(POS_SLEEPING);
         }
         POS_SLEEPING => {
-            game.send_to_char(db,chid, "You are already sound asleep.\r\n");
+            game.send_to_char(ch, "You are already sound asleep.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(db,chid, "Sleep while fighting?  Are you MAD?\r\n");
+            game.send_to_char(ch, "Sleep while fighting?  Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 "You stop floating around, and lie down to sleep.\r\n",
             );
             game.act(db,
@@ -1076,12 +1072,12 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     one_argument(argument, &mut arg);
     if !arg.is_empty() {
         if ch.get_pos() == POS_SLEEPING {
-            game.send_to_char(db,chid, "Maybe you should wake yourself up first.\r\n");
+            game.send_to_char(ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
             vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
             vict_id.is_none()
         } {
-            game.send_to_char(db,chid, NOPERSON);
+            game.send_to_char(ch, NOPERSON);
         } else if vict_id.unwrap() == chid {
             self_ = true;
         } else if db.ch(vict_id.unwrap()).awake() {
@@ -1136,11 +1132,11 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
     let ch = db.ch(chid);
     if ch.aff_flagged(AFF_SLEEP) {
-        game.send_to_char(db,chid, "You can't wake up!\r\n");
+        game.send_to_char(ch, "You can't wake up!\r\n");
     } else if ch.get_pos() > POS_SLEEPING {
-        game.send_to_char(db,chid, "You are already awake...\r\n");
+        game.send_to_char(ch, "You are already awake...\r\n");
     } else {
-        game.send_to_char(db,chid, "You awaken, and sit up.\r\n");
+        game.send_to_char(ch, "You awaken, and sit up.\r\n");
         game.act(db,"$n awakens.", true, Some(chid), None, None, TO_ROOM);
         let ch = db.ch_mut(chid);
         ch.set_pos(POS_SITTING);
@@ -1158,11 +1154,11 @@ pub fn do_follow(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
             leader = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
             leader.is_none()
         } {
-            game.send_to_char(db,chid, NOPERSON);
+            game.send_to_char(ch, NOPERSON);
             return;
         }
     } else {
-        game.send_to_char(db,chid, "Whom do you wish to follow?\r\n");
+        game.send_to_char(ch, "Whom do you wish to follow?\r\n");
         return;
     }
 
@@ -1191,13 +1187,13 @@ pub fn do_follow(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         /* Not Charmed follow person */
         if leader.unwrap() == chid {
             if ch.master.is_none() {
-                game.send_to_char(db,chid, "You are already following yourself.\r\n");
+                game.send_to_char(ch, "You are already following yourself.\r\n");
                 return;
             }
             game.stop_follower(db, chid);
         } else {
             if circle_follow(&db, chid, leader) {
-                game.send_to_char(db,chid, "Sorry, but following in loops is not allowed.\r\n");
+                game.send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
                 return;
             }
             if ch.master.is_some() {

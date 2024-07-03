@@ -275,7 +275,7 @@ pub fn check_killer(chid: DepotId, vict_id:DepotId, game: &mut Game, db: &mut DB
     let ch = db.ch_mut(chid);
     ch.set_plr_flag_bit(PLR_KILLER);
 
-    game.send_to_char(db,chid, "If you want to be a PLAYER KILLER, so be it...\r\n");
+    game.send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
     let ch = db.ch(chid);
     let vict = db.ch(vict_id);
     game.mudlog(db,
@@ -472,11 +472,11 @@ pub fn die(chid: DepotId, game: &mut Game, db: &mut DB) {
 }
 
 pub fn perform_group_gain(chid: DepotId, base: i32, victim_id: DepotId, game: &mut Game, db: &mut DB) {
+    let ch = db.ch(chid);
     let share = min(MAX_EXP_GAIN, max(1, base));
 
     if share > 1 {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "You receive your share of experience -- {} points.\r\n",
                 share
@@ -484,8 +484,7 @@ pub fn perform_group_gain(chid: DepotId, base: i32, victim_id: DepotId, game: &m
             .as_str(),
         );
     } else {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "You receive your share of experience -- one measly little point!\r\n",
         );
     }
@@ -566,12 +565,11 @@ pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB
     exp = max(exp, 1);
 
     if exp > 1 {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!("You receive {} experience points.\r\n", exp).as_str(),
         );
     } else {
-        game.send_to_char(db,chid, "You receive one lousy experience point.\r\n");
+        game.send_to_char(ch, "You receive one lousy experience point.\r\n");
     }
     gain_exp(chid, exp, game, db);
     change_alignment(db, chid, victim_id);
@@ -697,7 +695,7 @@ impl Game {
 
         /* damage message to damager */
         let ch = db.ch(chid);
-        self.send_to_char(db,chid, CCYEL!(ch, C_CMP));
+        self.send_to_char(ch, CCYEL!(ch, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_char,
             ATTACK_HIT_TEXT[w_type].singular,
@@ -705,11 +703,11 @@ impl Game {
         );
         self.act(db,&buf, false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_CHAR);
         let ch = db.ch(chid);
-        self.send_to_char(db,chid, CCNRM!(ch, C_CMP));
+        self.send_to_char(ch, CCNRM!(ch, C_CMP));
 
         /* damage message to damagee */
         let victim = db.ch(victim_id);
-        self.send_to_char(db,victim_id, CCRED!(victim, C_CMP));
+        self.send_to_char(victim, CCRED!(victim, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_victim,
             ATTACK_HIT_TEXT[w_type].singular,
@@ -724,7 +722,7 @@ impl Game {
             TO_VICT | TO_SLEEP,
         );
         let victim = db.ch(victim_id);
-        self.send_to_char(db,victim_id, CCNRM!(victim, C_CMP));
+        self.send_to_char(victim, CCNRM!(victim, C_CMP));
     }
 
     /*
@@ -788,7 +786,7 @@ impl Game {
                         let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr].die_msg.victim_msg.clone();
                         let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].die_msg.room_msg.clone();
                         if !attacker_msg.is_empty() {
-                            self.send_to_char(db,chid, CCYEL!(ch, C_CMP));
+                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
                             self.act(db,
                                 attacker_msg,
                                 false,
@@ -798,10 +796,10 @@ impl Game {
                                 TO_CHAR,
                             );
                             let ch = db.ch(chid);
-                            self.send_to_char(db,chid, CCNRM!(ch, C_CMP));
+                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
                         let vict = db.ch(vict_id);
-                        self.send_to_char(db,vict_id, CCRED!(vict, C_CMP));
+                        self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(db,
                             victim_msg,
                             false,
@@ -811,7 +809,7 @@ impl Game {
                             TO_VICT | TO_SLEEP,
                         );
                         let vict = db.ch(vict_id);
-                        self.send_to_char(db,vict_id, CCNRM!(vict, C_CMP));
+                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(db,
                             room_msg,
@@ -826,7 +824,7 @@ impl Game {
                         let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr].hit_msg.victim_msg.clone();
                         let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].hit_msg.room_msg.clone();
                         if !attacker_msg.is_empty() {
-                            self.send_to_char(db,chid, CCYEL!(ch, C_CMP));
+                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
                             self.act(db,
                                 attacker_msg,
                                 false,
@@ -836,10 +834,10 @@ impl Game {
                                 TO_CHAR,
                             );
                             let ch = db.ch(chid);
-                            self.send_to_char(db,chid, CCNRM!(ch, C_CMP));
+                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
                         let vict = db.ch(vict_id);
-                        self.send_to_char(db,vict_id, CCRED!(vict, C_CMP));
+                        self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(db,
                             victim_msg,
                             false,
@@ -849,7 +847,7 @@ impl Game {
                             TO_VICT | TO_SLEEP,
                         );
                         let vict = db.ch(vict_id);
-                        self.send_to_char(db,vict_id, CCNRM!(vict, C_CMP));
+                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(db,
                             room_msg,
@@ -866,7 +864,7 @@ impl Game {
                     let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].miss_msg.room_msg.clone();
                     /* Dam == 0 */
                     if !attacker_msg.is_empty() {
-                        self.send_to_char(db,chid, CCYEL!(ch, C_CMP));
+                        self.send_to_char(ch, CCYEL!(ch, C_CMP));
                         self.act(db,
                             attacker_msg,
                             false,
@@ -876,10 +874,10 @@ impl Game {
                             TO_CHAR,
                         );
                         let ch = db.ch(chid);
-                        self.send_to_char(db,chid, CCNRM!(ch, C_CMP));
+                        self.send_to_char(ch, CCNRM!(ch, C_CMP));
                     }
                     let vict = db.ch(vict_id);
-                    self.send_to_char(db,vict_id, CCRED!(vict, C_CMP));
+                    self.send_to_char(vict, CCRED!(vict, C_CMP));
                     self.act(db,
                         victim_msg,
                         false,
@@ -889,7 +887,7 @@ impl Game {
                         TO_VICT | TO_SLEEP,
                     );
                     let vict = db.ch(vict_id);
-                    self.send_to_char(db,vict_id, CCNRM!(vict, C_CMP));
+                    self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                     self.act(db,
                         room_msg,
@@ -941,8 +939,8 @@ impl Game {
 
         /* peaceful rooms */
         if chid != victim_id && db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-            self.send_to_char(db,
-                chid,
+            self.send_to_char(
+                ch,
                 "This room just has such a peaceful, easy feeling...\r\n",
             );
             return 0;
@@ -1054,8 +1052,8 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(db,
-                    victim_id,
+                self.send_to_char(
+                    victim,
                     "You are mortally wounded, and will die soon, if not aided.\r\n",
                 );
             }
@@ -1069,8 +1067,8 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(db,
-                    victim_id,
+                self.send_to_char(
+                    victim,
                     "You are incapacitated an will slowly die, if not aided.\r\n",
                 );
             }
@@ -1083,8 +1081,8 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(db,
-                    victim_id,
+                self.send_to_char(
+                    victim,
                     "You're stunned, but will probably regain consciousness again.\r\n",
                 );
             }
@@ -1097,18 +1095,18 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(db,victim_id, "You are dead!  Sorry...\r\n");
+                self.send_to_char(victim, "You are dead!  Sorry...\r\n");
             }
 
             _ => {
                 /* >= POSITION SLEEPING */
                 if dam > (victim.get_max_hit() / 4) as i32 {
-                    self.send_to_char(db,victim_id, "That really did HURT!\r\n");
+                    self.send_to_char(victim, "That really did HURT!\r\n");
                 }
                 let victim = db.ch(victim_id);
                 if victim.get_hit() < victim.get_max_hit() / 4 {
-                    self.send_to_char(db,
-                        victim_id,
+                    self.send_to_char(
+                        victim,
                         format!(
                             "{}You wish that your wounds would stop BLEEDING so much!{}\r\n",
                             CCRED!(victim, C_SPR),
@@ -1128,7 +1126,7 @@ impl Game {
                     && victim.get_hit() < victim.get_wimp_lev() as i16
                     && victim.get_hit() > 0
                 {
-                    self.send_to_char(db,victim_id, "You wimp out, and attempt to flee!\r\n");
+                    self.send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
                     do_flee(self,db,  victim_id, "", 0, 0);
                 }
             }
@@ -1387,7 +1385,7 @@ impl Game {
             }
             let ch = db.ch(chid);
             if ch.get_pos() < POS_FIGHTING {
-                self.send_to_char(db,chid, "You can't fight while sitting!!\r\n");
+                self.send_to_char(ch, "You can't fight while sitting!!\r\n");
                 continue;
             }
 

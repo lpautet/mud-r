@@ -2810,44 +2810,41 @@ pub fn command_interpreter(game: &mut Game, db: &mut DB, chid: DepotId, argument
     }
 
     if cmd.command == "\n" {
-        game.send_to_char(db,chid, "Huh?!?\r\n");
+        game.send_to_char(ch, "Huh?!?\r\n");
     } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "You try, but the mind-numbing cold prevents you...\r\n",
         );
     } else if cmd.command_pointer as usize == do_nothing as usize {
-        game.send_to_char(db,chid, "Sorry, that command hasn't been implemented yet.\r\n");
+        game.send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
     } else if ch.is_npc() && cmd.minimum_level >= LVL_IMMORT {
-        game.send_to_char(db,chid, "You can't use immortal commands while switched.\r\n");
+        game.send_to_char(ch, "You can't use immortal commands while switched.\r\n");
     } else if ch.get_pos() < cmd.minimum_position {
         match ch.get_pos() {
             POS_DEAD => {
-                game.send_to_char(db,chid, "Lie still; you are DEAD!!! :-(\r\n");
+                game.send_to_char(ch, "Lie still; you are DEAD!!! :-(\r\n");
             }
             POS_INCAP | POS_MORTALLYW => {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     "You are in a pretty bad shape, unable to do anything!\r\n",
                 );
             }
             POS_STUNNED => {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     "All you can do right now is think about the stars!\r\n",
                 );
             }
             POS_SLEEPING => {
-                game.send_to_char(db,chid, "In your dreams, or what?\r\n");
+                game.send_to_char(ch, "In your dreams, or what?\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(db,chid, "Nah... You feel too relaxed to do that..\r\n");
+                game.send_to_char(ch, "Nah... You feel too relaxed to do that..\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(db,chid, "Maybe you should get on your feet first?\r\n");
+                game.send_to_char(ch, "Maybe you should get on your feet first?\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(db,chid, "No way!  You're fighting for your life!\r\n");
+                game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
             }
             _ => {}
         }
@@ -2877,15 +2874,14 @@ pub fn do_alias(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
 
     if arg.is_empty() {
         /* no argument specified -- list currently defined aliases */
-        game.send_to_char(db,chid, "Currently defined aliases:\r\n");
+        game.send_to_char(ch, "Currently defined aliases:\r\n");
         let ch = db.ch(chid);
         if ch.player_specials.aliases.len() == 0 {
-            game.send_to_char(db,chid, " None.\r\n");
+            game.send_to_char(ch, " None.\r\n");
         } else {
             let list = ch.player_specials.aliases.clone();
             for a in list {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     format!("{:15} {}\r\n", a.alias, a.replacement).as_str(),
                 );
             }
@@ -2902,17 +2898,18 @@ pub fn do_alias(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             let ch = db.ch_mut(chid);
             ch.player_specials.aliases.remove(a.unwrap());
         }
+        let ch = db.ch(chid);
         /* if no replacement string is specified, assume we want to delete */
         if repl.is_empty() {
             if a.is_none() {
-                game.send_to_char(db,chid, "No such alias.\r\n");
+                game.send_to_char(ch, "No such alias.\r\n");
             } else {
-                game.send_to_char(db,chid, "Alias deleted.\r\n");
+                game.send_to_char(ch, "Alias deleted.\r\n");
             }
         } else {
             /* otherwise, either add or redefine an alias */
             if arg == "alias" {
-                game.send_to_char(db,chid, "You can't alias 'alias'.\r\n");
+                game.send_to_char(ch, "You can't alias 'alias'.\r\n");
                 return;
             }
             delete_doubledollar(&mut repl);
@@ -2930,7 +2927,7 @@ pub fn do_alias(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             }
             let ch = db.ch_mut(chid);
             ch.player_specials.aliases.push(a);
-            game.send_to_char(db,chid, "Alias added.\r\n");
+            game.send_to_char(ch, "Alias added.\r\n");
         }
     }
 }
@@ -4010,7 +4007,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                             load_room = db.r_frozen_start_room;
                         }
 
-                        game.send_to_char(db,character_id, format!("{}", WELC_MESSG).as_str());
+                        game.send_to_char(character, format!("{}", WELC_MESSG).as_str());
                         //db.character_list.push(character);
                         db.char_to_room(character_id, load_room);
                         load_result = crash_load(game, db, character_id);
@@ -4035,7 +4032,8 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                     let character = db.ch(character_id);
                     if character.get_level() == 0 {
                         do_start(game, db, character_id);
-                        game.send_to_char(db,character_id, format!("{}", START_MESSG).as_str());
+                        let character = db.ch(character_id);
+                        game.send_to_char(character, format!("{}", START_MESSG).as_str());
                         look_at_room(game, db, character_id, false);
                     }
                     if db.mails.has_mail(
@@ -4044,12 +4042,14 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                             .get_idnum(),
                     ) {
                         let chid = game.desc(d_id).character.as_ref().unwrap().clone();
-                        game.send_to_char(db,chid, "You have mail waiting.\r\n");
+                        let ch = db.ch(chid);
+                        game.send_to_char(ch, "You have mail waiting.\r\n");
                     }
                     if load_result == 2 {
                         /* rented items lost */
                         let chid = game.desc(d_id).character.as_ref().unwrap().clone();
-                        game.send_to_char(db,chid, "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
+                        let ch = db.ch(chid);
+                        game.send_to_char(ch, "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
                     }
                     game.desc_mut(d_id).has_prompt = false;
                 }

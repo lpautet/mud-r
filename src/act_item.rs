@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::cmp::{max, min};
@@ -29,9 +29,9 @@ use crate::interpreter::{
 };
 use crate::spells::SPELL_POISON;
 use crate::structs::{
-    AffectedType, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL,
-    ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE,
-    ITEM_NODROP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS,
+    AffectedType, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER,
+    ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE, ITEM_NODROP,
+    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS,
     ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER, ITEM_WEAR_HANDS, ITEM_WEAR_HEAD,
     ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK, ITEM_WEAR_SHIELD, ITEM_WEAR_TAKE,
     ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
@@ -43,10 +43,9 @@ use crate::util::rand_number;
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: DepotId) {
-    if db.obj(cid).get_obj_weight() + db.obj(oid).get_obj_weight()
-        > db.obj(cid).get_obj_val(0)
-    {
-        game.act(db,
+    if db.obj(cid).get_obj_weight() + db.obj(oid).get_obj_weight() > db.obj(cid).get_obj_val(0) {
+        game.act(
+            db,
             "$p won't fit in $P.",
             false,
             Some(chid),
@@ -55,7 +54,8 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
             TO_CHAR,
         );
     } else if db.obj(oid).obj_flagged(ITEM_NODROP) && db.obj(cid).in_room() != NOWHERE {
-        game.act(db,
+        game.act(
+            db,
             "You can't get $p out of your hand.",
             false,
             Some(chid),
@@ -67,7 +67,8 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
         db.obj_from_char(oid);
         db.obj_to_obj(oid, cid);
 
-        game.act(db,
+        game.act(
+            db,
             "$n puts $p in $P.",
             true,
             Some(chid),
@@ -80,7 +81,8 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
         if db.obj(oid).obj_flagged(ITEM_NODROP) && !db.obj(cid).obj_flagged(ITEM_NODROP) {
             db.obj_mut(cid).set_obj_extra_bit(ITEM_NODROP);
 
-            game.act(db,
+            game.act(
+                db,
                 "You get a strange feeling as you put $p in $P.",
                 false,
                 Some(chid),
@@ -89,7 +91,8 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
                 TO_CHAR,
             );
         } else {
-            game.act(db,
+            game.act(
+                db,
                 "You put $p in $P.",
                 false,
                 Some(chid),
@@ -110,7 +113,14 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
     <container> must be in inventory or on ground.
     all objects to be put into container must be in inventory.
 */
-pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_put(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut found = false;
     let mut howmany = 1;
@@ -136,15 +146,15 @@ pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     let mut oid;
 
     if theobj.is_empty() {
-        game.send_to_char(db,chid, "Put what in what?\r\n");
+        game.send_to_char(ch, "Put what in what?\r\n");
     } else if cont_dotmode != FIND_INDIV {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             "You can only put things into one container at a time.\r\n",
         );
     } else if thecont.is_empty() {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!(
                 "What do you want to put {} in?\r\n",
                 if obj_dotmode == FIND_INDIV {
@@ -156,7 +166,8 @@ pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             .as_str(),
         );
     } else {
-        game.generic_find(db,
+        game.generic_find(
+            db,
             &thecont,
             (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
             chid,
@@ -164,12 +175,13 @@ pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             &mut cid,
         );
         if cid.is_none() {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't see {} {} here.\r\n", an!(thecont), thecont).as_str(),
             );
         } else if db.obj(cid.unwrap()).get_obj_type() != ITEM_CONTAINER {
-            game.act(db,
+            game.act(
+                db,
                 "$p is not a container.",
                 false,
                 Some(chid),
@@ -178,57 +190,48 @@ pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
                 TO_CHAR,
             );
         } else if db.obj(cid.unwrap()).objval_flagged(CONT_CLOSED) {
-            game.send_to_char(db,chid, "You'd better open it first!\r\n");
+            game.send_to_char(ch, "You'd better open it first!\r\n");
         } else {
             if obj_dotmode == FIND_INDIV {
                 /* put <obj> <container> */
 
                 if {
-                    oid =
-                        game.get_obj_in_list_vis(db,ch, &theobj, None, ch.carrying.as_ref());
+                    oid = game.get_obj_in_list_vis(db, ch, &theobj, None, ch.carrying.as_ref());
                     oid.is_none()
                 } {
-                    game.send_to_char(db,
-                        chid,
+                    game.send_to_char(
+                        ch,
                         format!("You aren't carrying {} {}.\r\n", an!(theobj), theobj).as_str(),
                     );
                 } else if oid == cid && howmany == 1 {
-                    game.send_to_char(db,chid, "You attempt to fold it into itself, but fail.\r\n");
+                    game.send_to_char(ch, "You attempt to fold it into itself, but fail.\r\n");
                 } else {
                     while oid.is_some() && howmany != 0 {
                         if oid != cid {
                             howmany -= 1;
-                            perform_put(game, db,chid, oid.unwrap(), cid.unwrap());
+                            perform_put(game, db, chid, oid.unwrap(), cid.unwrap());
                         }
                         let ch = db.ch(chid);
-                        oid = game.get_obj_in_list_vis(db,
-                            ch,
-                            &theobj,
-                            None,
-                            ch.carrying.as_ref(),
-                        );
+                        oid = game.get_obj_in_list_vis(db, ch, &theobj, None, ch.carrying.as_ref());
                     }
                 }
             } else {
                 let list = ch.carrying.clone();
                 for oid in list {
                     if oid != cid.unwrap()
-                        && (obj_dotmode == FIND_ALL
-                            || isname(&theobj, &db.obj(oid).name.as_ref()))
+                        && (obj_dotmode == FIND_ALL || isname(&theobj, &db.obj(oid).name.as_ref()))
                     {
                         found = true;
-                        perform_put(game, db,chid, oid, cid.unwrap());
+                        perform_put(game, db, chid, oid, cid.unwrap());
                     }
                 }
+                let ch = db.ch(chid);
                 if !found {
                     if obj_dotmode == FIND_ALL {
-                        game.send_to_char(db,
-                            chid,
-                            "You don't seem to have anything to put in it.\r\n",
-                        );
+                        game.send_to_char(ch, "You don't seem to have anything to put in it.\r\n");
                     } else {
-                        game.send_to_char(db,
-                            chid,
+                        game.send_to_char(
+                            ch,
                             format!("You don't seem to have any {}s.\r\n", theobj).as_str(),
                         );
                     }
@@ -241,7 +244,8 @@ pub fn do_put(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
 fn can_take_obj(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId) -> bool {
     let ch = db.ch(chid);
     if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
-        game.act(db,
+        game.act(
+            db,
             "$p: you can't carry that many items.",
             false,
             Some(chid),
@@ -251,7 +255,8 @@ fn can_take_obj(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId) -> bool {
         );
         return false;
     } else if (ch.is_carrying_w() + db.obj(oid).get_obj_weight()) > ch.can_carry_w() as i32 {
-        game.act(db,
+        game.act(
+            db,
             "$p: you can't carry that much weight.",
             false,
             Some(chid),
@@ -261,7 +266,8 @@ fn can_take_obj(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId) -> bool {
         );
         return false;
     } else if !db.obj(oid).can_wear(ITEM_WEAR_TAKE) {
-        game.act(db,
+        game.act(
+            db,
             "$p: you can't take that!",
             false,
             Some(chid),
@@ -286,14 +292,15 @@ fn get_check_money(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId) {
     ch.set_gold(ch.get_gold() + value);
 
     if value == 1 {
-        game.send_to_char(db,chid, "There was 1 coin.\r\n");
+        game.send_to_char(ch, "There was 1 coin.\r\n");
     } else {
-        game.send_to_char(db,chid, format!("There were {} coins.\r\n", value).as_str());
+        game.send_to_char(ch, format!("There were {} coins.\r\n", value).as_str());
     }
 }
 
 fn perform_get_from_container(
-    game: &mut Game, db: &mut DB, 
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     oid: DepotId,
     cid: DepotId,
@@ -302,7 +309,8 @@ fn perform_get_from_container(
     if mode == FIND_OBJ_INV || can_take_obj(game, db, chid, oid) {
         let ch = db.ch(chid);
         if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
-            game.act(db,
+            game.act(
+                db,
                 "$p: you can't hold any more items.",
                 false,
                 Some(chid),
@@ -313,7 +321,8 @@ fn perform_get_from_container(
         } else {
             db.obj_from_obj(oid);
             db.obj_to_char(oid, chid);
-            game.act(db,
+            game.act(
+                db,
                 "You get $p from $P.",
                 false,
                 Some(chid),
@@ -321,7 +330,8 @@ fn perform_get_from_container(
                 Some(VictimRef::Obj(cid)),
                 TO_CHAR,
             );
-            game.act(db,
+            game.act(
+                db,
                 "$n gets $p from $P.",
                 true,
                 Some(chid),
@@ -335,7 +345,8 @@ fn perform_get_from_container(
 }
 
 fn get_from_container(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     cid: DepotId,
     arg: &str,
@@ -349,7 +360,8 @@ fn get_from_container(
     let obj_dotmode = find_all_dots(arg);
 
     if db.obj(cid).obj_flagged(CONT_CLOSED) {
-        game.act(db,
+        game.act(
+            db,
             "$p is closed.",
             false,
             Some(chid),
@@ -358,35 +370,36 @@ fn get_from_container(
             TO_CHAR,
         );
     } else if obj_dotmode == FIND_INDIV {
-        let mut oid = game.get_obj_in_list_vis(db,ch, arg, None, &db.obj(cid).contains.clone());
+        let mut oid = game.get_obj_in_list_vis(db, ch, arg, None, &db.obj(cid).contains.clone());
         if oid.is_none() {
             let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
-            game.act(db,&buf, false, Some(chid), Some(cid), None, TO_CHAR);
+            game.act(db, &buf, false, Some(chid), Some(cid), None, TO_CHAR);
         } else {
             while oid.is_some() && howmany != 0 {
                 howmany -= 1;
-                perform_get_from_container(game,db, chid, oid.unwrap(), cid, mode);
+                perform_get_from_container(game, db, chid, oid.unwrap(), cid, mode);
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, arg, None, &db.obj(cid).contains.clone());
+                oid = game.get_obj_in_list_vis(db, ch, arg, None, &db.obj(cid).contains.clone());
             }
         }
     } else {
         if obj_dotmode == FIND_ALLDOT && arg.is_empty() {
-            game.send_to_char(db,chid, "Get all of what?\r\n");
+            game.send_to_char(ch, "Get all of what?\r\n");
             return;
         }
         for oid in db.obj(cid).contains.clone() {
             let ch = db.ch(chid);
-            if game.can_see_obj(db,ch, db.obj(oid))
+            if game.can_see_obj(db, ch, db.obj(oid))
                 && (obj_dotmode == FIND_ALL || isname(arg, &db.obj(oid).name))
             {
                 found = true;
-                perform_get_from_container(game,db, chid, oid, cid, mode);
+                perform_get_from_container(game, db, chid, oid, cid, mode);
             }
         }
         if !found {
             if obj_dotmode == FIND_ALL {
-                game.act(db,
+                game.act(
+                    db,
                     "$p seems to be empty.",
                     false,
                     Some(chid),
@@ -396,17 +409,18 @@ fn get_from_container(
                 );
             } else {
                 let buf = format!("You can't seem to find any {}s in $p.", arg);
-                game.act(db,&buf, false, Some(chid), Some(cid), None, TO_CHAR);
+                game.act(db, &buf, false, Some(chid), Some(cid), None, TO_CHAR);
             }
         }
     }
 }
 
 fn perform_get_from_room(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId) -> bool {
-    if can_take_obj(game, db,chid, oid) {
+    if can_take_obj(game, db, chid, oid) {
         db.obj_from_room(oid);
         db.obj_to_char(oid, chid);
-        game.act(db,
+        game.act(
+            db,
             "You get $p.",
             false,
             Some(chid),
@@ -414,29 +428,33 @@ fn perform_get_from_room(game: &mut Game, db: &mut DB, chid: DepotId, oid: Depot
             None,
             TO_CHAR,
         );
-        game.act(db,"$n gets $p.", true, Some(chid), Some(oid), None, TO_ROOM);
+        game.act(
+            db,
+            "$n gets $p.",
+            true,
+            Some(chid),
+            Some(oid),
+            None,
+            TO_ROOM,
+        );
         get_check_money(game, db, chid, oid);
         return true;
     }
     return false;
 }
 
-fn get_from_room(game: &mut Game,db: &mut DB, chid: DepotId, arg: &str, howmany: i32) {
+fn get_from_room(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str, howmany: i32) {
     let ch = db.ch(chid);
     let mut found = false;
     let mut howmany = howmany;
     let dotmode = find_all_dots(arg);
 
     if dotmode == FIND_INDIV {
-        let mut oid = game.get_obj_in_list_vis2(db,
-            ch,
-            arg,
-            None,
-            &db.world[ch.in_room() as usize].contents,
-        );
+        let mut oid =
+            game.get_obj_in_list_vis2(db, ch, arg, None, &db.world[ch.in_room() as usize].contents);
         if oid.is_none() {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't see {} {} here.\r\n", an!(arg), arg).as_str(),
             );
         } else {
@@ -445,9 +463,10 @@ fn get_from_room(game: &mut Game,db: &mut DB, chid: DepotId, arg: &str, howmany:
                     break;
                 }
                 howmany -= 1;
-                perform_get_from_room(game,db, chid, oid.unwrap());
+                perform_get_from_room(game, db, chid, oid.unwrap());
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis2(db,
+                oid = game.get_obj_in_list_vis2(
+                    db,
                     ch,
                     arg,
                     None,
@@ -457,32 +476,37 @@ fn get_from_room(game: &mut Game,db: &mut DB, chid: DepotId, arg: &str, howmany:
         }
     } else {
         if dotmode == FIND_ALLDOT && arg.is_empty() {
-            game.send_to_char(db,chid, "Get all of what?\r\n");
+            game.send_to_char(ch, "Get all of what?\r\n");
             return;
         }
         for oid in db.world[ch.in_room() as usize].contents.clone() {
             let ch = db.ch(chid);
-            if game.can_see_obj(db,ch, db.obj(oid))
+            if game.can_see_obj(db, ch, db.obj(oid))
                 && (dotmode == FIND_ALL || isname(arg, &db.obj(oid).name))
             {
                 found = true;
-                perform_get_from_room(game,db, chid, oid);
+                perform_get_from_room(game, db, chid, oid);
             }
         }
+        let ch = db.ch(chid);
         if !found {
             if dotmode == FIND_ALL {
-                game.send_to_char(db,chid, "There doesn't seem to be anything here.\r\n");
+                game.send_to_char(ch, "There doesn't seem to be anything here.\r\n");
             } else {
-                game.send_to_char(db,
-                    chid,
-                    format!("You don't see any {}s here.\r\n", arg).as_str(),
-                );
+                game.send_to_char(ch, format!("You don't see any {}s here.\r\n", arg).as_str());
             }
         }
     }
 }
 
-pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_get(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -494,11 +518,11 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     one_argument(two_arguments(argument, &mut arg1, &mut arg2), &mut arg3); /* three_arguments */
 
     if arg1.is_empty() {
-        game.send_to_char(db,chid, "Get what?\r\n");
+        game.send_to_char(ch, "Get what?\r\n");
     } else if arg2.is_empty() {
-        get_from_room(game,db, chid, &arg1, 1);
+        get_from_room(game, db, chid, &arg1, 1);
     } else if is_number(&arg1) && arg3.is_empty() {
-        get_from_room(game,db, chid, &arg2, arg1.parse::<i32>().unwrap());
+        get_from_room(game, db, chid, &arg2, arg1.parse::<i32>().unwrap());
     } else {
         let mut amount = 1;
         if is_number(&arg1) {
@@ -508,7 +532,8 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
         }
         let cont_dotmode = find_all_dots(&arg2);
         if cont_dotmode == FIND_INDIV {
-            let mode = game.generic_find(db,
+            let mode = game.generic_find(
+                db,
                 &arg2,
                 (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
                 chid,
@@ -516,12 +541,13 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
                 &mut cid,
             );
             if cid.is_none() {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(
+                    ch,
                     format!("You don't have {} {}.\r\n", an!(&arg2), &arg2).as_str(),
                 );
             } else if db.obj(cid.unwrap()).get_obj_type() != ITEM_CONTAINER {
-                game.act(db,
+                game.act(
+                    db,
                     "$p is not a container.",
                     false,
                     Some(chid),
@@ -530,25 +556,26 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
                     TO_CHAR,
                 );
             } else {
-                get_from_container(game,db, chid, cid.unwrap(), &arg1, mode, amount);
+                get_from_container(game, db, chid, cid.unwrap(), &arg1, mode, amount);
             }
         } else {
             if cont_dotmode == FIND_ALLDOT && arg2.is_empty() {
-                game.send_to_char(db,chid, "Get from all of what?\r\n");
+                game.send_to_char(ch, "Get from all of what?\r\n");
                 return;
             }
             let list = ch.carrying.clone();
             for contid in list {
                 let ch = db.ch(chid);
-                if game.can_see_obj(db,ch, db.obj(contid))
+                if game.can_see_obj(db, ch, db.obj(contid))
                     && (cont_dotmode == FIND_ALL || isname(&arg2, &db.obj(contid).name))
                 {
                     if db.obj(contid).get_obj_type() == ITEM_CONTAINER {
                         found = true;
-                        get_from_container(game,db, chid, contid, &arg1, FIND_OBJ_INV, amount);
+                        get_from_container(game, db, chid, contid, &arg1, FIND_OBJ_INV, amount);
                     } else if cont_dotmode == FIND_ALLDOT {
                         found = true;
-                        game.act(db,
+                        game.act(
+                            db,
                             "$p is not a container.",
                             false,
                             Some(chid),
@@ -562,14 +589,15 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             let ch = db.ch(chid);
             for contid in db.world[ch.in_room() as usize].contents.clone() {
                 let ch = db.ch(chid);
-                if game.can_see_obj(db,ch, db.obj(contid))
+                if game.can_see_obj(db, ch, db.obj(contid))
                     && (cont_dotmode == FIND_ALL || isname(&arg2, &db.obj(contid).name))
                 {
                     if db.obj(contid).get_obj_type() == ITEM_CONTAINER {
-                        get_from_container(game,db, chid, contid, &arg1, FIND_OBJ_ROOM, amount);
+                        get_from_container(game, db, chid, contid, &arg1, FIND_OBJ_ROOM, amount);
                         found = true;
                     } else if cont_dotmode == FIND_ALLDOT {
-                        game.act(db,
+                        game.act(
+                            db,
                             "$p is not a container.",
                             false,
                             Some(chid),
@@ -583,10 +611,12 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             }
             if !found {
                 if cont_dotmode == FIND_ALL {
-                    game.send_to_char(db,chid, "You can't seem to find any containers.\r\n");
+                    let ch = db.ch(chid);
+                    game.send_to_char(ch, "You can't seem to find any containers.\r\n");
                 } else {
-                    game.send_to_char(db,
-                        chid,
+                    let ch = db.ch(chid);
+                    game.send_to_char(
+                        ch,
                         format!("You can't seem to find any {}s here.\r\n", &arg2).as_str(),
                     );
                 }
@@ -595,12 +625,19 @@ pub fn do_get(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     }
 }
 
-fn perform_drop_gold(game: &mut Game,db: &mut DB, chid: DepotId, amount: i32, mode: u8, rdr: RoomRnum) {
+fn perform_drop_gold(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    amount: i32,
+    mode: u8,
+    rdr: RoomRnum,
+) {
     let ch = db.ch(chid);
     if amount <= 0 {
-        game.send_to_char(db,chid, "Heh heh heh.. we are jolly funny today, eh?\r\n");
+        game.send_to_char(ch, "Heh heh heh.. we are jolly funny today, eh?\r\n");
     } else if ch.get_gold() < amount {
-        game.send_to_char(db,chid, "You don't have that many coins!\r\n");
+        game.send_to_char(ch, "You don't have that many coins!\r\n");
     } else {
         if mode != SCMD_JUNK as u8 {
             let ch = db.ch_mut(chid);
@@ -608,11 +645,13 @@ fn perform_drop_gold(game: &mut Game,db: &mut DB, chid: DepotId, amount: i32, mo
 
             let oid = db.create_money(amount).unwrap();
             if mode == SCMD_DONATE as u8 {
-                game.send_to_char(db,
-                    chid,
+                let ch = db.ch(chid);
+                game.send_to_char(
+                    ch,
                     "You throw some gold into the air where it disappears in a puff of smoke!\r\n",
                 );
-                game.act(db,
+                game.act(
+                    db,
                     "$n throws some gold into the air where it disappears in a puff of smoke!",
                     false,
                     Some(chid),
@@ -621,7 +660,8 @@ fn perform_drop_gold(game: &mut Game,db: &mut DB, chid: DepotId, amount: i32, mo
                     TO_ROOM,
                 );
                 db.obj_to_room(oid, rdr);
-                game.act(db,
+                game.act(
+                    db,
                     "$p suddenly appears in a puff of orange smoke!",
                     false,
                     None,
@@ -631,9 +671,9 @@ fn perform_drop_gold(game: &mut Game,db: &mut DB, chid: DepotId, amount: i32, mo
                 );
             } else {
                 let buf = format!("$n drops {}.", money_desc(amount));
-                game.act(db,&buf, true, Some(chid), None, None, TO_ROOM);
-
-                game.send_to_char(db,chid, "You drop some gold.\r\n");
+                game.act(db, &buf, true, Some(chid), None, None, TO_ROOM);
+                let ch = db.ch(chid);
+                game.send_to_char(ch, "You drop some gold.\r\n");
                 let ch = db.ch(chid);
                 db.obj_to_room(oid, ch.in_room());
             }
@@ -642,10 +682,10 @@ fn perform_drop_gold(game: &mut Game,db: &mut DB, chid: DepotId, amount: i32, mo
                 "$n drops {} which disappears in a puff of smoke!",
                 money_desc(amount)
             );
-            game.act(db,&buf, false, Some(chid), None, None, TO_ROOM);
+            game.act(db, &buf, false, Some(chid), None, None, TO_ROOM);
 
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 "You drop some gold which disappears in a puff of smoke!\r\n",
             );
         }
@@ -665,7 +705,8 @@ macro_rules! vanish {
 }
 
 fn perform_drop(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     oid: DepotId,
     mut mode: u8,
@@ -674,15 +715,15 @@ fn perform_drop(
 ) -> i32 {
     if db.obj(oid).obj_flagged(ITEM_NODROP) {
         let buf = format!("You can't {} $p, it must be CURSED!", sname);
-        game.act(db,&buf, false, Some(chid), Some(oid), None, TO_CHAR);
+        game.act(db, &buf, false, Some(chid), Some(oid), None, TO_CHAR);
         return 0;
     }
 
     let buf = format!("You {} $p.{}", sname, vanish!(mode));
-    game.act(db,&buf, false, Some(chid), Some(oid), None, TO_CHAR);
+    game.act(db, &buf, false, Some(chid), Some(oid), None, TO_CHAR);
 
     let buf = format!("$n {}s $p.{}", sname, vanish!(mode));
-    game.act(db,&buf, true, Some(chid), Some(oid), None, TO_ROOM);
+    game.act(db, &buf, true, Some(chid), Some(oid), None, TO_ROOM);
 
     db.obj_from_char(oid);
 
@@ -698,7 +739,8 @@ fn perform_drop(
 
         SCMD_DONATE => {
             db.obj_to_room(oid, rdr);
-            game.act(db,
+            game.act(
+                db,
                 "$p suddenly appears in a puff a smoke!",
                 false,
                 None,
@@ -710,7 +752,7 @@ fn perform_drop(
         }
         SCMD_JUNK => {
             let value = max(1, min(200, db.obj(oid).get_obj_cost() / 16));
-            game.extract_obj(db,oid);
+            game.extract_obj(db, oid);
             return value;
         }
         _ => {
@@ -723,7 +765,14 @@ fn perform_drop(
     0
 }
 
-pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_drop(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    subcmd: i32,
+) {
     let ch = db.ch(chid);
     let sname;
     let mut mode = SCMD_DROP;
@@ -749,7 +798,7 @@ pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 _ => {}
             }
             if rdr == NOWHERE {
-                game.send_to_char(db,chid, "Sorry, you can't donate anything right now.\r\n");
+                game.send_to_char(ch, "Sorry, you can't donate anything right now.\r\n");
                 return;
             }
         }
@@ -765,36 +814,33 @@ pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let dotmode;
 
     if arg.is_empty() {
-        game.send_to_char(db,
-            chid,
-            format!("What do you want to {}?\r\n", sname).as_str(),
-        );
+        game.send_to_char(ch, format!("What do you want to {}?\r\n", sname).as_str());
         return;
     } else if is_number(&arg) {
         let mut multi = arg.parse::<i32>().unwrap();
         one_argument(argument, &mut arg);
         if arg == "coins" || arg == "coin" {
-            perform_drop_gold(game,db, chid, multi, mode, rdr);
+            perform_drop_gold(game, db, chid, multi, mode, rdr);
         } else if multi <= 0 {
-            game.send_to_char(db,chid, "Yeah, that makes sense.\r\n");
+            game.send_to_char(ch, "Yeah, that makes sense.\r\n");
         } else if arg.is_empty() {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("What do you want to {} {} of?\r\n", sname, multi).as_str(),
             );
         } else if {
-            oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+            oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
             oid.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't seem to have any {}s.\r\n", arg).as_str(),
             );
         } else {
             loop {
-                amount += perform_drop(game,db, chid, oid.unwrap(), mode, sname, rdr);
+                amount += perform_drop(game, db, chid, oid.unwrap(), mode, sname, rdr);
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
                 multi -= 1;
                 if multi == 0 {
                     break;
@@ -807,13 +853,10 @@ pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         /* Can't junk or donate all */
         if (dotmode == FIND_ALL) && (subcmd == SCMD_JUNK as i32 || subcmd == SCMD_DONATE as i32) {
             if subcmd == SCMD_JUNK as i32 {
-                game.send_to_char(db,
-                    chid,
-                    "Go to the dump if you want to junk EVERYTHING!\r\n",
-                );
+                game.send_to_char(ch, "Go to the dump if you want to junk EVERYTHING!\r\n");
             } else {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(
+                    ch,
                     "Go do the donation room if you want to donate EVERYTHING!\r\n",
                 );
                 return;
@@ -822,56 +865,58 @@ pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         if dotmode == FIND_ALL {
             let ch = db.ch(chid);
             if ch.carrying.is_empty() {
-                game.send_to_char(db,chid, "You don't seem to be carrying anything.\r\n");
+                game.send_to_char(ch, "You don't seem to be carrying anything.\r\n");
             } else {
                 let list = ch.carrying.clone();
                 for oid in list {
-                    amount += perform_drop(game,db, chid, oid, mode, sname, rdr);
+                    amount += perform_drop(game, db, chid, oid, mode, sname, rdr);
                 }
             }
         } else if dotmode == FIND_ALLDOT {
             if arg.is_empty() {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(
+                    ch,
                     format!("What do you want to {} all of?\r\n", sname).as_str(),
                 );
                 return;
             }
             if {
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(
+                    ch,
                     format!("You don't seem to have any {}s.\r\n", arg).as_str(),
                 );
             }
 
             while oid.is_some() {
-                amount += perform_drop(game,db, chid, oid.unwrap(), mode, sname, rdr);
+                amount += perform_drop(game, db, chid, oid.unwrap(), mode, sname, rdr);
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
             }
         } else {
             if {
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(
+                    ch,
                     format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                 );
             } else {
-                amount += perform_drop(game,db, chid, oid.unwrap(), mode, sname, rdr);
+                amount += perform_drop(game, db, chid, oid.unwrap(), mode, sname, rdr);
             }
         }
     }
 
     if amount != 0 && subcmd == SCMD_JUNK as i32 {
-        game.send_to_char(db,chid, "You have been rewarded by the gods!\r\n");
-        game.act(db,
+        let ch = db.ch(chid);
+        game.send_to_char(ch, "You have been rewarded by the gods!\r\n");
+        game.act(
+            db,
             "$n has been rewarded by the gods!",
             true,
             Some(chid),
@@ -887,7 +932,8 @@ pub fn do_drop(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
 fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, oid: DepotId) {
     let vict = db.ch(vict_id);
     if db.obj(oid).obj_flagged(ITEM_NODROP) {
-        game.act(db,
+        game.act(
+            db,
             "You can't let go of $p!!  Yeech!",
             false,
             Some(chid),
@@ -898,7 +944,8 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
         return;
     }
     if vict.is_carrying_n() >= vict.can_carry_n() as u8 {
-        game.act(db,
+        game.act(
+            db,
             "$N seems to have $S hands full.",
             false,
             Some(chid),
@@ -909,7 +956,8 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
         return;
     }
     if db.obj(oid).get_obj_weight() + vict.is_carrying_w() > vict.can_carry_w() as i32 {
-        game.act(db,
+        game.act(
+            db,
             "$E can't carry that much weight.",
             false,
             Some(chid),
@@ -921,7 +969,8 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
     }
     db.obj_from_char(oid);
     db.obj_to_char(oid, vict_id);
-    game.act(db,
+    game.act(
+        db,
         "You give $p to $N.",
         false,
         Some(chid),
@@ -929,7 +978,8 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
         Some(VictimRef::Char(vict_id)),
         TO_CHAR,
     );
-    game.act(db,
+    game.act(
+        db,
         "$n gives you $p.",
         false,
         Some(chid),
@@ -937,7 +987,8 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
         Some(VictimRef::Char(vict_id)),
         TO_VICT,
     );
-    game.act(db,
+    game.act(
+        db,
         "$n gives $p to $N.",
         true,
         Some(chid),
@@ -949,18 +1000,19 @@ fn perform_give(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, o
 
 /* utility function for give */
 fn give_find_vict(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) -> Option<DepotId> {
+    let ch = db.ch(chid);
     let vict_id;
     let mut arg = arg.trim_start().to_string();
 
     if arg.is_empty() {
-        game.send_to_char(db,chid, "To who?\r\n");
+        game.send_to_char(ch, "To who?\r\n");
     } else if {
-        vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
+        vict_id = game.get_char_vis(db, chid, &mut arg, None, FIND_CHAR_ROOM);
         vict_id.is_none()
     } {
-        game.send_to_char(db,chid, NOPERSON);
+        game.send_to_char(ch, NOPERSON);
     } else if vict_id.unwrap() == chid {
-        game.send_to_char(db,chid, "What's the point of that?\r\n");
+        game.send_to_char(ch, "What's the point of that?\r\n");
     } else {
         return vict_id;
     }
@@ -973,21 +1025,22 @@ fn perform_give_gold(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: Depot
     let mut buf;
 
     if amount <= 0 {
-        game.send_to_char(db,chid, "Heh heh heh ... we are jolly funny today, eh?\r\n");
+        game.send_to_char(ch, "Heh heh heh ... we are jolly funny today, eh?\r\n");
         return;
     }
     if ch.get_gold() < amount && (ch.is_npc() || (ch.get_level() < LVL_GOD as u8)) {
-        game.send_to_char(db,chid, "You don't have that many coins!\r\n");
+        game.send_to_char(ch, "You don't have that many coins!\r\n");
         return;
     }
-    game.send_to_char(db,chid, OK);
+    game.send_to_char(ch, OK);
 
     buf = format!(
         "$n gives you {} gold coin{}.",
         amount,
         if amount == 1 { "" } else { "s" }
     );
-    game.act(db,
+    game.act(
+        db,
         &buf,
         false,
         Some(chid),
@@ -997,7 +1050,8 @@ fn perform_give_gold(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: Depot
     );
 
     buf = format!("$n gives {} to $N.", money_desc(amount));
-    game.act(db,
+    game.act(
+        db,
         &buf,
         true,
         Some(chid),
@@ -1015,7 +1069,15 @@ fn perform_give_gold(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: Depot
     vict.set_gold(vict.get_gold() + amount);
 }
 
-pub fn do_give(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_give(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
+    let ch = db.ch(chid);
     let mut arg = String::new();
 
     let mut argument = one_argument(argument, &mut arg);
@@ -1024,52 +1086,54 @@ pub fn do_give(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let mut oid = None;
 
     if arg.is_empty() {
-        game.send_to_char(db,chid, "Give what to who?\r\n");
+        game.send_to_char(ch, "Give what to who?\r\n");
     } else if is_number(&arg) {
         amount = arg.parse::<i32>().unwrap();
         argument = one_argument(argument, &mut arg);
         if arg == "coins" || arg == "coin" {
             one_argument(argument, &mut arg);
             if {
-                vict_id = give_find_vict(game,db, chid, &arg);
+                vict_id = give_find_vict(game, db, chid, &arg);
                 vict_id.is_some()
             } {
-                perform_give_gold(game,db, chid, vict_id.unwrap(), amount);
+                perform_give_gold(game, db, chid, vict_id.unwrap(), amount);
                 return;
             } else if arg.is_empty() {
                 /* Give multiple code. */
-                game.send_to_char(db,
-                    chid,
+                let ch = db.ch(chid);
+                game.send_to_char(
+                    ch,
                     format!("What do you want to give {} of?\r\n", amount).as_str(),
                 );
             } else if {
-                vict_id = give_find_vict(game,db, chid, argument);
+                vict_id = give_find_vict(game, db, chid, argument);
                 vict_id.is_none()
             } {
                 return;
             } else if {
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
             }
-            game.send_to_char(db,
-                chid,
+            let ch = db.ch(chid);
+            game.send_to_char(
+                ch,
                 format!("You don't seem to have any {}s.\r\n", arg).as_str(),
             );
         } else {
             while oid.is_some() && amount != 0 {
                 amount -= 1;
-                perform_give(game,db, chid, vict_id.unwrap(), oid.unwrap());
+                perform_give(game, db, chid, vict_id.unwrap(), oid.unwrap());
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
             }
         }
     } else {
         let mut buf1 = String::new();
         one_argument(argument, &mut buf1);
         if {
-            vict_id = give_find_vict(game,db, chid, &buf1);
+            vict_id = give_find_vict(game, db, chid, &buf1);
             vict_id.is_none()
         } {
             return;
@@ -1078,32 +1142,34 @@ pub fn do_give(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         if dotmode == FIND_INDIV {
             if {
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
                 oid.is_none()
             } {
-                game.send_to_char(db,
-                    chid,
+                let ch = db.ch(chid);
+                game.send_to_char(
+                    ch,
                     format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                 );
             } else {
-                perform_give(game,db, chid, vict_id.unwrap(), oid.unwrap());
+                perform_give(game, db, chid, vict_id.unwrap(), oid.unwrap());
             }
         } else {
             if dotmode == FIND_ALLDOT && arg.is_empty() {
-                game.send_to_char(db,chid, "All of what?\r\n");
+                let ch = db.ch(chid);
+                game.send_to_char(ch, "All of what?\r\n");
                 return;
             }
             let ch = db.ch(chid);
             if ch.carrying.len() == 0 {
-                game.send_to_char(db,chid, "You don't seem to be holding anything.\r\n");
+                game.send_to_char(ch, "You don't seem to be holding anything.\r\n");
             } else {
-                let list = ch.carrying.clone() ;
+                let list = ch.carrying.clone();
                 for oid in list {
                     let ch = db.ch(chid);
-                    if game.can_see_obj(db,ch, db.obj(oid))
+                    if game.can_see_obj(db, ch, db.obj(oid))
                         && (dotmode == FIND_ALL || isname(&arg, &db.obj(oid).name))
                     {
-                        perform_give(game,db, chid, vict_id.unwrap(), oid);
+                        perform_give(game, db, chid, vict_id.unwrap(), oid);
                     }
                 }
             }
@@ -1111,7 +1177,7 @@ pub fn do_give(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
 }
 
-pub fn weight_change_object( db: &mut DB, oid: DepotId, weight: i32) {
+pub fn weight_change_object(db: &mut DB, oid: DepotId, weight: i32) {
     let tmp_ch;
     let tmp_obj;
     if db.obj(oid).in_room() != NOWHERE {
@@ -1207,7 +1273,14 @@ pub fn name_to_drinkcon(db: &mut DB, oid: Option<DepotId>, type_: i32) {
     db.obj_mut(oid.unwrap()).name = Rc::from(new_name.as_str());
 }
 
-pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_drink(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -1219,17 +1292,18 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     }
 
     if arg.len() == 0 {
-        game.send_to_char(db,chid, "Drink from what?\r\n");
+        game.send_to_char(ch, "Drink from what?\r\n");
         return;
     }
     let mut toid;
     let mut on_ground = false;
     if {
-        toid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+        toid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
         toid.is_none()
     } {
         if {
-            toid = game.get_obj_in_list_vis2(db,
+            toid = game.get_obj_in_list_vis2(
+                db,
                 ch,
                 &arg,
                 None,
@@ -1237,30 +1311,27 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             );
             toid.is_none()
         } {
-            game.send_to_char(db,chid, "You can't find it!\r\n");
+            game.send_to_char(ch, "You can't find it!\r\n");
             return;
         } else {
             on_ground = true;
         }
     }
     let toid = toid.unwrap();
-    if db.obj(toid).get_obj_type() != ITEM_DRINKCON
-        && db.obj(toid).get_obj_type() != ITEM_FOUNTAIN
+    if db.obj(toid).get_obj_type() != ITEM_DRINKCON && db.obj(toid).get_obj_type() != ITEM_FOUNTAIN
     {
-        game.send_to_char(db,chid, "You can't drink from that!\r\n");
+        game.send_to_char(ch, "You can't drink from that!\r\n");
         return;
     }
     if on_ground && db.obj(toid).get_obj_type() == ITEM_DRINKCON {
-        game.send_to_char(db,chid, "You have to be holding that to drink from it.\r\n");
+        game.send_to_char(ch, "You have to be holding that to drink from it.\r\n");
         return;
     }
     if ch.get_cond(DRUNK) > 10 && ch.get_cond(THIRST) > 0 {
         /* The pig is drunk */
-        game.send_to_char(db,
-            chid,
-            "You can't seem to get close enough to your mouth.\r\n",
-        );
-        game.act(db,
+        game.send_to_char(ch, "You can't seem to get close enough to your mouth.\r\n");
+        game.act(
+            db,
             "$n tries to drink but misses $s mouth!",
             true,
             Some(chid),
@@ -1271,11 +1342,11 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         return;
     }
     if ch.get_cond(FULL) > 20 && ch.get_cond(THIRST) > 0 {
-        game.send_to_char(db,chid, "Your stomach can't contain anymore!\r\n");
+        game.send_to_char(ch, "Your stomach can't contain anymore!\r\n");
         return;
     }
     if db.obj(toid).get_obj_val(1) == 0 {
-        game.send_to_char(db,chid, "It's empty.\r\n");
+        game.send_to_char(ch, "It's empty.\r\n");
         return;
     }
     let mut amount;
@@ -1284,10 +1355,10 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             "$n DRINKS {} from $p.",
             DRINKS[db.obj(toid).get_obj_val(2) as usize]
         );
-        game.act(db,&buf, true, Some(chid), Some(toid), None, TO_ROOM);
+        game.act(db, &buf, true, Some(chid), Some(toid), None, TO_ROOM);
 
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!(
                 "You drink the {}.\r\n",
                 DRINKS[db.obj(toid).get_obj_val(2) as usize]
@@ -1302,7 +1373,8 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             amount = rand_number(3, 10) as i32;
         }
     } else {
-        game.act(db,
+        game.act(
+            db,
             "$n sips from $p.",
             true,
             Some(chid),
@@ -1310,8 +1382,8 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             None,
             TO_ROOM,
         );
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!(
                 "It tastes like {}.\r\n",
                 DRINKS[db.obj(toid).get_obj_val(2) as usize]
@@ -1328,17 +1400,20 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
 
     weight_change_object(db, toid, -weight as i32); /* Subtract amount */
 
-    game.gain_condition(db,
+    game.gain_condition(
+        db,
         chid,
         DRUNK,
         DRINK_AFF[db.obj(toid).get_obj_val(2) as usize][DRUNK as usize] * amount / 4,
     );
-    game.gain_condition(db,
+    game.gain_condition(
+        db,
         chid,
         FULL,
         DRINK_AFF[db.obj(toid).get_obj_val(2) as usize][FULL as usize] * amount / 4,
     );
-    game.gain_condition(db,
+    game.gain_condition(
+        db,
         chid,
         THIRST,
         DRINK_AFF[db.obj(toid).get_obj_val(2) as usize][THIRST as usize] * amount / 4,
@@ -1346,23 +1421,24 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     let ch = db.ch(chid);
 
     if ch.get_cond(DRUNK) > 10 {
-        game.send_to_char(db,chid, "You feel drunk.\r\n");
+        game.send_to_char(ch, "You feel drunk.\r\n");
     }
     let ch = db.ch(chid);
 
     if ch.get_cond(THIRST) > 20 {
-        game.send_to_char(db,chid, "You don't feel thirsty any more.\r\n");
+        game.send_to_char(ch, "You don't feel thirsty any more.\r\n");
     }
     let ch = db.ch(chid);
 
     if ch.get_cond(FULL) > 20 {
-        game.send_to_char(db,chid, "You are full.\r\n");
+        game.send_to_char(ch, "You are full.\r\n");
     }
 
     if db.obj(toid).get_obj_val(3) != 0 {
         /* The crap was poisoned ! */
-        game.send_to_char(db,chid, "Oops, it tasted rather strange!\r\n");
-        game.act(db,
+        game.send_to_char(ch, "Oops, it tasted rather strange!\r\n");
+        game.act(
+            db,
             "$n chokes and utters some strange sounds.",
             true,
             Some(chid),
@@ -1392,7 +1468,14 @@ pub fn do_drink(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     return;
 }
 
-pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_eat(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -1403,16 +1486,16 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     }
 
     if arg.len() == 0 {
-        game.send_to_char(db,chid, "Eat what?\r\n");
+        game.send_to_char(ch, "Eat what?\r\n");
         return;
     }
     let food_id;
     if {
-        food_id = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+        food_id = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
         food_id.is_none()
     } {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
         return;
@@ -1422,20 +1505,21 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
         && (db.obj(food_id).get_obj_type() == ITEM_DRINKCON
             || db.obj(food_id).get_obj_type() == ITEM_FOUNTAIN)
     {
-        do_drink(game,db, chid, argument, 0, SCMD_SIP);
+        do_drink(game, db, chid, argument, 0, SCMD_SIP);
         return;
     }
     if (db.obj(food_id).get_obj_type() != ITEM_FOOD) && (ch.get_level() < LVL_GOD as u8) {
-        game.send_to_char(db,chid, "You can't eat THAT!\r\n");
+        game.send_to_char(ch, "You can't eat THAT!\r\n");
         return;
     }
     if ch.get_cond(FULL) > 20 {
         /* Stomach full */
-        game.send_to_char(db,chid, "You are too full to eat more!\r\n");
+        game.send_to_char(ch, "You are too full to eat more!\r\n");
         return;
     }
     if subcmd == SCMD_EAT {
-        game.act(db,
+        game.act(
+            db,
             "You eat $p.",
             false,
             Some(chid),
@@ -1443,7 +1527,8 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             None,
             TO_CHAR,
         );
-        game.act(db,
+        game.act(
+            db,
             "$n eats $p.",
             true,
             Some(chid),
@@ -1452,7 +1537,8 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             TO_ROOM,
         );
     } else {
-        game.act(db,
+        game.act(
+            db,
             "You nibble a little bit of $p.",
             false,
             Some(chid),
@@ -1460,7 +1546,8 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             None,
             TO_CHAR,
         );
-        game.act(db,
+        game.act(
+            db,
             "$n tastes a little bit of $p.",
             true,
             Some(chid),
@@ -1476,18 +1563,19 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
         1
     };
 
-    game.gain_condition(db,chid, FULL, amount);
+    game.gain_condition(db, chid, FULL, amount);
     let ch = db.ch(chid);
 
     if ch.get_cond(FULL) > 20 {
-        game.send_to_char(db,chid, "You are full.\r\n");
+        game.send_to_char(ch, "You are full.\r\n");
     }
     let ch = db.ch(chid);
 
     if db.obj(food_id).get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT as u8) {
         /* The crap was poisoned ! */
-        game.send_to_char(db,chid, "Oops, that tasted rather strange!\r\n");
-        game.act(db,
+        game.send_to_char(ch, "Oops, that tasted rather strange!\r\n");
+        game.act(
+            db,
             "$n coughs and utters some strange sounds.",
             false,
             Some(chid),
@@ -1506,19 +1594,27 @@ pub fn do_eat(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
         db.affect_join(chid, &mut af, false, false, false, false);
     }
     if subcmd == SCMD_EAT {
-        game.extract_obj(db,food_id);
+        game.extract_obj(db, food_id);
     } else {
         if {
             db.obj_mut(food_id).decr_obj_val(1);
             db.obj(food_id).get_obj_val(0) == 0
         } {
-            game.send_to_char(db,chid, "There's nothing left now.\r\n");
+            let ch = db.ch(chid);
+            game.send_to_char(ch, "There's nothing left now.\r\n");
             game.extract_obj(db, food_id);
         }
     }
 }
 
-pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_pour(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -1531,41 +1627,42 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     if subcmd == SCMD_POUR {
         if arg1.is_empty() {
             /* No arguments */
-            game.send_to_char(db,chid, "From what do you want to pour?\r\n");
+            game.send_to_char(ch, "From what do you want to pour?\r\n");
             return;
         }
         if {
-            from_obj_id = game.get_obj_in_list_vis(db,ch, &arg1, None, &ch.carrying);
+            from_obj_id = game.get_obj_in_list_vis(db, ch, &arg1, None, &ch.carrying);
             from_obj_id.is_none()
         } {
-            game.send_to_char(db,chid, "You can't find it!\r\n");
+            game.send_to_char(ch, "You can't find it!\r\n");
             return;
         }
         let from_obj_id = from_obj_id.unwrap();
         if db.obj(from_obj_id).get_obj_type() != ITEM_DRINKCON {
-            game.send_to_char(db,chid, "You can't pour from that!\r\n");
+            game.send_to_char(ch, "You can't pour from that!\r\n");
             return;
         }
     }
     if subcmd == SCMD_FILL {
         if arg1.is_empty() {
             /* no arguments */
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 "What do you want to fill?  And what are you filling it from?\r\n",
             );
             return;
         }
         if {
-            to_obj_id = game.get_obj_in_list_vis(db,ch, &arg1, None, &ch.carrying);
+            to_obj_id = game.get_obj_in_list_vis(db, ch, &arg1, None, &ch.carrying);
             to_obj_id.is_none()
         } {
-            game.send_to_char(db,chid, "You can't find it!\r\n");
+            game.send_to_char(ch, "You can't find it!\r\n");
             return;
         }
         let to_obj_id = to_obj_id.unwrap();
         if db.obj(to_obj_id).get_obj_type() != ITEM_DRINKCON {
-            game.act(db,
+            game.act(
+                db,
                 "You can't fill $p!",
                 false,
                 Some(chid),
@@ -1577,7 +1674,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         }
         if arg2.is_empty() {
             /* no 2nd argument */
-            game.act(db,
+            game.act(
+                db,
                 "What do you want to fill $p from?",
                 false,
                 Some(chid),
@@ -1588,7 +1686,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             return;
         }
         if {
-            from_obj_id = game.get_obj_in_list_vis2(db,
+            from_obj_id = game.get_obj_in_list_vis2(
+                db,
                 ch,
                 &arg2,
                 None,
@@ -1596,15 +1695,16 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             );
             from_obj_id.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("There doesn't seem to be {} {} here.\r\n", an!(arg2), arg2).as_str(),
             );
             return;
         }
         let from_obj_id = from_obj_id.unwrap();
         if db.obj(from_obj_id).get_obj_type() != ITEM_FOUNTAIN {
-            game.act(db,
+            game.act(
+                db,
                 "You can't fill something from $p.",
                 false,
                 Some(chid),
@@ -1618,7 +1718,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let from_obj_id = from_obj_id.unwrap();
 
     if db.obj(from_obj_id).get_obj_val(1) == 0 {
-        game.act(db,
+        game.act(
+            db,
             "The $p is empty.",
             false,
             Some(chid),
@@ -1631,11 +1732,12 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     if subcmd == SCMD_POUR {
         /* pour */
         if arg2.is_empty() {
-            game.send_to_char(db,chid, "Where do you want it?  Out or in what?\r\n");
+            game.send_to_char(ch, "Where do you want it?  Out or in what?\r\n");
             return;
         }
         if arg2 == "out" {
-            game.act(db,
+            game.act(
+                db,
                 "$n empties $p.",
                 true,
                 Some(chid),
@@ -1643,7 +1745,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 None,
                 TO_ROOM,
             );
-            game.act(db,
+            game.act(
+                db,
                 "You empty $p.",
                 false,
                 Some(chid),
@@ -1654,7 +1757,7 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
 
             weight_change_object(db, from_obj_id, -db.obj(from_obj_id).get_obj_val(1)); /* Empty */
 
-            name_from_drinkcon( db, Some(from_obj_id));
+            name_from_drinkcon(db, Some(from_obj_id));
             db.obj_mut(from_obj_id).set_obj_val(1, 0);
             db.obj_mut(from_obj_id).set_obj_val(2, 0);
             db.obj_mut(from_obj_id).set_obj_val(3, 0);
@@ -1662,39 +1765,39 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             return;
         }
         if {
-            to_obj_id = game.get_obj_in_list_vis(db,ch, &arg2, None, &ch.carrying);
+            to_obj_id = game.get_obj_in_list_vis(db, ch, &arg2, None, &ch.carrying);
             to_obj_id.is_none()
         } {
-            game.send_to_char(db,chid, "You can't find it!\r\n");
+            game.send_to_char(ch, "You can't find it!\r\n");
             return;
         }
         let to_obj_id = to_obj_id.unwrap();
         if (db.obj(to_obj_id).get_obj_type() != ITEM_DRINKCON)
             && (db.obj(to_obj_id).get_obj_type() != ITEM_FOUNTAIN)
         {
-            game.send_to_char(db,chid, "You can't pour anything into that.\r\n");
+            game.send_to_char(ch, "You can't pour anything into that.\r\n");
             return;
         }
     }
     let to_obj_id = to_obj_id.unwrap();
 
     if to_obj_id == from_obj_id {
-        game.send_to_char(db,chid, "A most unproductive effort.\r\n");
+        game.send_to_char(ch, "A most unproductive effort.\r\n");
         return;
     }
     if (db.obj(to_obj_id).get_obj_val(1) != 0)
         && (db.obj(to_obj_id).get_obj_val(2) != db.obj(from_obj_id).get_obj_val(2))
     {
-        game.send_to_char(db,chid, "There is already another liquid in it!\r\n");
+        game.send_to_char(ch, "There is already another liquid in it!\r\n");
         return;
     }
     if !(db.obj(to_obj_id).get_obj_val(1) < db.obj(to_obj_id).get_obj_val(0)) {
-        game.send_to_char(db,chid, "There is no room for more.\r\n");
+        game.send_to_char(ch, "There is no room for more.\r\n");
         return;
     }
     if subcmd == SCMD_POUR {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!(
                 "You pour the {} into the {}.",
                 DRINKS[db.obj(from_obj_id).get_obj_val(2) as usize],
@@ -1705,7 +1808,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
 
     if subcmd == SCMD_FILL {
-        game.act(db,
+        game.act(
+            db,
             "You gently fill $p from $P.",
             false,
             Some(chid),
@@ -1713,7 +1817,8 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             Some(VictimRef::Obj(from_obj_id)),
             TO_CHAR,
         );
-        game.act(db,
+        game.act(
+            db,
             "$n gently fills $p from $P.",
             true,
             Some(chid),
@@ -1745,15 +1850,13 @@ pub fn do_pour(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         let v = db.obj(to_obj_id).get_obj_val(1) + db.obj(from_obj_id).get_obj_val(1);
         db.obj_mut(to_obj_id).set_obj_val(1, v);
         amount += db.obj(from_obj_id).get_obj_val(1);
-        name_from_drinkcon( db, Some(from_obj_id));
+        name_from_drinkcon(db, Some(from_obj_id));
         db.obj_mut(from_obj_id).set_obj_val(1, 0);
         db.obj_mut(from_obj_id).set_obj_val(2, 0);
         db.obj_mut(from_obj_id).set_obj_val(3, 0);
     }
     /* Then the poison boogie */
-    let v = if db.obj(to_obj_id).get_obj_val(3) != 0
-        || db.obj(from_obj_id).get_obj_val(3) != 0
-    {
+    let v = if db.obj(to_obj_id).get_obj_val(3) != 0 || db.obj(from_obj_id).get_obj_val(3) != 0 {
         1
     } else {
         0
@@ -1814,7 +1917,8 @@ fn wear_message(game: &mut Game, db: &mut DB, chid: DepotId, obj: DepotId, _wher
         ["$n grabs $p.", "You grab $p."],
     ];
 
-    game.act(db,
+    game.act(
+        db,
         WEAR_MESSAGES[_where as usize][0],
         true,
         Some(chid),
@@ -1822,7 +1926,8 @@ fn wear_message(game: &mut Game, db: &mut DB, chid: DepotId, obj: DepotId, _wher
         None,
         TO_ROOM,
     );
-    game.act(db,
+    game.act(
+        db,
         WEAR_MESSAGES[_where as usize][1],
         false,
         Some(chid),
@@ -1884,7 +1989,8 @@ fn perform_wear(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, _wher
 
     /* first, make sure that the wear position is valid. */
     if !db.obj(oid).can_wear(WEAR_BITVECTORS[_where as usize]) {
-        game.act(db,
+        game.act(
+            db,
             "You can't wear $p there.",
             false,
             Some(chid),
@@ -1905,7 +2011,7 @@ fn perform_wear(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, _wher
     }
 
     if ch.get_eq(_where as i8).is_some() {
-        game.send_to_char(db,chid, ALREADY_WEARING[_where as usize]);
+        game.send_to_char(ch, ALREADY_WEARING[_where as usize]);
         return;
     }
     wear_message(game, db, chid, oid, _where);
@@ -1914,6 +2020,7 @@ fn perform_wear(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, _wher
 }
 
 pub fn find_eq_pos(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId, arg: &str) -> i16 {
+    let ch = db.ch(chid);
     let mut _where = -1;
 
     const KEYWORDS: [&str; 19] = [
@@ -1979,8 +2086,8 @@ pub fn find_eq_pos(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId, arg: &
         _where_o = search_block(arg, &KEYWORDS, false);
         _where_o.is_none()
     } {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!("'{}'?  What part of your body is THAT?\r\n", arg).as_str(),
         );
     } else {
@@ -1990,7 +2097,14 @@ pub fn find_eq_pos(game: &mut Game, db: &DB, chid: DepotId, oid: DepotId, arg: &
     _where
 }
 
-pub fn do_wear(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_wear(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -1998,14 +2112,14 @@ pub fn do_wear(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     two_arguments(argument, &mut arg1, &mut arg2);
 
     if arg1.is_empty() {
-        game.send_to_char(db,chid, "Wear what?\r\n");
+        game.send_to_char(ch, "Wear what?\r\n");
         return;
     }
     let dotmode = find_all_dots(&arg1);
 
     if !arg2.is_empty() && dotmode != FIND_INDIV {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             "You can't specify the same body location for more than one item!\r\n",
         );
         return;
@@ -2015,40 +2129,42 @@ pub fn do_wear(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     if dotmode == FIND_ALL {
         for oid in ch.carrying.clone() {
             let ch = db.ch(chid);
-            if game.can_see_obj(db,ch, db.obj(oid)) && {
-                _where = find_eq_pos(game,db, chid, oid, "");
+            if game.can_see_obj(db, ch, db.obj(oid)) && {
+                _where = find_eq_pos(game, db, chid, oid, "");
                 _where >= 0
             } {
                 items_worn += 1;
-                perform_wear(game, db,chid, oid, _where as i32);
+                perform_wear(game, db, chid, oid, _where as i32);
             }
         }
         if items_worn == 0 {
-            game.send_to_char(db,chid, "You don't seem to have anything wearable.\r\n");
+            let ch = db.ch(chid);
+            game.send_to_char(ch, "You don't seem to have anything wearable.\r\n");
         }
     } else if dotmode == FIND_ALLDOT {
         if arg1.is_empty() {
-            game.send_to_char(db,chid, "Wear all of what?\r\n");
+            game.send_to_char(ch, "Wear all of what?\r\n");
             return;
         }
         let mut oid;
         if {
-            oid = game.get_obj_in_list_vis(db,ch, &arg1, None, &ch.carrying);
+            oid = game.get_obj_in_list_vis(db, ch, &arg1, None, &ch.carrying);
             oid.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't seem to have any {}s.\r\n", arg1).as_str(),
             );
         } else {
             while oid.is_some() {
                 if {
-                    _where = find_eq_pos(game, db,chid, oid.unwrap(), "");
+                    _where = find_eq_pos(game, db, chid, oid.unwrap(), "");
                     _where >= 0
                 } {
                     perform_wear(game, db, chid, oid.unwrap(), _where as i32);
                 } else {
-                    game.act(db,
+                    game.act(
+                        db,
                         "You can't wear $p.",
                         false,
                         Some(chid),
@@ -2058,27 +2174,28 @@ pub fn do_wear(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                     );
                 }
                 let ch = db.ch(chid);
-                oid = game.get_obj_in_list_vis(db,ch, &arg1, None, &ch.carrying);
+                oid = game.get_obj_in_list_vis(db, ch, &arg1, None, &ch.carrying);
             }
         }
     } else {
         let oid;
         if {
-            oid = game.get_obj_in_list_vis(db,ch, &arg1, None, &ch.carrying);
+            oid = game.get_obj_in_list_vis(db, ch, &arg1, None, &ch.carrying);
             oid.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't seem to have {} {}.\r\n", an!(arg1), arg1).as_str(),
             );
         } else {
             if {
-                _where = find_eq_pos(game,db, chid, oid.unwrap(), &arg2);
+                _where = find_eq_pos(game, db, chid, oid.unwrap(), &arg2);
                 _where >= 0
             } {
-                perform_wear(game, db,chid, oid.unwrap(), _where as i32);
+                perform_wear(game, db, chid, oid.unwrap(), _where as i32);
             } else if arg2.is_empty() {
-                game.act(db,
+                game.act(
+                    db,
                     "You can't wear $p.",
                     false,
                     Some(chid),
@@ -2091,7 +2208,14 @@ pub fn do_wear(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
 }
 
-pub fn do_wield(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_wield(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -2099,50 +2223,55 @@ pub fn do_wield(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     one_argument(argument, &mut arg);
 
     if arg.is_empty() {
-        game.send_to_char(db,chid, "Wield what?\r\n");
+        game.send_to_char(ch, "Wield what?\r\n");
     } else if {
-        oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+        oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
         oid.is_none()
     } {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
     } else {
         let oid = oid.unwrap();
         if !db.obj(oid).can_wear(ITEM_WEAR_WIELD) {
-            game.send_to_char(db,chid, "You can't wield that.\r\n");
-        } else if db.obj(oid).get_obj_weight()
-            > STR_APP[ch.strength_apply_index()].wield_w as i32
-        {
-            game.send_to_char(db,chid, "It's too heavy for you to use.\r\n");
+            game.send_to_char(ch, "You can't wield that.\r\n");
+        } else if db.obj(oid).get_obj_weight() > STR_APP[ch.strength_apply_index()].wield_w as i32 {
+            game.send_to_char(ch, "It's too heavy for you to use.\r\n");
         } else {
-            perform_wear(game, db,chid, oid, WEAR_WIELD as i32);
+            perform_wear(game, db, chid, oid, WEAR_WIELD as i32);
         }
     }
 }
 
-pub fn do_grab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_grab(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
     let oid: Option<DepotId>;
     one_argument(argument, &mut arg);
 
     if arg.is_empty() {
-        game.send_to_char(db,chid, "Hold what?\r\n");
+        game.send_to_char(ch, "Hold what?\r\n");
     } else if {
-        oid = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
+        oid = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
         oid.is_none()
     } {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(
+            ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
     } else {
         let oid = oid.unwrap();
 
         if db.obj(oid).get_obj_type() == ITEM_LIGHT {
-            perform_wear(game, db,chid, oid, WEAR_LIGHT as i32);
+            perform_wear(game, db, chid, oid, WEAR_LIGHT as i32);
         } else {
             if !db.obj(oid).can_wear(ITEM_WEAR_HOLD)
                 && db.obj(oid).get_obj_type() != ITEM_WAND
@@ -2150,7 +2279,7 @@ pub fn do_grab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 && db.obj(oid).get_obj_type() != ITEM_SCROLL
                 && db.obj(oid).get_obj_type() != ITEM_POTION
             {
-                game.send_to_char(db,chid, "You can't hold that.\r\n");
+                game.send_to_char(ch, "You can't hold that.\r\n");
             } else {
                 perform_wear(game, db, chid, oid, WEAR_HOLD as i32);
             }
@@ -2168,7 +2297,8 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
     } {
         error!("SYSERR: perform_remove: bad pos {} passed.", pos);
     } else if db.obj(oid.unwrap()).obj_flagged(ITEM_NODROP) {
-        game.act(db,
+        game.act(
+            db,
             "You can't remove $p, it must be CURSED!",
             false,
             Some(chid),
@@ -2177,7 +2307,8 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
             TO_CHAR,
         );
     } else if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
-        game.act(db,
+        game.act(
+            db,
             "$p: you can't carry that many items!",
             false,
             Some(chid),
@@ -2187,9 +2318,10 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
         );
     } else {
         let oid = oid.unwrap();
-        let eqid = game.unequip_char(db,chid, pos).unwrap();
+        let eqid = game.unequip_char(db, chid, pos).unwrap();
         db.obj_to_char(eqid, chid);
-        game.act(db,
+        game.act(
+            db,
             "You stop using $p.",
             false,
             Some(chid),
@@ -2197,7 +2329,8 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
             None,
             TO_CHAR,
         );
-        game.act(db,
+        game.act(
+            db,
             "$n stops using $p.",
             true,
             Some(chid),
@@ -2208,13 +2341,20 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
     }
 }
 
-pub fn do_remove(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_remove(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
     if arg.is_empty() {
-        game.send_to_char(db,chid, "Remove what?\r\n");
+        game.send_to_char(ch, "Remove what?\r\n");
         return;
     }
     let dotmode = find_all_dots(&arg);
@@ -2225,46 +2365,48 @@ pub fn do_remove(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         for i in 0..NUM_WEARS {
             let ch = db.ch(chid);
             if ch.get_eq(i).is_some() {
-                perform_remove(game, db,chid, i);
+                perform_remove(game, db, chid, i);
                 found = true;
             }
         }
         if !found {
-            game.send_to_char(db,chid, "You're not using anything.\r\n");
+            let ch = db.ch(chid);
+            game.send_to_char(ch, "You're not using anything.\r\n");
         }
     } else if dotmode == FIND_ALLDOT {
         if arg.is_empty() {
-            game.send_to_char(db,chid, "Remove all of what?\r\n");
+            game.send_to_char(ch, "Remove all of what?\r\n");
         } else {
             found = false;
             for i in 0..NUM_WEARS {
                 let ch = db.ch(chid);
                 if ch.get_eq(i).is_some()
-                    && game.can_see_obj(db,ch, db.obj(ch.get_eq(i).unwrap()))
+                    && game.can_see_obj(db, ch, db.obj(ch.get_eq(i).unwrap()))
                     && isname(&arg, db.obj(ch.get_eq(i).unwrap()).name.as_ref())
                 {
-                    perform_remove(game, db,chid, i);
+                    perform_remove(game, db, chid, i);
                     found = true;
                 }
             }
             if !found {
-                game.send_to_char(db,
-                    chid,
+                let ch = db.ch(chid);
+                game.send_to_char(
+                    ch,
                     format!("You don't seem to be using any {}s.\r\n", arg).as_str(),
                 );
             }
         }
     } else {
         if {
-            i = game.get_obj_pos_in_equip_vis(db,ch, &arg, None, &ch.equipment);
+            i = game.get_obj_pos_in_equip_vis(db, ch, &arg, None, &ch.equipment);
             i.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(
+                ch,
                 format!("You don't seem to be using {} {}.\r\n", an!(arg), arg).as_str(),
             );
         } else {
-            perform_remove(game, db,chid, i.unwrap());
+            perform_remove(game, db, chid, i.unwrap());
         }
     }
 }

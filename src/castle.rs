@@ -362,8 +362,7 @@ fn block_way(
         );
     }
 
-    game.send_to_char(db,
-        chid,
+    game.send_to_char(ch,
         "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
     );
     return true;
@@ -405,7 +404,7 @@ fn fry_victim(game: &mut Game,  db: &mut DB,chid: DepotId) {
 
     match rand_number(0, 8) {
         1 | 2 | 3 => {
-            game.send_to_char(db,chid, "You raise your hand in a dramatical gesture.\r\n");
+            game.send_to_char(ch, "You raise your hand in a dramatical gesture.\r\n");
             game.act(db,
                 "$n raises $s hand in a dramatical gesture.",
                 true,
@@ -417,7 +416,7 @@ fn fry_victim(game: &mut Game,  db: &mut DB,chid: DepotId) {
             cast_spell(game,db, chid, Some(tchid), None, SPELL_COLOR_SPRAY);
         }
         4 | 5 => {
-            game.send_to_char(db,chid, "You concentrate and mumble to yourself.\r\n");
+            game.send_to_char(ch, "You concentrate and mumble to yourself.\r\n");
             game.act(db,
                 "$n concentrates, and mumbles to $mself.",
                 true,
@@ -755,7 +754,7 @@ pub fn training_master(
         }
 
         2 => {
-            game.send_to_char(db,chid, "You command your pupils to bow.\r\n");
+            game.send_to_char(ch, "You command your pupils to bow.\r\n");
             game.act(db,
                 "$n commands $s pupils to bow.",
                 false,
@@ -823,7 +822,7 @@ pub fn training_master(
                 Some(VictimRef::Char(chid)),
                 TO_CHAR,
             );
-            game.send_to_char(db,pupil1_id, "You quickly pick up your weapon again.\r\n");
+            game.send_to_char(db.ch(pupil1_id), "You quickly pick up your weapon again.\r\n");
             game.act(db,
                 "You yell at $n, as he fumbles, losing $s weapon.",
                 false,
@@ -916,7 +915,7 @@ pub fn training_master(
         }
 
         _ => {
-            game.send_to_char(db,chid, "You show your pupils an advanced technique.\r\n");
+            game.send_to_char(ch, "You show your pupils an advanced technique.\r\n");
             game.act(db,
                 "$n shows $s pupils an advanced technique.",
                 false,

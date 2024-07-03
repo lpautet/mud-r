@@ -393,7 +393,7 @@ pub fn spell_summon(
     let chid = chid.unwrap();
     let ch = db.ch(chid);
         if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
-        game.send_to_char(db,chid, SUMMON_FAIL);
+        game.send_to_char(ch, SUMMON_FAIL);
         return;
     }
 
@@ -407,12 +407,11 @@ pub fn spell_summon(
             && !victim.prf_flagged(PRF_SUMMONABLE)
             && !victim.plr_flagged(PLR_KILLER)
         {
-            game.send_to_char(db,victim_id, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
+            game.send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
                                          ch.get_name(), db.world[ch.in_room() as usize].name,
                                          if ch.player.sex == SEX_MALE { "He" } else { "She" }).as_str());
                                          let victim = db.ch(victim_id);
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!(
                     "You failed because {} has summon protection on.\r\n",
                     victim.get_name()
@@ -440,7 +439,7 @@ pub fn spell_summon(
     if victim.mob_flagged(MOB_NOSUMMON)
         || victim.is_npc() && mag_savingthrow(victim, SAVING_SPELL, 0)
     {
-        game.send_to_char(db,chid, SUMMON_FAIL);
+        game.send_to_char(ch, SUMMON_FAIL);
         return;
     }
 
@@ -488,6 +487,7 @@ pub fn spell_locate_object(
      * Since we're passed the object and not the keyword we can only guess
      * at what the player originally meant to search for. -gg
      */
+    let ch = db.ch(chid.unwrap());
     let oid = oid.unwrap();
     let mut name = String::new();
     name.push_str(& db.obj(oid).name);
@@ -498,8 +498,7 @@ pub fn spell_locate_object(
             continue;
         }
 
-        game.send_to_char(db,
-            chid.unwrap(),
+        game.send_to_char(ch,
             format!(
                 "{}{}",
                 &db.obj(i).short_description[0..0].to_uppercase(),
@@ -509,8 +508,7 @@ pub fn spell_locate_object(
         );
 
         if db.obj(i).carried_by.is_some() {
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     " is being carried by {}.\r\n",
                     game.pers(db,db.ch(db.obj(i).carried_by.unwrap()), db.ch(chid.unwrap()))
@@ -518,8 +516,7 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else if db.obj(i).in_room() != NOWHERE {
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     " is in {}.\r\n",
                     db.world[db.obj(i).in_room() as usize].name
@@ -527,8 +524,7 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else if db.obj(i).in_obj.is_some() {
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     " is in {}.\r\n",
                     db.obj(db.obj(i).in_obj.unwrap()).short_description
@@ -536,8 +532,7 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else if db.obj(i).worn_by.is_some() {
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     " is being worn by {}.\r\n",
                     game.pers(db,db.ch(db.obj(i).worn_by.unwrap()), db.ch(chid.unwrap()))
@@ -545,14 +540,14 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else {
-            game.send_to_char(db,chid.unwrap(), "'s location is uncertain.\r\n");
+            game.send_to_char(ch, "'s location is uncertain.\r\n");
         }
 
         j -= 1;
     }
 
     if j == level / 2 {
-        game.send_to_char(db,chid.unwrap(), "You sense nothing.\r\n");
+        game.send_to_char(ch, "You sense nothing.\r\n");
     }
 }
 
@@ -573,24 +568,24 @@ pub fn spell_charm(
     let ch = db.ch(chid);
 
     if victim_id ==  chid {
-        game.send_to_char(db,chid, "You like yourself even better!\r\n");
+        game.send_to_char(ch, "You like yourself even better!\r\n");
     } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
-        game.send_to_char(db,chid, "You fail because SUMMON protection is on!\r\n");
+        game.send_to_char(ch, "You fail because SUMMON protection is on!\r\n");
     } else if victim.aff_flagged(AFF_SANCTUARY) {
-        game.send_to_char(db,chid, "Your victim is protected by sanctuary!\r\n");
+        game.send_to_char(ch, "Your victim is protected by sanctuary!\r\n");
     } else if victim.mob_flagged(MOB_NOCHARM) {
-        game.send_to_char(db,chid, "Your victim resists!\r\n");
+        game.send_to_char(ch, "Your victim resists!\r\n");
     } else if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(db,chid, "You can't have any followers of your own!\r\n");
+        game.send_to_char(ch, "You can't have any followers of your own!\r\n");
     } else if victim.aff_flagged(AFF_CHARM) || level < victim.get_level() as i32 {
-        game.send_to_char(db,chid, "You fail.\r\n");
+        game.send_to_char(ch, "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
-        game.send_to_char(db,chid, "You fail - shouldn't be doing it anyway.\r\n");
+        game.send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
     } else if circle_follow(&db, victim_id, Some(chid)) {
-        game.send_to_char(db,chid, "Sorry, following in circles can not be allowed.\r\n");
+        game.send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
-        game.send_to_char(db,chid, "Your victim resists!\r\n");
+        game.send_to_char(ch, "Your victim resists!\r\n");
     } else {
         if victim.master.is_some() {
             game.stop_follower(db, victim_id);
@@ -636,13 +631,14 @@ pub fn spell_identify(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
+    let ch = db.ch(chid.unwrap());
+
     if oid.is_some() {
         let oid = oid.unwrap();
         let mut bitbuf = String::new();
 
         sprinttype(db.obj(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
-        game.send_to_char(db,
-            chid.unwrap(),
+        game.send_to_char(ch,
             format!(
                 "You feel informed:\r\nObject '{}', Item type: {}\r\n",
                 db.obj(oid).short_description, bitbuf
@@ -652,17 +648,15 @@ pub fn spell_identify(
 
         if db.obj(oid).get_obj_affect() != 0 {
             sprintbit(db.obj(oid).get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
         }
 
         sprintbit(db.obj(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
-        game.send_to_char(db,chid.unwrap(), format!("Item is: {}\r\n", bitbuf).as_str());
+        game.send_to_char(ch, format!("Item is: {}\r\n", bitbuf).as_str());
 
-        game.send_to_char(db,
-            chid.unwrap(),
+        game.send_to_char(ch,
             format!(
                 "Weight: {}, Value: {}, Rent: {}\r\n",
                 db.obj(oid).get_obj_weight(),
@@ -686,8 +680,7 @@ pub fn spell_identify(
                     bitbuf.push_str(skill_name(&db, db.obj(oid).get_obj_val(3)));
                 }
 
-                game.send_to_char(db,
-                    chid.unwrap(),
+                game.send_to_char(ch,
                     format!(
                         "This {} casts: {}\r\n",
                         ITEM_TYPES[db.obj(oid).get_obj_type() as usize],
@@ -697,8 +690,7 @@ pub fn spell_identify(
                 );
             }
             ITEM_WAND | ITEM_STAFF => {
-                game.send_to_char(db,
-                    chid.unwrap(),
+                game.send_to_char(ch,
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
                         ITEM_TYPES[db.obj(oid).get_obj_type() as usize],
@@ -711,8 +703,7 @@ pub fn spell_identify(
                 );
             }
             ITEM_WEAPON => {
-                game.send_to_char(db,
-                    chid.unwrap(),
+                game.send_to_char(ch,
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
                         db.obj(oid).get_obj_val(1),
@@ -723,8 +714,7 @@ pub fn spell_identify(
                 );
             }
             ITEM_ARMOR => {
-                game.send_to_char(db,
-                    chid.unwrap(),
+                game.send_to_char(ch,
                     format!("AC-apply is {}\r\n", db.obj(oid).get_obj_val(0)).as_str(),
                 );
             }
@@ -736,7 +726,7 @@ pub fn spell_identify(
                 && db.obj(oid).affected[i].modifier != 0
             {
                 if !found {
-                    game.send_to_char(db,chid.unwrap(), "Can affect you as :\r\n");
+                    game.send_to_char(ch, "Can affect you as :\r\n");
                     found = true;
                 }
                 sprinttype(
@@ -744,8 +734,7 @@ pub fn spell_identify(
                     &APPLY_TYPES,
                     &mut bitbuf,
                 );
-                game.send_to_char(db,
-                    chid.unwrap(),
+                game.send_to_char(ch,
                     format!(
                         "   Affects: {} By {}\r\n",
                         bitbuf,
@@ -759,14 +748,12 @@ pub fn spell_identify(
         /* victim */
         let victim_id = victim_id.unwrap();
         let victim = db.ch(victim_id);
-        game.send_to_char(db,
-            chid.unwrap(),
+        game.send_to_char(ch,
             format!("Name: {}\r\n", victim.get_name()).as_str(),
         );
         let victim = db.ch(victim_id);
         if !victim.is_npc() {
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     "{} is {} years, {} months, {} days and {} hours old.\r\n",
                     victim.get_name(),
@@ -778,8 +765,7 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = db.ch(victim_id);
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     "Height {} cm, Weight {} pounds\r\n",
                     victim.get_height(),
@@ -788,8 +774,7 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = db.ch(victim_id);
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     "Level: {}, Hits: {}, Mana: {}\r\n",
                     victim.get_level(),
@@ -799,8 +784,7 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = db.ch(victim_id);
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     "AC: {}, Hitroll: {}, Damroll: {}\r\n",
                     compute_armor_class(victim),
@@ -810,8 +794,7 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = db.ch(victim_id);
-            game.send_to_char(db,
-                chid.unwrap(),
+            game.send_to_char(ch,
                 format!(
                     "Str: {}/{}, Int: {}, Wis: {}, Dex: {}, Con: {}, Cha: {}\r\n",
                     victim.get_str(),
@@ -901,11 +884,12 @@ pub fn spell_detect_poison(
         let victim_id = victim_id.unwrap();
         let victim = db.ch(victim_id);
         let chid = chid.unwrap();
+        let ch = db.ch(chid);
         if chid == victim_id {
             if victim.aff_flagged(AFF_POISON) {
-                game.send_to_char(db,chid, "You can sense poison in your blood.\r\n");
+                game.send_to_char(ch, "You can sense poison in your blood.\r\n");
             } else {
-                game.send_to_char(db,chid, "You feel healthy.\r\n");
+                game.send_to_char(ch, "You feel healthy.\r\n");
             }
         } else {
             if victim.aff_flagged(AFF_POISON) {
@@ -955,7 +939,7 @@ pub fn spell_detect_poison(
                     }
                 }
                 _ => {
-                    game.send_to_char(db,chid, "You sense that it should not be consumed.\r\n");
+                    game.send_to_char(ch, "You sense that it should not be consumed.\r\n");
                 }
             }
         }

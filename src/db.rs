@@ -336,6 +336,7 @@ impl DB {
  * To fix later, if desired. -gg 6/24/99
  */
 pub fn do_reboot(game: &mut Game, db: &mut DB,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -424,12 +425,12 @@ pub fn do_reboot(game: &mut Game, db: &mut DB,  chid: DepotId, argument: &str, _
             db.index_boot(DB_BOOT_HLP);
         }
         _ => {
-            game.send_to_char(db,chid, "Unknown reload option.\r\n");
+            game.send_to_char(ch, "Unknown reload option.\r\n");
             return;
         }
     }
-
-    game.send_to_char(db,chid, OK);
+    let ch = db.ch(chid);
+    game.send_to_char(ch, OK);
 }
 
 pub(crate) fn boot_world(game: &mut Game, db: &mut DB) {
@@ -2296,13 +2297,14 @@ impl DB {
 }
 impl Game {
     pub fn vnum_mobile(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
+        let ch = db.ch(chid);
         let mut found = 0;
         for nr in 0..db.mob_protos.len() {
             let mp = &db.mob_protos[nr];
             if isname(searchname, &mp.player.name) {
                 found += 1;
-                self.send_to_char(db,
-                    chid,
+                self.send_to_char(
+                    ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found,
@@ -2317,13 +2319,13 @@ impl Game {
     }
 
     pub fn vnum_object(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
+        let ch = db.ch(chid);
         let mut found = 0;
         for nr in 0..db.obj_proto.len() {
             let op = &db.obj_proto[nr];
             if isname(searchname, &op.name) {
                 found += 1;
-                self.send_to_char(db,
-                    chid,
+                self.send_to_char(ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found, db.obj_index[nr].vnum, op.short_description

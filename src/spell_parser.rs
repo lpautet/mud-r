@@ -484,7 +484,7 @@ pub fn call_magic(
         sinfo_violent = sinfo.violent;
     }
     if db.room_flagged(db.ch(caster_id).in_room(), ROOM_NOMAGIC) {
-        game.send_to_char(db, caster_id, "Your magic fizzles out and dies.\r\n");
+        game.send_to_char(db.ch(caster_id), "Your magic fizzles out and dies.\r\n");
         game.act(db,
             "$n's magic fizzles out and dies.",
             false,
@@ -498,8 +498,8 @@ pub fn call_magic(
     if db.room_flagged(db.ch(caster_id).in_room(), ROOM_PEACEFUL)
         && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
-        game.send_to_char(db,
-            caster_id,
+        game.send_to_char(db.ch(
+            caster_id),
             "A flash of white light fills the room, dispelling your violent magic!\r\n",
         );
         game.act(db,
@@ -620,6 +620,7 @@ pub fn call_magic(
  * files (this is a CircleMUD enhancement).
  */
 pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, argument: &str) {
+    let ch = db.ch(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -665,7 +666,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
             }
 
             if db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(db,chid, "It seems powerless.\r\n");
+                game.send_to_char(ch, "It seems powerless.\r\n");
                 game.act(db,
                     "Nothing seems to happen.",
                     false,
@@ -831,7 +832,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
             }
 
             if db.obj(oid).get_obj_val(2) <= 0 {
-                game.send_to_char(db,chid, "It seems powerless.\r\n");
+                game.send_to_char(ch, "It seems powerless.\r\n");
                 game.act(db,
                     "Nothing seems to happen.",
                     false,
@@ -997,19 +998,19 @@ pub fn cast_spell(
     if ch.get_pos() < sinfo.min_position {
         match ch.get_pos() {
             POS_SLEEPING => {
-                game.send_to_char(db,chid, "You dream about great magical powers.\r\n");
+                game.send_to_char(ch, "You dream about great magical powers.\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(db,chid, "You cannot concentrate while resting.\r\n");
+                game.send_to_char(ch, "You cannot concentrate while resting.\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(db,chid, "You can't do this sitting!\r\n");
+                game.send_to_char(ch, "You can't do this sitting!\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(db,chid, "Impossible!  You can't concentrate enough!\r\n");
+                game.send_to_char(ch, "Impossible!  You can't concentrate enough!\r\n");
             }
             _ => {
-                game.send_to_char(db,chid, "You can't do much of anything like this!\r\n");
+                game.send_to_char(ch, "You can't do much of anything like this!\r\n");
             }
         }
         return 0;
@@ -1018,25 +1019,24 @@ pub fn cast_spell(
         && tch_id.is_some()
         && ch.master.unwrap() == tch_id.unwrap()
     {
-        game.send_to_char(db,chid, "You are afraid you might hurt your master!\r\n");
+        game.send_to_char(ch, "You are afraid you might hurt your master!\r\n");
         return 0;
     }
     if (tch_id.is_none() || chid != tch_id.unwrap()) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
-        game.send_to_char(db,chid, "You can only cast this spell upon yourself!\r\n");
+        game.send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
         return 0;
     }
     if tch_id.is_some() && chid == tch_id.unwrap() && is_set!(sinfo.targets, TAR_NOT_SELF) {
-        game.send_to_char(db,chid, "You cannot cast this spell upon yourself!\r\n");
+        game.send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
     if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "You can't cast this spell if you're not in a group!\r\n",
         );
         return 0;
     }
-    game.send_to_char(db,chid, OK);
+    game.send_to_char(ch, OK);
     say_spell(game, db,chid, spellnum, tch_id, tobj_id);
     let ch = db.ch(chid);
     return call_magic(
@@ -1066,13 +1066,12 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let mut i = argument.splitn(3, '\'');
 
     if i.next().is_none() {
-        game.send_to_char(db,chid, "Cast what where?\r\n");
+        game.send_to_char(ch, "Cast what where?\r\n");
         return;
     }
     let s = i.next();
     if s.is_none() {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
         );
         return;
@@ -1083,17 +1082,17 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let spellnum = find_skill_num(db, s);
 
     if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
-        game.send_to_char(db,chid, "Cast what?!?\r\n");
+        game.send_to_char(ch, "Cast what?!?\r\n");
         return;
     }
     let spellnum = spellnum.unwrap();
     let sinfo = db.spell_info[spellnum as usize];
     if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
-        game.send_to_char(db,chid, "You do not know that spell!\r\n");
+        game.send_to_char(ch, "You do not know that spell!\r\n");
         return;
     }
     if ch.get_skill(spellnum) == 0 {
-        game.send_to_char(db,chid, "You are unfamiliar with that spell.\r\n");
+        game.send_to_char(ch, "You are unfamiliar with that spell.\r\n");
         return;
     }
     let arg;
@@ -1188,8 +1187,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
             target = true;
         }
         if !target {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!(
                     "Upon {} should the spell be cast?\r\n",
                     if is_set!(
@@ -1208,19 +1206,18 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
 
     if target && tch_id.unwrap() == chid && sinfo.violent {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
         );
         return;
     }
     if !target {
-        game.send_to_char(db,chid, "Cannot find the target of your spell!\r\n");
+        game.send_to_char(ch, "Cannot find the target of your spell!\r\n");
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
     if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(db,chid, "You haven't the energy to cast that spell!\r\n");
+        game.send_to_char(ch, "You haven't the energy to cast that spell!\r\n");
         return;
     }
 
@@ -1229,7 +1226,8 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         let ch = db.ch_mut(chid);
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         if tch_id.is_none() || game.skill_message(db, 0, chid, tch_id.unwrap(), spellnum) == 0 {
-            game.send_to_char(db,chid, "You lost your concentration!\r\n");
+            let ch = db.ch(chid);
+            game.send_to_char(ch, "You lost your concentration!\r\n");
         }
         if mana > 0 {
             let ch = db.ch_mut(chid);

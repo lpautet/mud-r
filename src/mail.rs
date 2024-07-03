@@ -690,8 +690,7 @@ pub fn postmaster(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i
         return false;
     }
     if db.no_mail {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
         );
         return false;

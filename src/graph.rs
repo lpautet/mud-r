@@ -161,13 +161,13 @@ pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     let ch = db.ch(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
-        game.send_to_char(db,chid, "You have no idea how.\r\n");
+        game.send_to_char(ch, "You have no idea how.\r\n");
         return;
     }
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        game.send_to_char(db,chid, "Whom are you trying to track?\r\n");
+        game.send_to_char(ch, "Whom are you trying to track?\r\n");
         return;
     }
     let vict_id;
@@ -176,14 +176,14 @@ pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         vict_id = game.get_char_vis(db, chid, &mut arg, None, FIND_CHAR_WORLD);
         vict_id.is_none()
     } {
-        game.send_to_char(db,chid, "No one is around by that name.\r\n");
+        game.send_to_char(ch, "No one is around by that name.\r\n");
         return;
     }
     let vict_id = vict_id.unwrap();
     let vict = db.ch(vict_id);
     /* We can't track the victim. */
     if vict.aff_flagged(AFF_NOTRACK) {
-        game.send_to_char(db,chid, "You sense no trail.\r\n");
+        game.send_to_char(ch, "You sense no trail.\r\n");
         return;
     }
 
@@ -199,8 +199,7 @@ pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 break;
             }
         }
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
         return;
@@ -208,26 +207,25 @@ pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
 
     /* They passed the skill check. */
     let dir = find_first_step(game, db, ch.in_room(), vict.in_room());
-
+    let ch = db.ch(chid);
     match dir {
         BFS_ERROR => {
-            game.send_to_char(db,chid, "Hmm.. something seems to be wrong.\r\n");
+            game.send_to_char(ch, "Hmm.. something seems to be wrong.\r\n");
         }
 
         BFS_ALREADY_THERE => {
-            game.send_to_char(db,chid, "You're already in the same room!!\r\n");
+            game.send_to_char(ch, "You're already in the same room!!\r\n");
         }
 
         BFS_NO_PATH => {
             let vict = db.ch(vict_id);
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
-            game.send_to_char(db,
-                chid,
+            let ch = db.ch(chid);
+            game.send_to_char(ch,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );
         }

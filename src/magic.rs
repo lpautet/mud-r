@@ -90,8 +90,9 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
                 if af._type > 0 && af._type <= MAX_SPELLS as i16 {
                     if af._type != last_type_notification {
                         if db.spell_info[af._type as usize].wear_off_msg.is_some() {
-                            game.send_to_char(db,
-                                i_id,
+                            let i = db.ch(i_id);
+                            game.send_to_char(
+                                i,
                                 format!(
                                     "{}\r\n",
                                     db.spell_info[af._type as usize].wear_off_msg.unwrap()
@@ -141,13 +142,13 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
 // if (verbose) {
 // switch (rand_number(0, 2)) {
 // case 0:
-// game.send_to_char(db,chid, "A wart sprouts on your nose.\r\n");
+// game.send_to_char(ch, "A wart sprouts on your nose.\r\n");
 // break;
 // case 1:
-// game.send_to_char(db,chid, "Your hair falls out in clumps.\r\n");
+// game.send_to_char(ch, "Your hair falls out in clumps.\r\n");
 // break;
 // case 2:
-// game.send_to_char(db,chid, "A huge corn develops on your big toe.\r\n");
+// game.send_to_char(ch, "A huge corn develops on your big toe.\r\n");
 // break;
 // }
 // }
@@ -162,7 +163,7 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
 // extract_obj(obj2);
 // }
 // if (verbose) {
-// game.send_to_char(db,chid, "A puff of smoke rises from your pack.\r\n");
+// game.send_to_char(ch, "A puff of smoke rises from your pack.\r\n");
 // act("A puff of smoke rises from $n's pack.", TRUE, ch, NULL, NULL, TO_ROOM);
 // }
 // return (TRUE);
@@ -377,7 +378,7 @@ pub fn mag_affects(
             if victim.as_ref().unwrap().mob_flagged(MOB_NOBLIND)
                 || mag_savingthrow(victim.as_ref().unwrap(), savetype, 0)
             {
-                game.send_to_char(db,chid, "You fail.\r\n");
+                game.send_to_char(ch, "You fail.\r\n");
                 return;
             }
 
@@ -396,7 +397,7 @@ pub fn mag_affects(
         }
         SPELL_CURSE => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(db,chid, NOEFFECT);
+                game.send_to_char(ch, NOEFFECT);
                 return;
             }
 
@@ -455,7 +456,7 @@ pub fn mag_affects(
         }
         SPELL_POISON => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(db,chid, NOEFFECT);
+                game.send_to_char(ch, NOEFFECT);
                 return;
             }
             af[0].location = APPLY_STR as u8;
@@ -494,8 +495,8 @@ pub fn mag_affects(
             af[0].bitvector = AFF_SLEEP;
 
             if victim.as_ref().unwrap().get_pos() > POS_SLEEPING {
-                game.send_to_char(db,
-                    victim_id.unwrap(),
+                game.send_to_char(
+                    victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
                 game.act(db,"$n goes to sleep.", true, Some(victim_id.unwrap()), None, None, TO_ROOM);
@@ -537,12 +538,13 @@ pub fn mag_affects(
      * by sancting them and waiting for it to fade, for example.
      */
     let victim = victim_id.map(|v| db.ch(v));
+    let ch = db.ch(chid);
     if victim.as_ref().unwrap().is_npc()
         && !affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
     {
         for i in 0..MAX_SPELL_AFFECTS as usize {
             if victim.as_ref().unwrap().aff_flagged(af[i].bitvector) {
-                game.send_to_char(db,chid, NOEFFECT);
+                game.send_to_char(ch, NOEFFECT);
                 return;
             }
         }
@@ -552,10 +554,11 @@ pub fn mag_affects(
      * If the victim is already affected by this spell, and the spell does
      * not have an accumulative effect, then fail the spell.
      */
+    let ch = db.ch(chid);
     if affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
         && !(accum_duration || accum_affect)
     {
-        game.send_to_char(db,chid, NOEFFECT);
+        game.send_to_char(ch, NOEFFECT);
         return;
     }
 
@@ -850,11 +853,11 @@ pub fn mag_summons(
     }
 
     if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(db,chid, "You are too giddy to have any followers!\r\n");
+        game.send_to_char(ch, "You are too giddy to have any followers!\r\n");
         return;
     }
     if rand_number(0, 101) < pfail {
-        game.send_to_char(db,chid, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
+        game.send_to_char(ch, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
         return;
     }
     for _ in 0..num {
@@ -863,8 +866,8 @@ pub fn mag_summons(
             mob_id = db.read_mobile(mob_num, VIRTUAL);
             mob_id.is_none()
         } {
-            game.send_to_char(db,
-                chid,
+            let ch = db.ch(chid);
+            game.send_to_char(ch,
                 "You don't quite remember how to make that creature.\r\n",
             );
             return;
@@ -920,25 +923,24 @@ pub fn mag_points(
         return;
     }
     let victim_id = victim_id.unwrap();
-
+    let victim = db.ch_mut(victim_id);
     match spellnum {
         SPELL_CURE_LIGHT => {
             healing = dice(1, 8) + 1 + (level / 4);
-            game.send_to_char(db,victim_id, "You feel better.\r\n");
+            game.send_to_char(victim, "You feel better.\r\n");
         }
         SPELL_CURE_CRITIC => {
             healing = dice(3, 8) + 3 + (level / 4);
-            game.send_to_char(db,victim_id, "You feel a lot better!\r\n");
+            game.send_to_char(victim, "You feel a lot better!\r\n");
         }
         SPELL_HEAL => {
             healing = 100 + dice(3, 8);
-            game.send_to_char(db,victim_id, "A warm feeling floods your body.\r\n");
+            game.send_to_char(victim, "A warm feeling floods your body.\r\n");
         }
         _ => {
             return;
         }
     }
-    let victim = db.ch_mut(victim_id);
     victim.set_hit(min(victim.get_max_hit(), victim.get_hit() + healing as i16));
     victim.set_move(min(victim.get_max_move(), victim.get_move() + move_));
     update_pos(victim);
@@ -953,6 +955,7 @@ pub fn mag_unaffects(
     _type_: i32,
 ) {
     let victim = db.ch(victim_id);
+    let ch = db.ch(chid);
     let spell;
     let mut msg_not_affected = true;
     let to_vict;
@@ -995,7 +998,7 @@ pub fn mag_unaffects(
 
     if !affected_by_spell(victim, spell as i16) {
         if msg_not_affected {
-            game.send_to_char(db,chid, NOEFFECT);
+            game.send_to_char(ch, NOEFFECT);
         }
         return;
     }
@@ -1079,9 +1082,9 @@ pub fn mag_alter_objs(
         }
         _ => {}
     }
-
+    let ch = db.ch(chid);
     if to_char.is_empty() {
-        game.send_to_char(db,chid, NOEFFECT);
+        game.send_to_char(ch, NOEFFECT);
     } else {
         game.act(db, to_char, true, Some(chid), Some(oid), None, TO_CHAR);
     }
@@ -1098,6 +1101,7 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
         return;
     }
     let chid = chid.unwrap();
+    let ch = db.ch(chid);
     /* level = MAX(MIN(level, LVL_IMPL), 1); - Hm, not used. */
     let z;
     match spellnum {
@@ -1105,13 +1109,14 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
             z = 10;
         }
         _ => {
-            game.send_to_char(db,chid, "Spell unimplemented, it would seem.\r\n");
+            game.send_to_char(ch, "Spell unimplemented, it would seem.\r\n");
             return;
         }
     }
     let tobj = db.read_object(z, VIRTUAL);
+    let ch = db.ch(chid);
     if tobj.is_none() {
-        game.send_to_char(db,chid, "I seem to have goofed.\r\n");
+        game.send_to_char(ch, "I seem to have goofed.\r\n");
         error!(
             "SYSERR: spell_creations, spell {}, obj {}: obj not found",
             spellnum, z

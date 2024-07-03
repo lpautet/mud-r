@@ -612,10 +612,10 @@ impl Game {
 
                 if self.desc(d_id).str.is_some() {
                     /* Writing boards, mail, etc. */
-                    string_add(self, db,d_id, &comm);
+                    string_add(self, db, d_id, &comm);
                 } else if self.desc(d_id).showstr_count != 0 {
                     /* Reading something w/ pager */
-                    show_string(self, db,d_id, &comm);
+                    show_string(self, db, d_id, &comm);
                 } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
                     nanny(self, db, d_id, &comm);
@@ -648,7 +648,7 @@ impl Game {
             for d_id in self.descriptor_list.ids() {
                 let d = self.desc(d_id);
                 if !d.has_prompt && d.output.is_empty() {
-                    let text = &make_prompt(self, db,  d_id);
+                    let text = &make_prompt(self, db, d_id);
                     let d = self.desc_mut(d_id);
                     write_to_descriptor(d.stream.as_mut().unwrap(), text.as_bytes());
                     d.has_prompt = true;
@@ -749,7 +749,7 @@ impl Game {
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave = 0;
                 crash_save_all(self, db);
-                house_save_all( db);
+                house_save_all(db);
             }
         }
 
@@ -850,10 +850,7 @@ fn make_prompt(game: &Game, db: &DB, d_id: DepotId) -> String {
 
         prompt.push_str("> ");
     } else if d.connected == ConPlaying && db.ch(d.character.unwrap()).is_npc() {
-        prompt.push_str(format!(
-            "{}s>",
-            db.ch(d.character.unwrap()).get_name()
-        ).as_str());
+        prompt.push_str(format!("{}s>", db.ch(d.character.unwrap()).get_name()).as_str());
     }
 
     prompt
@@ -890,9 +887,7 @@ impl Game {
     /* Add a new string to a player's output queue. */
     fn write_to_output(&mut self, desc_id: DepotId, txt: &str) -> usize {
         let payload = txt.as_bytes();
-        self.desc_mut(desc_id)
-            .output
-            .extend_from_slice(payload);
+        self.desc_mut(desc_id).output.extend_from_slice(payload);
         payload.len()
     }
 }
@@ -983,7 +978,8 @@ impl Game {
                 .unwrap()
                 .shutdown(Shutdown::Both)
                 .expect("shutdowning socket which is banned");
-            self.mudlog(db,
+            self.mudlog(
+                db,
                 CMP,
                 LVL_GOD as i32,
                 true,
@@ -1041,7 +1037,7 @@ impl Game {
         }
 
         /* add a prompt */
-        i.extend_from_slice(make_prompt(self,db,  desc_id).as_bytes());
+        i.extend_from_slice(make_prompt(self, db, desc_id).as_bytes());
 
         /*
          * now, send the output.  If this is an 'interruption', use the prepended
@@ -1138,7 +1134,12 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
                 if err.valid_up_to() == 0 && buf[0] == IAC && r == 3 {
                     // this is a telnet command, no worries we can ignore that read
                 } else {
-                    error!("UTF-8 ERROR read={} invalid={:?} err={:?}", r, buf[err.valid_up_to()], err);
+                    error!(
+                        "UTF-8 ERROR read={} invalid={:?} err={:?}",
+                        r,
+                        buf[err.valid_up_to()],
+                        err
+                    );
                 }
                 Ok(0)
             }
@@ -1430,23 +1431,22 @@ impl Game {
                             TO_ROOM,
                         );
                         self.save_char(db, link_challenged_id);
-                        self.mudlog(db,
+                        self.mudlog(
+                            db,
                             NRM,
                             max(
                                 LVL_IMMORT as i32,
                                 db.ch(link_challenged_id).get_invis_lev() as i32,
                             ),
                             true,
-                            format!(
-                                "Closing link to: {}.",
-                                db.ch(link_challenged_id).get_name()
-                            )
-                            .as_str(),
+                            format!("Closing link to: {}.", db.ch(link_challenged_id).get_name())
+                                .as_str(),
                         );
                     }
                     _ => {
                         let name = db.ch(d.character.unwrap()).get_name();
-                        self.mudlog(db,
+                        self.mudlog(
+                            db,
                             CMP,
                             LVL_IMMORT as i32,
                             true,
@@ -1465,7 +1465,8 @@ impl Game {
                 }
             }
             None => {
-                self.mudlog(db,
+                self.mudlog(
+                    db,
                     CMP,
                     LVL_IMMORT as i32,
                     true,
@@ -1621,17 +1622,17 @@ impl Game {
  **************************************************************** */
 
 impl Game {
-    pub fn send_to_char(&mut self, db: &DB, chid: DepotId, messg: &str) -> usize {
-        if db.ch(chid).desc.is_some() && messg != "" {
-            let desc_id = db.ch(chid).desc.unwrap();
-            return self.write_to_output(desc_id, messg);
+    pub fn send_to_char(&mut self, ch: &CharData, messg: &str) -> usize {
+        if ch.desc.is_some() && messg != "" {
+            self.write_to_output(ch.desc.unwrap(), messg)
+        } else {
+            0
         }
-        0
     }
 }
 
 impl Game {
-    pub fn send_to_all(&mut self,messg: &str) {
+    pub fn send_to_all(&mut self, messg: &str) {
         if messg.is_empty() {
             return;
         }
@@ -1657,8 +1658,7 @@ impl Game {
             }
             let character_id = i.character.borrow();
             let character = character_id.map(|i| db.ch(i));
-            if !character.as_ref().unwrap().awake() || !db.outside(character.as_ref().unwrap())
-            {
+            if !character.as_ref().unwrap().awake() || !db.outside(character.as_ref().unwrap()) {
                 continue;
             }
 
@@ -1708,14 +1708,14 @@ impl Game {
                     '\0'
                 } {
                     'n' => {
-                        i = self.pers(db,db.ch(chid.unwrap()), db.ch(to_id));
+                        i = self.pers(db, db.ch(chid.unwrap()), db.ch(to_id));
                     }
                     'N' => {
                         i = if vict_obj.clone().is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                self.pers(db,db.ch(p), db.ch(to_id))
+                                self.pers(db, db.ch(p), db.ch(to_id))
                             } else {
                                 Rc::from("<INV_CHAR_REF>")
                             }
@@ -1767,7 +1767,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            self.objn(db,obj.unwrap(), db.ch(to_id))
+                            self.objn(db, obj.unwrap(), db.ch(to_id))
                         };
                     }
                     'O' => {
@@ -1775,7 +1775,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                self.objn(db,db.obj(p), db.ch(to_id))
+                                self.objn(db, db.obj(p), db.ch(to_id))
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
                             }
@@ -1785,7 +1785,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(self.objs(db,obj.unwrap(), db.ch(to_id)))
+                            Rc::from(self.objs(db, obj.unwrap(), db.ch(to_id)))
                         };
                     }
                     'P' => {
@@ -1793,7 +1793,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(self.objs(db,db.obj(p), db.ch(to_id)))
+                                Rc::from(self.objs(db, db.obj(p), db.ch(to_id)))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1982,7 +1982,7 @@ impl Game {
             if !sendok!(to, to_sleeping) || (chid.is_some() && to_id == chid.unwrap()) {
                 continue;
             }
-            if hide_invisible && chid.is_some() && !self.can_see(db,to, db.ch(chid.unwrap())) {
+            if hide_invisible && chid.is_some() && !self.can_see(db, to, db.ch(chid.unwrap())) {
                 continue;
             }
             if _type != TO_ROOM && vict_obj.is_none() {

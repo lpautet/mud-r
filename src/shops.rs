@@ -768,8 +768,7 @@ fn shopping_buy(
     }
     let ch = db.ch(chid);
     if ch.is_carrying_n() + 1 > ch.can_carry_n() as u8 {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "{}: You can't carry any more items.\r\n",
                 fname(db.obj(oid.unwrap()).name.as_ref())
@@ -779,8 +778,7 @@ fn shopping_buy(
         return;
     }
     if ch.is_carrying_w() + db.obj(oid.unwrap()).get_obj_weight() > ch.can_carry_w() as i32 {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "{}: You can't carry that much weight.\r\n",
                 fname(db.obj(oid.unwrap()).name.as_ref())
@@ -871,8 +869,8 @@ fn shopping_buy(
         .replace("%s", &ch.get_name())
         .replace("%d", &goldamt.to_string());
     do_tell(game, db, keeper_id, &tmpbuf, CMD_TELL.load(Ordering::Relaxed), 0);
-
-    game.send_to_char(db,chid, format!("You now have {}.\r\n", tempstr).as_str());
+    let ch = db.ch(chid);
+    game.send_to_char(ch, format!("You now have {}.\r\n", tempstr).as_str());
 
     if db.shop_index[shop_nr].shop_uses_bank() {
         let keeper = db.ch(keeper_id);
@@ -1132,9 +1130,8 @@ oid,
         .replace("%s", &ch.get_name())
         .replace("%d", &goldamt.to_string());
     do_tell(game, db,keeper_id, &tempbuf, CMD_TELL.load(Ordering::Relaxed), 0);
-
-    game.send_to_char(db,
-        chid,
+    let ch = db.ch(chid);
+    game.send_to_char(ch,
         format!("The shopkeeper now has {}.\r\n", tempstr).as_str(),
     );
     let keeper = db.ch(keeper_id);
@@ -1304,13 +1301,14 @@ pub fn shopping_list(
             }
         }
     }
+    let ch = db.ch(chid);
     lindex += 1;
     if last_oid.is_none() {
         /* we actually have nothing in our list for sale, period */
-        game.send_to_char(db,chid, "Currently, there is nothing for sale.\r\n");
+        game.send_to_char(ch, "Currently, there is nothing for sale.\r\n");
     } else if !name.is_empty() && !found {
         /* nothing the char was looking for was found */
-        game.send_to_char(db,chid, "Presently, none of those are for sale.\r\n");
+        game.send_to_char(ch, "Presently, none of those are for sale.\r\n");
     } else {
         if name.is_empty() || isname(&name, db.obj(last_oid.unwrap()).name.as_ref()) {
             /* show last obj */
@@ -1872,8 +1870,8 @@ fn list_all_shops(game: &mut Game, db: &mut DB, chid: DepotId) {
 }
 
 fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
-    game.send_to_char(db,
-        chid,
+    let ch = db.ch(chid);
+    game.send_to_char(ch,
         format!(
             "Vnum:       [{:5}], Rnum: [{:5}]\r\n",
             db.shop_index[shop_nr as usize].vnum,
@@ -1882,13 +1880,13 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
         .as_str(),
     );
 
-    game.send_to_char(db,chid, "Rooms:      ");
+    game.send_to_char(ch, "Rooms:      ");
     let mut column = 12; /* ^^^ strlen ^^^ */
     let mut count = 0;
     for sindex in 0..db.shop_index[shop_nr as usize].in_room.len() {
         count += 1;
         if sindex != 0 {
-            game.send_to_char(db,chid, ", ");
+            game.send_to_char(ch, ", ");
             column += 2;
         }
         let temp;
@@ -1908,23 +1906,22 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
 
         /* Implementing word-wrapping: assumes screen-size == 80 */
         if buf1.len() + column >= 78 && column >= 20 {
-            game.send_to_char(db,chid, "\r\n            ");
+            game.send_to_char(ch, "\r\n            ");
             /* 12 is to line up with "Rooms:" printed first, and spaces above. */
             column = 12;
         }
 
-        game.send_to_char(db,chid, &buf1);
+        game.send_to_char(ch, &buf1);
 
         column += buf1.len();
     }
     if count == 0 {
-        game.send_to_char(db,chid, "Rooms:      None!");
+        game.send_to_char(ch, "Rooms:      None!");
     }
 
-    game.send_to_char(db,chid, "\r\nShopkeeper: ");
+    game.send_to_char(ch, "\r\nShopkeeper: ");
     if db.shop_index[shop_nr as usize].keeper != NOBODY {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!(
                 "{} (#{}), Special Function: {}\r\n",
                 db.mob_protos[db.shop_index[shop_nr as usize].keeper as usize].get_name(),
@@ -1941,8 +1938,7 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
             let k_id = k.unwrap();
             let k = db.ch(k_id);
 
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!(
                     "Coins:      [{:9}], Bank: [{:9}] (Total: {})\r\n",
                     k.get_gold(),
@@ -1952,12 +1948,11 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
                 .as_str(),
             );
         } else {
-            game.send_to_char(db,chid, "<NONE>\r\n");
+            game.send_to_char(ch, "<NONE>\r\n");
         }
     }
     let ptrsave;
-    game.send_to_char(db,
-        chid,
+    game.send_to_char(ch,
         format!(
             "Customers:  {}\r\n",
             if {
@@ -1972,7 +1967,7 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
         .as_str(),
     );
 
-    game.send_to_char(db,chid, "Produces:   ");
+    game.send_to_char(ch, "Produces:   ");
     let mut column = 12; /* ^^^ strlen ^^^ */
     let mut sindex = 0;
     let mut buf1 = String::new();
@@ -1980,7 +1975,7 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
     while db.shop_index[shop_nr as usize].shop_product(sindex) != NOTHING {
         count += 1;
         if sindex != 0 {
-            game.send_to_char(db,chid, ", ");
+            game.send_to_char(ch, ", ");
             column += 2;
         }
         let nbuf = format!(
@@ -1991,21 +1986,21 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
         buf1.push_str(&nbuf);
         /* Implementing word-wrapping: assumes screen-size == 80 */
         if nbuf.len() + column >= 78 && column >= 20 {
-            game.send_to_char(db,chid, "\r\n            ");
+            game.send_to_char(ch, "\r\n            ");
             /* 12 is to line up with "Produces:" printed first, and spaces above. */
             column = 12;
         }
 
-        game.send_to_char(db,chid, &buf1);
+        game.send_to_char(ch, &buf1);
         buf1.clear();
         column += nbuf.len();
         sindex += 1;
     }
     if count == 0 {
-        game.send_to_char(db,chid, "Produces:   Nothing!");
+        game.send_to_char(ch, "Produces:   Nothing!");
     }
 
-    game.send_to_char(db,chid, "\r\nBuys:       ");
+    game.send_to_char(ch, "\r\nBuys:       ");
     let mut column = 12; /* ^^^ strlen ^^^ */
 
     sindex = 0;
@@ -2015,7 +2010,7 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
 
         let buf1;
         if sindex != 0 {
-            game.send_to_char(db,chid, ", ");
+            game.send_to_char(ch, ", ");
             column += 2;
         }
 
@@ -2032,22 +2027,21 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
 
         /* Implementing word-wrapping: assumes screen-size == 80 */
         if buf1.len() + column >= 78 && column >= 20 {
-            game.send_to_char(db,chid, "\r\n            ");
+            game.send_to_char(ch, "\r\n            ");
             /* 12 is to line up with "Buys:" printed first, and spaces above. */
             column = 12;
         }
 
-        game.send_to_char(db,chid, &buf1);
+        game.send_to_char(ch, &buf1);
 
         column += buf1.len();
         sindex += 1;
     }
     if count == 0 {
-        game.send_to_char(db,chid, "Buys:       Nothing!");
+        game.send_to_char(ch, "Buys:       Nothing!");
     }
 
-    game.send_to_char(db,
-        chid,
+    game.send_to_char(ch,
         format!(
             "\r\nBuy at:     [{:6}], Sell at: [{:6}], Open: [{}-{}, {}-{}]\r\n",
             db.shop_index[shop_nr as usize].profit_sell, db.shop_index[shop_nr as usize].profit_buy, db.shop_index[shop_nr as usize].open1, db.shop_index[shop_nr as usize].close1, db.shop_index[shop_nr as usize].open2, db.shop_index[shop_nr as usize].close2
@@ -2058,7 +2052,7 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
     /* Need a local buffer. */
     let mut buf1 = String::new();
     sprintbit(db.shop_index[shop_nr as usize].bitvector as i64, &SHOP_BITS, &mut buf1);
-    game.send_to_char(db,chid, format!("Bits:       {}\r\n", buf1).as_str());
+    game.send_to_char(ch, format!("Bits:       {}\r\n", buf1).as_str());
 }
 
 pub fn show_shops(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
@@ -2077,7 +2071,7 @@ pub fn show_shops(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
             }
 
             if shop_nr.is_none() {
-                game.send_to_char(db,chid, "This isn't a shop!\r\n");
+                game.send_to_char(ch, "This isn't a shop!\r\n");
                 return;
             }
         } else if is_number(arg) {
@@ -2087,7 +2081,7 @@ pub fn show_shops(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
             }
         }
         if shop_nr.is_none() {
-            game.send_to_char(db,chid, "Illegal shop number.\r\n");
+            game.send_to_char(ch, "Illegal shop number.\r\n");
             return;
         }
         list_detailed_shop(game, db, chid, shop_nr.unwrap());

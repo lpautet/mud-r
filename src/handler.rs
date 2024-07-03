@@ -947,8 +947,9 @@ impl Game {
                 if db.obj(light_oid).get_obj_val(2) > 0 {
                     db.obj_mut(light_oid).decr_obj_val(2);
                     i = db.obj(light_oid).get_obj_val(2);
+                    let ch = db.ch(chid);
                     if i == 1 {
-                        self.send_to_char(db, chid, "Your light begins to flicker and fade.\r\n");
+                        self.send_to_char(ch, "Your light begins to flicker and fade.\r\n");
                         self.act(
                             db,
                             "$n's light begins to flicker and fade.",
@@ -959,7 +960,7 @@ impl Game {
                             TO_ROOM,
                         );
                     } else if i == 0 {
-                        self.send_to_char(db, chid, "Your light sputters out and dies.\r\n");
+                        self.send_to_char(ch, "Your light sputters out and dies.\r\n");
                         self.act(
                             db,
                             "$n's light sputters out and dies.",

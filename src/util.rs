@@ -1326,8 +1326,8 @@ impl Game {
             if log_type > { if character.prf_flagged(PRF_LOG1) {1} else {0} } + {if character.prf_flagged(PRF_LOG2) {2} else {0} } {
                 continue;
             }
-            self.send_to_char(db,
-                character_id,
+            self.send_to_char(
+                character,
                 format!(
                     "{}{}{}",
                     CCGRN!(character, C_NRM),

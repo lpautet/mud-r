@@ -113,7 +113,7 @@ fn splskl(ch: &CharData) -> &str {
 pub fn list_skills(game: &mut Game, db: &mut DB, chid: DepotId) {
     let ch = db.ch(chid);
     if ch.get_practices() == 0 {
-        game.send_to_char(db,chid, "You have no practice sessions remaining.\r\n");
+        game.send_to_char(ch, "You have no practice sessions remaining.\r\n");
         return;
     }
 
@@ -155,7 +155,7 @@ pub fn guild(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
     }
 
     if ch.get_practices() <= 0 {
-        game.send_to_char(db,chid, "You do not seem to be able to practice now.\r\n");
+        game.send_to_char(ch, "You do not seem to be able to practice now.\r\n");
         return true;
     }
 
@@ -165,17 +165,16 @@ pub fn guild(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
         || ch.get_level()
             < db.spell_info[skill_num.unwrap() as usize].min_level[ch.get_class() as usize] as u8
     {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!("You do not know of that {}.\r\n", splskl(ch)).as_str(),
         );
         return true;
     }
     if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
-        game.send_to_char(db,chid, "You are already learned in that area.\r\n");
+        game.send_to_char(ch, "You are already learned in that area.\r\n");
         return true;
     }
-    game.send_to_char(db,chid, "You practice for a while...\r\n");
+    game.send_to_char(ch, "You practice for a while...\r\n");
     let ch = db.ch_mut(chid);
     ch.set_practices(ch.get_practices() - 1);
 
@@ -188,7 +187,7 @@ pub fn guild(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
     ch.set_skill(skill_num.unwrap(), min(learned(ch), percent));
 
     if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
-        game.send_to_char(db,chid, "You are now learned in that area.\r\n");
+        game.send_to_char(ch, "You are now learned in that area.\r\n");
     }
 
     true
@@ -230,9 +229,9 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
         value += max(1, min(50, db.obj(k).get_obj_cost() / 10));
         game.extract_obj(db,k);
     }
-
+    let ch = db.ch(chid);
     if value != 0 {
-        game.send_to_char(db,chid, "You are awarded for outstanding performance.\r\n");
+        game.send_to_char(ch, "You are awarded for outstanding performance.\r\n");
         game.act(db,
             "$n has been awarded for being a good citizen.",
             true,
@@ -660,7 +659,7 @@ pub fn guild_guard(
         if !ch.is_npc() && ch.get_class() == gi.pc_class {
             continue;
         }
-        game.send_to_char(db,chid, buf);
+        game.send_to_char(ch, buf);
         game.act(db,buf2, false, Some(chid), None, None, TO_ROOM);
 
         return true;
@@ -884,7 +883,7 @@ pub fn pet_shops(
     let pet_room = ch.in_room() + 1;
 
     if cmd_is(cmd, "list") {
-        game.send_to_char(db,chid, "Available pets are:\r\n");
+        game.send_to_char(ch, "Available pets are:\r\n");
         let list = clone_vec2(&db.world[pet_room as usize].peoples);
         for pet_id in list {
             let pet = db.ch(pet_id);
@@ -892,8 +891,7 @@ pub fn pet_shops(
             if !pet.is_npc() {
                 continue;
             }
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!("{:8} - {}\r\n", pet_price(pet), pet.get_name()).as_str(),
             );
         }
@@ -904,12 +902,12 @@ pub fn pet_shops(
         two_arguments(argument, &mut buf, &mut pet_name);
         let pet_id = db.get_char_room(&buf, None, pet_room);
         if pet_id.is_none() || !db.ch(pet_id.unwrap()).is_npc() {
-            game.send_to_char(db,chid, "There is no such pet!\r\n");
+            game.send_to_char(ch, "There is no such pet!\r\n");
             return true;
         }
         let pet_id = pet_id.unwrap();
         if ch.get_gold() < pet_price(db.ch(pet_id)) {
-            game.send_to_char(db,chid, "You don't have enough gold!\r\n");
+            game.send_to_char(ch, "You don't have enough gold!\r\n");
             return true;
         }
         let pet_price = pet_price(db.ch(pet_id));
@@ -942,8 +940,8 @@ pub fn pet_shops(
         let pet = db.ch_mut(pet_id);
         pet.set_is_carrying_w(1000);
         pet.set_is_carrying_n(100);
-
-        game.send_to_char(db,chid, "May you enjoy your pet.\r\n");
+        let ch = db.ch(chid);
+        game.send_to_char(ch, "May you enjoy your pet.\r\n");
         game.act(db,
             "$n buys $N as a pet.",
             false,
@@ -969,29 +967,28 @@ pub fn bank(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
 
     return if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {
-            game.send_to_char(db,
-                chid,
+            game.send_to_char(ch,
                 format!("Your current balance is {} coins.\r\n", ch.get_bank_gold()).as_str(),
             );
         } else {
-            game.send_to_char(db,chid, "You currently have no money deposited.\r\n");
+            game.send_to_char(ch, "You currently have no money deposited.\r\n");
         }
         true
     } else if cmd_is(cmd, "deposit") {
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
-            game.send_to_char(db,chid, "How much do you want to deposit?\r\n");
+            game.send_to_char(ch, "How much do you want to deposit?\r\n");
             return true;
         }
         if ch.get_gold() < amount {
-            game.send_to_char(db,chid, "You don't have that many coins!\r\n");
+            game.send_to_char(ch, "You don't have that many coins!\r\n");
             return true;
         }
         let ch = db.ch_mut(chid);
         ch.set_gold(ch.get_gold() - amount);
         ch.set_bank_gold(ch.get_bank_gold() + amount);
-        game.send_to_char(db,chid, format!("You deposit {} coins.\r\n", amount).as_str());
+        game.send_to_char(ch, format!("You deposit {} coins.\r\n", amount).as_str());
         game.act(db,
             "$n makes a bank transaction.",
             true,
@@ -1005,17 +1002,17 @@ pub fn bank(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
         let amount = argument.trim_start().parse::<i32>();
         let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
         if amount <= 0 {
-            game.send_to_char(db,chid, "How much do you want to withdraw?\r\n");
+            game.send_to_char(ch, "How much do you want to withdraw?\r\n");
             return true;
         }
         if ch.get_bank_gold() < amount {
-            game.send_to_char(db,chid, "You don't have that many coins deposited!\r\n");
+            game.send_to_char(ch, "You don't have that many coins deposited!\r\n");
             return true;
         }
         let ch = db.ch_mut(chid);
         ch.set_gold(ch.get_gold() + amount);
         ch.set_bank_gold(ch.get_bank_gold() - amount);
-        game.send_to_char(db,chid, format!("You withdraw {} coins.\r\n", amount).as_str());
+        game.send_to_char(ch, format!("You withdraw {} coins.\r\n", amount).as_str());
         game.act(db,
             "$n makes a bank transaction.",
             true,

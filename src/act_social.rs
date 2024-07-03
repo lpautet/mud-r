@@ -55,13 +55,14 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
 }
 
 pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let act_nr;
 
     if {
         act_nr = find_action(db, cmd);
         act_nr.is_none()
     } {
-        game.send_to_char(db,chid, "That action is not supported.\r\n");
+        game.send_to_char(ch, "That action is not supported.\r\n");
         return;
     }
     let act_nr = act_nr.unwrap();
@@ -84,7 +85,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
     }
 
     if buf.is_empty() {
-        game.send_to_char(db,chid, format!("{}\r\n", action_char_no_arg).as_str());
+        game.send_to_char(ch, format!("{}\r\n", action_char_no_arg).as_str());
         game.act(db,
             &action_others_no_arg,
             action_hide,
@@ -100,9 +101,9 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
         vict_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
         vict_id.is_none()
     } {
-        game.send_to_char(db,chid, format!("{}\r\n", &action_not_found).as_str());
+        game.send_to_char(ch, format!("{}\r\n", &action_not_found).as_str());
     } else if vict_id.unwrap() == chid {
-        game.send_to_char(db,chid, format!("{}\r\n", &action_char_auto).as_str());
+        game.send_to_char(ch, format!("{}\r\n", &action_char_auto).as_str());
         game.act(db,
             &action_others_auto,
             action_hide,
@@ -153,6 +154,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
 }
 
 pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
@@ -162,13 +164,12 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
             victim = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
             victim.is_none()
         } {
-            game.send_to_char(db,chid, "Can't hear you!\r\n");
+            game.send_to_char(ch, "Can't hear you!\r\n");
         } else {
             let victim_id = victim.unwrap();
             let victim = db.ch(victim_id);
             if victim_id != chid {
-                game.send_to_char(db,
-                    chid,
+                game.send_to_char(ch,
                     format!("You insult {}.\r\n", victim.get_name()).as_str(),
                 );
 
@@ -246,11 +247,11 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                 );
             } else {
                 /* ch == victim */
-                game.send_to_char(db,chid, "You feel insulted.\r\n");
+                game.send_to_char(ch, "You feel insulted.\r\n");
             }
         }
     } else {
-        game.send_to_char(db,chid, "I'm sure you don't want to insult *everybody*...\r\n");
+        game.send_to_char(ch, "I'm sure you don't want to insult *everybody*...\r\n");
     }
 }
 

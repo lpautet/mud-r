@@ -388,13 +388,14 @@ pub fn update_obj_file(db: &DB) {
 }
 
 pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
+    let ch = db.ch(chid);
     let mut filename = String::new();
     if !get_filename(&mut filename, CRASH_FILE, name) {
         return;
     }
     let fl = OpenOptions::new().read(true).open(&filename);
     if fl.is_err() {
-        game.send_to_char(db,chid, format!("{} has no rent file.\r\n", name).as_str());
+        game.send_to_char(ch, format!("{} has no rent file.\r\n", name).as_str());
         return;
     }
     let mut rent = RentInfo::new();
@@ -408,26 +409,26 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
 
     /* Oops, can't get the data, punt. */
     if r.is_err() {
-        game.send_to_char(db,chid, "Error reading rent information.\r\n");
+        game.send_to_char(ch, "Error reading rent information.\r\n");
         return;
     }
 
-    game.send_to_char(db,chid, format!("{}\r\n", filename).as_str());
+    game.send_to_char(ch, format!("{}\r\n", filename).as_str());
     match rent.rentcode {
         RENT_RENTED => {
-            game.send_to_char(db,chid, "Rent\r\n");
+            game.send_to_char(ch, "Rent\r\n");
         }
         RENT_CRASH => {
-            game.send_to_char(db,chid, "Crash\r\n");
+            game.send_to_char(ch, "Crash\r\n");
         }
         RENT_CRYO => {
-            game.send_to_char(db,chid, "Cryo\r\n");
+            game.send_to_char(ch, "Cryo\r\n");
         }
         RENT_TIMEDOUT | RENT_FORCED => {
-            game.send_to_char(db,chid, "TimedOut\r\n");
+            game.send_to_char(ch, "TimedOut\r\n");
         }
         _ => {
-            game.send_to_char(db,chid, "Undef\r\n");
+            game.send_to_char(ch, "Undef\r\n");
         }
     }
 
@@ -450,13 +451,13 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
             let oid = db.read_object(object.item_number, VIRTUAL);
             let obj = db.obj(oid.unwrap());
             // #if USE_AUTOEQ
-            // game.send_to_char(db,chid, " [%5d] (%5dau) <%2d> %-20s\r\n",
+            // game.send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
             // object.item_number, obj.get_obj_rent(),
             // object.location, obj->short_description);
             // #else
             let oin = object.item_number;
-            game.send_to_char(db,
-                chid,
+            let ch = db.ch(chid);
+            game.send_to_char(ch,
                 format!(
                     " [{:5}] ({:5}au) {:20}\r\n",
                     oin,
@@ -550,7 +551,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
         let err = fl.err().unwrap();
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: READING OBJECT FILE {} (5) {}", filename, err);
-            game.send_to_char(db,chid,
+            game.send_to_char(ch,
                          "\r\n********************* NOTICE *********************\r\nThere was a problem loading your objects from disk.\r\nContact a God for assistance.\r\n");
         }
         let ch = db.ch(chid);
@@ -1521,8 +1522,7 @@ fn gen_receptionist(
     }
 
     if recep.awake() {
-        game.send_to_char(db,
-            chid,
+        game.send_to_char(ch,
             format!("{} is unable to talk to you...\r\n", hssh(recep)).as_str(),
         );
         return true;
