@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use crate::depot::{DepotId, HasId};
 use crate::interpreter::AliasData;
-use crate::Game;
+use crate::{Game, DB};
 
 pub enum MeRef {
     None,
@@ -23,7 +23,7 @@ pub enum MeRef {
 }
 
 pub type Special =
-    fn(game: &mut Game, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
+    fn(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;

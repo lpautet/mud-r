@@ -118,14 +118,14 @@ macro_rules! ban_list_format {
     };
 }
 
-pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_ban(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if argument.is_empty() {
-        if game.db.ban_list.is_empty() {
-            game.send_to_char(chid, "No sites are banned.\r\n");
+        if db.ban_list.is_empty() {
+            game.send_to_char(db,chid, "No sites are banned.\r\n");
             return;
         }
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!(
                 ban_list_format!(),
@@ -133,7 +133,7 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
             )
             .as_str(),
         );
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!(
                 ban_list_format!(),
@@ -145,18 +145,18 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
             .as_str(),
         );
 
-        for idx in 0..game.db.ban_list.len() {
+        for idx in 0..db.ban_list.len() {
             let timestr;
-            if game.db.ban_list[idx].date != 0 {
-                timestr = ctime(game.db.ban_list[idx].date as u64);
+            if db.ban_list[idx].date != 0 {
+                timestr = ctime(db.ban_list[idx].date as u64);
             } else {
                 timestr = "Unknown".to_string();
             }
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 format!(
                     ban_list_format!(),
-                    game.db.ban_list[idx].site, BAN_TYPES[game.db.ban_list[idx].type_ as usize], timestr, game.db.ban_list[idx].name
+                    db.ban_list[idx].site, BAN_TYPES[db.ban_list[idx].type_ as usize], timestr, db.ban_list[idx].name
                 )
                 .as_str(),
             );
@@ -167,16 +167,16 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
     let mut site = String::new();
     two_arguments(argument, &mut flag, &mut site);
     if site.is_empty() || flag.is_empty() {
-        game.send_to_char(chid, "Usage: ban {all | select | new} site_name\r\n");
+        game.send_to_char(db,chid, "Usage: ban {all | select | new} site_name\r\n");
         return;
     }
     if !(flag == "select" || flag == "all" || flag == "new") {
-        game.send_to_char(chid, "Flag must be ALL, SELECT, or NEW.\r\n");
+        game.send_to_char(db,chid, "Flag must be ALL, SELECT, or NEW.\r\n");
         return;
     }
-    let ban_node = game.db.ban_list.iter().find(|b| b.site.as_ref() == site);
+    let ban_node = db.ban_list.iter().find(|b| b.site.as_ref() == site);
     if ban_node.is_some() {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "That site has already been banned -- unban it to change the ban type.\r\n",
         );
@@ -197,10 +197,10 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
         ban_node.type_ = ban_node_type as i32;
     }
 
-    game.db.ban_list.push(ban_node);
+    db.ban_list.push(ban_node);
 
-    let ch = game.db.ch(chid);
-    game.mudlog(
+    let ch = db.ch(chid);
+    game.mudlog(db,
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -212,31 +212,31 @@ pub fn do_ban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subc
         )
         .as_str(),
     );
-    game.send_to_char(chid, "Site banned.\r\n");
-    write_ban_list(&game.db);
+    game.send_to_char(db,chid, "Site banned.\r\n");
+    write_ban_list(&db);
 }
 
-pub fn do_unban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_unban(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut site = String::new();
     one_argument(argument, &mut site);
     if site.is_empty() {
-        game.send_to_char(chid, "A site to unban might help.\r\n");
+        game.send_to_char(db,chid, "A site to unban might help.\r\n");
         return;
     }
-    let p = game.db
+    let p = db
         .ban_list
         .iter()
         .position(|b| b.site.as_ref() == site);
 
     if p.is_none() {
-        game.send_to_char(chid, "That site is not currently banned.\r\n");
+        game.send_to_char(db,chid, "That site is not currently banned.\r\n");
         return;
     }
 
-    let ban_node = game.db.ban_list.remove(p.unwrap());
-    game.send_to_char(chid, "Site unbanned.\r\n");
-    let ch = game.db.ch(chid);
-    game.mudlog(
+    let ban_node = db.ban_list.remove(p.unwrap());
+    game.send_to_char(db,chid, "Site unbanned.\r\n");
+    let ch = db.ch(chid);
+    game.mudlog(db,
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -249,7 +249,7 @@ pub fn do_unban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         .as_str(),
     );
 
-    write_ban_list(&game.db);
+    write_ban_list(&db);
 }
 
 /**************************************************************************
@@ -257,7 +257,7 @@ pub fn do_unban(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
+pub fn valid_name<'a>(game: &mut Game, db:&DB,  newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login
@@ -272,14 +272,13 @@ pub fn valid_name<'a>(game: &mut Game, newname: &str) -> bool {
         }
 
         let character_id = character_id.unwrap();
-        let character = game.db.ch(character_id);
+        let character = db.ch(character_id);
 
         if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
             return dt.state() == ConPlaying;
         }
     }
 
-    let db = &game.db;
     /* return valid if list doesn't exist */
     if db.invalid_list.len() == 0 {
         return true;

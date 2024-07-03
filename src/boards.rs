@@ -262,7 +262,7 @@ fn init_boards(db: &mut DB) {
 }
 
 pub fn gen_board(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB, 
     chid: DepotId,
     me: MeRef,
     cmd: i32,
@@ -274,27 +274,27 @@ pub fn gen_board(
         MeRef::Obj(me_obj) => {board = me_obj},
         _ => panic!("Unexpected MeRef type in receptionist"),
     }
-    if !game.db.boards.loaded {
-        init_boards(&mut game.db);
-        game.db.boards.loaded = true;
+    if !db.boards.loaded {
+        init_boards( db);
+        db.boards.loaded = true;
     }
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     if ch.desc.is_none() {
         return false;
     }
 
-    if cmd != game.db.boards.acmd_write
-        && cmd != game.db.boards.acmd_look
-        && cmd != game.db.boards.acmd_examine
-        && cmd != game.db.boards.acmd_read
-        && cmd != game.db.boards.acmd_remove
+    if cmd != db.boards.acmd_write
+        && cmd != db.boards.acmd_look
+        && cmd != db.boards.acmd_examine
+        && cmd != db.boards.acmd_read
+        && cmd != db.boards.acmd_remove
     {
         return false;
     }
 
     let board_type;
     if {
-        board_type = find_board(&game.db, chid);
+        board_type = find_board(&db, chid);
         board_type.is_none()
     } {
         error!("SYSERR:  degenerate board!  (what the hell...)");
@@ -302,46 +302,46 @@ pub fn gen_board(
     }
     let board_type = board_type.unwrap();
 
-    return if cmd == game.db.boards.acmd_write {
-        board_write_message(game, board_type, chid, argument)
-    } else if cmd == game.db.boards.acmd_look || cmd == game.db.boards.acmd_examine {
-        board_show_board(game, board_type, chid, argument, board)
-    } else if cmd == game.db.boards.acmd_read {
-        board_display_msg(game, board_type, chid, argument, board)
-    } else if cmd == game.db.boards.acmd_remove {
-        board_remove_msg( game, board_type, chid, argument)
+    return if cmd == db.boards.acmd_write {
+        board_write_message(game, db,board_type, chid, argument)
+    } else if cmd == db.boards.acmd_look || cmd == db.boards.acmd_examine {
+        board_show_board(game, db,board_type, chid, argument, board)
+    } else if cmd == db.boards.acmd_read {
+        board_display_msg(game, db, board_type, chid, argument, board)
+    } else if cmd == db.boards.acmd_remove {
+        board_remove_msg( game, db, board_type, chid, argument)
     } else {
         false
     };
 }
 
 fn board_write_message(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB,
     board_type: usize,
     chid: DepotId,
     arg: &str,
 ) -> bool {
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
 
-    if ch.get_level() < game.db.boards.boardinfo[board_type].write_lvl as u8 {
-        game.send_to_char(chid, "You are not holy enough to write on this board.\r\n");
+    if ch.get_level() < db.boards.boardinfo[board_type].write_lvl as u8 {
+        game.send_to_char(db,chid, "You are not holy enough to write on this board.\r\n");
         return true;
     }
-    if game.db.boards.num_of_msgs[board_type] >= MAX_BOARD_MESSAGES {
-        game.send_to_char(chid, "The board is full.\r\n");
+    if db.boards.num_of_msgs[board_type] >= MAX_BOARD_MESSAGES {
+        game.send_to_char(db,chid, "The board is full.\r\n");
         return true;
     }
     let slot;
     if {
-        slot = find_slot(&mut game.db.boards);
+        slot = find_slot(&mut db.boards);
         slot.is_none()
     } {
-        game.send_to_char(chid, "The board is malfunctioning - sorry.\r\n");
+        game.send_to_char(db,chid, "The board is malfunctioning - sorry.\r\n");
         error!("SYSERR: Board: failed to find empty slot on write.");
         return false;
     }
 
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type]].slot_num = slot;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]].slot_num = slot;
     /* skip blanks */
     let mut arg = arg.trim_start().to_string();
     delete_doubledollar(&mut arg);
@@ -350,23 +350,23 @@ fn board_write_message(
     arg.truncate(80);
 
     if arg.is_empty() {
-        game.send_to_char(chid, "We must have a headline!\r\n");
+        game.send_to_char(db,chid, "We must have a headline!\r\n");
         return true;
     }
     let ct = time_now();
     let tmstr = ctime(ct);
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     let buf2 = format!("({})", ch.get_name());
     let buf = format!("{:10} {:12} :: {}", tmstr, buf2, arg);
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type]].heading = Some(Rc::from(buf.as_str()));
-    let ch = game.db.ch(chid);
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type]].level = ch.get_level() as i32;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]].heading = Some(Rc::from(buf.as_str()));
+    let ch = db.ch(chid);
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]].level = ch.get_level() as i32;
 
-    game.send_to_char(
+    game.send_to_char(db,
         chid,
         "Write your message.  Terminate with a @ on a new line.\r\n\r\n",
     );
-    game.act(
+    game.act(db,
         "$n starts to write a message.",
         true,
         Some(chid),
@@ -374,12 +374,12 @@ fn board_write_message(
         None,
         TO_ROOM,
     );
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     let desc_id = ch.desc.unwrap();
     string_write(
-        game,
+        game,db,
         desc_id,
-        game.db.boards.msg_storage[game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type]]
+        db.boards.msg_storage[db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]]
             .slot_num
             .unwrap()]
         .clone(),
@@ -387,18 +387,18 @@ fn board_write_message(
         board_type as i64 + BOARD_MAGIC,
     );
 
-    game.db.boards.num_of_msgs[board_type] += 1;
+    db.boards.num_of_msgs[board_type] += 1;
     return true;
 }
 
 fn board_show_board(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB,
     board_type: usize,
     chid: DepotId,
     arg: &str,
     board_id: DepotId,
 ) -> bool {
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
 
     if ch.desc.is_none() {
         return false;
@@ -406,30 +406,30 @@ fn board_show_board(
     let mut tmp = String::new();
     one_argument(arg, &mut tmp);
 
-    if tmp.is_empty() || !isname(&tmp, game.db.obj(board_id).name.as_ref()) {
+    if tmp.is_empty() || !isname(&tmp, db.obj(board_id).name.as_ref()) {
         return false;
     }
 
-    if ch.get_level() < game.db.boards.boardinfo[board_type].read_lvl as u8 {
-        game.send_to_char(chid, "You try but fail to understand the holy words.\r\n");
+    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl as u8 {
+        game.send_to_char(db,chid, "You try but fail to understand the holy words.\r\n");
         return true;
     }
-    game.act("$n studies the board.", true, Some(chid), None, None, TO_ROOM);
+    game.act(db,"$n studies the board.", true, Some(chid), None, None, TO_ROOM);
 
-    if game.db.boards.num_of_msgs[board_type] == 0 {
-        game.send_to_char(chid, "This is a bulletin board.  Usage: READ/REMOVE <messg #>, WRITE <header>.\r\nThe board is empty.\r\n");
+    if db.boards.num_of_msgs[board_type] == 0 {
+        game.send_to_char(db,chid, "This is a bulletin board.  Usage: READ/REMOVE <messg #>, WRITE <header>.\r\nThe board is empty.\r\n");
     } else {
         let mut buf = format!(
             "This is a bulletin board.  Usage: READ/REMOVE <messg #>, WRITE <header>.\r\n\
 You will need to look at the board to save your message.\r\n\
 There are {} messages on the board.\r\n",
-game.db.boards.num_of_msgs[board_type]
+db.boards.num_of_msgs[board_type]
         );
         if NEWEST_AT_TOP {
-            for i in (0..game.db.boards.num_of_msgs[board_type]).rev() {
-                if game.db.boards.msg_index[board_type][i].heading.clone().is_none() {
+            for i in (0..db.boards.num_of_msgs[board_type]).rev() {
+                if db.boards.msg_index[board_type][i].heading.clone().is_none() {
                     error!("SYSERR: Board {} is fubar'd.", board_type);
-                    game.send_to_char(chid, "Sorry, the board isn't working.\r\n");
+                    game.send_to_char(db,chid, "Sorry, the board isn't working.\r\n");
                     return true;
                 }
 
@@ -437,16 +437,16 @@ game.db.boards.num_of_msgs[board_type]
                     format!(
                         "{:2} : {}\r\n",
                         i + 1,
-                        game.db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
+                        db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
                     )
                     .as_str(),
                 );
             }
         } else {
-            for i in 0..game.db.boards.num_of_msgs[board_type] {
-                if game.db.boards.msg_index[board_type][i].heading.is_none() {
+            for i in 0..db.boards.num_of_msgs[board_type] {
+                if db.boards.msg_index[board_type][i].heading.is_none() {
                     error!("SYSERR: Board {} is fubar'd.", board_type);
-                    game.send_to_char(chid, "Sorry, the board isn't working.\r\n");
+                    game.send_to_char(db,chid, "Sorry, the board isn't working.\r\n");
                     return true;
                 }
 
@@ -454,36 +454,36 @@ game.db.boards.num_of_msgs[board_type]
                     format!(
                         "{:2} : {}\r\n",
                         i + 1,
-                        game.db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
+                        db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
                     )
                     .as_str(),
                 );
             }
         }
-        let ch = game.db.ch(chid);
+        let ch = db.ch(chid);
         let d_id = ch.desc.unwrap();
-        page_string(game, d_id, &buf, true);
+        page_string(game, db, d_id, &buf, true);
     }
     return true;
 }
 
 fn board_display_msg(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB, 
     board_type: usize,
     chid: DepotId,
     arg: &str,
     board_id: DepotId,
 ) -> bool {
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
 
     let mut number = String::new();
     one_argument(arg, &mut number);
     if number.is_empty() {
         return false;
     }
-    if isname(&number, &game.db.obj(board_id).name) {
+    if isname(&number, &db.obj(board_id).name) {
         /* so "read board" works */
-        return board_show_board(game,  board_type, chid, arg, board_id);
+        return board_show_board(game,  db,board_type, chid, arg, board_id);
     }
     if !is_number(&number) {
         /* read 2.mail, look 2.sword */
@@ -494,68 +494,68 @@ fn board_display_msg(
         return false;
     }
 
-    if ch.get_level() < game.db.boards.boardinfo[board_type].read_lvl as u8 {
-        game.send_to_char(chid, "You try but fail to understand the holy words.\r\n");
+    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl as u8 {
+        game.send_to_char(db,chid, "You try but fail to understand the holy words.\r\n");
         return true;
     }
-    if game.db.boards.num_of_msgs[board_type] == 0 {
-        game.send_to_char(chid, "The board is empty!\r\n");
+    if db.boards.num_of_msgs[board_type] == 0 {
+        game.send_to_char(db,chid, "The board is empty!\r\n");
         return true;
     }
-    if msg < 1 || msg > game.db.boards.num_of_msgs[board_type] as i32 {
-        game.send_to_char(chid, "That message exists only in your imagination.\r\n");
+    if msg < 1 || msg > db.boards.num_of_msgs[board_type] as i32 {
+        game.send_to_char(db,chid, "That message exists only in your imagination.\r\n");
         return true;
     }
     let ind;
     if NEWEST_AT_TOP {
-        ind = game.db.boards.num_of_msgs[board_type] - msg as usize;
+        ind = db.boards.num_of_msgs[board_type] - msg as usize;
     } else {
         ind = msg as usize - 1;
     }
-    let msg_slot_numo = game.db.boards.msg_index[board_type][ind].slot_num;
+    let msg_slot_numo = db.boards.msg_index[board_type][ind].slot_num;
     let mut msg_slot_num = 0;
     if msg_slot_numo.is_none() || {
         msg_slot_num = msg_slot_numo.unwrap();
         msg_slot_num >= INDEX_SIZE
     } {
-        game.send_to_char(chid, "Sorry, the board is not working.\r\n");
-        let ch = game.db.ch(chid);
+        game.send_to_char(db,chid, "Sorry, the board is not working.\r\n");
+        let ch = db.ch(chid);
         error!(
             "SYSERR: Board is screwed up. (Room #{})",
-            game.db.get_room_vnum(ch.in_room())
+            db.get_room_vnum(ch.in_room())
         );
         return true;
     }
 
-    if game.db.boards.msg_index[board_type][ind].heading.is_none() {
-        game.send_to_char(chid, "That message appears to be screwed up.\r\n");
+    if db.boards.msg_index[board_type][ind].heading.is_none() {
+        game.send_to_char(db,chid, "That message appears to be screwed up.\r\n");
         return true;
     }
 
-    if RefCell::borrow(&game.db.boards.msg_storage[msg_slot_num]).is_empty() {
-        game.send_to_char(chid, "That message seems to be empty.\r\n");
+    if RefCell::borrow(&db.boards.msg_storage[msg_slot_num]).is_empty() {
+        game.send_to_char(db,chid, "That message seems to be empty.\r\n");
         return true;
     }
     let buffer = format!(
         "Message {} : {}\r\n\r\n{}\r\n",
         msg,
-        game.db.boards.msg_index[board_type][ind].heading.as_ref().unwrap(),
-        RefCell::borrow(&game.db.boards.msg_storage[msg_slot_num])
+        db.boards.msg_index[board_type][ind].heading.as_ref().unwrap(),
+        RefCell::borrow(&db.boards.msg_storage[msg_slot_num])
     );
 
     let d_id = ch.desc.unwrap();
-    page_string(game,d_id , &buffer, true);
+    page_string(game,db, d_id , &buffer, true);
 
     true
 }
 
 fn board_remove_msg(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB,
     board_type: usize,
     chid: DepotId,
     arg: &str,
 ) -> bool {
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     let mut number = String::new();
     one_argument(arg, &mut number);
 
@@ -567,91 +567,91 @@ fn board_remove_msg(
         return false;
     }
 
-    if game.db.boards.num_of_msgs[board_type] == 0 {
-        game.send_to_char(chid, "The board is empty!\r\n");
+    if db.boards.num_of_msgs[board_type] == 0 {
+        game.send_to_char(db,chid, "The board is empty!\r\n");
         return true;
     }
-    if msg < 1 || msg as usize > game.db.boards.num_of_msgs[board_type] {
-        game.send_to_char(chid, "That message exists only in your imagination.\r\n");
+    if msg < 1 || msg as usize > db.boards.num_of_msgs[board_type] {
+        game.send_to_char(db,chid, "That message exists only in your imagination.\r\n");
         return true;
     }
     let ind;
     if NEWEST_AT_TOP {
-        ind = game.db.boards.num_of_msgs[board_type] - msg as usize;
+        ind = db.boards.num_of_msgs[board_type] - msg as usize;
     } else {
         ind = msg as usize - 1;
     }
 
-    if game.db.boards.msg_index[board_type][ind].heading.is_none() {
-        game.send_to_char(chid, "That message appears to be screwed up.\r\n");
+    if db.boards.msg_index[board_type][ind].heading.is_none() {
+        game.send_to_char(db,chid, "That message appears to be screwed up.\r\n");
         return true;
     }
     let buf = format!("({})", ch.get_name());
-    if ch.get_level() < game.db.boards.boardinfo[board_type].remove_lvl as u8
-        && !game.db.boards.msg_index[board_type][ind]
+    if ch.get_level() < db.boards.boardinfo[board_type].remove_lvl as u8
+        && !db.boards.msg_index[board_type][ind]
             .heading
             .as_ref()
             .unwrap()
             .contains(&buf)
     {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "You are not holy enough to remove other people's messages.\r\n",
         );
         return true;
     }
-    if ch.get_level() < game.db.boards.msg_index[board_type][ind].level as u8 {
-        game.send_to_char(chid, "You can't remove a message holier than yourself.\r\n");
+    if ch.get_level() < db.boards.msg_index[board_type][ind].level as u8 {
+        game.send_to_char(db,chid, "You can't remove a message holier than yourself.\r\n");
         return true;
     }
-    let slot_numo = game.db.boards.msg_index[board_type][ind].slot_num;
+    let slot_numo = db.boards.msg_index[board_type][ind].slot_num;
     let mut slot_num = 0;
     if slot_numo.is_none() || {
         slot_num = slot_numo.unwrap();
         slot_num >= INDEX_SIZE
     } {
-        game.send_to_char(chid, "That message is majorly screwed up.\r\n");
-        let ch = game.db.ch(chid);
+        game.send_to_char(db,chid, "That message is majorly screwed up.\r\n");
+        let ch = db.ch(chid);
         error!(
             "SYSERR: The board is seriously screwed up. (Room #{})",
-            game.db.get_room_vnum(ch.in_room())
+            db.get_room_vnum(ch.in_room())
         );
         return true;
     }
     for d in game.descriptor_list.iter() {
         if d.state() == ConPlaying
             && d.str.is_some()
-            && Rc::ptr_eq(d.str.as_ref().unwrap(), &game.db.boards.msg_storage[slot_num])
+            && Rc::ptr_eq(d.str.as_ref().unwrap(), &db.boards.msg_storage[slot_num])
         {
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 "At least wait until the author is finished before removing it!\r\n",
             );
             return true;
         }
     }
-    if !RefCell::borrow(&game.db.boards.msg_storage[slot_num]).is_empty() {
-        *RefCell::borrow_mut(&game.db.boards.msg_storage[slot_num]) = String::new();
+    if !RefCell::borrow(&db.boards.msg_storage[slot_num]).is_empty() {
+        *RefCell::borrow_mut(&db.boards.msg_storage[slot_num]) = String::new();
     }
-    game.db.boards.msg_storage_taken[slot_num] = false;
-    if !game.db.boards.msg_index[board_type][ind].heading.is_none() {
-        game.db.boards.msg_index[board_type][ind].heading = None;
+    db.boards.msg_storage_taken[slot_num] = false;
+    if !db.boards.msg_index[board_type][ind].heading.is_none() {
+        db.boards.msg_index[board_type][ind].heading = None;
     }
 
-    for i in ind..game.db.boards.num_of_msgs[board_type] - 1 {
-        game.db.boards.msg_index[board_type][i].heading = game.db.boards.msg_index[board_type][i + 1].heading.clone();
-        game.db.boards.msg_index[board_type][i].slot_num = game.db.boards.msg_index[board_type][i + 1].slot_num;
-        game.db.boards.msg_index[board_type][i].level = game.db.boards.msg_index[board_type][i + 1].level;
+    for i in ind..db.boards.num_of_msgs[board_type] - 1 {
+        db.boards.msg_index[board_type][i].heading = db.boards.msg_index[board_type][i + 1].heading.clone();
+        db.boards.msg_index[board_type][i].slot_num = db.boards.msg_index[board_type][i + 1].slot_num;
+        db.boards.msg_index[board_type][i].level = db.boards.msg_index[board_type][i + 1].level;
     }
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type] - 1].heading = None;
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type] - 1].slot_num = None;
-    game.db.boards.msg_index[board_type][game.db.boards.num_of_msgs[board_type] - 1].level = 0;
-    game.db.boards.num_of_msgs[board_type] -= 1;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type] - 1].heading = None;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type] - 1].slot_num = None;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type] - 1].level = 0;
+    db.boards.num_of_msgs[board_type] -= 1;
 
-    game.send_to_char(chid, "Message removed.\r\n");
+    game.send_to_char(db,chid, "Message removed.\r\n");
     let buf = format!("$n just removed message {}.", msg);
-    game.act(&buf, false, Some(chid), None, None, TO_ROOM);
-    board_save_board(&mut game.db.boards, board_type);
+    game.act(db,&buf, false, Some(chid), None, None, TO_ROOM);
+    board_save_board(&mut db.boards, board_type);
 
     return true;
 }
@@ -751,7 +751,7 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
             &mut b.num_of_msgs[board_type] as *mut _ as *mut u8,
             mem::size_of::<usize>(),
         );
-        // `read_exact()` comes from `Read` impl for `&[u8]`
+        // `read_exact(db,)` comes from `Read` impl for `&[u8]`
         let r = fl.read_exact(config_slice);
         if r.is_err() {
             let r = r.err().unwrap();

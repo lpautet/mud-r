@@ -54,27 +54,27 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
-pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
+pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
     let act_nr;
 
     if {
-        act_nr = find_action(&game.db, cmd);
+        act_nr = find_action(db, cmd);
         act_nr.is_none()
     } {
-        game.send_to_char(chid, "That action is not supported.\r\n");
+        game.send_to_char(db,chid, "That action is not supported.\r\n");
         return;
     }
     let act_nr = act_nr.unwrap();
-    let action_char_found = game.db.soc_mess_list[act_nr].char_found.clone();
-    let action_others_found = game.db.soc_mess_list[act_nr].others_found.clone();
-    let action_vict_found = game.db.soc_mess_list[act_nr].vict_found.clone();
-    let action_others_no_arg = game.db.soc_mess_list[act_nr].others_no_arg.clone();
-    let action_not_found = game.db.soc_mess_list[act_nr].not_found.clone();
-    let action_char_auto = game.db.soc_mess_list[act_nr].char_auto.clone();
-    let action_others_auto = game.db.soc_mess_list[act_nr].others_auto.clone();
-    let action_min_victim_position = game.db.soc_mess_list[act_nr].min_victim_position.clone();
-    let action_char_no_arg = game.db.soc_mess_list[act_nr].char_no_arg.clone();
-    let action_hide = game.db.soc_mess_list[act_nr].hide;
+    let action_char_found = db.soc_mess_list[act_nr].char_found.clone();
+    let action_others_found = db.soc_mess_list[act_nr].others_found.clone();
+    let action_vict_found = db.soc_mess_list[act_nr].vict_found.clone();
+    let action_others_no_arg = db.soc_mess_list[act_nr].others_no_arg.clone();
+    let action_not_found = db.soc_mess_list[act_nr].not_found.clone();
+    let action_char_auto = db.soc_mess_list[act_nr].char_auto.clone();
+    let action_others_auto = db.soc_mess_list[act_nr].others_auto.clone();
+    let action_min_victim_position = db.soc_mess_list[act_nr].min_victim_position.clone();
+    let action_char_no_arg = db.soc_mess_list[act_nr].char_no_arg.clone();
+    let action_hide = db.soc_mess_list[act_nr].hide;
 
 
 
@@ -84,8 +84,8 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
     }
 
     if buf.is_empty() {
-        game.send_to_char(chid, format!("{}\r\n", action_char_no_arg).as_str());
-        game.act(
+        game.send_to_char(db,chid, format!("{}\r\n", action_char_no_arg).as_str());
+        game.act(db,
             &action_others_no_arg,
             action_hide,
             Some(chid),
@@ -97,13 +97,13 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
     }
     let vict_id;
     if {
-        vict_id = game.get_char_vis(chid, &mut buf, None, FIND_CHAR_ROOM);
+        vict_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
         vict_id.is_none()
     } {
-        game.send_to_char(chid, format!("{}\r\n", &action_not_found).as_str());
+        game.send_to_char(db,chid, format!("{}\r\n", &action_not_found).as_str());
     } else if vict_id.unwrap() == chid {
-        game.send_to_char(chid, format!("{}\r\n", &action_char_auto).as_str());
-        game.act(
+        game.send_to_char(db,chid, format!("{}\r\n", &action_char_auto).as_str());
+        game.act(db,
             &action_others_auto,
             action_hide,
             Some(chid),
@@ -113,9 +113,9 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
         );
     } else {
         let vict_id = vict_id.unwrap();
-        let vict = game.db.ch(vict_id);
+        let vict = db.ch(vict_id);
         if vict.get_pos() < action_min_victim_position as u8 {
-            game.act(
+            game.act(db,
                 "$N is not in a proper position for that.",
                 false,
                 Some(chid),
@@ -124,7 +124,7 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
                 TO_CHAR | TO_SLEEP,
             );
         } else {
-            game.act(
+            game.act(db,
                 &action_char_found,
                 false,
                 Some(chid),
@@ -132,7 +132,7 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
                 Some(VictimRef::Char(vict_id)),
                 TO_CHAR | TO_SLEEP,
             );
-            game.act(
+            game.act(db,
                 &action_others_found,
                 action_hide,
                 Some(chid),
@@ -140,7 +140,7 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
                 Some(VictimRef::Char(vict_id)),
                 TO_NOTVICT,
             );
-            game.act(
+            game.act(db,
                 &action_vict_found,
                 action_hide,
                 Some(chid),
@@ -152,33 +152,33 @@ pub fn do_action(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, _su
     }
 }
 
-pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
     if !arg.is_empty() {
         let victim;
         if {
-            victim = game.get_char_vis(chid, &mut arg, None, FIND_CHAR_ROOM);
+            victim = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
             victim.is_none()
         } {
-            game.send_to_char(chid, "Can't hear you!\r\n");
+            game.send_to_char(db,chid, "Can't hear you!\r\n");
         } else {
             let victim_id = victim.unwrap();
-            let victim = game.db.ch(victim_id);
+            let victim = db.ch(victim_id);
             if victim_id != chid {
-                game.send_to_char(
+                game.send_to_char(db,
                     chid,
                     format!("You insult {}.\r\n", victim.get_name()).as_str(),
                 );
 
                 match rand_number(0, 2) {
                     0 => {
-                        let ch = game.db.ch(chid);
+                        let ch = db.ch(chid);
                         if ch.get_sex() == SEX_MALE {
-                            let victim = game.db.ch(victim_id);
+                            let victim = db.ch(victim_id);
                             if victim.get_sex() == SEX_MALE {
-                                game.act(
+                                game.act(db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
                                     Some(chid),
@@ -187,7 +187,7 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                                     TO_VICT,
                                 );
                             } else {
-                                game.act(
+                                game.act(db,
                                     "$n says that women can't fight.",
                                     false,
                                     Some(chid),
@@ -198,9 +198,9 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                             }
                         } else {
                             /* Ch == Woman */
-                            let victim = game.db.ch(victim_id);
+                            let victim = db.ch(victim_id);
                             if victim.get_sex() == SEX_MALE {
-                                game.act(
+                                game.act(db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,
                                     Some(chid),
@@ -209,13 +209,13 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                                     TO_VICT,
                                 );
                             } else {
-                                game.act("$n tells you that you'd lose a beauty contest against a troll.",
+                                game.act(db,"$n tells you that you'd lose a beauty contest against a troll.",
                                        false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_VICT);
                             }
                         }
                     }
                     1 => {
-                        game.act(
+                        game.act(db,
                             "$n calls your mother a bitch!",
                             false,
                             Some(chid),
@@ -225,7 +225,7 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                         );
                     }
                     _ => {
-                        game.act(
+                        game.act(db,
                             "$n tells you to get lost!",
                             false,
                             Some(chid),
@@ -236,7 +236,7 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                     }
                 } /* end switch */
 
-                game.act(
+                game.act(db,
                     "$n insults $N.",
                     true,
                     Some(chid),
@@ -246,11 +246,11 @@ pub fn do_insult(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
                 );
             } else {
                 /* ch == victim */
-                game.send_to_char(chid, "You feel insulted.\r\n");
+                game.send_to_char(db,chid, "You feel insulted.\r\n");
             }
         }
     } else {
-        game.send_to_char(chid, "I'm sure you don't want to insult *everybody*...\r\n");
+        game.send_to_char(db,chid, "I'm sure you don't want to insult *everybody*...\r\n");
     }
 }
 

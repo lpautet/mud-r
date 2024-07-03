@@ -3517,8 +3517,8 @@ pub fn roll_real_abils(ch: &mut CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &mut Game, chid: DepotId) {
-    let ch = game.db.ch_mut(chid);
+pub fn do_start(game: &mut Game, db: &mut DB, chid: DepotId) {
+    let ch = db.ch_mut(chid);
     ch.set_level(1);
     ch.set_exp(1);
 
@@ -3547,15 +3547,15 @@ pub fn do_start(game: &mut Game, chid: DepotId) {
         _ => {}
     }
 
-    advance_level(chid, game);
-    let ch = game.db.ch(chid);
-    game.mudlog(
+    advance_level(chid, game, db);
+    let ch = db.ch(chid);
+    game.mudlog(db,
         BRF,
         max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
         true,
         format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
     );
-    let ch = game.db.ch_mut(chid);
+    let ch = db.ch_mut(chid);
     ch.set_hit(ch.get_max_hit());
     ch.set_mana(ch.get_max_mana());
     ch.set_move(ch.get_max_move());
@@ -3573,8 +3573,8 @@ pub fn do_start(game: &mut Game, chid: DepotId) {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(chid: DepotId, game: &mut Game) {
-    let ch = game.db.ch_mut(chid);
+pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB) {
+    let ch = db.ch_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;
@@ -3628,8 +3628,8 @@ pub fn advance_level(chid: DepotId, game: &mut Game) {
         ch.set_prf_flags_bits(PRF_HOLYLIGHT);
     }
 
-    snoop_check(game, chid);
-    game.save_char(chid);
+    snoop_check(game, db,chid);
+    game.save_char(db, chid);
 }
 
 /*

@@ -764,7 +764,7 @@ impl CharData {
 }
 
 impl Game {
-    pub fn get_real_level(&self, ch: &CharData) -> u8 {
+    pub fn get_real_level(&self, db: &DB, ch: &CharData) -> u8 {
         if ch.desc.is_some()
             && self
                 .desc(ch.desc.unwrap())
@@ -772,7 +772,7 @@ impl Game {
                 .borrow()
                 .is_some()
         {
-            self.db.ch(self.desc(ch.desc.unwrap())
+            db.ch(self.desc(ch.desc.unwrap())
                 .original
                 .unwrap())
                 .get_level()
@@ -993,52 +993,52 @@ impl DB {
 }
 
 impl Game {
-    pub fn can_get_obj(&self, ch: &CharData, obj: &ObjData) -> bool {
-        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(ch, obj)
+    pub fn can_get_obj(&self, db: &DB, ch: &CharData, obj: &ObjData) -> bool {
+        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(db, ch, obj)
     }
-    pub fn mort_can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
-        self.db.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(sub, obj)
+    pub fn mort_can_see_obj(&self, db: &DB, sub: &CharData, obj: &ObjData) -> bool {
+        db.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(db, sub, obj)
     }
-    pub fn can_see(&self, sub: &CharData, obj: &CharData) -> bool {
+    pub fn can_see(&self, db: &DB, sub: &CharData, obj: &CharData) -> bool {
         self_(sub, obj)
-            || ((self.get_real_level(sub)
+            || ((self.get_real_level(db, sub)
                 >= (if obj.is_npc() {
                     0
                 } else {
                     obj.get_invis_lev() as u8
                 }))
-                && self.db.imm_can_see(sub, obj))
+                && db.imm_can_see(sub, obj))
     }
-    pub fn can_see_obj_carrier(&self, sub: &CharData, obj: &ObjData) -> bool {
+    pub fn can_see_obj_carrier(&self, db:&DB, sub: &CharData, obj: &ObjData) -> bool {
         (obj.carried_by.borrow().is_none()
-            || self.can_see(sub, self.db.ch(obj.carried_by.unwrap())))
+            || self.can_see(db, sub, db.ch(obj.carried_by.unwrap())))
             && (obj.worn_by.borrow().is_none()
-                || self.can_see(sub, self.db.ch(obj.worn_by.unwrap())))
+                || self.can_see(db, sub, db.ch(obj.worn_by.unwrap())))
     }
-    pub fn pers(&self, ch: &CharData, vict: &CharData) -> Rc<str> {
-        if self.can_see(vict, ch) {
+    pub fn pers(&self, db: &DB, ch: &CharData, vict: &CharData) -> Rc<str> {
+        if self.can_see(db, vict, ch) {
             ch.get_name().clone()
         } else {
             Rc::from("someone")
         }
     }
-    pub fn objs(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
-        if self.can_see_obj(vict, obj) {
+    pub fn objs(&self, db: &DB, obj: &ObjData, vict: &CharData) -> Rc<str> {
+        if self.can_see_obj(db, vict, obj) {
             obj.short_description.clone()
         } else {
             Rc::from("something")
         }
     }
 
-    pub fn objn(&self, obj: &ObjData, vict: &CharData) -> Rc<str> {
-        if self.can_see_obj(vict, obj) {
+    pub fn objn(&self, db: &DB, obj: &ObjData, vict: &CharData) -> Rc<str> {
+        if self.can_see_obj(db, vict, obj) {
             fname(obj.name.as_ref())
         } else {
             Rc::from("something")
         }
     }
-    pub fn can_see_obj(&self, sub: &CharData, obj: &ObjData) -> bool {
-        self.mort_can_see_obj(sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
+    pub fn can_see_obj(&self, db: &DB, sub: &CharData, obj: &ObjData) -> bool {
+        self.mort_can_see_obj(db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
     }
 }
 
@@ -1231,15 +1231,15 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &mut Game, chid: DepotId) {
-    let ch = game.db.ch(chid);
+pub fn log_death_trap(game: &mut Game, db: &DB, chid: DepotId) {
+    let ch = db.ch(chid);
     let mesg = format!(
         "{} hit death trap #{} ({})",
         ch.get_name(),
-        game.db.get_room_vnum(ch.in_room()),
-        game.db.world[ch.in_room() as usize].name
+        db.get_room_vnum(ch.in_room()),
+        db.world[ch.in_room() as usize].name
     );
-    game.mudlog(BRF, LVL_IMMORT as i32, true, mesg.as_str());
+    game.mudlog(db,BRF, LVL_IMMORT as i32, true, mesg.as_str());
 }
 
 /*
@@ -1291,7 +1291,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * based on syslog by Fen Jul 3, 1992
  */
 impl Game {
-    pub(crate) fn mudlog(&mut self, _type: u8, level: i32, file: bool, msg: &str) {
+    pub(crate) fn mudlog(&mut self, db: &DB, _type: u8, level: i32, file: bool, msg: &str) {
         if msg == "" {
             return;
         }
@@ -1312,7 +1312,7 @@ impl Game {
                 continue;
             }
             let character_id = self.desc(d_id).character.as_ref().unwrap().clone();
-            let character = self.db.ch(character_id);
+            let character = db.ch(character_id);
             if character.is_npc() {
                 /* switch */
                 continue;
@@ -1340,7 +1340,7 @@ impl Game {
             // 1: 0) + (PRF_FLAGGED(i->character, PRF_LOG2)?
             // 2: 0))
             // continue;
-            self.send_to_char(
+            self.send_to_char(db,
                 character_id,
                 format!(
                     "{}{}{}",
@@ -1496,15 +1496,15 @@ pub fn circle_follow(db: &DB, chid: DepotId, victim_id: Option<DepotId>) -> bool
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
 impl Game {
-    pub fn stop_follower(&mut self, chid: DepotId) {
-        let ch = self.db.ch(chid);
+    pub fn stop_follower(&mut self, db: &mut DB, chid: DepotId) {
+        let ch = db.ch(chid);
         if ch.master.is_none() {
             return;
         }
 
         if ch.aff_flagged(AFF_CHARM) {
             let vobj = ch.master.unwrap();
-            self.act(
+            self.act(db,
                 "You realize that $N is a jerk!",
                 false,
                 Some(chid),
@@ -1512,7 +1512,7 @@ impl Game {
                 Some(VictimRef::Char(vobj)),
                 TO_CHAR,
             );
-            self.act(
+            self.act(db,
                 "$n realizes that $N is a jerk!",
                 false,
                 Some(chid),
@@ -1520,7 +1520,7 @@ impl Game {
                 Some(VictimRef::Char(vobj)),
                 TO_NOTVICT,
             );
-            self.act(
+            self.act(db,
                 "$n hates your guts!",
                 false,
                 Some(chid),
@@ -1528,13 +1528,13 @@ impl Game {
                 Some(VictimRef::Char(vobj)),
                 TO_VICT,
             );
-            let ch = self.db.ch(chid);
+            let ch = db.ch(chid);
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                self.db.affect_from_char(chid, SPELL_CHARM as i16);
+                db.affect_from_char(chid, SPELL_CHARM as i16);
             }
         } else {
             let vobj = ch.master.unwrap();
-            self.act(
+            self.act(db,
                 "You stop following $N.",
                 false,
                 Some(chid),
@@ -1542,9 +1542,9 @@ impl Game {
                 Some(VictimRef::Char(vobj)),
                 TO_CHAR,
             );
-            let ch = self.db.ch(chid);
+            let ch = db.ch(chid);
             let vobj = ch.master.unwrap();
-            self.act(
+            self.act(db,
                 "$n stops following $N.",
                 true,
                 Some(chid),
@@ -1552,9 +1552,9 @@ impl Game {
                 Some(VictimRef::Char(vobj)),
                 TO_NOTVICT,
             );
-            let ch = self.db.ch(chid);
+            let ch = db.ch(chid);
             let vr = ch.master.unwrap();
-            self.act(
+            self.act(db,
                 "$n stops following you.",
                 true,
                 Some(chid),
@@ -1563,24 +1563,24 @@ impl Game {
                 TO_VICT,
             );
         }
-        let ch = self.db.ch(chid);
-        self.db.ch_mut(ch.master
+        let ch = db.ch(chid);
+        db.ch_mut(ch.master
             .unwrap())
             .followers
             .retain(|c| c.follower == chid);
-        let ch = self.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.master = None;
         ch.remove_aff_flags(AFF_CHARM | AFF_GROUP);
     }
 
 
-pub fn num_followers_charmed(&self, chid: DepotId) -> i32 {
-    let ch = self.db.ch(chid);
+pub fn num_followers_charmed(&self,  db: &DB, chid: DepotId) -> i32 {
+    let ch = db.ch(chid);
     let mut total = 0;
 
     for lackey in ch.followers.iter() {
-        if self.db.ch(lackey.follower).aff_flagged(AFF_CHARM)
-            && self.db.ch(lackey.follower).master.unwrap() == chid
+        if db.ch(lackey.follower).aff_flagged(AFF_CHARM)
+            && db.ch(lackey.follower).master.unwrap() == chid
         {
             total += 1;
         }
@@ -1590,23 +1590,23 @@ pub fn num_followers_charmed(&self, chid: DepotId) -> i32 {
 }
 impl Game {
     /* Called when a character that follows/is followed dies */
-    pub fn die_follower(&mut self, chid: DepotId) {
-        let ch = self.db.ch(chid);
+    pub fn die_follower(&mut self, db: &mut DB, chid: DepotId) {
+        let ch = db.ch(chid);
         if ch.master.is_some() {
-            self.stop_follower(chid);
+            self.stop_follower(db, chid);
         }
-        let ch = self.db.ch(chid);
+        let ch = db.ch(chid);
         let list = ch.followers.clone();
         for k in  list {
-            self.stop_follower(k.follower);
+            self.stop_follower(db, k.follower);
         }
     }
 }
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
-pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
-    let ch = game.db.ch_mut(chid);
+pub fn add_follower(game: &mut Game, db: &mut DB, chid: DepotId, leader_id: DepotId) {
+    let ch = db.ch_mut(chid);
     if ch.master.is_some() {
         // core_dump();
         return;
@@ -1617,10 +1617,10 @@ pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
     let k = FollowType {
         follower: chid,
     };
-    let leader = game.db.ch_mut(leader_id);
+    let leader = db.ch_mut(leader_id);
     leader.followers.push(k);
 
-    game.act(
+    game.act(db,
         "You now follow $N.",
         false,
         Some(chid),
@@ -1628,10 +1628,10 @@ pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
         Some(VictimRef::Char(leader_id)),
         TO_CHAR,
     );
-    let ch = game.db.ch(chid);
-    let leader = game.db.ch(leader_id);
-    if game.can_see(leader, ch) {
-        game.act(
+    let ch = db.ch(chid);
+    let leader = db.ch(leader_id);
+    if game.can_see(db, leader, ch) {
+        game.act(db,
             "$n starts following you.",
             true,
             Some(chid),
@@ -1640,7 +1640,7 @@ pub fn add_follower(game: &mut Game, chid: DepotId, leader_id: DepotId) {
             TO_VICT,
         );
     }
-    game.act(
+    game.act(db,
         "$n starts to follow $N.",
         true,
         Some(chid),

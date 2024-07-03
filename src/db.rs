@@ -335,7 +335,7 @@ impl DB {
  * 'reload' command even when the string was not replaced.
  * To fix later, if desired. -gg 6/24/99
  */
-pub fn do_reboot(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_reboot(game: &mut Game, db: &mut DB,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -343,120 +343,120 @@ pub fn do_reboot(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _s
     match arg.as_str() {
         "all" | "*" => {
             if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
-                game.db.greetings = n.clone();
-                prune_crlf(&mut game.db.greetings);
+                db.greetings = n.clone();
+                prune_crlf(&mut db.greetings);
             }
             game.file_to_string_alloc(WIZLIST_FILE, &mut n);
-            game.db.wizlist = n.clone();
+            db.wizlist = n.clone();
             game.file_to_string_alloc(IMMLIST_FILE, &mut n);
-            game.db.immlist = n.clone();
+            db.immlist = n.clone();
             game.file_to_string_alloc(NEWS_FILE, &mut n);
-            game.db.news = n.clone();
+            db.news = n.clone();
             game.file_to_string_alloc(CREDITS_FILE, &mut n);
-            game.db.credits = n.clone();
+            db.credits = n.clone();
             game.file_to_string_alloc(MOTD_FILE, &mut n);
-            game.db.motd = n.clone();
+            db.motd = n.clone();
             game.file_to_string_alloc(IMOTD_FILE, &mut n);
-            game.db.imotd = n.clone();
+            db.imotd = n.clone();
             game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
-            game.db.help = n.clone();
+            db.help = n.clone();
             game.file_to_string_alloc(INFO_FILE, &mut n);
-            game.db.info = n.clone();
+            db.info = n.clone();
             game.file_to_string_alloc(POLICIES_FILE, &mut n);
-            game.db.policies = n.clone();
+            db.policies = n.clone();
             game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
-            game.db.handbook = n.clone();
+            db.handbook = n.clone();
             game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
-            game.db.background = n.clone();
+            db.background = n.clone();
         }
         "wizlist" => {
             game.file_to_string_alloc(WIZLIST_FILE, &mut n);
-            game.db.wizlist = n.clone();
+            db.wizlist = n.clone();
         }
         "immlist" => {
             game.file_to_string_alloc(IMMLIST_FILE, &mut n);
-            game.db.immlist = n.clone();
+            db.immlist = n.clone();
         }
         "news" => {
             game.file_to_string_alloc(NEWS_FILE, &mut n);
-            game.db.news = n.clone();
+            db.news = n.clone();
         }
         "credits" => {
             game.file_to_string_alloc(CREDITS_FILE, &mut n);
-            game.db.credits = n.clone();
+            db.credits = n.clone();
         }
         "motd" => {
             game.file_to_string_alloc(MOTD_FILE, &mut n);
-            game.db.motd = n.clone();
+            db.motd = n.clone();
         }
         "imotd" => {
             game.file_to_string_alloc(IMOTD_FILE, &mut n);
-            game.db.imotd = n.clone();
+            db.imotd = n.clone();
         }
         "help" => {
             game.file_to_string_alloc(HELP_PAGE_FILE, &mut n);
-            game.db.help = n.clone();
+            db.help = n.clone();
         }
         "info" => {
             game.file_to_string_alloc(INFO_FILE, &mut n);
-            game.db.info = n.clone();
+            db.info = n.clone();
         }
         "policy" => {
             game.file_to_string_alloc(POLICIES_FILE, &mut n);
-            game.db.policies = n.clone();
+            db.policies = n.clone();
         }
         "handbook" => {
             game.file_to_string_alloc(HANDBOOK_FILE, &mut n);
-            game.db.handbook = n.clone();
+            db.handbook = n.clone();
         }
         "background" => {
             game.file_to_string_alloc(BACKGROUND_FILE, &mut n);
-            game.db.background = n.clone();
+            db.background = n.clone();
         }
         "greetings" => {
             if game.file_to_string_alloc(GREETINGS_FILE, &mut n) == 0 {
-                game.db.greetings = n.clone();
-                prune_crlf(&mut game.db.greetings);
+                db.greetings = n.clone();
+                prune_crlf(&mut db.greetings);
             }
         }
         "xhelp" => {
-            game.db.help_table.clear();
-            game.db.index_boot(DB_BOOT_HLP);
+            db.help_table.clear();
+            db.index_boot(DB_BOOT_HLP);
         }
         _ => {
-            game.send_to_char(chid, "Unknown reload option.\r\n");
+            game.send_to_char(db,chid, "Unknown reload option.\r\n");
             return;
         }
     }
 
-    game.send_to_char(chid, OK);
+    game.send_to_char(db,chid, OK);
 }
 
-pub(crate) fn boot_world(game: &mut Game) {
+pub(crate) fn boot_world(game: &mut Game, db: &mut DB) {
     info!("Loading zone table.");
-    game.db.index_boot(DB_BOOT_ZON);
+    db.index_boot(DB_BOOT_ZON);
 
     info!("Loading rooms.");
-    game.db.index_boot(DB_BOOT_WLD);
+    db.index_boot(DB_BOOT_WLD);
 
     info!("Renumbering rooms.");
-    game.db.renum_world();
+    db.renum_world();
 
     info!("Checking start rooms.");
-    game.db.check_start_rooms();
+    db.check_start_rooms();
 
     info!("Loading mobs and generating index.");
-    game.db.index_boot(DB_BOOT_MOB);
+    db.index_boot(DB_BOOT_MOB);
 
     info!("Loading objs and generating index.");
-    game.db.index_boot(DB_BOOT_OBJ);
+    db.index_boot(DB_BOOT_OBJ);
 
     info!("Renumbering zone table.");
-    renum_zone_table(game);
+    renum_zone_table(game, db);
 
-    if !game.db.no_specials {
+    if !db.no_specials {
         info!("Loading shops.");
-        game.db.index_boot(DB_BOOT_SHP);
+        db.index_boot(DB_BOOT_SHP);
     }
 }
 impl DB {
@@ -577,108 +577,108 @@ impl DB {
     }
 
     /* body of the booting system */
-    pub fn boot_db(game: &mut Game) {
+    pub fn boot_db(game: &mut Game, db: &mut DB) {
         info!("Boot db -- BEGIN.");
 
         info!("Resetting the game time:");
-        game.db.reset_time();
+        db.reset_time();
 
         info!("Reading news, credits, help, bground, info & motds.");
         let mut buf = Rc::from("");
         game.file_to_string_alloc(NEWS_FILE, &mut buf);
-        game.db.news = buf.clone();
+        db.news = buf.clone();
         game.file_to_string_alloc(CREDITS_FILE, &mut buf);
-        game.db.credits = buf.clone();
+        db.credits = buf.clone();
         game.file_to_string_alloc(MOTD_FILE, &mut buf);
-        game.db.motd = buf.clone();
+        db.motd = buf.clone();
         game.file_to_string_alloc(IMOTD_FILE, &mut buf);
-        game.db.imotd = buf.clone();
+        db.imotd = buf.clone();
         game.file_to_string_alloc(HELP_PAGE_FILE, &mut buf);
-        game.db.help = buf.clone();
+        db.help = buf.clone();
         game.file_to_string_alloc(INFO_FILE, &mut buf);
-        game.db.info = buf.clone();
+        db.info = buf.clone();
         game.file_to_string_alloc(WIZLIST_FILE, &mut buf);
-        game.db.wizlist = buf.clone();
+        db.wizlist = buf.clone();
         game.file_to_string_alloc(IMMLIST_FILE, &mut buf);
-        game.db.immlist = buf.clone();
+        db.immlist = buf.clone();
         game.file_to_string_alloc(POLICIES_FILE, &mut buf);
-        game.db.policies = buf.clone();
+        db.policies = buf.clone();
         game.file_to_string_alloc(HANDBOOK_FILE, &mut buf);
-        game.db.handbook = buf.clone();
+        db.handbook = buf.clone();
         game.file_to_string_alloc(BACKGROUND_FILE, &mut buf);
-        game.db.background = buf.clone();
+        db.background = buf.clone();
         game.file_to_string_alloc(GREETINGS_FILE, &mut buf);
-        game.db.greetings = buf.clone();
-        prune_crlf(&mut game.db.greetings);
+        db.greetings = buf.clone();
+        prune_crlf(&mut db.greetings);
 
         info!("Loading spell definitions.");
-        mag_assign_spells(&mut game.db);
+        mag_assign_spells(db);
 
-        boot_world(game);
+        boot_world(game, db);
 
         info!("Loading help entries.");
-        game.db.index_boot(DB_BOOT_HLP);
+        db.index_boot(DB_BOOT_HLP);
 
         info!("Generating player index.");
-        game.db.build_player_index();
+        db.build_player_index();
 
         info!("Loading fight messages.");
-        game.db.load_messages();
+        db.load_messages();
 
         info!("Loading social messages.");
-        boot_social_messages(&mut game.db);
+        boot_social_messages(db);
 
         info!("Assigning function pointers:");
 
-        if !game.db.no_specials {
+        if !db.no_specials {
             info!("   Mobiles.");
-            assign_mobiles(&mut game.db);
+            assign_mobiles(db);
             info!("   Shopkeepers.");
-            assign_the_shopkeepers(&mut game.db);
+            assign_the_shopkeepers(db);
             info!("   Objects.");
-            assign_objects(&mut game.db);
+            assign_objects(db);
             info!("   Rooms.");
-            assign_rooms(&mut game.db);
+            assign_rooms(db);
         }
 
         info!("Assigning spell and skill levels.");
-        init_spell_levels(&mut game.db);
+        init_spell_levels(db);
         //
         info!("Sorting command list and spells.");
-        sort_commands(&mut game.db);
-        sort_spells(&mut game.db);
+        sort_commands(db);
+        sort_spells(db);
 
         info!("Booting mail system.");
-        if !game.db.mails.scan_file() {
+        if !db.mails.scan_file() {
             info!("    Mail boot failed -- Mail system disabled");
-            game.db.no_mail = true;
+            db.no_mail = true;
         }
         info!("Reading banned site and invalid-name list.");
-        load_banned(&mut game.db);
-        read_invalid_list(&mut game.db);
+        load_banned(db);
+        read_invalid_list(db);
 
-        if !game.db.no_rent_check {
+        if !db.no_rent_check {
             info!("Deleting timed-out crash and rent files:");
-            update_obj_file(&game.db);
+            update_obj_file(db);
             info!("   Done.");
         }
 
         // /* Moved here so the object limit code works. -gg 6/24/98 */
-        if !game.db.mini_mud {
+        if !db.mini_mud {
             info!("Booting houses.");
-            house_boot(&mut game.db);
+            house_boot(db);
         }
 
-        let zone_count = game.db.zone_table.len();
+        let zone_count = db.zone_table.len();
         for i in 0..zone_count {
             info!(
                 "Resetting #{}: {} (rooms {}-{}).",
-                game.db.zone_table[i].number,
-                game.db.zone_table[i].name,
-                game.db.zone_table[i].bot,
-                game.db.zone_table[i].top
+                db.zone_table[i].number,
+                db.zone_table[i].name,
+                db.zone_table[i].bot,
+                db.zone_table[i].top
             );
-            game.reset_zone(i);
+            game.reset_zone(db,i);
         }
 
         // TODO reset_q.head = reset_q.tail = NULL;
@@ -1395,100 +1395,100 @@ impl DB {
      * NOTE 2: Assumes sizeof(RoomRnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
      */
 }
-fn renum_zone_table(game: &mut Game) {
+fn renum_zone_table(game: &mut Game, db: &mut DB) {
     let mut olda;
     let mut oldb;
     let mut oldc;
 
-    for idx in 0..game.db.zone_table.len() {
-        for cmd_no in 0..game.db.zone_table[idx].cmd.len() {
-            if game.db.zone_table[idx].cmd[cmd_no].command == 'S' {
+    for idx in 0..db.zone_table.len() {
+        for cmd_no in 0..db.zone_table[idx].cmd.len() {
+            if db.zone_table[idx].cmd[cmd_no].command == 'S' {
                 break;
             }
             let mut a = 0;
             let mut b = 0;
             let mut c = 0;
-            olda = game.db.zone_table[idx].cmd[cmd_no].arg1;
-            oldb = game.db.zone_table[idx].cmd[cmd_no].arg2;
-            oldc = game.db.zone_table[idx].cmd[cmd_no].arg3;
-            match game.db.zone_table[idx].cmd[cmd_no].command {
+            olda = db.zone_table[idx].cmd[cmd_no].arg1;
+            oldb = db.zone_table[idx].cmd[cmd_no].arg2;
+            oldc = db.zone_table[idx].cmd[cmd_no].arg3;
+            match db.zone_table[idx].cmd[cmd_no].command {
                 'M' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_mobile(game.db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db
+                        .real_mobile(db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game
-                        .db
-                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
+                    db.zone_table[idx].cmd[cmd_no].arg3 = 
+                        db
+                        .real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
                         as i32;
-                    c = game.db.zone_table[idx].cmd[cmd_no].arg3;
+                    c = db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'O' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    if game.db.zone_table[idx].cmd[cmd_no].arg3 != NOWHERE as i32 {
-                        game.db.zone_table[idx].cmd[cmd_no].arg3 = game
-                            .db
-                            .real_room(game.db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
+                    if db.zone_table[idx].cmd[cmd_no].arg3 != NOWHERE as i32 {
+                        db.zone_table[idx].cmd[cmd_no].arg3 = 
+                            db
+                            .real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
                             as i32;
-                        c = game.db.zone_table[idx].cmd[cmd_no].arg3;
+                        c = db.zone_table[idx].cmd[cmd_no].arg3;
                     }
                 }
                 'G' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'E' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'P' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg3 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum)
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
+                    db.zone_table[idx].cmd[cmd_no].arg3 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum)
                         as i32;
-                    c = game.db.zone_table[idx].cmd[cmd_no].arg3;
+                    c = db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'D' => {
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'R' => {
                     /* rem obj from room */
-                    game.db.zone_table[idx].cmd[cmd_no].arg1 = game
-                        .db
-                        .real_room(game.db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
+                    db.zone_table[idx].cmd[cmd_no].arg1 = 
+                        db
+                        .real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
                         as i32;
-                    a = game.db.zone_table[idx].cmd[cmd_no].arg1;
-                    game.db.zone_table[idx].cmd[cmd_no].arg2 = game
-                        .db
-                        .real_object(game.db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum)
+                    a = db.zone_table[idx].cmd[cmd_no].arg1;
+                    db.zone_table[idx].cmd[cmd_no].arg2 = 
+                        db
+                        .real_object(db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum)
                         as i32;
-                    b = game.db.zone_table[idx].cmd[cmd_no].arg2;
+                    b = db.zone_table[idx].cmd[cmd_no].arg2;
                 }
                 _ => {}
             }
 
             if a == NOWHERE as i32 || b == NOWHERE as i32 || c == NOWHERE as i32 {
-                if !game.db.mini_mud {
+                if !db.mini_mud {
                     let buf = format!(
                         "Invalid vnum {}, cmd disabled",
                         if a == NOWHERE as i32 {
@@ -1500,12 +1500,12 @@ fn renum_zone_table(game: &mut Game) {
                         }
                     );
                     let mut cmd_no2 = cmd_no as i32;
-                    let zone = game.db.zone_table[idx].number as usize;
-                    let zcmd_command = game.db.zone_table[idx].cmd[cmd_no].command;
-                    let zcmd_line = game.db.zone_table[idx].cmd[cmd_no].line;
-                    game.log_zone_error(zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
+                    let zone = db.zone_table[idx].number as usize;
+                    let zcmd_command = db.zone_table[idx].cmd[cmd_no].command;
+                    let zcmd_line = db.zone_table[idx].cmd[cmd_no].line;
+                    game.log_zone_error(db,zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
                 }
-                game.db.zone_table[idx].cmd[cmd_no].command = '*';
+                db.zone_table[idx].cmd[cmd_no].command = '*';
             }
         }
     }
@@ -2295,18 +2295,18 @@ impl DB {
      *************************************************************************/
 }
 impl Game {
-    pub fn vnum_mobile(&mut self, searchname: &str, chid: DepotId) -> i32 {
+    pub fn vnum_mobile(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
         let mut found = 0;
-        for nr in 0..self.db.mob_protos.len() {
-            let mp = &self.db.mob_protos[nr];
+        for nr in 0..db.mob_protos.len() {
+            let mp = &db.mob_protos[nr];
             if isname(searchname, &mp.player.name) {
                 found += 1;
-                self.send_to_char(
+                self.send_to_char(db,
                     chid,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found,
-                        self.db.mob_index[nr].vnum,
+                        db.mob_index[nr].vnum,
                         mp.player.short_descr
                     )
                     .as_str(),
@@ -2316,17 +2316,17 @@ impl Game {
         return found;
     }
 
-    pub fn vnum_object(&mut self, searchname: &str, chid: DepotId) -> i32 {
+    pub fn vnum_object(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
         let mut found = 0;
-        for nr in 0..self.db.obj_proto.len() {
-            let op = &self.db.obj_proto[nr];
+        for nr in 0..db.obj_proto.len() {
+            let op = &db.obj_proto[nr];
             if isname(searchname, &op.name) {
                 found += 1;
-                self.send_to_char(
+                self.send_to_char(db,
                     chid,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
-                        found, self.db.obj_index[nr].vnum, op.short_description
+                        found, db.obj_index[nr].vnum, op.short_description
                     )
                     .as_str(),
                 );
@@ -2465,27 +2465,27 @@ const ZO_DEAD: i32 = 999;
 
 impl Game {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
-    pub(crate) fn zone_update(&mut self) {
+    pub(crate) fn zone_update(&mut self, db: &mut DB) {
         /* jelson 10/22/92 */
-        self.db.timer += 1;
-        if (self.db.timer * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
+        db.timer += 1;
+        if (db.timer * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
             /* one minute has passed */
             /*
              * NOT accurate unless PULSE_ZONE is a multiple of PASSES_PER_SEC or a
              * factor of 60
              */
 
-            self.db.timer = 0;
+            db.timer = 0;
 
             /* since one minute has passed, increment zone ages */
-            for (i, zone) in self.db.zone_table.iter_mut().enumerate() {
+            for (i, zone) in db.zone_table.iter_mut().enumerate() {
                 if zone.age < zone.lifespan && zone.reset_mode != 0 {
                     zone.age += 1;
                 }
 
                 if zone.age >= zone.lifespan && zone.age < ZO_DEAD && zone.reset_mode != 0 {
                     /* enqueue zone */
-                    self.db.reset_q.push(i as RoomRnum);
+                    db.reset_q.push(i as RoomRnum);
 
                     zone.age = ZO_DEAD;
                 }
@@ -2494,41 +2494,41 @@ impl Game {
 
         /* dequeue zones (if possible) and reset */
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
-        let update_list = self.db.reset_q.clone();
+        let update_list = db.reset_q.clone();
         for update_u in update_list {
-            if self.db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, update_u) {
-                self.reset_zone(update_u as usize);
-                self.mudlog(
+            if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self,db,  update_u) {
+                self.reset_zone(db,update_u as usize);
+                self.mudlog(db,
                     CMP,
                     LVL_GOD as i32,
                     false,
                     format!(
                         "Auto zone reset: {}",
-                        self.db.zone_table[update_u as usize].name
+                        db.zone_table[update_u as usize].name
                     )
                     .as_str(),
                 );
             }
         }
-        self.db.reset_q.clear();
+        db.reset_q.clear();
     }
 
     /* execute the reset command table of a given zone */
     fn log_zone_error(
-        &mut self,
+        &mut self, db: &DB,
         zone: usize,
         zcmd_command: char,
         zcmd_line: i32,
         message: &str,
         last_cmd: &mut i32,
     ) {
-        self.mudlog(
+        self.mudlog(db,
             NRM,
             LVL_GOD as i32,
             true,
             format!("SYSERR: zone file: {}", message).as_str(),
         );
-        self.mudlog(
+        self.mudlog(db,
             NRM,
             LVL_GOD as i32,
             true,
@@ -2541,17 +2541,17 @@ impl Game {
         *last_cmd = 0;
     }
 
-    pub(crate) fn reset_zone(&mut self, zone: usize) {
+    pub(crate) fn reset_zone(&mut self, db: &mut DB, zone: usize) {
         let mut last_cmd = 0;
         let mut oid;
         let mut mob_id = None;
-        let cmd_count = self.db.zone_table[zone].cmd.len();
+        let cmd_count = db.zone_table[zone].cmd.len();
         for cmd_no in 0..cmd_count {
-            // let zcmd = &self.db.zone_table[zone].cmd[cmd_no];
-            if self.db.zone_table[zone].cmd[cmd_no].command == 'S' {
+            // let zcmd = &db.zone_table[zone].cmd[cmd_no];
+            if db.zone_table[zone].cmd[cmd_no].command == 'S' {
                 break;
             }
-            if self.db.zone_table[zone].cmd[cmd_no].if_flag && last_cmd == 0 {
+            if db.zone_table[zone].cmd[cmd_no].if_flag && last_cmd == 0 {
                 continue;
             }
 
@@ -2560,7 +2560,7 @@ impl Game {
              *  the list of commands in load_zone() so that the counting
              *  will still be correct. - ae.
              */
-            let command = self.db.zone_table[zone].cmd[cmd_no].command;
+            let command = db.zone_table[zone].cmd[cmd_no].command;
             match command {
                 '*' => {
                     /* ignore command */
@@ -2569,13 +2569,13 @@ impl Game {
 
                 'M' => {
                     /* read a mobile */
-                    if self.db.mob_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    if db.mob_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < db.zone_table[zone].cmd[cmd_no].arg2
                     {
-                        let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
-                        mob_id = self.db.read_mobile(nr, REAL);
-                        let room = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                        self.db.char_to_room(mob_id.unwrap(), room);
+                        let nr = db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
+                        mob_id = db.read_mobile(nr, REAL);
+                        let room = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
+                        db.char_to_room(mob_id.unwrap(), room);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2584,19 +2584,19 @@ impl Game {
 
                 'O' => {
                     /* read an object */
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < db.zone_table[zone].cmd[cmd_no].arg2
                     {
-                        if self.db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
-                            let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            let room_nr = self.db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                            oid = self.db.read_object(nr, REAL);
-                            self.db.obj_to_room(oid.unwrap(), room_nr);
+                        if db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
+                            let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            let room_nr = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
+                            oid = db.read_object(nr, REAL);
+                            db.obj_to_room(oid.unwrap(), room_nr);
                             last_cmd = 1;
                         } else {
-                            let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = self.db.read_object(nr, REAL);
-                            self.db.obj_mut(oid.unwrap()).in_room = NOWHERE;
+                            let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            oid = db.read_object(nr, REAL);
+                            db.obj_mut(oid.unwrap()).in_room = NOWHERE;
                             last_cmd = 1;
                         }
                     } else {
@@ -2606,28 +2606,28 @@ impl Game {
 
                 'P' => {
                     /* object to object */
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < db.zone_table[zone].cmd[cmd_no].arg2
                     {
-                        let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = self.db.read_object(nr, REAL);
-                        let obj_to = self
-                            .db
-                            .get_obj_num(self.db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
+                        let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                        oid = db.read_object(nr, REAL);
+                        let obj_to =
+                            db
+                            .get_obj_num(db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
-                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                            let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
+                            let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                            let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                            self.log_zone_error(db,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
                                 "target obj not found, command disabled",
                                 &mut last_cmd,
                             );
-                            self.db.zone_table[zone].cmd[cmd_no].command = '*';
+                            db.zone_table[zone].cmd[cmd_no].command = '*';
                             continue;
                         }
-                        self.db.obj_to_obj(oid.unwrap(), obj_to.unwrap());
+                        db.obj_to_obj(oid.unwrap(), obj_to.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2637,9 +2637,9 @@ impl Game {
                 'G' => {
                     /* obj_to_char */
                     if mob_id.is_none() {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
+                        let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                        let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                        self.log_zone_error(db,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2647,15 +2647,15 @@ impl Game {
                             &mut last_cmd,
                         );
 
-                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
+                        db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < db.zone_table[zone].cmd[cmd_no].arg2
                     {
-                        let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = self.db.read_object(nr, REAL);
-                        self.db.obj_to_char(oid.unwrap(), mob_id.unwrap());
+                        let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                        oid = db.read_object(nr, REAL);
+                        db.obj_to_char(oid.unwrap(), mob_id.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2665,9 +2665,9 @@ impl Game {
                 'E' => {
                     /* object to equipment list */
                     if mob_id.is_none() {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
+                        let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                        let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                        self.log_zone_error(db,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2675,18 +2675,18 @@ impl Game {
                             &mut last_cmd,
                         );
 
-                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
+                        db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
                     }
-                    if self.db.obj_index[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < self.db.zone_table[zone].cmd[cmd_no].arg2
+                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                        < db.zone_table[zone].cmd[cmd_no].arg2
                     {
-                        if self.db.zone_table[zone].cmd[cmd_no].arg3 < 0
-                            || self.db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
+                        if db.zone_table[zone].cmd[cmd_no].arg3 < 0
+                            || db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
                         {
-                            let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                            let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
+                            let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                            let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                            self.log_zone_error(db,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
@@ -2694,10 +2694,10 @@ impl Game {
                                 &mut last_cmd,
                             );
                         } else {
-                            let nr = self.db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = self.db.read_object(nr, REAL);
-                            let pos = self.db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(mob_id.unwrap(), oid.unwrap(), pos);
+                            let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            oid = db.read_object(nr, REAL);
+                            let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
+                            self.equip_char(db,mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2707,79 +2707,79 @@ impl Game {
 
                 'R' => {
                     /* rem obj from room */
-                    oid = self.db.get_obj_in_list_num(
-                        self.db.zone_table[zone].cmd[cmd_no].arg2 as i16,
-                        self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                    oid = db.get_obj_in_list_num(
+                        db.zone_table[zone].cmd[cmd_no].arg2 as i16,
+                        db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                             .contents
                             .as_ref(),
                     );
                     if oid.is_some() {
-                        self.extract_obj(oid.unwrap());
+                        self.extract_obj(db,oid.unwrap());
                     }
                     last_cmd = 1;
                 }
 
                 'D' => {
                     /* set state of door */
-                    if self.db.zone_table[zone].cmd[cmd_no].arg2 < 0
-                        || self.db.zone_table[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
-                        || (self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                    if db.zone_table[zone].cmd[cmd_no].arg2 < 0
+                        || db.zone_table[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
+                        || (db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                             .dir_option
-                            [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                            [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
-                        let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                        let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
+                        let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                        let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                        self.log_zone_error(db,
                             zone,
                             zcmd_command,
                             zcmd_line,
                             "door does not exist, command disabled",
                             &mut last_cmd,
                         );
-                        self.db.zone_table[zone].cmd[cmd_no].command = '*';
+                        db.zone_table[zone].cmd[cmd_no].command = '*';
                     } else {
-                        match self.db.zone_table[zone].cmd[cmd_no].arg3 {
+                        match db.zone_table[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
 
                             1 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_CLOSED as i32);
                             }
 
                             2 => {
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                self.db.world[self.db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                                     .dir_option
-                                    [self.db.zone_table[zone].cmd[cmd_no].arg2 as usize]
+                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_CLOSED as i32);
@@ -2791,37 +2791,37 @@ impl Game {
                 }
 
                 _ => {
-                    let zcmd_command = self.db.zone_table[zone].cmd[cmd_no].command;
-                    let zcmd_line = self.db.zone_table[zone].cmd[cmd_no].line;
-                    self.log_zone_error(
+                    let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                    let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                    self.log_zone_error(db,
                         zone,
                         zcmd_command,
                         zcmd_line,
                         "unknown cmd in reset table; cmd disabled",
                         &mut last_cmd,
                     );
-                    self.db.zone_table[zone].cmd[cmd_no].command = '*';
+                    db.zone_table[zone].cmd[cmd_no].command = '*';
                 }
             }
         }
 
-        self.db.zone_table[zone].age = 0;
+        db.zone_table[zone].age = 0;
     }
 }
 
 /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
-fn is_empty(game: &Game, zone_nr: ZoneRnum) -> bool {
+fn is_empty(game: &Game, db: &DB, zone_nr: ZoneRnum) -> bool {
     for i in game.descriptor_list.iter() {
         if i.state() != ConPlaying {
             continue;
         }
-        if game.db.ch(i.character.unwrap()).in_room() == NOWHERE {
+        if db.ch(i.character.unwrap()).in_room() == NOWHERE {
             continue;
         }
-        if game.db.ch(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
+        if db.ch(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if game.db.world[game.db.ch(i.character.unwrap()).in_room() as usize].zone != zone_nr {
+        if db.world[db.ch(i.character.unwrap()).in_room() as usize].zone != zone_nr {
             continue;
         }
         return false;
@@ -2868,16 +2868,16 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, chid: DepotId) {
-        let ch = self.db.ch(chid);
+    pub fn save_char(&mut self, db: &mut DB,  chid: DepotId) {
+        let ch = db.ch(chid);
         let mut st: CharFileU = CharFileU::new();
 
         if ch.is_npc() || ch.desc.is_none() || ch.get_pfilepos() < 0 {
             return;
         }
 
-        self.char_to_store(chid, &mut st);
-        let ch = self.db.ch(chid);
+        self.char_to_store(db, chid, &mut st);
+        let ch = db.ch(chid);
         copy_to_stored(
             &mut st.host,
             self.descriptor_list
@@ -2890,7 +2890,7 @@ impl Game {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
                 let offset = ch.get_pfilepos() as usize * mem::size_of::<CharFileU>();
-            self.db
+            db
                 .player_fl
                 .as_mut()
                 .unwrap()
@@ -3057,20 +3057,20 @@ pub fn store_to_char(st: &CharFileU, ch: &mut CharData) {
 
 /* copy vital data from a players char-structure to the file structure */
 impl Game {
-    pub fn char_to_store(&mut self, chid: DepotId, st: &mut CharFileU) {
+    pub fn char_to_store(&mut self, db: &mut DB, chid: DepotId, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
         let mut char_eq: [Option<DepotId>; NUM_WEARS as usize] =
             [(); NUM_WEARS as usize].map(|_| None);
 
         for i in 0..NUM_WEARS {
-            let ch = self.db.ch(chid);
+            let ch = db.ch(chid);
             if ch.get_eq(i).is_some() {
-                char_eq[i as usize] = self.unequip_char(chid, i);
+                char_eq[i as usize] = self.unequip_char(db,chid, i);
             } else {
                 char_eq[i as usize] = None;
             }
         }
-        let ch = self.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         if ch.affected.len() > MAX_AFFECT {
             error!("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
         }
@@ -3095,12 +3095,12 @@ impl Game {
          * effects are doubled when the char logs back in.
          */
 
-        while { let ch = self.db.ch(chid); !ch.affected.is_empty() }{
-            let ch = self.db.ch(chid);
+        while { let ch = db.ch(chid); !ch.affected.is_empty() }{
+            let ch = db.ch(chid);
             let af = ch.affected[0];
-            self.db.affect_remove(chid, af);
+            db.affect_remove(chid, af);
         }
-        let ch = self.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.aff_abils = ch.real_abils;
 
         st.birth = ch.player.time.birth;
@@ -3162,7 +3162,7 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(chid, char_eq[i as usize].unwrap(), i);
+                self.equip_char(db,chid, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */

@@ -57,8 +57,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         != 0
 }
 
-fn valid_edge(game: &mut Game, x: RoomRnum, y: usize) -> bool {
-    let db = &game.db;
+fn valid_edge(game: &mut Game, db: &DB, x: RoomRnum, y: usize) -> bool {
     if db.world[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
     {
         return false;
@@ -96,11 +95,11 @@ impl BfsTracker {
  * Intended usage: in mobile_activity, give a mob a dir to go if they're
  * tracking another mob or a PC.  Or, a 'track' skill for PCs.
  */
-fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
+fn find_first_step(game: &mut Game, db: &mut DB, src: RoomRnum, target: RoomRnum) -> i32 {
     if src == NOWHERE
         || target == NOWHERE
-        || src >= game.db.world.len() as i16
-        || target > game.db.world.len() as i16
+        || src >= db.world.len() as i16
+        || target > db.world.len() as i16
     {
         error!(
             "SYSERR: Illegal value {} or {} passed to find_first_step.",
@@ -113,21 +112,21 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
     }
 
     /* clear marks first, some OLC systems will save the mark. */
-    for curr_room in 0..game.db.world.len() {
-        unmark(&mut game.db, curr_room as RoomRnum);
+    for curr_room in 0..db.world.len() {
+        unmark( db, curr_room as RoomRnum);
     }
 
-    mark(&mut game.db, src);
+    mark( db, src);
 
     /* first, enqueue the first steps, saving which direction we're going. */
 
     let mut tracker = BfsTracker::new();
 
     for curr_dir in 0..NUM_OF_DIRS {
-        if valid_edge(game, src, curr_dir) {
-            let room_nr = toroom(&game.db, src, curr_dir);
-            mark(&mut game.db, room_nr);
-            tracker.bfs_enqueue(toroom(&game.db, src, curr_dir), curr_dir);
+        if valid_edge(game, db, src, curr_dir) {
+            let room_nr = toroom(&db, src, curr_dir);
+            mark(db, room_nr);
+            tracker.bfs_enqueue(toroom(&db, src, curr_dir), curr_dir);
         }
     }
 
@@ -138,11 +137,11 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
             return curr_dir as i32;
         } else {
             for curr_dir in 0..NUM_OF_DIRS {
-                if valid_edge(game, tracker.queue[0].room, curr_dir) {
-                    let room_nr = toroom(&game.db, tracker.queue[0].room, curr_dir);
-                    mark(&mut game.db, room_nr);
+                if valid_edge(game, db, tracker.queue[0].room, curr_dir) {
+                    let room_nr = toroom(&db, tracker.queue[0].room, curr_dir);
+                    mark(db, room_nr);
                     tracker.bfs_enqueue(
-                        toroom(&game.db, tracker.queue[0].room, curr_dir),
+                        toroom(&db, tracker.queue[0].room, curr_dir),
                         tracker.queue[0].dir,
                     );
                 }
@@ -158,34 +157,33 @@ fn find_first_step(game: &mut Game, src: RoomRnum, target: RoomRnum) -> i32 {
 * Functions and Commands which use the above functions. *
 ********************************************************/
 
-pub fn do_track(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
-    let db = &game.db;
+pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
-        game.send_to_char(chid, "You have no idea how.\r\n");
+        game.send_to_char(db,chid, "You have no idea how.\r\n");
         return;
     }
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        game.send_to_char(chid, "Whom are you trying to track?\r\n");
+        game.send_to_char(db,chid, "Whom are you trying to track?\r\n");
         return;
     }
     let vict_id;
     /* The person can't see the victim. */
     if {
-        vict_id = game.get_char_vis(chid, &mut arg, None, FIND_CHAR_WORLD);
+        vict_id = game.get_char_vis(db, chid, &mut arg, None, FIND_CHAR_WORLD);
         vict_id.is_none()
     } {
-        game.send_to_char(chid, "No one is around by that name.\r\n");
+        game.send_to_char(db,chid, "No one is around by that name.\r\n");
         return;
     }
     let vict_id = vict_id.unwrap();
-    let vict = game.db.ch(vict_id);
+    let vict = db.ch(vict_id);
     /* We can't track the victim. */
     if vict.aff_flagged(AFF_NOTRACK) {
-        game.send_to_char(chid, "You sense no trail.\r\n");
+        game.send_to_char(db,chid, "You sense no trail.\r\n");
         return;
     }
 
@@ -201,7 +199,7 @@ pub fn do_track(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 break;
             }
         }
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
@@ -209,26 +207,26 @@ pub fn do_track(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     }
 
     /* They passed the skill check. */
-    let dir = find_first_step(game, ch.in_room(), vict.in_room());
+    let dir = find_first_step(game, db, ch.in_room(), vict.in_room());
 
     match dir {
         BFS_ERROR => {
-            game.send_to_char(chid, "Hmm.. something seems to be wrong.\r\n");
+            game.send_to_char(db,chid, "Hmm.. something seems to be wrong.\r\n");
         }
 
         BFS_ALREADY_THERE => {
-            game.send_to_char(chid, "You're already in the same room!!\r\n");
+            game.send_to_char(db,chid, "You're already in the same room!!\r\n");
         }
 
         BFS_NO_PATH => {
-            let vict = game.db.ch(vict_id);
-            game.send_to_char(
+            let vict = db.ch(vict_id);
+            game.send_to_char(db,
                 chid,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );

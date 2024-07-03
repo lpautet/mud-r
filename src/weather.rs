@@ -13,124 +13,124 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::dice;
-use crate::Game;
+use crate::{Game, DB};
 use std::cmp::{max, min};
 
 impl Game {
-    pub(crate) fn weather_and_time(&mut self, mode: i32) {
-        self.another_hour(mode);
+    pub(crate) fn weather_and_time(&mut self, db: &mut DB, mode: i32) {
+        self.another_hour(db, mode);
         if mode != 0 {
-            self.weather_change();
+            self.weather_change(db);
         }
     }
 
-    fn another_hour(&mut self, mode: i32) {
-        self.db.time_info.hours += 1;
+    fn another_hour(&mut self, db: &mut DB,mode: i32) {
+        db.time_info.hours += 1;
 
         if mode != 0 {
-            match self.db.time_info.hours {
+            match db.time_info.hours {
                 5 => {
-                    self.db.weather_info.sunlight = SUN_RISE;
-                    self.send_to_outdoor("The sun rises in the east.\r\n");
+                    db.weather_info.sunlight = SUN_RISE;
+                    self.send_to_outdoor(db,"The sun rises in the east.\r\n");
                 }
                 6 => {
-                    self.db.weather_info.sunlight = SUN_LIGHT;
-                    self.send_to_outdoor("The day has begun.\r\n");
+                    db.weather_info.sunlight = SUN_LIGHT;
+                    self.send_to_outdoor(db,"The day has begun.\r\n");
                 }
                 21 => {
-                    self.db.weather_info.sunlight = SUN_SET;
-                    self.send_to_outdoor("The sun slowly disappears in the west.\r\n");
+                    db.weather_info.sunlight = SUN_SET;
+                    self.send_to_outdoor(db,"The sun slowly disappears in the west.\r\n");
                 }
                 22 => {
-                    self.db.weather_info.sunlight = SUN_DARK;
-                    self.send_to_outdoor("The night has begun.\r\n");
+                    db.weather_info.sunlight = SUN_DARK;
+                    self.send_to_outdoor(db,"The night has begun.\r\n");
                 }
                 _ => {}
             }
         }
 
-        if self.db.time_info.hours > 23 {
+        if db.time_info.hours > 23 {
             /* Changed by HHS due to bug ??? */
-            self.db.time_info.hours -= 24;
-            self.db.time_info.day += 1;
+            db.time_info.hours -= 24;
+            db.time_info.day += 1;
 
-            if self.db.time_info.day > 34 {
-                self.db.time_info.day = 0;
-                self.db.time_info.month += 1;
+            if db.time_info.day > 34 {
+                db.time_info.day = 0;
+                db.time_info.month += 1;
 
-                if self.db.time_info.month > 16 {
-                    self.db.time_info.month = 0;
-                    self.db.time_info.year += 1;
+                if db.time_info.month > 16 {
+                    db.time_info.month = 0;
+                    db.time_info.year += 1;
                 }
             }
         }
     }
 
-    fn weather_change(&mut self) {
+    fn weather_change(&mut self,db: &mut DB) {
 
         let diff;
-        if (self.db.time_info.month >= 9) && (self.db.time_info.month <= 16) {
-            diff = if self.db.weather_info.pressure > 985 { -2 } else { 2 };
+        if (db.time_info.month >= 9) && (db.time_info.month <= 16) {
+            diff = if db.weather_info.pressure > 985 { -2 } else { 2 };
         } else {
-            diff = if self.db.weather_info.pressure > 1015 { -2 } else { 2 };
+            diff = if db.weather_info.pressure > 1015 { -2 } else { 2 };
         }
 
-        self.db.weather_info.change += dice(1, 4) * diff + dice(2, 6) - dice(2, 6);
+        db.weather_info.change += dice(1, 4) * diff + dice(2, 6) - dice(2, 6);
 
-        self.db.weather_info.change = min(self.db.weather_info.change, 12);
-        self.db.weather_info.change = max(self.db.weather_info.change, -12);
+        db.weather_info.change = min(db.weather_info.change, 12);
+        db.weather_info.change = max(db.weather_info.change, -12);
 
-        self.db.weather_info.pressure += self.db.weather_info.change;
+        db.weather_info.pressure += db.weather_info.change;
 
-        self.db.weather_info.pressure = min(self.db.weather_info.pressure, 1040);
-        self.db.weather_info.pressure = max(self.db.weather_info.pressure, 960);
+        db.weather_info.pressure = min(db.weather_info.pressure, 1040);
+        db.weather_info.pressure = max(db.weather_info.pressure, 960);
 
         let mut change = 0;
 
-        match self.db.weather_info.sky {
+        match db.weather_info.sky {
             SKY_CLOUDLESS => {
-                if self.db.weather_info.pressure < 990 {
+                if db.weather_info.pressure < 990 {
                     change = 1;
-                } else if self.db.weather_info.pressure < 1010 {
+                } else if db.weather_info.pressure < 1010 {
                     if dice(1, 4) == 1 {
                         change = 1;
                     }
                 }
             }
             SKY_CLOUDY => {
-                if self.db.weather_info.pressure < 970 {
+                if db.weather_info.pressure < 970 {
                     change = 2;
-                } else if self.db.weather_info.pressure < 990 {
+                } else if db.weather_info.pressure < 990 {
                     if dice(1, 4) == 1 {
                         change = 2;
                     } else {
                         change = 0;
                     }
-                } else if self.db.weather_info.pressure > 1030 {
+                } else if db.weather_info.pressure > 1030 {
                     if dice(1, 4) == 1 {
                         change = 3;
                     }
                 }
             }
             SKY_RAINING => {
-                if self.db.weather_info.pressure < 970 {
+                if db.weather_info.pressure < 970 {
                     if dice(1, 4) == 1 {
                         change = 4;
                     } else {
                         change = 0;
                     }
-                } else if self.db.weather_info.pressure > 1030 {
+                } else if db.weather_info.pressure > 1030 {
                     change = 5;
-                } else if self.db.weather_info.pressure > 1010 {
+                } else if db.weather_info.pressure > 1010 {
                     if dice(1, 4) == 1 {
                         change = 5;
                     }
                 }
             }
             SKY_LIGHTNING => {
-                if self.db.weather_info.pressure > 1010 {
+                if db.weather_info.pressure > 1010 {
                     change = 6;
-                } else if self.db.weather_info.pressure > 990 {
+                } else if db.weather_info.pressure > 990 {
                     if dice(1, 4) == 1 {
                         change = 6;
                     }
@@ -139,40 +139,40 @@ impl Game {
 
             _ => {
                 change = 0;
-                self.db.weather_info.sky = SKY_CLOUDLESS;
+                db.weather_info.sky = SKY_CLOUDLESS;
             }
         }
 
         match change {
             0 => {}
             1 => {
-                self.send_to_outdoor("The sky starts to get cloudy.\r\n");
-                self.db.weather_info.sky = SKY_CLOUDY;
+                self.send_to_outdoor(db,"The sky starts to get cloudy.\r\n");
+                db.weather_info.sky = SKY_CLOUDY;
             }
 
             2 => {
-                self.send_to_outdoor("It starts to rain.\r\n");
-                self.db.weather_info.sky = SKY_RAINING;
+                self.send_to_outdoor(db,"It starts to rain.\r\n");
+                db.weather_info.sky = SKY_RAINING;
             }
 
             3 => {
-                self.send_to_outdoor("The clouds disappear.\r\n");
-                self.db.weather_info.sky = SKY_CLOUDLESS;
+                self.send_to_outdoor(db,"The clouds disappear.\r\n");
+                db.weather_info.sky = SKY_CLOUDLESS;
             }
 
             4 => {
-                self.send_to_outdoor("Lightning starts to show in the sky.\r\n");
-                self.db.weather_info.sky = SKY_LIGHTNING;
+                self.send_to_outdoor(db,"Lightning starts to show in the sky.\r\n");
+                db.weather_info.sky = SKY_LIGHTNING;
             }
 
             5 => {
-                self.send_to_outdoor("The rain stops.\r\n");
-                self.db.weather_info.sky = SKY_CLOUDY;
+                self.send_to_outdoor(db,"The rain stops.\r\n");
+                db.weather_info.sky = SKY_CLOUDY;
             }
 
             6 => {
-                self.send_to_outdoor("The lightning stops.\r\n");
-                self.db.weather_info.sky = SKY_RAINING;
+                self.send_to_outdoor(db,"The lightning stops.\r\n");
+                db.weather_info.sky = SKY_RAINING;
             }
             _ => {}
         }

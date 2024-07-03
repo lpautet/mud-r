@@ -52,12 +52,12 @@ use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{ LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
-use crate::{DescriptorData, Game,  PAGE_LENGTH, PAGE_WIDTH};
+use crate::{DescriptorData, Game, DB, PAGE_LENGTH, PAGE_WIDTH};
 
-pub fn string_write(game: &mut Game, d_id: DepotId, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
+pub fn string_write(game: &mut Game, db: &mut DB, d_id: DepotId, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
     let d = game.desc(d_id);
-    if d.character.is_some() && !game.db.ch(d.character.unwrap()).is_npc() {
-        game.db.ch_mut(d.character.unwrap()).set_plr_flag_bit(PLR_WRITING);
+    if d.character.is_some() && !db.ch(d.character.unwrap()).is_npc() {
+        db.ch_mut(d.character.unwrap()).set_plr_flag_bit(PLR_WRITING);
     }
 
     let d = game.desc_mut(d_id);
@@ -67,7 +67,7 @@ pub fn string_write(game: &mut Game, d_id: DepotId, writeto: Rc<RefCell<String>>
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
+pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
@@ -86,7 +86,7 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
     if RefCell::borrow(the_str.as_ref()).is_empty() {
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-            game.send_to_char(chid, "String too long - Truncated.\r\n");
+            game.send_to_char(db,chid, "String too long - Truncated.\r\n");
             str_.truncate(game.desc_mut(d_id).max_str - 3);
             str_.push_str("\r\n");
             *RefCell::borrow_mut(the_str.as_ref()) = str_;
@@ -97,7 +97,7 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
     } else {
         if str_.len() + RefCell::borrow(the_str.as_ref()).len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-            game.send_to_char(chid, "String too long.  Last line skipped.\r\n");
+            game.send_to_char(db,chid, "String too long.  Last line skipped.\r\n");
             terminator = true;
         } else {
             RefCell::borrow_mut(the_str.as_ref()).push_str(str_.as_str());
@@ -106,7 +106,7 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
 
     if terminator {
         if game.desc_mut(d_id).state() == ConPlaying
-            && game.db.ch(game
+            && db.ch(game
                 .desc(d_id)
                 .character
                 .unwrap())
@@ -114,8 +114,8 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
         {
             let message_pointer = game.desc_mut(d_id).str.as_ref().unwrap().clone();
             let mail_to = game.desc_mut(d_id).mail_to;
-            let from = game.db.ch(game.desc(d_id).character.unwrap()).get_idnum();
-            game.db.store_mail(
+            let from = db.ch(game.desc(d_id).character.unwrap()).get_idnum();
+            db.store_mail(
                 mail_to,
                 from,
                 RefCell::borrow(message_pointer.as_ref()).as_str(),
@@ -123,8 +123,8 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
             game.desc_mut(d_id).mail_to = 0;
             game.desc_mut(d_id).str = None;
             game.write_to_output(d_id, "Message sent!\r\n");
-            if !game.db.ch(game.desc(d_id).character.unwrap()).is_npc() {
-                game.db.ch_mut(game.desc(d_id)
+            if !db.ch(game.desc(d_id).character.unwrap()).is_npc() {
+                db.ch_mut(game.desc(d_id)
                     .character
                     .unwrap())
                     .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
@@ -135,7 +135,7 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
 
         if game.desc_mut(d_id).mail_to >= BOARD_MAGIC {
             let board_type = (game.desc_mut(d_id).mail_to - BOARD_MAGIC) as usize;
-            board_save_board(&mut game.db.boards, board_type);
+            board_save_board(&mut db.boards, board_type);
             game.desc_mut(d_id).mail_to = 0;
         }
         if game.desc_mut(d_id).state() == ConExdesc {
@@ -144,9 +144,9 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
         }
         if game.desc(d_id).state() == ConPlaying
             && game.desc(d_id).character.is_some()
-            && !game.db.ch(game.desc(d_id).character.unwrap()).is_npc()
+            && !db.ch(game.desc(d_id).character.unwrap()).is_npc()
         {
-            game.db.ch_mut(game.desc(d_id)
+            db.ch_mut(game.desc(d_id)
                 .character
                 .unwrap())
                 .remove_plr_flag(PLR_WRITING);
@@ -159,7 +159,7 @@ pub fn string_add(game: &mut Game, d_id: DepotId, str_: &str) {
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
-pub fn do_skillset(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_skillset(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let mut name = String::new();
 
     let argument2 = one_argument(argument, &mut name);
@@ -167,45 +167,45 @@ pub fn do_skillset(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
 
     if name.is_empty() {
         /* no arguments. print an informative text */
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "Syntax: skillset <name> '<skill>' <value>\r\n\
 Skill being one of the following:\r\n",
         );
         let mut qend = 0;
         for i in 0..TOP_SPELL_DEFINE + 1 {
-            if game.db.spell_info[i].name == UNUSED_SPELLNAME {
+            if db.spell_info[i].name == UNUSED_SPELLNAME {
                 /* This is valid. */
                 continue;
             }
-            game.send_to_char(chid, format!("{:18}", game.db.spell_info[i].name).as_str());
+            game.send_to_char(db,chid, format!("{:18}", db.spell_info[i].name).as_str());
             qend += 1;
             if qend % 4 == 3 {
-                game.send_to_char(chid, "\r\n");
+                game.send_to_char(db,chid, "\r\n");
             }
         }
         if qend % 4 != 0 {
-            game.send_to_char(chid, "\r\n");
+            game.send_to_char(db,chid, "\r\n");
         }
 
         return;
     }
-    let vict_id = game.get_char_vis(chid, &mut name, None, FIND_CHAR_WORLD);
+    let vict_id = game.get_char_vis(db,chid, &mut name, None, FIND_CHAR_WORLD);
     if vict_id.is_none() {
-        game.send_to_char(chid, NOPERSON);
+        game.send_to_char(db,chid, NOPERSON);
         return;
     }
     let vict_id = vict_id.unwrap();
-    let vict = game.db.ch(vict_id);
+    let vict = db.ch(vict_id);
     let mut argument = argument.trim_start().to_string();
 
     /* If there is no chars in argument */
     if argument.is_empty() {
-        game.send_to_char(chid, "Skill name expected.\r\n");
+        game.send_to_char(db,chid, "Skill name expected.\r\n");
         return;
     }
     if !argument.starts_with('\'') {
-        game.send_to_char(chid, "Skill must be enclosed in: ''\r\n");
+        game.send_to_char(db,chid, "Skill must be enclosed in: ''\r\n");
         return;
     }
     /* Locate the last quote and lowercase the magic words (if any) */
@@ -222,41 +222,41 @@ Skill being one of the following:\r\n",
     }
 
     if &argument[qend..qend] != "\'" {
-        game.send_to_char(chid, "Skill must be enclosed in: ''\r\n");
+        game.send_to_char(db,chid, "Skill must be enclosed in: ''\r\n");
         return;
     }
     let help = argument.to_lowercase();
     let help = &help.as_str()[0..qend];
 
-    let skill = find_skill_num(&game.db, help);
+    let skill = find_skill_num(db, help);
     if skill.is_none() {
-        game.send_to_char(chid, "Unrecognized skill.\r\n");
+        game.send_to_char(db,chid, "Unrecognized skill.\r\n");
         return;
     }
     let buf = String::new();
     let skill = skill.unwrap();
 
     if buf.is_empty() {
-        game.send_to_char(chid, "Learned value expected.\r\n");
+        game.send_to_char(db,chid, "Learned value expected.\r\n");
         return;
     }
     let value = buf.parse::<i8>();
     if value.is_err() {
-        game.send_to_char(chid, "Invalid value.\r\n");
+        game.send_to_char(db,chid, "Invalid value.\r\n");
         return;
     }
 
     let value = value.unwrap();
     if value < 0 {
-        game.send_to_char(chid, "Minimum value for learned is 0.\r\n");
+        game.send_to_char(db,chid, "Minimum value for learned is 0.\r\n");
         return;
     }
     if value > 100 {
-        game.send_to_char(chid, "Max value for learned is 100.\r\n");
+        game.send_to_char(db,chid, "Max value for learned is 100.\r\n");
         return;
     }
     if vict.is_npc() {
-        game.send_to_char(chid, "You can't set NPC skills.\r\n");
+        game.send_to_char(db,chid, "You can't set NPC skills.\r\n");
         return;
     }
 
@@ -264,29 +264,29 @@ Skill being one of the following:\r\n",
      * find_skill_num() guarantees a valid spell_info[] index, or -1, and we
      * checked for the -1 above so we are safe here.
      */
-    let vict = game.db.ch_mut(vict_id);
+    let vict = db.ch_mut(vict_id);
     vict.set_skill(skill, value);
-    let vict = game.db.ch(vict_id);
-    game.mudlog(
+    let vict = db.ch(vict_id);
+    game.mudlog(db,
         BRF,
         LVL_IMMORT as i32,
         true,
         format!(
             "{} changed {}'s {} to {}.",
-            game.db.ch(chid).get_name(),
+            db.ch(chid).get_name(),
             vict.get_name(),
-            game.db.spell_info[skill as usize].name,
+            db.spell_info[skill as usize].name,
             value
         )
         .as_str(),
     );
-    let vict = game.db.ch(vict_id);
-    game.send_to_char(
+    let vict = db.ch(vict_id);
+    game.send_to_char(db,
         chid,
         format!(
             "You change {}'s {} to {}.\r\n",
             vict.get_name(),
-            game.db.spell_info[skill as usize].name,
+            db.spell_info[skill as usize].name,
             value
         )
         .as_str(),
@@ -386,7 +386,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(game: &mut Game, d_id: DepotId, msg: &str, keep_internal: bool) {
+pub fn page_string(game: &mut Game, db: &mut DB, d_id: DepotId, msg: &str, keep_internal: bool) {
     if msg.is_empty() {
         return;
     }
@@ -404,11 +404,11 @@ pub fn page_string(game: &mut Game, d_id: DepotId, msg: &str, keep_internal: boo
     }
 
     let actbuf = "";
-    show_string(game, d_id, actbuf);
+    show_string(game, db, d_id, actbuf);
 }
 
 /* The call that displays the next page. */
-pub fn show_string(game: &mut Game, d_id: DepotId, input: &str) {
+pub fn show_string(game: &mut Game, db: &mut DB, d_id: DepotId, input: &str) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
@@ -439,7 +439,7 @@ pub fn show_string(game: &mut Game, d_id: DepotId, input: &str) {
             let nr = buf.parse::<i32>();
             if nr.is_err() {
                 let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-                game.send_to_char(
+                game.send_to_char(db,
                     chid,
                     "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
                 );
@@ -450,7 +450,7 @@ pub fn show_string(game: &mut Game, d_id: DepotId, input: &str) {
             );
         } else if !buf.is_empty() {
             let to_char_id = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-            game.send_to_char(
+            game.send_to_char(db,
                 to_char_id,
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );
@@ -464,7 +464,7 @@ pub fn show_string(game: &mut Game, d_id: DepotId, input: &str) {
         let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
         let showstr_page = game.desc_mut(d_id).showstr_page as usize;
         let msg = game.desc_mut(d_id).showstr_vector[showstr_page].clone();
-        game.send_to_char(chid, msg.as_ref());
+        game.send_to_char(db,chid, msg.as_ref());
         game.desc_mut(d_id).showstr_vector.clear();
         game.desc_mut(d_id).showstr_count = 0;
         if game.desc_mut(d_id).showstr_head.is_some() {
@@ -478,7 +478,7 @@ pub fn show_string(game: &mut Game, d_id: DepotId, input: &str) {
             - game.desc_mut(d_id).showstr_vector[(showstr_page + 1) as usize].len();
         let buffer = &game.desc_mut(d_id).showstr_vector[showstr_page].as_ref()[..diff].to_string();
         let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-        game.send_to_char(chid, buffer);
+        game.send_to_char(db,chid, buffer);
         game.desc_mut(d_id).showstr_page = showstr_page as i32 + 1;
     }
 }

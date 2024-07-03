@@ -17,7 +17,7 @@ use std::io::Write;
 
 use log::error;
 use crate::depot::DepotId;
-use crate::VictimRef;
+use crate::{VictimRef, DB};
 
 use crate::act_wizard::perform_immort_vis;
 use crate::alias::write_aliases;
@@ -51,30 +51,30 @@ use crate::structs::{
 use crate::util::{ rand_number, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-pub fn do_quit(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_quit(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() || ch.desc.is_none() {
         return;
     }
 
     if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(chid, "You have to type quit--no less, to quit!\r\n");
+        game.send_to_char(db,chid, "You have to type quit--no less, to quit!\r\n");
     } else if ch.get_pos() == POS_FIGHTING {
-        game.send_to_char(chid, "No way!  You're fighting for your life!\r\n");
+        game.send_to_char(db,chid, "No way!  You're fighting for your life!\r\n");
     } else if ch.get_pos() < POS_STUNNED {
-        game.send_to_char(chid, "You die before your time...\r\n");
-        die(chid, game);
+        game.send_to_char(db,chid, "You die before your time...\r\n");
+        die(chid, game,db);
     } else {
         game
-            .act("$n has left the game.", true, Some(chid), None, None, TO_ROOM);
-        let ch = game.db.ch(chid);
-        game.mudlog(
+            .act(db,"$n has left the game.", true, Some(chid), None, None, TO_ROOM);
+        let ch = db.ch(chid);
+        game.mudlog(db,
             NRM,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
             format!("{} has quit the game.", ch.get_name()).as_str(),
         );
-        game.send_to_char(chid, "Goodbye, friend.. Come back soon!\r\n");
+        game.send_to_char(db,chid, "Goodbye, friend.. Come back soon!\r\n");
 
         /*  We used to check here for duping attempts, but we may as well
          *  do it right in extract_char(), since there is no check if a
@@ -83,23 +83,23 @@ pub fn do_quit(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, sub
          */
 
         if FREE_RENT {
-            crash_rentsave(game, chid, 0);
+            crash_rentsave(game, db, chid, 0);
         }
 
         /* If someone is quitting in their house, let them load back here. */
-        let ch = game.db.ch(chid);
-        if !ch.plr_flagged(PLR_LOADROOM) && game.db.room_flagged(ch.in_room(), ROOM_HOUSE) {
-            let val = game.db.get_room_vnum(ch.in_room());
-            let ch = game.db.ch_mut(chid);
+        let ch = db.ch(chid);
+        if !ch.plr_flagged(PLR_LOADROOM) && db.room_flagged(ch.in_room(), ROOM_HOUSE) {
+            let val = db.get_room_vnum(ch.in_room());
+            let ch = db.ch_mut(chid);
             ch.set_loadroom(val);
         }
 
-        game.db.extract_char(chid); /* Char is saved before extracting. */
+        db.extract_char(chid); /* Char is saved before extracting. */
     }
 }
 
-pub fn do_save(game: &mut Game, chid: DepotId, _argument: &str, cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_save(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() || ch.desc.is_none() {
         return;
     }
@@ -114,53 +114,53 @@ pub fn do_save(game: &mut Game, chid: DepotId, _argument: &str, cmd: usize, _sub
          * immortal advances from mortality, you may want < instead of <=.
          */
         if AUTO_SAVE && ch.get_level() <= LVL_IMMORT as u8 {
-            game.send_to_char(chid, "Saving aliases.\r\n");
-            let ch = game.db.ch(chid);
+            game.send_to_char(db,chid, "Saving aliases.\r\n");
+            let ch = db.ch(chid);
             write_aliases(ch);
             return;
         }
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!("Saving {} and aliases.\r\n", ch.get_name()).as_str(),
         );
     }
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     write_aliases(ch);
-    game.save_char(chid);
-    crash_crashsave(&mut game.db, chid);
-    let ch = game.db.ch(chid);
-    if game.db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
-        let in_room =  game.db.get_room_vnum(ch.in_room());
-        house_crashsave(&mut game.db, in_room);
+    game.save_char(db,chid);
+    crash_crashsave( db, chid);
+    let ch = db.ch(chid);
+    if db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
+        let in_room =  db.get_room_vnum(ch.in_room());
+        house_crashsave(db, in_room);
     }
 }
 
 /* generic function for commands which are normally overridden by
 special procedures - i.e., shop commands, mail commands, etc. */
 pub fn do_not_here(
-    game: &mut Game,
+    game: &mut Game, db: &mut DB,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    game.send_to_char(chid, "Sorry, but you cannot do that here!\r\n");
+    game.send_to_char(db,chid, "Sorry, but you cannot do that here!\r\n");
 }
 
-pub fn do_sneak(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_sneak(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() || ch.get_skill(SKILL_SNEAK) == 0 {
-        game.send_to_char(chid, "You have no idea how to do that.\r\n");
+        game.send_to_char(db,chid, "You have no idea how to do that.\r\n");
         return;
     }
-    game.send_to_char(chid, "Okay, you'll try to move silently for a while.\r\n");
-    let ch = game.db.ch(chid);
+    game.send_to_char(db,chid, "Okay, you'll try to move silently for a while.\r\n");
+    let ch = db.ch(chid);
     if ch.aff_flagged(AFF_SNEAK) {
-        game.db.affect_from_char(chid, SKILL_SNEAK as i16);
+        db.affect_from_char(chid, SKILL_SNEAK as i16);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     if percent
         > (ch.get_skill(SKILL_SNEAK) as i16 + DEX_APP_SKILL[ch.get_dex() as usize].sneak) as u32
     {
@@ -175,18 +175,18 @@ pub fn do_sneak(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _s
         bitvector: AFF_SNEAK,
     };
 
-    game.db.affect_to_char(chid, af);
+    db.affect_to_char(chid, af);
 }
 
-pub fn do_hide(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_hide(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() || ch.get_skill(SKILL_HIDE) == 0 {
-        game.send_to_char(chid, "You have no idea how to do that.\r\n");
+        game.send_to_char(db,chid, "You have no idea how to do that.\r\n");
         return;
     }
 
-    game.send_to_char(chid, "You attempt to hide yourself.\r\n");
-    let ch = game.db.ch_mut(chid);
+    game.send_to_char(db,chid, "You attempt to hide yourself.\r\n");
+    let ch = db.ch_mut(chid);
     if ch.aff_flagged(AFF_HIDE) {
         ch.remove_aff_flags(AFF_HIDE);
     }
@@ -201,14 +201,14 @@ pub fn do_hide(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _su
     ch.set_aff_flags_bits(AFF_HIDE);
 }
 
-pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_steal(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() || ch.get_skill(SKILL_STEAL) == 0 {
-        game.send_to_char(chid, "You have no idea how to do that.\r\n");
+        game.send_to_char(db,chid, "You have no idea how to do that.\r\n");
         return;
     }
-    if game.db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-        game.send_to_char(
+    if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+        game.send_to_char(db,
             chid,
             "This room just has such a peaceful, easy feeling...\r\n",
         );
@@ -219,20 +219,20 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict_id;
     if {
-        vict_id = game.get_char_vis(chid, &mut vict_name, None, FIND_CHAR_ROOM);
+        vict_id = game.get_char_vis(db,chid, &mut vict_name, None, FIND_CHAR_ROOM);
         vict_id.is_none()
     } {
-        game.send_to_char(chid, "Steal what from who?\r\n");
+        game.send_to_char(db,chid, "Steal what from who?\r\n");
         return;
     } else if vict_id.unwrap() == chid 
     {
-        game.send_to_char(chid, "Come on now, that's rather stupid!\r\n");
+        game.send_to_char(db,chid, "Come on now, that's rather stupid!\r\n");
         return;
     }
     let mut ohoh = false;
 
     let vict_id = vict_id.unwrap();
-    let vict = game.db.ch(vict_id);
+    let vict = db.ch(vict_id);
     /* 101% is a complete failure */
     let mut percent =
         rand_number(1, 101) as i32 - DEX_APP_SKILL[ch.get_dex() as usize].p_pocket as i32;
@@ -254,8 +254,8 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     /* NO NO With Imp's and Shopkeepers, and if player thieving is not allowed */
     if vict.get_level() >= LVL_IMMORT as u8
         || pcsteal
-        || (game.db.get_mob_spec(vict).is_some()
-            && game.db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
+        || (db.get_mob_spec(vict).is_some()
+            && db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
     {
         percent = 101; /* Failure */
     }
@@ -263,23 +263,23 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     let mut the_eq_pos = -1;
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            oid = game.get_obj_in_list_vis(ch, &mut obj_name, None, &vict.carrying);
+            oid = game.get_obj_in_list_vis(db,ch, &mut obj_name, None, &vict.carrying);
             oid.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
                     && isname(
                         &obj_name,
-                        game.db.obj(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
+                        db.obj(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
                     )
-                    && game.can_see_obj(ch, game.db.obj(vict.get_eq(eq_pos).unwrap()))
+                    && game.can_see_obj(db,ch, db.obj(vict.get_eq(eq_pos).unwrap()))
                 {
                     oid = vict.get_eq(eq_pos);
                     the_eq_pos = eq_pos;
                 }
             }
             if oid.is_none() {
-                game.act(
+                game.act(db,
                     "$E hasn't got that item.",
                     false,
                     Some(chid),
@@ -291,11 +291,11 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             } else {
                 /* It is equipment */
                 if vict.get_pos() > POS_STUNNED {
-                    game.send_to_char(chid, "Steal the equipment now?  Impossible!\r\n");
+                    game.send_to_char(db,chid, "Steal the equipment now?  Impossible!\r\n");
                     return;
                 } else {
                     let oid = oid.unwrap();
-                    game.act(
+                    game.act(db,
                         "You unequip $p and steal it.",
                         false,
                         Some(chid),
@@ -303,7 +303,7 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                         None,
                         TO_CHAR,
                     );
-                    game.act(
+                    game.act(db,
                         "$n steals $p from $N.",
                         false,
                         Some(chid),
@@ -311,19 +311,19 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                         Some(VictimRef::Char(vict_id)),
                         TO_NOTVICT,
                     );
-                    let eqid = game.unequip_char(vict_id, the_eq_pos).unwrap();
-                    game.db.obj_to_char(eqid, chid);
+                    let eqid = game.unequip_char(db,vict_id, the_eq_pos).unwrap();
+                    db.obj_to_char(eqid, chid);
                 }
             }
         } else {
             /* obj found in inventory */
             let oid = oid.unwrap();
 
-            percent += game.db.obj(oid).get_obj_weight(); /* Make heavy harder */
+            percent += db.obj(oid).get_obj_weight(); /* Make heavy harder */
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
-                game.send_to_char(chid, "Oops..\r\n");
-                game.act(
+                game.send_to_char(db,chid, "Oops..\r\n");
+                game.act(db,
                     "$n tried to steal something from you!",
                     false,
                     Some(chid),
@@ -331,7 +331,7 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     Some(VictimRef::Char(vict_id)),
                     TO_VICT,
                 );
-                game.act(
+                game.act(db,
                     "$n tries to steal something from $N.",
                     true,
                     Some(chid),
@@ -342,13 +342,13 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             } else {
                 /* Steal the item */
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
-                    if ch.is_carrying_w() + game.db.obj(oid).get_obj_weight() < ch.can_carry_w() as i32 {
-                        game.db.obj_from_char(oid);
-                        game.db.obj_to_char(oid, chid);
-                        game.send_to_char(chid, "Got it!\r\n");
+                    if ch.is_carrying_w() + db.obj(oid).get_obj_weight() < ch.can_carry_w() as i32 {
+                        db.obj_from_char(oid);
+                        db.obj_to_char(oid, chid);
+                        game.send_to_char(db,chid, "Got it!\r\n");
                     }
                 } else {
-                    game.send_to_char(chid, "You cannot carry that much.\r\n");
+                    game.send_to_char(db,chid, "You cannot carry that much.\r\n");
                 }
             }
         }
@@ -356,8 +356,8 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         /* Steal some coins */
         if vict.awake() && percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
             ohoh = true;
-            game.send_to_char(chid, "Oops..\r\n");
-            game.act(
+            game.send_to_char(db,chid, "Oops..\r\n");
+            game.act(db,
                 "You discover that $n has $s hands in your wallet.",
                 false,
                 Some(chid),
@@ -365,7 +365,7 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 Some(VictimRef::Char(vict_id)),
                 TO_VICT,
             );
-            game.act(
+            game.act(db,
                 "$n tries to steal gold from $N.",
                 true,
                 Some(chid),
@@ -378,32 +378,32 @@ pub fn do_steal(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             let mut gold = vict.get_gold() * rand_number(1, 10) as i32 / 100;
             gold = min(1782, gold);
             if gold > 0 {
-                let ch = game.db.ch_mut(chid);
+                let ch = db.ch_mut(chid);
                 ch.set_gold(ch.get_gold() + gold);
-                let vict = game.db.ch_mut(vict_id);
+                let vict = db.ch_mut(vict_id);
                 vict.set_gold(vict.get_gold() - gold);
 
                 if gold > 1 {
-                    game.send_to_char(
+                    game.send_to_char(db,
                         chid,
                         format!("Bingo!  You got {} gold coins.\r\n", gold).as_str(),
                     );
                 } else {
-                    game.send_to_char(chid, "You manage to swipe a solitary gold coin.\r\n");
+                    game.send_to_char(db,chid, "You manage to swipe a solitary gold coin.\r\n");
                 }
             } else {
-                game.send_to_char(chid, "You couldn't get any gold...\r\n");
+                game.send_to_char(db,chid, "You couldn't get any gold...\r\n");
             }
         }
     }
-    let vict = game.db.ch(vict_id);
+    let vict = db.ch(vict_id);
     if ohoh && vict.is_npc() && vict.awake() {
-        game.hit(vict_id, chid, TYPE_UNDEFINED);
+        game.hit(db,vict_id, chid, TYPE_UNDEFINED);
     }
 }
 
-pub fn do_practice(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_practice(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() {
         return;
     }
@@ -411,43 +411,43 @@ pub fn do_practice(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, 
     one_argument(argument, &mut arg);
 
     if !arg.is_empty() {
-        game.send_to_char(chid, "You can only practice skills in your guild.\r\n");
+        game.send_to_char(db,chid, "You can only practice skills in your guild.\r\n");
     } else {
-        list_skills(game, chid);
+        list_skills(game, db, chid);
     }
 }
 
-pub fn do_visible(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_visible(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_vis(game, chid);
+        perform_immort_vis(game, db,chid);
         return;
     }
 
     if ch.aff_flagged(AFF_INVISIBLE) {
-        game.appear(chid);
-        game.send_to_char(chid, "You break the spell of invisibility.\r\n");
+        game.appear(db,chid);
+        game.send_to_char(db,chid, "You break the spell of invisibility.\r\n");
     } else {
-        game.send_to_char(chid, "You are already visible.\r\n");
+        game.send_to_char(db,chid, "You are already visible.\r\n");
     }
 }
 
-pub fn do_title(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_title(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut argument = argument.trim_start().to_string();
     delete_doubledollar(&mut argument);
 
     if ch.is_npc() {
-        game.send_to_char(chid, "Your title is fine... go away.\r\n");
+        game.send_to_char(db,chid, "Your title is fine... go away.\r\n");
     } else if ch.plr_flagged(PLR_NOTITLE) {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "You can't title yourself -- you shouldn't have abused it!\r\n",
         );
     } else if argument.contains('(') || argument.contains('(') {
-        game.send_to_char(chid, "Titles can't contain the ( or ) characters.\r\n");
+        game.send_to_char(db,chid, "Titles can't contain the ( or ) characters.\r\n");
     } else if argument.len() > MAX_TITLE_LENGTH {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!(
                 "Sorry, titles can't be longer than {} characters.\r\n",
@@ -456,28 +456,28 @@ pub fn do_title(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             .as_str(),
         );
     } else {
-        let ch = game.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.set_title(Some(argument.into()));
-        let ch = game.db.ch(chid);
+        let ch = db.ch(chid);
 
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!("Okay, you're now {} {}.\r\n", ch.get_name(), ch.get_title()).as_str(),
         );
     }
 }
 
-fn perform_group(game: &mut Game, chid: DepotId, vict_id: DepotId) -> i32 {
-    let ch = game.db.ch(chid);
-    let vict = game.db.ch(vict_id);
-    if vict.aff_flagged(AFF_GROUP) || !game.can_see(ch, vict) {
+fn perform_group(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId) -> i32 {
+    let ch = db.ch(chid);
+    let vict = db.ch(vict_id);
+    if vict.aff_flagged(AFF_GROUP) || !game.can_see(db,ch, vict) {
         return 0;
     }
-    let vict = game.db.ch_mut(vict_id);
+    let vict = db.ch_mut(vict_id);
     vict.set_aff_flags_bits(AFF_GROUP);
 
     if chid != vict_id {
-        game.act(
+        game.act(db,
             "$N is now a member of your group.",
             false,
             Some(chid),
@@ -486,7 +486,7 @@ fn perform_group(game: &mut Game, chid: DepotId, vict_id: DepotId) -> i32 {
             TO_CHAR,
         );
     }
-    game.act(
+    game.act(db,
         "You are now a member of $n's group.",
         false,
         Some(chid),
@@ -494,7 +494,7 @@ fn perform_group(game: &mut Game, chid: DepotId, vict_id: DepotId) -> i32 {
         Some(VictimRef::Char(vict_id)),
         TO_VICT,
     );
-    game.act(
+    game.act(db,
         "$N is now a member of $n's group.",
         false,
         Some(chid),
@@ -505,19 +505,19 @@ fn perform_group(game: &mut Game, chid: DepotId, vict_id: DepotId) -> i32 {
     return 1;
 }
 
-fn print_group(game: &mut Game, chid: DepotId) {
-    let ch = game.db.ch(chid);
+fn print_group(game: &mut Game, db: &mut DB, chid: DepotId) {
+    let ch = db.ch(chid);
     if !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(chid, "But you are not the member of a group!\r\n");
+        game.send_to_char(db,chid, "But you are not the member of a group!\r\n");
     } else {
-        game.send_to_char(chid, "Your group consists of:\r\n");
-        let ch = game.db.ch(chid);
+        game.send_to_char(db,chid, "Your group consists of:\r\n");
+        let ch = db.ch(chid);
         let k_id = if ch.master.is_some() {
             ch.master.unwrap()
         } else {
             chid
         };
-        let k = game.db.ch(k_id);
+        let k = db.ch(k_id);
 
         if k.aff_flagged(AFF_GROUP) {
             let buf = format!(
@@ -528,12 +528,12 @@ fn print_group(game: &mut Game, chid: DepotId) {
                 k.get_level(),
                 k.class_abbr()
             );
-            game.act(&buf, false, Some(chid), None, Some(VictimRef::Char(k_id)), TO_CHAR);
+            game.act(db,&buf, false, Some(chid), None, Some(VictimRef::Char(k_id)), TO_CHAR);
         }
-        let k = game.db.ch(k_id);
+        let k = db.ch(k_id);
         let list = k.followers.clone();
         for f in list {
-            let follower = game.db.ch(f.follower);
+            let follower = db.ch(f.follower);
             if !follower.aff_flagged(AFF_GROUP) {
                 continue;
             }
@@ -546,7 +546,7 @@ fn print_group(game: &mut Game, chid: DepotId) {
                 follower.get_level(),
                 follower.class_abbr()
             );
-            game.act(
+            game.act(db,
                 &buf,
                 false,
                 Some(chid),
@@ -558,19 +558,19 @@ fn print_group(game: &mut Game, chid: DepotId) {
     }
 }
 
-pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_group(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
 
     if buf.is_empty() {
-        print_group(game, chid);
+        print_group(game, db,chid);
         return;
     }
 
     if ch.master.is_some() {
-        game.act(
+        game.act(db,
             "You can not enroll group members without being head of a group.",
             false,
             Some(chid),
@@ -582,30 +582,30 @@ pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     }
 
     if buf == "all" {
-        perform_group(game, chid, chid);
+        perform_group(game, db,chid, chid);
         let mut found = 0;
-        let ch = game.db.ch(chid);
+        let ch = db.ch(chid);
         let list = ch.followers.clone();
         for f in list {
-            found += perform_group(game, chid, f.follower);
+            found += perform_group(game, db,chid, f.follower);
         }
         if found == 0 {
-            game.send_to_char(chid, "Everyone following you is already in your group.\r\n");
+            game.send_to_char(db,chid, "Everyone following you is already in your group.\r\n");
         }
         return;
     }
     let vict_id;
 
     if {
-        vict_id = game.get_char_vis(chid, &mut buf, None, FIND_CHAR_ROOM);
+        vict_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
         vict_id.is_none()
     } {
-        game.send_to_char(chid, NOPERSON);
-    } else if (game.db.ch(vict_id.unwrap()).master.is_none()
-        || game.db.ch(vict_id.unwrap()).master.unwrap() != chid)
+        game.send_to_char(db,chid, NOPERSON);
+    } else if (db.ch(vict_id.unwrap()).master.is_none()
+        || db.ch(vict_id.unwrap()).master.unwrap() != chid)
         && vict_id.unwrap() != chid
     {
-        game.act(
+        game.act(db,
             "$N must follow you to enter your group.",
             false,
             Some(chid),
@@ -615,13 +615,13 @@ pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         );
     } else {
         let vict_id = vict_id.unwrap();
-        let vict = game.db.ch(vict_id);
+        let vict = db.ch(vict_id);
 
         if !vict.aff_flagged(AFF_GROUP) {
-            perform_group(game, chid, vict_id);
+            perform_group(game, db,chid, vict_id);
         } else {
             if chid != vict_id {
-                game.act(
+                game.act(db,
                     "$N is no longer a member of your group.",
                     false,
                     Some(chid),
@@ -630,7 +630,7 @@ pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     TO_CHAR,
                 );
             }
-            game.act(
+            game.act(db,
                 "You have been kicked out of $n's group!",
                 false,
                 Some(chid),
@@ -638,7 +638,7 @@ pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 Some(VictimRef::Char(vict_id)),
                 TO_VICT,
             );
-            game.act(
+            game.act(db,
                 "$N has been kicked out of $n's group!",
                 false,
                 Some(chid),
@@ -646,30 +646,30 @@ pub fn do_group(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 Some(VictimRef::Char(vict_id)),
                 TO_NOTVICT,
             );
-            let vict = game.db.ch_mut(vict_id);
+            let vict = db.ch_mut(vict_id);
             vict.remove_prf_flags_bits(AFF_GROUP);
         }
     }
 }
 
-pub fn do_ungroup(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_ungroup(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
     if buf.is_empty() {
         if ch.master.is_some() || !ch.aff_flagged(AFF_GROUP) {
-            game.send_to_char(chid, "But you lead no group!\r\n");
+            game.send_to_char(db,chid, "But you lead no group!\r\n");
             return;
         }
 
         for f in ch.followers.clone() {
-            let follower = game.db.ch(f.follower);
+            let follower = db.ch(f.follower);
             if follower.aff_flagged(AFF_GROUP) {
-                let follower = game.db.ch_mut(f.follower);
+                let follower = db.ch_mut(f.follower);
                 follower.remove_aff_flags(AFF_GROUP);
 
-                game.act(
+                game.act(db,
                     "$N has disbanded the group.",
                     true,
                     Some(f.follower),
@@ -677,41 +677,41 @@ pub fn do_ungroup(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
                     Some(VictimRef::Char(chid)),
                     TO_CHAR,
                 );
-                let follower = game.db.ch(f.follower);
+                let follower = db.ch(f.follower);
                 if !follower.aff_flagged(AFF_CHARM) {
-                    game.stop_follower(f.follower);
+                    game.stop_follower(db, f.follower);
                 }
             }
         }
-        let ch = game.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.remove_aff_flags(AFF_GROUP);
 
-        game.send_to_char(chid, "You disband the group.\r\n");
+        game.send_to_char(db,chid, "You disband the group.\r\n");
         return;
     }
     let tchid;
     if {
-        tchid = game.get_char_vis(chid, &mut buf, None, FIND_CHAR_ROOM);
+        tchid = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
         tchid.is_none()
     } {
-        game.send_to_char(chid, "There is no such person!\r\n");
+        game.send_to_char(db,chid, "There is no such person!\r\n");
         return;
     }
     let tchid = tchid.unwrap();
-    let tch = game.db.ch(tchid);
+    let tch = db.ch(tchid);
     if tch.master.is_none() || tch.master.unwrap() != chid {
-        game.send_to_char(chid, "That person is not following you!\r\n");
+        game.send_to_char(db,chid, "That person is not following you!\r\n");
         return;
     }
 
     if !tch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(chid, "That person isn't in your group.\r\n");
+        game.send_to_char(db,chid, "That person isn't in your group.\r\n");
         return;
     }
-    let tch = game.db.ch_mut(tchid);
+    let tch = db.ch_mut(tchid);
     tch.remove_aff_flags(AFF_GROUP);
 
-    game.act(
+    game.act(db,
         "$N is no longer a member of your group.",
         false,
         Some(chid),
@@ -719,7 +719,7 @@ pub fn do_ungroup(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         Some(VictimRef::Char(tchid)),
         TO_CHAR,
     );
-    game.act(
+    game.act(db,
         "You have been kicked out of $n's group!",
         false,
         Some(chid),
@@ -727,7 +727,7 @@ pub fn do_ungroup(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         Some(VictimRef::Char(tchid)),
         TO_VICT,
     );
-    game.act(
+    game.act(db,
         "$N has been kicked out of $n's group!",
         false,
         Some(chid),
@@ -735,16 +735,16 @@ pub fn do_ungroup(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         Some(VictimRef::Char(tchid)),
         TO_NOTVICT,
     );
-    let tch = game.db.ch(tchid);
+    let tch = db.ch(tchid);
     if !tch.aff_flagged(AFF_CHARM) {
-        game.stop_follower(tchid);
+        game.stop_follower(db, tchid);
     }
 }
 
-pub fn do_report(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_report(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(chid, "But you are not a member of any group!\r\n");
+        game.send_to_char(db,chid, "But you are not a member of any group!\r\n");
         return;
     }
 
@@ -763,23 +763,23 @@ pub fn do_report(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, _
     } else {
         chid
     };
-let k = game.db.ch(k_id);
+let k = db.ch(k_id);
 let list = k.followers.clone();
     for f in list {
-        let follower = game.db.ch(f.follower);
+        let follower = db.ch(f.follower);
         if follower.aff_flagged(AFF_GROUP) && f.follower != chid {
-            game.act(&buf, true, Some(chid), None, Some(VictimRef::Char(f.follower)), TO_VICT);
+            game.act(db,&buf, true, Some(chid), None, Some(VictimRef::Char(f.follower)), TO_VICT);
         }
     }
     if k_id != chid {
-        game.act(&buf, true, Some(chid), None, Some(VictimRef::Char(k_id)), TO_VICT);
+        game.act(db,&buf, true, Some(chid), None, Some(VictimRef::Char(k_id)), TO_VICT);
     }
 
-    game.send_to_char(chid, "You report to the group.\r\n");
+    game.send_to_char(db,chid, "You report to the group.\r\n");
 }
 
-pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_split(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() {
         return;
     }
@@ -789,11 +789,11 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     if is_number(&buf) {
         amount = buf.parse::<i32>().unwrap();
         if amount <= 0 {
-            game.send_to_char(chid, "Sorry, you can't do that.\r\n");
+            game.send_to_char(db,chid, "Sorry, you can't do that.\r\n");
             return;
         }
         if amount > ch.get_gold() {
-            game.send_to_char(chid, "You don't seem to have that much gold to split.\r\n");
+            game.send_to_char(db,chid, "You don't seem to have that much gold to split.\r\n");
             return;
         }
         let k_id = if ch.master.is_some() {
@@ -801,7 +801,7 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         } else {
             chid
         };
-        let k = game.db.ch(k_id);
+        let k = db.ch(k_id);
         let mut num;
         if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
             num = 1;
@@ -811,7 +811,7 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 
         let list = k.followers.clone();
         for f in list {
-            let follower = game.db.ch(f.follower);
+            let follower = db.ch(f.follower);
             if follower.aff_flagged(AFF_GROUP)
                 && !follower.is_npc()
                 && follower.in_room() == ch.in_room()
@@ -825,10 +825,10 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             share = amount / num;
             rest = amount % num;
         } else {
-            game.send_to_char(chid, "With whom do you wish to share your gold?\r\n");
+            game.send_to_char(db,chid, "With whom do you wish to share your gold?\r\n");
             return;
         }
-        let ch = game.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.set_gold(ch.get_gold() - share * (num - 1));
 
         /* Abusing signed/unsigned to make sizeof work. */
@@ -850,34 +850,34 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 .as_str(),
             );
         }
-        let k = game.db.ch(k_id);
-        let ch = game.db.ch(chid);
+        let k = db.ch(k_id);
+        let ch = db.ch(chid);
         if k.aff_flagged(AFF_GROUP)
             && k.in_room() == ch.in_room()
             && !k.is_npc()
             && k_id != chid
         {
-            let k = game.db.ch_mut(k_id);
+            let k = db.ch_mut(k_id);
             k.set_gold(k.get_gold() + share);
-            game.send_to_char(k_id, &buf);
+            game.send_to_char(db,k_id, &buf);
         }
-        let k = game.db.ch(k_id);
+        let k = db.ch(k_id);
         let list = k.followers.clone();
         for f in list {
-            let follower = game.db.ch(f.follower);
-            let ch = game.db.ch(chid);
+            let follower = db.ch(f.follower);
+            let ch = db.ch(chid);
             if follower.aff_flagged(AFF_GROUP)
                 && !follower.is_npc()
                 && follower.in_room() == ch.in_room()
                 && f.follower != chid
             {
-                let follower = game.db.ch_mut(f.follower);
+                let follower = db.ch_mut(f.follower);
                 follower.set_gold(follower.get_gold() + share);
 
-                game.send_to_char(f.follower, &buf);
+                game.send_to_char(db,f.follower, &buf);
             }
         }
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!(
                 "You split {} coins among {} members -- {} coins each.\r\n",
@@ -887,7 +887,7 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
         );
 
         if rest != 0 {
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 format!(
                     "{} coin{} {} not splitable, so you keep the money.\r\n",
@@ -897,11 +897,11 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                 )
                 .as_str(),
             );
-            let ch = game.db.ch_mut(chid);
+            let ch = db.ch_mut(chid);
             ch.set_gold(ch.get_gold() + rest);
         }
     } else {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "How many coins do you wish to split with your group?\r\n",
         );
@@ -909,15 +909,15 @@ pub fn do_split(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
     }
 }
 
-pub fn do_use(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_use(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
+    let ch = db.ch(chid);
     let mut buf = String::new();
     let mut arg = String::new();
     let mut argument = argument.to_string();
 
     half_chop(&mut argument, &mut arg, &mut buf);
     if arg.is_empty() {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             format!("What do you want to {}?\r\n", CMD_INFO[cmd].command).as_str(),
         );
@@ -925,14 +925,14 @@ pub fn do_use(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd
     }
     let mut mag_item = ch.get_eq(WEAR_HOLD as i8);
 
-    if mag_item.is_none() || !isname(&arg, game.db.obj(mag_item.unwrap()).name.as_ref()) {
+    if mag_item.is_none() || !isname(&arg, db.obj(mag_item.unwrap()).name.as_ref()) {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 if {
-                    mag_item = game.get_obj_in_list_vis(ch, &arg, None, &ch.carrying);
+                    mag_item = game.get_obj_in_list_vis(db,ch, &arg, None, &ch.carrying);
                     mag_item.is_none()
                 } {
-                    game.send_to_char(
+                    game.send_to_char(db,
                         chid,
                         format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                     );
@@ -940,7 +940,7 @@ pub fn do_use(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd
                 }
             }
             SCMD_USE => {
-                game.send_to_char(
+                game.send_to_char(db,
                     chid,
                     format!("You don't seem to be holding {} {}.\r\n", an!(arg), arg).as_str(),
                 );
@@ -955,31 +955,31 @@ pub fn do_use(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd
     let mag_item = mag_item.unwrap();
     match subcmd {
         SCMD_QUAFF => {
-            if game.db.obj(mag_item).get_obj_type() != ITEM_POTION {
-                game.send_to_char(chid, "You can only quaff potions.\r\n");
+            if db.obj(mag_item).get_obj_type() != ITEM_POTION {
+                game.send_to_char(db,chid, "You can only quaff potions.\r\n");
                 return;
             }
         }
         SCMD_RECITE => {
-            if game.db.obj(mag_item).get_obj_type() != ITEM_SCROLL {
-                game.send_to_char(chid, "You can only recite scrolls.\r\n");
+            if db.obj(mag_item).get_obj_type() != ITEM_SCROLL {
+                game.send_to_char(db,chid, "You can only recite scrolls.\r\n");
                 return;
             }
         }
         SCMD_USE => {
-            if game.db.obj(mag_item).get_obj_type() != ITEM_WAND && game.db.obj(mag_item).get_obj_type() != ITEM_STAFF {
-                game.send_to_char(chid, "You can't seem to figure out how to use it.\r\n");
+            if db.obj(mag_item).get_obj_type() != ITEM_WAND && db.obj(mag_item).get_obj_type() != ITEM_STAFF {
+                game.send_to_char(db,chid, "You can't seem to figure out how to use it.\r\n");
                 return;
             }
         }
         _ => {}
     }
 
-    mag_objectmagic(game, chid, mag_item, &buf);
+    mag_objectmagic(game,db, chid, mag_item, &buf);
 }
 
-pub fn do_wimpy(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_wimpy(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     let mut arg = String::new();
 
     /* 'wimp_level' is a player_special. -gg 2/25/98 */
@@ -991,7 +991,7 @@ pub fn do_wimpy(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
 
     if arg.is_empty() {
         if ch.get_wimp_lev() != 0 {
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 format!(
                     "Your current wimp level is {} hit points.\r\n",
@@ -1001,7 +1001,7 @@ pub fn do_wimpy(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             );
             return;
         } else {
-            game.send_to_char(chid, "At the moment, you're not a wimp.  (sure, sure...)\r\n");
+            game.send_to_char(db,chid, "At the moment, you're not a wimp.  (sure, sure...)\r\n");
             return;
         }
     }
@@ -1012,16 +1012,16 @@ pub fn do_wimpy(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
             wimp_lev != 0
         } {
             if wimp_lev < 0 {
-                game.send_to_char(chid, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
+                game.send_to_char(db,chid, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
             } else if wimp_lev > ch.get_max_hit() as i32 {
-                game.send_to_char(chid, "That doesn't make much sense, now does it?\r\n");
+                game.send_to_char(db,chid, "That doesn't make much sense, now does it?\r\n");
             } else if wimp_lev > (ch.get_max_hit() / 2) as i32 {
-                game.send_to_char(
+                game.send_to_char(db,
                     chid,
                     "You can't set your wimp level above half your hit points.\r\n",
                 );
             } else {
-                game.send_to_char(
+                game.send_to_char(db,
                     chid,
                     format!(
                         "Okay, you'll wimp out if you drop below {} hit points.\r\n",
@@ -1029,35 +1029,35 @@ pub fn do_wimpy(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _su
                     )
                     .as_str(),
                 );
-                let ch = game.db.ch_mut(chid);
+                let ch = db.ch_mut(chid);
                 ch.set_wimp_lev(wimp_lev);
             }
         } else {
-            game.send_to_char(
+            game.send_to_char(db,
                 chid,
                 "Okay, you'll now tough out fights to the bitter end.\r\n",
             );
-            let ch = game.db.ch_mut(chid);
+            let ch = db.ch_mut(chid);
             ch.set_wimp_lev(0);
         }
     } else {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "Specify at how many hit points you want to wimp out at.  (0 to disable)\r\n",
         );
     }
 }
 
-pub fn do_display(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_display(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = db.ch(chid);
     if ch.is_npc() {
-        game.send_to_char(chid, "Monsters don't need displays.  Go away.\r\n");
+        game.send_to_char(db,chid, "Monsters don't need displays.  Go away.\r\n");
         return;
     }
     let argument = argument.trim_start();
 
     if argument.len() == 0 {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
         );
@@ -1065,10 +1065,10 @@ pub fn do_display(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
     }
 
     if argument == "auto" {
-        let ch = game.db.ch_mut(chid);
+        let ch = db.ch_mut(chid);
         ch.toggle_prf_flag_bits(PRF_DISPAUTO);
-        let ch = game.db.ch(chid);
-        game.send_to_char(
+        let ch = db.ch(chid);
+        game.send_to_char(db,
             chid,
             format!(
                 "Auto prompt {}abled.\r\n",
@@ -1083,7 +1083,7 @@ pub fn do_display(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         return;
     }
 
-    let ch = game.db.ch_mut(chid);
+    let ch = db.ch_mut(chid);
     if argument == "on" || argument == "all" {
         ch.set_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
     } else if argument == "off" || argument == "none" {
@@ -1103,7 +1103,7 @@ pub fn do_display(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
                     ch.set_prf_flags_bits(PRF_DISPMOVE);
                 }
                 _ => {
-                    game.send_to_char(
+                    game.send_to_char(db,
                         chid,
                         "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
                     );
@@ -1113,11 +1113,11 @@ pub fn do_display(game: &mut Game, chid: DepotId, argument: &str, _cmd: usize, _
         }
     }
 
-    game.send_to_char(chid, OK);
+    game.send_to_char(db,chid, OK);
 }
 
-pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_gen_write(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
+    let ch = db.ch(chid);
     let filename;
     match subcmd {
         SCMD_BUG => {
@@ -1137,7 +1137,7 @@ pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, 
     let dt = Utc::now();
 
     if ch.is_npc() {
-        game.send_to_char(chid, "Monsters can't have ideas - Go away.\r\n");
+        game.send_to_char(db,chid, "Monsters can't have ideas - Go away.\r\n");
         return;
     }
 
@@ -1145,10 +1145,10 @@ pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, 
     delete_doubledollar(&mut argument);
 
     if argument.is_empty() {
-        game.send_to_char(chid, "That must be a mistake...\r\n");
+        game.send_to_char(db,chid, "That must be a mistake...\r\n");
         return;
     }
-    game.mudlog(
+    game.mudlog(db,
         CMP,
         LVL_IMMORT as i32,
         false,
@@ -1173,7 +1173,7 @@ pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, 
     let fm = r.unwrap();
 
     if fm.len() >= MAX_FILESIZE as u64 {
-        game.send_to_char(
+        game.send_to_char(db,
             chid,
             "Sorry, the file is full right now.. try again later.\r\n",
         );
@@ -1186,15 +1186,15 @@ pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, 
             filename,
             fl.err().unwrap()
         );
-        game.send_to_char(chid, "Could not open the file.  Sorry.\r\n");
+        game.send_to_char(db,chid, "Could not open the file.  Sorry.\r\n");
         return;
     }
-    let ch = game.db.ch(chid);
+    let ch = db.ch(chid);
     let buf = format!(
         "{:8} ({:6}) [{:5}] {}\n",
         ch.get_name(),
         dt,
-        game.db.get_room_vnum(ch.in_room()),
+        db.get_room_vnum(ch.in_room()),
         argument
     );
     let r = fl.unwrap().write_all(buf.as_ref());
@@ -1204,11 +1204,11 @@ pub fn do_gen_write(game: &mut Game, chid: DepotId, argument: &str, cmd: usize, 
             filename,
             r.err().unwrap()
         );
-        game.send_to_char(chid, "Could not write to the file.  Sorry.\r\n");
+        game.send_to_char(db,chid, "Could not write to the file.  Sorry.\r\n");
         return;
     }
 
-    game.send_to_char(chid, "Okay.  Thanks!\r\n");
+    game.send_to_char(db,chid, "Okay.  Thanks!\r\n");
 }
 
 const TOG_ON: usize = 1;
@@ -1220,8 +1220,8 @@ macro_rules! prf_tog_chk {
     };
 }
 
-pub fn do_gen_tog(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
-    let ch = game.db.ch(chid);
+pub fn do_gen_tog(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = db.ch(chid);
     const TOG_MESSAGES: [[&str; 2]; 17] = [
         [
             "You are now safe from summoning by other players.\r\n",
@@ -1282,7 +1282,7 @@ pub fn do_gen_tog(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, 
         return;
     }
     let result;
-    let ch = game.db.ch_mut(chid);
+    let ch = db.ch_mut(chid);
     match subcmd {
         SCMD_NOSUMMON => {
             result = prf_tog_chk!(ch, PRF_SUMMONABLE);
@@ -1352,9 +1352,9 @@ pub fn do_gen_tog(game: &mut Game, chid: DepotId, _argument: &str, _cmd: usize, 
     }
 
     if result {
-        game.send_to_char(chid, TOG_MESSAGES[subcmd as usize][TOG_ON]);
+        game.send_to_char(db,chid, TOG_MESSAGES[subcmd as usize][TOG_ON]);
     } else {
-        game.send_to_char(chid, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
+        game.send_to_char(db,chid, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
     }
 
     return;
