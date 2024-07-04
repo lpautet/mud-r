@@ -370,7 +370,7 @@ fn board_write_message(
     game.act(db,
         "$n starts to write a message.",
         true,
-        Some(chid),
+        Some(ch),
         None,
         None,
         TO_ROOM,
@@ -415,7 +415,7 @@ fn board_show_board(
         game.send_to_char(ch, "You try but fail to understand the holy words.\r\n");
         return true;
     }
-    game.act(db,"$n studies the board.", true, Some(chid), None, None, TO_ROOM);
+    game.act(db,"$n studies the board.", true, Some(ch), None, None, TO_ROOM);
 
     if db.boards.num_of_msgs[board_type] == 0 {
         game.send_to_char(ch, "This is a bulletin board.  Usage: READ/REMOVE <messg #>, WRITE <header>.\r\nThe board is empty.\r\n");
@@ -649,7 +649,7 @@ fn board_remove_msg(
     let ch = db.ch(chid);
     game.send_to_char(ch, "Message removed.\r\n");
     let buf = format!("$n just removed message {}.", msg);
-    game.act(db,&buf, false, Some(chid), None, None, TO_ROOM);
+    game.act(db,&buf, false, Some(ch), None, None, TO_ROOM);
     board_save_board(&mut db.boards, board_type);
 
     return true;

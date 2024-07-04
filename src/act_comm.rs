@@ -46,7 +46,7 @@ pub fn do_say(
         game.send_to_char(ch, "Yes, but WHAT do you want to say?\r\n");
     } else {
         let buf = format!("$n says, '{}'", argument);
-        game.act(db, &buf, false, Some(chid), None, None, TO_ROOM);
+        game.act(db, &buf, false, Some(ch), None, None, TO_ROOM);
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(ch, OK);
         } else {
@@ -89,23 +89,24 @@ pub fn do_gsay(
                 db,
                 &buf,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(k_id)),
+                Some(VictimRef::Char(k)),
                 TO_VICT | TO_SLEEP,
             );
         }
         let k = db.ch(k_id);
         let followers_ids = k.followers.iter().map(|f| f.follower);
         for f_id in followers_ids {
-            if db.ch(f_id).aff_flagged(AFF_GROUP) && f_id != chid {
+            let f = db.ch(f_id);
+            if f.aff_flagged(AFF_GROUP) && f_id != chid {
                 game.act(
                     db,
                     &buf,
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(f_id)),
+                    Some(VictimRef::Char(f)),
                     TO_VICT | TO_SLEEP,
                 );
             }
@@ -130,9 +131,9 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
         db,
         &buf,
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(vict_id)),
+        Some(VictimRef::Char(vict)),
         TO_VICT | TO_SLEEP,
     );
     game.send_to_char(vict, CCNRM!(vict, C_NRM));
@@ -146,9 +147,9 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
             db,
             &buf,
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
         game.send_to_char(ch, CCNRM!(ch, C_NRM));
@@ -178,9 +179,9 @@ fn is_tell_ok(game: &mut Game, db: &DB, chid: DepotId, vict_id: DepotId) -> bool
             db,
             "$E's linkless at the moment.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else if vict.plr_flagged(PLR_WRITING) {
@@ -188,9 +189,9 @@ fn is_tell_ok(game: &mut Game, db: &DB, chid: DepotId, vict_id: DepotId) -> bool
             db,
             "$E's writing a message right now; try again later.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
@@ -200,9 +201,9 @@ fn is_tell_ok(game: &mut Game, db: &DB, chid: DepotId, vict_id: DepotId) -> bool
             db,
             "$E can't hear you.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
     } else {
@@ -350,15 +351,15 @@ pub fn do_spec_comm(
         );
     } else {
         let vict_id = vict_id.unwrap();
-
+        let vict = db.ch(vict_id);
         let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
         game.act(
             db,
             &buf1,
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_VICT,
         );
 
@@ -380,9 +381,9 @@ pub fn do_spec_comm(
             db,
             action_others,
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_NOTVICT,
         );
     }
@@ -475,31 +476,33 @@ pub fn do_write(
             pen = ch.get_eq(WEAR_HOLD as i8);
         }
     }
-    let pen = pen.unwrap();
-    let paper = paper.unwrap();
+    let pen_id = pen.unwrap();
+    let pen = db.obj(pen_id);
+    let paper_id = paper.unwrap();
+    let paper = db.obj(paper_id);
 
     /* ok.. now let's see what kind of stuff we've found */
-    if db.obj(pen).get_obj_type() != ITEM_PEN {
+    if db.obj(pen_id).get_obj_type() != ITEM_PEN {
         game.act(
             db,
             "$p is no good for writing with.",
             false,
-            Some(chid),
+            Some(ch),
             Some(pen),
             None,
             TO_CHAR,
         );
-    } else if db.obj(paper).get_obj_type() != ITEM_NOTE {
+    } else if db.obj(paper_id).get_obj_type() != ITEM_NOTE {
         game.act(
             db,
             "You can't write on $p.",
             false,
-            Some(chid),
+            Some(ch),
             Some(paper),
             None,
             TO_CHAR,
         );
-    } else if !db.obj(paper).action_description.borrow().is_empty() {
+    } else if !db.obj(paper_id).action_description.borrow().is_empty() {
         game.send_to_char(ch, "There's something written on it already.\r\n");
     } else {
         /* we can write - hooray! */
@@ -508,7 +511,7 @@ pub fn do_write(
             db,
             "$n begins to jot down a note.",
             true,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -519,7 +522,7 @@ pub fn do_write(
             game,
             db,
             desc_id,
-            db.obj(paper).action_description.clone(),
+            db.obj(paper_id).action_description.clone(),
             MAX_NOTE_LENGTH as usize,
             0,
         );
@@ -553,13 +556,14 @@ pub fn do_page(
                     if game.desc(d_id).state() == ConPlaying && game.desc(d_id).character.is_some()
                     {
                         let vict_id = game.desc(d_id).character.unwrap();
+                        let vict = db.ch(vict_id);
                         game.act(
                             db,
                             &buf,
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(VictimRef::Char(vict)),
                             TO_VICT,
                         );
                     } else {
@@ -575,14 +579,14 @@ pub fn do_page(
             vict_id.is_some()
         } {
             let vict_id = vict_id.unwrap();
-
+let vict = db.ch(vict_id);
             game.act(
                 db,
                 &buf,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
             if ch.prf_flagged(PRF_NOREPEAT) {
@@ -592,9 +596,9 @@ pub fn do_page(
                     db,
                     &buf,
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_CHAR,
                 );
             }
@@ -766,9 +770,9 @@ pub fn do_gen_comm(
                 db,
                 &buf1,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(ic_id)),
+                Some(VictimRef::Char(ic)),
                 TO_VICT | TO_SLEEP,
             );
             if COLOR_LEV!(ic) >= C_NRM {
@@ -815,7 +819,7 @@ pub fn do_qcomm(
                 db,
                 &buf,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 Some(VictimRef::Str(Rc::from(argument.to_string()))),
                 TO_CHAR,
@@ -825,7 +829,7 @@ pub fn do_qcomm(
                 db,
                 argument,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 Some(VictimRef::Str(Rc::from(argument.to_string()))),
                 TO_CHAR,
@@ -847,13 +851,14 @@ pub fn do_qcomm(
                     .prf_flagged(PRF_QUEST)
             {
                 let vict_id = game.descriptor_list.get(id).character.unwrap();
+                let vict = db.ch(vict_id);
                 game.act(
                     db,
                     &buf,
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_VICT | TO_SLEEP,
                 );
             }

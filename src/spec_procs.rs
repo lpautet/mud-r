@@ -197,7 +197,8 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
     let ch = db.ch(chid);
 
     let list = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for k in list {
+    for k_id in list {
+        let k = db.obj(k_id);
         game.act(db,
             "$p vanishes in a puff of smoke!",
             false,
@@ -206,7 +207,7 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
             None,
             TO_ROOM,
         );
-        game.extract_obj(db,k);
+        game.extract_obj(db,k_id);
     }
 
     if !cmd_is(cmd, "drop") {
@@ -217,7 +218,8 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
     let mut value = 0;
     let ch = db.ch(chid);
     let list = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for k in list {
+    for k_id in list {
+        let k = db.obj(k_id);
         game.act(db,
             "$p vanishes in a puff of smoke!",
             false,
@@ -226,8 +228,8 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
             None,
             TO_ROOM,
         );
-        value += max(1, min(50, db.obj(k).get_obj_cost() / 10));
-        game.extract_obj(db,k);
+        value += max(1, min(50, k.get_obj_cost() / 10));
+        game.extract_obj(db,k_id);
     }
     let ch = db.ch(chid);
     if value != 0 {
@@ -235,7 +237,7 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
         game.act(db,
             "$n has been awarded for being a good citizen.",
             true,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -308,10 +310,11 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
         'W' => {
             let ch = db.ch_mut(chid);
             ch.set_pos(POS_STANDING);
+            let ch = db.ch(chid);
             game.act(db,
                 "$n awakens and groans loudly.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -321,10 +324,11 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
         'S' => {
             let ch = db.ch_mut(chid);
             ch.set_pos(POS_SLEEPING);
+            let ch = db.ch(chid);
             game.act(db,
                 "$n lies down and instantly falls asleep.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -335,19 +339,19 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
             game.act(db,
                 "$n says 'Hello Honey!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
             );
-            game.act(db,"$n smirks.", false, Some(chid), None, None, TO_ROOM);
+            game.act(db,"$n smirks.", false, Some(ch), None, None, TO_ROOM);
         }
 
         'b' => {
             game.act(db,
                 "$n says 'What a view!  I must get something done about that dump!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -358,7 +362,7 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
             game.act(db,
                 "$n says 'Vandals!  Youngsters nowadays have no respect for anything!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -369,7 +373,7 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
             game.act(db,
                 "$n says 'Good day, citizens!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -380,7 +384,7 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
             game.act(db,
                 "$n says 'I hereby declare the bazaar open!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -391,7 +395,7 @@ pub fn mayor(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
             game.act(db,
                 "$n says 'I hereby declare Midgaard closed!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -441,17 +445,17 @@ fn npc_steal(game: &mut Game, db: &mut DB, chid: DepotId, victim_id: DepotId) {
         game.act(db,
             "You discover that $n has $s hands in your wallet.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(victim_id)),
+            Some(VictimRef::Char(victim)),
             TO_VICT,
         );
         game.act(db,
             "$n tries to steal gold from $N.",
             true,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(victim_id)),
+            Some(VictimRef::Char(victim)),
             TO_NOTVICT,
         );
     } else {
@@ -481,24 +485,23 @@ pub fn snake(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
     {
         return false;
     }
+    let fighting = db.ch(ch.fighting_id().unwrap());
     game.act(db,
         "$n bites $N!",
         true,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(ch.fighting_id().unwrap())),
+        Some(VictimRef::Char(fighting)),
         TO_NOTVICT,
     );
-    let ch = db.ch(chid);
     game.act(db,
         "$n bites you!",
         true,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(ch.fighting_id().unwrap())),
+        Some(VictimRef::Char(fighting)),
         TO_VICT,
     );
-    let ch = db.ch(chid);
     call_magic(
         game,db,
         chid,
@@ -660,7 +663,7 @@ pub fn guild_guard(
             continue;
         }
         game.send_to_char(ch, buf);
-        game.act(db,buf2, false, Some(chid), None, None, TO_ROOM);
+        game.act(db,buf2, false, Some(ch), None, None, TO_ROOM);
 
         return true;
     }
@@ -710,7 +713,7 @@ pub fn fido(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, _
         game.act(db,
             "$n savagely devours a corpse.",
             false,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -749,7 +752,7 @@ pub fn janitor(
         game.act(db,
             "$n picks up some trash.",
             false,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -790,7 +793,7 @@ pub fn cityguard(
             game.act(db,
                 "$n screams 'HEY!!!  You're one of those PLAYER KILLERS!!!!!!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -803,7 +806,7 @@ pub fn cityguard(
             game.act(db,
                 "$n screams 'HEY!!!  You're one of those PLAYER THIEVES!!!!!!'",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -836,7 +839,7 @@ pub fn cityguard(
         game.act(db,
             "$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'",
             false,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -942,12 +945,13 @@ pub fn pet_shops(
         pet.set_is_carrying_n(100);
         let ch = db.ch(chid);
         game.send_to_char(ch, "May you enjoy your pet.\r\n");
+        let pet = db.ch(pet_id);
         game.act(db,
             "$n buys $N as a pet.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(pet_id)),
+            Some(VictimRef::Char(pet)),
             TO_ROOM,
         );
 
@@ -989,10 +993,11 @@ pub fn bank(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
         ch.set_gold(ch.get_gold() - amount);
         ch.set_bank_gold(ch.get_bank_gold() + amount);
         game.send_to_char(ch, format!("You deposit {} coins.\r\n", amount).as_str());
+        let ch = db.ch(chid);
         game.act(db,
             "$n makes a bank transaction.",
             true,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -1012,11 +1017,12 @@ pub fn bank(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
         let ch = db.ch_mut(chid);
         ch.set_gold(ch.get_gold() + amount);
         ch.set_bank_gold(ch.get_bank_gold() - amount);
+        let ch = db.ch(chid);
         game.send_to_char(ch, format!("You withdraw {} coins.\r\n", amount).as_str());
         game.act(db,
             "$n makes a bank transaction.",
             true,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,

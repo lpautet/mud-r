@@ -89,7 +89,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
         game.act(db,
             &action_others_no_arg,
             action_hide,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -107,7 +107,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
         game.act(db,
             &action_others_auto,
             action_hide,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
@@ -119,34 +119,34 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
             game.act(db,
                 "$N is not in a proper position for that.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
         } else {
             game.act(db,
                 &action_char_found,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
             game.act(db,
                 &action_others_found,
                 action_hide,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
             game.act(db,
                 &action_vict_found,
                 action_hide,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
         }
@@ -182,18 +182,18 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                                 game.act(db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
-                                    Some(chid),
+                                    Some(ch),
                                     None,
-                                    Some(VictimRef::Char(victim_id)),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             } else {
                                 game.act(db,
                                     "$n says that women can't fight.",
                                     false,
-                                    Some(chid),
+                                    Some(ch),
                                     None,
-                                    Some(VictimRef::Char(victim_id)),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             }
@@ -204,14 +204,14 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                                 game.act(db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,
-                                    Some(chid),
+                                    Some(ch),
                                     None,
-                                    Some(VictimRef::Char(victim_id)),
+                                    Some(VictimRef::Char(victim)),
                                     TO_VICT,
                                 );
                             } else {
                                 game.act(db,"$n tells you that you'd lose a beauty contest against a troll.",
-                                       false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_VICT);
+                                       false, Some(ch), None, Some(VictimRef::Char(victim)), TO_VICT);
                             }
                         }
                     }
@@ -219,9 +219,9 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                         game.act(db,
                             "$n calls your mother a bitch!",
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
-                            Some(VictimRef::Char(victim_id)),
+                            Some(VictimRef::Char(victim)),
                             TO_VICT,
                         );
                     }
@@ -229,9 +229,9 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                         game.act(db,
                             "$n tells you to get lost!",
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
-                            Some(VictimRef::Char(victim_id)),
+                            Some(VictimRef::Char(victim)),
                             TO_VICT,
                         );
                     }
@@ -240,9 +240,9 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                 game.act(db,
                     "$n insults $N.",
                     true,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(victim_id)),
+                    Some(VictimRef::Char(victim)),
                     TO_NOTVICT,
                 );
             } else {

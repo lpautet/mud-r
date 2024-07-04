@@ -241,9 +241,9 @@ fn look_at_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
             db,
             "You see nothing special about $m.",
             false,
-            Some(i_id),
+            Some(i),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -263,9 +263,9 @@ fn look_at_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
             db,
             "$n is using:",
             false,
-            Some(i_id),
+            Some(i),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         for j in 0..NUM_WEARS {
@@ -281,9 +281,9 @@ fn look_at_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
             db,
             "\r\nYou attempt to peek at $s inventory:",
             false,
-            Some(i_id),
+            Some(i),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         let list = i.carrying.clone();
@@ -340,9 +340,9 @@ fn list_one_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
                 db,
                 "...$e glows with a bright light!",
                 false,
-                Some(i_id),
+                Some(i),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -351,9 +351,9 @@ fn list_one_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
                 db,
                 "...$e is groping around blindly!",
                 false,
-                Some(i_id),
+                Some(i),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -427,9 +427,9 @@ fn list_one_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
             db,
             "...$e glows with a bright light!",
             false,
-            Some(i_id),
+            Some(i),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -797,14 +797,15 @@ fn look_at_target(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
         look_at_char(game, db, found_char_id, chid);
         if chid != found_char_id {
             let ch = db.ch(chid);
+            let found_char = db.ch(found_char_id);
             if game.can_see(db, db.ch(found_char_id), ch) {
                 game.act(
                     db,
                     "$n looks at you.",
                     true,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(found_char_id)),
+                    Some(VictimRef::Char(found_char)),
                     TO_VICT,
                 );
             }
@@ -812,9 +813,9 @@ fn look_at_target(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
                 db,
                 "$n looks at $N.",
                 true,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(found_char_id)),
+                Some(VictimRef::Char(found_char)),
                 TO_NOTVICT,
             );
         }

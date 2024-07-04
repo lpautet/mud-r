@@ -106,43 +106,43 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
         }
     }
 
+    let desc = game.desc_mut(d_id);
     if terminator {
-        if game.desc_mut(d_id).state() == ConPlaying
-            && db.ch(game
-                .desc(d_id)
+        if desc.state() == ConPlaying
+            && db.ch(desc
                 .character
                 .unwrap())
                 .plr_flagged(PLR_MAILING)
         {
-            let message_pointer = game.desc_mut(d_id).str.as_ref().unwrap().clone();
-            let mail_to = game.desc_mut(d_id).mail_to;
-            let from = db.ch(game.desc(d_id).character.unwrap()).get_idnum();
+            let message_pointer = desc.str.as_ref().unwrap().clone();
+            let mail_to = desc.mail_to;
+            let from = db.ch(desc.character.unwrap()).get_idnum();
             db.store_mail(
                 mail_to,
                 from,
                 RefCell::borrow(message_pointer.as_ref()).as_str(),
             );
-            game.desc_mut(d_id).mail_to = 0;
-            game.desc_mut(d_id).str = None;
-            game.write_to_output(d_id, "Message sent!\r\n");
-            if !db.ch(game.desc(d_id).character.unwrap()).is_npc() {
-                db.ch_mut(game.desc(d_id)
+            desc.mail_to = 0;
+            desc.str = None;
+            desc.write_to_output( "Message sent!\r\n");
+            if !db.ch(desc.character.unwrap()).is_npc() {
+                db.ch_mut(desc
                     .character
                     .unwrap())
                     .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
             }
         }
 
-        game.desc_mut(d_id).str = None;
+        desc.str = None;
 
-        if game.desc_mut(d_id).mail_to >= BOARD_MAGIC {
-            let board_type = (game.desc_mut(d_id).mail_to - BOARD_MAGIC) as usize;
+        if desc.mail_to >= BOARD_MAGIC {
+            let board_type = (desc.mail_to - BOARD_MAGIC) as usize;
             board_save_board(&mut db.boards, board_type);
-            game.desc_mut(d_id).mail_to = 0;
+            desc.mail_to = 0;
         }
-        if game.desc_mut(d_id).state() == ConExdesc {
-            game.write_to_output(d_id, MENU);
-            game.desc_mut(d_id).set_state(ConMenu);
+        if desc.state() == ConExdesc {
+            desc.write_to_output(MENU);
+            desc.set_state(ConMenu);
         }
         if game.desc(d_id).state() == ConPlaying
             && game.desc(d_id).character.is_some()

@@ -593,11 +593,12 @@ impl Game {
                             db.char_to_room(character_id, character.get_was_in());
                             let character = db.ch_mut(character_id);
                             character.set_was_in(NOWHERE);
+                            let character = db.ch(character_id);
                             self.act(
                                 db,
                                 "$n has returned.",
                                 true,
-                                Some(character_id),
+                                Some(character),
                                 None,
                                 None,
                                 TO_ROOM,
@@ -636,19 +637,21 @@ impl Game {
 
             /* Send queued output out to the operating system (ultimately to user). */
             for d_id in self.descriptor_list.ids() {
-                if !self.desc(d_id).output.is_empty() {
+                let desc = self.desc_mut(d_id);
+                if !desc.output.is_empty() {
                     self.process_output(db, d_id);
-                    if self.desc(d_id).output.is_empty() {
-                        self.desc_mut(d_id).has_prompt = true;
+                    let desc = self.desc_mut(d_id);
+                    if desc.output.is_empty() {
+                        desc.has_prompt = true;
                     }
                 }
             }
 
             /* Print prompts for other descriptors who had no other output */
             for d_id in self.descriptor_list.ids() {
-                let d = self.desc(d_id);
+                let d = self.desc_mut(d_id);
                 if !d.has_prompt && d.output.is_empty() {
-                    let text = &make_prompt(self, db, d_id);
+                    let text = &d.make_prompt( db);
                     let d = self.desc_mut(d_id);
                     write_to_descriptor(d.stream.as_mut().unwrap(), text.as_bytes());
                     d.has_prompt = true;
@@ -792,70 +795,66 @@ impl Game {
             sockets_connected, sockets_playing
         );
     }
+}
 
+impl DescriptorData {
     /*
      * Turn off echoing (specific to telnet client)
      */
-    fn echo_off(&mut self, desc_id: DepotId) {
-        self.desc_mut(desc_id)
-            .output
-            .extend_from_slice(&[IAC, WILL, TELOPT_ECHO]);
+    fn echo_off(&mut self) {
+        self.output.extend_from_slice(&[IAC, WILL, TELOPT_ECHO]);
     }
 
     /*
      * Turn on echoing (specific to telnet client)
      */
-    fn echo_on(&mut self, desc_id: DepotId) {
-        self.desc_mut(desc_id)
-            .output
-            .extend_from_slice(&[IAC, WONT, TELOPT_ECHO]);
-    }
-}
-
-fn make_prompt(game: &Game, db: &DB, d_id: DepotId) -> String {
-    let d = game.desc(d_id);
-    let mut prompt = "".to_string();
-
-    /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
-
-    if d.str.borrow().is_some() {
-        prompt.push_str("] ");
-    } else if d.showstr_count != 0 {
-        prompt.push_str(&*format!(
-            "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
-            d.showstr_page, d.showstr_count
-        ));
-    } else if d.connected == ConPlaying && !db.ch(d.character.unwrap()).is_npc() {
-        let character_id = d.character.unwrap();
-        let character = db.ch(character_id);
-        if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH {
-            let il = character.get_invis_lev();
-            prompt.push_str(format!("i{} ", il).as_str());
-        }
-
-        if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH {
-            let hit = character.get_hit();
-            prompt.push_str(format!("{}H ", hit).as_str());
-        }
-
-        if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH {
-            let mana = character.get_mana();
-            prompt.push_str(format!("{}M ", mana).as_str());
-        }
-
-        if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH {
-            let _move = character.get_move();
-            prompt.push_str(format!("{}V ", _move).as_str());
-        }
-
-        prompt.push_str("> ");
-    } else if d.connected == ConPlaying && db.ch(d.character.unwrap()).is_npc() {
-        prompt.push_str(format!("{}s>", db.ch(d.character.unwrap()).get_name()).as_str());
+    fn echo_on(&mut self) {
+        self.output.extend_from_slice(&[IAC, WONT, TELOPT_ECHO]);
     }
 
-    prompt
-}
+    fn make_prompt(&mut self, db: &DB) -> String {
+        let mut prompt = "".to_string();
 
+        /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
+
+        if self.str.borrow().is_some() {
+            prompt.push_str("] ");
+        } else if self.showstr_count != 0 {
+            prompt.push_str(&*format!(
+                "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
+                self.showstr_page, self.showstr_count
+            ));
+        } else if self.connected == ConPlaying && !db.ch(self.character.unwrap()).is_npc() {
+            let character_id = self.character.unwrap();
+            let character = db.ch(character_id);
+            if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH {
+                let il = character.get_invis_lev();
+                prompt.push_str(format!("i{} ", il).as_str());
+            }
+
+            if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH {
+                let hit = character.get_hit();
+                prompt.push_str(format!("{}H ", hit).as_str());
+            }
+
+            if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH {
+                let mana = character.get_mana();
+                prompt.push_str(format!("{}M ", mana).as_str());
+            }
+
+            if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH {
+                let _move = character.get_move();
+                prompt.push_str(format!("{}V ", _move).as_str());
+            }
+
+            prompt.push_str("> ");
+        } else if self.connected == ConPlaying && db.ch(self.character.unwrap()).is_npc() {
+            prompt.push_str(format!("{}s>", db.ch(self.character.unwrap()).get_name()).as_str());
+        }
+
+        prompt
+    }
+}
 fn write_to_q(txt: &str, queue: &mut LinkedList<TxtBlock>, aliased: bool) {
     let newt = TxtBlock {
         text: String::from(txt),
@@ -876,18 +875,18 @@ fn get_from_q(queue: &mut LinkedList<TxtBlock>, dest: &mut String, aliased: &mut
     }
 }
 
-/* Empty the queues before closing connection */
-fn flush_queues(d: &mut DescriptorData) {
-    d.output.clear();
-    d.inbuf.clear();
-    d.input.clear();
-}
+impl DescriptorData {
+    /* Empty the queues before closing connection */
+    fn flush_queues(&mut self) {
+        self.output.clear();
+        self.inbuf.clear();
+        self.input.clear();
+    }
 
-impl Game {
     /* Add a new string to a player's output queue. */
-    fn write_to_output(&mut self, desc_id: DepotId, txt: &str) -> usize {
+    fn write_to_output(&mut self, txt: &str) -> usize {
         let payload = txt.as_bytes();
-        self.desc_mut(desc_id).output.extend_from_slice(payload);
+        self.output.extend_from_slice(payload);
         payload.len()
     }
 }
@@ -999,10 +998,11 @@ impl Game {
         }
         newd.desc_num = self.last_desc;
 
-        /* append to list */
-        let desc_id = self.descriptor_list.push(newd);
         let txt = db.greetings.clone();
-        self.write_to_output(desc_id, txt.as_ref());
+        newd.write_to_output(txt.as_ref());
+
+        /* append to list */
+        self.descriptor_list.push(newd);
     }
 }
 
@@ -1022,41 +1022,39 @@ impl Game {
         let mut i = "\r\n".as_bytes().to_vec();
         let mut result;
 
-        let t = self.desc_mut(desc_id);
+        let desc = self.desc_mut(desc_id);
         /* now, append the 'real' output */
-        i.append(&mut t.output);
+        i.append(&mut desc.output);
 
         /* add the extra CRLF if the person isn't in compact mode */
-        let t = self.desc(desc_id);
-        if t.connected == ConPlaying
-            && t.character.is_some()
-            && !db.ch(t.character.unwrap()).is_npc()
-            && db.ch(t.character.unwrap()).prf_flagged(PRF_COMPACT)
+        if desc.connected == ConPlaying
+            && desc.character.is_some()
+            && !db.ch(desc.character.unwrap()).is_npc()
+            && db.ch(desc.character.unwrap()).prf_flagged(PRF_COMPACT)
         {
             i.extend_from_slice("\r\n".as_bytes());
         }
 
         /* add a prompt */
-        i.extend_from_slice(make_prompt(self, db, desc_id).as_bytes());
+        i.extend_from_slice(desc.make_prompt(db).as_bytes());
 
         /*
          * now, send the output.  If this is an 'interruption', use the prepended
          * CRLF, otherwise send the straight output sans CRLF.
          */
-        let t = self.desc_mut(desc_id);
-        if t.has_prompt {
-            t.has_prompt = false;
-            result = write_to_descriptor(t.stream.as_mut().unwrap(), &i);
+        if desc.has_prompt {
+            desc.has_prompt = false;
+            result = write_to_descriptor(desc.stream.as_mut().unwrap(), &i);
             if result >= 2 {
                 result -= 2;
             }
         } else {
-            result = write_to_descriptor(t.stream.as_mut().unwrap(), &i[2..]);
+            result = write_to_descriptor(desc.stream.as_mut().unwrap(), &i[2..]);
         }
 
         if result < 0 {
             /* Oops, fatal error. Bye! */
-            let _ = t.stream.as_mut().unwrap().shutdown(Shutdown::Both);
+            let _ = desc.stream.as_mut().unwrap().shutdown(Shutdown::Both);
             return -1;
         } else if result == 0 {
             /* Socket buffer full. Try later. */
@@ -1064,10 +1062,12 @@ impl Game {
         }
 
         /* Handle snooping: prepend "% " and send to snooper. */
-        if self.desc(desc_id).snoop_by.is_some() {
-            let snooper_id = self.desc_mut(desc_id).snoop_by.unwrap();
-            self.write_to_output(snooper_id, format!("% {}%%", result).as_str());
+        if desc.snoop_by.is_some() {
+            let snooper_id = self.desc(desc_id).snoop_by.unwrap();
+            let snooper = self.desc_mut(snooper_id);
+            snooper.write_to_output(format!("% {}%%", result).as_str());
         }
+        let desc = self.desc_mut(desc_id);
 
         /* The common case: all saved output was handed off to the kernel buffer. */
         let exp_len = (i.len() - 2) as i32;
@@ -1076,7 +1076,7 @@ impl Game {
             //self.desc_mut(desc_id).output.clear();
         } else {
             /* Not all data in buffer sent.  result < output buffersize. */
-            self.desc_mut(desc_id).output = i.split_off(result as usize);
+            desc.output = i.split_off(result as usize);
         }
         result
     }
@@ -1172,9 +1172,10 @@ impl Game {
         let mut read_point = 0;
         let mut nl_pos: Option<usize> = None;
         let mut tmp = String::new();
+        let desc = self.desc_mut(d_id);
 
         /* first, find the point where we left off reading data */
-        buf_length = self.desc(d_id).inbuf.len();
+        buf_length = desc.inbuf.len();
         let mut space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
 
         loop {
@@ -1183,7 +1184,7 @@ impl Game {
                 return -1;
             }
 
-            match perform_socket_read(self.desc_mut(d_id)) {
+            match perform_socket_read(desc) {
                 Err(_) => return -1, /* Error, disconnect them. */
                 Ok(0) => return 0,   /* Just blocking, no problems. */
                 Ok(size) => bytes_read = size,
@@ -1193,7 +1194,7 @@ impl Game {
 
             /* search for a newline in the data we just read */
             for i in read_point..read_point + bytes_read {
-                let x = self.desc(d_id).inbuf.chars().nth(i).unwrap();
+                let x = desc.inbuf.chars().nth(i).unwrap();
 
                 if nl_pos.is_some() {
                     break;
@@ -1223,8 +1224,9 @@ impl Game {
             space_left = MAX_INPUT_LENGTH - 1;
 
             /* The '> 1' reserves room for a '$ => $$' expansion. */
-            for ptr in 0..self.desc(d_id).inbuf.len() {
-                let x = self.desc(d_id).inbuf.chars().nth(ptr).unwrap();
+            let desc = self.desc_mut(d_id);
+            for ptr in 0..desc.inbuf.len() {
+                let x = desc.inbuf.chars().nth(ptr).unwrap();
                 if space_left <= 1 || ptr >= nl_pos.unwrap() {
                     break;
                 }
@@ -1251,39 +1253,41 @@ impl Game {
             }
 
             if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-                if write_to_descriptor(self.desc_mut(d_id).stream.as_mut().unwrap(), tmp.as_bytes())
+                if write_to_descriptor(desc.stream.as_mut().unwrap(), tmp.as_bytes())
                     < 0
                 {
                     return -1;
                 }
             }
 
-            if self.desc(d_id).snoop_by.is_some() {
-                let desc_id = self.desc_mut(d_id).snoop_by.unwrap();
-                self.write_to_output(desc_id, format!("% {}\r\n", tmp).as_str());
+            if desc.snoop_by.is_some() {
+                let snooper_id = desc.snoop_by.unwrap();
+                let snooper = self.desc_mut(snooper_id);
+                snooper.write_to_output(format!("% {}\r\n", tmp).as_str());
             }
             failed_subst = false;
+            let desc = self.desc_mut(d_id);
 
             if tmp == "!" {
                 /* Redo last command. */
-                tmp = self.desc_mut(d_id).last_input.clone();
+                tmp = desc.last_input.clone();
             } else if tmp.starts_with('!') && tmp.len() > 1 {
                 let mut commandln = &tmp[1..];
-                let starting_pos = self.desc(d_id).history_pos;
-                let mut cnt = if self.desc(d_id).history_pos == 0 {
+                let starting_pos = desc.history_pos;
+                let mut cnt = if desc.history_pos == 0 {
                     HISTORY_SIZE - 1
                 } else {
-                    self.desc_mut(d_id).history_pos - 1
+                    desc.history_pos - 1
                 };
 
                 commandln = commandln.trim_start();
                 while cnt != starting_pos {
-                    if !self.desc(d_id).history[cnt].is_empty()
-                        && is_abbrev(commandln, self.desc(d_id).history[cnt].as_str())
+                    if !desc.history[cnt].is_empty()
+                        && is_abbrev(commandln, desc.history[cnt].as_str())
                     {
-                        tmp = self.desc(d_id).history[cnt].clone();
-                        self.desc_mut(d_id).last_input = tmp.clone();
-                        self.write_to_output(d_id, format!("{}\r\n", tmp).as_str());
+                        tmp = desc.history[cnt].clone();
+                        desc.last_input = tmp.clone();
+                        desc.write_to_output(format!("{}\r\n", tmp).as_str());
                         break;
                     }
                     if cnt == 0 {
@@ -1293,28 +1297,28 @@ impl Game {
                     cnt -= 1;
                 }
             } else if tmp.starts_with('^') {
-                let orig = self.desc(d_id).last_input.clone();
-                failed_subst = self.perform_subst(d_id, orig.as_str(), &mut tmp);
+                let orig = desc.last_input.clone();
+                failed_subst = desc.perform_subst(orig.as_str(), &mut tmp);
                 if !failed_subst {
-                    self.desc_mut(d_id).last_input = tmp.to_string();
+                    desc.last_input = tmp.to_string();
                 }
             } else {
-                self.desc_mut(d_id).last_input = tmp.to_string();
-                let pos = self.desc_mut(d_id).history_pos;
-                self.desc_mut(d_id).history[pos] = tmp.to_string();
-                self.desc_mut(d_id).history_pos = self.desc(d_id).history_pos + 1;
-                if self.desc_mut(d_id).history_pos >= HISTORY_SIZE {
-                    self.desc_mut(d_id).history_pos = 0;
+                desc.last_input = tmp.to_string();
+                let pos = desc.history_pos;
+                desc.history[pos] = tmp.to_string();
+                desc.history_pos = desc.history_pos + 1;
+                if desc.history_pos >= HISTORY_SIZE {
+                    desc.history_pos = 0;
                 }
             }
 
             if !failed_subst {
-                write_to_q(tmp.as_str(), &mut self.desc_mut(d_id).input, false);
+                write_to_q(tmp.as_str(), &mut desc.input, false);
             }
 
             /* find the end of this line */
-            while nl_pos.unwrap() < self.desc(d_id).inbuf.len()
-                && isnewl!(self.desc(d_id).inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+            while nl_pos.unwrap() < desc.inbuf.len()
+                && isnewl!(desc.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
             {
                 nl_pos = Some(nl_pos.unwrap() + 1);
             }
@@ -1322,22 +1326,26 @@ impl Game {
             /* see if there's another newline in the input buffer */
             read_point = nl_pos.unwrap();
             nl_pos = None;
-            for i in read_point..self.desc(d_id).inbuf.len() {
-                if isnewl!(self.desc(d_id).inbuf.chars().nth(i).unwrap()) {
+            for i in read_point..desc.inbuf.len() {
+                if isnewl!(desc.inbuf.chars().nth(i).unwrap()) {
                     nl_pos = Some(i);
                     break;
                 }
             }
         }
-        self.desc_mut(d_id).inbuf.drain(..read_point);
+        let desc = self.desc_mut(d_id);
+
+        desc.inbuf.drain(..read_point);
 
         return 1;
     }
-    /* perform substitution for the '^..^' csh-esque syntax orig is the
-     * orig string, i.e. the one being modified.  subst contains the
-     * substition string, i.e. "^telm^tell"
-     */
-    fn perform_subst(&mut self, desc_id: DepotId, orig: &str, subst: &mut String) -> bool {
+}
+/* perform substitution for the '^..^' csh-esque syntax orig is the
+ * orig string, i.e. the one being modified.  subst contains the
+ * substition string, i.e. "^telm^tell"
+ */
+impl DescriptorData {
+    fn perform_subst(&mut self, orig: &str, subst: &mut String) -> bool {
         /*
          * first is the position of the beginning of the first string (the one
          * to be replaced
@@ -1347,7 +1355,7 @@ impl Game {
         /* now find the second '^' */
 
         if second.is_none() {
-            self.write_to_output(desc_id, "Invalid substitution.\r\n");
+            self.write_to_output("Invalid substitution.\r\n");
             return true;
         }
         /* terminate "first" at the position of the '^' and make 'second' point
@@ -1358,7 +1366,7 @@ impl Game {
         /* now, see if the contents of the first string appear in the original */
         let strpos = orig.find(first);
         if strpos.is_none() {
-            self.write_to_output(desc_id, "Invalid substitution.\r\n");
+            self.write_to_output("Invalid substitution.\r\n");
             return true;
         }
         let strpos = strpos.unwrap();
@@ -1384,40 +1392,38 @@ impl Game {
 }
 impl Game {
     pub fn close_socket(&mut self, db: &mut DB, d: DepotId) {
-        let mut d = self.descriptor_list.take(d);
+        let mut desc: DescriptorData = self.descriptor_list.take(d);
 
-        d.stream
+        desc.stream
             .as_mut()
             .unwrap()
             .shutdown(Shutdown::Both)
             .expect("SYSERR while closing socket");
-        flush_queues(&mut d);
+        desc.flush_queues();
 
         /* Forget snooping */
-        if d.snooping.is_some() {
-            self.desc_mut(d.snooping.unwrap()).snoop_by = None;
+        if desc.snooping.is_some() {
+            self.desc_mut(desc.snooping.unwrap()).snoop_by = None;
         }
 
-        if d.snoop_by.is_some() {
-            self.write_to_output(
-                d.snoop_by.unwrap(),
-                "Your victim is no longer among us.\r\n",
-            );
-            d.snoop_by = None;
+        if desc.snoop_by.is_some() {
+            let snooper = self.desc_mut(desc.snoop_by.unwrap());
+            snooper.write_to_output("Your victim is no longer among us.\r\n");
+            desc.snoop_by = None;
         }
 
-        match d.character.as_ref() {
+        match desc.character.as_ref() {
             Some(character_id) => {
                 /* If we're switched, this resets the mobile taken. */
                 db.ch_mut(*character_id).desc = None;
 
-                match d.state() {
+                match desc.state() {
                     ConPlaying | ConDisconnect => {
-                        let original = d.original;
+                        let original = desc.original;
                         let link_challenged_id = if original.is_some() {
                             original.as_ref().unwrap().clone()
                         } else {
-                            d.character.borrow().as_ref().unwrap().clone()
+                            desc.character.borrow().as_ref().unwrap().clone()
                         };
 
                         /* We are guaranteed to have a person. */
@@ -1425,7 +1431,7 @@ impl Game {
                             db,
                             "$n has lost $s link.",
                             true,
-                            Some(link_challenged_id),
+                            Some(db.ch(link_challenged_id)),
                             None,
                             None,
                             TO_ROOM,
@@ -1444,7 +1450,7 @@ impl Game {
                         );
                     }
                     _ => {
-                        let name = db.ch(d.character.unwrap()).get_name();
+                        let name = db.ch(desc.character.unwrap()).get_name();
                         self.mudlog(
                             db,
                             CMP,
@@ -1460,7 +1466,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        db.free_char(d.character.unwrap());
+                        db.free_char(desc.character.unwrap());
                     }
                 }
             }
@@ -1476,23 +1482,24 @@ impl Game {
         }
 
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
-        if d.original.is_some() && db.ch(d.original.unwrap()).desc.borrow().is_some() {
-            db.ch_mut(d.original.unwrap()).desc = None;
+        if desc.original.is_some() && db.ch(desc.original.unwrap()).desc.borrow().is_some() {
+            db.ch_mut(desc.original.unwrap()).desc = None;
         }
     }
 
     fn check_idle_passwords(&mut self) {
         //struct descriptor_data * d, * next_d;
         for d_id in self.descriptor_list.ids() {
-            if self.desc(d_id).state() != ConPassword && self.desc(d_id).state() != ConGetName {
+            let desc = self.desc_mut(d_id);
+            if desc.state() != ConPassword && desc.state() != ConGetName {
                 continue;
             }
-            if self.desc(d_id).idle_tics == 0 {
-                self.desc_mut(d_id).idle_tics = 1;
+            if desc.idle_tics == 0 {
+                desc.idle_tics = 1;
             } else {
-                self.echo_on(d_id);
-                self.write_to_output(d_id, "\r\nTimed out... goodbye.\r\n");
-                self.desc_mut(d_id).set_state(ConClose);
+                desc.echo_on();
+                desc.write_to_output("\r\nTimed out... goodbye.\r\n");
+                desc.set_state(ConClose);
             }
         }
     }
@@ -1624,14 +1631,13 @@ impl Game {
 impl Game {
     pub fn send_to_char(&mut self, ch: &CharData, messg: &str) -> usize {
         if ch.desc.is_some() && messg != "" {
-            self.write_to_output(ch.desc.unwrap(), messg)
+            let desc = self.desc_mut(ch.desc.unwrap());
+            desc.write_to_output(messg)
         } else {
             0
         }
     }
-}
 
-impl Game {
     pub fn send_to_all(&mut self, messg: &str) {
         if messg.is_empty() {
             return;
@@ -1642,7 +1648,9 @@ impl Game {
             if t.state() != ConPlaying {
                 continue;
             }
-            self.write_to_output(d_id, messg);
+            let desc = self.desc_mut(d_id);
+
+            desc.write_to_output(messg);
         }
     }
 
@@ -1651,30 +1659,30 @@ impl Game {
             return;
         }
 
-        for d_id in self.descriptor_list.ids() {
-            let i = self.desc_mut(d_id);
-            if i.state() != ConPlaying || i.character.borrow().is_none() {
+        for desc_id in self.descriptor_list.ids() {
+            let desc = self.desc(desc_id);
+            if desc.state() != ConPlaying || desc.character.borrow().is_none() {
                 continue;
             }
-            let character_id = i.character.borrow();
-            let character = character_id.map(|i| db.ch(i));
-            if !character.as_ref().unwrap().awake() || !db.outside(character.as_ref().unwrap()) {
+            let character_id = desc.character.unwrap();
+            let character = db.ch(character_id);
+            if !character.awake() || !db.outside(character) {
                 continue;
             }
+            let desc = self.desc_mut(desc_id);
 
-            self.write_to_output(d_id, messg);
+            desc.write_to_output(messg);
         }
     }
 
     pub fn send_to_room(&mut self, db: &DB, room: RoomRnum, msg: &str) {
-        let list = clone_vec2(&db.world[room as usize].peoples);
-        for i_id in list {
-            let i = db.ch(i_id);
-            if i.desc.is_none() {
+        for &chid in &db.world[room as usize].peoples {
+            let ch = db.ch(chid);
+            if ch.desc.is_none() {
                 continue;
             }
-            let desc_id = i.desc.unwrap();
-            self.write_to_output(desc_id, msg);
+            let desc = self.desc_mut(ch.desc.unwrap());
+            desc.write_to_output(msg);
         }
     }
 }
@@ -1687,17 +1695,15 @@ impl Game {
         &mut self,
         db: &DB,
         orig: &str,
-        chid: Option<DepotId>,
-        oid: Option<DepotId>,
+        ch: Option<&CharData>,
+        obj: Option<&ObjData>,
         vict_obj: Option<VictimRef>,
-        to_id: DepotId,
+        to: &CharData,
     ) {
         let mut uppercasenext = false;
         let mut orig = orig.to_string();
         let mut i: Rc<str>;
         let mut buf = String::new();
-
-        let obj = oid.map(|e| db.obj(e));
 
         loop {
             if orig.starts_with('$') {
@@ -1708,56 +1714,56 @@ impl Game {
                     '\0'
                 } {
                     'n' => {
-                        i = self.pers(db, db.ch(chid.unwrap()), db.ch(to_id));
+                        i = self.pers(db, ch.unwrap(), to);
                     }
                     'N' => {
                         i = if vict_obj.clone().is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                self.pers(db, db.ch(p), db.ch(to_id))
+                                self.pers(db, p, to)
                             } else {
                                 Rc::from("<INV_CHAR_REF>")
                             }
                         };
                     }
                     'm' => {
-                        i = Rc::from(hmhr(db.ch(chid.unwrap())));
+                        i = Rc::from(hmhr(ch.unwrap()));
                     }
                     'M' => {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hmhr(db.ch(p)))
+                                Rc::from(hmhr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
                         };
                     }
                     's' => {
-                        i = Rc::from(hshr(db.ch(chid.unwrap())));
+                        i = Rc::from(hshr(ch.unwrap()));
                     }
                     'S' => {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hshr(db.ch(p)))
+                                Rc::from(hshr(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
                         };
                     }
                     'e' => {
-                        i = Rc::from(hssh(db.ch(chid.unwrap())));
+                        i = Rc::from(hssh(ch.unwrap()));
                     }
                     'E' => {
                         i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hssh(db.ch(p)))
+                                Rc::from(hssh(p))
                             } else {
                                 Rc::from("<INV_CHAR_DATA>")
                             }
@@ -1767,7 +1773,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            self.objn(db, obj.unwrap(), db.ch(to_id))
+                            self.objn(db, obj.unwrap(), to)
                         };
                     }
                     'O' => {
@@ -1775,7 +1781,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                self.objn(db, db.obj(p), db.ch(to_id))
+                                self.objn(db, p, to)
                             } else {
                                 Rc::from("<INV_OBJ_DATA>")
                             }
@@ -1785,7 +1791,7 @@ impl Game {
                         i = if obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
-                            Rc::from(self.objs(db, obj.unwrap(), db.ch(to_id)))
+                            Rc::from(self.objs(db, obj.unwrap(), to))
                         };
                     }
                     'P' => {
@@ -1793,7 +1799,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(self.objs(db, db.obj(p), db.ch(to_id)))
+                                Rc::from(self.objs(db, p, to))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1811,7 +1817,7 @@ impl Game {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(sana(db.obj(p)))
+                                Rc::from(sana(p))
                             } else {
                                 Rc::from("<INV_OBJ_REF>")
                             }
@@ -1893,8 +1899,9 @@ impl Game {
         // TODO orig.pop();
         buf.push_str("\r\n");
 
-        let desc_id = db.ch(to_id).desc.unwrap();
-        self.write_to_output(desc_id, format!("{}", buf).as_str());
+        let desc_id = to.desc.unwrap();
+        let desc = self.desc_mut(desc_id);
+        desc.write_to_output(format!("{}", buf).as_str());
     }
 }
 
@@ -1907,9 +1914,9 @@ macro_rules! sendok {
 }
 
 #[derive(Clone)]
-pub enum VictimRef {
-    Char(DepotId),
-    Obj(DepotId),
+pub enum VictimRef<'a> {
+    Char(&'a CharData),
+    Obj(&'a ObjData),
     Str(Rc<str>),
 }
 
@@ -1919,8 +1926,8 @@ impl Game {
         db: &DB,
         str: &str,
         hide_invisible: bool,
-        chid: Option<DepotId>,
-        oid: Option<DepotId>,
+        ch: Option<&CharData>,
+        obj: Option<&ObjData>,
         vict_obj: Option<VictimRef>,
         _type: i32,
     ) {
@@ -1947,17 +1954,17 @@ impl Game {
         }
 
         if _type == TO_CHAR {
-            if chid.is_some() && sendok!(db.ch(chid.unwrap()), to_sleeping) {
-                self.perform_act(db, str, chid, oid, vict_obj, chid.unwrap());
+            if ch.is_some() && sendok!(ch.unwrap(), to_sleeping) {
+                self.perform_act(db, str, ch, obj, vict_obj, ch.as_ref().unwrap());
             }
             return;
         }
 
         if _type == TO_VICT {
             if vict_obj.is_some() {
-                if let Some(VictimRef::Char(to_id)) = vict_obj {
-                    if sendok!(db.ch(to_id), to_sleeping) {
-                        self.perform_act(db, str, chid, oid, vict_obj.clone(), to_id);
+                if let Some(VictimRef::Char(to_ch)) = vict_obj {
+                    if sendok!(to_ch, to_sleeping) {
+                        self.perform_act(db, str, ch, obj, vict_obj.clone(), to_ch);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -1967,10 +1974,10 @@ impl Game {
         }
         /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
         let char_list;
-        if chid.is_some() && db.ch(chid.unwrap()).in_room() != NOWHERE {
-            char_list = &db.world[db.ch(chid.unwrap()).in_room() as usize].peoples;
-        } else if oid.is_some() && db.obj(oid.unwrap()).in_room() != NOWHERE {
-            char_list = &db.world[db.obj(oid.unwrap()).in_room() as usize].peoples;
+        if ch.is_some() && ch.unwrap().in_room() != NOWHERE {
+            char_list = &db.world[ch.unwrap().in_room() as usize].peoples;
+        } else if obj.is_some() && obj.as_ref().unwrap().in_room() != NOWHERE {
+            char_list = &db.world[obj.as_ref().unwrap().in_room() as usize].peoples;
         } else {
             error!("SYSERR: no valid target to act()!");
             return;
@@ -1979,10 +1986,10 @@ impl Game {
         let list = clone_vec2(char_list);
         for to_id in list {
             let to = db.ch(to_id);
-            if !sendok!(to, to_sleeping) || (chid.is_some() && to_id == chid.unwrap()) {
+            if !sendok!(to, to_sleeping) || (ch.is_some() && to_id == ch.unwrap().id()) {
                 continue;
             }
-            if hide_invisible && chid.is_some() && !self.can_see(db, to, db.ch(chid.unwrap())) {
+            if hide_invisible && ch.is_some() && !self.can_see(db, to, ch.unwrap()) {
                 continue;
             }
             if _type != TO_ROOM && vict_obj.is_none() {
@@ -1990,8 +1997,8 @@ impl Game {
             }
             let same_chr;
             if vict_obj.is_some() {
-                if let Some(VictimRef::Char(p_id)) = vict_obj {
-                    same_chr = to_id == p_id;
+                if let Some(VictimRef::Char(p)) = vict_obj {
+                    same_chr = to_id == p.id();
                 } else {
                     error!("Error in act: invalid CharData ref");
                     continue;
@@ -2003,7 +2010,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(db, str, chid, oid, vict_obj.clone(), to.id());
+            self.perform_act(db, str, ch, obj, vict_obj.clone(), to);
         }
     }
 }

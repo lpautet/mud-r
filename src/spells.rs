@@ -298,7 +298,9 @@ pub fn spell_create_water(
                  db.obj_mut(obj_id).set_obj_val(1,v  );
                 name_to_drinkcon(db, Some(obj_id), LIQ_WATER);
                 weight_change_object(db, obj_id, water);
-                game.act(db,"$p is filled.", false, Some(chid), Some(obj_id), None, TO_CHAR);
+                let ch = db.ch(chid);
+                let obj = db.obj(obj_id);
+                game.act(db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
             }
         }
     }
@@ -316,13 +318,16 @@ pub fn spell_recall(
     }
 
     let victim_id = victim_id.unwrap();
-    game.act(db,"$n disappears.", true, Some(victim_id), None, None, TO_ROOM);
+    let victim = db.ch(victim_id);
+
+    game.act(db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
     db.char_from_room(victim_id);
     db.char_to_room(victim_id, db.r_mortal_start_room);
+    let victim = db.ch(victim_id);
     game.act(db,
         "$n appears in the middle of the room.",
         true,
-        Some(victim_id),
+        Some(victim),
         None,
         None,
         TO_ROOM,
@@ -343,7 +348,7 @@ pub fn spell_teleport(
         return;
     }
     let victim_id = victim_id.unwrap();
-
+    let victim = db.ch(victim_id);
     loop {
         to_room = rand_number(0, db.world.len() as u32);
         if !db.room_flagged(
@@ -357,17 +362,18 @@ pub fn spell_teleport(
     game.act(db,
         "$n slowly fades out of existence and is gone.",
         false,
-        Some(victim_id),
+        Some(victim),
         None,
         None,
         TO_ROOM,
     );
     db.char_from_room(victim_id);
     db.char_to_room(victim_id, to_room as RoomRnum);
+    let victim = db.ch(victim_id);
     game.act(db,
         "$n slowly fades into existence.",
         false,
-        Some(victim_id),
+        Some(victim),
         None,
         None,
         TO_ROOM,
@@ -400,7 +406,7 @@ pub fn spell_summon(
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
             game.act(db,"As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
-                   false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_CHAR);
+                   false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
             return;
         }
         if !victim.is_npc()
@@ -446,7 +452,7 @@ pub fn spell_summon(
     game.act(db,
         "$n disappears suddenly.",
         true,
-        Some(victim_id),
+        Some(victim),
         None,
         None,
         TO_ROOM,
@@ -455,20 +461,22 @@ pub fn spell_summon(
     db.char_from_room(victim_id);
     let ch = db.ch(chid);
     db.char_to_room(victim_id, ch.in_room());
+    let victim = db.ch(victim_id);
     game.act(db,
         "$n arrives suddenly.",
         true,
-        Some(victim_id),
+        Some(victim),
         None,
         None,
         TO_ROOM,
     );
+    let ch = db.ch(chid);
     game.act(db,
         "$n has summoned you!",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(victim_id)),
+        Some(VictimRef::Char(victim)),
         TO_VICT,
     );
     look_at_room(game, db,victim_id, false);
@@ -608,13 +616,14 @@ pub fn spell_charm(
             af.duration /= victim.get_int() as i16;
         }
         db.affect_to_char(victim_id, af);
-
+        let victim = db.ch(victim_id);
+        let ch = db.ch(chid);
         game.act(db,
             "Isn't $n just such a nice fellow?",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(victim_id)),
+            Some(VictimRef::Char(victim)),
             TO_VICT,
         );
         let victim = db.ch_mut(victim_id);
@@ -856,17 +865,22 @@ pub fn spell_enchant_weapon(
     if ch.is_good() {
         let obj = db.obj_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
-        game.act(db,"$p glows blue.", false, Some(chid), Some(oid), None, TO_CHAR);
+        let ch = db.ch(chid);
+        let obj=db.obj(oid);
+        game.act(db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else if ch.is_evil() {
         let obj = db.obj_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
-        game.act(db,"$p glows red.", false, Some(chid), Some(oid), None, TO_CHAR);
+        let ch = db.ch(chid);
+        let obj=db.obj(oid);
+        game.act(db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else {
+        let obj=db.obj(oid);
         game.act(db,
             "$p glows yellow.",
             false,
-            Some(chid),
-            Some(oid),
+            Some(ch),
+            Some(obj),
             None,
             TO_CHAR,
         );
@@ -896,18 +910,18 @@ pub fn spell_detect_poison(
                 game.act(db,
                     "You sense that $E is poisoned.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(victim_id)),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
             } else {
                 game.act(db,
                     "You sense that $E is healthy.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(victim_id)),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
             }
@@ -915,15 +929,15 @@ pub fn spell_detect_poison(
 
         if oid.is_some() {
             let oid = oid.unwrap();
-
-            match db.obj(oid).get_obj_type() {
+            let obj = db.obj(oid);
+            match obj.get_obj_type() {
                 ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
-                    if db.obj(oid).get_obj_val(3) != 0 {
+                    if obj.get_obj_val(3) != 0 {
                         game.act(db,
                             "You sense that $p has been contaminated.",
                             false,
-                            Some(chid),
-                            Some(oid),
+                            Some(ch),
+                            Some(obj),
                             None,
                             TO_CHAR,
                         );
@@ -931,8 +945,8 @@ pub fn spell_detect_poison(
                         game.act(db,
                             "You sense that $p is safe for consumption.",
                             false,
-                            Some(chid),
-                            Some(oid),
+                            Some(ch),
+                            Some(obj),
                             None,
                             TO_CHAR,
                         );

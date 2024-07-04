@@ -736,9 +736,9 @@ fn postmaster_send_mail(
         game.act(db,
             &buf,
             false,
-            Some(mailman.id()),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
@@ -751,9 +751,9 @@ fn postmaster_send_mail(
         game.act(db,
             "$n tells you, 'You need to specify an addressee!'",
             false,
-            Some(mailman.id()),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
@@ -768,29 +768,32 @@ $n tells you, '...which I see you can't afford.'",
         game.act(db,
             &buf,
             false,
-            Some(mailman.id()),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
     }
     let recipient = db.get_id_by_name(&buf);
     if recipient < 0 || !mail_recip_ok(game, db,&buf) {
+        let mailman = db.ch(mailman_id);
+        let ch = db.ch(chid);
         game.act(db,
             "$n tells you, 'No one by that name is registered here!'",
             false,
-            Some(mailman_id),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
     }
+    let ch = db.ch(chid);
     game.act(db,
         "$n starts to write some mail.",
         true,
-        Some(chid),
+        Some(ch),
         None,
         None,
         TO_ROOM,
@@ -800,13 +803,13 @@ $n tells you, '...which I see you can't afford.'",
 $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
-
+    let mailman = db.ch(mailman_id);
     game.act(db,
         &buf,
         false,
-        Some(mailman_id),
+        Some(mailman),
         None,
-        Some(VictimRef::Char(chid)),
+        Some(VictimRef::Char(ch)),
         TO_VICT,
     );
     let ch = db.ch_mut(chid);
@@ -833,21 +836,25 @@ fn postmaster_check_mail(
 ) {
     let ch = db.ch(chid);
     if db.mails.has_mail(ch.get_idnum()) {
+        let ch = db.ch(chid);
+        let mailman = db.ch(mailman_id);
         game.act(db,
             "$n tells you, 'You have mail waiting.'",
             false,
-            Some(mailman_id),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     } else {
+        let mailman = db.ch(mailman_id);
+        let ch = db.ch(chid);
         game.act(db,
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
-            Some(mailman_id),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -863,12 +870,14 @@ fn postmaster_receive_mail(
     let ch = db.ch(chid);
     if !db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
+        let ch = db.ch(chid);
+        let mailman = db.ch(mailman_id);
         game.act(db,
             buf,
             false,
-            Some(mailman_id),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return;
@@ -894,20 +903,22 @@ fn postmaster_receive_mail(
         };
         db.obj_mut(oid).action_description = Rc::from(RefCell::from(mail_content));
         db.obj_to_char(oid, chid);
+        let mailman = db.ch(mailman_id);
+        let ch = db.ch(chid);
         game.act(db,
             "$n gives you a piece of mail.",
             false,
-            Some(mailman_id),
+            Some(mailman),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         game.act(db,
             "$N gives $n a piece of mail.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(mailman_id)),
+            Some(VictimRef::Char(mailman)),
             TO_ROOM,
         );
     }

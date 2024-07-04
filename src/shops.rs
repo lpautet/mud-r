@@ -855,11 +855,12 @@ fn shopping_buy(
     let tempstr = times_message(Some(db.obj(ch.carrying[0])), "", bought);
 
     let tempbuf = format!("$n buys {}.", tempstr);
+    let obj = oid.map(|id| db.obj(id));
     game.act(db,
         &tempbuf,
         false,
-        Some(chid),
-        oid,
+        Some(ch),
+        obj,
         None,
         TO_ROOM,
     );
@@ -1116,11 +1117,13 @@ fn shopping_sell(
 
     let tempstr = times_message(None, &name, sold);
     let tempbuf = format!("$n sells {}.", tempstr);
+    let ch = db.ch(chid);
+    let obj = oid.map(|id| db.obj(id));
     game.act(db,
         &tempbuf,
         false,
-        Some(chid),
-oid,
+        Some(ch),
+obj,
         None,
         TO_ROOM,
     );
@@ -1386,11 +1389,11 @@ pub fn shop_keeper(
     if !keeper.awake() {
         return false;
     }
-
+    let ch = db.ch(chid);
     if cmd_is(cmd, "steal") {
         let argm = format!("$N shouts '{}'", MSG_NO_STEAL_HERE);
         game
-            .act(db,&argm, false, Some(chid), None, Some(VictimRef::Char(keeper_id)), TO_CHAR);
+            .act(db,&argm, false, Some(ch), None, Some(VictimRef::Char(keeper)), TO_CHAR);
         let ch = db.ch(chid);
                 do_action(
             game, db, 

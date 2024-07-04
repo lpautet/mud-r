@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use log::error;
@@ -18,13 +18,13 @@ use crate::depot::DepotId;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
-    MeRef, CharData, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL,
-    MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY,
-    NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
+    CharData, MeRef, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD,
+    MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE,
+    MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::{ clone_vec2, rand_number};
-use crate::{Game, DB, TO_ROOM};
+use crate::util::{clone_vec2, rand_number};
 use crate::VictimRef;
+use crate::{Game, DB, TO_ROOM};
 
 impl Game {
     pub fn mobile_activity(&mut self, db: &mut DB) {
@@ -46,7 +46,12 @@ impl Game {
                     );
                 } else {
                     if db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
-                        self, db, chid, MeRef::Char(chid), 0, "",
+                        self,
+                        db,
+                        chid,
+                        MeRef::Char(chid),
+                        0,
+                        "",
                     ) {
                         continue; /* go to next char */
                     }
@@ -61,32 +66,30 @@ impl Game {
 
             /* Scavenger (picking up objects) */
             if ch.mob_flagged(MOB_SCAVENGER) {
-                if db.world[ch.in_room() as usize]
-                    .contents
-                    .len()
-                    != 0
-                    && rand_number(0, 10) == 0
-                {
+                if db.world[ch.in_room() as usize].contents.len() != 0 && rand_number(0, 10) == 0 {
                     let mut max = 1;
-                    let mut best_obj = None;
+                    let mut best_obj_id = None;
                     {
                         let contents = clone_vec2(&db.world[ch.in_room() as usize].contents);
                         for oid in contents.into_iter() {
                             let obj = db.obj(oid);
                             if self.can_get_obj(db, ch, obj) && obj.get_obj_cost() > max {
-                                best_obj = Some(oid);
+                                best_obj_id = Some(oid);
                                 max = obj.get_obj_cost();
                             }
                         }
                     }
-                    if best_obj.is_some() {
-                        db.obj_from_room(best_obj.unwrap());
-                        db.obj_to_char(best_obj.unwrap(), chid);
-                        self.act(db,
+                    if best_obj_id.is_some() {
+                        db.obj_from_room(best_obj_id.unwrap());
+                        db.obj_to_char(best_obj_id.unwrap(), chid);
+                        let ch = db.ch(chid);
+                        let best_obj = db.obj(best_obj_id.unwrap());
+                        self.act(
+                            db,
                             "$n gets $p.",
                             false,
-                            Some(chid),
-                            Some(best_obj.unwrap()),
+                            Some(ch),
+                            Some(best_obj),
                             None,
                             TO_ROOM,
                         );
@@ -106,9 +109,7 @@ impl Game {
                     ROOM_NOMOB | ROOM_DEATH,
                 )
                 && (!ch.mob_flagged(MOB_STAY_ZONE)
-                    || db.world
-                        [db.exit(ch, door as usize).unwrap().to_room as usize]
-                        .zone
+                    || db.world[db.exit(ch, door as usize).unwrap().to_room as usize].zone
                         == db.world[ch.in_room() as usize].zone)
             {
                 perform_move(self, db, chid, door as i32, true);
@@ -118,15 +119,16 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
-                let peoples_in_room =
-                    clone_vec2(&db.world[ch.in_room() as usize].peoples);
+                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
                 for vict_id in peoples_in_room {
                     let vict = db.ch(vict_id);
                     if found {
                         break;
                     }
                     let ch = db.ch(chid);
-                    if vict.is_npc() || !self.can_see(db,ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    if vict.is_npc()
+                        || !self.can_see(db, ch, vict)
+                        || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
                     }
@@ -142,7 +144,7 @@ impl Game {
                     {
                         /* Can a master successfully control the charmed monster? */
                         let master_id = ch.master.clone();
-                        if self.aggressive_mob_on_a_leash(db, chid, master_id , vict_id) {
+                        if self.aggressive_mob_on_a_leash(db, chid, master_id, vict_id) {
                             continue;
                         }
                         self.hit(db, chid, vict_id, TYPE_UNDEFINED);
@@ -155,20 +157,21 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_MEMORY) && ch.memory().len() != 0 {
                 let mut found = false;
-                let peoples_in_room =
-                    clone_vec2(&db.world[ch.in_room() as usize].peoples);
+                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
                 for vict_id in peoples_in_room {
                     let vict = db.ch(vict_id);
                     if found {
                         break;
                     }
                     let ch = db.ch(chid);
-                    if vict.is_npc() || !self.can_see(db,ch, vict) || vict.prf_flagged(PRF_NOHASSLE)
+                    if vict.is_npc()
+                        || !self.can_see(db, ch, vict)
+                        || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
                     }
-                    let list =  ch.memory().clone();
-                    for id in list{
+                    let list = ch.memory().clone();
+                    for id in list {
                         let vict = db.ch(vict_id);
                         if id != vict.get_idnum() {
                             continue;
@@ -180,12 +183,13 @@ impl Game {
                         if self.aggressive_mob_on_a_leash(db, chid, master_id, vict_id) {
                             continue;
                         }
-
+                        let ch = db.ch(chid);
                         found = true;
-                        self.act(db,
+                        self.act(
+                            db,
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
@@ -211,17 +215,10 @@ impl Game {
                     > ((db.ch(ch.master.unwrap()).get_cha() - 2) / 3) as i32
             {
                 let master_id = ch.master.unwrap();
-                if !self.aggressive_mob_on_a_leash(db,
-                    chid,
-                    Some(master_id),
-                    master_id,
-                ) {
+                if !self.aggressive_mob_on_a_leash(db, chid, Some(master_id), master_id) {
                     let ch = db.ch(chid);
-                    if self.can_see(db,ch, db.ch(ch.master.unwrap()))
-                        && !db.ch(ch
-                            .master
-                            .unwrap())
-                            .prf_flagged(PRF_NOHASSLE)
+                    if self.can_see(db, ch, db.ch(ch.master.unwrap()))
+                        && !db.ch(ch.master.unwrap()).prf_flagged(PRF_NOHASSLE)
                     {
                         let victim_id = ch.master.unwrap();
                         self.hit(db, chid, victim_id, TYPE_UNDEFINED);
@@ -234,8 +231,7 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
-                let peoples_in_room =
-                    clone_vec2(&db.world[ch.in_room() as usize].peoples);
+                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
                 for vict_id in peoples_in_room {
                     let vict = db.ch(vict_id);
                     if found {
@@ -249,16 +245,18 @@ impl Game {
                     {
                         continue;
                     }
+                    let ch = db.ch(chid);
+                    let vict = db.ch(vict_id);
 
-                    self.act(db,
+                    self.act(
+                        db,
                         "$n jumps to the aid of $N!",
                         false,
-                        Some(chid),
+                        Some(ch),
                         None,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(VictimRef::Char(vict)),
                         TO_ROOM,
                     );
-let vict = db.ch(vict_id);
                     self.hit(db, chid, vict.fighting_id().unwrap(), TYPE_UNDEFINED);
                     found = true;
                 }
@@ -292,8 +290,7 @@ pub fn forget(db: &mut DB, chid: DepotId, victim_id: DepotId) {
     let victim_idnum = victim.get_idnum();
     let ch = db.ch_mut(chid);
 
-    ch.mob_specials.memory
-        .retain(|id| *id != victim_idnum);
+    ch.mob_specials.memory.retain(|id| *id != victim_idnum);
 }
 
 impl CharData {
@@ -312,7 +309,8 @@ impl CharData {
 const SNARL_CMD: AtomicUsize = AtomicUsize::new(0);
 impl Game {
     fn aggressive_mob_on_a_leash(
-        &mut self, db: &mut DB,
+        &mut self,
+        db: &mut DB,
         slave_id: DepotId,
         master_id: Option<DepotId>,
         attack_id: DepotId,
@@ -338,7 +336,8 @@ impl Game {
                 let victbuf = attack.get_name();
 
                 do_action(
-                    self, db,
+                    self,
+                    db,
                     slave_id,
                     &victbuf.clone(),
                     SNARL_CMD.load(Ordering::Relaxed),

@@ -395,10 +395,11 @@ impl Game {
                     db.stop_fighting(ch.fighting_id().unwrap());
                     db.stop_fighting(chid);
                 }
+                let ch = db.ch(chid);
                 self.act(db,
                     "$n disappears into the void.",
                     true,
-                    Some(chid),
+                    Some(ch),
                     None,
                     None,
                     TO_ROOM,
@@ -492,72 +493,75 @@ impl Game {
         for o in db.object_list.ids() {
             old_object_list.push(o);
         }
-        for j in old_object_list.into_iter() {
+        for j_id in old_object_list.into_iter() {
             /* If this is a corpse */
-            if db.obj(j).is_corpse() {
+            let j_obj = db.obj(j_id);
+            if j_obj.is_corpse() {
                 /* timer count down */
-                if db.obj(j).get_obj_timer() > 0 {
-                    db.obj_mut(j).decr_obj_timer(1);
+                if j_obj.get_obj_timer() > 0 {
+                    db.obj_mut(j_id).decr_obj_timer(1);
                 }
-
-                if db.obj(j).get_obj_timer() == 0 {
-                    if db.obj(j).carried_by.is_some() {
-                        let chid = db.obj(j).carried_by.unwrap();
+                let j_obj = db.obj(j_id);
+                if j_obj.get_obj_timer() == 0 {
+                    if j_obj.carried_by.is_some() {
+                        let chid = j_obj.carried_by.unwrap();
+                        let ch = db.ch(chid);
                         self.act(db, 
                             "$p decays in your hands.",
                             false,
-                            Some(chid),
-                            Some(j),
+                            Some(ch),
+                            Some(j_obj),
                             None,
                             TO_CHAR,
                         );
-                    } else if db.obj(j).in_room() != NOWHERE
-                        && db.world[db.obj(j).in_room() as usize]
+                    } else if j_obj.in_room() != NOWHERE
+                        && db.world[j_obj.in_room() as usize]
                             .peoples
                             .len()
                             != 0
                     {
                         let chid =
-                            db.world[db.obj(j).in_room() as usize].peoples[0].clone();
+                            db.world[j_obj.in_room() as usize].peoples[0].clone();
+                            let ch = db.ch(chid);
                         self.act(db, 
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(chid),
-                            Some(j),
+                            Some(ch),
+                            Some(j_obj),
                             None,
                             TO_ROOM,
                         );
                         self.act(db,
                             "A quivering horde of maggots consumes $p.",
                             true,
-                            Some(chid),
-                            Some(j),
+                            Some(ch),
+                            Some(j_obj),
                             None,
                             TO_CHAR,
                         );
                     }
                     let mut old_contains = vec![];
-                    for c in db.obj(j).contains.clone().into_iter() {
+                    for c in j_obj.contains.clone().into_iter() {
                         old_contains.push(c);
                     }
 
                     for jj in old_contains.into_iter() {
                         db.obj_from_obj(jj);
-
-                        if db.obj(j).in_obj.is_some() {
-                            db.obj_to_obj(jj, db.obj(j).in_obj.unwrap());
-                        } else if db.obj(j).carried_by.is_some() {
+                        let j_obj = db.obj(j_id);
+                        if j_obj.in_obj.is_some() {
+                            db.obj_to_obj(jj, j_obj.in_obj.unwrap());
+                        } else if j_obj.carried_by.is_some() {
                             db.obj_to_room(
                                 jj,
-                                db.ch(db.obj(j).carried_by.unwrap()).in_room(),
+                                db.ch(j_obj.carried_by.unwrap()).in_room(),
                             );
-                        } else if db.obj(j).in_room() != NOWHERE {
-                            db.obj_to_room(jj, db.obj(j).in_room());
+                        } else if j_obj.in_room() != NOWHERE {
+                            db.obj_to_room(jj, j_obj.in_room());
                         } else {
                             //   core_dump();
                         }
                     }
-                    self.extract_obj(db, j);
+                    self.extract_obj(db, j_id);
                 }
             }
         }

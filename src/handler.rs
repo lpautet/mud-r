@@ -572,8 +572,8 @@ impl Game {
                 db,
                 "You are zapped by $p and instantly let go of it.",
                 false,
-                Some(chid),
-                Some(oid),
+                Some(ch),
+                Some(obj),
                 None,
                 TO_CHAR,
             );
@@ -581,8 +581,8 @@ impl Game {
                 db,
                 "$n is zapped by $p and instantly lets go of it.",
                 false,
-                Some(chid),
-                Some(oid),
+                Some(ch),
+                Some(obj),
                 None,
                 TO_ROOM,
             );
@@ -954,7 +954,7 @@ impl Game {
                             db,
                             "$n's light begins to flicker and fade.",
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
@@ -965,7 +965,7 @@ impl Game {
                             db,
                             "$n's light sputters out and dies.",
                             false,
-                            Some(chid),
+                            Some(ch),
                             None,
                             None,
                             TO_ROOM,
@@ -1051,10 +1051,9 @@ impl Game {
                 }
                 let ch = db.ch(chid);
                 let desc_id = ch.desc.unwrap();
-                self.desc_mut(desc_id).set_state(ConMenu);
-                let ch = db.ch(chid);
-                let desc_id = ch.desc.unwrap();
-                self.write_to_output(desc_id, MENU);
+                let desc = self.desc_mut(desc_id);
+                desc.set_state(ConMenu);
+                desc.write_to_output( MENU);
             }
         }
 

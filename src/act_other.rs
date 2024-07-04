@@ -66,7 +66,7 @@ pub fn do_quit(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
         die(chid, game,db);
     } else {
         game
-            .act(db,"$n has left the game.", true, Some(chid), None, None, TO_ROOM);
+            .act(db,"$n has left the game.", true, Some(ch), None, None, TO_ROOM);
         let ch = db.ch(chid);
         game.mudlog(db,
             NRM,
@@ -281,9 +281,9 @@ pub fn do_steal(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 game.act(db,
                     "$E hasn't got that item.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_CHAR,
                 );
                 return;
@@ -294,20 +294,21 @@ pub fn do_steal(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                     return;
                 } else {
                     let oid = oid.unwrap();
+                    let obj = db.obj(oid);
                     game.act(db,
                         "You unequip $p and steal it.",
                         false,
-                        Some(chid),
-                        Some(oid),
+                        Some(ch),
+                        Some(obj),
                         None,
                         TO_CHAR,
                     );
                     game.act(db,
                         "$n steals $p from $N.",
                         false,
-                        Some(chid),
-                        Some(oid),
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        Some(obj),
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                     let eqid = game.unequip_char(db,vict_id, the_eq_pos).unwrap();
@@ -325,17 +326,17 @@ pub fn do_steal(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 game.act(db,
                     "$n tried to steal something from you!",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_VICT,
                 );
                 game.act(db,
                     "$n tries to steal something from $N.",
                     true,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_NOTVICT,
                 );
             } else {
@@ -360,17 +361,17 @@ pub fn do_steal(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             game.act(db,
                 "You discover that $n has $s hands in your wallet.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
             game.act(db,
                 "$n tries to steal gold from $N.",
                 true,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
         } else {
@@ -472,31 +473,32 @@ fn perform_group(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId) 
     }
     let vict = db.ch_mut(vict_id);
     vict.set_aff_flags_bits(AFF_GROUP);
-
+    let ch = db.ch(chid);
+    let vict = db.ch(vict_id);
     if chid != vict_id {
         game.act(db,
             "$N is now a member of your group.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
     }
     game.act(db,
         "You are now a member of $n's group.",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(vict_id)),
+        Some(VictimRef::Char(vict)),
         TO_VICT,
     );
     game.act(db,
         "$N is now a member of $n's group.",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(vict_id)),
+        Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
     return 1;
@@ -525,7 +527,7 @@ fn print_group(game: &mut Game, db: &mut DB, chid: DepotId) {
                 k.get_level(),
                 k.class_abbr()
             );
-            game.act(db,&buf, false, Some(chid), None, Some(VictimRef::Char(k_id)), TO_CHAR);
+            game.act(db,&buf, false, Some(ch), None, Some(VictimRef::Char(k)), TO_CHAR);
         }
         let k = db.ch(k_id);
         let list = k.followers.clone();
@@ -546,9 +548,9 @@ fn print_group(game: &mut Game, db: &mut DB, chid: DepotId) {
             game.act(db,
                 &buf,
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(f.follower)),
+                Some(VictimRef::Char(follower)),
                 TO_CHAR,
             );
         }
@@ -570,7 +572,7 @@ pub fn do_group(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         game.act(db,
             "You can not enroll group members without being head of a group.",
             false,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_CHAR,
@@ -603,12 +605,14 @@ pub fn do_group(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         || db.ch(vict_id.unwrap()).master.unwrap() != chid)
         && vict_id.unwrap() != chid
     {
+        let vict_id = vict_id.unwrap();
+        let vict = db.ch(vict_id);
         game.act(db,
             "$N must follow you to enter your group.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id.unwrap())),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
     } else {
@@ -622,26 +626,26 @@ pub fn do_group(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 game.act(db,
                     "$N is no longer a member of your group.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(vict_id)),
+                    Some(VictimRef::Char(vict)),
                     TO_CHAR,
                 );
             }
             game.act(db,
                 "You have been kicked out of $n's group!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
             game.act(db,
                 "$N has been kicked out of $n's group!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
             let vict = db.ch_mut(vict_id);
@@ -666,13 +670,14 @@ pub fn do_ungroup(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _
             if follower.aff_flagged(AFF_GROUP) {
                 let follower = db.ch_mut(f.follower);
                 follower.remove_aff_flags(AFF_GROUP);
-
+                let follower = db.ch(f.follower);
+                let ch = db.ch(chid);
                 game.act(db,
                     "$N has disbanded the group.",
                     true,
-                    Some(f.follower),
+                    Some(follower),
                     None,
-                    Some(VictimRef::Char(chid)),
+                    Some(VictimRef::Char(ch)),
                     TO_CHAR,
                 );
                 let follower = db.ch(f.follower);
@@ -708,29 +713,30 @@ pub fn do_ungroup(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _
     }
     let tch = db.ch_mut(tchid);
     tch.remove_aff_flags(AFF_GROUP);
-
+    let ch = db.ch(chid);
+    let tch = db.ch(tchid);
     game.act(db,
         "$N is no longer a member of your group.",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(tchid)),
+        Some(VictimRef::Char(tch)),
         TO_CHAR,
     );
     game.act(db,
         "You have been kicked out of $n's group!",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(tchid)),
+        Some(VictimRef::Char(tch)),
         TO_VICT,
     );
     game.act(db,
         "$N has been kicked out of $n's group!",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(tchid)),
+        Some(VictimRef::Char(tch)),
         TO_NOTVICT,
     );
     let tch = db.ch(tchid);
@@ -766,11 +772,11 @@ let list = k.followers.clone();
     for f in list {
         let follower = db.ch(f.follower);
         if follower.aff_flagged(AFF_GROUP) && f.follower != chid {
-            game.act(db,&buf, true, Some(chid), None, Some(VictimRef::Char(f.follower)), TO_VICT);
+            game.act(db,&buf, true, Some(ch), None, Some(VictimRef::Char(follower)), TO_VICT);
         }
     }
     if k_id != chid {
-        game.act(db,&buf, true, Some(chid), None, Some(VictimRef::Char(k_id)), TO_VICT);
+        game.act(db,&buf, true, Some(ch), None, Some(VictimRef::Char(k)), TO_VICT);
     }
 
     game.send_to_char(ch, "You report to the group.\r\n");

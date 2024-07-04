@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -39,7 +39,7 @@ use crate::structs::{
     WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R,
 };
 use crate::util::{
-   get_filename, hssh, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY,
+    get_filename, hssh, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY,
 };
 use crate::{Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
@@ -50,11 +50,7 @@ const CRYO_FACTOR: i32 = 4;
 pub const LOC_INVENTORY: i32 = 0;
 pub const MAX_BAG_ROWS: i32 = 5;
 
-pub fn obj_from_store(
-    db: &mut DB,
-    object: &ObjFileElem,
-    location: &mut i32,
-) -> Option<DepotId> {
+pub fn obj_from_store(db: &mut DB, object: &ObjFileElem, location: &mut i32) -> Option<DepotId> {
     *location = 0;
     let itemnum = db.real_object(object.item_number);
     if itemnum == NOTHING {
@@ -227,7 +223,8 @@ fn auto_equip(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, locatio
             }
         } else {
             /* Oops, saved a player with double equipment? */
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 BRF,
                 LVL_IMMORT as i32,
                 true,
@@ -457,7 +454,8 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
             // #else
             let oin = object.item_number;
             let ch = db.ch(chid);
-            game.send_to_char(ch,
+            game.send_to_char(
+                ch,
                 format!(
                     " [{:5}] ({:5}au) {:20}\r\n",
                     oin,
@@ -467,7 +465,7 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
                 .as_str(),
             );
             // #endif
-            game.extract_obj(db,oid.unwrap());
+            game.extract_obj(db, oid.unwrap());
         }
     }
 }
@@ -555,7 +553,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
                          "\r\n********************* NOTICE *********************\r\nThere was a problem loading your objects from disk.\r\nContact a God for assistance.\r\n");
         }
         let ch = db.ch(chid);
-        game.mudlog(db,
+        game.mudlog(
+            db,
             NRM,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
@@ -583,7 +582,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
         let num_of_days = (time_now() - rent.time as u64) / SECS_PER_REAL_DAY;
         let cost = rent.net_cost_per_diem * num_of_days as i32;
         if cost > ch.get_gold() + ch.get_bank_gold() {
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 BRF,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -593,7 +593,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
                 )
                 .as_str(),
             );
-            crash_crashsave( db, chid);
+            crash_crashsave(db, chid);
             return 2;
         } else {
             let ch = db.ch_mut(chid);
@@ -607,7 +607,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
     let ch = db.ch(chid);
     match orig_rent_code {
         RENT_RENTED => {
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -615,7 +616,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
             );
         }
         RENT_CRASH => {
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -627,7 +629,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
             );
         }
         RENT_CRYO => {
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -635,7 +638,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
             );
         }
         RENT_FORCED | RENT_TIMEDOUT => {
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -648,7 +652,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
         }
         _ => {
             let rc = rent.rentcode;
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 BRF,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -683,7 +688,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
         }
 
         num_objs += 1;
-        let oid = obj_from_store( db, &object, &mut location);
+        let oid = obj_from_store(db, &object, &mut location);
         if oid.is_none() {
             continue;
         }
@@ -800,7 +805,8 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
 
     /* Little hoarding check. -gg 3/1/98 */
     let ch = db.ch(chid);
-    game.mudlog(db,
+    game.mudlog(
+        db,
         NRM,
         max(ch.get_invis_lev() as i32, LVL_GOD as i32),
         true,
@@ -845,11 +851,10 @@ fn crash_save(db: &mut DB, oid: Option<DepotId>, fp: &mut File, location: i32) -
             }
 
             let obj_weight = db.obj(oid.unwrap()).get_obj_weight();
-            db.obj_mut(db.obj(toid).in_obj
-                .unwrap())
+            db.obj_mut(db.obj(toid).in_obj.unwrap())
                 .incr_obj_weight(-obj_weight);
 
-                toid = db.obj(toid).in_obj.unwrap();
+            toid = db.obj(toid).in_obj.unwrap();
         }
 
         if !result {
@@ -992,7 +997,7 @@ pub fn crash_crashsave(db: &mut DB, chid: DepotId) {
     }
     let ch = db.ch(chid);
     let list = ch.carrying.clone();
-    for o in list{
+    for o in list {
         if !crash_save(db, Some(o), &mut fp, 0) {
             return;
         }
@@ -1024,7 +1029,7 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
 
     crash_extract_norent_eq(game, db, chid);
     let ch = db.ch(chid);
-    let list =  ch.carrying.clone();
+    let list = ch.carrying.clone();
     for o in list {
         crash_extract_norents(game, db, o);
     }
@@ -1053,7 +1058,10 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
             }
         }
 
-        while { let ch = db.ch(chid); (cost > ch.get_gold() + ch.get_bank_gold()) && ch.carrying.len() != 0 }{
+        while {
+            let ch = db.ch(chid);
+            (cost > ch.get_gold() + ch.get_bank_gold()) && ch.carrying.len() != 0
+        } {
             let ch = db.ch(chid);
             let carrying = ch.carrying.clone();
             crash_extract_expensive(game, db, carrying);
@@ -1096,13 +1104,13 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
         let ch = db.ch(chid);
         if ch.get_eq(j).is_some() {
             let ch = db.ch(chid);
-let oid = ch.get_eq(j);
+            let oid = ch.get_eq(j);
             if !crash_save(db, oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = db.ch(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight( db, oid);
+            crash_restore_weight(db, oid);
             let ch = db.ch(chid);
             let oid = ch.get_eq(j);
             crash_extract_objs(game, db, oid);
@@ -1142,7 +1150,7 @@ pub fn crash_rentsave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
     crash_extract_norent_eq(game, db, chid);
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents(game,db,  o);
+        crash_extract_norents(game, db, o);
     }
     let ch = db.ch(chid);
     let mut rent = RentInfo {
@@ -1175,14 +1183,14 @@ pub fn crash_rentsave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
             }
             let ch = db.ch(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(db,oid );
+            crash_restore_weight(db, oid);
             let ch = db.ch(chid);
-            crash_extract_objs(game,db,  ch.get_eq(j));
+            crash_extract_objs(game, db, ch.get_eq(j));
         }
     }
     let ch = db.ch(chid);
     let list = ch.carrying.clone();
-    for o in  list {
+    for o in list {
         if !crash_save(db, Some(o), &mut fp, 0) {
             return;
         }
@@ -1212,7 +1220,7 @@ fn crash_cryosave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
     }
     let mut fp = fp.unwrap();
 
-    crash_extract_norent_eq(game,db,  chid);
+    crash_extract_norent_eq(game, db, chid);
     let ch = db.ch(chid);
     let list = ch.carrying.clone();
     for o in list {
@@ -1265,8 +1273,8 @@ fn crash_cryosave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
 * Routines used for the receptionist					  *
 ************************************************************************* */
 
-fn crash_rent_deadline(game: &mut Game, db: &mut DB, chid: DepotId,
-    recep_id: DepotId, cost: i32) {
+fn crash_rent_deadline(game: &mut Game, db: &mut DB, chid: DepotId, recep_id: DepotId, cost: i32) {
+    let recep = db.ch(recep_id);
     let ch = db.ch(chid);
     if cost == 0 {
         return;
@@ -1279,34 +1287,41 @@ on hand and in the bank.'\r\n",
         rent_deadline,
         if rent_deadline != 1 { "s" } else { "" }
     );
-    game.act(db,
+    game.act(
+        db,
         &buf,
         false,
-        Some(recep_id),
+        Some(recep),
         None,
-        Some(VictimRef::Char(chid)),
+        Some(VictimRef::Char(ch)),
         TO_VICT,
     );
 }
 
 fn crash_report_unrentables(
-    game: &mut Game, db: &DB,
+    game: &mut Game,
+    db: &DB,
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
 ) -> i32 {
     let ch = db.ch(chid);
+    let recep = db.ch(recep_id);
     let mut has_norents = 0;
 
     if crash_is_unrentable(db.obj(oid)) {
         has_norents = 1;
-        let buf = format!("$n tells you, 'You cannot store {}.'", game.objs(db, db.obj(oid), ch));
-        game.act(db,
+        let buf = format!(
+            "$n tells you, 'You cannot store {}.'",
+            game.objs(db, db.obj(oid), ch)
+        );
+        game.act(
+            db,
             &buf,
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
     }
@@ -1318,7 +1333,8 @@ fn crash_report_unrentables(
 }
 
 fn crash_report_rent(
-    game: &mut Game, db: &DB,
+    game: &mut Game,
+    db: &DB,
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
@@ -1328,6 +1344,7 @@ fn crash_report_rent(
     factor: i32,
 ) {
     let ch = db.ch(chid);
+    let recep = db.ch(recep_id);
     if !crash_is_unrentable(db.obj(oid)) {
         *nitems += 1;
         *cost += max(0, db.obj(oid).get_obj_rent() * factor);
@@ -1337,12 +1354,13 @@ fn crash_report_rent(
                 db.obj(oid).get_obj_rent() * factor,
                 game.objs(db, db.obj(oid), ch)
             );
-            game.act(db,
+            game.act(
+                db,
                 &buf,
                 false,
-                Some(recep_id),
+                Some(recep),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
         }
@@ -1353,12 +1371,14 @@ fn crash_report_rent(
 }
 
 fn crash_offer_rent(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     recep_id: DepotId,
     display: bool,
     factor: i32,
 ) -> i32 {
+    let recep = db.ch(recep_id);
     let ch = db.ch(chid);
     let mut numitems = 0;
 
@@ -1373,7 +1393,7 @@ fn crash_offer_rent(
         if eqi.is_none() {
             continue;
         }
-        norent += crash_report_unrentables(game,db,  chid, recep_id, eqi.unwrap());
+        norent += crash_report_unrentables(game, db, chid, recep_id, eqi.unwrap());
     }
     if norent != 0 {
         return 0;
@@ -1384,10 +1404,11 @@ fn crash_offer_rent(
     let list = ch.carrying.clone();
     for o in list {
         crash_report_rent(
-            game,db,
+            game,
+            db,
             chid,
             recep_id,
-        o,
+            o,
             &mut totalcost,
             &mut numitems,
             display,
@@ -1396,12 +1417,13 @@ fn crash_offer_rent(
     }
     for i in 0..NUM_WEARS {
         let ch = db.ch(chid);
-        let eqi= ch.get_eq(i);
+        let eqi = ch.get_eq(i);
         if eqi.is_none() {
             continue;
         }
         crash_report_rent(
-            game,db,
+            game,
+            db,
             chid,
             recep_id,
             ch.get_eq(i).unwrap(),
@@ -1413,12 +1435,13 @@ fn crash_offer_rent(
     }
 
     if numitems == 0 {
-        game.act(db,
+        game.act(
+            db,
             "$n tells you, 'But you are not carrying anything!  Just quit!'",
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return 0;
@@ -1428,12 +1451,13 @@ fn crash_offer_rent(
             "$n tells you, 'Sorry, but I cannot store more than {} items.'",
             MAX_OBJ_SAVE
         );
-        game.act(db,
+        game.act(
+            db,
             &buf,
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return 0;
@@ -1443,12 +1467,13 @@ fn crash_offer_rent(
             "$n tells you, 'Plus, my {} coin fee..'",
             MIN_RENT_COST * factor
         );
-        game.act(db,
+        game.act(
+            db,
             &buf,
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
 
@@ -1461,23 +1486,25 @@ fn crash_offer_rent(
                 ""
             }
         );
-        game.act(db,
+        game.act(
+            db,
             &buf,
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
 
         let ch = db.ch(chid);
         if totalcost > ch.get_gold() + ch.get_bank_gold() {
-            game.act(db,
+            game.act(
+                db,
                 "$n tells you, '...which I see you can't afford.'",
                 false,
-                Some(recep_id),
+                Some(recep),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             return 0;
@@ -1489,7 +1516,8 @@ fn crash_offer_rent(
 }
 
 fn gen_receptionist(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     recep_id: DepotId,
     cmd: i32,
@@ -1504,7 +1532,8 @@ fn gen_receptionist(
 
     if cmd == 0 && rand_number(0, 5) == 0 {
         do_action(
-            game,db,
+            game,
+            db,
             recep_id,
             "",
             find_command(ACTION_TABLE[rand_number(0, 8) as usize]).unwrap(),
@@ -1522,17 +1551,19 @@ fn gen_receptionist(
     }
 
     if recep.awake() {
-        game.send_to_char(ch,
+        game.send_to_char(
+            ch,
             format!("{} is unable to talk to you...\r\n", hssh(recep)).as_str(),
         );
         return true;
     }
 
-    if !game.can_see(db,recep, ch) {
-        game.act(db,
+    if !game.can_see(db, recep, ch) {
+        game.act(
+            db,
             "$n says, 'I don't deal with people I can't see!'",
             false,
-            Some(recep_id),
+            Some(recep),
             None,
             None,
             TO_ROOM,
@@ -1541,19 +1572,20 @@ fn gen_receptionist(
     }
 
     if FREE_RENT {
-        game.act(db,
+        game.act(
+            db,
             "$n tells you, 'Rent is free here.  Just quit, and your objects will be saved!'",
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         return true;
     }
 
     if cmd_is(cmd, "rent") {
-        let cost = crash_offer_rent(game,db,  chid, recep_id, false, mode);
+        let cost = crash_offer_rent(game, db, chid, recep_id, false, mode);
         if cost == 0 {
             return true;
         }
@@ -1569,22 +1601,26 @@ fn gen_receptionist(
                 cost
             );
         }
-        game.act(db,
+        let recep = db.ch(recep_id);
+        let ch = db.ch(chid);
+        game.act(
+            db,
             &buf,
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         let ch = db.ch(chid);
         if cost > ch.get_gold() + ch.get_bank_gold() {
-            game.act(db,
+            game.act(
+                db,
                 "$n tells you, '...which I see you can't afford.'",
                 false,
-                Some(recep_id),
+                Some(recep),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             return true;
@@ -1594,17 +1630,21 @@ fn gen_receptionist(
         }
 
         if mode == RENT_FACTOR {
-            game.act(db,
+            let recep = db.ch(recep_id);
+            let ch = db.ch(chid);
+            game.act(
+                db,
                 "$n stores your belongings and helps you into your private chamber.",
                 false,
-                Some(recep_id),
+                Some(recep),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
             crash_rentsave(game, db, chid, cost);
             let ch = db.ch(chid);
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -1618,19 +1658,23 @@ fn gen_receptionist(
             );
         } else {
             /* cryo */
-            game.act(db,
+            let ch = db.ch(chid);
+            let recep = db.ch(recep_id);
+            game.act(
+                db,
                 "$n stores your belongings and helps you into your private chamber.\r\n\
 A white mist appears in the room, chilling you to the bone...\r\n\
 You begin to lose consciousness...",
                 false,
-                Some(recep_id),
+                Some(recep),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
-            crash_cryosave(game, db,chid, cost);
+            crash_cryosave(game, db, chid, cost);
             let ch = db.ch(chid);
-            game.mudlog(db,
+            game.mudlog(
+                db,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -1639,13 +1683,15 @@ You begin to lose consciousness...",
             let ch = db.ch_mut(chid);
             ch.set_plr_flag_bit(PLR_CRYO);
         }
-
-        game.act(db,
+        let ch = db.ch(chid);
+        let recep = db.ch(recep_id);
+        game.act(
+            db,
             "$n helps $N into $S private chamber.",
             false,
-            Some(recep_id),
+            Some(recep),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
         let ch = db.ch(chid);
@@ -1655,12 +1701,15 @@ You begin to lose consciousness...",
         db.extract_char(chid); /* It saves. */
     } else {
         crash_offer_rent(game, db, chid, recep_id, true, mode);
-        game.act(db,
+        let recep = db.ch(recep_id);
+        let ch = db.ch(chid);
+        game.act(
+            db,
             "$N gives $n an offer.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(recep_id)),
+            Some(VictimRef::Char(recep)),
             TO_ROOM,
         );
     }
@@ -1668,20 +1717,22 @@ You begin to lose consciousness...",
 }
 
 pub fn receptionist(
-    game: &mut Game,db: &mut DB,
-    chid: DepotId, 
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
     me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     match me {
-        MeRef::Char(recep) => gen_receptionist(game, db,chid, recep, cmd, argument, RENT_FACTOR),
+        MeRef::Char(recep) => gen_receptionist(game, db, chid, recep, cmd, argument, RENT_FACTOR),
         _ => panic!("Unexpected MeRef type in receptionist"),
     }
 }
 
 pub fn cryogenicist(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game,
+    db: &mut DB,
     chid: DepotId,
     me: MeRef,
     cmd: i32,

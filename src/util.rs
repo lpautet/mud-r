@@ -1490,28 +1490,29 @@ impl Game {
 
         if ch.aff_flagged(AFF_CHARM) {
             let master_id = ch.master.unwrap();
+            let master = db.ch(master_id);
             self.act(db,
                 "You realize that $N is a jerk!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_CHAR,
             );
             self.act(db,
                 "$n realizes that $N is a jerk!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_NOTVICT,
             );
             self.act(db,
                 "$n hates your guts!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
@@ -1519,28 +1520,29 @@ impl Game {
             }
         } else {
             let master_id: DepotId = ch.master.unwrap();
+            let master = db.ch(master_id);
             self.act(db,
                 "You stop following $N.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_CHAR,
             );
             self.act(db,
                 "$n stops following $N.",
                 true,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_NOTVICT,
             );
             self.act(db,
                 "$n stops following you.",
                 true,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(master_id)),
+                Some(VictimRef::Char(master)),
                 TO_VICT,
             );
         }
@@ -1600,13 +1602,14 @@ pub fn add_follower(game: &mut Game, db: &mut DB, chid: DepotId, leader_id: Depo
     };
     let leader = db.ch_mut(leader_id);
     leader.followers.push(k);
-
+    let ch = db.ch(chid);
+    let leader = db.ch(leader_id);
     game.act(db,
         "You now follow $N.",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(leader_id)),
+        Some(VictimRef::Char(leader)),
         TO_CHAR,
     );
     let ch = db.ch(chid);
@@ -1615,18 +1618,18 @@ pub fn add_follower(game: &mut Game, db: &mut DB, chid: DepotId, leader_id: Depo
         game.act(db,
             "$n starts following you.",
             true,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(leader_id)),
+            Some(VictimRef::Char(leader)),
             TO_VICT,
         );
     }
     game.act(db,
         "$n starts to follow $N.",
         true,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(leader_id)),
+        Some(VictimRef::Char(leader)),
         TO_NOTVICT,
     );
 }

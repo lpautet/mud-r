@@ -78,46 +78,48 @@ pub fn do_assist(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
             game.act(db,
                 "But nobody is fighting $M!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(helpee_id)),
+                Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
         } else if game.can_see(db,ch, db.ch(opponent_id.unwrap())) {
             game.act(db,
                 "You can't see who is fighting $M!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(helpee_id)),
+                Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
         } else if !PK_ALLOWED && !db.ch(opponent_id.unwrap()).is_npc() {
             /* prevent accidental pkill */
+            let opponent = db.ch(opponent_id.unwrap());
             game.act(db,
                 "Use 'murder' if you really want to attack $N.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(opponent_id.unwrap())),
+                Some(VictimRef::Char(opponent)),
                 TO_CHAR,
             );
         } else {
+            let helpee = db.ch(helpee_id);
             game.send_to_char(ch, "You join the fight!\r\n");
             game.act(db,
                 "$N assists you!",
                 false,
-                Some(helpee_id),
+                Some(helpee),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
             game.act(db,
                 "$n assists $N.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(helpee_id)),
+                Some(VictimRef::Char(helpee)),
                 TO_NOTVICT,
             );
             game.hit(db, chid, opponent_id.unwrap(), TYPE_UNDEFINED);
@@ -140,24 +142,28 @@ pub fn do_hit(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     } {
         game.send_to_char(ch, "They don't seem to be here.\r\n");
     } else if vict_id.unwrap() == chid {
+        let vict_id = vict_id.unwrap();
+        let vict = db.ch(vict_id);
         game.send_to_char(ch, "You hit yourself...OUCH!.\r\n");
         game.act(db,
             "$n hits $mself, and says OUCH!",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id.unwrap())),
+            Some(VictimRef::Char(vict)),
             TO_ROOM,
         );
     } else if ch.aff_flagged(AFF_CHARM)
         && ch.master.unwrap() == vict_id.unwrap()
     {
+        let vict_id = vict_id.unwrap();
+        let vict = db.ch(vict_id);
         game.act(db,
             "$N is just such a good friend, you simply can't hit $M.",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id.unwrap())),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
     } else {
@@ -216,28 +222,29 @@ pub fn do_kill(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd:
         } else if chid ==  vict_id.unwrap() {
             game.send_to_char(ch, "Your mother would be so sad.. :(\r\n");
         } else {
+            let vict = db.ch(vict_id.unwrap());
             game.act(db,
                 "You chop $M to pieces!  Ah!  The blood!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id.unwrap())),
+                Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
             game.act(db,
                 "$N chops you to pieces!",
                 false,
-                Some(vict_id.unwrap()),
+                Some(vict),
                 None,
-                Some(VictimRef::Char(chid)),
+                Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
             game.act(db,
                 "$n brutally slays $N!",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id.unwrap())),
+                Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
             game.raw_kill(db, vict_id.unwrap());
@@ -290,25 +297,25 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
         game.act(db,
             "You notice $N lunging at you!",
             false,
-            Some(vict_id),
+            Some(vict),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_CHAR,
         );
         game.act(db,
             "$e notices you lunging at $m!",
             false,
-            Some(vict_id),
+            Some(vict),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_VICT,
         );
         game.act(db,
             "$n notices $N lunging at $m!",
             false,
-            Some(vict_id),
+            Some(vict),
             None,
-            Some(VictimRef::Char(chid)),
+            Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
         game.hit(db,vict_id, chid, TYPE_UNDEFINED);
@@ -354,18 +361,17 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         }
         if vict_id.is_some() {
             let vict_id = vict_id.unwrap();
-
+            let vict = db.ch(vict_id);
             let buf = format!("$N orders you to '{}'", message);
-            game.act(db,&buf, false, Some(vict_id), None, Some(VictimRef::Char(chid)), TO_CHAR);
+            game.act(db,&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
             game.act(db,
                 "$n gives $N an order.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
-                Some(VictimRef::Char(vict_id)),
+                Some(VictimRef::Char(vict)),
                 TO_ROOM,
             );
-            let vict = db.ch(vict_id);
             if vict.master.is_some()
                 && vict.master.unwrap() != chid
                 || !vict.aff_flagged(AFF_CHARM)
@@ -373,7 +379,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 game.act(db,
                     "$n has an indifferent look.",
                     false,
-                    Some(vict_id),
+                    Some(vict),
                     None,
                     None,
                     TO_ROOM,
@@ -386,7 +392,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             /* This is order "followers" */
 
             let buf = format!("$n issues the order '{}'.", message);
-            game.act(db,&buf, false, Some(chid), None, None, TO_ROOM);
+            game.act(db,&buf, false, Some(ch), None, None, TO_ROOM);
             let ch = db.ch(chid);
             let list = ch.followers.clone();
             for k_id in list {
@@ -431,7 +437,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
             game.act(db,
                 "$n panics, and attempts to flee!",
                 true,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -454,7 +460,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
                 game.act(db,
                     "$n tries to flee, but can't!",
                     true,
-                    Some(chid),
+                    Some(ch),
                     None,
                     None,
                     TO_ROOM,
@@ -574,14 +580,15 @@ pub fn do_rescue(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
             }
         }
     }
+    let vict = db.ch(vict_id);
 
     if tmp_ch_id.is_none() {
         game.act(db,
             "But nobody is fighting $M!",
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(vict_id)),
+            Some(VictimRef::Char(vict)),
             TO_CHAR,
         );
         return;
@@ -598,20 +605,19 @@ pub fn do_rescue(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
     game.act(db,
         "You are rescued by $N, you are confused!",
         false,
-        Some(vict_id),
+        Some(vict),
         None,
-        Some(VictimRef::Char(chid)),
+        Some(VictimRef::Char(ch)),
         TO_CHAR,
     );
     game.act(db,
         "$n heroically rescues $N!",
         false,
-        Some(chid),
+        Some(ch),
         None,
-        Some(VictimRef::Char(vict_id)),
+        Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
-    let vict = db.ch(vict_id);
     if vict.fighting_id().is_some() && vict.fighting_id().unwrap() == tmp_ch_id {
         db.stop_fighting(vict_id);
     }

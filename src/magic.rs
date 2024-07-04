@@ -12,7 +12,7 @@
 use std::cmp::{max, min};
 
 use log::error;
-use crate::depot::{DepotId, HasId};
+use crate::depot::DepotId;
 use crate::VictimRef;
 
 use crate::class::saving_throws;
@@ -245,9 +245,9 @@ pub fn mag_damage(
                 game.act(db,
                     "The gods protect $N.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(victim_id)),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
                 return 0;
@@ -262,9 +262,9 @@ pub fn mag_damage(
                 game.act(db,
                     "The gods protect $N.",
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
-                    Some(VictimRef::Char(victim_id)),
+                    Some(VictimRef::Char(victim)),
                     TO_CHAR,
                 );
                 return 0;
@@ -499,7 +499,7 @@ pub fn mag_affects(
                     victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
-                game.act(db,"$n goes to sleep.", true, Some(victim_id.unwrap()), None, None, TO_ROOM);
+                game.act(db,"$n goes to sleep.", true, victim, None, None, TO_ROOM);
                 let mut victim = victim_id.map(|v| db.ch_mut(v));
                 victim.as_mut().unwrap().set_pos(POS_SLEEPING);
             }
@@ -575,12 +575,13 @@ pub fn mag_affects(
         }
     }
     let victim = victim_id.map(|v| db.ch(v));
+    let ch = db.ch(chid);
     if !to_vict.is_empty() {
-        game.act(db,to_vict, false, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(chid)), TO_CHAR);
+        game.act(db,to_vict, false, victim, None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     let victim = victim_id.map(|v| db.ch(v));
     if !to_room.is_empty() {
-        game.act(db,to_room, true, if victim.is_none() { None} else {Some(victim.unwrap().id())}, None, Some(VictimRef::Char(chid)), TO_ROOM);
+        game.act(db,to_room, true, victim, None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 /*
@@ -703,6 +704,7 @@ pub fn mag_areas(
         return;
     }
     let chid = chid.unwrap();
+    let ch = db.ch(chid);
     /*
      * to add spells to this fn, just add the message here plus an entry
      * in mag_damage for the damaging part of the spell.
@@ -716,10 +718,10 @@ pub fn mag_areas(
     }
 
     if !to_char.is_empty() {
-        game.act(db, to_char, false, Some(chid), None, None, TO_CHAR);
+        game.act(db, to_char, false, Some(ch), None, None, TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(db, to_room, false, Some(chid), None, None, TO_ROOM);
+        game.act(db, to_room, false, Some(ch), None, None, TO_ROOM);
     }
     let ch = db.ch(chid);
     let peoples = clone_vec2(&db.world[ch.in_room() as usize].peoples);
@@ -833,7 +835,7 @@ pub fn mag_summons(
                 game.act(db,
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
-                    Some(chid),
+                    Some(ch),
                     None,
                     None,
                     TO_CHAR,
@@ -888,12 +890,14 @@ pub fn mag_summons(
             mob.player.name = name;
             mob.player.short_descr = descr;
         }
+        let ch = db.ch(chid);
+        let mob = db.ch(mob_id);
         game.act(db,
             MAG_SUMMON_MSGS[msg],
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(mob_id)),
+            Some(VictimRef::Char(mob)),
             TO_ROOM,
         );
         add_follower(game, db, mob_id, chid);
@@ -1004,11 +1008,13 @@ pub fn mag_unaffects(
     }
 
     db.affect_from_char(victim_id, spell as i16);
+    let victim = db.ch(victim_id);
+    let ch = db.ch(chid);
     if !to_vict.is_empty() {
-        game.act(db, to_vict, false, Some(victim_id), None, Some(VictimRef::Char(chid)), TO_CHAR);
+        game.act(db, to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(db, to_room, false, Some(victim_id), None, Some(VictimRef::Char(chid)), TO_ROOM);
+        game.act(db, to_room, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 
@@ -1083,16 +1089,17 @@ pub fn mag_alter_objs(
         _ => {}
     }
     let ch = db.ch(chid);
+    let obj = db.obj(oid);
     if to_char.is_empty() {
         game.send_to_char(ch, NOEFFECT);
     } else {
-        game.act(db, to_char, true, Some(chid), Some(oid), None, TO_CHAR);
+        game.act(db, to_char, true, Some(ch), Some(obj), None, TO_CHAR);
     }
 
     if !to_room.is_empty() {
-        game.act(db, to_room, true, Some(chid), Some(oid), None, TO_ROOM);
+        game.act(db, to_room, true, Some(ch), Some(obj), None, TO_ROOM);
     } else if !to_char.is_empty() {
-        game.act(db, to_char, true, Some(chid), Some(oid), None, TO_ROOM);
+        game.act(db, to_char, true, Some(ch), Some(obj), None, TO_ROOM);
     }
 }
 
@@ -1113,9 +1120,9 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
             return;
         }
     }
-    let tobj = db.read_object(z, VIRTUAL);
+    let tobj_id = db.read_object(z, VIRTUAL);
     let ch = db.ch(chid);
-    if tobj.is_none() {
+    if tobj_id.is_none() {
         game.send_to_char(ch, "I seem to have goofed.\r\n");
         error!(
             "SYSERR: spell_creations, spell {}, obj {}: obj not found",
@@ -1123,12 +1130,14 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
         );
         return;
     }
-    let tobj = tobj.unwrap();
-    db.obj_to_char(tobj, chid);
+    let tobj_id = tobj_id.unwrap();
+    db.obj_to_char(tobj_id, chid);
+    let ch = db.ch(chid);
+    let tobj = db.obj(tobj_id);
     game.act(db, 
         "$n creates $p.",
         false,
-        Some(chid),
+        Some(ch),
         Some(tobj),
         None,
         TO_ROOM,
@@ -1136,7 +1145,7 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
     game.act(db, 
         "You create $p.",
         false,
-        Some(chid),
+        Some(ch),
         Some(tobj),
         None,
         TO_CHAR,

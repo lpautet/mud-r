@@ -127,12 +127,12 @@ impl Game {
         }
         let ch = db.ch_mut(chid);
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
-
+        let ch = db.ch(chid);
         if ch.get_level() < LVL_IMMORT as u8 {
             self.act(db,
                 "$n slowly fades into existence.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -141,7 +141,7 @@ impl Game {
             self.act(db,
                 "You feel a strange presence as $n appears, seemingly from nowhere.",
                 false,
-                Some(chid),
+                Some(ch),
                 None,
                 None,
                 TO_ROOM,
@@ -418,15 +418,15 @@ pub fn change_alignment(db: &mut DB, chid: DepotId, victim_id: DepotId) {
 
 impl Game {
     pub fn death_cry(&mut self, db: & DB,  chid: DepotId) {
+        let ch = db.ch(chid);
         self.act(db,
             "Your blood freezes as you hear $n's death cry.",
             false,
-            Some(chid),
+            Some(ch),
             None,
             None,
             TO_ROOM,
         );
-        let ch = db.ch(chid);
         let ch_in_room = ch.in_room();
         for door in 0..NUM_OF_DIRS {
             let ch = db.ch(chid);
@@ -608,6 +608,8 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 impl Game {
     /* message for doing damage with a weapon */
     pub fn dam_message(&mut self, db: & DB,  dam: i32, chid: DepotId, victim_id: DepotId, mut w_type: i32) {
+        let ch = db.ch(chid);
+        let victim = db.ch(victim_id);
         struct DamWeaponType {
             to_room: &'static str,
             to_char: &'static str,
@@ -691,7 +693,7 @@ impl Game {
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(db,&buf, false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_NOTVICT);
+        self.act(db,&buf, false, Some(ch), None, Some(VictimRef::Char(victim)), TO_NOTVICT);
 
         /* damage message to damager */
         let ch = db.ch(chid);
@@ -701,7 +703,7 @@ impl Game {
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(db,&buf, false, Some(chid), None, Some(VictimRef::Char(victim_id)), TO_CHAR);
+        self.act(db,&buf, false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
         let ch = db.ch(chid);
         self.send_to_char(ch, CCNRM!(ch, C_CMP));
 
@@ -716,9 +718,9 @@ impl Game {
         self.act(db,
             &buf,
             false,
-            Some(chid),
+            Some(ch),
             None,
-            Some(VictimRef::Char(victim_id)),
+            Some(VictimRef::Char(victim)),
             TO_VICT | TO_SLEEP,
         );
         let victim = db.ch(victim_id);
@@ -738,9 +740,8 @@ impl Game {
     ) -> i32 {
         let ch = db.ch(chid);
         let vict = db.ch(vict_id);
-        let weap_b = db.ch(chid).get_eq(WEAR_WIELD as i8).clone();
-        let weap = weap_b;
-        let weapref = if weap.is_none() { None } else { Some(weap.unwrap())};
+        let weap_id = db.ch(chid).get_eq(WEAR_WIELD as i8).clone();
+        let weap = weap_id.map(|id| db.obj(id));
 
         for i in 0..db.fight_messages.len() {
             if db.fight_messages[i].a_type == attacktype {
@@ -755,25 +756,25 @@ impl Game {
                     self.act(db,
                         attacker_msg,
                         false,
-                        Some(chid),
-                        weapref,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
                         TO_CHAR,
                     );
                     self.act(db,
                         victim_msg,
                         false,
-                        Some(chid),
-                        weapref,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
                         TO_VICT,
                     );
                     self.act(db,
                         room_msg,
                         false,
-                        Some(chid),
-                        weapref,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                 } else if dam != 0 {
@@ -790,9 +791,9 @@ impl Game {
                             self.act(db,
                                 attacker_msg,
                                 false,
-                                Some(chid),
-                                weapref,
-                                Some(VictimRef::Char(vict_id)),
+                                Some(ch),
+                                weap,
+                                Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
                             let ch = db.ch(chid);
@@ -803,9 +804,9 @@ impl Game {
                         self.act(db,
                             victim_msg,
                             false,
-                            Some(chid),
-                            weapref,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
                         let vict = db.ch(vict_id);
@@ -814,9 +815,9 @@ impl Game {
                         self.act(db,
                             room_msg,
                             false,
-                            Some(chid),
-                            weapref,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
                             TO_NOTVICT,
                         );
                     } else {
@@ -828,9 +829,9 @@ impl Game {
                             self.act(db,
                                 attacker_msg,
                                 false,
-                                Some(chid),
-                                weapref,
-                                Some(VictimRef::Char(vict_id)),
+                                Some(ch),
+                                weap,
+                                Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
                             let ch = db.ch(chid);
@@ -841,9 +842,9 @@ impl Game {
                         self.act(db,
                             victim_msg,
                             false,
-                            Some(chid),
-                            weapref,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
                         let vict = db.ch(vict_id);
@@ -852,9 +853,9 @@ impl Game {
                         self.act(db,
                             room_msg,
                             false,
-                            Some(chid),
-                            weapref,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
                             TO_NOTVICT,
                         );
                     }
@@ -868,9 +869,9 @@ impl Game {
                         self.act(db,
                             attacker_msg,
                             false,
-                            Some(chid),
-                            weapref,
-                            Some(VictimRef::Char(vict_id)),
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
                             TO_CHAR,
                         );
                         let ch = db.ch(chid);
@@ -881,9 +882,9 @@ impl Game {
                     self.act(db,
                         victim_msg,
                         false,
-                        Some(chid),
-                        weapref,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
                         TO_VICT | TO_SLEEP,
                     );
                     let vict = db.ch(vict_id);
@@ -892,9 +893,9 @@ impl Game {
                     self.act(db,
                         room_msg,
                         false,
-                        Some(chid),
-                        weapref,
-                        Some(VictimRef::Char(vict_id)),
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
                 }
@@ -1047,7 +1048,7 @@ impl Game {
                 self.act(db,
                     "$n is mortally wounded, and will die soon, if not aided.",
                     true,
-                    Some(victim_id),
+                    Some(victim),
                     None,
                     None,
                     TO_ROOM,
@@ -1062,7 +1063,7 @@ impl Game {
                 self.act(db,
                     "$n is incapacitated and will slowly die, if not aided.",
                     true,
-                    Some(victim_id),
+                    Some(victim),
                     None,
                     None,
                     TO_ROOM,
@@ -1076,7 +1077,7 @@ impl Game {
                 self.act(db,
                     "$n is stunned, but will probably regain consciousness again.",
                     true,
-                    Some(victim_id),
+                    Some(victim),
                     None,
                     None,
                     TO_ROOM,
@@ -1090,7 +1091,7 @@ impl Game {
                 self.act(db,
                     "$n is dead!  R.I.P.",
                     false,
-                    Some(victim_id),
+                    Some(victim),
                     None,
                     None,
                     TO_ROOM,
@@ -1141,7 +1142,7 @@ impl Game {
                 self.act(db,
                     "$n is rescued by divine forces.",
                     false,
-                    Some(victim_id),
+                    Some(victim),
                     None,
                     None,
                     TO_ROOM,
@@ -1373,10 +1374,11 @@ impl Game {
 
                 if ch.get_pos() < POS_FIGHTING {
                     ch.set_pos(POS_FIGHTING);
+                    let ch = db.ch(chid);
                     self.act(db,
                         "$n scrambles to $s feet!",
                         true,
-                        Some(chid),
+                        Some(ch),
                         None,
                         None,
                         TO_ROOM,
