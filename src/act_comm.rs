@@ -16,7 +16,6 @@ use crate::interpreter::{
     delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
     SCMD_SHOUT, SCMD_WHISPER,
 };
-use crate::modify::string_write;
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
@@ -518,10 +517,9 @@ pub fn do_write(
         );
         let ch = db.ch(chid);
         let desc_id = ch.desc.unwrap();
-        string_write(
-            game,
+        let desc = game.desc_mut(desc_id);
+        desc.string_write(
             db,
-            desc_id,
             db.obj(paper_id).action_description.clone(),
             MAX_NOTE_LENGTH as usize,
             0,

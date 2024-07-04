@@ -1009,7 +1009,7 @@ impl Game {
         if !ch.is_npc() && ch.desc.is_none() {
             for d_id in self.descriptor_list.ids() {
                 if self.desc(d_id).original.is_some() && self.desc(d_id).original.unwrap() == chid {
-                    let chid = self.desc(d_id).character.as_ref().unwrap().clone();
+                    let chid = self.desc(d_id).character.unwrap();
                     do_return(self, db, chid, "", 0, 0);
                     break;
                 }
@@ -1180,7 +1180,6 @@ impl Game {
 
             self.extract_char_final(db, vict_id);
             db.extractions_pending -= 1;
-            db.character_list.take(vict_id);
         }
 
         if db.extractions_pending > 0 {

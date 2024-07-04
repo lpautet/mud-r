@@ -651,7 +651,7 @@ impl Game {
             for d_id in self.descriptor_list.ids() {
                 let d = self.desc_mut(d_id);
                 if !d.has_prompt && d.output.is_empty() {
-                    let text = &d.make_prompt( db);
+                    let text = &d.make_prompt(db);
                     let d = self.desc_mut(d_id);
                     write_to_descriptor(d.stream.as_mut().unwrap(), text.as_bytes());
                     d.has_prompt = true;
@@ -1253,9 +1253,7 @@ impl Game {
             }
 
             if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-                if write_to_descriptor(desc.stream.as_mut().unwrap(), tmp.as_bytes())
-                    < 0
-                {
+                if write_to_descriptor(desc.stream.as_mut().unwrap(), tmp.as_bytes()) < 0 {
                     return -1;
                 }
             }

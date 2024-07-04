@@ -54,16 +54,16 @@ use crate::structs::{ LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
 use crate::{DescriptorData, Game, DB, PAGE_LENGTH, PAGE_WIDTH};
 
-pub fn string_write(game: &mut Game, db: &mut DB, d_id: DepotId, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
-    let d = game.desc(d_id);
-    if d.character.is_some() && !db.ch(d.character.unwrap()).is_npc() {
-        db.ch_mut(d.character.unwrap()).set_plr_flag_bit(PLR_WRITING);
+impl DescriptorData {
+pub fn string_write(&mut self, db: &mut DB, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
+    if self.character.is_some() && !db.ch(self.character.unwrap()).is_npc() {
+        db.ch_mut(self.character.unwrap()).set_plr_flag_bit(PLR_WRITING);
     }
 
-    let d = game.desc_mut(d_id);
-    d.str = Some(writeto);
-    d.max_str = len;
-    d.mail_to = mailto;
+    self.str = Some(writeto);
+    self.max_str = len;
+    self.mail_to = mailto;
+}
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */

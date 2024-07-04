@@ -55,7 +55,7 @@ use crate::db::{parse_c_string, DB};
 use crate::depot::DepotId;
 use crate::handler::isname;
 use crate::interpreter::{delete_doubledollar, find_command, is_number, one_argument};
-use crate::modify::{page_string, string_write};
+use crate::modify::page_string;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     MeRef, ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL,
@@ -377,9 +377,9 @@ fn board_write_message(
     );
     let ch = db.ch(chid);
     let desc_id = ch.desc.unwrap();
-    string_write(
-        game,db,
-        desc_id,
+    let desc = game.desc_mut(desc_id);
+    desc.string_write(
+        db,
         db.boards.msg_storage[db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]]
             .slot_num
             .unwrap()]

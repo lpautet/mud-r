@@ -3259,6 +3259,7 @@ impl DB {
         if self.ch(chid).desc.is_some() {
             self.ch_mut(chid).desc = None;
         }
+        self.character_list.take(chid);
     }
 }
 

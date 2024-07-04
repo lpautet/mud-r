@@ -30,7 +30,6 @@ use log::{error, info};
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
-use crate::modify::string_write;
 use crate::structs::{
     CharData, CharFileU, MeRef, ITEM_NOTE, ITEM_WEAR_HOLD, ITEM_WEAR_TAKE, NOTHING, PLR_DELETED,
     PLR_MAILING,
@@ -818,9 +817,9 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 
     /* Start writing! */
     let desc_id = ch.desc.unwrap();
-    string_write(
-        game,db,
-        desc_id,
+    let desc = game.desc_mut(desc_id);
+    desc.string_write(
+        db,
         Rc::new(RefCell::new(String::new())),
         MAX_MAIL_SIZE,
         recipient,
