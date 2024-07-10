@@ -617,12 +617,12 @@ From: {}\r\n\
             if to.is_some() {
                 to.unwrap()
             } else {
-                "Unknown".to_string()
+                "Unknown"
             },
             if from.is_some() {
                 from.unwrap()
             } else {
-                "Unknown".to_string()
+                "Unknown"
             },
             parse_c_string(&header.txt)
         );

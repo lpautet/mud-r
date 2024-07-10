@@ -159,11 +159,11 @@ macro_rules! check_player_special {
 pub use check_player_special;
 
 impl CharData {
-    pub fn poofin(&self) -> Rc<str> {
-        self.player_specials.poofin.clone()
+    pub fn poofin(&self) -> &Rc<str> {
+        &self.player_specials.poofin
     }
-    pub fn poofout(&self) -> Rc<str> {
-        self.player_specials.poofout.clone()
+    pub fn poofout(&self) -> &Rc<str> {
+        &self.player_specials.poofout
     }
     pub fn get_last_tell(&self) -> i64 {
         self.player_specials.last_tell
@@ -879,14 +879,6 @@ impl ObjData {
     }
 }
 
-pub fn clone_vec2<A: Clone>(from: &Vec<A>) -> Vec<A> {
-    let mut ret = vec![];
-    for e in from.iter() {
-        ret.push(e.clone());
-    }
-    ret
-}
-
 impl ObjData {
     pub fn objwear_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_wear(), flag)
@@ -928,9 +920,9 @@ impl DB {
     pub fn valid_room_rnum(&self, rnum: RoomRnum) -> bool {
         rnum != NOWHERE && rnum <= self.world.len() as i16
     }
-    pub fn get_room_spec(&self, rnum: RoomRnum) -> Option<Special> {
+    pub fn get_room_spec(&self, rnum: RoomRnum) -> Option<&Special> {
         if self.valid_room_rnum(rnum) {
-            self.world[rnum as usize].func.borrow().clone()
+            self.world[rnum as usize].func.as_ref()
         } else {
             None
         }
@@ -1311,7 +1303,7 @@ impl Game {
                 /* switch */
                 continue;
             }
-            let character_id = self.desc(d_id).character.as_ref().unwrap().clone();
+            let character_id = self.desc(d_id).character.unwrap();
             let character = db.ch(character_id);
             if character.is_npc() {
                 /* switch */
@@ -1579,8 +1571,7 @@ impl Game {
             self.stop_follower(db, chid);
         }
         let ch = db.ch(chid);
-        let list = ch.followers.clone();
-        for k in  list {
+        for k in  ch.followers.clone() {
             self.stop_follower(db, k.follower);
         }
     }

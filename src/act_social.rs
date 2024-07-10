@@ -66,15 +66,15 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
         return;
     }
     let act_nr = act_nr.unwrap();
-    let action_char_found = db.soc_mess_list[act_nr].char_found.clone();
-    let action_others_found = db.soc_mess_list[act_nr].others_found.clone();
-    let action_vict_found = db.soc_mess_list[act_nr].vict_found.clone();
-    let action_others_no_arg = db.soc_mess_list[act_nr].others_no_arg.clone();
-    let action_not_found = db.soc_mess_list[act_nr].not_found.clone();
-    let action_char_auto = db.soc_mess_list[act_nr].char_auto.clone();
-    let action_others_auto = db.soc_mess_list[act_nr].others_auto.clone();
-    let action_min_victim_position = db.soc_mess_list[act_nr].min_victim_position.clone();
-    let action_char_no_arg = db.soc_mess_list[act_nr].char_no_arg.clone();
+    let action_char_found = &db.soc_mess_list[act_nr].char_found;
+    let action_others_found = &db.soc_mess_list[act_nr].others_found;
+    let action_vict_found = &db.soc_mess_list[act_nr].vict_found;
+    let action_others_no_arg = &db.soc_mess_list[act_nr].others_no_arg;
+    let action_not_found = &db.soc_mess_list[act_nr].not_found;
+    let action_char_auto = &db.soc_mess_list[act_nr].char_auto;
+    let action_others_auto = &db.soc_mess_list[act_nr].others_auto;
+    let action_min_victim_position = db.soc_mess_list[act_nr].min_victim_position;
+    let action_char_no_arg = &db.soc_mess_list[act_nr].char_no_arg;
     let action_hide = db.soc_mess_list[act_nr].hide;
 
 

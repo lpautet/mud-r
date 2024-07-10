@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 use std::cell::RefCell;
 use std::cmp::{max, min};
@@ -59,8 +59,8 @@ use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::{
-     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number,
-    time_now, touch, CMP, NRM, SECS_PER_REAL_HOUR,
+    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
+    CMP, NRM, SECS_PER_REAL_HOUR,
 };
 use crate::{check_player_special, get_last_tell_mut, Game};
 
@@ -104,7 +104,7 @@ pub const SUF_TEXT: &str = "text";
 pub const SUF_ALIAS: &str = "alias";
 
 pub struct PlayerIndexElement {
-    pub(crate) name: String,
+    pub(crate) name: Rc<str>,
     id: i64,
 }
 
@@ -276,15 +276,15 @@ pub struct BanListElement {
 }
 
 impl DB {
-    pub fn get_name_by_id(&self, id: i64) -> Option<String> {
+    pub fn get_name_by_id(&self, id: i64) -> Option<&str> {
         self.player_table
             .iter()
             .find(|p| p.id == id)
-            .map(|p| p.name.clone())
+            .map(|p| p.name.as_ref())
     }
 
     pub fn get_id_by_name(&self, name: &str) -> i64 {
-        let r = self.player_table.iter().find(|p| p.name == name);
+        let r = self.player_table.iter().find(|p| p.name.as_ref() == name);
         if r.is_some() {
             r.unwrap().id
         } else {
@@ -335,7 +335,14 @@ impl DB {
  * 'reload' command even when the string was not replaced.
  * To fix later, if desired. -gg 6/24/99
  */
-pub fn do_reboot(game: &mut Game, db: &mut DB,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_reboot(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -492,10 +499,10 @@ impl DB {
         /* Mobiles */
         for cnt in 0..self.mob_protos.len() {
             while !self.mob_protos[cnt].affected.is_empty() {
-        //        self.affect_remove(
-          //          &self.mob_protos[cnt],
-            //        &self.mob_protos[cnt].affected[0],
-              //  );
+                //        self.affect_remove(
+                //          &self.mob_protos[cnt],
+                //        &self.mob_protos[cnt].affected[0],
+                //  );
             }
         }
         self.mob_protos.clear();
@@ -679,7 +686,7 @@ impl DB {
                 self.zone_table[i].bot,
                 self.zone_table[i].top
             );
-            game.reset_zone(self,i);
+            game.reset_zone(self, i);
         }
 
         // TODO reset_q.head = reset_q.tail = NULL;
@@ -848,11 +855,10 @@ impl DB {
                 }
             }
 
-            let mut pie = PlayerIndexElement {
-                name: parse_c_string(&dummy.name),
+            let pie = PlayerIndexElement {
+                name: Rc::from(parse_c_string(&dummy.name).to_lowercase().as_str()),
                 id: dummy.char_specials_saved.idnum,
             };
-            pie.name = pie.name.to_lowercase();
             self.player_table.push(pie);
             self.top_idnum = max(self.top_idnum, dummy.char_specials_saved.idnum as i32);
         }
@@ -1278,7 +1284,7 @@ impl DB {
             }
             match line.remove(0) {
                 'D' => {
-                    self.setup_dir(reader, &mut rd, line.parse::<i32>().unwrap());
+                    DB::setup_dir(reader, &mut rd, line.parse::<i32>().unwrap());
                 }
                 'E' => {
                     rd.ex_descriptions.push(ExtraDescrData {
@@ -1300,7 +1306,7 @@ impl DB {
     }
 
     /* read direction data */
-    fn setup_dir(&self, reader: &mut BufReader<File>, room: &mut RoomData, dir: i32) {
+    fn setup_dir(reader: &mut BufReader<File>, room: &mut RoomData, dir: i32) {
         let mut t = [0; 5];
         let mut line = String::new();
 
@@ -1415,74 +1421,52 @@ fn renum_zone_table(game: &mut Game, db: &mut DB) {
             match db.zone_table[idx].cmd[cmd_no].command {
                 'M' => {
                     db.zone_table[idx].cmd[cmd_no].arg1 =
-                        db
-                        .real_mobile(db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum)
-                        as i32;
+                        db.real_mobile(db.zone_table[idx].cmd[cmd_no].arg1 as MobVnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
-                    db.zone_table[idx].cmd[cmd_no].arg3 = 
-                        db
-                        .real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg3 =
+                        db.real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum) as i32;
                     c = db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'O' => {
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
                     if db.zone_table[idx].cmd[cmd_no].arg3 != NOWHERE as i32 {
-                        db.zone_table[idx].cmd[cmd_no].arg3 = 
-                            db
-                            .real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum)
-                            as i32;
+                        db.zone_table[idx].cmd[cmd_no].arg3 =
+                            db.real_room(db.zone_table[idx].cmd[cmd_no].arg3 as RoomRnum) as i32;
                         c = db.zone_table[idx].cmd[cmd_no].arg3;
                     }
                 }
                 'G' => {
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'E' => {
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'P' => {
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg1 as ObjVnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
-                    db.zone_table[idx].cmd[cmd_no].arg3 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg3 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg3 as ObjVnum) as i32;
                     c = db.zone_table[idx].cmd[cmd_no].arg3;
                 }
                 'D' => {
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
                 }
                 'R' => {
                     /* rem obj from room */
-                    db.zone_table[idx].cmd[cmd_no].arg1 = 
-                        db
-                        .real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg1 =
+                        db.real_room(db.zone_table[idx].cmd[cmd_no].arg1 as RoomRnum) as i32;
                     a = db.zone_table[idx].cmd[cmd_no].arg1;
-                    db.zone_table[idx].cmd[cmd_no].arg2 = 
-                        db
-                        .real_object(db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum)
-                        as i32;
+                    db.zone_table[idx].cmd[cmd_no].arg2 =
+                        db.real_object(db.zone_table[idx].cmd[cmd_no].arg2 as RoomRnum) as i32;
                     b = db.zone_table[idx].cmd[cmd_no].arg2;
                 }
                 _ => {}
@@ -1504,211 +1488,210 @@ fn renum_zone_table(game: &mut Game, db: &mut DB) {
                     let zone = db.zone_table[idx].number as usize;
                     let zcmd_command = db.zone_table[idx].cmd[cmd_no].command;
                     let zcmd_line = db.zone_table[idx].cmd[cmd_no].line;
-                    game.log_zone_error(db,zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
+                    game.log_zone_error(db, zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
                 }
                 db.zone_table[idx].cmd[cmd_no].command = '*';
             }
         }
     }
 }
-impl DB {
-    fn parse_simple_mob(&mut self, reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
-        let mut line = String::new();
+fn parse_simple_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
+    let mut line = String::new();
 
-        mobch.real_abils.str = 11;
-        mobch.real_abils.intel = 11;
-        mobch.real_abils.wis = 11;
-        mobch.real_abils.dex = 11;
-        mobch.real_abils.con = 11;
-        mobch.real_abils.cha = 11;
+    mobch.real_abils.str = 11;
+    mobch.real_abils.intel = 11;
+    mobch.real_abils.wis = 11;
+    mobch.real_abils.dex = 11;
+    mobch.real_abils.con = 11;
+    mobch.real_abils.cha = 11;
 
-        if get_line(reader, &mut line) == 0 {
-            error!(
-                "SYSERR: Format error in mob #{}, file ended after S flag!",
-                nr
-            );
-            process::exit(1);
-        }
-
-        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error in mob #{}, first line after S flag\n...expecting line of form '# # # #d#+# #d#+#'", nr);
-            process::exit(1);
-        }
-        let t = f.unwrap();
-
-        mobch.set_level(t[1].parse::<u8>().unwrap());
-        mobch.set_hitroll(20 - t[2].parse::<i8>().unwrap());
-        mobch.set_ac(10 * t[3].parse::<i16>().unwrap());
-
-        /* max hit = 0 is a flag that H, M, V is xdy+z */
-        mobch.set_max_hit(0);
-        mobch.set_hit(t[4].parse::<i16>().unwrap());
-        mobch.set_mana(t[5].parse::<i16>().unwrap());
-        mobch.set_move(t[6].parse::<i16>().unwrap());
-
-        mobch.set_max_mana(10);
-        mobch.set_max_move(50);
-
-        mobch.mob_specials.damnodice = t[7].parse::<u8>().unwrap();
-        mobch.mob_specials.damsizedice = t[8].parse::<u8>().unwrap();
-        mobch.set_damroll(t[9].parse::<i8>().unwrap());
-
-        if get_line(reader, &mut line) == 0 {
-            error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #', but file ended!", nr);
-            process::exit(1);
-        }
-
-        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #'", nr);
-            process::exit(1);
-        }
-        let t = f.unwrap();
-
-        mobch.set_gold(t[1].parse::<i32>().unwrap());
-        mobch.set_exp(t[2].parse::<i32>().unwrap());
-
-        if get_line(reader, &mut line) == 0 {
-            error!("SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #', but file ended!", nr);
-            process::exit(1);
-        }
-
-        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #'",
-                nr
-            );
-            process::exit(1);
-        }
-        let t = f.unwrap();
-
-        mobch.set_pos(t[1].parse::<u8>().unwrap());
-        mobch.set_default_pos(t[2].parse::<u8>().unwrap());
-        mobch.set_sex(t[3].parse::<u8>().unwrap());
-
-        mobch.set_class(0);
-        mobch.set_weight(200);
-        mobch.set_height(198);
-
-        /*
-         * these are now save applies; base save numbers for MOBs are now from
-         * the warrior save table.
-         */
-        for j in 0..5 {
-            mobch.set_save(j, 0);
-        }
-    }
-
-    /*
-     * interpret_espec is the function that takes espec keywords and values
-     * and assigns the correct value to the mob as appropriate.  Adding new
-     * e-specs is absurdly easy -- just add a new CASE statement to this
-     * function!  No other changes need to be made anywhere in the code.
-     *
-     */
-    fn interpret_espec(&mut self, keyword: &str, value: &str, mobch: &mut CharData, nr: i32) {
-        let mut num_arg = 0;
-
-        /*
-         * If there isn't a colon, there is no value.  While Boolean options are
-         * possible, we don't actually have any.  Feel free to make some.
-         */
-        if !value.is_empty() {
-            let r = value.parse::<i32>();
-            num_arg = if r.is_ok() { r.unwrap() } else { 0 };
-        }
-
-        match keyword {
-            "BareHandAttack" => {
-                num_arg = max(0, min(99, num_arg));
-                mobch.mob_specials.attack_type = num_arg as u8;
-            }
-
-            "Str" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.str = num_arg as i8;
-            }
-
-            "StrAdd" => {
-                num_arg = max(0, min(100, num_arg));
-                mobch.real_abils.str_add = num_arg as i8;
-            }
-
-            "Int" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.intel = num_arg as i8;
-            }
-
-            "Wis" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.wis = num_arg as i8;
-            }
-
-            "Dex" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.dex = num_arg as i8;
-            }
-
-            "Con" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.con = num_arg as i8;
-            }
-
-            "Cha" => {
-                num_arg = max(3, min(25, num_arg));
-                mobch.real_abils.cha = num_arg as i8;
-            }
-
-            _ => {
-                error!(
-                    "SYSERR: Warning: unrecognized espec keyword {} in mob #{}",
-                    keyword, nr
-                );
-            }
-        }
-    }
-
-    fn parse_espec(&mut self, buf: &str, mobch: &mut CharData, nr: i32) {
-        let mut buf = buf;
-        let mut ptr = "";
-        let p = buf.find(':');
-        if p.is_some() {
-            let p = p.unwrap();
-            ptr = &buf[p + 1..];
-            buf = &buf[0..p];
-            ptr = ptr.trim_start();
-        }
-
-        self.interpret_espec(buf, ptr, mobch, nr);
-    }
-
-    fn parse_enhanced_mob(&mut self, reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
-        let mut line = String::new();
-
-        self.parse_simple_mob(reader, mobch, nr);
-
-        while get_line(reader, &mut line) != 0 {
-            if line == "E" {
-                /* end of the enhanced section */
-                return;
-            } else if line.starts_with('#') {
-                /* we've hit the next mob, maybe? */
-                error!("SYSERR: Unterminated E section in mob #{}", nr);
-                process::exit(1);
-            } else {
-                self.parse_espec(&line, mobch, nr);
-            }
-        }
-
-        error!("SYSERR: Unexpected end of file reached after mob #{}", nr);
+    if get_line(reader, &mut line) == 0 {
+        error!(
+            "SYSERR: Format error in mob #{}, file ended after S flag!",
+            nr
+        );
         process::exit(1);
     }
 
+    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})").unwrap();
+    let f = regex.captures(line.as_str());
+    if f.is_none() {
+        error!("SYSERR: Format error in mob #{}, first line after S flag\n...expecting line of form '# # # #d#+# #d#+#'", nr);
+        process::exit(1);
+    }
+    let t = f.unwrap();
+
+    mobch.set_level(t[1].parse::<u8>().unwrap());
+    mobch.set_hitroll(20 - t[2].parse::<i8>().unwrap());
+    mobch.set_ac(10 * t[3].parse::<i16>().unwrap());
+
+    /* max hit = 0 is a flag that H, M, V is xdy+z */
+    mobch.set_max_hit(0);
+    mobch.set_hit(t[4].parse::<i16>().unwrap());
+    mobch.set_mana(t[5].parse::<i16>().unwrap());
+    mobch.set_move(t[6].parse::<i16>().unwrap());
+
+    mobch.set_max_mana(10);
+    mobch.set_max_move(50);
+
+    mobch.mob_specials.damnodice = t[7].parse::<u8>().unwrap();
+    mobch.mob_specials.damsizedice = t[8].parse::<u8>().unwrap();
+    mobch.set_damroll(t[9].parse::<i8>().unwrap());
+
+    if get_line(reader, &mut line) == 0 {
+        error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #', but file ended!", nr);
+        process::exit(1);
+    }
+
+    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})").unwrap();
+    let f = regex.captures(line.as_str());
+    if f.is_none() {
+        error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #'", nr);
+        process::exit(1);
+    }
+    let t = f.unwrap();
+
+    mobch.set_gold(t[1].parse::<i32>().unwrap());
+    mobch.set_exp(t[2].parse::<i32>().unwrap());
+
+    if get_line(reader, &mut line) == 0 {
+        error!("SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #', but file ended!", nr);
+        process::exit(1);
+    }
+
+    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
+    let f = regex.captures(line.as_str());
+    if f.is_none() {
+        error!(
+            "SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #'",
+            nr
+        );
+        process::exit(1);
+    }
+    let t = f.unwrap();
+
+    mobch.set_pos(t[1].parse::<u8>().unwrap());
+    mobch.set_default_pos(t[2].parse::<u8>().unwrap());
+    mobch.set_sex(t[3].parse::<u8>().unwrap());
+
+    mobch.set_class(0);
+    mobch.set_weight(200);
+    mobch.set_height(198);
+
+    /*
+     * these are now save applies; base save numbers for MOBs are now from
+     * the warrior save table.
+     */
+    for j in 0..5 {
+        mobch.set_save(j, 0);
+    }
+}
+
+/*
+ * interpret_espec is the function that takes espec keywords and values
+ * and assigns the correct value to the mob as appropriate.  Adding new
+ * e-specs is absurdly easy -- just add a new CASE statement to this
+ * function!  No other changes need to be made anywhere in the code.
+ *
+ */
+fn interpret_espec(keyword: &str, value: &str, mobch: &mut CharData, nr: i32) {
+    let mut num_arg = 0;
+
+    /*
+     * If there isn't a colon, there is no value.  While Boolean options are
+     * possible, we don't actually have any.  Feel free to make some.
+     */
+    if !value.is_empty() {
+        let r = value.parse::<i32>();
+        num_arg = if r.is_ok() { r.unwrap() } else { 0 };
+    }
+
+    match keyword {
+        "BareHandAttack" => {
+            num_arg = max(0, min(99, num_arg));
+            mobch.mob_specials.attack_type = num_arg as u8;
+        }
+
+        "Str" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.str = num_arg as i8;
+        }
+
+        "StrAdd" => {
+            num_arg = max(0, min(100, num_arg));
+            mobch.real_abils.str_add = num_arg as i8;
+        }
+
+        "Int" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.intel = num_arg as i8;
+        }
+
+        "Wis" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.wis = num_arg as i8;
+        }
+
+        "Dex" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.dex = num_arg as i8;
+        }
+
+        "Con" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.con = num_arg as i8;
+        }
+
+        "Cha" => {
+            num_arg = max(3, min(25, num_arg));
+            mobch.real_abils.cha = num_arg as i8;
+        }
+
+        _ => {
+            error!(
+                "SYSERR: Warning: unrecognized espec keyword {} in mob #{}",
+                keyword, nr
+            );
+        }
+    }
+}
+
+fn parse_espec( buf: &str, mobch: &mut CharData, nr: i32) {
+    let mut buf = buf;
+    let mut ptr = "";
+    let p = buf.find(':');
+    if p.is_some() {
+        let p = p.unwrap();
+        ptr = &buf[p + 1..];
+        buf = &buf[0..p];
+        ptr = ptr.trim_start();
+    }
+
+    interpret_espec(buf, ptr, mobch, nr);
+}
+
+fn parse_enhanced_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32) {
+    let mut line = String::new();
+
+    parse_simple_mob(reader, mobch, nr);
+
+    while get_line(reader, &mut line) != 0 {
+        if line == "E" {
+            /* end of the enhanced section */
+            return;
+        } else if line.starts_with('#') {
+            /* we've hit the next mob, maybe? */
+            error!("SYSERR: Unterminated E section in mob #{}", nr);
+            process::exit(1);
+        } else {
+            parse_espec(&line, mobch, nr);
+        }
+    }
+
+    error!("SYSERR: Unexpected end of file reached after mob #{}", nr);
+    process::exit(1);
+}
+impl DB {
     fn parse_mobile(&mut self, reader: &mut BufReader<File>, nr: i32) {
         let mut line = String::new();
 
@@ -1742,8 +1725,7 @@ impl DB {
         }
         mobch.player.short_descr = tmpstr.into();
         mobch.player.long_descr = Rc::from(fread_string(reader, buf2.as_str()).as_str());
-        mobch.player.description =
-            Rc::new(RefCell::from(fread_string(reader, buf2.as_str())));
+        mobch.player.description = Rc::new(RefCell::from(fread_string(reader, buf2.as_str())));
         mobch.set_title(None);
 
         /* *** Numeric data *** */
@@ -1797,11 +1779,11 @@ impl DB {
         match f[4].to_uppercase().as_str() {
             "S" => {
                 /* Simple monsters */
-                self.parse_simple_mob(reader, &mut mobch, nr);
+                parse_simple_mob(reader, &mut mobch, nr);
             }
             "E" => {
                 /* Circle3 Enhanced monsters */
-                self.parse_enhanced_mob(reader, &mut mobch, nr);
+                parse_enhanced_mob(reader, &mut mobch, nr);
             }
             /* add new mob types here.. */
             _ => {
@@ -2307,9 +2289,7 @@ impl Game {
                     ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
-                        found,
-                        db.mob_index[nr].vnum,
-                        mp.player.short_descr
+                        found, db.mob_index[nr].vnum, mp.player.short_descr
                     )
                     .as_str(),
                 );
@@ -2325,7 +2305,8 @@ impl Game {
             let op = &db.obj_proto[nr];
             if isname(searchname, &op.name) {
                 found += 1;
-                self.send_to_char(ch,
+                self.send_to_char(
+                    ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
                         found, db.obj_index[nr].vnum, op.short_description
@@ -2381,16 +2362,11 @@ impl DB {
         let mut mob = self.mob_protos[i as usize].make_copy();
 
         if mob.points.max_hit == 0 {
-            let max_hit = dice(
-                mob.points.hit as i32,
-                mob.points.mana as i32,
-            ) + mob.points.movem as i32;
+            let max_hit =
+                dice(mob.points.hit as i32, mob.points.mana as i32) + mob.points.movem as i32;
             mob.points.max_hit = max_hit as i16;
         } else {
-            let max_hit = rand_number(
-                mob.points.hit as u32,
-                mob.points.mana as u32,
-            ) as i16;
+            let max_hit = rand_number(mob.points.hit as u32, mob.points.mana as u32) as i16;
             mob.points.max_hit = max_hit;
         }
 
@@ -2438,7 +2414,8 @@ impl DB {
     }
 
     /* create a new object from a prototype */
-    pub fn read_object(&mut self, nr: ObjVnum, read_type: i32) -> Option<DepotId> /* and obj_rnum */ {
+    pub fn read_object(&mut self, nr: ObjVnum, read_type: i32) -> Option<DepotId> /* and obj_rnum */
+    {
         let i = if read_type == VIRTUAL {
             self.real_object(nr)
         } else {
@@ -2498,17 +2475,14 @@ impl Game {
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
         let update_list = db.reset_q.clone();
         for update_u in update_list {
-            if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self,db,  update_u) {
-                self.reset_zone(db,update_u as usize);
-                self.mudlog(db,
+            if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, db, update_u) {
+                self.reset_zone(db, update_u as usize);
+                self.mudlog(
+                    db,
                     CMP,
                     LVL_GOD as i32,
                     false,
-                    format!(
-                        "Auto zone reset: {}",
-                        db.zone_table[update_u as usize].name
-                    )
-                    .as_str(),
+                    format!("Auto zone reset: {}", db.zone_table[update_u as usize].name).as_str(),
                 );
             }
         }
@@ -2517,20 +2491,23 @@ impl Game {
 
     /* execute the reset command table of a given zone */
     fn log_zone_error(
-        &mut self, db: &DB,
+        &mut self,
+        db: &DB,
         zone: usize,
         zcmd_command: char,
         zcmd_line: i32,
         message: &str,
         last_cmd: &mut i32,
     ) {
-        self.mudlog(db,
+        self.mudlog(
+            db,
             NRM,
             LVL_GOD as i32,
             true,
             format!("SYSERR: zone file: {}", message).as_str(),
         );
-        self.mudlog(db,
+        self.mudlog(
+            db,
             NRM,
             LVL_GOD as i32,
             true,
@@ -2614,12 +2591,12 @@ impl Game {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                         oid = db.read_object(nr, REAL);
                         let obj_to =
-                            db
-                            .get_obj_num(db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
+                            db.get_obj_num(db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
                             let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(db,
+                            self.log_zone_error(
+                                db,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
@@ -2641,7 +2618,8 @@ impl Game {
                     if mob_id.is_none() {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(db,
+                        self.log_zone_error(
+                            db,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2669,7 +2647,8 @@ impl Game {
                     if mob_id.is_none() {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(db,
+                        self.log_zone_error(
+                            db,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2688,7 +2667,8 @@ impl Game {
                         {
                             let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(db,
+                            self.log_zone_error(
+                                db,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
@@ -2699,7 +2679,7 @@ impl Game {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             oid = db.read_object(nr, REAL);
                             let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(db,mob_id.unwrap(), oid.unwrap(), pos);
+                            self.equip_char(db, mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2716,7 +2696,7 @@ impl Game {
                             .as_ref(),
                     );
                     if oid.is_some() {
-                        self.extract_obj(db,oid.unwrap());
+                        db.extract_obj( oid.unwrap());
                     }
                     last_cmd = 1;
                 }
@@ -2725,14 +2705,14 @@ impl Game {
                     /* set state of door */
                     if db.zone_table[zone].cmd[cmd_no].arg2 < 0
                         || db.zone_table[zone].cmd[cmd_no].arg2 >= NUM_OF_DIRS as i32
-                        || (db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                            .dir_option
+                        || (db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                             [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                             .is_none())
                     {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(db,
+                        self.log_zone_error(
+                            db,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2743,14 +2723,12 @@ impl Game {
                     } else {
                         match db.zone_table[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .remove_exit_info_bit(EX_LOCKED as i32);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2758,14 +2736,12 @@ impl Game {
                             }
 
                             1 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2773,14 +2749,12 @@ impl Game {
                             }
 
                             2 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
                                     .set_exit_info_bit(EX_LOCKED as i32);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
-                                    .dir_option
+                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
@@ -2795,7 +2769,8 @@ impl Game {
                 _ => {
                     let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                     let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                    self.log_zone_error(db,
+                    self.log_zone_error(
+                        db,
                         zone,
                         zcmd_command,
                         zcmd_line,
@@ -2837,7 +2812,7 @@ fn is_empty(game: &Game, db: &DB, zone_nr: ZoneRnum) -> bool {
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        return self.player_table.iter().position(|pie| pie.name == name);
+        return self.player_table.iter().position(|pie| pie.name.as_ref() == name);
     }
 
     /* Load a char, TRUE if loaded, FALSE if not */
@@ -2870,7 +2845,7 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, db: &mut DB,  chid: DepotId) {
+    pub fn save_char(&mut self, db: &mut DB, chid: DepotId) {
         let ch = db.ch(chid);
         let mut st: CharFileU = CharFileU::new();
 
@@ -2882,24 +2857,17 @@ impl Game {
         let ch = db.ch(chid);
         copy_to_stored(
             &mut st.host,
-            self.descriptor_list
-                .get(ch.desc.unwrap())
-                .host
-                .as_ref(),
+            self.descriptor_list.get(ch.desc.unwrap()).host.as_ref(),
         );
 
         unsafe {
             let player_slice =
                 slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
-                let offset = ch.get_pfilepos() as usize * mem::size_of::<CharFileU>();
-            db
-                .player_fl
+            let offset = ch.get_pfilepos() as usize * mem::size_of::<CharFileU>();
+            db.player_fl
                 .as_mut()
                 .unwrap()
-                .write_all_at(
-                    player_slice,
-                     offset as u64,
-                )
+                .write_all_at(player_slice, offset as u64)
                 .expect("Error while writing player record to file");
         }
     }
@@ -3067,7 +3035,7 @@ impl Game {
         for i in 0..NUM_WEARS {
             let ch = db.ch(chid);
             if ch.get_eq(i).is_some() {
-                char_eq[i as usize] = self.unequip_char(db,chid, i);
+                char_eq[i as usize] = db.unequip_char( chid, i);
             } else {
                 char_eq[i as usize] = None;
             }
@@ -3097,7 +3065,10 @@ impl Game {
          * effects are doubled when the char logs back in.
          */
 
-        while { let ch = db.ch(chid); !ch.affected.is_empty() }{
+        while {
+            let ch = db.ch(chid);
+            !ch.affected.is_empty()
+        } {
             let ch = db.ch(chid);
             let af = ch.affected[0];
             db.affect_remove(chid, af);
@@ -3141,8 +3112,7 @@ impl Game {
                     RefCell::borrow(&ch.player.description).len(),
                     st.description.len()
                 );
-                RefCell::borrow_mut(&ch.player.description)
-                    .truncate(&st.description.len() - 3);
+                RefCell::borrow_mut(&ch.player.description).truncate(&st.description.len() - 3);
                 RefCell::borrow_mut(&ch.player.description).push_str("\r\n");
             }
             copy_to_stored(
@@ -3164,7 +3134,7 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(db,chid, char_eq[i as usize].unwrap(), i);
+                self.equip_char(db, chid, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */
@@ -3195,15 +3165,14 @@ impl DB {
             /* new name */
             i = self.player_table.len();
             self.player_table.push(PlayerIndexElement {
-                name: name.to_lowercase(),
+                name: Rc::from(name.to_lowercase().as_str()),
                 id: i as i64,
             });
             i
         } else {
             let pos = pos.unwrap();
-
             let mut pie = self.player_table.get_mut(pos);
-            pie.as_mut().unwrap().name = name.to_lowercase();
+            pie.as_mut().unwrap().name = Rc::from(name.to_lowercase().as_str());
             pos
         };
     }
@@ -3500,19 +3469,17 @@ impl DB {
         }
         r.unwrap() as ObjRnum
     }
-}
 
-/* returns the real number of the zone with given virtual number */
-pub fn real_zone(db: &DB, vnum: RoomVnum) -> Option<usize> {
-    db.zone_table.iter().position(|z| z.number == vnum)
-}
+    /* returns the real number of the zone with given virtual number */
+    pub fn real_zone(&self, vnum: RoomVnum) -> Option<usize> {
+        self.zone_table.iter().position(|z| z.number == vnum)
+    }
 
-/*
- * Extend later to include more checks.
- *
- * TODO: Add checks for unknown bitvectors.
- */
-impl DB {
+    /*
+     * Extend later to include more checks.
+     *
+     * TODO: Add checks for unknown bitvectors.
+     */
     fn check_object(&self, obj: &ObjData) -> bool {
         let mut error = false;
 
@@ -3767,7 +3734,7 @@ impl Default for CharData {
                 con: 0,
                 cha: 0,
             },
-            aff_abils:CharAbilityData {
+            aff_abils: CharAbilityData {
                 str: 0,
                 str_add: 0,
                 intel: 0,
@@ -3858,7 +3825,7 @@ impl Default for CharData {
             desc: None,
             // next_fighting: RefCell::new(None),
             followers: vec![],
-            master:None,
+            master: None,
         }
     }
 }
@@ -3888,7 +3855,7 @@ impl CharData {
             },
             real_abils: self.real_abils,
             aff_abils: self.aff_abils,
-            points:self.points,
+            points: self.points,
             char_specials: CharSpecialData {
                 fighting_chid: None,
                 hunting_chid: None,

@@ -51,7 +51,7 @@ use crate::structs::{
     POS_STUNNED, PRF_SUMMONABLE, THIRST,
 };
 use crate::util::{
-    age, clone_vec2, rand_number, real_time_passed, sprintbit, sprinttype, time_now,
+    age, rand_number, real_time_passed, sprintbit, sprinttype, time_now,
     SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN,
 };
 use crate::VictimRef;
@@ -234,7 +234,7 @@ fn look_at_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
     }
 
     if !RefCell::borrow(&i.player.description).is_empty() {
-        let messg = i.player.description.borrow().clone();
+        let messg = i.player.description.borrow();
         game.send_to_char(ch, messg.as_str());
     } else {
         game.act(
@@ -286,8 +286,7 @@ fn look_at_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        let list = i.carrying.clone();
-        for tmp_obj_id in list {
+        for &tmp_obj_id in &i.carrying {
             let ch = db.ch(chid);
             if game.can_see_obj(db, ch, db.obj(tmp_obj_id))
                 && rand_number(0, 20) < ch.get_level() as u32
@@ -332,8 +331,7 @@ fn list_one_char(game: &mut Game, db: &DB, i_id: DepotId, chid: DepotId) {
                 game.send_to_char(ch, "(Blue Aura) ");
             }
         }
-        let messg = i.player.long_descr.clone();
-        game.send_to_char(ch, &messg);
+        game.send_to_char(ch, &i.player.long_descr);
 
         if i.aff_flagged(AFF_SANCTUARY) {
             game.act(
@@ -749,10 +747,10 @@ fn look_in_obj(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
     }
 }
 
-fn find_exdesc(word: &str, list: &Vec<ExtraDescrData>) -> Option<Rc<str>> {
+fn find_exdesc<'a>(word: &str, list: &'a Vec<ExtraDescrData>) -> Option<&'a Rc<str>> {
     for i in list {
         if isname(word, i.keyword.as_ref()) {
-            return Some(i.description.clone());
+            return Some(&i.description);
         }
     }
     None
@@ -912,8 +910,7 @@ pub fn do_look(
         game.send_to_char(ch, "You can't see a damned thing, you're blind!\r\n");
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         game.send_to_char(ch, "It is pitch black...\r\n");
-        let list = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-        list_char_to_char(game, db, &list, chid);
+        list_char_to_char(game, db, &db.world[ch.in_room() as usize].peoples, chid);
         /* glowing red eyes */
     } else {
         let mut argument = argument.to_string();
@@ -1352,7 +1349,7 @@ pub fn do_help(
     let d_id = ch.desc.unwrap();
 
     if argument.len() == 0 {
-        page_string(game, db, d_id, &db.help.clone(), false);
+        page_string(game, db, d_id, &db.help, false);
         return;
     }
     if db.help_table.len() == 0 {
@@ -1373,7 +1370,7 @@ pub fn do_help(
             while mid > 0 && db.help_table[mid - 1].keyword.starts_with(argument) {
                 mid -= 1;
             }
-            page_string(game, db, d_id, &db.help_table[mid].entry.clone(), false);
+            page_string(game, db, d_id, &db.help_table[mid].entry, false);
             return;
         } else {
             if db.help_table[mid].keyword.as_ref() < argument {
@@ -1493,7 +1490,7 @@ pub fn do_who(
         } {
             continue;
         }
-        let tch_id = tch_id.unwrap().clone();
+        let tch_id = tch_id.unwrap();
         let tch = db.ch(tch_id);
 
         if !name_search.is_empty()
@@ -1798,7 +1795,7 @@ pub fn do_users(
                     .name
                     .is_empty()
             {
-                db.ch(game.desc(d_id).original.unwrap()).player.name.clone()
+                &db.ch(game.desc(d_id).original.unwrap()).player.name
             } else if game.desc(d_id).character.is_some()
                 && !db
                     .ch(game.desc(d_id).character.unwrap())
@@ -1806,12 +1803,11 @@ pub fn do_users(
                     .name
                     .is_empty()
             {
-                db.ch(game.desc(d_id).character.unwrap())
+                &db.ch(game.desc(d_id).character.unwrap())
                     .player
                     .name
-                    .clone()
             } else {
-                Rc::from("UNDEFINED")
+                "UNDEFINED"
             },
             state,
             idletime,
@@ -1861,31 +1857,31 @@ pub fn do_gen_ps(
     let d_id = ch.desc.unwrap();
     match subcmd {
         SCMD_CREDITS => {
-            page_string(game, db, d_id, db.credits.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.credits, false);
         }
         SCMD_NEWS => {
-            page_string(game, db, d_id, &db.news.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.news, false);
         }
         SCMD_INFO => {
-            page_string(game, db, d_id, &db.info.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.info, false);
         }
         SCMD_WIZLIST => {
-            page_string(game, db, d_id, &db.wizlist.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.wizlist, false);
         }
         SCMD_IMMLIST => {
-            page_string(game, db, d_id, &db.immlist.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.immlist, false);
         }
         SCMD_HANDBOOK => {
-            page_string(game, db, d_id, &db.handbook.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.handbook, false);
         }
         SCMD_POLICIES => {
-            page_string(game, db, d_id, &db.policies.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.policies, false);
         }
         SCMD_MOTD => {
-            page_string(game, db, d_id, &db.motd.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.motd, false);
         }
         SCMD_IMOTD => {
-            page_string(game, db, d_id, &db.imotd.clone().as_ref(), false);
+            page_string(game, db, d_id, &db.imotd, false);
         }
         SCMD_CLEAR => {
             game.send_to_char(ch, "\x1b[H\x1b[J");

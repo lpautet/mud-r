@@ -12,7 +12,6 @@
 use crate::depot::DepotId;
 use crate::VictimRef;
 use std::borrow::Borrow;
-use std::rc::Rc;
 
 use crate::act_informative::look_at_room;
 use crate::act_item::find_eq_pos;
@@ -50,9 +49,8 @@ fn has_boat(game: &mut Game, db: &DB, chid: DepotId) -> bool {
 
     /* non-wearable boats in inventory will do it */
 
-    let list = ch.carrying.clone();
-    for oid in list.iter() {
-        if db.obj(*oid).get_obj_type() == ITEM_BOAT && (find_eq_pos(game, db, chid, *oid, "") < 0)
+    for &oid in &ch.carrying {
+        if db.obj(oid).get_obj_type() == ITEM_BOAT && (find_eq_pos(game, db, chid, oid, "") < 0)
         {
             return true;
         }
@@ -129,9 +127,8 @@ pub fn perform_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, need_
         }
 
         let ch = db.ch(chid);
-        let list = ch.followers.clone();
-        for k in list.iter() {
-            let follower = db.ch(k.follower);
+        for f in ch.followers.clone() {
+            let follower = db.ch(f.follower);
             if follower.in_room() == was_in && follower.get_pos() >= POS_STANDING {
                 let ch = db.ch(chid);
                 game.act(db,
@@ -142,7 +139,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, need_
                     Some(VictimRef::Char(ch)),
                     TO_CHAR,
                 );
-                perform_move(game, db,k.follower, dir, true);
+                perform_move(game, db,f.follower, dir, true);
             }
         }
         return true;
@@ -474,7 +471,7 @@ fn do_doorcmd(
 
     let mut other_room = NOWHERE;
 
-    let mut back_to_room: Option<i16> = None;
+    let mut back_to_room = None;
     let mut back_keyword = None;
 
     buf = format!("$n {}s ", CMD_DOOR[scmd as usize]);
@@ -608,8 +605,7 @@ fn do_doorcmd(
         } else {
             let ch = db.ch(chid);
             Some(VictimRef::Str(
-                db.exit(ch, door.unwrap()).unwrap().keyword.clone(),
-            ))
+                db.exit(ch, door.unwrap()).unwrap().keyword.as_ref()))
         };
         game.act(db,
             &buf,
@@ -774,7 +770,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(Rc::from(CMD_DOOR[subcmd as usize]))),
+                Some(VictimRef::Str(CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
         } else if !door_is_open(&db, ch, oid.map(|o| db.obj(o)), dooro)

@@ -255,7 +255,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name<'a>(game: &mut Game, db:&DB,  newname: &str) -> bool {
+pub fn valid_name(game: &mut Game, db:&DB,  newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login

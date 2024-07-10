@@ -394,8 +394,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             let buf = format!("$n issues the order '{}'.", message);
             game.act(db,&buf, false, Some(ch), None, None, TO_ROOM);
             let ch = db.ch(chid);
-            let list = ch.followers.clone();
-            for k_id in list {
+            for k_id in ch.followers.clone() {
                 let follower = db.ch(k_id.follower);
                 let ch = db.ch(chid);
                 if ch.in_room() == follower.in_room() {

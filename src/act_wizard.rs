@@ -57,7 +57,7 @@ use crate::structs::{
     PRF_SUMMONABLE, ROOM_DEATH, ROOM_GODROOM, ROOM_HOUSE, ROOM_PRIVATE, THIRST,
 };
 use crate::util::{
-    age, clone_vec2, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
+    age, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
     SECS_PER_MUD_YEAR,
 };
 use crate::VictimRef;
@@ -572,17 +572,17 @@ pub fn do_vnum(
 fn do_stat_room(game: &mut Game, db: &mut DB, chid: DepotId) {
     let ch = db.ch(chid);
 
-    let rm_name = db.world[ch.in_room() as usize].name.clone();
+    let rm_name = db.world[ch.in_room() as usize].name.as_str();
     let rm_zone = db.world[ch.in_room() as usize].zone;
     let rm_sector_type = db.world[ch.in_room() as usize].sector_type;
     let rm_number = db.world[ch.in_room() as usize].number;
     let rm_func_is_none = db.world[ch.in_room() as usize].func.is_none();
-    let rm_description = db.world[ch.in_room() as usize].description.clone();
+    let rm_description = db.world[ch.in_room() as usize].description.as_str();
     let rm_ex_descriptions_len = db.world[ch.in_room() as usize].ex_descriptions.len();
-    let rm_peoples = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    let rm_contents = clone_vec2(&db.world[ch.in_room() as usize].contents);
+    let rm_peoples = &db.world[ch.in_room() as usize].peoples;
+    let rm_contents = &db.world[ch.in_room() as usize].contents;
     let rm_room_flags = db.world[ch.in_room() as usize].room_flags;
-    let rm_dir_option = db.world[ch.in_room() as usize].dir_option.clone();
+    let rm_dir_option = &db.world[ch.in_room() as usize].dir_option;
 
     game.send_to_char(
         ch,
@@ -639,13 +639,9 @@ fn do_stat_room(game: &mut Game, db: &mut DB, chid: DepotId) {
         let ch = db.ch(chid);
         game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
         for idx in 0..rm_ex_descriptions_len {
-            let ch = db.ch(chid);
-            let desc_keyword = db.world[ch.in_room() as usize].ex_descriptions[idx]
-                .keyword
-                .clone();
-
+            let desc_keyword = &db.world[ch.in_room() as usize].ex_descriptions[idx]
+                .keyword;
             game.send_to_char(ch, format!(" {}", desc_keyword).as_str());
-            let ch = db.ch(chid);
             game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
         }
     }
@@ -844,12 +840,10 @@ fn do_stat_object(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId) {
     );
 
     if !db.obj(oid).ex_descriptions.is_empty() {
-        let ch = db.ch(chid);
         game.send_to_char(ch, format!("Extra descs:{}", CCCYN!(ch, C_NRM)).as_str());
 
-        for desc in db.obj(oid).ex_descriptions.clone().iter() {
+        for desc in db.obj(oid).ex_descriptions.iter() {
             game.send_to_char(ch, format!(" {}", desc.keyword).as_str());
-            let ch = db.ch(chid);
             game.send_to_char(ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
         }
     }
@@ -1076,7 +1070,7 @@ fn do_stat_object(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId) {
         let mut column = 9; /* ^^^ strlen ^^^ */
         let mut found = 0;
 
-        for (i2, j2) in db.obj(oid).contains.clone().iter().enumerate() {
+        for (i2, j2) in db.obj(oid).contains.iter().enumerate() {
             let messg = format!(
                 "{} {}",
                 if found != 0 { "," } else { "" },
@@ -1476,8 +1470,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         game.send_to_char(ch, " <none>\r\n");
     } else {
         let mut found = 0;
-        let list = k.followers.clone();
-        for (i, fol) in list.iter().enumerate() {
+        for (i, fol) in k.followers.iter().enumerate() {
             let ch = db.ch(chid);
             column += game.send_to_char(
                 ch,
@@ -1515,8 +1508,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     /* Routine to show what spells a char is affected by */
     let k = db.ch(k_id);
     if k.affected.len() != 0 {
-        let list = k.affected.clone();
-        for aff in list {
+        for aff in &k.affected {
             let ch = db.ch(chid);
             game.send_to_char(
                 ch,
@@ -1864,8 +1856,7 @@ pub fn do_snoop(
         let ch = db.ch(chid);
         let desc_id = ch.desc.unwrap();
         let victim = victim_id.map(|v| db.ch(v));
-        let new_snooping = Some(victim.as_ref().unwrap().desc.unwrap()).clone();
-        game.desc_mut(desc_id).snooping = new_snooping;
+        game.desc_mut(desc_id).snooping = victim.as_ref().unwrap().desc.clone();
     }
 }
 
@@ -2149,7 +2140,7 @@ pub fn do_vstat(
         }
         let oid = db.read_object(r_num, REAL);
         do_stat_object(game, db, chid, oid.unwrap());
-        game.extract_obj(db, oid.unwrap());
+        db.extract_obj( oid.unwrap());
     } else {
         game.send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
@@ -2236,7 +2227,7 @@ pub fn do_purge(
                 None,
                 TO_ROOM,
             );
-            game.extract_obj(db, oid);
+            db.extract_obj( oid);
         } else {
             game.send_to_char(ch, "Nothing here by that name.\r\n");
             return;
@@ -2258,8 +2249,7 @@ pub fn do_purge(
         let ch = db.ch(chid);
         game.send_to_room(db, ch.in_room(), "The world seems a little cleaner.\r\n");
         let ch = db.ch(chid);
-        let list = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-        for vict_id in list {
+        for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
             let vict = db.ch(vict_id);
             if !vict.is_npc() {
                 continue;
@@ -2272,7 +2262,7 @@ pub fn do_purge(
             } {
                 let vict = db.ch(vict_id);
                 let oid = vict.carrying[0];
-                game.extract_obj(db, oid);
+                db.extract_obj( oid);
             }
 
             /* Dump equipment. */
@@ -2280,7 +2270,7 @@ pub fn do_purge(
                 let vict = db.ch(vict_id);
                 if vict.get_eq(i).is_some() {
                     let oid = vict.get_eq(i).unwrap();
-                    game.extract_obj(db, oid)
+                    db.extract_obj( oid)
                 }
             }
 
@@ -2296,7 +2286,7 @@ pub fn do_purge(
                 break;
             }
             let oid = db.world[ch_in_room as usize].contents[0];
-            game.extract_obj(db, oid);
+            db.extract_obj( oid);
         }
     }
 }
@@ -2575,8 +2565,7 @@ pub fn perform_immort_vis(game: &mut Game, db: &mut DB, chid: DepotId) {
 fn perform_immort_invis(game: &mut Game, db: &mut DB, chid: DepotId, level: i32) {
     let ch = db.ch(chid);
 
-    let list = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    for tch_id in list {
+    for &tch_id in &db.world[ch.in_room() as usize].peoples {
         let tch = db.ch(tch_id);
         if tch_id == chid {
             continue;
@@ -2929,8 +2918,8 @@ pub fn do_last(
             id,
             chdata.level,
             CLASS_ABBREVS[chdata.chclass as usize],
-            parse_c_string(&chdata.name.clone()),
-            parse_c_string(&chdata.host.clone()),
+            parse_c_string(&chdata.name),
+            parse_c_string(&chdata.host),
             ctime(chdata.last_logon)
         )
         .as_str(),
@@ -3013,8 +3002,7 @@ pub fn do_force(
             .as_str(),
         );
         let ch = db.ch(chid);
-        let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-        for vict_id in peoples_in_room.clone() {
+        for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
             let vict = db.ch(vict_id);
             let ch = db.ch(chid);
             if !vict.is_npc() && vict.get_level() >= ch.get_level() {
@@ -3211,7 +3199,7 @@ pub fn do_wiznet(
                     .ch(game.desc(d_id).character.unwrap())
                     .prf_flagged(PRF_NOREPEAT)
         } {
-            let chid = game.desc(d_id).character.as_ref().unwrap().clone();
+            let chid = game.desc(d_id).character.unwrap();
             game.send_to_char(ch, CCCYN!(db.ch(game.desc(d_id).character.unwrap()), C_NRM));
             let dc_id = game.desc(d_id).character.unwrap();
             let dc = db.ch(dc_id);
@@ -4370,7 +4358,7 @@ fn perform_set(
             }
         }
         2 => {
-            set_title(vict, Some(val_arg.to_string()));
+            set_title(vict, Some(val_arg));
             let messg = format!(
                 "{}'s title is now: {}\r\n",
                 vict.get_name(),

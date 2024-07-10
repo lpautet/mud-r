@@ -224,8 +224,7 @@ pub fn do_put(
                     }
                 }
             } else {
-                let list = ch.carrying.clone();
-                for oid in list {
+                for oid in ch.carrying.clone() {
                     if oid != cid.unwrap()
                         && (obj_dotmode == FIND_ALL || isname(&theobj, &db.obj(oid).name.as_ref()))
                     {
@@ -296,7 +295,7 @@ fn get_check_money(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId) {
         return;
     }
 
-    game.extract_obj(db, oid);
+    db.extract_obj( oid);
     let ch = db.ch_mut(chid);
     ch.set_gold(ch.get_gold() + value);
 
@@ -384,7 +383,7 @@ fn get_from_container(
             TO_CHAR,
         );
     } else if obj_dotmode == FIND_INDIV {
-        let mut oid = game.get_obj_in_list_vis(db, ch, arg, None, &cobj.contains.clone());
+        let mut oid = game.get_obj_in_list_vis(db, ch, arg, None, &cobj.contains);
         if oid.is_none() {
             let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
             game.act(db, &buf, false, Some(ch), Some(cobj), None, TO_CHAR);
@@ -394,7 +393,7 @@ fn get_from_container(
                 perform_get_from_container(game, db, chid, oid.unwrap(), cid, mode);
                 let ch = db.ch(chid);
                 let cobj = db.obj(cid);
-                oid = game.get_obj_in_list_vis(db, ch, arg, None, &cobj.contains.clone());
+                oid = game.get_obj_in_list_vis(db, ch, arg, None, &cobj.contains);
             }
         }
     } else {
@@ -776,7 +775,7 @@ fn perform_drop(
         }
         SCMD_JUNK => {
             let value = max(1, min(200, db.obj(oid).get_obj_cost() / 16));
-            game.extract_obj(db, oid);
+            db.extract_obj( oid);
             return value;
         }
         _ => {
@@ -1254,7 +1253,7 @@ pub fn name_from_drinkcon(db: &mut DB, oid: Option<DepotId>) {
 
     let mut new_name = String::new();
     let next = "";
-    let bname = db.obj(oid).name.clone();
+    let bname = &db.obj(oid).name;
     let mut cur_name = bname.as_ref();
     while cur_name.len() != 0 {
         if cur_name.starts_with(' ') {
@@ -1632,7 +1631,7 @@ pub fn do_eat(
         db.affect_join(chid, &mut af, false, false, false, false);
     }
     if subcmd == SCMD_EAT {
-        game.extract_obj(db, food_id);
+        db.extract_obj( food_id);
     } else {
         if {
             db.obj_mut(food_id).decr_obj_val(1);
@@ -1641,7 +1640,7 @@ pub fn do_eat(
         } {
             let ch = db.ch(chid);
             game.send_to_char(ch, "There's nothing left now.\r\n");
-            game.extract_obj(db, food_id);
+            db.extract_obj( food_id);
         }
     }
 }
@@ -2374,7 +2373,7 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
         );
     } else {
         let oid = oid.unwrap();
-        let eqid = game.unequip_char(db, chid, pos).unwrap();
+        let eqid = db.unequip_char( chid, pos).unwrap();
         db.obj_to_char(eqid, chid);
         let ch = db.ch(chid);
         let obj = db.obj(oid);

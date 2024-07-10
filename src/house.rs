@@ -151,7 +151,7 @@ fn house_load(db: &mut DB, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            let newobjid = obj_from_store(db, &object, &mut i).clone().unwrap();
+            let newobjid = obj_from_store(db, &object, &mut i).unwrap();
             db.obj_to_room(newobjid, rnum);
         }
     }

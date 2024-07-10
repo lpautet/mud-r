@@ -55,7 +55,7 @@ use crate::structs::{
     PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
-use crate::util::{ clone_vec2, has_spell_routine, rand_number};
+use crate::util::{ has_spell_routine, rand_number};
 use crate::{is_set,  Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 /*
@@ -370,8 +370,7 @@ fn say_spell(
         buf2.push_str(format!("$n utters the words, '{}'.", buf).as_str());
     }
 
-    let list = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    for i_id in list {
+    for &i_id in &db.world[ch.in_room() as usize].peoples {
         if i_id == chid
             || (tch_id.is_some() && i_id == tch_id.unwrap())
             || db.ch(i_id).desc.is_none()
@@ -651,7 +650,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 TO_CHAR,
             );
             if !obj.action_description.borrow().is_empty() {
-                let str = obj.action_description.borrow().clone();
+                let str = obj.action_description.borrow();
                 game.act(db,
                     str.as_str(),
                     false,
@@ -711,9 +710,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         call_magic(game, db,chid, None, None, spellnum, k, CAST_STAFF);
                     }
                 } else {
-                    let peoples_in_room =
-                        clone_vec2(&db.world[ch.in_room() as usize].peoples);
-                    for tch_id in peoples_in_room {
+                    for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
                         if chid != tch_id {
                             let obj = db.obj(oid);
                             let spellnum = obj.get_obj_val(3);
@@ -761,7 +758,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         TO_CHAR,
                     );
                     if !RefCell::borrow(&obj.action_description).is_empty() {
-                        let str = obj.action_description.borrow().clone();
+                        let str = obj.action_description.borrow();
                         game.act(db,
                             str.as_str(),
                             false,
@@ -792,7 +789,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     TO_CHAR,
                 );
                 if !RefCell::borrow(&obj.action_description).is_empty() {
-                    let str = obj.action_description.borrow().clone();
+                    let str = obj.action_description.borrow();
                     game.act(db,
                         str.as_str(),
                         false,
@@ -908,7 +905,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 TO_CHAR,
             );
             if !RefCell::borrow(&obj.action_description).is_empty() {
-                let str = obj.action_description.borrow().clone();
+                let str = obj.action_description.borrow();
                 game.act(db,
                     str.as_str(),
                     false,
@@ -941,13 +938,13 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 }
             }
 
-            game.extract_obj(db,oid);
+            db.extract_obj(oid);
         }
         ITEM_POTION => {
             game
                 .act(db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
             if !RefCell::borrow(&obj.action_description).is_empty() {
-                let str = obj.action_description.borrow().clone();
+                let str = obj.action_description.borrow();
                 game.act(db,
                     str.as_str(),
                     false,
@@ -980,7 +977,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 }
             }
 
-            game.extract_obj(db,oid);
+            db.extract_obj(oid);
         }
         _ => {
             error!(

@@ -22,7 +22,7 @@ use crate::structs::{
     MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE,
     MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::{clone_vec2, rand_number};
+use crate::util::rand_number;
 use crate::VictimRef;
 use crate::{Game, DB, TO_ROOM};
 
@@ -70,8 +70,7 @@ impl Game {
                     let mut max = 1;
                     let mut best_obj_id = None;
                     {
-                        let contents = clone_vec2(&db.world[ch.in_room() as usize].contents);
-                        for oid in contents.into_iter() {
+                        for &oid in &db.world[ch.in_room() as usize].contents {
                             let obj = db.obj(oid);
                             if self.can_get_obj(db, ch, obj) && obj.get_obj_cost() > max {
                                 best_obj_id = Some(oid);
@@ -119,8 +118,7 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_AGGRESSIVE | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL | MOB_AGGR_GOOD) {
                 let mut found = false;
-                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-                for vict_id in peoples_in_room {
+                for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
                     let vict = db.ch(vict_id);
                     if found {
                         break;
@@ -157,8 +155,7 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_MEMORY) && ch.memory().len() != 0 {
                 let mut found = false;
-                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-                for vict_id in peoples_in_room {
+                for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
                     let vict = db.ch(vict_id);
                     if found {
                         break;
@@ -170,8 +167,7 @@ impl Game {
                     {
                         continue;
                     }
-                    let list = ch.memory().clone();
-                    for id in list {
+                    for id in ch.memory().clone() {
                         let vict = db.ch(vict_id);
                         if id != vict.get_idnum() {
                             continue;
@@ -231,8 +227,7 @@ impl Game {
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
                 let mut found = false;
-                let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-                for vict_id in peoples_in_room {
+                for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
                     let vict = db.ch(vict_id);
                     if found {
                         break;

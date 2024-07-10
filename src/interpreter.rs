@@ -77,7 +77,7 @@ use crate::structs::{
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
     SEX_MALE,
 };
-use crate::util::{clone_vec2, BRF, NRM};
+use crate::util::{BRF, NRM};
 use crate::{
     _clrlevel, clr, write_to_q, Game, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM,
 };
@@ -2892,8 +2892,7 @@ pub fn do_alias(
         if ch.player_specials.aliases.len() == 0 {
             game.send_to_char(ch, " None.\r\n");
         } else {
-            let list = ch.player_specials.aliases.clone();
-            for a in list {
+            for a in &ch.player_specials.aliases {
                 game.send_to_char(ch, format!("{:15} {}\r\n", a.alias, a.replacement).as_str());
             }
         }
@@ -3037,7 +3036,7 @@ pub fn perform_alias(game: &mut Game, db: &DB, d_id: DepotId, orig: &mut String)
     } {
         return false;
     }
-    let a = a.unwrap().clone();
+    let a = a.unwrap();
     if a.type_ == ALIAS_SIMPLE {
         orig.clear();
         orig.push_str(a.replacement.as_ref());
@@ -3279,8 +3278,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
 
     /* special in mobile present? */
     let ch = db.ch(chid);
-    let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    for k_id in peoples_in_room {
+    for k_id in db.world[ch.in_room() as usize].peoples.clone() {
         let k = db.ch(k_id);
         if !k.mob_flagged(MOB_NOTDEADYET) {
             if db.get_mob_spec(k).is_some()
@@ -3291,8 +3289,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
         }
     }
     let ch = db.ch(chid);
-    let peoples_in_room = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for i in peoples_in_room {
+    for i in db.world[ch.in_room() as usize].contents.clone() {
         if db.get_obj_spec(i).is_some() {
             if db.get_obj_spec(i).as_ref().unwrap()(game, db, chid, MeRef::Obj(i), cmd, arg) {
                 return true;
@@ -3759,11 +3756,9 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                     level = character.get_level();
                 }
                 if level >= LVL_IMMORT as u8 {
-                    let txt = db.imotd.clone();
-                    desc.write_to_output(txt.as_ref());
+                    desc.write_to_output(db.imotd.as_ref());
                 } else {
-                    let txt = db.motd.clone();
-                    desc.write_to_output(txt.as_ref());
+                    desc.write_to_output(db.motd.as_ref());
                 }
                 let character = db.ch(character_id);
                 {
@@ -3996,14 +3991,14 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                         .mails
                         .has_mail(db.ch(desc.character.unwrap()).get_idnum())
                     {
-                        let chid = desc.character.as_ref().unwrap().clone();
+                        let chid = desc.character.unwrap();
                         let ch = db.ch(chid);
                         game.send_to_char(ch, "You have mail waiting.\r\n");
                     }
                     let desc = game.desc_mut(d_id);
                     if load_result == 2 {
                         /* rented items lost */
-                        let chid = desc.character.as_ref().unwrap().clone();
+                        let chid = desc.character.unwrap();
                         let ch = db.ch(chid);
                         game.send_to_char(ch, "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
                     }
@@ -4014,7 +4009,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                 '2' => {
                     if character.player.description.borrow().is_empty() {
                         let cp = &character.player;
-                        let player_description = RefCell::borrow(&cp.description).clone();
+                        let player_description = RefCell::borrow(&cp.description);
                         desc.write_to_output(
                             format!("Old description:\r\n{}", player_description).as_str(),
                         );
@@ -4029,8 +4024,8 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                     desc.set_state(ConExdesc);
                 }
                 '3' => {
-                    let msg = db.background.clone();
-                    page_string(game, db, d_id, msg.as_ref(), false);
+                    let msg = db.background.as_ref();
+                    page_string(game, db, d_id, msg, false);
                     let desc = game.desc_mut(d_id);
                     desc.set_state(ConRmotd);
                 }

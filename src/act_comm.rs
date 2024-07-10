@@ -28,7 +28,6 @@ use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
 };
-use std::rc::Rc;
 
 pub fn do_say(
     game: &mut Game,
@@ -819,7 +818,7 @@ pub fn do_qcomm(
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(Rc::from(argument.to_string()))),
+                Some(VictimRef::Str(argument)),
                 TO_CHAR,
             );
         } else {
@@ -829,7 +828,7 @@ pub fn do_qcomm(
                 false,
                 Some(ch),
                 None,
-                Some(VictimRef::Str(Rc::from(argument.to_string()))),
+                Some(VictimRef::Str(argument)),
                 TO_CHAR,
             );
         }

@@ -182,17 +182,17 @@ pub fn move_gain(ch: &CharData) -> u8 {
     gain
 }
 
-pub fn set_title(ch: &mut CharData, title: Option<String>) {
+pub fn set_title(ch: &mut CharData, title: Option<&str>) {
     let mut title = title;
-    if title.is_none() || title.clone().unwrap().is_empty() {
+    if title.is_none() || title.unwrap().is_empty() {
         if ch.get_sex() == SEX_FEMALE {
-            title = Some(title_female(ch.get_class() as i32, ch.get_level() as i32).to_string());
+            title = Some(title_female(ch.get_class() as i32, ch.get_level() as i32));
         } else {
-            title = Some(title_male(ch.get_class() as i32, ch.get_level() as i32).to_string());
+            title = Some(title_male(ch.get_class() as i32, ch.get_level() as i32));
         }
     }
 
-    ch.set_title(title.map(|t| Rc::from(t.as_str())));
+    ch.set_title(title.map(|t| Rc::from(t)));
 }
 
 // void run_autowiz(void)
@@ -521,7 +521,7 @@ impl Game {
                             != 0
                     {
                         let chid =
-                            db.world[j_obj.in_room() as usize].peoples[0].clone();
+                            db.world[j_obj.in_room() as usize].peoples[0];
                             let ch = db.ch(chid);
                         self.act(db, 
                             "A quivering horde of maggots consumes $p.",
@@ -541,7 +541,7 @@ impl Game {
                         );
                     }
                     let mut old_contains = vec![];
-                    for c in j_obj.contains.clone().into_iter() {
+                    for &c in &j_obj.contains {
                         old_contains.push(c);
                     }
 
@@ -561,7 +561,7 @@ impl Game {
                             //   core_dump();
                         }
                     }
-                    self.extract_obj(db, j_id);
+                    db.extract_obj( j_id);
                 }
             }
         }

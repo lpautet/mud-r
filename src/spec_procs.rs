@@ -38,7 +38,7 @@ use crate::structs::{
     MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
     PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
 };
-use crate::util::{add_follower, clone_vec2, rand_number};
+use crate::util::{add_follower, rand_number};
 use crate::{ Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 /* ********************************************************************
@@ -196,8 +196,7 @@ pub fn guild(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
 pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = db.ch(chid);
 
-    let list = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for k_id in list {
+    for k_id in db.world[ch.in_room() as usize].contents.clone() {
         let k = db.obj(k_id);
         game.act(db,
             "$p vanishes in a puff of smoke!",
@@ -207,7 +206,7 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
             None,
             TO_ROOM,
         );
-        game.extract_obj(db,k_id);
+        db.extract_obj(k_id);
     }
 
     if !cmd_is(cmd, "drop") {
@@ -217,8 +216,7 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
     do_drop(game, db,chid, argument, cmd as usize, SCMD_DROP as i32);
     let mut value = 0;
     let ch = db.ch(chid);
-    let list = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for k_id in list {
+    for k_id in db.world[ch.in_room() as usize].contents.clone() {
         let k = db.obj(k_id);
         game.act(db,
             "$p vanishes in a puff of smoke!",
@@ -229,7 +227,7 @@ pub fn dump(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, a
             TO_ROOM,
         );
         value += max(1, min(50, k.get_obj_cost() / 10));
-        game.extract_obj(db,k_id);
+        db.extract_obj(k_id);
     }
     let ch = db.ch(chid);
     if value != 0 {
@@ -520,10 +518,7 @@ pub fn thief(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, 
     if cmd != 0 || ch.get_pos() != POS_STANDING {
         return false;
     }
-    let list = clone_vec2(&db.world[ch.in_room() as usize]
-    .peoples);
-    for cons_id in list
-    {
+    for cons_id in db.world[ch.in_room() as usize].peoples.clone() {
         let cons = db.ch(cons_id);
         if !cons.is_npc() && cons.get_level() < LVL_IMMORT as u8 && rand_number(0, 4) == 0 {
             npc_steal(game, db, chid, cons_id);
@@ -548,8 +543,7 @@ pub fn magic_user(
     /* pseudo-randomly choose someone in the room who is fighting me */
     let mut vict_id = None;
     {
-        let peoples = db.world[ch.in_room() as usize].peoples.clone();
-        for v_id in peoples {
+        for &v_id in &db.world[ch.in_room() as usize].peoples {
             let v = db.ch(v_id);
             if v.fighting_id().is_some()
                 && v.fighting_id().unwrap() == chid
@@ -703,9 +697,7 @@ pub fn fido(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, _
         return false;
     }
 
-    let list = clone_vec2(&db.world[ch.in_room() as usize].contents);
-    for i in list
-    {
+    for i in db.world[ch.in_room() as usize].contents.clone() {
         if !db.obj(i).is_corpse() {
             continue;
         }
@@ -723,7 +715,7 @@ pub fn fido(game: &mut Game, db: &mut DB, chid: DepotId, _me: MeRef, cmd: i32, _
             let ch = db.ch(chid);
             db.obj_to_room(temp, ch.in_room());
         }
-        game.extract_obj(db,i);
+        db.extract_obj(i);
         return true;
     }
 
@@ -782,8 +774,7 @@ pub fn cityguard(
     let mut min_cha = 6;
     let mut spittle = None;
     let mut evil_id = None;
-    let peoples = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    for tch_id in peoples {
+    for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
         let tch = db.ch(tch_id);
         if !game.can_see(db,ch, tch) {
             continue;
@@ -887,8 +878,7 @@ pub fn pet_shops(
 
     if cmd_is(cmd, "list") {
         game.send_to_char(ch, "Available pets are:\r\n");
-        let list = clone_vec2(&db.world[pet_room as usize].peoples);
-        for pet_id in list {
+        for &pet_id in &db.world[pet_room as usize].peoples {
             let pet = db.ch(pet_id);
             /* No, you can't have the Implementor as a pet if he's in there. */
             if !pet.is_npc() {

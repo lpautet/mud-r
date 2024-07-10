@@ -57,7 +57,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         != 0
 }
 
-fn valid_edge(game: &mut Game, db: &DB, x: RoomRnum, y: usize) -> bool {
+fn valid_edge(game: &Game, db: &DB, x: RoomRnum, y: usize) -> bool {
     if db.world[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
     {
         return false;
@@ -68,7 +68,6 @@ fn valid_edge(game: &mut Game, db: &DB, x: RoomRnum, y: usize) -> bool {
     if db.room_flagged(toroom(db, x, y), ROOM_NOTRACK) || is_marked(db, toroom(db, x, y)) {
         return false;
     }
-
     true
 }
 
@@ -95,7 +94,7 @@ impl BfsTracker {
  * Intended usage: in mobile_activity, give a mob a dir to go if they're
  * tracking another mob or a PC.  Or, a 'track' skill for PCs.
  */
-fn find_first_step(game: &mut Game, db: &mut DB, src: RoomRnum, target: RoomRnum) -> i32 {
+fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) -> i32 {
     if src == NOWHERE
         || target == NOWHERE
         || src >= db.world.len() as i16

@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 //
 // const char *string_fields[] =
@@ -50,20 +50,27 @@ use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
 use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
 use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
-use crate::structs::{ LVL_IMMORT, PLR_MAILING, PLR_WRITING};
+use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
 use crate::{DescriptorData, Game, DB, PAGE_LENGTH, PAGE_WIDTH};
 
 impl DescriptorData {
-pub fn string_write(&mut self, db: &mut DB, writeto: Rc<RefCell<String>>, len: usize, mailto: i64) {
-    if self.character.is_some() && !db.ch(self.character.unwrap()).is_npc() {
-        db.ch_mut(self.character.unwrap()).set_plr_flag_bit(PLR_WRITING);
-    }
+    pub fn string_write(
+        &mut self,
+        db: &mut DB,
+        writeto: Rc<RefCell<String>>,
+        len: usize,
+        mailto: i64,
+    ) {
+        if self.character.is_some() && !db.ch(self.character.unwrap()).is_npc() {
+            db.ch_mut(self.character.unwrap())
+                .set_plr_flag_bit(PLR_WRITING);
+        }
 
-    self.str = Some(writeto);
-    self.max_str = len;
-    self.mail_to = mailto;
-}
+        self.str = Some(writeto);
+        self.max_str = len;
+        self.mail_to = mailto;
+    }
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
@@ -108,12 +115,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
 
     let desc = game.desc_mut(d_id);
     if terminator {
-        if desc.state() == ConPlaying
-            && db.ch(desc
-                .character
-                .unwrap())
-                .plr_flagged(PLR_MAILING)
-        {
+        if desc.state() == ConPlaying && db.ch(desc.character.unwrap()).plr_flagged(PLR_MAILING) {
             let message_pointer = desc.str.as_ref().unwrap().clone();
             let mail_to = desc.mail_to;
             let from = db.ch(desc.character.unwrap()).get_idnum();
@@ -124,11 +126,9 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
             );
             desc.mail_to = 0;
             desc.str = None;
-            desc.write_to_output( "Message sent!\r\n");
+            desc.write_to_output("Message sent!\r\n");
             if !db.ch(desc.character.unwrap()).is_npc() {
-                db.ch_mut(desc
-                    .character
-                    .unwrap())
+                db.ch_mut(desc.character.unwrap())
                     .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
             }
         }
@@ -148,9 +148,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
             && game.desc(d_id).character.is_some()
             && !db.ch(game.desc(d_id).character.unwrap()).is_npc()
         {
-            db.ch_mut(game.desc(d_id)
-                .character
-                .unwrap())
+            db.ch_mut(game.desc(d_id).character.unwrap())
                 .remove_plr_flag(PLR_WRITING);
         }
     } else {
@@ -161,7 +159,14 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
-pub fn do_skillset(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_skillset(
+    game: &mut Game,
+    db: &mut DB,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = db.ch(chid);
     let mut name = String::new();
 
@@ -170,7 +175,8 @@ pub fn do_skillset(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
 
     if name.is_empty() {
         /* no arguments. print an informative text */
-        game.send_to_char(ch,
+        game.send_to_char(
+            ch,
             "Syntax: skillset <name> '<skill>' <value>\r\n\
 Skill being one of the following:\r\n",
         );
@@ -192,7 +198,7 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict_id = game.get_char_vis(db,chid, &mut name, None, FIND_CHAR_WORLD);
+    let vict_id = game.get_char_vis(db, chid, &mut name, None, FIND_CHAR_WORLD);
     if vict_id.is_none() {
         game.send_to_char(ch, NOPERSON);
         return;
@@ -269,7 +275,8 @@ Skill being one of the following:\r\n",
     let vict = db.ch_mut(vict_id);
     vict.set_skill(skill, value);
     let vict = db.ch(vict_id);
-    game.mudlog(db,
+    game.mudlog(
+        db,
         BRF,
         LVL_IMMORT as i32,
         true,
@@ -284,7 +291,8 @@ Skill being one of the following:\r\n",
     );
     let vict = db.ch(vict_id);
     let ch = db.ch(chid);
-    game.send_to_char(ch,
+    game.send_to_char(
+        ch,
         format!(
             "You change {}'s {} to {}.\r\n",
             vict.get_name(),
@@ -393,14 +401,15 @@ pub fn page_string(game: &mut Game, db: &DB, d_id: DepotId, msg: &str, keep_inte
         return;
     }
 
-    game.desc_mut(d_id).showstr_count = count_pages(msg);
-    let need = game.desc_mut(d_id).showstr_count as usize;
-    game.desc_mut(d_id).showstr_vector.reserve_exact(need);
+    let desc = game.desc_mut(d_id);
+    desc.showstr_count = count_pages(msg);
+    let need = desc.showstr_count as usize;
+    desc.showstr_vector.reserve_exact(need);
 
     if keep_internal {
-        game.desc_mut(d_id).showstr_head = Some(Rc::from(msg));
-        let msg = game.desc_mut(d_id).showstr_head.as_ref().unwrap().clone();
-        paginate_string(msg.as_ref(), game.desc_mut(d_id));
+        desc.showstr_head = Some(Rc::from(msg));
+        let msg = desc.showstr_head.as_ref().unwrap().clone();
+        paginate_string(msg.as_ref(), desc);
     } else {
         paginate_string(msg, game.desc_mut(d_id));
     }
@@ -410,7 +419,7 @@ pub fn page_string(game: &mut Game, db: &DB, d_id: DepotId, msg: &str, keep_inte
 }
 
 /* The call that displays the next page. */
-pub fn show_string(game: &mut Game, db: & DB, d_id: DepotId, input: &str) {
+pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
@@ -440,9 +449,10 @@ pub fn show_string(game: &mut Game, db: & DB, d_id: DepotId, input: &str) {
         else if cmd.is_digit(10) {
             let nr = buf.parse::<i32>();
             if nr.is_err() {
-                let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
+                let chid = game.desc_mut(d_id).character.unwrap();
                 let ch = db.ch(chid);
-                game.send_to_char(ch,
+                game.send_to_char(
+                    ch,
                     "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
                 );
             }
@@ -451,9 +461,9 @@ pub fn show_string(game: &mut Game, db: & DB, d_id: DepotId, input: &str) {
                 min(nr.unwrap() - 1, game.desc_mut(d_id).showstr_count - 1),
             );
         } else if !buf.is_empty() {
-            let to_char_id = game.desc_mut(d_id).character.as_ref().unwrap().clone();
-            game.send_to_char(db.ch(
-                to_char_id),
+            let to_char_id = game.desc_mut(d_id).character.unwrap();
+            game.send_to_char(
+                db.ch(to_char_id),
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );
             return;
@@ -463,7 +473,7 @@ pub fn show_string(game: &mut Game, db: & DB, d_id: DepotId, input: &str) {
      * then free up the space we used.
      */
     if game.desc_mut(d_id).showstr_page + 1 >= game.desc_mut(d_id).showstr_count {
-        let chid = game.desc_mut(d_id).character.as_ref().unwrap().clone();
+        let chid = game.desc_mut(d_id).character.unwrap();
         let showstr_page = game.desc_mut(d_id).showstr_page as usize;
         let msg = game.desc_mut(d_id).showstr_vector[showstr_page].clone();
         let ch = db.ch(chid);

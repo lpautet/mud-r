@@ -29,7 +29,6 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::Appender;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
-use util::clone_vec2;
 
 use crate::act_social::free_social_messages;
 use crate::ban::{free_invalid_list, isbanned};
@@ -998,8 +997,7 @@ impl Game {
         }
         newd.desc_num = self.last_desc;
 
-        let txt = db.greetings.clone();
-        newd.write_to_output(txt.as_ref());
+        newd.write_to_output(&db.greetings);
 
         /* append to list */
         self.descriptor_list.push(newd);
@@ -1419,9 +1417,9 @@ impl Game {
                     ConPlaying | ConDisconnect => {
                         let original = desc.original;
                         let link_challenged_id = if original.is_some() {
-                            original.as_ref().unwrap().clone()
+                            original.unwrap()
                         } else {
-                            desc.character.borrow().as_ref().unwrap().clone()
+                            desc.character.unwrap()
                         };
 
                         /* We are guaranteed to have a person. */
@@ -1715,7 +1713,7 @@ impl Game {
                         i = self.pers(db, ch.unwrap(), to);
                     }
                     'N' => {
-                        i = if vict_obj.clone().is_none() {
+                        i = if vict_obj.is_none() {
                             Rc::from(ACTNULL)
                         } else {
                             if let Some(VictimRef::Char(p)) = vict_obj {
@@ -1911,11 +1909,11 @@ macro_rules! sendok {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum VictimRef<'a> {
     Char(&'a CharData),
     Obj(&'a ObjData),
-    Str(Rc<str>),
+    Str(&'a str),
 }
 
 impl Game {
@@ -1962,7 +1960,7 @@ impl Game {
             if vict_obj.is_some() {
                 if let Some(VictimRef::Char(to_ch)) = vict_obj {
                     if sendok!(to_ch, to_sleeping) {
-                        self.perform_act(db, str, ch, obj, vict_obj.clone(), to_ch);
+                        self.perform_act(db, str, ch, obj, vict_obj, to_ch);
                     }
                 } else {
                     error!("Invalid CharData ref for victim! in act");
@@ -1981,8 +1979,7 @@ impl Game {
             return;
         }
 
-        let list = clone_vec2(char_list);
-        for to_id in list {
+        for &to_id in char_list {
             let to = db.ch(to_id);
             if !sendok!(to, to_sleeping) || (ch.is_some() && to_id == ch.unwrap().id()) {
                 continue;
@@ -2008,7 +2005,7 @@ impl Game {
                 continue;
             }
 
-            self.perform_act(db, str, ch, obj, vict_obj.clone(), to);
+            self.perform_act(db, str, ch, obj, vict_obj, to);
         }
     }
 }

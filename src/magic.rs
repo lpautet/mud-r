@@ -39,7 +39,7 @@ use crate::structs::{
     ITEM_BLESS, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_INVISIBLE, ITEM_NODROP, ITEM_NOINVIS,
     ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING,
 };
-use crate::util::{add_follower, clone_vec2, dice, rand_number};
+use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
 
 /*
@@ -638,8 +638,7 @@ pub fn mag_groups(game: &mut Game, db: &mut DB, level: i32, chid: Option<DepotId
         k_id = chid;
     }
     let k = db.ch(k_id);
-    let list = k.followers.clone();
-    for f in list {
+    for f in k.followers.clone() {
         let tch_id = f.follower;
         let tch =db.ch(tch_id);
         let ch = db.ch(chid);
@@ -724,8 +723,7 @@ pub fn mag_areas(
         game.act(db, to_room, false, Some(ch), None, None, TO_ROOM);
     }
     let ch = db.ch(chid);
-    let peoples = clone_vec2(&db.world[ch.in_room() as usize].peoples);
-    for tch_id in peoples {
+    for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
         let tch = db.ch(tch_id);
         /*
          * The skips: 1: the caster
@@ -903,11 +901,11 @@ pub fn mag_summons(
         add_follower(game, db, mob_id, chid);
 
         if handle_corpse {
-            for tobjid in db.obj(oid.unwrap()).contains.clone().into_iter() {
+            for tobjid in db.obj(oid.unwrap()).contains.clone() {
                 db.obj_from_obj(tobjid);
                 db.obj_to_char(tobjid, mob_id);
             }
-            game.extract_obj(db, oid.unwrap());
+            db.extract_obj( oid.unwrap());
         }
     }
 }

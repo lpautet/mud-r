@@ -606,7 +606,7 @@ fn get_purchase_obj(
     loop {
         let keeper = db.ch(keeper_id);
         if name.starts_with('#') || is_number(&name) {
-            oid = get_hash_obj_vis(game, db, chid, &name, &keeper.carrying.clone());
+            oid = get_hash_obj_vis(game, db, chid, &name, &keeper.carrying);
         } else {
             oid = get_slide_obj_vis(game, db, chid, &name, &keeper.carrying.clone());
         }
@@ -621,7 +621,7 @@ fn get_purchase_obj(
             return None;
         }
         if db.obj(oid.unwrap()).get_obj_cost() <= 0 {
-            game.extract_obj(db, oid.unwrap());
+            db.extract_obj( oid.unwrap());
             oid = None;
         }
         if oid.is_some() {
@@ -954,7 +954,7 @@ fn slide_obj(game: &mut Game, db: &mut DB, oid: DepotId, keeper_id: DepotId, sho
     }
     /* Extract the object if it is identical to one produced */
     if shop_producing(db, oid, shop_nr) {
-        game.extract_obj(db, oid);
+        db.extract_obj( oid);
         return;
     }
     db.shop_index[shop_nr].lastsort += 1;
@@ -1207,18 +1207,18 @@ fn list_object(
     match db.obj(oid).get_obj_type() {
         ITEM_DRINKCON => {
             if db.obj(oid).get_obj_val(1) != 0 {
-                itemname = format!(
+                itemname = Rc::from(format!(
                     "{} of {}",
                     db.obj(oid).short_description,
                     DRINKS[db.obj(oid).get_obj_val(2) as usize]
-                );
+                ).as_str());
             } else {
-                itemname = db.obj(oid).short_description.clone().to_string();
+                itemname = db.obj(oid).short_description.clone();
             }
         }
 
         ITEM_WAND | ITEM_STAFF => {
-            itemname = format!(
+            itemname = Rc::from(format!(
                 "{}{}",
                 db.obj(oid).short_description,
                 if db.obj(oid).get_obj_val(2) < db.obj(oid).get_obj_val(1) {
@@ -1226,11 +1226,11 @@ fn list_object(
                 } else {
                     ""
                 }
-            );
+            ).as_str());
         }
 
         _ => {
-            itemname = db.obj(oid).short_description.to_string();
+            itemname = db.obj(oid).short_description.clone();
         }
     }
 
@@ -1244,7 +1244,7 @@ fn list_object(
         )
         .as_str(),
     );
-    result.clone()
+    result
 }
 
 pub fn shopping_list(
@@ -1275,8 +1275,7 @@ pub fn shopping_list(
     let mut last_oid: Option<DepotId> = None;
     let keeper = db.ch(keeper_id);
     if keeper.carrying.len() != 0 {
-        let cl = keeper.carrying.clone();
-        for oid in cl {
+        for &oid in &keeper.carrying {
             let ch = db.ch(chid);
             if game.can_see_obj(db,ch, db.obj(oid)) && db.obj(oid).get_obj_cost() > 0 {
                 if last_oid.is_none() {
@@ -2022,9 +2021,9 @@ fn list_detailed_shop(game: &mut Game, db: &DB, chid: DepotId, shop_nr: i32) {
             ITEM_TYPES[db.shop_index[shop_nr as usize].type_[sindex as usize].type_ as usize],
             db.shop_index[shop_nr as usize].type_[sindex as usize].type_,
             if !db.shop_index[shop_nr as usize].type_[sindex as usize].keywords.is_empty() {
-                db.shop_index[shop_nr as usize].type_[sindex as usize].keywords.clone()
+                &db.shop_index[shop_nr as usize].type_[sindex as usize].keywords
             } else {
-                Rc::from("all")
+                "all"
             }
         );
 
