@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 
 use log::error;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::config::OK;
@@ -629,14 +629,14 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
-    let mut tch_id = None;
-    let mut tobjid = None;
+    let mut tch = None;
+    let mut tobj = None;
     let k = game.generic_find(db,
         &arg,
         (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
-        chid,
-        &mut tch_id,
-        &mut tobjid,
+        ch,
+        &mut tch,
+        &mut tobj,
     );
 
     match obj.get_obj_type() {
@@ -681,6 +681,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     TO_ROOM,
                 );
             } else {
+                let oid = obj.id();
                 db.obj_mut(oid).decr_obj_val(2);
                 let ch = db.ch_mut(chid);
                 ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -730,7 +731,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
         }
         ITEM_WAND => {
             if k == FIND_CHAR_ROOM {
-                if tch_id.unwrap() == chid {
+                if tch.unwrap().id() == chid {
                     game.act(db,
                         "You point $p at yourself.",
                         false,
@@ -748,7 +749,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         TO_ROOM,
                     );
                 } else {
-                    let tch = db.ch(tch_id.unwrap());
+                    let tch = tch.unwrap();
                     game.act(db,
                         "You point $p at $N.",
                         false,
@@ -778,8 +779,8 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         );
                     }
                 }
-            } else if tobjid.is_some() {
-                let tobj = db.obj(tobjid.unwrap());
+            } else if tobj.is_some() {
+                let tobj = tobj.unwrap();
                 game.act(db,
                     "You point $p at $P.",
                     false,
@@ -853,6 +854,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 );
                 return;
             }
+            let tch_id = tch.map(|c| c.id());
+            let tobj_id = tobj.map(|o| o.id());
+            let oid = obj.id();
             db.obj_mut(oid).decr_obj_val(2);
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -862,7 +866,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     game,db,
                     chid,
                     tch_id,
-                    tobjid,
+                    tobj_id,
                     obj.get_obj_val(3),
                     obj.get_obj_val(0),
                     CAST_WAND,
@@ -872,7 +876,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     game,db,
                     chid,
                     tch_id,
-                    tobjid,
+                    tobj_id,
                     obj.get_obj_val(3),
                     DEFAULT_WAND_LVL,
                     CAST_WAND,
@@ -893,7 +897,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     return;
                 }
             } else {
-                tch_id = Some(chid);
+                tch = Some(ch);
             }
 
             game.act(db,
@@ -918,6 +922,8 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 game
                     .act(db,"$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
             }
+            let tch_id = tch.map(|c| c.id());
+            let tobj_id = tobj.map(|o| o.id());
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             for i in 1..3 {
@@ -928,7 +934,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     game,db,
                     chid,
                     tch_id,
-                    tobjid,
+                    tobj_id,
                     spellnum,
                     level,
                     CAST_SCROLL,
@@ -1123,23 +1129,23 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
     let mut t = t.unwrap().to_string();
     let mut target = false;
-    let mut tch_id= None;
-    let mut tobj_id= None;
+    let mut tch= None;
+    let mut tobj= None;
     if is_set!(sinfo.targets, TAR_IGNORE) {
         target = true;
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                tch_id = game.get_char_vis(db,chid, &mut t, None, FIND_CHAR_ROOM);
-                tch_id.is_some()
+                tch = game.get_char_vis(db,ch, &mut t, None, FIND_CHAR_ROOM);
+                tch.is_some()
             } {
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
             if {
-                tch_id = game.get_char_vis(db,chid, &mut t, None, FIND_CHAR_WORLD);
-                tch_id.is_some()
+                tch = game.get_char_vis(db,ch, &mut t, None, FIND_CHAR_WORLD);
+                tch.is_some()
             } {
                 target = true;
             }
@@ -1147,8 +1153,8 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
             if {
-                tobj_id = game.get_obj_in_list_vis(db,ch, &t, None, &ch.carrying);
-                tobj_id.is_some()
+                tobj = game.get_obj_in_list_vis(db,ch, &t, None, &ch.carrying);
+                tobj.is_some()
             } {
                 target = true;
             }
@@ -1157,29 +1163,29 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
                 if ch.get_eq(i).is_some() && isname(&t, db.obj(ch.get_eq(i).unwrap()).name.as_ref()) {
-                    tobj_id = Some(ch.get_eq(i).unwrap());
+                    tobj = Some(db.obj(ch.get_eq(i).unwrap()));
                     target = true;
                 }
             }
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
             if {
-                tobj_id = game.get_obj_in_list_vis2(db,
+                tobj = game.get_obj_in_list_vis2(db,
                     ch,
                     &t,
                     None,
                     &db.world[ch.in_room as usize]
                         .contents
                 );
-                tobj_id.is_some()
+                tobj.is_some()
             } {
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) {
             if {
-                tobj_id = game.get_obj_vis(db,ch, &t, None);
-                tobj_id.is_some()
+                tobj = game.get_obj_vis(db,ch, &t, None);
+                tobj.is_some()
             } {
                 target = true;
             }
@@ -1188,19 +1194,19 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         /* if target string is empty */
         if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) {
             if ch.fighting_id().is_some() {
-                tch_id = Some(chid);
+                tch = Some(ch);
                 target = true;
             }
         }
         if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) {
             if ch.fighting_id().is_some() {
-                tch_id = ch.fighting_id();
+                tch = Some(db.ch(ch.fighting_id().unwrap()));
                 target = true;
             }
         }
         /* if no target specified, and the spell isn't violent, default to self */
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && !sinfo.violent {
-            tch_id = Some(chid);
+            tch = Some(ch);
             target = true;
         }
         if !target {
@@ -1222,7 +1228,8 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         }
     }
 
-    if target && tch_id.unwrap() == chid && sinfo.violent {
+    let tch_id = tch.map(|c| c.id());
+    if target && tch.unwrap().id() == chid && sinfo.violent {
         game.send_to_char(ch,
             "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
         );
@@ -1242,19 +1249,23 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     if rand_number(0, 101) > ch.get_skill(spellnum) as u32 {
         let ch = db.ch_mut(chid);
         ch.set_wait_state(PULSE_VIOLENCE as i32);
-        if tch_id.is_none() || game.skill_message(db, 0, chid, tch_id.unwrap(), spellnum) == 0 {
-            let ch = db.ch(chid);
+        let ch = db.ch(chid);
+        let tch = tch_id.map(|i| db.ch(i));
+        if tch.is_none() || game.skill_message(db, 0, ch, tch.unwrap(), spellnum) == 0 {
             game.send_to_char(ch, "You lost your concentration!\r\n");
         }
         if mana > 0 {
             let ch = db.ch_mut(chid);
             ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));
         }
-        if sinfo.violent && tch_id.is_some() && db.ch(tch_id.unwrap()).is_npc() {
+        let tch = tch_id.map(|i| db.ch(i));
+        if sinfo.violent && tch.is_some() && tch.unwrap().is_npc() {
             game.hit(db, tch_id.unwrap(), chid, TYPE_UNDEFINED);
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
+        let tch_id = tch.map(|c| c.id());
+        let tobj_id = tobj.map(|o| o.id());
         if cast_spell(game, db, chid, tch_id, tobj_id, spellnum) != 0 {
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);

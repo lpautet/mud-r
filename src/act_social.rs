@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 use log::error;
 use regex::Regex;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::db::{DB, SOCMESS_FILE};
@@ -96,13 +96,13 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
         );
         return;
     }
-    let vict_id;
+    let vict;
     if {
-        vict_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, format!("{}\r\n", &action_not_found).as_str());
-    } else if vict_id.unwrap() == chid {
+    } else if vict.unwrap().id() == chid {
         game.send_to_char(ch, format!("{}\r\n", &action_char_auto).as_str());
         game.act(db,
             &action_others_auto,
@@ -113,8 +113,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
             TO_ROOM,
         );
     } else {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
         if vict.get_pos() < action_min_victim_position as u8 {
             game.act(db,
                 "$N is not in a proper position for that.",
@@ -161,14 +160,13 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
     if !arg.is_empty() {
         let victim;
         if {
-            victim = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
+            victim = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
             victim.is_none()
         } {
             game.send_to_char(ch, "Can't hear you!\r\n");
         } else {
-            let victim_id = victim.unwrap();
-            let victim = db.ch(victim_id);
-            if victim_id != chid {
+            let victim = victim.unwrap();
+            if victim.id() != chid {
                 game.send_to_char(ch,
                     format!("You insult {}.\r\n", victim.get_name()).as_str(),
                 );
@@ -177,7 +175,6 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                     0 => {
                         let ch = db.ch(chid);
                         if ch.get_sex() == SEX_MALE {
-                            let victim = db.ch(victim_id);
                             if victim.get_sex() == SEX_MALE {
                                 game.act(db,
                                     "$n accuses you of fighting like a woman!",
@@ -199,7 +196,6 @@ pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                             }
                         } else {
                             /* Ch == Woman */
-                            let victim = db.ch(victim_id);
                             if victim.get_sex() == SEX_MALE {
                                 game.act(db,
                                     "$n accuses you of having the smallest... (brain?)",

@@ -2473,8 +2473,7 @@ impl Game {
 
         /* dequeue zones (if possible) and reset */
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
-        let update_list = db.reset_q.clone();
-        for update_u in update_list {
+        for update_u in db.reset_q.clone() {
             if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, db, update_u) {
                 self.reset_zone(db, update_u as usize);
                 self.mudlog(

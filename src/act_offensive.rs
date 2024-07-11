@@ -39,22 +39,21 @@ pub fn do_assist(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         return;
     }
     one_argument(argument, &mut arg);
-    let helpee_id;
+    let helpee;
     if arg.is_empty() {
         game.send_to_char(ch, "Whom do you wish to assist?\r\n");
     } else if {
-        helpee_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-        helpee_id.is_none()
+        helpee = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
-    } else if helpee_id.unwrap() == chid {
+    } else if helpee.unwrap().id() == chid {
         game.send_to_char(ch, "You can't help yourself any more than this!\r\n");
     } else {
         /*
          * Hit the same enemy the person you're helping is.
          */
-        let helpee_id = helpee_id.unwrap();
-        let helpee = db.ch(helpee_id);
+        let helpee = helpee.unwrap();
         let mut opponent_id = None;
         if helpee.fighting_id().is_some() {
             opponent_id = helpee.fighting_id();
@@ -104,7 +103,6 @@ pub fn do_assist(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
                 TO_CHAR,
             );
         } else {
-            let helpee = db.ch(helpee_id);
             game.send_to_char(ch, "You join the fight!\r\n");
             game.act(db,
                 "$N assists you!",
@@ -131,19 +129,18 @@ pub fn do_hit(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
     let ch = db.ch(chid);
 
     let mut arg = String::new();
-    let vict_id;
+    let vict;
 
     one_argument(argument, &mut arg);
     if arg.is_empty() {
         game.send_to_char(ch, "Hit who?\r\n");
     } else if {
-        vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, "They don't seem to be here.\r\n");
-    } else if vict_id.unwrap() == chid {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+    } else if vict.unwrap().id() == chid {
+        let vict = vict.unwrap();
         game.send_to_char(ch, "You hit yourself...OUCH!.\r\n");
         game.act(db,
             "$n hits $mself, and says OUCH!",
@@ -154,10 +151,9 @@ pub fn do_hit(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             TO_ROOM,
         );
     } else if ch.aff_flagged(AFF_CHARM)
-        && ch.master.unwrap() == vict_id.unwrap()
+        && ch.master.unwrap() == vict.unwrap().id()
     {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
         game.act(db,
             "$N is just such a good friend, you simply can't hit $M.",
             false,
@@ -167,8 +163,8 @@ pub fn do_hit(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd:
             TO_CHAR,
         );
     } else {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
+        let vict_id = vict.id();
         if !PK_ALLOWED {
             if !vict.is_npc() && !ch.is_npc() {
                 if subcmd != SCMD_MURDER {
@@ -210,19 +206,19 @@ pub fn do_kill(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd:
         return;
     }
     one_argument(argument, &mut arg);
-    let vict_id;
+    let vict;
     if arg.is_empty() {
         game.send_to_char(ch, "Kill who?\r\n");
     } else {
         if {
-            vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-            vict_id.is_none()
+            vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict.is_none()
         } {
             game.send_to_char(ch, "They aren't here.\r\n");
-        } else if chid ==  vict_id.unwrap() {
+        } else if chid ==  vict.unwrap().id() {
             game.send_to_char(ch, "Your mother would be so sad.. :(\r\n");
         } else {
-            let vict = db.ch(vict_id.unwrap());
+            let vict = vict.unwrap();
             game.act(db,
                 "You chop $M to pieces!  Ah!  The blood!",
                 false,
@@ -247,7 +243,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd:
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            game.raw_kill(db, vict_id.unwrap());
+            game.raw_kill(db, vict.id());
         }
     }
 }
@@ -262,16 +258,16 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
     }
 
     one_argument(argument, &mut buf);
-    let vict_id;
+    let vict;
     if {
-        vict_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, "Backstab who?\r\n");
         return;
     }
-    let vict_id = vict_id.unwrap();
-    if vict_id == chid {
+    let vict = vict.unwrap();
+    if vict.id() == chid {
         game.send_to_char(ch, "How can you sneak up on yourself?\r\n");
         return;
     }
@@ -285,7 +281,6 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
         );
         return;
     }
-    let vict = db.ch(vict_id);
     if vict.fighting_id().is_some() {
         game.send_to_char(ch,
             "You can't backstab a fighting person -- they're too alert!\r\n",
@@ -318,7 +313,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
             Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
-        game.hit(db,vict_id, chid, TYPE_UNDEFINED);
+        game.hit(db,vict.id(), chid, TYPE_UNDEFINED);
         return;
     }
 
@@ -326,9 +321,9 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
     let prob = ch.get_skill(SKILL_BACKSTAB);
 
     if vict.awake() && percent > prob as u32 {
-        game.damage(db, chid, vict_id, 0, SKILL_BACKSTAB);
+        game.damage(db, chid, vict.id(), 0, SKILL_BACKSTAB);
     } else {
-        game.hit(db, chid, vict_id, SKILL_BACKSTAB);
+        game.hit(db, chid, vict.id(), SKILL_BACKSTAB);
     }
     let ch = db.ch_mut(chid);
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
@@ -342,15 +337,15 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
     let mut argument = argument.to_string();
 
     half_chop(&mut argument, &mut name, &mut message);
-    let vict_id;
+    let vict;
     if name.is_empty() || message.is_empty() {
         game.send_to_char(ch, "Order who to do what?\r\n");
     } else if {
-        vict_id = game.get_char_vis(db,chid, &mut name, None, FIND_CHAR_ROOM);
-        vict_id.is_none() && !is_abbrev(&name, "followers")
+        vict = game.get_char_vis(db,ch, &mut name, None, FIND_CHAR_ROOM);
+        vict.is_none() && !is_abbrev(&name, "followers")
     } {
         game.send_to_char(ch, "That person isn't here.\r\n");
-    } else if vict_id.is_some() && chid == vict_id.unwrap() {
+    } else if vict.is_some() && chid == vict.unwrap().id() {
         game.send_to_char(ch, "You obviously suffer from skitzofrenia.\r\n");
     } else {
         if ch.aff_flagged(AFF_CHARM) {
@@ -359,9 +354,8 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
             );
             return;
         }
-        if vict_id.is_some() {
-            let vict_id = vict_id.unwrap();
-            let vict = db.ch(vict_id);
+        if vict.is_some() {
+            let vict = vict.unwrap();
             let buf = format!("$N orders you to '{}'", message);
             game.act(db,&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
             game.act(db,
@@ -386,7 +380,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
                 );
             } else {
                 game.send_to_char(ch, OK);
-                command_interpreter(game, db, vict_id, &message);
+                command_interpreter(game, db, vict.id(), &message);
             }
         } else {
             /* This is order "followers" */
@@ -493,33 +487,33 @@ pub fn do_bash(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     }
     let mut victo;
     if {
-        victo = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
+        victo = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
         victo.is_some()
     } {
         if ch.fighting_id().is_some() && ch.in_room() == db.ch(ch.fighting_id().unwrap()).in_room() {
-            victo = ch.fighting_id();
+            victo = ch.fighting_id().map(|i| db.ch(i));
         } else {
             game.send_to_char(ch, "Bash who?\r\n");
             return;
         }
     }
-    let vict_id = victo.unwrap();
-    if vict_id == chid {
+    let vict = victo.unwrap();
+    if vict.id() == chid {
         game.send_to_char(ch, "Aren't we funny today...\r\n");
         return;
     }
     let mut percent = rand_number(1, 101); /* 101% is a complete failure */
     let prob = ch.get_skill(SKILL_BASH);
-    let vict = db.ch(vict_id);
     if vict.mob_flagged(MOB_NOBASH) {
         percent = 101;
     }
 
     if percent > prob as u32 {
-        game.damage(db, chid, vict_id, 0, SKILL_BASH);
+        game.damage(db, chid, vict.id(), 0, SKILL_BASH);
         let ch = db.ch_mut(chid);
         ch.set_pos(POS_SITTING);
     } else {
+        let vict_id = vict.id();
         /*
          * If we bash a player and they wimp out, they will move to the previous
          * room before we set them sitting.  If we try to set the victim sitting
@@ -552,20 +546,20 @@ pub fn do_rescue(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
     }
 
     one_argument(argument, &mut arg);
-    let vict_id;
+    let vict;
     if {
-        vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, "Whom do you want to rescue?\r\n");
         return;
     }
-    let vict_id = vict_id.unwrap();
-    if vict_id == chid {
+    let vict = vict.unwrap();
+    if vict.id() == chid {
         game.send_to_char(ch, "What about fleeing instead?\r\n");
         return;
     }
-    if ch.fighting_id().is_some() && ch.fighting_id().unwrap() == vict_id {
+    if ch.fighting_id().is_some() && ch.fighting_id().unwrap() == vict.id() {
         game.send_to_char(ch, "How can you rescue someone you are trying to kill?\r\n");
         return;
     }
@@ -573,13 +567,12 @@ pub fn do_rescue(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
     {
         for tch_id in db.world[ch.in_room() as usize].peoples.iter() {
             let tch = db.ch(*tch_id);
-            if tch.fighting_id().is_some() && tch.fighting_id().unwrap() == vict_id {
+            if tch.fighting_id().is_some() && tch.fighting_id().unwrap() == vict.id() {
                 tmp_ch_id = Some(*tch_id);
                 break;
             }
         }
     }
-    let vict = db.ch(vict_id);
 
     if tmp_ch_id.is_none() {
         game.act(db,
@@ -617,6 +610,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
+    let vict_id = vict.id();
     if vict.fighting_id().is_some() && vict.fighting_id().unwrap() == tmp_ch_id {
         db.stop_fighting(vict_id);
     }
@@ -644,21 +638,20 @@ pub fn do_kick(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         return;
     }
     one_argument(argument, &mut arg);
-    let mut vict_id;
+    let mut vict;
     if {
-        vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         if ch.fighting_id().is_some() && ch.in_room() == db.ch(ch.fighting_id().unwrap()).in_room() {
-            vict_id = ch.fighting_id();
+            vict = ch.fighting_id().map(|i| db.ch(i));
         } else {
             game.send_to_char(ch, "Kick who?\r\n");
             return;
         }
     }
-    let vict_id = vict_id.unwrap();
-    let vict = db.ch(vict_id);
-    if vict_id == chid {
+    let vict = vict.unwrap();
+    if vict.id() == chid {
         game.send_to_char(ch, "Aren't we funny today...\r\n");
         return;
     }
@@ -667,9 +660,9 @@ pub fn do_kick(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
     let prob = ch.get_skill(SKILL_KICK);
 
     if percent > prob as i16 {
-        game.damage(db,chid, vict_id, 0, SKILL_KICK);
+        game.damage(db,chid, vict.id(), 0, SKILL_KICK);
     } else {
-        game.damage(db,chid, vict_id, (ch.get_level() / 2) as i32, SKILL_KICK);
+        game.damage(db,chid, vict.id(), (ch.get_level() / 2) as i32, SKILL_KICK);
     }
     let ch = db.ch_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);

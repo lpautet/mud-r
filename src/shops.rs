@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use log::error;
 use regex::Regex;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 
 use crate::act_comm::{do_say, do_tell};
@@ -892,8 +892,8 @@ fn get_selling_obj(
     msg: i32,
 ) -> Option<DepotId> {
     let ch = db.ch(chid);
-    let oid = game.get_obj_in_list_vis(db,ch, name, None, &ch.carrying);
-    if oid.is_none() {
+    let obj = game.get_obj_in_list_vis(db,ch, name, None, &ch.carrying);
+    if obj.is_none() {
         if msg != 0 {
             let tbuf = db.shop_index[0].no_such_item2.replace("%s", &ch.get_name());
 
@@ -901,10 +901,10 @@ fn get_selling_obj(
         }
         return None;
     }
-    let oid = oid.unwrap();
-    let result = trade_with(db.obj(oid),  &db.shop_index[shop_nr]);
+    let obj = obj.unwrap();
+    let result = trade_with(obj,  &db.shop_index[shop_nr]);
     if result == OBJECT_OK {
-        return Some(oid);
+        return Some(obj.id());
     }
 
     if msg == 0 {

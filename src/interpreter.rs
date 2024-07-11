@@ -3250,10 +3250,10 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
     /* special in equipment list? */
     for j in 0..NUM_WEARS {
         let ch = db.ch(chid);
-        if ch.get_eq(j).is_some() && db.get_obj_spec(ch.get_eq(j).unwrap()).is_some() {
-            let eq = ch.get_eq(j);
-            let oid = eq.unwrap();
-            if db.get_obj_spec(eq.unwrap()).as_ref().unwrap()(
+        if ch.get_eq(j).is_some() && db.get_obj_spec(db.obj(ch.get_eq(j).unwrap())).is_some() {
+            let oid = ch.get_eq(j).unwrap();
+            let obj = db.obj(oid);
+            if db.get_obj_spec(obj).as_ref().unwrap()(
                 game,
                 db,
                 chid,
@@ -3269,8 +3269,9 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
     /* special in inventory? */
     let ch = db.ch(chid);
     for i in ch.carrying.clone() {
-        if db.get_obj_spec(i).is_some() {
-            if db.get_obj_spec(i).as_ref().unwrap()(game, db, chid, MeRef::Obj(i), cmd, arg) {
+        let obj = db.obj(i);
+        if let Some(spec) = db.get_obj_spec(obj) {
+            if spec(game, db, chid, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3290,8 +3291,9 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
     }
     let ch = db.ch(chid);
     for i in db.world[ch.in_room() as usize].contents.clone() {
-        if db.get_obj_spec(i).is_some() {
-            if db.get_obj_spec(i).as_ref().unwrap()(game, db, chid, MeRef::Obj(i), cmd, arg) {
+        let obj = db.obj(i);
+        if let Some(spec) = db.get_obj_spec(obj) {
+            if spec(game, db, chid, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3984,7 +3986,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                         do_start(game, db, character_id);
                         let character = db.ch(character_id);
                         game.send_to_char(character, format!("{}", START_MESSG).as_str());
-                        look_at_room(game, db, character_id, false);
+                        look_at_room(game, db, character, false);
                     }
                     let desc = game.desc_mut(d_id);
                     if db

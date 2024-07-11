@@ -44,7 +44,7 @@ use std::rc::Rc;
 
 use crate::boards::{board_save_board, BOARD_MAGIC};
 use crate::config::{MENU, NOPERSON};
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
 use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
@@ -198,13 +198,13 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict_id = game.get_char_vis(db, chid, &mut name, None, FIND_CHAR_WORLD);
-    if vict_id.is_none() {
+    let vict = game.get_char_vis(db, ch, &mut name, None, FIND_CHAR_WORLD);
+    if vict.is_none() {
         game.send_to_char(ch, NOPERSON);
         return;
     }
-    let vict_id = vict_id.unwrap();
-    let vict = db.ch(vict_id);
+    let vict = vict.unwrap();
+    let vict_id = vict.id();
     let mut argument = argument.trim_start().to_string();
 
     /* If there is no chars in argument */

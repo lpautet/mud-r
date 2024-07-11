@@ -9,7 +9,7 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 use std::borrow::Borrow;
 
@@ -37,8 +37,7 @@ use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, r
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
-fn has_boat(game: &mut Game, db: &DB, chid: DepotId) -> bool {
-    let ch = db.ch(chid);
+fn has_boat(game: &mut Game, db: &DB, ch: &CharData) -> bool {
     if ch.get_level() > LVL_IMMORT as u8 {
         return true;
     }
@@ -50,14 +49,14 @@ fn has_boat(game: &mut Game, db: &DB, chid: DepotId) -> bool {
     /* non-wearable boats in inventory will do it */
 
     for &oid in &ch.carrying {
-        if db.obj(oid).get_obj_type() == ITEM_BOAT && (find_eq_pos(game, db, chid, oid, "") < 0)
+        let obj = db.obj(oid);
+        if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(game,  ch, obj, "") < 0)
         {
             return true;
         }
     }
 
     /* and any boat you're wearing will do it too */
-    let ch = db.ch(chid);
     for i in 0..NUM_WEARS {
         if ch.get_eq(i).is_some() && db.obj(ch.get_eq(i).unwrap()).get_obj_type() == ITEM_BOAT
         {
@@ -186,7 +185,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
             == SECT_WATER_NOSWIM)
     {
-        if !has_boat(game, db,chid) {
+        if !has_boat(game, db,ch) {
             game.send_to_char(ch, "You need a boat to go there.\r\n");
             return false;
         }
@@ -274,7 +273,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, chid: DepotId, dir: i32, nee
 
     let ch = db.ch(chid);
     if ch.desc.borrow().is_some() {
-        look_at_room(game, db, chid, false);
+        look_at_room(game, db, ch, false);
     }
 
     let ch = db.ch(chid);
@@ -296,8 +295,7 @@ pub fn do_move(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _cm
     perform_move(game, db,chid, subcmd - 1, false);
 }
 
-fn find_door(game: &mut Game, db:  &DB, chid: DepotId, type_: &str, dir: &str, cmdname: &str) -> Option<i32> {
-    let ch = db.ch(chid);
+fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, cmdname: &str) -> Option<i32> {
     let dooro;
 
     if !dir.is_empty() {
@@ -743,17 +741,17 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
     let mut type_ = String::new();
     let mut dir = String::new();
     let mut victim = None;
-    let mut oid = None;
+    let mut obj = None;
     two_arguments(argument, &mut type_, &mut dir);
     if !game.generic_find(db,
         &type_,
         (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
-        chid,
+        ch,
         &mut victim,
-        &mut oid,
+        &mut obj,
     ) != 0
     {
-        let dooroi = find_door(game,db, chid, &type_, &dir, CMD_DOOR[subcmd as usize]);
+        let dooroi = find_door(game,db, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
         dooro = if dooroi.is_some() {
             Some(dooroi.unwrap() as usize)
         } else {
@@ -761,10 +759,11 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
         };
     }
 
-    if oid.is_some() || dooro.is_some() {
+    if obj.is_some() || dooro.is_some() {
+        let obj_id = obj.map(|o| o.id());
         let ch = db.ch(chid);
-        let keynum = door_key(&db, ch, oid.map(|o| db.obj(o)), dooro);
-        if !door_is_openable(&db, ch, oid.map(|o| db.obj(o)), dooro) {
+        let keynum = door_key(&db, ch, obj, dooro);
+        if !door_is_openable(&db, ch, obj, dooro) {
             game.act(db,
                 "You can't $F that!",
                 false,
@@ -773,19 +772,19 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
                 Some(VictimRef::Str(CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
-        } else if !door_is_open(&db, ch, oid.map(|o| db.obj(o)), dooro)
+        } else if !door_is_open(&db, ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
             game.send_to_char(ch, "But it's already closed!\r\n");
-        } else if !door_is_closed(&db, ch, oid.map(|o| db.obj(o)), dooro)
+        } else if !door_is_closed(&db, ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
             game.send_to_char(ch, "But it's currently open!\r\n");
-        } else if !(door_is_locked(&db, ch, oid.map(|o| db.obj(o)), dooro))
+        } else if !(door_is_locked(&db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
             game.send_to_char(ch, "Oh.. it wasn't locked, after all..\r\n");
-        } else if !(door_is_unlocked(&db, ch, oid.map(|o| db.obj(o)), dooro))
+        } else if !(door_is_unlocked(&db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
             game.send_to_char(ch, "It seems to be locked.\r\n");
@@ -795,10 +794,10 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
         {
             game.send_to_char(ch, "You don't seem to have the proper key.\r\n");
         } else if {
-            let pickproof = door_is_pickproof(&db, ch, oid.map(|o| db.obj(o)), dooro);
+            let pickproof = door_is_pickproof(&db, ch, obj, dooro);
             ok_pick(game, db,chid, keynum, pickproof, subcmd)
         } {
-            do_doorcmd(game, db, chid, oid, dooro, subcmd);
+            do_doorcmd(game, db, chid, obj_id, dooro, subcmd);
         }
     }
     return;
@@ -1065,7 +1064,7 @@ pub fn do_sleep(game: &mut Game, db: &mut DB, chid: DepotId, _argument: &str, _c
 pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
-    let vict_id;
+    let vict;
     let mut self_ = false;
 
     one_argument(argument, &mut arg);
@@ -1073,14 +1072,14 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         if ch.get_pos() == POS_SLEEPING {
             game.send_to_char(ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
-            vict_id = game.get_char_vis(db,chid, &mut arg, None, FIND_CHAR_ROOM);
-            vict_id.is_none()
+            vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict.is_none()
         } {
             game.send_to_char(ch, NOPERSON);
-        } else if vict_id.unwrap() == chid {
+        } else if vict.unwrap().id() == chid {
             self_ = true;
-        } else if db.ch(vict_id.unwrap()).awake() {
-            let vict = db.ch(vict_id.unwrap());
+        } else if vict.unwrap().awake() {
+            let vict = vict.unwrap();
             game.act(db,
                 "$E is already awake.",
                 false,
@@ -1089,8 +1088,8 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-        } else if db.ch(vict_id.unwrap()).aff_flagged(AFF_SLEEP) {
-            let vict = db.ch(vict_id.unwrap());
+        } else if vict.unwrap().aff_flagged(AFF_SLEEP) {
+            let vict =vict.unwrap();
             game.act(db,
                 "You can't wake $M up!",
                 false,
@@ -1099,8 +1098,8 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-        } else if db.ch(vict_id.unwrap()).get_pos() < POS_SLEEPING {
-            let vict = db.ch(vict_id.unwrap());
+        } else if vict.unwrap().get_pos() < POS_SLEEPING {
+            let vict = vict.unwrap();
             game.act(db,
                 "$E's in pretty bad shape!",
                 false,
@@ -1110,7 +1109,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 TO_CHAR,
             );
         } else {
-            let vict = db.ch(vict_id.unwrap());
+            let vict = vict.unwrap();
             game.act(db,
                 "You wake $M up.",
                 false,
@@ -1127,7 +1126,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
                 Some(VictimRef::Char(vict)),
                 TO_VICT | TO_SLEEP,
             );
-            db.ch_mut(vict_id.unwrap()).set_pos(POS_SITTING);
+            db.ch_mut(vict.id()).set_pos(POS_SITTING);
         }
         if !self_ {
             return;
@@ -1151,11 +1150,11 @@ pub fn do_follow(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
-    let leader_id;
+    let leader;
     if !buf.is_empty() {
         if {
-            leader_id = game.get_char_vis(db,chid, &mut buf, None, FIND_CHAR_ROOM);
-            leader_id.is_none()
+            leader = game.get_char_vis(db,ch, &mut buf, None, FIND_CHAR_ROOM);
+            leader.is_none()
         } {
             game.send_to_char(ch, NOPERSON);
             return;
@@ -1165,8 +1164,8 @@ pub fn do_follow(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         return;
     }
 
-    if ch.master.is_some() && ch.master.unwrap() == leader_id.unwrap() {
-        let leader = db.ch(leader_id.unwrap());
+    if ch.master.is_some() && ch.master.unwrap() == leader.unwrap().id() {
+        let leader = leader.unwrap();
         game.act(db,
             "You are already following $M.",
             false,
@@ -1190,24 +1189,25 @@ pub fn do_follow(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _c
         );
     } else {
         /* Not Charmed follow person */
-        if leader_id.unwrap() == chid {
+        if leader.unwrap().id() == chid {
             if ch.master.is_none() {
                 game.send_to_char(ch, "You are already following yourself.\r\n");
                 return;
             }
             game.stop_follower(db, chid);
         } else {
-            if circle_follow(&db, chid, leader_id) {
+            if circle_follow(&db, ch, leader) {
                 game.send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
                 return;
             }
+            let leader_id = leader.unwrap().id();
             if ch.master.is_some() {
                 game.stop_follower(db, chid);
             }
             let ch = db.ch_mut(chid);
             ch.remove_aff_flags(AFF_GROUP);
 
-            add_follower(game, db, chid, leader_id.unwrap());
+            add_follower(game, db, chid, leader_id);
         }
     }
 }

@@ -1196,15 +1196,15 @@ impl Game {
 * which incorporate the actual player-data                               *.
 *********************************************************************** */
 impl Game {
-    pub fn get_player_vis(
+    pub fn get_player_vis<'a>(
         &self,
-        db: &DB,
-        chid: DepotId,
+        db: &'a DB,
+        ch: &CharData,
         name: &mut String,
         number: Option<&mut i32>,
         inroom: i32,
-    ) -> Option<DepotId> {
-        let ch = db.ch(chid);
+    ) -> Option<&'a CharData> {
+        //let ch = db.ch(chid);
         let mut num;
         let t: &mut i32;
         if number.is_none() {
@@ -1232,19 +1232,19 @@ impl Game {
             if *number != 0 {
                 continue;
             }
-            return Some(i.id());
+            return Some(i);
         }
         return None;
     }
 
-    pub fn get_char_room_vis(
+    pub fn get_char_room_vis<'a>(
         &self,
-        db: &DB,
-        chid: DepotId,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &mut String,
         number: Option<&mut i32>,
-    ) -> Option<DepotId> {
-        let ch = db.ch(chid);
+    ) -> Option<&'a CharData> {
+        //let ch = db.ch(chid);
         let mut num;
         let t: &mut i32;
         if number.is_none() {
@@ -1257,12 +1257,12 @@ impl Game {
 
         /* JE 7/18/94 :-) :-) */
         if name == "self" || name == "me" {
-            return Some(chid);
+            return Some(ch);
         }
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(db, chid, name, None, FIND_CHAR_ROOM);
+            return self.get_player_vis(db, ch, name, None, FIND_CHAR_ROOM);
         }
 
         for i_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -1271,7 +1271,7 @@ impl Game {
                 if self.can_see(db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
-                        return Some(i_id);
+                        return Some(i);
                     }
                 }
             }
@@ -1279,13 +1279,13 @@ impl Game {
         return None;
     }
 
-    pub fn get_char_world_vis(
+    pub fn get_char_world_vis<'a>(
         &self,
-        db: &DB,
-        ch: &CharData,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &mut String,
         number: Option<&mut i32>,
-    ) -> Option<DepotId> {
+    ) -> Option<&'a CharData> {
         let mut num;
         let t: &mut i32;
         if number.is_none() {
@@ -1296,14 +1296,14 @@ impl Game {
         }
         let number: &mut i32 = t;
 
-        let i = self.get_char_room_vis(db, ch.id(), name, Some(number));
+        let i = self.get_char_room_vis(db, ch, name, Some(number));
         if i.is_some() {
             return i;
         }
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(db, ch.id(), name, None, 0);
+            return self.get_player_vis(db, ch, name, None, 0);
         }
 
         for i in db.character_list.iter() {
@@ -1320,36 +1320,36 @@ impl Game {
             if *number != 0 {
                 continue;
             }
-            return Some(i.id());
+            return Some(i);
         }
         return None;
     }
 
-    pub fn get_char_vis(
+    pub fn get_char_vis<'a>(
         &self,
-        db: &DB,
-        chid: DepotId,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &mut String,
         number: Option<&mut i32>,
         _where: i32,
-    ) -> Option<DepotId> {
+    ) -> Option<&'a CharData> {
         return if _where == FIND_CHAR_ROOM {
-            self.get_char_room_vis(db, chid, name, number)
+            self.get_char_room_vis(db, ch, name, number)
         } else if _where == FIND_CHAR_WORLD {
-            self.get_char_world_vis(db, db.ch(chid), name, number)
+            self.get_char_world_vis(db, ch, name, number)
         } else {
             None
         };
     }
 
-    pub fn get_obj_in_list_vis(
+    pub fn get_obj_in_list_vis<'a>(
         &self,
-        db: &DB,
-        ch: &CharData,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &str,
         number: Option<&mut i32>,
         list: &Vec<DepotId>,
-    ) -> Option<DepotId> {
+    ) -> Option<&'a ObjData> {
         let mut num;
         let t: &mut i32;
         let mut name = name.to_string();
@@ -1366,10 +1366,11 @@ impl Game {
 
         for i in list.iter() {
             if isname(&name, db.obj(*i).name.as_ref()) {
-                if self.can_see_obj(db, ch, db.obj(*i)) {
+                let obj = db.obj(*i);
+                if self.can_see_obj(db, ch, obj) {
                     *number -= 1;
                     if *number == 0 {
-                        return Some(*i);
+                        return Some(obj);
                     }
                 }
             }
@@ -1378,14 +1379,14 @@ impl Game {
         None
     }
 
-    pub fn get_obj_in_list_vis2(
+    pub fn get_obj_in_list_vis2<'a>(
         &self,
-        db: &DB,
-        ch: &CharData,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &str,
         number: Option<&mut i32>,
         list: &Vec<DepotId>,
-    ) -> Option<DepotId> {
+    ) -> Option<&'a ObjData> {
         let mut num;
         let t: &mut i32;
         let mut name = name.to_string();
@@ -1402,10 +1403,11 @@ impl Game {
 
         for i in list.iter() {
             if isname(&name, db.obj(*i).name.as_ref()) {
-                if self.can_see_obj(db, ch, db.obj(*i)) {
+                let obj = db.obj(*i);
+                if self.can_see_obj(db, ch, obj ) {
                     *number -= 1;
                     if *number == 0 {
-                        return Some(*i);
+                        return Some(obj);
                     }
                 }
             }
@@ -1415,13 +1417,13 @@ impl Game {
     }
 
     /* search the entire world for an object, and return a pointer  */
-    pub fn get_obj_vis(
+    pub fn get_obj_vis<'a>(
         &self,
-        db: &DB,
-        ch: &CharData,
+        db: &'a DB,
+        ch: &'a CharData,
         name: &str,
         number: Option<&mut i32>,
-    ) -> Option<DepotId> {
+    ) -> Option<&'a ObjData> {
         let mut num;
         let t: &mut i32;
         let mut name = name.to_string();
@@ -1460,7 +1462,7 @@ impl Game {
                 if self.can_see_obj(db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
-                        return Some(i.id());
+                        return Some(i);
                     }
                 }
             }
@@ -1468,14 +1470,14 @@ impl Game {
         None
     }
 
-    pub fn get_obj_in_equip_vis(
+    pub fn get_obj_in_equip_vis<'a>(
         &self,
-        db: &DB,
-        ch: &CharData,
+        db: &'a DB,
+        ch: &'a CharData,
         arg: &str,
         number: Option<&mut i32>,
         equipment: &[Option<DepotId>],
-    ) -> Option<DepotId> {
+    ) -> Option<&'a ObjData> {
         let mut num;
         let t: &mut i32;
         let mut name = arg.to_string();
@@ -1497,7 +1499,7 @@ impl Game {
             {
                 *number -= 1;
                 if *number == 0 {
-                    return equipment[j].clone();
+                    return equipment[j].map(|i| db.obj(i));
                 }
             }
         }
@@ -1691,16 +1693,15 @@ impl Game {
      * like the one_argument routine), but now it returns an integer that
      * describes what it filled in.
      */
-    pub fn generic_find(
+    pub fn generic_find<'a>(
         &self,
-        db: &DB,
+        db: &'a DB,
         arg: &str,
         bitvector: i64,
-        chid: DepotId,
-        tar_ch: &mut Option<DepotId>,
-        tar_obj: &mut Option<DepotId>,
+        ch: &'a CharData,
+        tar_ch: &mut Option<&'a CharData>,
+        tar_obj: &mut Option<&'a ObjData>,
     ) -> i32 {
-        let ch = db.ch(chid);
         let mut name = String::new();
         let mut found = false;
 
@@ -1716,7 +1717,7 @@ impl Game {
 
         if is_set!(bitvector, FIND_CHAR_ROOM as i64) {
             /* Find person in room */
-            *tar_ch = self.get_char_room_vis(db, chid, &mut name, Some(&mut number));
+            *tar_ch = self.get_char_room_vis(db, ch, &mut name, Some(&mut number));
 
             if tar_ch.is_some() {
                 return FIND_CHAR_ROOM;
@@ -1741,7 +1742,7 @@ impl Game {
                 {
                     number -= 1;
                     if number == 0 {
-                        *tar_obj = ch.get_eq(i);
+                        *tar_obj = Some(db.obj(ch.get_eq(i).unwrap()));
                         found = true;
                     }
                 }

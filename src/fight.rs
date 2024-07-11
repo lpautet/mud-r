@@ -770,15 +770,13 @@ impl Game {
      */
     pub fn skill_message(
         &mut self,
-        db: &mut DB,
+        db: &DB,
         dam: i32,
-        chid: DepotId,
-        vict_id: DepotId,
+        ch: &CharData,
+        vict: &CharData,
         attacktype: i32,
     ) -> i32 {
-        let ch = db.ch(chid);
-        let vict = db.ch(vict_id);
-        let weap_id = db.ch(chid).get_eq(WEAR_WIELD as i8);
+        let weap_id = ch.get_eq(WEAR_WIELD as i8);
         let weap = weap_id.map(|id| db.obj(id));
 
         for i in 0..db.fight_messages.len() {
@@ -844,10 +842,8 @@ impl Game {
                                 Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
-                            let ch = db.ch(chid);
                             self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
-                        let vict = db.ch(vict_id);
                         self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(
                             db,
@@ -858,7 +854,6 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
-                        let vict = db.ch(vict_id);
                         self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(
@@ -889,10 +884,8 @@ impl Game {
                                 Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
-                            let ch = db.ch(chid);
                             self.send_to_char(ch, CCNRM!(ch, C_CMP));
                         }
-                        let vict = db.ch(vict_id);
                         self.send_to_char(vict, CCRED!(vict, C_CMP));
                         self.act(
                             db,
@@ -903,7 +896,6 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
-                        let vict = db.ch(vict_id);
                         self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                         self.act(
@@ -937,10 +929,8 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_CHAR,
                         );
-                        let ch = db.ch(chid);
                         self.send_to_char(ch, CCNRM!(ch, C_CMP));
                     }
-                    let vict = db.ch(vict_id);
                     self.send_to_char(vict, CCRED!(vict, C_CMP));
                     self.act(
                         db,
@@ -951,7 +941,6 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_VICT | TO_SLEEP,
                     );
-                    let vict = db.ch(vict_id);
                     self.send_to_char(vict, CCNRM!(vict, C_CMP));
 
                     self.act(
@@ -1093,11 +1082,13 @@ impl Game {
          * death blow, send a skill_message if one exists; if not, default to a
          * dam_message. Otherwise, always send a dam_message.
          */
+        let ch = db.ch(chid);
+        let victim = db.ch(victim_id);
         if !is_weapon!(attacktype) {
-            self.skill_message(db, dam, chid, victim_id, attacktype);
+            self.skill_message(db, dam, ch, victim, attacktype);
         } else {
             if victim.get_pos() == POS_DEAD || dam == 0 {
-                if self.skill_message(db, dam, chid, victim_id, attacktype) == 0 {
+                if self.skill_message(db, dam, ch, victim, attacktype) == 0 {
                     self.dam_message(db, dam, chid, victim_id, attacktype);
                 }
             } else {

@@ -23,7 +23,7 @@ use crate::structs::{
     PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
     PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
-use crate::{VictimRef, DB};
+use crate::{CharData, VictimRef, DB};
 use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
@@ -43,14 +43,13 @@ pub fn do_say(
     if argument.is_empty() {
         game.send_to_char(ch, "Yes, but WHAT do you want to say?\r\n");
     } else {
-        let buf = format!("$n says, '{}'", argument);
-        game.act(db, &buf, false, Some(ch), None, None, TO_ROOM);
+        game.act(db, &format!("$n says, '{}'", argument), false, Some(ch), None, None, TO_ROOM);
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(ch, OK);
         } else {
             let mut argument = argument.to_string();
             delete_doubledollar(&mut argument);
-            game.send_to_char(ch, format!("You say, '{}'\r\n", argument).as_str());
+            game.send_to_char(ch, &format!("You say, '{}'\r\n", argument));
         }
     }
 }
@@ -93,7 +92,6 @@ pub fn do_gsay(
                 TO_VICT | TO_SLEEP,
             );
         }
-        let k = db.ch(k_id);
         let followers_ids = k.followers.iter().map(|f| f.follower);
         for f_id in followers_ids {
             let f = db.ch(f_id);
@@ -114,7 +112,7 @@ pub fn do_gsay(
         } else {
             game.send_to_char(
                 ch,
-                format!("You tell the group, '{}'\r\n", argument).as_str(),
+                &format!("You tell the group, '{}'\r\n", argument),
             );
         }
     }
@@ -124,10 +122,9 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
     let ch = db.ch(chid);
     let vict = db.ch(vict_id);
     game.send_to_char(vict, CCRED!(vict, C_NRM));
-    let buf = format!("$n tells you, '{}'", arg);
     game.act(
         db,
-        &buf,
+        &format!("$n tells you, '{}'", arg),
         false,
         Some(ch),
         None,
@@ -140,10 +137,9 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
         game.send_to_char(ch, OK);
     } else {
         game.send_to_char(ch, CCRED!(ch, C_NRM));
-        let buf = format!("You tell $N, '{}'", arg);
         game.act(
             db,
-            &buf,
+            &format!("You tell $N, '{}'", arg),
             false,
             Some(ch),
             None,
@@ -159,10 +155,8 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
     }
 }
 
-fn is_tell_ok(game: &mut Game, db: &DB, chid: DepotId, vict_id: DepotId) -> bool {
-    let ch = db.ch(chid);
-    let vict = db.ch(vict_id);
-    if chid == vict_id {
+fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool {
+    if ch.id() == vict.id() {
         game.send_to_char(ch, "You try to tell yourself something.\r\n");
     } else if !ch.is_npc() && ch.prf_flagged(PRF_NOTELL) {
         game.send_to_char(
@@ -228,21 +222,21 @@ pub fn do_tell(
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
     half_chop(&mut argument, &mut buf, &mut buf2);
-    let mut vict_id = None;
+    let mut vict = None;
     if buf.is_empty() || buf2.is_empty() {
         game.send_to_char(ch, "Who do you wish to tell what??\r\n");
     } else if ch.get_level() < LVL_IMMORT as u8 && {
-        vict_id = game.get_player_vis(db, chid, &mut buf, None, FIND_CHAR_WORLD);
-        vict_id.is_none()
+        vict = game.get_player_vis(db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
     } else if ch.get_level() >= LVL_IMMORT as u8 && {
-        vict_id = game.get_char_vis(db, chid, &mut buf, None, FIND_CHAR_WORLD);
-        vict_id.is_none()
+        vict = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
-    } else if is_tell_ok(game, db, chid, vict_id.unwrap()) {
-        perform_tell(game, db, chid, vict_id.unwrap(), &buf2);
+    } else if is_tell_ok(game, db, ch, vict.unwrap()) {
+        perform_tell(game, db, chid, vict.unwrap().id(), &buf2);
     }
 }
 
@@ -286,7 +280,7 @@ pub fn do_reply(
 
         if last_tell_chid.is_none() {
             game.send_to_char(ch, "They are no longer playing.\r\n");
-        } else if is_tell_ok(game, db, chid, last_tell_chid.unwrap()) {
+        } else if is_tell_ok(game, db, ch, db.ch(last_tell_chid.unwrap())) {
             perform_tell(game, db, chid, last_tell_chid.unwrap(), argument);
         }
     }
@@ -331,25 +325,24 @@ pub fn do_spec_comm(
     let mut buf2 = String::new();
 
     half_chop(&mut argument, &mut buf, &mut buf2);
-    let vict_id;
+    let vict;
     if buf.is_empty() || buf2.is_empty() {
         game.send_to_char(
             ch,
             format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
         );
     } else if {
-        vict_id = game.get_char_vis(db, chid, &mut buf, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
-    } else if vict_id.unwrap() == chid {
+    } else if vict.unwrap().id() == chid {
         game.send_to_char(
             ch,
             "You can't get your mouth close enough to your ear...\r\n",
         );
     } else {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
         let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
         game.act(
             db,
@@ -369,7 +362,7 @@ pub fn do_spec_comm(
                 format!(
                     "You {} {}, '{}'\r\n",
                     action_sing,
-                    db.ch(vict_id).get_name(),
+                    vict.get_name(),
                     buf2
                 )
                 .as_str(),
@@ -443,11 +436,11 @@ pub fn do_write(
             );
             return;
         }
-        if db.obj(paper.unwrap()).get_obj_type() == ITEM_PEN {
+        if paper.unwrap().get_obj_type() == ITEM_PEN {
             /* oops, a pen.. */
             pen = paper;
             paper = None;
-        } else if db.obj(paper.unwrap()).get_obj_type() != ITEM_NOTE {
+        } else if paper.unwrap().get_obj_type() != ITEM_NOTE {
             game.send_to_char(ch, "That thing has nothing to do with writing.\r\n");
             return;
         }
@@ -469,18 +462,16 @@ pub fn do_write(
             return;
         }
         if pen.is_some() {
-            paper = ch.get_eq(WEAR_HOLD as i8);
+            paper = Some(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap()));
         } else {
-            pen = ch.get_eq(WEAR_HOLD as i8);
+            pen = Some(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap()));
         }
     }
-    let pen_id = pen.unwrap();
-    let pen = db.obj(pen_id);
-    let paper_id = paper.unwrap();
-    let paper = db.obj(paper_id);
+    let pen = pen.unwrap();
+    let paper = paper.unwrap();
 
     /* ok.. now let's see what kind of stuff we've found */
-    if db.obj(pen_id).get_obj_type() != ITEM_PEN {
+    if pen.get_obj_type() != ITEM_PEN {
         game.act(
             db,
             "$p is no good for writing with.",
@@ -490,7 +481,7 @@ pub fn do_write(
             None,
             TO_CHAR,
         );
-    } else if db.obj(paper_id).get_obj_type() != ITEM_NOTE {
+    } else if paper.get_obj_type() != ITEM_NOTE {
         game.act(
             db,
             "You can't write on $p.",
@@ -500,7 +491,7 @@ pub fn do_write(
             None,
             TO_CHAR,
         );
-    } else if !db.obj(paper_id).action_description.borrow().is_empty() {
+    } else if !paper.action_description.borrow().is_empty() {
         game.send_to_char(ch, "There's something written on it already.\r\n");
     } else {
         /* we can write - hooray! */
@@ -519,7 +510,7 @@ pub fn do_write(
         let desc = game.desc_mut(desc_id);
         desc.string_write(
             db,
-            db.obj(paper_id).action_description.clone(),
+            paper.action_description.clone(),
             MAX_NOTE_LENGTH as usize,
             0,
         );
@@ -570,13 +561,12 @@ pub fn do_page(
                 return;
             }
         }
-        let vict_id;
+        let vict;
         if {
-            vict_id = game.get_char_vis(db, chid, &mut arg, None, FIND_CHAR_WORLD);
-            vict_id.is_some()
+            vict = game.get_char_vis(db, ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict.is_some()
         } {
-            let vict_id = vict_id.unwrap();
-let vict = db.ch(vict_id);
+            let vict = vict.unwrap();
             game.act(
                 db,
                 &buf,

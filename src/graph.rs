@@ -13,7 +13,7 @@ use log::error;
 
 use crate::constants::DIRS;
 use crate::db::DB;
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
@@ -169,17 +169,17 @@ pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cm
         game.send_to_char(ch, "Whom are you trying to track?\r\n");
         return;
     }
-    let vict_id;
+    let vict;
     /* The person can't see the victim. */
     if {
-        vict_id = game.get_char_vis(db, chid, &mut arg, None, FIND_CHAR_WORLD);
-        vict_id.is_none()
+        vict = game.get_char_vis(db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict.is_none()
     } {
         game.send_to_char(ch, "No one is around by that name.\r\n");
         return;
     }
-    let vict_id = vict_id.unwrap();
-    let vict = db.ch(vict_id);
+    let vict = vict.unwrap();
+    let vict_id = vict.id();
     /* We can't track the victim. */
     if vict.aff_flagged(AFF_NOTRACK) {
         game.send_to_char(ch, "You sense no trail.\r\n");

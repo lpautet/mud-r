@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::VictimRef;
 use std::borrow::Borrow;
 use std::fs::{File, OpenOptions};
@@ -1045,9 +1045,9 @@ impl ObjData {
 }
 
 impl DB {
-    pub fn get_obj_spec(&self, oid: DepotId) -> Option<Special> {
-        if self.valid_obj_rnum(self.obj(oid)) {
-            self.obj_index[self.obj(oid).get_obj_rnum() as usize].func
+    pub fn get_obj_spec(&self, obj: &ObjData) -> Option<Special> {
+        if self.valid_obj_rnum(obj) {
+            self.obj_index[obj.get_obj_rnum() as usize].func
         } else {
             None
         }
@@ -1448,22 +1448,22 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
-pub fn circle_follow(db: &DB, chid: DepotId, victim_id: Option<DepotId>) -> bool {
-    if victim_id.is_none() {
+pub fn circle_follow(db: &DB, ch: &CharData, victim: Option<&CharData>) -> bool {
+    if victim.is_none() {
         return false;
     }
-    let mut k = victim_id.unwrap();
+    let mut k = victim.unwrap();
     loop {
-        if k == chid {
+        if k.id() == ch.id() {
             return true;
         }
 
         let t;
         {
-            if db.ch(k).master.is_none() {
+            if k.master.is_none() {
                 break;
             } else {
-                t = db.ch(k).master.unwrap();
+                t = db.ch(k.master.unwrap());
             }
         }
         k = t;

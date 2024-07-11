@@ -332,7 +332,7 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, victim_id, false);
+    look_at_room(game, db, victim, false);
 }
 
 pub fn spell_teleport(
@@ -378,7 +378,7 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, victim_id, false);
+    look_at_room(game, db, victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
@@ -479,7 +479,7 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(game, db,victim_id, false);
+    look_at_room(game, db,victim, false);
 }
 
 pub fn spell_locate_object(
@@ -590,7 +590,7 @@ pub fn spell_charm(
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
         game.send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
-    } else if circle_follow(&db, victim_id, Some(chid)) {
+    } else if circle_follow(&db, victim, Some(ch)) {
         game.send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
         game.send_to_char(ch, "Your victim resists!\r\n");

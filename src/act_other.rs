@@ -15,7 +15,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::depot::DepotId;
+use crate::depot::{DepotId, HasId};
 use crate::{VictimRef, DB};
 use log::error;
 
@@ -262,21 +262,20 @@ pub fn do_steal(
     let mut obj_name = String::new();
     let mut vict_name = String::new();
     two_arguments(argument, &mut obj_name, &mut vict_name);
-    let vict_id;
+    let vict;
     if {
-        vict_id = game.get_char_vis(db, chid, &mut vict_name, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db, ch, &mut vict_name, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, "Steal what from who?\r\n");
         return;
-    } else if vict_id.unwrap() == chid {
+    } else if vict.unwrap().id() == chid {
         game.send_to_char(ch, "Come on now, that's rather stupid!\r\n");
         return;
     }
     let mut ohoh = false;
 
-    let vict_id = vict_id.unwrap();
-    let vict = db.ch(vict_id);
+    let vict = vict.unwrap();
     /* 101% is a complete failure */
     let mut percent =
         rand_number(1, 101) as i32 - DEX_APP_SKILL[ch.get_dex() as usize].p_pocket as i32;
@@ -303,12 +302,13 @@ pub fn do_steal(
     {
         percent = 101; /* Failure */
     }
-    let mut oid;
+    let mut obj;
     let mut the_eq_pos = -1;
+    let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            oid = game.get_obj_in_list_vis(db, ch, &mut obj_name, None, &vict.carrying);
-            oid.is_none()
+            obj = game.get_obj_in_list_vis(db, ch, &mut obj_name, None, &vict.carrying);
+            obj.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
@@ -318,11 +318,11 @@ pub fn do_steal(
                     )
                     && game.can_see_obj(db, ch, db.obj(vict.get_eq(eq_pos).unwrap()))
                 {
-                    oid = vict.get_eq(eq_pos);
+                    obj = vict.get_eq(eq_pos).map(|i| db.obj(i));
                     the_eq_pos = eq_pos;
                 }
             }
-            if oid.is_none() {
+            if obj.is_none() {
                 game.act(
                     db,
                     "$E hasn't got that item.",
@@ -339,8 +339,7 @@ pub fn do_steal(
                     game.send_to_char(ch, "Steal the equipment now?  Impossible!\r\n");
                     return;
                 } else {
-                    let oid = oid.unwrap();
-                    let obj = db.obj(oid);
+                    let obj = obj.unwrap();
                     game.act(
                         db,
                         "You unequip $p and steal it.",
@@ -359,15 +358,15 @@ pub fn do_steal(
                         Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
-                    let eqid = db.unequip_char(vict_id, the_eq_pos).unwrap();
+                    let eqid = db.unequip_char(vict.id(), the_eq_pos).unwrap();
                     db.obj_to_char(eqid, chid);
                 }
             }
         } else {
             /* obj found in inventory */
-            let oid = oid.unwrap();
+            let obj = obj.unwrap();
 
-            percent += db.obj(oid).get_obj_weight(); /* Make heavy harder */
+            percent += obj.get_obj_weight(); /* Make heavy harder */
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
                 game.send_to_char(ch, "Oops..\r\n");
@@ -392,9 +391,10 @@ pub fn do_steal(
             } else {
                 /* Steal the item */
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
-                    if ch.is_carrying_w() + db.obj(oid).get_obj_weight() < ch.can_carry_w() as i32 {
-                        db.obj_from_char(oid);
-                        db.obj_to_char(oid, chid);
+                    if ch.is_carrying_w() + obj.get_obj_weight() < ch.can_carry_w() as i32 {
+                        let obj_id = obj.id();
+                        db.obj_from_char(obj_id);
+                        db.obj_to_char(obj_id, chid);
                         let ch = db.ch(chid);
                         game.send_to_char(ch, "Got it!\r\n");
                     }
@@ -688,19 +688,18 @@ pub fn do_group(
         }
         return;
     }
-    let vict_id;
+    let vict;
 
     if {
-        vict_id = game.get_char_vis(db, chid, &mut buf, None, FIND_CHAR_ROOM);
-        vict_id.is_none()
+        vict = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
-    } else if (db.ch(vict_id.unwrap()).master.is_none()
-        || db.ch(vict_id.unwrap()).master.unwrap() != chid)
-        && vict_id.unwrap() != chid
+    } else if (vict.unwrap().master.is_none()
+        ||vict.unwrap().master.unwrap() != chid)
+        && vict.unwrap().id() != chid
     {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
         game.act(
             db,
             "$N must follow you to enter your group.",
@@ -711,13 +710,13 @@ pub fn do_group(
             TO_CHAR,
         );
     } else {
-        let vict_id = vict_id.unwrap();
-        let vict = db.ch(vict_id);
+        let vict = vict.unwrap();
+        let ch = db.ch(chid);
 
         if !vict.aff_flagged(AFF_GROUP) {
-            perform_group(game, db, chid, vict_id);
+            perform_group(game, db, chid, vict.id());
         } else {
-            if chid != vict_id {
+            if chid != vict.id() {
                 game.act(
                     db,
                     "$N is no longer a member of your group.",
@@ -746,7 +745,7 @@ pub fn do_group(
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            let vict = db.ch_mut(vict_id);
+            let vict = db.ch_mut(vict.id());
             vict.remove_prf_flags_bits(AFF_GROUP);
         }
     }
@@ -798,16 +797,15 @@ pub fn do_ungroup(
         game.send_to_char(ch, "You disband the group.\r\n");
         return;
     }
-    let tchid;
+    let tch;
     if {
-        tchid = game.get_char_vis(db, chid, &mut buf, None, FIND_CHAR_ROOM);
-        tchid.is_none()
+        tch = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        tch.is_none()
     } {
         game.send_to_char(ch, "There is no such person!\r\n");
         return;
     }
-    let tchid = tchid.unwrap();
-    let tch = db.ch(tchid);
+    let tch = tch.unwrap();
     if tch.master.is_none() || tch.master.unwrap() != chid {
         game.send_to_char(ch, "That person is not following you!\r\n");
         return;
@@ -817,6 +815,7 @@ pub fn do_ungroup(
         game.send_to_char(ch, "That person isn't in your group.\r\n");
         return;
     }
+    let tchid = tch.id();
     let tch = db.ch_mut(tchid);
     tch.remove_aff_flags(AFF_GROUP);
     let ch = db.ch(chid);
@@ -1067,9 +1066,9 @@ pub fn do_use(
         );
         return;
     }
-    let mut mag_item = ch.get_eq(WEAR_HOLD as i8);
+    let mut mag_item = ch.get_eq(WEAR_HOLD as i8).map(|i| db.obj(i));
 
-    if mag_item.is_none() || !isname(&arg, db.obj(mag_item.unwrap()).name.as_ref()) {
+    if mag_item.is_none() || !isname(&arg, mag_item.unwrap().name.as_ref()) {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 if {
@@ -1099,20 +1098,20 @@ pub fn do_use(
     let mag_item = mag_item.unwrap();
     match subcmd {
         SCMD_QUAFF => {
-            if db.obj(mag_item).get_obj_type() != ITEM_POTION {
+            if mag_item.get_obj_type() != ITEM_POTION {
                 game.send_to_char(ch, "You can only quaff potions.\r\n");
                 return;
             }
         }
         SCMD_RECITE => {
-            if db.obj(mag_item).get_obj_type() != ITEM_SCROLL {
+            if mag_item.get_obj_type() != ITEM_SCROLL {
                 game.send_to_char(ch, "You can only recite scrolls.\r\n");
                 return;
             }
         }
         SCMD_USE => {
-            if db.obj(mag_item).get_obj_type() != ITEM_WAND
-                && db.obj(mag_item).get_obj_type() != ITEM_STAFF
+            if mag_item.get_obj_type() != ITEM_WAND
+                && mag_item.get_obj_type() != ITEM_STAFF
             {
                 game.send_to_char(ch, "You can't seem to figure out how to use it.\r\n");
                 return;
@@ -1121,7 +1120,7 @@ pub fn do_use(
         _ => {}
     }
 
-    mag_objectmagic(game, db, chid, mag_item, &buf);
+    mag_objectmagic(game, db, chid, mag_item.id(), &buf);
 }
 
 pub fn do_wimpy(
