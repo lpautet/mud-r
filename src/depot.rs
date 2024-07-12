@@ -93,7 +93,7 @@ where
             panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
+            panic!("GURU MEDITATION invalid seq in take expected:{} got:{}-{}", self.slots[id.index as usize].seq , id.index, id.seq );
         }
         self.slots[id.index as usize].free = true;
         self.slots[id.index as usize].seq = 0; // so that old DepotId are now invalid
@@ -106,7 +106,7 @@ where
             panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
+            panic!("GURU MEDITATION invalid seq in get expected:{} got:{}-{}", self.slots[id.index as usize].seq ,id.index, id.seq );
         }
         &self.slots[id.index as usize].value
     }
@@ -116,7 +116,7 @@ where
             panic!("GURU MEDITATION id.index > slots.len {} {}", id.index, self.slots.len());
         }
         if self.slots[id.index as usize].seq != id.seq {
-            panic!("GURU MEDITATION invalid seq {} {}", self.slots[id.index as usize].seq , id.seq );
+            panic!("GURU MEDITATION invalid seq in get_mut expected:{} got:{}-{}", self.slots[id.index as usize].seq ,id.index, id.seq );
         }
         &mut self.slots[id.index as usize].value
     }

@@ -2977,8 +2977,7 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
     ch.player.short_descr = Rc::from("");
     ch.player.long_descr = Rc::from("");
     ch.player.title = Some(Rc::from(parse_c_string(&st.title).as_str()));
-    let description = texts.get_mut(ch.player.description);
-    description.text = parse_c_string(&st.description);
+    ch.player.description = texts.add_text(parse_c_string(&st.description));
 
     ch.player.hometown = st.hometown;
     ch.player.time.birth = st.birth;
