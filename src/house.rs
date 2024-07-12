@@ -18,7 +18,7 @@ use log::{error, info};
 
 use crate::constants::{DIRS, REV_DIR};
 use crate::db::{DB, HCONTROL_FILE};
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::interpreter::{half_chop, is_abbrev, one_argument, search_block};
 use crate::objsave::{obj_from_store, obj_to_store};
 use crate::structs::{
@@ -26,7 +26,7 @@ use crate::structs::{
     NUM_OF_DIRS, ROOM_ATRIUM, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PRIVATE,
 };
 use crate::util::{ctime, time_now, NRM};
-use crate::Game;
+use crate::{Game, TextData};
 
 pub const MAX_HOUSES: usize = 100;
 pub const MAX_GUESTS: usize = 10;
@@ -710,7 +710,7 @@ fn hcontrol_pay_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
 }
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
-pub fn do_hcontrol(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_hcontrol(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg1 = String::new();
     let mut arg2 = String::new();
@@ -732,7 +732,7 @@ pub fn do_hcontrol(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, 
 }
 
 /* The house command, used by mortal house owners to assign guests */
-pub fn do_house(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
 
     let mut arg = String::new();

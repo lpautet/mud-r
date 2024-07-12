@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::handler::{FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::interpreter::{
     delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
@@ -23,7 +23,7 @@ use crate::structs::{
     PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
     PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
-use crate::{CharData, VictimRef, DB};
+use crate::{CharData, TextData, VictimRef, DB};
 use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
@@ -31,7 +31,7 @@ use crate::{
 
 pub fn do_say(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -56,7 +56,7 @@ pub fn do_say(
 
 pub fn do_gsay(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -211,7 +211,7 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
  */
 pub fn do_tell(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -242,7 +242,7 @@ pub fn do_tell(
 
 pub fn do_reply(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -288,7 +288,7 @@ pub fn do_reply(
 
 pub fn do_spec_comm(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -381,8 +381,8 @@ pub fn do_spec_comm(
 }
 
 pub fn do_write(
-    game: &mut Game,
-    db: &mut DB,
+    game: &mut Game, 
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -491,7 +491,7 @@ pub fn do_write(
             None,
             TO_CHAR,
         );
-    } else if !paper.action_description.borrow().is_empty() {
+    } else if !texts.get(paper.action_description).text.is_empty() {
         game.send_to_char(ch, "There's something written on it already.\r\n");
     } else {
         /* we can write - hooray! */
@@ -510,7 +510,7 @@ pub fn do_write(
         let desc = game.desc_mut(desc_id);
         desc.string_write(
             db,
-            paper.action_description.clone(),
+            paper.action_description,
             MAX_NOTE_LENGTH as usize,
             0,
         );
@@ -519,7 +519,7 @@ pub fn do_write(
 
 pub fn do_page(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -601,7 +601,7 @@ pub fn do_page(
 
 pub fn do_gen_comm(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -771,7 +771,7 @@ pub fn do_gen_comm(
 
 pub fn do_qcomm(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,

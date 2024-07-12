@@ -15,8 +15,8 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::depot::{DepotId, HasId};
-use crate::{VictimRef, DB};
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{TextData, VictimRef, DB};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -53,7 +53,7 @@ use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 pub fn do_quit(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -70,7 +70,7 @@ pub fn do_quit(
         game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
     } else if ch.get_pos() < POS_STUNNED {
         game.send_to_char(ch, "You die before your time...\r\n");
-        die(chid, game, db);
+        die(chid, game, db, texts);
     } else {
         game.act(
             db,
@@ -115,7 +115,7 @@ pub fn do_quit(
 
 pub fn do_save(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     cmd: usize,
@@ -148,7 +148,7 @@ pub fn do_save(
     }
     let ch = db.ch(chid);
     write_aliases(ch);
-    game.save_char(db, chid);
+    game.save_char(db, texts, chid);
     crash_crashsave(db, chid);
     let ch = db.ch(chid);
     if db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
@@ -161,7 +161,7 @@ pub fn do_save(
 special procedures - i.e., shop commands, mail commands, etc. */
 pub fn do_not_here(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -173,7 +173,7 @@ pub fn do_not_here(
 
 pub fn do_sneak(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -211,7 +211,7 @@ pub fn do_sneak(
 
 pub fn do_hide(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -241,7 +241,7 @@ pub fn do_hide(
 
 pub fn do_steal(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -451,13 +451,13 @@ pub fn do_steal(
     }
     let vict = db.ch(vict_id);
     if ohoh && vict.is_npc() && vict.awake() {
-        game.hit(db, vict_id, chid, TYPE_UNDEFINED);
+        game.hit(db, texts, vict_id, chid, TYPE_UNDEFINED);
     }
 }
 
 pub fn do_practice(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -479,7 +479,7 @@ pub fn do_practice(
 
 pub fn do_visible(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -502,7 +502,7 @@ pub fn do_visible(
 
 pub fn do_title(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -646,7 +646,7 @@ fn print_group(game: &mut Game, db: &mut DB, chid: DepotId) {
 
 pub fn do_group(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -753,7 +753,7 @@ pub fn do_group(
 
 pub fn do_ungroup(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -855,7 +855,7 @@ pub fn do_ungroup(
 
 pub fn do_report(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -914,7 +914,7 @@ pub fn do_report(
 
 pub fn do_split(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1047,7 +1047,7 @@ pub fn do_split(
 
 pub fn do_use(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,
@@ -1120,12 +1120,12 @@ pub fn do_use(
         _ => {}
     }
 
-    mag_objectmagic(game, db, chid, mag_item.id(), &buf);
+    mag_objectmagic(game, db, texts,chid, mag_item.id(), &buf);
 }
 
 pub fn do_wimpy(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1202,7 +1202,7 @@ pub fn do_wimpy(
 
 pub fn do_display(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1277,7 +1277,7 @@ pub fn do_display(
 
 pub fn do_gen_write(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,
@@ -1389,7 +1389,7 @@ macro_rules! prf_tog_chk {
 
 pub fn do_gen_tog(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,

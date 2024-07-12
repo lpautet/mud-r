@@ -26,7 +26,7 @@ use crate::act_wizard::snoop_check;
 use crate::config::SITEOK_EVERYONE;
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
 use crate::spell_parser::spell_level;
 use crate::spells::{
@@ -50,7 +50,7 @@ use crate::structs::{
     PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
-use crate::{check_player_special, set_skill, Game};
+use crate::{check_player_special, set_skill, Game, TextData};
 
 pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
@@ -3517,7 +3517,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &mut Game, db: &mut DB, chid: DepotId) {
+pub fn do_start(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) {
     let ch = db.ch_mut(chid);
     ch.set_level(1);
     ch.set_exp(1);
@@ -3547,7 +3547,7 @@ pub fn do_start(game: &mut Game, db: &mut DB, chid: DepotId) {
         _ => {}
     }
 
-    advance_level(chid, game, db);
+    advance_level(chid, game, db, texts);
     let ch = db.ch(chid);
     game.mudlog(db,
         BRF,
@@ -3573,7 +3573,7 @@ pub fn do_start(game: &mut Game, db: &mut DB, chid: DepotId) {
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB) {
+pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     let ch = db.ch_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
@@ -3629,7 +3629,7 @@ pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB) {
     }
 
     snoop_check(game, db,chid);
-    game.save_char(db, chid);
+    game.save_char(db, texts, chid);
 }
 
 /*

@@ -20,7 +20,7 @@ use crate::act_wizard::do_return;
 use crate::class::invalid_class;
 use crate::config::MENU;
 use crate::db::DB;
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::interpreter::one_argument;
 use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
@@ -36,7 +36,7 @@ use crate::structs::{
     PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
 use crate::util::{rand_number, SECS_PER_MUD_YEAR};
-use crate::{is_set, Game, TO_CHAR, TO_ROOM};
+use crate::{is_set, Game, TextData, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
 pub const FIND_CHAR_WORLD: i32 = 1 << 1;
@@ -989,7 +989,7 @@ impl Game {
     }
 
     /* Extract a ch completely from the world, and leave his stuff behind */
-    pub fn extract_char_final(&mut self, db: &mut DB, chid: DepotId) {
+    pub fn extract_char_final(&mut self, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) {
         let ch = db.ch(chid);
         if ch.in_room() == NOWHERE {
             error!(
@@ -1008,7 +1008,7 @@ impl Game {
             for d_id in self.descriptor_list.ids() {
                 if self.desc(d_id).original.is_some() && self.desc(d_id).original.unwrap() == chid {
                     let chid = self.desc(d_id).character.unwrap();
-                    do_return(self, db, chid, "", 0, 0);
+                    do_return(self, db, texts, chid, "", 0, 0);
                     break;
                 }
             }
@@ -1024,7 +1024,7 @@ impl Game {
              * body after the removal so dump them to the main menu.
              */
             if self.desc(ch.desc.unwrap()).original.borrow().is_some() {
-                do_return(self, db, chid, "", 0, 0);
+                do_return(self, db, texts, chid, "", 0, 0);
             } else {
                 /*
                  * Now we boot anybody trying to log in with the same character, to
@@ -1109,7 +1109,7 @@ impl Game {
             let ch = db.ch_mut(chid);
             ch.clear_memory()
         } else {
-            self.save_char(db, chid);
+            self.save_char(db, texts, chid);
             let ch = db.ch(chid);
             crash_delete_crashfile(ch);
         }
@@ -1156,7 +1156,7 @@ impl DB {
  * NOTE: This doesn't handle recursive extractions.
  */
 impl Game {
-    pub fn extract_pending_chars(&mut self, db: &mut DB) {
+    pub fn extract_pending_chars(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
         // struct char_data * vict, * next_vict, * prev_vict;
 
         if db.extractions_pending < 0 {
@@ -1176,7 +1176,7 @@ impl Game {
                 continue;
             }
 
-            self.extract_char_final(db, vict_id);
+            self.extract_char_final(db, texts, vict_id);
             db.extractions_pending -= 1;
         }
 

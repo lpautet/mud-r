@@ -16,7 +16,7 @@ use crate::config::{
     FREE_RENT, IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN,
     MAX_EXP_LOSS,
 };
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::fight::update_pos;
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
@@ -29,7 +29,7 @@ use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
 use crate::util::{age, BRF, CMP};
-use crate::{Game, DB, TO_CHAR, TO_ROOM};
+use crate::{Game, TextData, DB, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -221,7 +221,7 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
 
-pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, db: &mut DB) {
+pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     let ch = db.ch(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
@@ -248,7 +248,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, db: &mut DB) {
             ch.set_level(ch.get_level() + 1);
 
             num_levels += 1;
-            advance_level(chid, game, db);
+            advance_level(chid, game, db, texts);
             is_altered = true;
         }
 
@@ -292,7 +292,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, db: &mut DB) {
     }
 }
 
-pub fn gain_exp_regardless(game: &mut Game, db: &mut DB, chid: DepotId, gain: i32) {
+pub fn gain_exp_regardless(game: &mut Game, db: &mut DB, chid: DepotId, gain: i32, texts: &mut Depot<TextData>) {
     let ch = db.ch_mut(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
@@ -311,7 +311,7 @@ pub fn gain_exp_regardless(game: &mut Game, db: &mut DB, chid: DepotId, gain: i3
             let ch = db.ch_mut(chid);
             ch.set_level(ch.get_level() + 1);
             num_levels += 1;
-            advance_level(chid, game,db);
+            advance_level(chid, game,db, texts);
             is_altered = true;
         }
 
@@ -382,7 +382,7 @@ impl Game {
         }
     }
 
-    fn check_idling(&mut self, db: &mut DB, chid: DepotId) {
+    fn check_idling(&mut self, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) {
         let ch = db.ch_mut(chid);
         ch.char_specials
             .timer += 1;
@@ -406,7 +406,7 @@ impl Game {
                 );
                 let ch = db.ch(chid);
                 self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-                self.save_char(db, chid);
+                self.save_char(db, texts, chid);
                 crash_crashsave( db, chid);
                 db.char_from_room(chid);
                 db.char_to_room(chid, 1);
@@ -449,7 +449,7 @@ impl Game {
     }
 
     /* Update PCs, NPCs, and objects */
-    pub fn point_update(&mut self, db: &mut DB) {
+    pub fn point_update(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
         /* characters */
         for i_id in db.character_list.ids() {
             self.gain_condition(db,i_id, FULL, -1);
@@ -461,7 +461,7 @@ impl Game {
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
                 if i.aff_flagged(AFF_POISON) {
-                    if self.damage(db,i_id, i_id, 2, SPELL_POISON) == -1 {
+                    if self.damage(db,texts,i_id, i_id, 2, SPELL_POISON) == -1 {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }
                 }
@@ -470,11 +470,11 @@ impl Game {
                     update_pos(i);
                 }
             } else if i.get_pos() == POS_INCAP {
-                if self.damage(db,i_id, i_id, 1, TYPE_SUFFERING) == -1 {
+                if self.damage(db,texts,i_id, i_id, 1, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             } else if i.get_pos() == POS_MORTALLYW {
-                if self.damage(db, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
+                if self.damage(db, texts,i_id, i_id, 2, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             }
@@ -483,7 +483,7 @@ impl Game {
                 self.update_char_objects(db, i_id);
                 let i = db.ch(i_id);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
-                    self.check_idling(db, i_id);
+                    self.check_idling(db, texts, i_id);
                 }
             }
         }

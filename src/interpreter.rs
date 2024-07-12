@@ -9,7 +9,6 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
-use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::LinkedList;
 use std::rc::Rc;
@@ -54,7 +53,7 @@ use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
@@ -78,9 +77,7 @@ use crate::structs::{
     SEX_MALE,
 };
 use crate::util::{BRF, NRM};
-use crate::{
-    _clrlevel, clr, write_to_q, Game, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM,
-};
+use crate::{_clrlevel, clr, write_to_q, Game, TextData, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM};
 
 /*
  * Alert! Changed from 'struct alias' to 'struct AliasData' in bpl15
@@ -254,7 +251,7 @@ pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
 * priority.
 */
 type Command =
-    fn(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, subcmd: i32);
+    fn(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, argument: &str, cmd: usize, subcmd: i32);
 
 pub struct CommandInfo {
     pub(crate) command: &'static str,
@@ -266,7 +263,7 @@ pub struct CommandInfo {
 
 pub fn do_nothing(
     _game: &mut Game,
-    _db: &mut DB,
+    _db: &mut DB,_texts: &mut Depot<TextData>, 
     _chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2780,7 +2777,7 @@ const RESERVED: [&str; 9] = [
  * It makes sure you are the proper level and position to execute the command,
  * then calls the appropriate function.
  */
-pub fn command_interpreter(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str) {
+pub fn command_interpreter(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, argument: &str) {
     let ch = db.ch_mut(chid);
     let line: &str;
     let mut arg = String::new();
@@ -2854,8 +2851,8 @@ pub fn command_interpreter(game: &mut Game, db: &mut DB, chid: DepotId, argument
             }
             _ => {}
         }
-    } else if db.no_specials || !special(game, db, chid, cmd_idx as i32, line) {
-        (cmd.command_pointer)(game, db, chid, line, cmd_idx, cmd.subcmd);
+    } else if db.no_specials || !special(game, db,texts, chid, cmd_idx as i32, line) {
+        (cmd.command_pointer)(game, db, texts, chid, line, cmd_idx, cmd.subcmd);
     }
 }
 
@@ -2870,7 +2867,7 @@ fn find_alias<'a, 'b>(alias_list: &'a Vec<AliasData>, alias: &'b str) -> Option<
 /* The interface to the outside world: do_alias */
 pub fn do_alias(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3237,12 +3234,12 @@ pub fn is_move(cmdnum: i32) -> bool {
     CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
 }
 
-pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str) -> bool {
+pub fn special(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, cmd: i32, arg: &str) -> bool {
     let ch = db.ch(chid);
     /* special in room? */
     if db.get_room_spec(ch.in_room()).is_some() {
         let f = db.get_room_spec(ch.in_room()).unwrap();
-        if f(game, db, chid, MeRef::None, cmd, arg) {
+        if f(game, db, texts, chid, MeRef::None, cmd, arg) {
             return true;
         }
     }
@@ -3253,14 +3250,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
         if ch.get_eq(j).is_some() && db.get_obj_spec(db.obj(ch.get_eq(j).unwrap())).is_some() {
             let oid = ch.get_eq(j).unwrap();
             let obj = db.obj(oid);
-            if db.get_obj_spec(obj).as_ref().unwrap()(
-                game,
-                db,
-                chid,
-                MeRef::Obj(oid),
-                cmd,
-                arg,
-            ) {
+            if db.get_obj_spec(obj).as_ref().unwrap()(game, db,texts, chid, MeRef::Obj(oid), cmd, arg) {
                 return true;
             }
         }
@@ -3271,7 +3261,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
     for i in ch.carrying.clone() {
         let obj = db.obj(i);
         if let Some(spec) = db.get_obj_spec(obj) {
-            if spec(game, db, chid, MeRef::Obj(i), cmd, arg) {
+            if spec(game, db,texts,  chid, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3283,7 +3273,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
         let k = db.ch(k_id);
         if !k.mob_flagged(MOB_NOTDEADYET) {
             if db.get_mob_spec(k).is_some()
-                && db.get_mob_spec(k).as_ref().unwrap()(game, db, chid, MeRef::Char(k_id), cmd, arg)
+                && db.get_mob_spec(k).as_ref().unwrap()(game, db, texts, chid, MeRef::Char(k_id), cmd, arg)
             {
                 return true;
             }
@@ -3293,7 +3283,7 @@ pub fn special(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, arg: &str)
     for i in db.world[ch.in_room() as usize].contents.clone() {
         let obj = db.obj(i);
         if let Some(spec) = db.get_obj_spec(obj) {
-            if spec(game, db, chid, MeRef::Obj(i), cmd, arg) {
+            if spec(game, db, texts, chid, MeRef::Obj(i), cmd, arg) {
                 return true;
             }
         }
@@ -3327,7 +3317,7 @@ pub const USURP: u8 = 2;
 pub const UNSWITCH: u8 = 3;
 
 /* This function seems a bit over-extended. */
-fn perform_dupe_check(game: &mut Game, db: &mut DB, d_id: DepotId) -> bool {
+fn perform_dupe_check(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_id: DepotId) -> bool {
     let mut target_id = None;
     let mut mode = 0;
     let id: i64;
@@ -3369,7 +3359,7 @@ fn perform_dupe_check(game: &mut Game, db: &mut DB, d_id: DepotId) -> bool {
         {
             /* Character taking over their own body, while an immortal was switched to it. */
             let chid = game.desc(k_id).character.unwrap();
-            do_return(game, db, chid, "", 0, 0);
+            do_return(game, db, texts, chid, "", 0, 0);
         } else if game.desc(k_id).character.is_some()
             && db.ch(game.desc(k_id).character.unwrap()).get_idnum() == id
         {
@@ -3507,7 +3497,7 @@ fn perform_dupe_check(game: &mut Game, db: &mut DB, d_id: DepotId) -> bool {
 }
 
 /* deal with newcomers and other non-playing sockets */
-pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
+pub fn nanny(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,  d_id: DepotId, arg: &str) {
     let arg = arg.trim();
     let desc = game.desc_mut(d_id);
 
@@ -3544,7 +3534,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                 let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
                 if player_i.is_some() {
                     let character = db.ch_mut(character_id);
-                    store_to_char(&tmp_store, character);
+                    store_to_char( texts, &tmp_store, character);
                     character.set_pfilepos(player_i.unwrap() as i32);
 
                     if character.prf_flagged(PLR_DELETED) {
@@ -3693,7 +3683,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                         let desc = game.desc_mut(d_id);
 
                         let chid = desc.character.unwrap();
-                        game.save_char(db, chid);
+                        game.save_char(db, texts, chid);
                         let desc = game.desc_mut(d_id);
 
                         desc.bad_pws += 1;
@@ -3745,7 +3735,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                     }
                 }
                 /* check and make sure no other copies of this player are logged in */
-                if perform_dupe_check(game, db, d_id) {
+                if perform_dupe_check(game, db, texts, d_id) {
                     return;
                 }
                 let desc = game.desc_mut(d_id);
@@ -3892,8 +3882,8 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
             }
 
             /* Now GET_NAME() will work properly. */
-            db.init_char(character_id);
-            game.save_char(db, character_id);
+            db.init_char(texts, character_id);
+            game.save_char(db, texts, character_id);
             let desc = game.desc_mut(d_id);
 
             desc.write_to_output(format!("{}\r\n*** PRESS RETURN: ", db.motd).as_str());
@@ -3960,14 +3950,14 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                         game.send_to_char(character, format!("{}", WELC_MESSG).as_str());
                         //db.character_list.push(character);
                         db.char_to_room(character_id, load_room);
-                        load_result = crash_load(game, db, character_id);
+                        load_result = crash_load(game, db, texts, character_id);
 
                         /* Clear their load room if it's not persistant. */
                         let character = db.ch_mut(character_id);
                         if !character.plr_flagged(PLR_LOADROOM) {
                             character.set_loadroom(NOWHERE);
                         }
-                        game.save_char(db, character_id);
+                        game.save_char(db, texts, character_id);
                         let character = db.ch(character_id);
                         game.act(
                             db,
@@ -3983,10 +3973,10 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                     desc.set_state(ConPlaying);
                     let character = db.ch(character_id);
                     if character.get_level() == 0 {
-                        do_start(game, db, character_id);
+                        do_start(game, db, texts, character_id);
                         let character = db.ch(character_id);
                         game.send_to_char(character, format!("{}", START_MESSG).as_str());
-                        look_at_room(game, db, character, false);
+                        look_at_room(game, db, texts, character, false);
                     }
                     let desc = game.desc_mut(d_id);
                     if db
@@ -4009,19 +3999,14 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                 }
 
                 '2' => {
-                    if character.player.description.borrow().is_empty() {
-                        let cp = &character.player;
-                        let player_description = RefCell::borrow(&cp.description);
-                        desc.write_to_output(
-                            format!("Old description:\r\n{}", player_description).as_str(),
-                        );
-                        let character = db.ch(character_id);
-                        RefCell::borrow_mut(&character.player.description).clear();
+                    let text = &mut texts.get_mut(character.player.description).text;
+                    if text.is_empty() {
+                        let mesg = format!("Old description:\r\n{}", text);
+                        desc.write_to_output(&mesg);
+                        text.clear();
                     }
                     desc.write_to_output( "Enter the new text you'd like others to see when they look at you.\r\nTerminate with a '@' on a new line.\r\n");
-                    let character = db.ch(character_id);
-                    let description = character.player.description.clone();
-                    desc.str = Some(description);
+                    desc.str = Some(character.player.description);
                     desc.max_str = EXDSCR_LENGTH;
                     desc.set_state(ConExdesc);
                 }
@@ -4115,7 +4100,7 @@ pub fn nanny(game: &mut Game, db: &mut DB, d_id: DepotId, arg: &str) {
                 if d_ch.get_level() < LVL_GRGOD as u8 {
                     d_ch.set_plr_flag_bit(PLR_DELETED);
                 }
-                game.save_char(db, d_chid);
+                game.save_char(db, texts, d_chid);
                 let desc = game.desc_mut(d_id);
                 let d_ch = db.ch(d_chid);
                 crash_delete_file(&d_ch.get_name());

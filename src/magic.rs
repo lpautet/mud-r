@@ -12,8 +12,8 @@
 use std::cmp::{max, min};
 
 use log::error;
-use crate::depot::DepotId;
-use crate::VictimRef;
+use crate::depot::{Depot, DepotId};
+use crate::{TextData, VictimRef};
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
@@ -177,7 +177,7 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
  * -1 = dead, otherwise the amount of damage done.
  */
 pub fn mag_damage(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     level: i32,
     chid: DepotId,
     victim_id: DepotId,
@@ -300,7 +300,7 @@ pub fn mag_damage(
     }
 
     /* and finally, inflict the damage */
-    return game.damage(db, chid, victim_id, dam, spellnum);
+    return game.damage(db, texts, chid, victim_id, dam, spellnum);
 }
 
 /*
@@ -589,7 +589,7 @@ pub fn mag_affects(
  * is the one you should change to add new group spells.
  */
 fn perform_mag_groups(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     level: i32,
     chid: DepotId,
     tch_id: DepotId,
@@ -604,7 +604,7 @@ fn perform_mag_groups(
             mag_affects(game, db,level, chid, Some(tch_id), SPELL_ARMOR, savetype);
         }
         SPELL_GROUP_RECALL => {
-            spell_recall(game, db, level, Some(chid), Some(tch_id), None);
+            spell_recall(game, db, texts,level, Some(chid), Some(tch_id), None);
         }
         _ => {}
     }
@@ -621,7 +621,7 @@ fn perform_mag_groups(
  * To add new group spells, you shouldn't have to change anything in
  * mag_groups -- just add a new case to perform_mag_groups.
  */
-pub fn mag_groups(game: &mut Game, db: &mut DB, level: i32, chid: Option<DepotId>, spellnum: i32, savetype: i32) {
+pub fn mag_groups(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, level: i32, chid: Option<DepotId>, spellnum: i32, savetype: i32) {
     if chid.is_none() {
         return;
     }
@@ -651,13 +651,13 @@ pub fn mag_groups(game: &mut Game, db: &mut DB, level: i32, chid: Option<DepotId
         if chid == tch_id {
             continue;
         }
-        perform_mag_groups(game, db, level, chid, tch_id, spellnum, savetype);
+        perform_mag_groups(game, db, texts, level, chid, tch_id, spellnum, savetype);
     }
     let k = db.ch(k_id);
     if k_id != chid && k.aff_flagged(AFF_GROUP) {
-        perform_mag_groups(game, db, level, chid, k_id, spellnum, savetype);
+        perform_mag_groups(game, db, texts, level, chid, k_id, spellnum, savetype);
     }
-    perform_mag_groups(game, db, level, chid, chid, spellnum, savetype);
+    perform_mag_groups(game, db, texts, level, chid, chid, spellnum, savetype);
 }
 
 /*
@@ -690,7 +690,7 @@ pub fn mag_masses(db: &DB, _level: i32, chid: DepotId, spellnum: i32, _savetype:
  *  area spells have limited targets within the room.
  */
 pub fn mag_areas(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     level: i32,
     chid: Option<DepotId>,
     spellnum: i32,
@@ -747,7 +747,7 @@ pub fn mag_areas(
         }
 
         /* Doesn't matter if they die here so we don't check. -gg 6/24/98 */
-        mag_damage(game, db, level, chid, tch_id, spellnum, 1);
+        mag_damage(game, db, texts, level, chid, tch_id, spellnum, 1);
     }
 }
 

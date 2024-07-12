@@ -16,8 +16,8 @@ use std::rc::Rc;
 
 use log::error;
 use regex::Regex;
-use crate::depot::{DepotId, HasId};
-use crate::VictimRef;
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
 use crate::handler::FIND_CHAR_ROOM;
@@ -54,7 +54,7 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
-pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
+pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let act_nr;
 
@@ -152,7 +152,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, cm
     }
 }
 
-pub fn do_insult(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);

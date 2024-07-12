@@ -13,7 +13,7 @@ use log::error;
 
 use crate::constants::DIRS;
 use crate::db::DB;
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
@@ -21,7 +21,7 @@ use crate::structs::{
      RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
-use crate::Game;
+use crate::{Game, TextData};
 
 struct BfsQueueStruct {
     room: RoomRnum,
@@ -156,7 +156,7 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
 * Functions and Commands which use the above functions. *
 ********************************************************/
 
-pub fn do_track(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_track(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {

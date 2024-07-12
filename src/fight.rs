@@ -23,7 +23,7 @@ use crate::config::{
 };
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::handler::affected_by_spell;
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
@@ -42,7 +42,7 @@ use crate::structs::{
     ROOM_PEACEFUL, WEAR_WIELD,
 };
 use crate::util::{dice, rand_number, BRF};
-use crate::VictimRef;
+use crate::{TextData, VictimRef};
 use crate::{
     _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT,
 };
@@ -466,9 +466,9 @@ impl Game {
     }
 }
 
-pub fn die(chid: DepotId, game: &mut Game, db: &mut DB) {
+pub fn die(chid: DepotId, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     let ch = db.ch(chid);
-    gain_exp(chid, -(ch.get_exp() / 2), game, db);
+    gain_exp(chid, -(ch.get_exp() / 2), game, db, texts);
     let ch = db.ch_mut(chid);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
@@ -481,7 +481,7 @@ pub fn perform_group_gain(
     base: i32,
     victim_id: DepotId,
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut Depot<TextData>
 ) {
     let ch = db.ch(chid);
     let share = min(MAX_EXP_GAIN, max(1, base));
@@ -501,11 +501,11 @@ pub fn perform_group_gain(
             "You receive your share of experience -- one measly little point!\r\n",
         );
     }
-    gain_exp(chid, share, game, db);
+    gain_exp(chid, share, game, db, texts);
     change_alignment(db, chid, victim_id);
 }
 
-pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB) {
+pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     let ch = db.ch(chid);
     let victim = db.ch(victim_id);
     let k_id;
@@ -545,19 +545,19 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut D
     }
 
     if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
-        perform_group_gain(k_id, base, victim_id, game, db);
+        perform_group_gain(k_id, base, victim_id, game, db, texts);
     }
     let k = db.ch(k_id);
     for f in k.followers.clone() {
         let follower = db.ch(f.follower);
         let ch = db.ch(chid);
         if follower.aff_flagged(AFF_GROUP) && follower.in_room() == ch.in_room() {
-            perform_group_gain(f.follower, base, victim_id, game, db);
+            perform_group_gain(f.follower, base, victim_id, game, db, texts);
         }
     }
 }
 
-pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB) {
+pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     let ch = db.ch(chid);
     let victim = db.ch(victim_id);
     let mut exp = min(MAX_EXP_GAIN, victim.get_exp() / 3);
@@ -584,7 +584,7 @@ pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, db: &mut DB
     } else {
         game.send_to_char(ch, "You receive one lousy experience point.\r\n");
     }
-    gain_exp(chid, exp, game, db);
+    gain_exp(chid, exp, game, db, texts);
     change_alignment(db, chid, victim_id);
 }
 
@@ -967,7 +967,7 @@ impl Game {
      */
     pub fn damage(
         &mut self,
-        db: &mut DB,
+        db: &mut DB, texts: &mut Depot<TextData>,
         chid: DepotId,
         victim_id: DepotId,
         dam: i32,
@@ -989,7 +989,7 @@ impl Game {
                 db.get_room_vnum(victim.in_room()),
                 ch.get_name()
             );
-            die(victim_id, self, db);
+            die(victim_id, self, db, texts);
             return -1; /* -je, 7/7/92 */
         }
 
@@ -1003,7 +1003,7 @@ impl Game {
         }
 
         /* shopkeeper protection */
-        if !ok_damage_shopkeeper(self, db, chid, victim_id) {
+        if !ok_damage_shopkeeper(self, db, texts,chid, victim_id) {
             return 0;
         }
 
@@ -1066,7 +1066,7 @@ impl Game {
 
         /* Gain exp for the hit */
         if chid != victim_id {
-            gain_exp(chid, victim.get_level() as i32 * dam, self, db);
+            gain_exp(chid, victim.get_level() as i32 * dam, self, db, texts);
         }
         let victim = db.ch_mut(victim_id);
         update_pos(victim);
@@ -1176,7 +1176,7 @@ impl Game {
                     );
                     let victim = db.ch(victim_id);
                     if chid != victim_id && victim.mob_flagged(MOB_WIMPY) {
-                        do_flee(self, db, victim_id, "", 0, 0);
+                        do_flee(self, db, texts, victim_id, "", 0, 0);
                     }
                 }
                 let victim = db.ch(victim_id);
@@ -1187,7 +1187,7 @@ impl Game {
                     && victim.get_hit() > 0
                 {
                     self.send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
-                    do_flee(self, db, victim_id, "", 0, 0);
+                    do_flee(self, db, texts, victim_id, "", 0, 0);
                 }
             }
         }
@@ -1195,7 +1195,7 @@ impl Game {
         /* Help out poor linkless people who are attacked */
         let victim = db.ch(victim_id);
         if !victim.is_npc() && victim.desc.is_none() && victim.get_pos() > POS_STUNNED {
-            do_flee(self, db, victim_id, "", 0, 0);
+            do_flee(self, db, texts, victim_id, "", 0, 0);
             let victim = db.ch(victim_id);
             if victim.fighting_id().is_none() {
                 self.act(
@@ -1226,9 +1226,9 @@ impl Game {
             if chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
                 let ch = db.ch(chid);
                 if ch.aff_flagged(AFF_GROUP) {
-                    group_gain(chid, victim_id, self, db);
+                    group_gain(chid, victim_id, self, db, texts);
                 } else {
-                    solo_gain(chid, victim_id, self, db);
+                    solo_gain(chid, victim_id, self, db, texts);
                 }
                 let victim = db.ch(victim_id);
                 if !victim.is_npc() {
@@ -1251,7 +1251,7 @@ impl Game {
                         forget(db, chid, victim_id);
                     }
                 }
-                die(victim_id, self, db);
+                die(victim_id, self, db, texts);
                 return -1;
             }
         }
@@ -1283,7 +1283,7 @@ pub fn compute_thaco(ch: &CharData, _victim: &CharData) -> i32 {
 }
 
 impl Game {
-    pub fn hit(&mut self, db: &mut DB, chid: DepotId, victim_id: DepotId, _type: i32) {
+    pub fn hit(&mut self, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, victim_id: DepotId, _type: i32) {
         let ch = db.ch(chid);
         let victim = db.ch(victim_id);
         let wielded = ch.get_eq(WEAR_WIELD as i8);
@@ -1341,7 +1341,7 @@ impl Game {
         if dam == 0 {
             /* the attacker missed the victim */
             self.damage(
-                db,
+                db, texts,
                 chid,
                 victim_id,
                 0,
@@ -1399,20 +1399,20 @@ impl Game {
 
             if _type == SKILL_BACKSTAB {
                 self.damage(
-                    db,
+                    db,texts,
                     chid,
                     victim_id,
                     dam * backstab_mult(ch.get_level()),
                     SKILL_BACKSTAB,
                 );
             } else {
-                self.damage(db, chid, victim_id, dam, w_type);
+                self.damage(db, texts,chid, victim_id, dam, w_type);
             }
         }
     }
 
     /* control the fights going on.  Called every 2 seconds from comm.c. */
-    pub fn perform_violence(&mut self, db: &mut DB) {
+    pub fn perform_violence(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
         let mut old_combat_list = vec![];
         for c in db.combat_list.iter() {
             old_combat_list.push(*c);
@@ -1456,7 +1456,7 @@ impl Game {
                 continue;
             }
 
-            self.hit(db, chid, ch.fighting_id().unwrap(), TYPE_UNDEFINED);
+            self.hit(db, texts, chid, ch.fighting_id().unwrap(), TYPE_UNDEFINED);
             let ch = db.ch(chid);
             if ch.mob_flagged(MOB_SPEC)
                 && db.get_mob_spec(ch).is_some()
@@ -1465,7 +1465,7 @@ impl Game {
                 let actbuf = String::new();
                 db.get_mob_spec(ch).as_ref().unwrap()(
                     self,
-                    db,
+                    db,texts,
                     chid,
                     MeRef::Char(chid),
                     0,

@@ -9,12 +9,11 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::interpreter::AliasData;
-use crate::{Game, DB};
+use crate::{Game, TextData, DB};
 
 pub enum MeRef {
     None,
@@ -23,7 +22,7 @@ pub enum MeRef {
 }
 
 pub type Special =
-    fn(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
+    fn(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
@@ -565,7 +564,7 @@ pub struct CharPlayerData {
     /* for NPC 'actions'                    */
     pub long_descr: Rc<str>,
     /* for 'look'			       */
-    pub description: Rc<RefCell<String>>,
+    pub description: DepotId,
     /* Extra descriptions                   */
     pub title: Option<Rc<str>>,
     /* PC / NPC's title                     */
@@ -672,7 +671,7 @@ pub struct ObjData {
     /* When in room                     */
     pub(crate) short_description: Rc<str>,
     /* when worn/carry/in cont.         */
-    pub action_description: Rc<RefCell<String>>,
+    pub action_description: DepotId,
     /* What to write when used          */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* extra descriptions     */

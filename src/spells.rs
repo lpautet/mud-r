@@ -9,8 +9,8 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 use std::cmp::{max, min};
-use crate::depot::DepotId;
-use crate::{VictimRef, DB};
+use crate::depot::{Depot, DepotId};
+use crate::{TextData, VictimRef, DB};
 
 use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
@@ -307,7 +307,7 @@ pub fn spell_create_water(
 }
 
 pub fn spell_recall(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -332,11 +332,11 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, victim, false);
+    look_at_room(game, db, texts,victim, false);
 }
 
 pub fn spell_teleport(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -378,13 +378,13 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, victim, false);
+    look_at_room(game, db, texts,victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 pub fn spell_summon(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -479,7 +479,7 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(game, db,victim, false);
+    look_at_room(game, db,texts,victim, false);
 }
 
 pub fn spell_locate_object(

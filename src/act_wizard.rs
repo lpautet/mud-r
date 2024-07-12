@@ -29,7 +29,7 @@ use crate::constants::{
 use crate::db::{
     clear_char, parse_c_string, store_to_char, DB, FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
 };
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
 use crate::handler::{get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::house::{hcontrol_list_houses, house_can_enter};
@@ -60,7 +60,7 @@ use crate::util::{
     age, ctime, hmhr, sprintbit, sprinttype, time_now, touch, BRF, NRM,
     SECS_PER_MUD_YEAR,
 };
-use crate::{ObjData, VictimRef};
+use crate::{ObjData, TextData, VictimRef};
 use crate::{
     _clrlevel, clr, onoff, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
     TO_VICT,
@@ -72,7 +72,7 @@ use sha2::Sha256;
 
 pub fn do_echo(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -103,7 +103,7 @@ pub fn do_echo(
 
 pub fn do_send(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -249,7 +249,7 @@ fn find_target_room(game: &mut Game, db: &DB, ch: &CharData, rawroomstr: &str) -
 
 pub fn do_at(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -283,7 +283,7 @@ pub fn do_at(
     let original_loc = ch.in_room();
     db.char_from_room(chid);
     db.char_to_room(chid, location);
-    command_interpreter(game, db, chid, &command);
+    command_interpreter(game, db, texts,chid, &command);
 
     /* check if the char is still there */
     let ch = db.ch(chid);
@@ -295,7 +295,7 @@ pub fn do_at(
 
 pub fn do_goto(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -335,12 +335,12 @@ pub fn do_goto(
     );
     game.act(db, &buf, true, Some(ch), None, None, TO_ROOM);
 
-    look_at_room(game, db, ch, false);
+    look_at_room(game, db, texts,ch, false);
 }
 
 pub fn do_trans(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB, texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -401,7 +401,7 @@ pub fn do_trans(
                 Some(VictimRef::Char(victim)),
                 TO_VICT,
             );
-            look_at_room(game, db, db.ch(victim_id), false);
+            look_at_room(game, db, texts, db.ch(victim_id), false);
         }
     } else {
         /* Trans All */
@@ -455,7 +455,7 @@ pub fn do_trans(
                     Some(VictimRef::Char(victim)),
                     TO_VICT,
                 );
-                look_at_room(game, db, victim, false);
+                look_at_room(game, db, texts, victim, false);
             }
         }
     }
@@ -465,7 +465,7 @@ pub fn do_trans(
 
 pub fn do_teleport(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -531,13 +531,13 @@ pub fn do_teleport(
             Some(VictimRef::Char(victim)),
             TO_VICT,
         );
-        look_at_room(game, db, victim, false);
+        look_at_room(game, db, texts,victim, false);
     }
 }
 
 pub fn do_vnum(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -567,7 +567,7 @@ pub fn do_vnum(
     }
 }
 
-fn do_stat_room(game: &mut Game, db: &mut DB, chid: DepotId) {
+fn do_stat_room(game: &mut Game, db: &mut DB,chid: DepotId) {
     let ch = db.ch(chid);
 
     let rm_name = db.world[ch.in_room() as usize].name.as_str();
@@ -797,7 +797,7 @@ fn do_stat_room(game: &mut Game, db: &mut DB, chid: DepotId) {
     }
 }
 
-fn do_stat_object(game: &mut Game, db: &DB, ch: &CharData, obj: &ObjData) {
+fn do_stat_object(game: &mut Game, db: &DB,ch: &CharData, obj: &ObjData) {
 
     let vnum = db.get_obj_vnum(obj);
     game.send_to_char(
@@ -1504,7 +1504,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
 pub fn do_stat(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1522,7 +1522,7 @@ pub fn do_stat(
         game.send_to_char(ch, "Stats on who or what?\r\n");
         return;
     } else if is_abbrev(&buf1, "room") {
-        do_stat_room(game, db, chid);
+        do_stat_room(game, db,  chid);
     } else if is_abbrev(&buf1, "mob") {
         if buf2.is_empty() {
             game.send_to_char(ch, "Stats on which mobile?\r\n");
@@ -1532,7 +1532,7 @@ pub fn do_stat(
                 victim = game.get_char_vis(db, ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(game, db, ch, victim.unwrap());
+                do_stat_character(game, db,  ch, victim.unwrap());
             } else {
                 game.send_to_char(ch, "No such mobile around.\r\n");
             }
@@ -1546,7 +1546,7 @@ pub fn do_stat(
                 victim = game.get_player_vis(db, ch, &mut buf2, None, FIND_CHAR_WORLD);
                 victim.is_some()
             } {
-                do_stat_character(game, db, ch, victim.unwrap());
+                do_stat_character(game, db,  ch, victim.unwrap());
             } else {
                 game.send_to_char(ch, "No such player around.\r\n");
             }
@@ -1559,13 +1559,13 @@ pub fn do_stat(
             victim = game.get_player_vis(db, ch, &mut buf2, None, FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(game, db, ch, victim.unwrap());
+            do_stat_character(game, db,  ch, victim.unwrap());
         } else {
             let mut loaded_victim = CharData::default();
             let mut tmp_store = CharFileU::new();
             clear_char(&mut loaded_victim);
             if db.load_char(&buf2, &mut tmp_store).is_some() {
-                store_to_char(&tmp_store, &mut loaded_victim);
+                store_to_char(texts, &tmp_store, &mut loaded_victim);
                 loaded_victim.player.time.logon = tmp_store.last_logon;
                 let loaded_victim_id = db.character_list.push(loaded_victim);
                 db.char_to_room(loaded_victim_id, 0);
@@ -1574,9 +1574,9 @@ pub fn do_stat(
                 if loaded_victim.get_level() > ch.get_level() {
                     game.send_to_char(ch, "Sorry, you can't do that.\r\n");
                 } else {
-                    do_stat_character(game, db, ch, loaded_victim);
+                    do_stat_character(game, db,  ch, loaded_victim);
                 }
-                game.extract_char_final(db, loaded_victim_id);
+                game.extract_char_final(db, texts, loaded_victim_id);
             } else {
                 let ch = db.ch(chid);
                 game.send_to_char(ch, "There is no such player.\r\n");
@@ -1591,7 +1591,7 @@ pub fn do_stat(
                 obj = game.get_obj_vis(db, ch, &mut buf2, None);
                 obj.is_some()
             } {
-                do_stat_object(game, db, ch, obj.unwrap());
+                do_stat_object(game, db,  ch, obj.unwrap());
             } else {
                 game.send_to_char(ch, "No such object around.\r\n");
             }
@@ -1605,17 +1605,17 @@ pub fn do_stat(
             obj = game.get_obj_in_equip_vis(db, ch, &name, Some(&mut number), &ch.equipment);
             obj.is_some()
         } {
-            do_stat_object(game, db, ch, obj.unwrap());
+            do_stat_object(game, db,  ch, obj.unwrap());
         } else if {
             obj = game.get_obj_in_list_vis(db, ch, &name, Some(&mut number), &ch.carrying);
             obj.is_some()
         } {
-            do_stat_object(game, db, ch, obj.unwrap());
+            do_stat_object(game, db,  ch, obj.unwrap());
         } else if {
             victim = game.get_char_vis(db, ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
         } {
-            do_stat_character(game, db, ch, victim.unwrap());
+            do_stat_character(game, db,  ch, victim.unwrap());
         } else if {
             obj = game.get_obj_in_list_vis2(
                 db,
@@ -1626,17 +1626,17 @@ pub fn do_stat(
             );
             obj.is_some()
         } {
-            do_stat_object(game, db, ch, obj.unwrap());
+            do_stat_object(game, db,  ch, obj.unwrap());
         } else if {
             victim = game.get_char_vis(db, ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
-            do_stat_character(game, db, ch, victim.unwrap());
+            do_stat_character(game, db,  ch, victim.unwrap());
         } else if {
             obj = game.get_obj_vis(db, ch, &mut name, Some(&mut number));
             obj.is_some()
         } {
-            do_stat_object(game, db, ch, obj.unwrap());
+            do_stat_object(game, db,  ch, obj.unwrap());
         } else {
             game.send_to_char(ch, "Nothing around by that name.\r\n");
         }
@@ -1645,7 +1645,7 @@ pub fn do_stat(
 
 pub fn do_shutdown(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1741,7 +1741,7 @@ fn stop_snooping(game: &mut Game, db: &mut DB, chid: DepotId) {
 
 pub fn do_snoop(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1811,7 +1811,7 @@ pub fn do_snoop(
 
 pub fn do_switch(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1871,7 +1871,7 @@ pub fn do_switch(
 
 pub fn do_return(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut  Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1925,7 +1925,7 @@ pub fn do_return(
 
 pub fn do_load(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2041,7 +2041,7 @@ pub fn do_load(
 
 pub fn do_vstat(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2100,7 +2100,7 @@ pub fn do_vstat(
 
 pub fn do_purge(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2244,7 +2244,7 @@ const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
 pub fn do_syslog(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2288,7 +2288,7 @@ pub fn do_syslog(
 
 pub fn do_advance(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2351,7 +2351,7 @@ pub fn do_advance(
     }
     let oldlevel = victim.get_level();
     if newlevel < oldlevel {
-        do_start(game, db, victim_id);
+        do_start(game, db,texts, victim_id);
         let victim = db.ch_mut(victim_id);
         victim.set_level(newlevel);
         let victim = db.ch(victim_id);
@@ -2419,14 +2419,14 @@ You feel slightly different.",
         game,
         db,
         victim_id,
-        level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),
+        level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),texts,
     );
-    game.save_char(db, victim_id);
+    game.save_char(db, texts,victim_id);
 }
 
 pub fn do_restore(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2555,7 +2555,7 @@ fn perform_immort_invis(game: &mut Game, db: &mut DB, chid: DepotId, level: i32)
 
 pub fn do_invis(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2592,7 +2592,7 @@ pub fn do_invis(
 
 pub fn do_gecho(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2626,7 +2626,7 @@ pub fn do_gecho(
 
 pub fn do_poofset(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2658,7 +2658,7 @@ pub fn do_poofset(
 
 pub fn do_dc(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2739,7 +2739,7 @@ pub fn do_dc(
 
 pub fn do_wizlock(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2792,7 +2792,7 @@ pub fn do_wizlock(
 
 pub fn do_date(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2834,7 +2834,7 @@ pub fn do_date(
 
 pub fn do_last(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2877,7 +2877,7 @@ pub fn do_last(
 
 pub fn do_force(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2931,7 +2931,7 @@ pub fn do_force(
                 )
                 .as_str(),
             );
-            command_interpreter(game, db, vict.id(), &to_force);
+            command_interpreter(game, db, texts, vict.id(), &to_force);
         }
     } else if arg == "room" {
         game.send_to_char(ch, OK);
@@ -2965,7 +2965,7 @@ pub fn do_force(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            command_interpreter(game, db, vict_id, &to_force);
+            command_interpreter(game, db,texts,  vict_id, &to_force);
         }
     } else {
         /* force all */
@@ -3001,14 +3001,14 @@ pub fn do_force(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            command_interpreter(game, db, vict_id.unwrap(), &to_force);
+            command_interpreter(game, db, texts, vict_id.unwrap(), &to_force);
         }
     }
 }
 
 pub fn do_wiznet(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3168,7 +3168,7 @@ pub fn do_wiznet(
 
 pub fn do_zreset(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3248,7 +3248,7 @@ pub fn do_zreset(
  */
 pub fn do_wizutil(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3485,7 +3485,7 @@ pub fn do_wizutil(
                 error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
             }
         }
-        game.save_char(db, vict_id);
+        game.save_char(db, texts,vict_id);
     }
 }
 
@@ -3505,7 +3505,7 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
 
 pub fn do_show(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -4724,7 +4724,7 @@ fn perform_set(
 
 pub fn do_set(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut  Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -4794,7 +4794,7 @@ pub fn do_set(
             player_i = db.load_char(&name, &mut tmp_store);
             player_i.is_some()
         } {
-            store_to_char(&tmp_store, &mut cbuf);
+            store_to_char(texts,  &tmp_store, &mut cbuf);
             let ch = db.ch(chid);
             if cbuf.get_level() >= ch.get_level() {
                 game.send_to_char(ch, "Sorry, you can't do that.\r\n");
@@ -4824,10 +4824,10 @@ pub fn do_set(
     /* save the character if a change was made */
     if retval {
         if !is_file && !db.ch(vict_id).is_npc() {
-            game.save_char(db, vict_id);
+            game.save_char(db, texts,vict_id);
         }
         if is_file {
-            game.char_to_store(db, vict_id, &mut tmp_store);
+            game.char_to_store(texts,db, vict_id, &mut tmp_store);
 
             unsafe {
                 let player_slice = slice::from_raw_parts(

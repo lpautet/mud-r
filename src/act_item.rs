@@ -12,8 +12,8 @@
 use std::cmp::{max, min};
 use std::rc::Rc;
 
-use crate::depot::{DepotId, HasId};
-use crate::{CharData, ObjData, VictimRef};
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{CharData, ObjData, TextData, VictimRef};
 use log::error;
 
 use crate::config::{DONATION_ROOM_1, NOPERSON, OK};
@@ -123,7 +123,7 @@ fn perform_put(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, cid: D
 */
 pub fn do_put(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -524,7 +524,7 @@ fn get_from_room(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str, howmany
 
 pub fn do_get(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -795,7 +795,7 @@ fn perform_drop(
 
 pub fn do_drop(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1104,7 +1104,7 @@ fn perform_give_gold(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: Depot
 
 pub fn do_give(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1311,7 +1311,7 @@ pub fn name_to_drinkcon(db: &mut DB, oid: Option<DepotId>, type_: i32) {
 
 pub fn do_drink(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1511,7 +1511,7 @@ pub fn do_drink(
 
 pub fn do_eat(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1546,7 +1546,7 @@ pub fn do_eat(
         && (food.get_obj_type() == ITEM_DRINKCON
             || food.get_obj_type() == ITEM_FOUNTAIN)
     {
-        do_drink(game, db, chid, argument, 0, SCMD_SIP);
+        do_drink(game, db, texts,chid, argument, 0, SCMD_SIP);
         return;
     }
     if (food.get_obj_type() != ITEM_FOOD) && (ch.get_level() < LVL_GOD as u8) {
@@ -1651,7 +1651,7 @@ pub fn do_eat(
 
 pub fn do_pour(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2147,7 +2147,7 @@ pub fn find_eq_pos(game: &mut Game, ch: &CharData, obj: &ObjData, arg: &str) -> 
 
 pub fn do_wear(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2260,7 +2260,7 @@ pub fn do_wear(
 
 pub fn do_wield(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2296,7 +2296,7 @@ pub fn do_wield(
 
 pub fn do_grab(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2399,7 +2399,7 @@ fn perform_remove(game: &mut Game, db: &mut DB, chid: DepotId, pos: i8) {
 
 pub fn do_remove(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,

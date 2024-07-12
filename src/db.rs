@@ -8,7 +8,6 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
@@ -62,7 +61,7 @@ use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
     CMP, NRM, SECS_PER_REAL_HOUR,
 };
-use crate::{check_player_special, get_last_tell_mut, Game};
+use crate::{check_player_special, get_last_tell_mut, Game, TextData};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -113,6 +112,9 @@ pub struct HelpIndexElement {
     pub entry: Rc<str>,
     pub duplicate: i32,
 }
+
+
+
 
 pub struct DB {
     pub world: Vec<RoomData>,
@@ -338,6 +340,7 @@ impl DB {
 pub fn do_reboot(
     game: &mut Game,
     db: &mut DB,
+    texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -429,7 +432,7 @@ pub fn do_reboot(
         }
         "xhelp" => {
             db.help_table.clear();
-            db.index_boot(DB_BOOT_HLP);
+            db.index_boot(texts, DB_BOOT_HLP);
         }
         _ => {
             game.send_to_char(ch, "Unknown reload option.\r\n");
@@ -440,12 +443,12 @@ pub fn do_reboot(
     game.send_to_char(ch, OK);
 }
 
-pub(crate) fn boot_world(game: &mut Game, db: &mut DB) {
+pub(crate) fn boot_world(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
     info!("Loading zone table.");
-    db.index_boot(DB_BOOT_ZON);
+    db.index_boot(texts,DB_BOOT_ZON);
 
     info!("Loading rooms.");
-    db.index_boot(DB_BOOT_WLD);
+    db.index_boot(texts, DB_BOOT_WLD);
 
     info!("Renumbering rooms.");
     db.renum_world();
@@ -454,17 +457,17 @@ pub(crate) fn boot_world(game: &mut Game, db: &mut DB) {
     db.check_start_rooms();
 
     info!("Loading mobs and generating index.");
-    db.index_boot(DB_BOOT_MOB);
+    db.index_boot(texts, DB_BOOT_MOB);
 
     info!("Loading objs and generating index.");
-    db.index_boot(DB_BOOT_OBJ);
+    db.index_boot(texts, DB_BOOT_OBJ);
 
     info!("Renumbering zone table.");
     renum_zone_table(game, db);
 
     if !db.no_specials {
         info!("Loading shops.");
-        db.index_boot(DB_BOOT_SHP);
+        db.index_boot(texts, DB_BOOT_SHP);
     }
 }
 impl DB {
@@ -515,7 +518,7 @@ impl DB {
         self.zone_table.clear();
     }
 
-    pub fn new() -> DB {
+    pub fn new(texts: &mut Depot<TextData>, ) -> DB {
         DB {
             world: vec![],
             character_list: Depot::new(),
@@ -574,7 +577,7 @@ impl DB {
             soc_mess_list: vec![],
             ban_list: vec![],
             invalid_list: vec![],
-            boards: BoardSystem::new(),
+            boards: BoardSystem::new(texts),
             house_control: [HouseControlRec::new(); MAX_HOUSES],
             num_of_houses: 0,
             mails: MailSystem::new(),
@@ -585,7 +588,7 @@ impl DB {
     }
 
     /* body of the booting system */
-    pub fn boot_db(&mut self, game: &mut Game) {
+    pub fn boot_db(&mut self, game: &mut Game, texts: &mut Depot<TextData>) {
         info!("Boot db -- BEGIN.");
 
         info!("Resetting the game time:");
@@ -622,10 +625,10 @@ impl DB {
         info!("Loading spell definitions.");
         mag_assign_spells(self);
 
-        boot_world(game, self);
+        boot_world(game, self, texts);
 
         info!("Loading help entries.");
-        self.index_boot(DB_BOOT_HLP);
+        self.index_boot(texts, DB_BOOT_HLP);
 
         info!("Generating player index.");
         self.build_player_index();
@@ -937,7 +940,7 @@ const DB_BOOT_SHP: u8 = 4;
 const DB_BOOT_HLP: u8 = 5;
 
 impl DB {
-    fn index_boot(&mut self, mode: u8) {
+    fn index_boot(&mut self, texts: &mut Depot<TextData>, mode: u8) {
         let index_filename: &str;
         let prefix: &str;
         let mut rec_count = 0;
@@ -1075,7 +1078,7 @@ impl DB {
 
             match mode {
                 DB_BOOT_WLD | DB_BOOT_OBJ | DB_BOOT_MOB => {
-                    self.discrete_load(db_file.unwrap(), mode, buf2.as_str());
+                    self.discrete_load(texts, db_file.unwrap(), mode, buf2.as_str());
                 }
                 DB_BOOT_ZON => {
                     self.load_zones(db_file.unwrap(), buf2.as_str());
@@ -1107,7 +1110,7 @@ impl DB {
         }
     }
 
-    fn discrete_load(&mut self, file: File, mode: u8, filename: &str) {
+    fn discrete_load(&mut self, texts: &mut Depot<TextData>, file: File, mode: u8, filename: &str) {
         let mut nr = -1;
         let mut last: i32;
         let mut line = String::new();
@@ -1160,11 +1163,11 @@ impl DB {
                             self.parse_room(&mut reader, nr);
                         }
                         DB_BOOT_MOB => {
-                            self.parse_mobile(&mut reader, nr);
+                            self.parse_mobile(texts, &mut reader, nr);
                         }
                         DB_BOOT_OBJ => {
                             line = self
-                                .parse_object(&mut reader, nr as MobVnum)
+                                .parse_object(texts, &mut reader, nr as MobVnum)
                                 .parse()
                                 .unwrap();
                         }
@@ -1692,7 +1695,7 @@ fn parse_enhanced_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i3
     process::exit(1);
 }
 impl DB {
-    fn parse_mobile(&mut self, reader: &mut BufReader<File>, nr: i32) {
+    fn parse_mobile(&mut self, texts: &mut Depot<TextData>, reader: &mut BufReader<File>, nr: i32) {
         let mut line = String::new();
 
         self.mob_index.push(IndexData {
@@ -1725,7 +1728,7 @@ impl DB {
         }
         mobch.player.short_descr = tmpstr.into();
         mobch.player.long_descr = Rc::from(fread_string(reader, buf2.as_str()).as_str());
-        mobch.player.description = Rc::new(RefCell::from(fread_string(reader, buf2.as_str())));
+        mobch.player.description = texts.add_text( fread_string(reader, buf2.as_str()));
         mobch.set_title(None);
 
         /* *** Numeric data *** */
@@ -1805,7 +1808,7 @@ impl DB {
     }
 
     /* read all objects from obj file; generate index and prototypes */
-    fn parse_object(&mut self, reader: &mut BufReader<File>, nr: MobVnum) -> String {
+    fn parse_object(&mut self, texts: &mut Depot<TextData>, reader: &mut BufReader<File>, nr: MobVnum) -> String {
         let mut line = String::new();
 
         let i = self.obj_index.len() as ObjVnum;
@@ -1859,7 +1862,7 @@ impl DB {
             name: Rc::from(""),
             description: Rc::from(""),
             short_description: Rc::from(""),
-            action_description: Rc::new(RefCell::new(String::new())),
+            action_description: DepotId::default(),
             ex_descriptions: vec![],
             carried_by: None,
             worn_by: None,
@@ -1891,7 +1894,7 @@ impl DB {
 
         let tmpptr = fread_string(reader, &buf2);
         obj.description = Rc::from(tmpptr.as_str());
-        obj.action_description = Rc::new(RefCell::from(fread_string(reader, &buf2)));
+        obj.action_description = texts.add_text(fread_string(reader, &buf2));
 
         /* *** numeric data *** */
         if get_line(reader, &mut line) == 0 {
@@ -2332,6 +2335,7 @@ impl DB {
     pub fn ch_mut(&mut self, o_id: DepotId) -> &mut CharData {
         self.character_list.get_mut(o_id)
     }
+   
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
     // {
@@ -2844,7 +2848,7 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, db: &mut DB, chid: DepotId) {
+    pub fn save_char(&mut self, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) {
         let ch = db.ch(chid);
         let mut st: CharFileU = CharFileU::new();
 
@@ -2852,7 +2856,7 @@ impl Game {
             return;
         }
 
-        self.char_to_store(db, chid, &mut st);
+        self.char_to_store(texts, db, chid, &mut st);
         let ch = db.ch(chid);
         copy_to_stored(
             &mut st.host,
@@ -2965,7 +2969,7 @@ impl CharFileU {
 }
 
 /* copy data from the file structure to a char struct */
-pub fn store_to_char(st: &CharFileU, ch: &mut CharData) {
+pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharData) {
     ch.set_sex(st.sex);
     ch.set_class(st.chclass);
     ch.set_level(st.level);
@@ -2973,7 +2977,8 @@ pub fn store_to_char(st: &CharFileU, ch: &mut CharData) {
     ch.player.short_descr = Rc::from("");
     ch.player.long_descr = Rc::from("");
     ch.player.title = Some(Rc::from(parse_c_string(&st.title).as_str()));
-    ch.player.description = Rc::new(RefCell::from(parse_c_string(&st.description)));
+    let description = texts.get_mut(ch.player.description);
+    description.text = parse_c_string(&st.description);
 
     ch.player.hometown = st.hometown;
     ch.player.time.birth = st.birth;
@@ -3026,7 +3031,7 @@ pub fn store_to_char(st: &CharFileU, ch: &mut CharData) {
 
 /* copy vital data from a players char-structure to the file structure */
 impl Game {
-    pub fn char_to_store(&mut self, db: &mut DB, chid: DepotId, st: &mut CharFileU) {
+    pub fn char_to_store(&mut self, texts: &mut Depot<TextData>, db: &mut DB, chid: DepotId, st: &mut CharFileU) {
         /* Unaffect everything a character can be affected by */
         let mut char_eq: [Option<DepotId>; NUM_WEARS as usize] =
             [(); NUM_WEARS as usize].map(|_| None);
@@ -3103,20 +3108,21 @@ impl Game {
         } else {
             st.title[0] = 0;
         }
-        if !ch.player.description.borrow().is_empty() {
-            if RefCell::borrow(&ch.player.description).len() >= st.description.len() {
+        let description = texts.get_mut(ch.player.description);
+        if !description.text.is_empty() {
+            if description.text.len() >= st.description.len() {
                 error!(
                     "SYSERR: char_to_store: {}'s description length: {}, max: {}!  Truncated.",
                     ch.get_pc_name(),
-                    RefCell::borrow(&ch.player.description).len(),
+                    description.text.len(),
                     st.description.len()
                 );
-                RefCell::borrow_mut(&ch.player.description).truncate(&st.description.len() - 3);
-                RefCell::borrow_mut(&ch.player.description).push_str("\r\n");
+                description.text.truncate(&st.description.len() - 3);
+                description.text.push_str("\r\n");
             }
             copy_to_stored(
                 &mut st.description,
-                &RefCell::borrow(&ch.player.description),
+                &description.text,
             );
         } else {
             st.description[0] = 0;
@@ -3345,7 +3351,7 @@ fn clear_object(obj: &mut ObjData) {
  * (and then never again for that character).
  */
 impl DB {
-    pub(crate) fn init_char(&mut self, chid: DepotId) {
+    pub(crate) fn init_char(&mut self, texts: &mut Depot<TextData>, chid: DepotId) {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
             let ch = self.ch_mut(chid);
@@ -3365,8 +3371,7 @@ impl DB {
         ch.set_title(None);
         ch.player.short_descr = Rc::from("");
         ch.player.long_descr = Rc::from("");
-        ch.player.description = Rc::new(RefCell::new(String::new()));
-
+        ch.player.description =  texts.add_text(String::default());
         let now = time_now();
         ch.player.time.birth = now;
         ch.player.time.logon = now;
@@ -3710,7 +3715,7 @@ impl Default for CharData {
                 name: Rc::from(""),
                 short_descr: Rc::from(""),
                 long_descr: Rc::from(""),
-                description: Rc::new(RefCell::new(String::new())),
+                description: DepotId::default(),
                 title: Option::from(Rc::from("")),
                 sex: 0,
                 chclass: 0,
@@ -3968,7 +3973,7 @@ impl Default for ObjData {
             name: Rc::from(""),
             description: Rc::from(""),
             short_description: Rc::from(""),
-            action_description: Rc::new(RefCell::new(String::new())),
+            action_description: DepotId::default(),
             ex_descriptions: vec![],
             carried_by: None,
             worn_by: None,

@@ -9,12 +9,11 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
-use std::cell::RefCell;
 use std::cmp::{max, min};
 
 use log::error;
-use crate::depot::{DepotId, HasId};
-use crate::VictimRef;
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{TextData, VictimRef};
 
 use crate::config::OK;
 use crate::db::DB;
@@ -468,7 +467,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
 pub fn call_magic(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, 
     caster_id: DepotId,
     cvict_id: Option<DepotId>,
     ovict: Option<DepotId>,
@@ -532,7 +531,7 @@ pub fn call_magic(
 
     if is_set!(sinfo_routines, MAG_DAMAGE) {
         if mag_damage(
-            game,db,
+            game,db,texts,
             level,
             caster_id,
             cvict_id.unwrap(),
@@ -567,14 +566,14 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
-        mag_groups(game,db, level, Some(caster_id), spellnum, savetype);
+        mag_groups(game,db, texts, level, Some(caster_id), spellnum, savetype);
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
         mag_masses(db, level, caster_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_AREAS) {
-        mag_areas(game, db, level, Some(caster_id), spellnum, savetype);
+        mag_areas(game, db, texts, level, Some(caster_id), spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
@@ -595,12 +594,12 @@ pub fn call_magic(
             }
             SPELL_IDENTIFY => spell_identify(game, db, level, Some(caster_id), cvict_id, ovict),
             SPELL_LOCATE_OBJECT => spell_locate_object(game, db, level, Some(caster_id), cvict_id, ovict),
-            SPELL_SUMMON => spell_summon(game, db, level, Some(caster_id), cvict_id, ovict),
+            SPELL_SUMMON => spell_summon(game, db,texts, level, Some(caster_id), cvict_id, ovict),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(game, db, level, Some(caster_id), cvict_id, ovict);
+                spell_recall(game, db, texts,level, Some(caster_id), cvict_id, ovict);
             }
             SPELL_TELEPORT => {
-                spell_teleport(game, db, level, Some(caster_id), cvict_id, ovict);
+                spell_teleport(game, db, texts,level, Some(caster_id), cvict_id, ovict);
             }
             _ => {}
         }
@@ -623,7 +622,7 @@ pub fn call_magic(
  * the DikuMUD format did not specify staff and wand levels in the world
  * files (this is a CircleMUD enhancement).
  */
-pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, argument: &str) {
+pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, oid: DepotId, argument: &str) {
     let ch = db.ch(chid);
     let obj = db.obj(oid);
     let mut arg = String::new();
@@ -649,10 +648,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 None,
                 TO_CHAR,
             );
-            if !obj.action_description.borrow().is_empty() {
-                let str = obj.action_description.borrow();
+            if !texts.get(obj.action_description).text.is_empty() {
                 game.act(db,
-                    str.as_str(),
+                    &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
                     Some(obj),
@@ -708,7 +706,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         i -= 1;
                         let obj = db.obj(oid);
                         let spellnum = obj.get_obj_val(i);
-                        call_magic(game, db,chid, None, None, spellnum, k, CAST_STAFF);
+                        call_magic(game, db,texts, chid, None, None, spellnum, k, CAST_STAFF);
                     }
                 } else {
                     for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -716,7 +714,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                             let obj = db.obj(oid);
                             let spellnum = obj.get_obj_val(3);
                             call_magic(
-                                game,db,
+                                game,db,texts,
                                 chid,
                                 Some(tch_id),
                                 None,
@@ -758,10 +756,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                         Some(VictimRef::Char(tch)),
                         TO_CHAR,
                     );
-                    if !RefCell::borrow(&obj.action_description).is_empty() {
-                        let str = obj.action_description.borrow();
+                    if !texts.get(obj.action_description).text.is_empty() {
                         game.act(db,
-                            str.as_str(),
+                            &texts.get(obj.action_description).text,
                             false,
                             Some(ch),
                             Some(obj),
@@ -789,10 +786,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                     Some(VictimRef::Obj(tobj)),
                     TO_CHAR,
                 );
-                if !RefCell::borrow(&obj.action_description).is_empty() {
-                    let str = obj.action_description.borrow();
+                if !texts.get(obj.action_description).text.is_empty() {
                     game.act(db,
-                        str.as_str(),
+                        &texts.get(obj.action_description).text,
                         false,
                         Some(ch),
                         Some(obj),
@@ -863,7 +859,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
             let obj = db.obj(oid);
             if obj.get_obj_val(0) != 0 {
                 call_magic(
-                    game,db,
+                    game,db,texts,
                     chid,
                     tch_id,
                     tobj_id,
@@ -873,7 +869,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 );
             } else {
                 call_magic(
-                    game,db,
+                    game,db,texts,
                     chid,
                     tch_id,
                     tobj_id,
@@ -908,10 +904,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 None,
                 TO_CHAR,
             );
-            if !RefCell::borrow(&obj.action_description).is_empty() {
-                let str = obj.action_description.borrow();
+            if !texts.get(obj.action_description).text.is_empty() {
                 game.act(db,
-                    str.as_str(),
+                    &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
                     Some(obj),
@@ -931,9 +926,8 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,db,
-                    chid,
-                    tch_id,
+                    game,db,texts,
+                    chid,tch_id,
                     tobj_id,
                     spellnum,
                     level,
@@ -949,10 +943,9 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
         ITEM_POTION => {
             game
                 .act(db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
-            if !RefCell::borrow(&obj.action_description).is_empty() {
-                let str = obj.action_description.borrow();
+            if !texts.get(obj.action_description).text.is_empty() {
                 game.act(db,
-                    str.as_str(),
+                    &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
                     Some(obj),
@@ -970,7 +963,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,db,
+                    game,db,texts,
                     chid,
                     Some(chid),
                     None,
@@ -1003,7 +996,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId
  * by NPCs via specprocs.
  */
 pub fn cast_spell(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, 
     chid: DepotId,
     tch_id: Option<DepotId>,
     tobj_id: Option<DepotId>,
@@ -1063,7 +1056,7 @@ pub fn cast_spell(
     say_spell(game, db,chid, spellnum, tch_id, tobj_id);
     let ch = db.ch(chid);
     return call_magic(
-        game,db,
+        game,db,texts,
         chid,
         tch_id,
         tobj_id,
@@ -1079,7 +1072,7 @@ pub fn cast_spell(
  * the spell can be cast, checks for sufficient mana and subtracts it, and
  * passes control to cast_spell().
  */
-pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if ch.is_npc() {
         return;
@@ -1260,13 +1253,13 @@ pub fn do_cast(game: &mut Game, db: &mut DB, chid: DepotId, argument: &str, _cmd
         }
         let tch = tch_id.map(|i| db.ch(i));
         if sinfo.violent && tch.is_some() && tch.unwrap().is_npc() {
-            game.hit(db, tch_id.unwrap(), chid, TYPE_UNDEFINED);
+            game.hit(db, texts, tch_id.unwrap(), chid, TYPE_UNDEFINED);
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
         let tch_id = tch.map(|c| c.id());
         let tobj_id = tobj.map(|o| o.id());
-        if cast_spell(game, db, chid, tch_id, tobj_id, spellnum) != 0 {
+        if cast_spell(game, db, texts, chid, tch_id, tobj_id, spellnum) != 0 {
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if mana > 0 {

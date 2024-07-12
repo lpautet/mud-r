@@ -38,13 +38,12 @@
  * else you may want through it.  The improved editor patch when updated
  * could use it to pass the old text buffer, for instance.
  */
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
 use crate::boards::{board_save_board, BOARD_MAGIC};
 use crate::config::{MENU, NOPERSON};
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::handler::FIND_CHAR_WORLD;
 use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
 use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
@@ -52,13 +51,13 @@ use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
-use crate::{DescriptorData, Game, DB, PAGE_LENGTH, PAGE_WIDTH};
+use crate::{DescriptorData, Game, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
 
 impl DescriptorData {
     pub fn string_write(
         &mut self,
-        db: &mut DB,
-        writeto: Rc<RefCell<String>>,
+        db: &mut DB, 
+        writeto: DepotId,
         len: usize,
         mailto: i64,
     ) {
@@ -74,7 +73,7 @@ impl DescriptorData {
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
+pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_id: DepotId, str_: &str) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
@@ -89,40 +88,40 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
     }
 
     // smash_tilde(str_);
-    let the_str = game.desc_mut(d_id).str.as_ref().unwrap().clone();
-    if RefCell::borrow(the_str.as_ref()).is_empty() {
+    let the_str_id = game.desc_mut(d_id).str.as_ref().unwrap().clone();
+    let text = &mut texts.get_mut(the_str_id).text;
+    if text.is_empty() {
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.unwrap();
             let ch = db.ch(chid);
             game.send_to_char(ch, "String too long - Truncated.\r\n");
             str_.truncate(game.desc_mut(d_id).max_str - 3);
             str_.push_str("\r\n");
-            *RefCell::borrow_mut(the_str.as_ref()) = str_;
+            *text = str_;
             terminator = true;
         } else {
-            *RefCell::borrow_mut(the_str.as_ref()) = str_;
+            *text = str_;
         }
     } else {
-        if str_.len() + RefCell::borrow(the_str.as_ref()).len() + 3 > game.desc_mut(d_id).max_str {
+        if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.unwrap();
             let ch = db.ch(chid);
             game.send_to_char(ch, "String too long.  Last line skipped.\r\n");
             terminator = true;
         } else {
-            RefCell::borrow_mut(the_str.as_ref()).push_str(str_.as_str());
+            text.push_str(str_.as_str());
         }
     }
 
     let desc = game.desc_mut(d_id);
     if terminator {
         if desc.state() == ConPlaying && db.ch(desc.character.unwrap()).plr_flagged(PLR_MAILING) {
-            let message_pointer = desc.str.as_ref().unwrap().clone();
             let mail_to = desc.mail_to;
             let from = db.ch(desc.character.unwrap()).get_idnum();
             db.store_mail(
                 mail_to,
                 from,
-                RefCell::borrow(message_pointer.as_ref()).as_str(),
+                text,
             );
             desc.mail_to = 0;
             desc.str = None;
@@ -137,7 +136,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
 
         if desc.mail_to >= BOARD_MAGIC {
             let board_type = (desc.mail_to - BOARD_MAGIC) as usize;
-            board_save_board(&mut db.boards, board_type);
+            board_save_board(&mut db.boards, texts, board_type);
             desc.mail_to = 0;
         }
         if desc.state() == ConExdesc {
@@ -152,7 +151,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
                 .remove_plr_flag(PLR_WRITING);
         }
     } else {
-        RefCell::borrow_mut(the_str.as_ref()).push_str("\r\n");
+        text.push_str("\r\n");
     }
 }
 
@@ -161,7 +160,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, d_id: DepotId, str_: &str) {
 // ********************************************************************** */
 pub fn do_skillset(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,_texts: &mut Depot<TextData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,

@@ -16,7 +16,6 @@
 /* You can modify the following constants to fit your own MUD.  */
 
 /* minimum level a player must be to send mail	*/
-use std::cell::RefCell;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::os::unix::fs::FileExt;
@@ -24,8 +23,8 @@ use std::path::Path;
 use std::rc::Rc;
 use std::{mem, process, slice};
 
-use crate::depot::{DepotId, HasId};
-use crate::VictimRef;
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{TextData, VictimRef};
 use log::{error, info};
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
@@ -134,19 +133,19 @@ impl MailSystem {
 
 /* -------------------------------------------------------------------------- */
 
-fn mail_recip_ok(game: &mut Game, db: &mut DB, name: &str) -> bool {
+fn mail_recip_ok(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, name: &str) -> bool {
     let mut ret = false;
     let mut tmp_store = CharFileU::new();
     let mut victim = CharData::default();
     clear_char(&mut victim);
     if db.load_char(name, &mut tmp_store).is_some() {
-        store_to_char(&tmp_store, &mut victim);
+        store_to_char(texts, &tmp_store, &mut victim);
         let victim = &Rc::from(victim);
         db.char_to_room(victim.id(), 0);
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
-        game.extract_char_final(db,victim.id());
+        game.extract_char_final(db,texts,victim.id());
     }
     ret
 }
@@ -679,7 +678,7 @@ From: {}\r\n\
 * routines.  Written by Jeremy Elson (jelson@circlemud.org) *
 ****************************************************************/
 
-pub fn postmaster(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
+pub fn postmaster(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = db.ch(chid);
     if ch.desc.is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
@@ -697,7 +696,7 @@ pub fn postmaster(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i
 
     return if cmd_is(cmd, "mail") {
         match me {
-            MeRef::Char(mailman) => postmaster_send_mail(game, db,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => postmaster_send_mail(game, db,texts,chid, mailman, cmd, argument),
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
@@ -709,7 +708,7 @@ pub fn postmaster(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i
         true
     } else if cmd_is(cmd, "receive") {
         match me {
-            MeRef::Char(mailman) => postmaster_receive_mail(game, db,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => postmaster_receive_mail(game, db,texts,chid, mailman, cmd, argument),
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
@@ -719,7 +718,7 @@ pub fn postmaster(game: &mut Game, db: &mut DB, chid: DepotId, me: MeRef, cmd: i
 }
 
 fn postmaster_send_mail(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
@@ -775,7 +774,7 @@ $n tells you, '...which I see you can't afford.'",
         return;
     }
     let recipient = db.get_id_by_name(&buf);
-    if recipient < 0 || !mail_recip_ok(game, db,&buf) {
+    if recipient < 0 || !mail_recip_ok(game, db,texts, &buf) {
         let mailman = db.ch(mailman_id);
         let ch = db.ch(chid);
         game.act(db,
@@ -820,7 +819,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     let desc = game.desc_mut(desc_id);
     desc.string_write(
         db,
-        Rc::new(RefCell::new(String::new())),
+        texts.add_text(String::new()),
         MAX_MAIL_SIZE,
         recipient,
     );
@@ -860,7 +859,7 @@ fn postmaster_check_mail(
 }
 
 fn postmaster_receive_mail(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
@@ -900,7 +899,7 @@ fn postmaster_receive_mail(
         } else {
             "Mail system error - please report.  Error #11.\r\n".to_string()
         };
-        db.obj_mut(oid).action_description = Rc::from(RefCell::from(mail_content));
+        db.obj_mut(oid).action_description = texts.add_text(mail_content);
         db.obj_to_char(oid, chid);
         let mailman = db.ch(mailman_id);
         let ch = db.ch(chid);

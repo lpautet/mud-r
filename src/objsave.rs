@@ -15,8 +15,8 @@ use std::io::{ErrorKind, Read, Seek, Write};
 use std::path::Path;
 use std::{fs, mem, slice};
 
-use crate::depot::{DepotId, HasId};
-use crate::VictimRef;
+use crate::depot::{Depot, DepotId, HasId};
+use crate::{TextData, VictimRef};
 use log::{error, info};
 
 use crate::act_social::do_action;
@@ -531,7 +531,7 @@ impl ObjFileElem {
  *  1 - load failure or load of crash items -- put char in temple.
  *  2 - rented equipment lost (no $)
  */
-pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
+pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) -> i32 {
     let ch = db.ch(chid);
 
     /* AutoEQ addition. */
@@ -599,7 +599,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, chid: DepotId) -> i32 {
             let ch = db.ch_mut(chid);
             ch.set_bank_gold(ch.get_bank_gold() - max(cost - ch.get_gold(), 0));
             ch.set_gold(max(ch.get_gold() - cost, 0));
-            game.save_char(db, chid);
+            game.save_char(db, texts, chid);
         }
     }
     let mut num_objs = 0;
@@ -1505,7 +1505,7 @@ fn crash_offer_rent(
 
 fn gen_receptionist(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     recep_id: DepotId,
     cmd: i32,
@@ -1522,7 +1522,7 @@ fn gen_receptionist(
         do_action(
             game,
             db,
-            recep_id,
+            texts,recep_id,
             "",
             find_command(ACTION_TABLE[rand_number(0, 8) as usize]).unwrap(),
             0,
@@ -1706,28 +1706,28 @@ You begin to lose consciousness...",
 
 pub fn receptionist(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     match me {
-        MeRef::Char(recep) => gen_receptionist(game, db, chid, recep, cmd, argument, RENT_FACTOR),
+        MeRef::Char(recep) => gen_receptionist(game, db, texts,chid, recep, cmd, argument, RENT_FACTOR),
         _ => panic!("Unexpected MeRef type in receptionist"),
     }
 }
 
 pub fn cryogenicist(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,texts: &mut Depot<TextData>,
     chid: DepotId,
     me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     match me {
-        MeRef::Char(recep) => gen_receptionist(game, db, chid, recep, cmd, argument, CRYO_FACTOR),
+        MeRef::Char(recep) => gen_receptionist(game, db, texts, chid, recep, cmd, argument, CRYO_FACTOR),
         _ => panic!("Unexpected MeRef type in cryogenicist"),
     }
 }

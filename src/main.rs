@@ -9,7 +9,6 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::LinkedList;
 use std::io::{ErrorKind, Read, Write};
@@ -96,6 +95,35 @@ pub const TO_NOTVICT: i32 = 3;
 pub const TO_CHAR: i32 = 4;
 pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 
+pub struct TextData {
+    id: DepotId,
+    pub text: String,
+}
+
+impl Default for TextData {
+    fn default() -> Self {
+        Self { id: Default::default(), text: Default::default() }
+    }
+}
+
+impl Depot<TextData> {
+
+    pub fn add_text(&mut self, text: String) -> DepotId {
+        self.push(TextData{id: DepotId::default(), text})
+    }
+}
+
+
+impl HasId for TextData {
+    fn id(&self) -> DepotId {
+       self.id
+    }
+
+    fn set_id(&mut self, id: DepotId) {
+       self.id = id;
+    }
+}
+
 pub struct DescriptorData {
     id: DepotId,
     stream: Option<TcpStream>,
@@ -120,7 +148,7 @@ pub struct DescriptorData {
     /* number of pages to page through	*/
     showstr_page: i32,
     /* which page are we currently showing?	*/
-    str: Option<Rc<RefCell<String>>>,
+    str: Option<DepotId>,
     /* for the modify-str system		*/
     pub max_str: usize,
     /*		-			*/
@@ -233,7 +261,9 @@ fn main() -> ExitCode {
         },
         max_players: 0,
     };
-    let mut db = DB::new();
+    let mut texts: Depot<TextData> = Depot::new();
+
+    let mut db = DB::new(&mut texts);
     let mut logname: Option<&str> = LOGNAME;
 
     let mut pos = 1;
@@ -366,11 +396,11 @@ fn main() -> ExitCode {
     info!("Using {} as data directory.", dir);
 
     if db.scheck {
-        boot_world(&mut game, &mut db);
+        boot_world(&mut game, &mut db, &mut texts);
     } else {
         info!("Running game on port {}.", port);
         game.mother_desc = Some(init_socket(port));
-        game.init_game(&mut db, port);
+        game.init_game(&mut db, &mut texts, port,);
     }
 
     info!("Clearing game world.");
@@ -382,7 +412,7 @@ fn main() -> ExitCode {
         free_messages(&mut db); /* fight.rs */
         db.mails.clear_free_list(); /* mail.rs */
         db.free_text_files(); /* db.rs */
-        board_clear_all(&mut db.boards); /* boards.rs */
+        board_clear_all(&mut db.boards, &mut texts); /* boards.rs */
         db.cmd_sort_info.clear(); /* act.informative.rs */
         free_social_messages(&mut db); /* act.social.rs */
         db.free_help(); /* db.rs */
@@ -395,7 +425,7 @@ fn main() -> ExitCode {
 
 impl Game {
     /* Init sockets, run game, and cleanup sockets */
-    fn init_game(&mut self, db: &mut DB, _port: u16) {
+    fn init_game(&mut self, db: &mut DB, texts: &mut Depot<TextData>, _port: u16) {
         /* We don't want to restart if we crash before we get up. */
         touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
 
@@ -403,7 +433,7 @@ impl Game {
         self.max_players = get_max_players();
 
         info!("Opening mother connection.");
-        db.boot_db(self);
+        db.boot_db(self, texts);
 
         // info!("Signal trapping.");
         // signal_setup();
@@ -413,13 +443,13 @@ impl Game {
 
         info!("Entering game loop.");
 
-        self.game_loop(db);
+        self.game_loop(db, texts);
 
         crash_save_all(self, db);
 
         info!("Closing all sockets.");
         let ids = self.descriptor_list.ids();
-        ids.iter().for_each(|d| self.close_socket(db, *d));
+        ids.iter().for_each(|d| self.close_socket(db, texts, *d));
 
         self.mother_desc = None;
 
@@ -470,7 +500,7 @@ impl Game {
         self.descriptor_list.get_mut(desc_id)
     }
 
-    fn game_loop(&mut self, db: &mut DB) {
+    fn game_loop(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
         let mut before_sleep;
@@ -612,13 +642,13 @@ impl Game {
 
                 if self.desc(d_id).str.is_some() {
                     /* Writing boards, mail, etc. */
-                    string_add(self, db, d_id, &comm);
+                    string_add(self, db, texts, d_id, &comm);
                 } else if self.desc(d_id).showstr_count != 0 {
                     /* Reading something w/ pager */
                     show_string(self, db, d_id, &comm);
                 } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, db, d_id, &comm);
+                    nanny(self, db, texts, d_id, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
@@ -630,7 +660,7 @@ impl Game {
                     }
                     /* Send it to interpreter */
                     let chid = self.desc(d_id).character.unwrap();
-                    command_interpreter(self, db, chid, &comm);
+                    command_interpreter(self, db, texts, chid, &comm);
                 }
             }
 
@@ -662,7 +692,7 @@ impl Game {
             for id in desc_ids {
                 let d = self.desc(id);
                 if d.state() == ConClose || d.state() == ConDisconnect {
-                    self.close_socket(db, id);
+                    self.close_socket(db, texts, id);
                 }
             }
 
@@ -693,7 +723,7 @@ impl Game {
             /* Now execute the heartbeat functions */
             while missed_pulses != 0 {
                 pulse += 1;
-                self.heartbeat(db, pulse);
+                self.heartbeat(db, texts, pulse);
                 missed_pulses -= 1;
             }
 
@@ -720,7 +750,7 @@ impl Game {
 }
 
 impl Game {
-    fn heartbeat(&mut self, db: &mut DB, pulse: u128) {
+    fn heartbeat(&mut self, db: &mut DB, texts: &mut Depot<TextData>, pulse: u128) {
         if pulse % PULSE_ZONE == 0 {
             self.zone_update(db);
         }
@@ -731,17 +761,17 @@ impl Game {
         }
 
         if pulse % PULSE_MOBILE == 0 {
-            self.mobile_activity(db);
+            self.mobile_activity(db, texts);
         }
 
         if pulse % PULSE_VIOLENCE == 0 {
-            self.perform_violence(db);
+            self.perform_violence(db, texts);
         }
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(db, 1);
             affect_update(self, db);
-            self.point_update(db);
+            self.point_update(db, texts);
             //fflush(player_fl);
         }
 
@@ -764,7 +794,7 @@ impl Game {
         }
 
         /* Every pulse! Don't want them to stink the place up... */
-        self.extract_pending_chars(db);
+        self.extract_pending_chars(db, texts);
     }
 }
 
@@ -1387,7 +1417,7 @@ impl DescriptorData {
     }
 }
 impl Game {
-    pub fn close_socket(&mut self, db: &mut DB, d: DepotId) {
+    pub fn close_socket(&mut self, db: &mut DB, texts: &mut Depot<TextData>, d: DepotId) {
         let mut desc: DescriptorData = self.descriptor_list.take(d);
 
         desc.stream
@@ -1432,7 +1462,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.save_char(db, link_challenged_id);
+                        self.save_char(db, texts, link_challenged_id);
                         self.mudlog(
                             db,
                             NRM,

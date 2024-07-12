@@ -43,7 +43,7 @@ TO ADD A NEW BOARD, simply follow our easy 4-step program:
 
 */
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::rc::Rc;
@@ -52,7 +52,7 @@ use std::{fs, mem, process, slice};
 use log::error;
 
 use crate::db::{parse_c_string, DB};
-use crate::depot::DepotId;
+use crate::depot::{Depot, DepotId};
 use crate::handler::isname;
 use crate::interpreter::{delete_doubledollar, find_command, is_number, one_argument};
 use crate::modify::page_string;
@@ -62,7 +62,7 @@ use crate::structs::{
     NOTHING,
 };
 use crate::util::{ctime, time_now};
-use crate::{ Game, TO_ROOM};
+use crate::{ Game, TextData, TO_ROOM};
 
 const NUM_OF_BOARDS: usize = 4; /* change if needed! */
 const MAX_BOARD_MESSAGES: usize = 60; /* arbitrary -- change if needed */
@@ -114,7 +114,7 @@ const NEWEST_AT_TOP: bool = false;
 
 pub struct BoardSystem {
     loaded: bool,
-    msg_storage: [Rc<RefCell<String>>; INDEX_SIZE],
+    msg_storage: [DepotId; INDEX_SIZE],
     msg_storage_taken: [bool; INDEX_SIZE],
     num_of_msgs: [usize; NUM_OF_BOARDS],
     acmd_read: usize,
@@ -127,10 +127,10 @@ pub struct BoardSystem {
 }
 
 impl BoardSystem {
-    pub(crate) fn new() -> BoardSystem {
+    pub(crate) fn new(texts: &mut  Depot<TextData>,) -> BoardSystem {
         BoardSystem {
             loaded: false,
-            msg_storage: [(); INDEX_SIZE].map(|_| Rc::new(RefCell::new(String::new()))),
+            msg_storage: [(); INDEX_SIZE].map(|_| texts.add_text("".into())),
             msg_storage_taken: [false; INDEX_SIZE],
             num_of_msgs: [0; NUM_OF_BOARDS],
             acmd_read: 0,
@@ -223,10 +223,10 @@ fn find_board(db: &DB, chid: DepotId) -> Option<usize> {
     None
 }
 
-fn init_boards(db: &mut DB) {
+fn init_boards(db: &mut DB, texts: &mut  Depot<TextData>,) {
     let mut fatal_error = 0;
     for i in 0..INDEX_SIZE {
-        *RefCell::borrow_mut(&db.boards.msg_storage[i]) = String::new();
+        texts.get_mut(db.boards.msg_storage[i]).text.clear();
         db.boards.msg_storage_taken[i] = false;
     }
     for i in 0..NUM_OF_BOARDS {
@@ -247,7 +247,7 @@ fn init_boards(db: &mut DB) {
         for j in 0..MAX_BOARD_MESSAGES {
             db.boards.msg_index[i][j].slot_num = None;
         }
-        board_load_board(&mut db.boards, i);
+        board_load_board(&mut db.boards, texts, i);
     }
 
     db.boards.acmd_read = find_command("read").unwrap();
@@ -262,7 +262,7 @@ fn init_boards(db: &mut DB) {
 }
 
 pub fn gen_board(
-    game: &mut Game, db: &mut DB, 
+    game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,
     chid: DepotId,
     me: MeRef,
     cmd: i32,
@@ -275,7 +275,7 @@ pub fn gen_board(
         _ => panic!("Unexpected MeRef type in receptionist"),
     }
     if !db.boards.loaded {
-        init_boards( db);
+        init_boards( db, texts);
         db.boards.loaded = true;
     }
     let ch = db.ch(chid);
@@ -307,9 +307,9 @@ pub fn gen_board(
     } else if cmd == db.boards.acmd_look || cmd == db.boards.acmd_examine {
         board_show_board(game, db,board_type, chid, argument, board)
     } else if cmd == db.boards.acmd_read {
-        board_display_msg(game, db, board_type, chid, argument, board)
+        board_display_msg(game, db, texts, board_type, chid, argument, board)
     } else if cmd == db.boards.acmd_remove {
-        board_remove_msg( game, db, board_type, chid, argument)
+        board_remove_msg( game, db, texts, board_type, chid, argument)
     } else {
         false
     };
@@ -382,8 +382,7 @@ fn board_write_message(
         db,
         db.boards.msg_storage[db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]]
             .slot_num
-            .unwrap()]
-        .clone(),
+            .unwrap()],
         MAX_MESSAGE_LENGTH,
         board_type as i64 + BOARD_MAGIC,
     );
@@ -469,7 +468,7 @@ db.boards.num_of_msgs[board_type]
 }
 
 fn board_display_msg(
-    game: &mut Game, db: &mut DB, 
+    game: &mut Game, db: &mut DB, texts: &Depot<TextData>,
     board_type: usize,
     chid: DepotId,
     arg: &str,
@@ -533,7 +532,8 @@ fn board_display_msg(
         return true;
     }
 
-    if RefCell::borrow(&db.boards.msg_storage[msg_slot_num]).is_empty() {
+    let text = &texts.get(db.boards.msg_storage[msg_slot_num]).text;
+    if text.is_empty() {
         game.send_to_char(ch, "That message seems to be empty.\r\n");
         return true;
     }
@@ -541,7 +541,7 @@ fn board_display_msg(
         "Message {} : {}\r\n\r\n{}\r\n",
         msg,
         db.boards.msg_index[board_type][ind].heading.as_ref().unwrap(),
-        RefCell::borrow(&db.boards.msg_storage[msg_slot_num])
+        text
     );
 
     let d_id = ch.desc.unwrap();
@@ -551,7 +551,7 @@ fn board_display_msg(
 }
 
 fn board_remove_msg(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,  texts: &mut Depot<TextData>,
     board_type: usize,
     chid: DepotId,
     arg: &str,
@@ -621,7 +621,7 @@ fn board_remove_msg(
     for d in game.descriptor_list.iter() {
         if d.state() == ConPlaying
             && d.str.is_some()
-            && Rc::ptr_eq(d.str.as_ref().unwrap(), &db.boards.msg_storage[slot_num])
+            && d.str.unwrap() == db.boards.msg_storage[slot_num]
         {
             game.send_to_char(ch,
                 "At least wait until the author is finished before removing it!\r\n",
@@ -629,8 +629,9 @@ fn board_remove_msg(
             return true;
         }
     }
-    if !RefCell::borrow(&db.boards.msg_storage[slot_num]).is_empty() {
-        *RefCell::borrow_mut(&db.boards.msg_storage[slot_num]) = String::new();
+    let text = &mut (texts.get_mut(db.boards.msg_storage[slot_num]).text);
+    if !text.is_empty() {
+        text.clear();
     }
     db.boards.msg_storage_taken[slot_num] = false;
     if !db.boards.msg_index[board_type][ind].heading.is_none() {
@@ -650,12 +651,12 @@ fn board_remove_msg(
     game.send_to_char(ch, "Message removed.\r\n");
     let buf = format!("$n just removed message {}.", msg);
     game.act(db,&buf, false, Some(ch), None, None, TO_ROOM);
-    board_save_board(&mut db.boards, board_type);
+    board_save_board(&mut db.boards, texts, board_type);
 
     return true;
 }
 
-pub fn board_save_board(b: &mut BoardSystem, board_type: usize) {
+pub fn board_save_board(b: &mut BoardSystem, texts: &Depot<TextData>, board_type: usize) {
     let filename = b.boardinfo[board_type].filename;
 
     if b.num_of_msgs[board_type] == 0 {
@@ -688,10 +689,11 @@ pub fn board_save_board(b: &mut BoardSystem, board_type: usize) {
         }
 
         let msg_slotnum = b.msg_index[board_type][i].slot_num.unwrap();
-        let tmp2 = &b.msg_storage[msg_slotnum];
+        let tmp2 = b.msg_storage[msg_slotnum];
+        let text = &texts.get(tmp2).text;
 
-        if !RefCell::borrow(tmp2).is_empty() {
-            b.msg_index[board_type][i].message_len = RefCell::borrow(tmp2).as_bytes().len();
+        if !text.is_empty() {
+            b.msg_index[board_type][i].message_len = text.as_bytes().len();
         } else {
             b.msg_index[board_type][i].message_len = 0;
         }
@@ -723,14 +725,14 @@ pub fn board_save_board(b: &mut BoardSystem, board_type: usize) {
             .expect("writing board message heading");
         }
 
-        if !RefCell::borrow(tmp2).is_empty() {
-            fl.write_all(RefCell::borrow(tmp2).as_bytes())
+        if !text.is_empty() {
+            fl.write_all(text.as_bytes())
                 .expect("writing board message");
         }
     }
 }
 
-fn board_load_board(b: &mut BoardSystem, board_type: usize) {
+fn board_load_board(b: &mut BoardSystem,texts: &mut Depot<TextData>, board_type: usize) {
     let fl = OpenOptions::new()
         .read(true)
         .open(b.boardinfo[board_type].filename);
@@ -755,14 +757,14 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
         if r.is_err() {
             let r = r.err().unwrap();
             error!("[SYSERR] Error while board file {} {r}", board_type);
-            board_reset_board(b, board_type);
+            board_reset_board(b, texts, board_type);
             return;
         }
     }
 
     if b.num_of_msgs[board_type] < 1 || b.num_of_msgs[board_type] > MAX_BOARD_MESSAGES {
         error!("SYSERR: Board file {} corrupt.  Resetting.", board_type);
-        board_reset_board(b, board_type);
+        board_reset_board(b, texts, board_type);
         return;
     }
 
@@ -785,7 +787,7 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
                     "[SYSERR] Error while board file record, Resetting. {} {r}",
                     board_type
                 );
-                board_reset_board(b, board_type);
+                board_reset_board(b, texts, board_type);
                 return;
             }
         }
@@ -801,7 +803,7 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
             len1 <= 0
         } {
             error!("SYSERR: Board file {} corrupt!  Resetting.", board_type);
-            board_reset_board(b, board_type);
+            board_reset_board(b, texts, board_type);
             return;
         }
         let mut tmp1 = vec![0 as u8; len1];
@@ -819,11 +821,12 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
                 "SYSERR: Out of slots booting board {}!  Resetting...",
                 board_type
             );
-            board_reset_board(b, board_type);
+            board_reset_board(b, texts, board_type);
             return;
         }
         b.msg_index[board_type][i].slot_num = sn;
         let len2;
+        let text = &mut texts.get_mut(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]).text;
         if {
             len2 = b.msg_index[board_type][i].message_len;
             len2 > 0
@@ -831,34 +834,31 @@ fn board_load_board(b: &mut BoardSystem, board_type: usize) {
             let mut tmp2 = vec![0 as u8; len2];
             fl.read_exact(tmp2.as_mut_slice())
                 .expect("Error reading board file message string");
-            *RefCell::borrow_mut(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]) =
-                parse_c_string(tmp2.as_slice());
+            *text=parse_c_string(tmp2.as_slice());
         } else {
-            *RefCell::borrow_mut(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]) =
-                String::new();
+            text.clear();
         }
     }
 }
 
 /* When shutting down, clear all boards. */
-pub fn board_clear_all(b: &mut BoardSystem) {
+pub fn board_clear_all(b: &mut BoardSystem,texts: &mut Depot<TextData>, ) {
     for i in 0..NUM_OF_BOARDS {
-        board_clear_board(b, i);
+        board_clear_board(b, texts, i);
     }
 }
 
 /* Clear the in-memory structures. */
-fn board_clear_board(b: &mut BoardSystem, board_type: usize) {
+fn board_clear_board(b: &mut BoardSystem,texts: &mut Depot<TextData>,  board_type: usize) {
     for i in 0..MAX_BOARD_MESSAGES {
         if !b.msg_index[board_type][i].heading.is_none() {
             b.msg_index[board_type][i].heading = None;
         }
         if b.msg_index[board_type][i].slot_num.is_some()
-            && !RefCell::borrow(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()])
+            && !texts.get(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]).text
                 .is_empty()
         {
-            *RefCell::borrow_mut(&b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]) =
-                String::new();
+            texts.get_mut(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()]).text.clear();
                 b.msg_storage_taken[b.msg_index[board_type][i].slot_num.unwrap()] = false;
         }
 
@@ -868,7 +868,7 @@ fn board_clear_board(b: &mut BoardSystem, board_type: usize) {
 }
 
 /* Destroy the on-disk and in-memory board. */
-fn board_reset_board(b: &mut BoardSystem, board_type: usize) {
-    board_clear_board(b, board_type);
+fn board_reset_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type: usize) {
+    board_clear_board(b, texts, board_type);
     fs::remove_file(b.boardinfo[board_type].filename).expect("Removing board file");
 }
