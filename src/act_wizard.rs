@@ -72,7 +72,7 @@ use sha2::Sha256;
 
 pub fn do_echo(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -103,7 +103,7 @@ pub fn do_echo(
 
 pub fn do_send(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -147,7 +147,7 @@ pub fn do_send(
 }
 
 /* take a string, and return an rnum.. used for goto, at, etc.  -je 4/6/93 */
-fn find_target_room(game: &mut Game, db: &DB, ch: &CharData, rawroomstr: &str) -> RoomRnum {
+fn find_target_room(game: &mut Game, db: &DB, objs: & Depot<ObjData>, ch: &CharData, rawroomstr: &str) -> RoomRnum {
 
     let mut location = NOWHERE;
     let mut roomstr = String::new();
@@ -185,7 +185,7 @@ fn find_target_room(game: &mut Game, db: &DB, ch: &CharData, rawroomstr: &str) -
                 return NOWHERE;
             }
         } else if {
-            target_obj = game.get_obj_vis(db, ch, &mut mobobjstr, Some(&mut num));
+            target_obj = game.get_obj_vis(db, objs,ch, &mut mobobjstr, Some(&mut num));
             target_obj.is_some()
         } {
             if target_obj.unwrap().in_room() != NOWHERE {
@@ -249,7 +249,7 @@ fn find_target_room(game: &mut Game, db: &DB, ch: &CharData, rawroomstr: &str) -
 
 pub fn do_at(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>, 
+    db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -272,7 +272,7 @@ pub fn do_at(
     }
     let location;
     if {
-        location = find_target_room(game, db, ch, &buf);
+        location = find_target_room(game, db, objs,ch, &buf);
         location == NOWHERE
     } {
         return;
@@ -281,21 +281,21 @@ pub fn do_at(
     /* a location has been found. */
     let ch = db.ch(chid);
     let original_loc = ch.in_room();
-    db.char_from_room(chid);
-    db.char_to_room(chid, location);
-    command_interpreter(game, db, texts,chid, &command);
+    db.char_from_room(objs,chid);
+    db.char_to_room(objs,chid, location);
+    command_interpreter(game, db, texts,objs,chid, &command);
 
     /* check if the char is still there */
     let ch = db.ch(chid);
     if ch.in_room() == location {
-        db.char_from_room(chid);
-        db.char_to_room(chid, original_loc);
+        db.char_from_room(objs,chid);
+        db.char_to_room(objs,chid, original_loc);
     }
 }
 
 pub fn do_goto(
     game: &mut Game,
-    db: &mut DB, texts: &mut  Depot<TextData>,
+    db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -305,7 +305,7 @@ pub fn do_goto(
     let ch = db.ch(chid);
 
     if {
-        location = find_target_room(game, db, ch, argument);
+        location = find_target_room(game, db, objs,ch, argument);
         location == NOWHERE
     } {
         return;
@@ -321,8 +321,8 @@ pub fn do_goto(
     );
     game.act(db, &buf, true, Some(ch), None, None, TO_ROOM);
 
-    db.char_from_room(chid);
-    db.char_to_room(chid, location);
+    db.char_from_room(objs,chid);
+    db.char_to_room(objs,chid, location);
     let ch = db.ch(chid);
     let x = ch.poofin();
     let buf = format!(
@@ -335,12 +335,12 @@ pub fn do_goto(
     );
     game.act(db, &buf, true, Some(ch), None, None, TO_ROOM);
 
-    look_at_room(game, db, texts,ch, false);
+    look_at_room(game, db, texts,objs,ch, false);
 }
 
 pub fn do_trans(
     game: &mut Game,
-    db: &mut DB, texts: &mut  Depot<TextData>,
+    db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -378,9 +378,9 @@ pub fn do_trans(
                 TO_ROOM,
             );
             let victim_id = victim.id();
-            db.char_from_room(victim_id);
+            db.char_from_room(objs, victim_id);
             let ch = db.ch(chid);
-            db.char_to_room(victim_id, ch.in_room());
+            db.char_to_room(objs, victim_id, ch.in_room());
             let victim = db.ch(victim_id);
             game.act(
                 db,
@@ -401,7 +401,7 @@ pub fn do_trans(
                 Some(VictimRef::Char(victim)),
                 TO_VICT,
             );
-            look_at_room(game, db, texts, db.ch(victim_id), false);
+            look_at_room(game, db, texts, objs, db.ch(victim_id), false);
         }
     } else {
         /* Trans All */
@@ -432,9 +432,9 @@ pub fn do_trans(
                     None,
                     TO_ROOM,
                 );
-                db.char_from_room(victim_id);
+                db.char_from_room(objs, victim_id);
                 let ch = db.ch(chid);
-                db.char_to_room(victim_id, ch.in_room());
+                db.char_to_room(objs, victim_id, ch.in_room());
                 let victim = db.ch(victim_id);
                 game.act(
                     db,
@@ -455,7 +455,7 @@ pub fn do_trans(
                     Some(VictimRef::Char(victim)),
                     TO_VICT,
                 );
-                look_at_room(game, db, texts, victim, false);
+                look_at_room(game, db, texts, objs, victim, false);
             }
         }
     }
@@ -465,7 +465,7 @@ pub fn do_trans(
 
 pub fn do_teleport(
     game: &mut Game,
-    db: &mut DB,texts: &mut  Depot<TextData>,
+    db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -493,7 +493,7 @@ pub fn do_teleport(
     } else if buf2.is_empty() {
         game.send_to_char(ch, "Where do you wish to send this person?\r\n");
     } else if {
-        target = find_target_room(game, db, ch, &buf2);
+        target = find_target_room(game, db,objs, ch, &buf2);
         target != NOWHERE
     } {
         let victim = victim.unwrap();
@@ -508,8 +508,8 @@ pub fn do_teleport(
             TO_ROOM,
         );
         let victim_id = victim.id();
-        db.char_from_room(victim_id);
-        db.char_to_room(victim_id, target);
+        db.char_from_room(objs,victim_id);
+        db.char_to_room(objs,victim_id, target);
         let victim = db.ch(victim_id);
         game.act(
             db,
@@ -531,13 +531,13 @@ pub fn do_teleport(
             Some(VictimRef::Char(victim)),
             TO_VICT,
         );
-        look_at_room(game, db, texts,victim, false);
+        look_at_room(game, db, texts,objs, victim, false);
     }
 }
 
 pub fn do_vnum(
     game: &mut Game,
-    db: &mut DB,_texts: &mut  Depot<TextData>,
+    db: &mut DB,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -567,7 +567,7 @@ pub fn do_vnum(
     }
 }
 
-fn do_stat_room(game: &mut Game, db: &mut DB,chid: DepotId) {
+fn do_stat_room(game: &mut Game, db: &mut DB,objs: & Depot<ObjData>, chid: DepotId) {
     let ch = db.ch(chid);
 
     let rm_name = db.world[ch.in_room() as usize].name.as_str();
@@ -694,7 +694,7 @@ fn do_stat_room(game: &mut Game, db: &mut DB,chid: DepotId) {
         let mut found = 0;
         for (i, oid) in rm_contents.iter().enumerate() {
             let ch = db.ch(chid);
-            if !game.can_see_obj(db, ch, db.obj(*oid)) {
+            if !game.can_see_obj(db, ch, objs.get(*oid)) {
                 continue;
             }
 
@@ -703,7 +703,7 @@ fn do_stat_room(game: &mut Game, db: &mut DB,chid: DepotId) {
                 format!(
                     "{} {}",
                     if found != 0 { "," } else { "" },
-                    db.obj(*oid).short_description
+                    objs.get(*oid).short_description
                 )
                 .as_str(),
             );
@@ -797,7 +797,7 @@ fn do_stat_room(game: &mut Game, db: &mut DB,chid: DepotId) {
     }
 }
 
-fn do_stat_object(game: &mut Game, db: &DB,ch: &CharData, obj: &ObjData) {
+fn do_stat_object(game: &mut Game, db: &DB,objs: & Depot<ObjData>, ch: &CharData, obj: &ObjData) {
 
     let vnum = db.get_obj_vnum(obj);
     game.send_to_char(
@@ -888,7 +888,7 @@ fn do_stat_object(game: &mut Game, db: &DB,ch: &CharData, obj: &ObjData) {
         format!(
             "In object: {}, ",
             if obj.in_obj.borrow().is_some() {
-                db.obj(jio.unwrap()).short_description.as_ref()
+                objs.get(jio.unwrap()).short_description.as_ref()
             } else {
                 "None"
             }
@@ -1069,7 +1069,7 @@ fn do_stat_object(game: &mut Game, db: &DB,ch: &CharData, obj: &ObjData) {
             let messg = format!(
                 "{} {}",
                 if found != 0 { "," } else { "" },
-                db.obj(*j2).short_description
+                objs.get(*j2).short_description
             );
             column += game.send_to_char(ch, messg.as_str());
             if column >= 62 {
@@ -1504,7 +1504,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
 pub fn do_stat(
     game: &mut Game,
-    db: &mut DB,texts: &mut  Depot<TextData>,
+    db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1522,7 +1522,7 @@ pub fn do_stat(
         game.send_to_char(ch, "Stats on who or what?\r\n");
         return;
     } else if is_abbrev(&buf1, "room") {
-        do_stat_room(game, db,  chid);
+        do_stat_room(game, db,  objs, chid);
     } else if is_abbrev(&buf1, "mob") {
         if buf2.is_empty() {
             game.send_to_char(ch, "Stats on which mobile?\r\n");
@@ -1568,7 +1568,7 @@ pub fn do_stat(
                 store_to_char(texts, &tmp_store, &mut loaded_victim);
                 loaded_victim.player.time.logon = tmp_store.last_logon;
                 let loaded_victim_id = db.character_list.push(loaded_victim);
-                db.char_to_room(loaded_victim_id, 0);
+                db.char_to_room(objs,loaded_victim_id, 0);
                 let ch = db.ch(chid);
                 let loaded_victim = db.ch(loaded_victim_id);
                 if loaded_victim.get_level() > ch.get_level() {
@@ -1576,7 +1576,7 @@ pub fn do_stat(
                 } else {
                     do_stat_character(game, db,  ch, loaded_victim);
                 }
-                game.extract_char_final(db, texts, loaded_victim_id);
+                game.extract_char_final(db, texts, objs,loaded_victim_id);
             } else {
                 let ch = db.ch(chid);
                 game.send_to_char(ch, "There is no such player.\r\n");
@@ -1588,10 +1588,10 @@ pub fn do_stat(
         } else {
             let obj;
             if {
-                obj = game.get_obj_vis(db, ch, &mut buf2, None);
+                obj = game.get_obj_vis(db, objs,ch, &mut buf2, None);
                 obj.is_some()
             } {
-                do_stat_object(game, db,  ch, obj.unwrap());
+                do_stat_object(game, db,  objs,ch, obj.unwrap());
             } else {
                 game.send_to_char(ch, "No such object around.\r\n");
             }
@@ -1602,15 +1602,15 @@ pub fn do_stat(
         let mut obj;
         let mut victim;
         if {
-            obj = game.get_obj_in_equip_vis(db, ch, &name, Some(&mut number), &ch.equipment);
+            obj = game.get_obj_in_equip_vis(db, objs,ch, &name, Some(&mut number), &ch.equipment);
             obj.is_some()
         } {
-            do_stat_object(game, db,  ch, obj.unwrap());
+            do_stat_object(game, db,objs,  ch, obj.unwrap());
         } else if {
-            obj = game.get_obj_in_list_vis(db, ch, &name, Some(&mut number), &ch.carrying);
+            obj = game.get_obj_in_list_vis(db, objs,ch, &name, Some(&mut number), &ch.carrying);
             obj.is_some()
         } {
-            do_stat_object(game, db,  ch, obj.unwrap());
+            do_stat_object(game, db, objs, ch, obj.unwrap());
         } else if {
             victim = game.get_char_vis(db, ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
             victim.is_some()
@@ -1618,7 +1618,7 @@ pub fn do_stat(
             do_stat_character(game, db,  ch, victim.unwrap());
         } else if {
             obj = game.get_obj_in_list_vis2(
-                db,
+                db,objs,
                 ch,
                 &mut name,
                 Some(&mut number),
@@ -1626,17 +1626,17 @@ pub fn do_stat(
             );
             obj.is_some()
         } {
-            do_stat_object(game, db,  ch, obj.unwrap());
+            do_stat_object(game, db, objs, ch, obj.unwrap());
         } else if {
             victim = game.get_char_vis(db, ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
             victim.is_some()
         } {
             do_stat_character(game, db,  ch, victim.unwrap());
         } else if {
-            obj = game.get_obj_vis(db, ch, &mut name, Some(&mut number));
+            obj = game.get_obj_vis(db,objs, ch, &mut name, Some(&mut number));
             obj.is_some()
         } {
-            do_stat_object(game, db,  ch, obj.unwrap());
+            do_stat_object(game, db,objs,  ch, obj.unwrap());
         } else {
             game.send_to_char(ch, "Nothing around by that name.\r\n");
         }
@@ -1645,7 +1645,7 @@ pub fn do_stat(
 
 pub fn do_shutdown(
     game: &mut Game,
-    db: &mut DB,_texts: &mut  Depot<TextData>,
+    db: &mut DB,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1741,7 +1741,7 @@ fn stop_snooping(game: &mut Game, db: &mut DB, chid: DepotId) {
 
 pub fn do_snoop(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1811,7 +1811,7 @@ pub fn do_snoop(
 
 pub fn do_switch(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1871,7 +1871,7 @@ pub fn do_switch(
 
 pub fn do_return(
     game: &mut Game,
-    db: &mut DB,_texts: &mut  Depot<TextData>,
+    db: &mut DB,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1925,7 +1925,7 @@ pub fn do_return(
 
 pub fn do_load(
     game: &mut Game,
-    db: &mut DB,_texts: &mut  Depot<TextData>,
+    db: &mut DB,_texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1958,7 +1958,7 @@ pub fn do_load(
         }
         let mob_id = db.read_mobile(r_num, REAL).unwrap();
         let ch = db.ch(chid);
-        db.char_to_room(mob_id, ch.in_room());
+        db.char_to_room(objs,mob_id, ch.in_room());
         let mob = db.ch(mob_id);
         let ch = db.ch(chid);
         game.act(
@@ -1998,15 +1998,15 @@ pub fn do_load(
             game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let oid = db.read_object(r_num, REAL).unwrap();
+        let oid = db.read_object(objs,r_num, REAL).unwrap();
         if LOAD_INTO_INVENTORY {
-            db.obj_to_char(oid, chid);
+            db.obj_to_char(objs,oid, chid);
         } else {
             let ch = db.ch(chid);
-            db.obj_to_room(oid, ch.in_room());
+            db.obj_to_room(objs,oid, ch.in_room());
         }
         let ch = db.ch(chid);
-        let obj = db.obj(oid);
+        let obj = objs.get(oid);
         game.act(
             db,
             "$n makes a strange magical gesture.",
@@ -2041,7 +2041,7 @@ pub fn do_load(
 
 pub fn do_vstat(
     game: &mut Game,
-    db: &mut DB,_texts: &mut  Depot<TextData>,
+    db: &mut DB,_texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2073,7 +2073,7 @@ pub fn do_vstat(
             return;
         }
         let mob_id = db.read_mobile(r_num, REAL);
-        db.char_to_room(mob_id.unwrap(), 0);
+        db.char_to_room(objs,mob_id.unwrap(), 0);
         let mob = db.ch(mob_id.unwrap());
         let ch = db.ch(chid);
         do_stat_character(game, db, ch, mob);
@@ -2088,11 +2088,11 @@ pub fn do_vstat(
             game.send_to_char(ch, "There is no object with that number.\r\n");
             return;
         }
-        let oid = db.read_object(r_num, REAL);
-        let obj = db.obj(oid.unwrap());
+        let oid = db.read_object(objs,r_num, REAL);
+        let obj = objs.get(oid.unwrap());
         let ch = db.ch(chid);
-        do_stat_object(game, db, ch, obj);
-        db.extract_obj( oid.unwrap());
+        do_stat_object(game, db, objs,ch, obj);
+        db.extract_obj( objs,oid.unwrap());
     } else {
         game.send_to_char(ch, "That'll have to be either 'obj' or 'mob'.\r\n");
     }
@@ -2100,7 +2100,7 @@ pub fn do_vstat(
 
 pub fn do_purge(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2157,7 +2157,7 @@ pub fn do_purge(
             db.extract_char(vict_id);
         } else if {
             obj = game.get_obj_in_list_vis2(
-                db,
+                db,objs,
                 ch,
                 &mut buf,
                 None,
@@ -2176,7 +2176,7 @@ pub fn do_purge(
                 None,
                 TO_ROOM,
             );
-            db.extract_obj( oid);
+            db.extract_obj( objs,oid);
         } else {
             game.send_to_char(ch, "Nothing here by that name.\r\n");
             return;
@@ -2211,7 +2211,7 @@ pub fn do_purge(
             } {
                 let vict = db.ch(vict_id);
                 let oid = vict.carrying[0];
-                db.extract_obj( oid);
+                db.extract_obj( objs,oid);
             }
 
             /* Dump equipment. */
@@ -2219,7 +2219,7 @@ pub fn do_purge(
                 let vict = db.ch(vict_id);
                 if vict.get_eq(i).is_some() {
                     let oid = vict.get_eq(i).unwrap();
-                    db.extract_obj( oid)
+                    db.extract_obj( objs,oid)
                 }
             }
 
@@ -2235,7 +2235,7 @@ pub fn do_purge(
                 break;
             }
             let oid = db.world[ch_in_room as usize].contents[0];
-            db.extract_obj( oid);
+            db.extract_obj( objs, oid);
         }
     }
 }
@@ -2244,7 +2244,7 @@ const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
 pub fn do_syslog(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2288,7 +2288,7 @@ pub fn do_syslog(
 
 pub fn do_advance(
     game: &mut Game,
-    db: &mut DB,texts: &mut  Depot<TextData>,
+    db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2351,7 +2351,7 @@ pub fn do_advance(
     }
     let oldlevel = victim.get_level();
     if newlevel < oldlevel {
-        do_start(game, db,texts, victim_id);
+        do_start(game, db,texts, objs, victim_id);
         let victim = db.ch_mut(victim_id);
         victim.set_level(newlevel);
         let victim = db.ch(victim_id);
@@ -2419,14 +2419,14 @@ You feel slightly different.",
         game,
         db,
         victim_id,
-        level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),texts,
+        level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),texts,objs,
     );
-    game.save_char(db, texts,victim_id);
+    game.save_char(db, texts,objs,victim_id);
 }
 
 pub fn do_restore(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2480,7 +2480,7 @@ pub fn do_restore(
         }
         let vict = db.ch_mut(vict_id);
         update_pos(vict);
-        db.affect_total(vict_id);
+        db.affect_total(objs,vict_id);
         let vict = db.ch(vict_id);
         let ch = db.ch(chid);
         game.send_to_char(ch, OK);
@@ -2496,7 +2496,7 @@ pub fn do_restore(
     }
 }
 
-pub fn perform_immort_vis(game: &mut Game, db: &mut DB, chid: DepotId) {
+pub fn perform_immort_vis(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
     let ch = db.ch(chid);
     if ch.get_invis_lev() == 0 && !ch.aff_flagged(AFF_HIDE | AFF_INVISIBLE) {
         game.send_to_char(ch, "You are already fully visible.\r\n");
@@ -2506,7 +2506,7 @@ pub fn perform_immort_vis(game: &mut Game, db: &mut DB, chid: DepotId) {
 
     ch.set_invis_lev(0);
 
-    game.appear(db, chid);
+    game.appear(db,objs, chid);
     let ch = db.ch(chid);
     game.send_to_char(ch, "You are now fully visible.\r\n");
 }
@@ -2555,7 +2555,7 @@ fn perform_immort_invis(game: &mut Game, db: &mut DB, chid: DepotId, level: i32)
 
 pub fn do_invis(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2573,7 +2573,7 @@ pub fn do_invis(
     one_argument(argument, &mut arg);
     if arg.is_empty() {
         if ch.get_invis_lev() > 0 {
-            perform_immort_vis(game, db, chid);
+            perform_immort_vis(game, db,objs, chid);
         } else {
             perform_immort_invis(game, db, chid, ch.get_level() as i32);
         }
@@ -2583,7 +2583,7 @@ pub fn do_invis(
         if level > ch.get_level() as i32 {
             game.send_to_char(ch, "You can't go invisible above your own level.\r\n");
         } else if level < 1 {
-            perform_immort_vis(game, db, chid);
+            perform_immort_vis(game, db,objs, chid);
         } else {
             perform_immort_invis(game, db, chid, level);
         }
@@ -2592,7 +2592,7 @@ pub fn do_invis(
 
 pub fn do_gecho(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2626,7 +2626,7 @@ pub fn do_gecho(
 
 pub fn do_poofset(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2658,7 +2658,7 @@ pub fn do_poofset(
 
 pub fn do_dc(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2739,7 +2739,7 @@ pub fn do_dc(
 
 pub fn do_wizlock(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2792,7 +2792,7 @@ pub fn do_wizlock(
 
 pub fn do_date(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2834,7 +2834,7 @@ pub fn do_date(
 
 pub fn do_last(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2877,7 +2877,7 @@ pub fn do_last(
 
 pub fn do_force(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>, 
+    db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2931,7 +2931,7 @@ pub fn do_force(
                 )
                 .as_str(),
             );
-            command_interpreter(game, db, texts, vict.id(), &to_force);
+            command_interpreter(game, db, texts, objs, vict.id(), &to_force);
         }
     } else if arg == "room" {
         game.send_to_char(ch, OK);
@@ -2965,7 +2965,7 @@ pub fn do_force(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            command_interpreter(game, db,texts,  vict_id, &to_force);
+            command_interpreter(game, db,texts, objs, vict_id, &to_force);
         }
     } else {
         /* force all */
@@ -3001,14 +3001,14 @@ pub fn do_force(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            command_interpreter(game, db, texts, vict_id.unwrap(), &to_force);
+            command_interpreter(game, db, texts, objs, vict_id.unwrap(), &to_force);
         }
     }
 }
 
 pub fn do_wiznet(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3168,7 +3168,7 @@ pub fn do_wiznet(
 
 pub fn do_zreset(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3187,7 +3187,7 @@ pub fn do_zreset(
     let mut i = zone_count;
     if arg.starts_with('*') {
         for i in 0..zone_count {
-            game.reset_zone(db, i);
+            game.reset_zone(db, objs,i);
         }
         let ch = db.ch(chid);
         game.send_to_char(ch, "Reset world.\r\n");
@@ -3215,7 +3215,7 @@ pub fn do_zreset(
         }
     }
     if i < db.zone_table.len() {
-        game.reset_zone(db, i as usize);
+        game.reset_zone(db,objs, i as usize);
         let ch = db.ch(chid);
         game.send_to_char(
             ch,
@@ -3248,7 +3248,7 @@ pub fn do_zreset(
  */
 pub fn do_wizutil(
     game: &mut Game,
-    db: &mut DB,texts: &mut  Depot<TextData>,
+    db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3467,7 +3467,7 @@ pub fn do_wizutil(
                         vict.affected.len() != 0
                     } {
                         let af = db.ch(vict_id).affected[0];
-                        db.affect_remove(vict_id, af);
+                        db.affect_remove(objs,vict_id, af);
                     }
                     let ch = db.ch(chid);
                     let vict = db.ch(vict_id);
@@ -3485,7 +3485,7 @@ pub fn do_wizutil(
                 error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
             }
         }
-        game.save_char(db, texts,vict_id);
+        game.save_char(db, texts,objs,vict_id);
     }
 }
 
@@ -3505,7 +3505,7 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
 
 pub fn do_show(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -3699,7 +3699,7 @@ pub fn do_show(
                 game.send_to_char(ch, "A name would help.\r\n");
                 return;
             }
-            crash_listrent(game, db, chid, &value);
+            crash_listrent(game, db,objs, chid, &value);
         }
 
         /* show stats */
@@ -4216,7 +4216,7 @@ const SET_FIELDS: [SetStruct; 52] = [
 
 fn perform_set(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     vict_id: DepotId,
     mode: i32,
@@ -4327,31 +4327,31 @@ fn perform_set(
         }
         4 => {
             vict.points.max_hit = range!(value, 1, 5000) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         5 => {
             vict.points.max_mana = range!(value, 1, 5000) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         6 => {
             vict.points.max_move = range!(value, 1, 5000) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         7 => {
             vict.points.hit = range!(value, -9, vict.points.max_hit) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         8 => {
             vict.points.mana = range!(value, 0, vict.points.max_mana) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         9 => {
             vict.points.movem = range!(value, 0, vict.points.max_move) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         10 => {
             vict.set_alignment(range!(value, -1000, 1000));
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         11 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4361,14 +4361,14 @@ fn perform_set(
             }
             vict.real_abils.str = value as i8;
             vict.real_abils.str_add = 0;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         12 => {
             vict.real_abils.str_add = range!(value, 0, 100) as i8;
             if value > 0 {
                 vict.real_abils.str = 18;
             }
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         13 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4377,7 +4377,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.intel = value as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         14 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4386,7 +4386,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.wis = value as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         15 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4395,7 +4395,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.dex = value as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         16 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4404,7 +4404,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.con = value as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         17 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4413,11 +4413,11 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.cha = value as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         18 => {
             vict.points.armor = range!(value, -100, 100) as i16;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         19 => {
             vict.set_gold(range!(value, 0, 100000000));
@@ -4430,11 +4430,11 @@ fn perform_set(
         }
         22 => {
             vict.points.hitroll = range!(value, -20, 20) as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         23 => {
             vict.points.damroll = range!(value, -20, 20) as i8;
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
         24 => {
             let ch = db.ch(chid);
@@ -4544,9 +4544,9 @@ fn perform_set(
             let vict = db.ch(vict_id);
             if vict.in_room() != NOWHERE {
                 /* Another Eric Green special. */
-                db.char_from_room(vict_id);
+                db.char_from_room(objs,vict_id);
             }
-            db.char_to_room(vict_id, rnum);
+            db.char_to_room(objs,vict_id, rnum);
         }
         36 => {
             if on {
@@ -4704,12 +4704,12 @@ fn perform_set(
         49 => {
             /* Blame/Thank Rick Glover. :) */
             vict.set_height(value as u8);
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
 
         50 => {
             vict.set_weight(value as u8);
-            db.affect_total(vict_id);
+            db.affect_total(objs,vict_id);
         }
 
         _ => {
@@ -4724,7 +4724,7 @@ fn perform_set(
 
 pub fn do_set(
     game: &mut Game,
-    db: &mut DB,texts: &mut  Depot<TextData>,
+    db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -4819,15 +4819,15 @@ pub fn do_set(
 
     /* perform the set */
     let vict_id = vict.unwrap().id();
-    let retval = perform_set(game, db, chid, vict_id, mode as i32, &buf);
+    let retval = perform_set(game, db, objs, chid, vict_id, mode as i32, &buf);
 
     /* save the character if a change was made */
     if retval {
         if !is_file && !db.ch(vict_id).is_npc() {
-            game.save_char(db, texts,vict_id);
+            game.save_char(db, texts,objs,vict_id);
         }
         if is_file {
-            game.char_to_store(texts,db, vict_id, &mut tmp_store);
+            game.char_to_store(texts,objs,db, vict_id, &mut tmp_store);
 
             unsafe {
                 let player_slice = slice::from_raw_parts(

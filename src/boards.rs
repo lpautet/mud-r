@@ -62,7 +62,7 @@ use crate::structs::{
     NOTHING,
 };
 use crate::util::{ctime, time_now};
-use crate::{ Game, TextData, TO_ROOM};
+use crate::{ Game, ObjData, TextData, TO_ROOM};
 
 const NUM_OF_BOARDS: usize = 4; /* change if needed! */
 const MAX_BOARD_MESSAGES: usize = 60; /* arbitrary -- change if needed */
@@ -196,7 +196,7 @@ fn find_slot(b: &mut BoardSystem) -> Option<usize> {
 }
 
 /* search the room ch is standing in to find which board he's looking at */
-fn find_board(db: &DB, chid: DepotId) -> Option<usize> {
+fn find_board(db: &DB,objs: &Depot<ObjData>,  chid: DepotId) -> Option<usize> {
     let ch = db.ch(chid);
 
     for oid in db.world[ch.in_room() as usize]
@@ -204,7 +204,7 @@ fn find_board(db: &DB, chid: DepotId) -> Option<usize> {
         .iter()
     {
         for i in 0..NUM_OF_BOARDS {
-            if db.boards.boardinfo[i].rnum.get() == db.obj(*oid).get_obj_rnum() {
+            if db.boards.boardinfo[i].rnum.get() == objs.get(*oid).get_obj_rnum() {
                 return Some(i);
             }
         }
@@ -213,7 +213,7 @@ fn find_board(db: &DB, chid: DepotId) -> Option<usize> {
     if ch.get_level() >= LVL_IMMORT as u8 {
         for oid in ch.carrying.iter() {
             for i in 0..NUM_OF_BOARDS {
-                if db.boards.boardinfo[i].rnum.get() == db.obj(*oid).get_obj_rnum() {
+                if db.boards.boardinfo[i].rnum.get() == objs.get(*oid).get_obj_rnum() {
                     return Some(i);
                 }
             }
@@ -262,7 +262,7 @@ fn init_boards(db: &mut DB, texts: &mut  Depot<TextData>,) {
 }
 
 pub fn gen_board(
-    game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,
+    game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     me: MeRef,
     cmd: i32,
@@ -294,7 +294,7 @@ pub fn gen_board(
 
     let board_type;
     if {
-        board_type = find_board(&db, chid);
+        board_type = find_board(&db,objs, chid);
         board_type.is_none()
     } {
         error!("SYSERR:  degenerate board!  (what the hell...)");
@@ -305,9 +305,9 @@ pub fn gen_board(
     return if cmd == db.boards.acmd_write {
         board_write_message(game, db,board_type, chid, argument)
     } else if cmd == db.boards.acmd_look || cmd == db.boards.acmd_examine {
-        board_show_board(game, db,board_type, chid, argument, board)
+        board_show_board(game, db,objs,board_type, chid, argument, board)
     } else if cmd == db.boards.acmd_read {
-        board_display_msg(game, db, texts, board_type, chid, argument, board)
+        board_display_msg(game, db, texts, objs,board_type, chid, argument, board)
     } else if cmd == db.boards.acmd_remove {
         board_remove_msg( game, db, texts, board_type, chid, argument)
     } else {
@@ -392,7 +392,7 @@ fn board_write_message(
 }
 
 fn board_show_board(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: & Depot<ObjData>, 
     board_type: usize,
     chid: DepotId,
     arg: &str,
@@ -406,7 +406,7 @@ fn board_show_board(
     let mut tmp = String::new();
     one_argument(arg, &mut tmp);
 
-    if tmp.is_empty() || !isname(&tmp, db.obj(board_id).name.as_ref()) {
+    if tmp.is_empty() || !isname(&tmp, objs.get(board_id).name.as_ref()) {
         return false;
     }
 
@@ -468,7 +468,7 @@ db.boards.num_of_msgs[board_type]
 }
 
 fn board_display_msg(
-    game: &mut Game, db: &mut DB, texts: &Depot<TextData>,
+    game: &mut Game, db: &mut DB, texts: &Depot<TextData>,objs: & Depot<ObjData>, 
     board_type: usize,
     chid: DepotId,
     arg: &str,
@@ -481,9 +481,9 @@ fn board_display_msg(
     if number.is_empty() {
         return false;
     }
-    if isname(&number, &db.obj(board_id).name) {
+    if isname(&number, &objs.get(board_id).name) {
         /* so "read board" works */
-        return board_show_board(game,  db,board_type, chid, arg, board_id);
+        return board_show_board(game,  db,objs,board_type, chid, arg, board_id);
     }
     if !is_number(&number) {
         /* read 2.mail, look 2.sword */

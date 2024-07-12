@@ -13,7 +13,7 @@ use std::cmp::{max, min};
 
 use log::error;
 use crate::depot::{Depot, DepotId};
-use crate::{TextData, VictimRef};
+use crate::{ObjData, TextData, VictimRef};
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
@@ -71,7 +71,7 @@ pub fn mag_savingthrow(ch: &CharData, type_: i32, modifier: i32) -> bool {
 }
 
 /* affect_update: called from main.rs (causes spells to wear off) */
-pub fn affect_update(game: &mut Game, db: &mut DB) {
+pub fn affect_update(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, ) {
     for i_id in db.character_list.ids() {
         let i = db.ch(i_id);
         let mut last_type_notification = -1;
@@ -103,7 +103,7 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
                         }
                     }
                 }
-                db.affect_remove(i_id, *af);
+                db.affect_remove(objs,i_id, *af);
                 false
             }
         });
@@ -177,7 +177,7 @@ pub fn affect_update(game: &mut Game, db: &mut DB) {
  * -1 = dead, otherwise the amount of damage done.
  */
 pub fn mag_damage(
-    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: DepotId,
     victim_id: DepotId,
@@ -300,7 +300,7 @@ pub fn mag_damage(
     }
 
     /* and finally, inflict the damage */
-    return game.damage(db, texts, chid, victim_id, dam, spellnum);
+    return game.damage(db, texts, objs,chid, victim_id, dam, spellnum);
 }
 
 /*
@@ -314,7 +314,7 @@ pub fn mag_damage(
 const MAX_SPELL_AFFECTS: i32 = 5; /* change if more needed */
 
 pub fn mag_affects(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: DepotId,
     victim_id: Option<DepotId>,
@@ -564,7 +564,7 @@ pub fn mag_affects(
 
     for i in 0..MAX_SPELL_AFFECTS as usize {
         if af[i].bitvector != 0 || af[i].location != APPLY_NONE as u8 {
-            db.affect_join(
+            db.affect_join(objs,
                 victim_id.unwrap(),
                 &mut af[i],
                 accum_duration,
@@ -589,7 +589,7 @@ pub fn mag_affects(
  * is the one you should change to add new group spells.
  */
 fn perform_mag_groups(
-    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: DepotId,
     tch_id: DepotId,
@@ -601,10 +601,10 @@ fn perform_mag_groups(
             mag_points(game,db,level, chid, Some(tch_id), SPELL_HEAL, savetype);
         }
         SPELL_GROUP_ARMOR => {
-            mag_affects(game, db,level, chid, Some(tch_id), SPELL_ARMOR, savetype);
+            mag_affects(game, db,objs,level, chid, Some(tch_id), SPELL_ARMOR, savetype);
         }
         SPELL_GROUP_RECALL => {
-            spell_recall(game, db, texts,level, Some(chid), Some(tch_id), None);
+            spell_recall(game, db, texts,objs, level, Some(chid), Some(tch_id), None);
         }
         _ => {}
     }
@@ -621,7 +621,7 @@ fn perform_mag_groups(
  * To add new group spells, you shouldn't have to change anything in
  * mag_groups -- just add a new case to perform_mag_groups.
  */
-pub fn mag_groups(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, level: i32, chid: Option<DepotId>, spellnum: i32, savetype: i32) {
+pub fn mag_groups(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  level: i32, chid: Option<DepotId>, spellnum: i32, savetype: i32) {
     if chid.is_none() {
         return;
     }
@@ -651,13 +651,13 @@ pub fn mag_groups(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, lev
         if chid == tch_id {
             continue;
         }
-        perform_mag_groups(game, db, texts, level, chid, tch_id, spellnum, savetype);
+        perform_mag_groups(game, db, texts, objs,level, chid, tch_id, spellnum, savetype);
     }
     let k = db.ch(k_id);
     if k_id != chid && k.aff_flagged(AFF_GROUP) {
-        perform_mag_groups(game, db, texts, level, chid, k_id, spellnum, savetype);
+        perform_mag_groups(game, db, texts, objs,level, chid, k_id, spellnum, savetype);
     }
-    perform_mag_groups(game, db, texts, level, chid, chid, spellnum, savetype);
+    perform_mag_groups(game, db, texts, objs, level, chid, chid, spellnum, savetype);
 }
 
 /*
@@ -690,7 +690,7 @@ pub fn mag_masses(db: &DB, _level: i32, chid: DepotId, spellnum: i32, _savetype:
  *  area spells have limited targets within the room.
  */
 pub fn mag_areas(
-    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     spellnum: i32,
@@ -747,7 +747,7 @@ pub fn mag_areas(
         }
 
         /* Doesn't matter if they die here so we don't check. -gg 6/24/98 */
-        mag_damage(game, db, texts, level, chid, tch_id, spellnum, 1);
+        mag_damage(game, db, texts, objs,level, chid, tch_id, spellnum, 1);
     }
 }
 
@@ -799,7 +799,7 @@ const MOB_CLONE: i32 = 10;
 const MOB_ZOMBIE: i32 = 11;
 
 pub fn mag_summons(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     oid: Option<DepotId>,
@@ -829,7 +829,7 @@ pub fn mag_summons(
             pfail = 50; /* 50% failure, should be based on something later. */
         }
         SPELL_ANIMATE_DEAD => {
-            if oid.is_none() || !db.obj(oid.unwrap()).is_corpse() {
+            if oid.is_none() || !objs.get(oid.unwrap()).is_corpse() {
                 game.act(db,
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
@@ -874,7 +874,7 @@ pub fn mag_summons(
         }
         let mob_id = mob_id.unwrap();
         let ch = db.ch(chid);
-        db.char_to_room(mob_id, ch.in_room());
+        db.char_to_room(objs,mob_id, ch.in_room());
         let mob = db.ch_mut(mob_id);
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
@@ -901,11 +901,11 @@ pub fn mag_summons(
         add_follower(game, db, mob_id, chid);
 
         if handle_corpse {
-            for tobjid in db.obj(oid.unwrap()).contains.clone() {
-                db.obj_from_obj(tobjid);
-                db.obj_to_char(tobjid, mob_id);
+            for tobjid in objs.get(oid.unwrap()).contains.clone() {
+                db.obj_from_obj(objs,tobjid);
+                db.obj_to_char(objs,tobjid, mob_id);
             }
-            db.extract_obj( oid.unwrap());
+            db.extract_obj( objs,oid.unwrap());
         }
     }
 }
@@ -949,7 +949,7 @@ pub fn mag_points(
 }
 
 pub fn mag_unaffects(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: DepotId,
     victim_id: DepotId,
@@ -1005,7 +1005,7 @@ pub fn mag_unaffects(
         return;
     }
 
-    db.affect_from_char(victim_id, spell as i16);
+    db.affect_from_char(objs,victim_id, spell as i16);
     let victim = db.ch(victim_id);
     let ch = db.ch(chid);
     if !to_vict.is_empty() {
@@ -1017,7 +1017,7 @@ pub fn mag_unaffects(
 }
 
 pub fn mag_alter_objs(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: DepotId,
     oid: Option<DepotId>,
@@ -1035,59 +1035,59 @@ pub fn mag_alter_objs(
 
     match spellnum {
         SPELL_BLESS => {
-            if ! db.obj(oid).obj_flagged(ITEM_BLESS) && ( db.obj(oid).get_obj_weight() <= 5 * ch.get_level() as i32) {
-                 db.obj_mut(oid).set_obj_extra_bit(ITEM_BLESS);
+            if ! objs.get(oid).obj_flagged(ITEM_BLESS) && ( objs.get(oid).get_obj_weight() <= 5 * ch.get_level() as i32) {
+                 objs.get_mut(oid).set_obj_extra_bit(ITEM_BLESS);
                 to_char = "$p glows briefly.";
             }
         }
         SPELL_CURSE => {
-            if ! db.obj(oid).obj_flagged(ITEM_NODROP) {
-                 db.obj_mut(oid).set_obj_extra_bit(ITEM_NODROP);
-                if  db.obj(oid).get_obj_type() == ITEM_WEAPON {
-                     db.obj_mut(oid).decr_obj_val(2);
+            if ! objs.get(oid).obj_flagged(ITEM_NODROP) {
+                 objs.get_mut(oid).set_obj_extra_bit(ITEM_NODROP);
+                if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
+                     objs.get_mut(oid).decr_obj_val(2);
                 }
                 to_char = "$p briefly glows red.";
             }
         }
         SPELL_INVISIBLE => {
-            if ! db.obj(oid).obj_flagged(ITEM_NOINVIS | ITEM_INVISIBLE) {
-                 db.obj_mut(oid).set_obj_extra_bit(ITEM_INVISIBLE);
+            if ! objs.get(oid).obj_flagged(ITEM_NOINVIS | ITEM_INVISIBLE) {
+                 objs.get_mut(oid).set_obj_extra_bit(ITEM_INVISIBLE);
                 to_char = "$p vanishes.";
             }
         }
         SPELL_POISON => {
-            if (( db.obj(oid).get_obj_type() == ITEM_DRINKCON)
-                || ( db.obj(oid).get_obj_type() == ITEM_FOUNTAIN)
-                || ( db.obj(oid).get_obj_type() == ITEM_FOOD))
-                &&  db.obj(oid).get_obj_val(3) == 0
+            if (( objs.get(oid).get_obj_type() == ITEM_DRINKCON)
+                || ( objs.get(oid).get_obj_type() == ITEM_FOUNTAIN)
+                || ( objs.get(oid).get_obj_type() == ITEM_FOOD))
+                &&  objs.get(oid).get_obj_val(3) == 0
             {
-                 db.obj_mut(oid).set_obj_val(3, 1);
+                 objs.get_mut(oid).set_obj_val(3, 1);
                 to_char = "$p steams briefly.";
             }
         }
         SPELL_REMOVE_CURSE => {
-            if  db.obj(oid).obj_flagged(ITEM_NODROP) {
-                 db.obj_mut(oid).remove_obj_extra_bit(ITEM_NODROP);
+            if  objs.get(oid).obj_flagged(ITEM_NODROP) {
+                 objs.get_mut(oid).remove_obj_extra_bit(ITEM_NODROP);
             }
-            if  db.obj(oid).get_obj_type() == ITEM_WEAPON {
-                 db.obj_mut(oid).incr_obj_val(2);
+            if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
+                 objs.get_mut(oid).incr_obj_val(2);
                 to_char = "$p briefly glows blue.";
             }
         }
 
         SPELL_REMOVE_POISON => {
-            if ( db.obj(oid).get_obj_type() == ITEM_DRINKCON)
-                || (( db.obj(oid).get_obj_type() == ITEM_FOUNTAIN)
-                    || ( db.obj(oid).get_obj_type() == ITEM_FOOD) &&  db.obj(oid).get_obj_val(3) != 0)
+            if ( objs.get(oid).get_obj_type() == ITEM_DRINKCON)
+                || (( objs.get(oid).get_obj_type() == ITEM_FOUNTAIN)
+                    || ( objs.get(oid).get_obj_type() == ITEM_FOOD) &&  objs.get(oid).get_obj_val(3) != 0)
             {
-                 db.obj_mut(oid).set_obj_val(3, 0);
+                 objs.get_mut(oid).set_obj_val(3, 0);
                 to_char = "$p steams briefly.";
             }
         }
         _ => {}
     }
     let ch = db.ch(chid);
-    let obj = db.obj(oid);
+    let obj = objs.get(oid);
     if to_char.is_empty() {
         game.send_to_char(ch, NOEFFECT);
     } else {
@@ -1101,7 +1101,7 @@ pub fn mag_alter_objs(
     }
 }
 
-pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<DepotId>, spellnum: i32) {
+pub fn mag_creations(game: &mut Game, db: &mut DB, objs: &mut Depot<ObjData>,  _level: i32, chid: Option<DepotId>, spellnum: i32) {
     if chid.is_none() {
         return;
     }
@@ -1118,7 +1118,7 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
             return;
         }
     }
-    let tobj_id = db.read_object(z, VIRTUAL);
+    let tobj_id = db.read_object(objs,z, VIRTUAL);
     let ch = db.ch(chid);
     if tobj_id.is_none() {
         game.send_to_char(ch, "I seem to have goofed.\r\n");
@@ -1129,9 +1129,9 @@ pub fn mag_creations(game: &mut Game, db: &mut DB,  _level: i32, chid: Option<De
         return;
     }
     let tobj_id = tobj_id.unwrap();
-    db.obj_to_char(tobj_id, chid);
+    db.obj_to_char(objs,tobj_id, chid);
     let ch = db.ch(chid);
-    let tobj = db.obj(tobj_id);
+    let tobj = objs.get(tobj_id);
     game.act(db, 
         "$n creates $p.",
         false,

@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
-use crate::depot::{DepotId, HasId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::VictimRef;
 use std::borrow::Borrow;
 use std::fs::{File, OpenOptions};
@@ -1474,7 +1474,7 @@ pub fn circle_follow(db: &DB, ch: &CharData, victim: Option<&CharData>) -> bool 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
 impl Game {
-    pub fn stop_follower(&mut self, db: &mut DB, chid: DepotId) {
+    pub fn stop_follower(&mut self, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = db.ch(chid);
         if ch.master.is_none() {
             return;
@@ -1508,7 +1508,7 @@ impl Game {
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                db.affect_from_char(chid, SPELL_CHARM as i16);
+                db.affect_from_char(objs,chid, SPELL_CHARM as i16);
             }
         } else {
             let master_id: DepotId = ch.master.unwrap();
@@ -1565,14 +1565,14 @@ pub fn num_followers_charmed(&self,  db: &DB, chid: DepotId) -> i32 {
 }
 impl Game {
     /* Called when a character that follows/is followed dies */
-    pub fn die_follower(&mut self, db: &mut DB, chid: DepotId) {
+    pub fn die_follower(&mut self, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = db.ch(chid);
         if ch.master.is_some() {
-            self.stop_follower(db, chid);
+            self.stop_follower(db, objs,chid);
         }
         let ch = db.ch(chid);
         for k in  ch.followers.clone() {
-            self.stop_follower(db, k.follower);
+            self.stop_follower(db, objs,k.follower);
         }
     }
 }

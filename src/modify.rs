@@ -51,7 +51,7 @@ use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
-use crate::{DescriptorData, Game, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
+use crate::{DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
 
 impl DescriptorData {
     pub fn string_write(
@@ -160,7 +160,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
 // ********************************************************************** */
 pub fn do_skillset(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,

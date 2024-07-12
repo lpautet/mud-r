@@ -23,7 +23,7 @@ use crate::structs::{
     PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
     PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
-use crate::{CharData, TextData, VictimRef, DB};
+use crate::{CharData, ObjData, TextData, VictimRef, DB};
 use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
@@ -31,7 +31,7 @@ use crate::{
 
 pub fn do_say(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -56,7 +56,7 @@ pub fn do_say(
 
 pub fn do_gsay(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -211,7 +211,7 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
  */
 pub fn do_tell(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -242,7 +242,7 @@ pub fn do_tell(
 
 pub fn do_reply(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -288,7 +288,7 @@ pub fn do_reply(
 
 pub fn do_spec_comm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -382,7 +382,7 @@ pub fn do_spec_comm(
 
 pub fn do_write(
     game: &mut Game, 
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -411,14 +411,14 @@ pub fn do_write(
     if !penname.is_empty() {
         /* there were two arguments */
         if {
-            paper = game.get_obj_in_list_vis(db, ch, &papername, None, &ch.carrying);
+            paper = game.get_obj_in_list_vis(db, objs,ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", papername).as_str());
             return;
         }
         if {
-            pen = game.get_obj_in_list_vis(db, ch, &penname, None, &ch.carrying);
+            pen = game.get_obj_in_list_vis(db, objs,ch, &penname, None, &ch.carrying);
             pen.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", penname).as_str());
@@ -427,7 +427,7 @@ pub fn do_write(
     } else {
         /* there was one arg.. let's see what we can find */
         if {
-            paper = game.get_obj_in_list_vis(db, ch, &papername, None, &ch.carrying);
+            paper = game.get_obj_in_list_vis(db, objs,ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(
@@ -457,14 +457,14 @@ pub fn do_write(
             );
             return;
         }
-        if !game.can_see_obj(db, ch, db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
+        if !game.can_see_obj(db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
             game.send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
             return;
         }
         if pen.is_some() {
-            paper = Some(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap()));
+            paper = Some(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap()));
         } else {
-            pen = Some(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap()));
+            pen = Some(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap()));
         }
     }
     let pen = pen.unwrap();
@@ -519,7 +519,7 @@ pub fn do_write(
 
 pub fn do_page(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -601,7 +601,7 @@ pub fn do_page(
 
 pub fn do_gen_comm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -771,7 +771,7 @@ pub fn do_gen_comm(
 
 pub fn do_qcomm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     cmd: usize,

@@ -24,7 +24,7 @@ use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::LVL_GOD;
 use crate::util::{ctime, time_now, NRM};
-use crate::{Game, TextData};
+use crate::{Game, ObjData, TextData};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 
@@ -118,7 +118,7 @@ macro_rules! ban_list_format {
     };
 }
 
-pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if argument.is_empty() {
         if db.ban_list.is_empty() {
@@ -212,7 +212,7 @@ pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: D
     write_ban_list(&db);
 }
 
-pub fn do_unban(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_unban(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut site = String::new();
     one_argument(argument, &mut site);

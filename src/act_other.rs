@@ -16,7 +16,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{TextData, VictimRef, DB};
+use crate::{ObjData, TextData, VictimRef, DB};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -53,7 +53,7 @@ use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 pub fn do_quit(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>,
+    db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -70,7 +70,7 @@ pub fn do_quit(
         game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
     } else if ch.get_pos() < POS_STUNNED {
         game.send_to_char(ch, "You die before your time...\r\n");
-        die(chid, game, db, texts);
+        die(chid, game, db, texts,objs);
     } else {
         game.act(
             db,
@@ -98,7 +98,7 @@ pub fn do_quit(
          */
 
         if FREE_RENT {
-            crash_rentsave(game, db, chid, 0);
+            crash_rentsave(game, db, objs,chid, 0);
         }
 
         /* If someone is quitting in their house, let them load back here. */
@@ -115,7 +115,7 @@ pub fn do_quit(
 
 pub fn do_save(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>,
+    db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     cmd: usize,
@@ -148,12 +148,12 @@ pub fn do_save(
     }
     let ch = db.ch(chid);
     write_aliases(ch);
-    game.save_char(db, texts, chid);
-    crash_crashsave(db, chid);
+    game.save_char(db, texts, objs,chid);
+    crash_crashsave(db,objs, chid);
     let ch = db.ch(chid);
     if db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
         let in_room = db.get_room_vnum(ch.in_room());
-        house_crashsave(db, in_room);
+        house_crashsave(db, objs, in_room);
     }
 }
 
@@ -161,7 +161,7 @@ pub fn do_save(
 special procedures - i.e., shop commands, mail commands, etc. */
 pub fn do_not_here(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -173,7 +173,7 @@ pub fn do_not_here(
 
 pub fn do_sneak(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -187,7 +187,7 @@ pub fn do_sneak(
     game.send_to_char(ch, "Okay, you'll try to move silently for a while.\r\n");
     let ch = db.ch(chid);
     if ch.aff_flagged(AFF_SNEAK) {
-        db.affect_from_char(chid, SKILL_SNEAK as i16);
+        db.affect_from_char(objs,chid, SKILL_SNEAK as i16);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
@@ -206,12 +206,12 @@ pub fn do_sneak(
         bitvector: AFF_SNEAK,
     };
 
-    db.affect_to_char(chid, af);
+    db.affect_to_char(objs, chid, af);
 }
 
 pub fn do_hide(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -241,7 +241,7 @@ pub fn do_hide(
 
 pub fn do_steal(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>,
+    db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -307,18 +307,18 @@ pub fn do_steal(
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            obj = game.get_obj_in_list_vis(db, ch, &mut obj_name, None, &vict.carrying);
+            obj = game.get_obj_in_list_vis(db, objs,ch, &mut obj_name, None, &vict.carrying);
             obj.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
                     && isname(
                         &obj_name,
-                        db.obj(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
+                        objs.get(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
                     )
-                    && game.can_see_obj(db, ch, db.obj(vict.get_eq(eq_pos).unwrap()))
+                    && game.can_see_obj(db, ch, objs.get(vict.get_eq(eq_pos).unwrap()))
                 {
-                    obj = vict.get_eq(eq_pos).map(|i| db.obj(i));
+                    obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
                     the_eq_pos = eq_pos;
                 }
             }
@@ -358,8 +358,8 @@ pub fn do_steal(
                         Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
-                    let eqid = db.unequip_char(vict.id(), the_eq_pos).unwrap();
-                    db.obj_to_char(eqid, chid);
+                    let eqid = db.unequip_char(objs,vict.id(), the_eq_pos).unwrap();
+                    db.obj_to_char(objs,eqid, chid);
                 }
             }
         } else {
@@ -393,8 +393,8 @@ pub fn do_steal(
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
                     if ch.is_carrying_w() + obj.get_obj_weight() < ch.can_carry_w() as i32 {
                         let obj_id = obj.id();
-                        db.obj_from_char(obj_id);
-                        db.obj_to_char(obj_id, chid);
+                        db.obj_from_char(objs,obj_id);
+                        db.obj_to_char(objs,obj_id, chid);
                         let ch = db.ch(chid);
                         game.send_to_char(ch, "Got it!\r\n");
                     }
@@ -451,13 +451,13 @@ pub fn do_steal(
     }
     let vict = db.ch(vict_id);
     if ohoh && vict.is_npc() && vict.awake() {
-        game.hit(db, texts, vict_id, chid, TYPE_UNDEFINED);
+        game.hit(db, texts, objs,vict_id, chid, TYPE_UNDEFINED);
     }
 }
 
 pub fn do_practice(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -479,7 +479,7 @@ pub fn do_practice(
 
 pub fn do_visible(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -487,12 +487,12 @@ pub fn do_visible(
 ) {
     let ch = db.ch(chid);
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_vis(game, db, chid);
+        perform_immort_vis(game, db, objs,chid);
         return;
     }
     let ch = db.ch(chid);
     if ch.aff_flagged(AFF_INVISIBLE) {
-        game.appear(db, chid);
+        game.appear(db, objs,chid);
         let ch = db.ch(chid);
         game.send_to_char(ch, "You break the spell of invisibility.\r\n");
     } else {
@@ -502,7 +502,7 @@ pub fn do_visible(
 
 pub fn do_title(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -646,7 +646,7 @@ fn print_group(game: &mut Game, db: &mut DB, chid: DepotId) {
 
 pub fn do_group(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -753,7 +753,7 @@ pub fn do_group(
 
 pub fn do_ungroup(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -787,7 +787,7 @@ pub fn do_ungroup(
                 );
                 let follower = db.ch(f.follower);
                 if !follower.aff_flagged(AFF_CHARM) {
-                    game.stop_follower(db, f.follower);
+                    game.stop_follower(db, objs,f.follower);
                 }
             }
         }
@@ -849,13 +849,13 @@ pub fn do_ungroup(
     );
     let tch = db.ch(tchid);
     if !tch.aff_flagged(AFF_CHARM) {
-        game.stop_follower(db, tchid);
+        game.stop_follower(db,objs, tchid);
     }
 }
 
 pub fn do_report(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -914,7 +914,7 @@ pub fn do_report(
 
 pub fn do_split(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1047,7 +1047,7 @@ pub fn do_split(
 
 pub fn do_use(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     cmd: usize,
@@ -1066,13 +1066,13 @@ pub fn do_use(
         );
         return;
     }
-    let mut mag_item = ch.get_eq(WEAR_HOLD as i8).map(|i| db.obj(i));
+    let mut mag_item = ch.get_eq(WEAR_HOLD as i8).map(|i| objs.get(i));
 
     if mag_item.is_none() || !isname(&arg, mag_item.unwrap().name.as_ref()) {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 if {
-                    mag_item = game.get_obj_in_list_vis(db, ch, &arg, None, &ch.carrying);
+                    mag_item = game.get_obj_in_list_vis(db, objs,ch, &arg, None, &ch.carrying);
                     mag_item.is_none()
                 } {
                     game.send_to_char(
@@ -1120,12 +1120,12 @@ pub fn do_use(
         _ => {}
     }
 
-    mag_objectmagic(game, db, texts,chid, mag_item.id(), &buf);
+    mag_objectmagic(game, db, texts,objs, chid, mag_item.id(), &buf);
 }
 
 pub fn do_wimpy(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1202,7 +1202,7 @@ pub fn do_wimpy(
 
 pub fn do_display(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1277,7 +1277,7 @@ pub fn do_display(
 
 pub fn do_gen_write(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     cmd: usize,
@@ -1389,7 +1389,7 @@ macro_rules! prf_tog_chk {
 
 pub fn do_gen_tog(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,

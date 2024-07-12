@@ -13,7 +13,7 @@ use std::cmp::{max, min};
 
 use log::error;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{TextData, VictimRef};
+use crate::{ObjData, TextData, VictimRef};
 
 use crate::config::OK;
 use crate::db::DB;
@@ -302,7 +302,7 @@ fn mag_manacost(ch: &CharData, sinfo: &SpellInfoType) -> i16 {
 }
 
 fn say_spell(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: & Depot<ObjData>, 
     chid: DepotId,
     spellnum: i32,
     tch_id: Option<DepotId>,
@@ -351,9 +351,9 @@ fn say_spell(
             );
             buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
         }
-    } else if tobj_id.is_some() && db.obj(tobj_id.unwrap()).in_room() == ch.in_room()
+    } else if tobj_id.is_some() && objs.get(tobj_id.unwrap()).in_room() == ch.in_room()
         || 
-            db.obj(tobj_id.unwrap()).carried_by.unwrap() ==
+            objs.get(tobj_id.unwrap()).carried_by.unwrap() ==
             chid
     {
         buf1.push_str(
@@ -384,7 +384,7 @@ fn say_spell(
         };
         let ch = db.ch(chid);
         let i = db.ch(i_id);
-        let toobj = tobj_id.map(|id| db.obj(id));
+        let toobj = tobj_id.map(|id| objs.get(id));
         let tch2 = db.ch(tch2_id.unwrap());
         if ch.get_class() == db.ch(i_id).get_class() {
             game.perform_act(db,&buf1, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
@@ -467,7 +467,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
 pub fn call_magic(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, 
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     caster_id: DepotId,
     cvict_id: Option<DepotId>,
     ovict: Option<DepotId>,
@@ -531,7 +531,7 @@ pub fn call_magic(
 
     if is_set!(sinfo_routines, MAG_DAMAGE) {
         if mag_damage(
-            game,db,texts,
+            game,db,texts,objs,
             level,
             caster_id,
             cvict_id.unwrap(),
@@ -543,12 +543,12 @@ pub fn call_magic(
         }
     }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
-        mag_affects(game, db,level, caster_id, cvict_id, spellnum, savetype);
+        mag_affects(game, db,objs,level, caster_id, cvict_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_UNAFFECTS) {
         mag_unaffects(
-            game,db,
+            game,db,objs,
             level,
             caster_id,
             cvict_id.unwrap(),
@@ -562,44 +562,44 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_ALTER_OBJS) {
-        mag_alter_objs(game, db,level, caster_id, ovict, spellnum, savetype);
+        mag_alter_objs(game, db,objs,level, caster_id, ovict, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
-        mag_groups(game,db, texts, level, Some(caster_id), spellnum, savetype);
+        mag_groups(game,db, texts,objs, level, Some(caster_id), spellnum, savetype);
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
         mag_masses(db, level, caster_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_AREAS) {
-        mag_areas(game, db, texts, level, Some(caster_id), spellnum, savetype);
+        mag_areas(game, db, texts, objs,level, Some(caster_id), spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
-        mag_summons(game, db,level, Some(caster_id), ovict, spellnum, savetype);
+        mag_summons(game, db,objs,level, Some(caster_id), ovict, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {
-        mag_creations(game, db,level, Some(caster_id), spellnum);
+        mag_creations(game, db,objs,level, Some(caster_id), spellnum);
     }
 
     if is_set!(sinfo_routines, MAG_MANUAL) {
         match spellnum {
-            SPELL_CHARM => spell_charm(game, db, level, Some(caster_id), cvict_id, ovict),
-            SPELL_CREATE_WATER => spell_create_water(game, db, level, Some(caster_id), cvict_id, ovict),
-            SPELL_DETECT_POISON => spell_detect_poison(game, db, level, Some(caster_id), cvict_id, ovict),
+            SPELL_CHARM => spell_charm(game, db,objs,level, Some(caster_id), cvict_id, ovict),
+            SPELL_CREATE_WATER => spell_create_water(game, db, objs,level, Some(caster_id), cvict_id, ovict),
+            SPELL_DETECT_POISON => spell_detect_poison(game, db,objs, level, Some(caster_id), cvict_id, ovict),
             SPELL_ENCHANT_WEAPON => {
-                spell_enchant_weapon(game, db, level, Some(caster_id), cvict_id, ovict)
+                spell_enchant_weapon(game, db, objs,level, Some(caster_id), cvict_id, ovict)
             }
-            SPELL_IDENTIFY => spell_identify(game, db, level, Some(caster_id), cvict_id, ovict),
-            SPELL_LOCATE_OBJECT => spell_locate_object(game, db, level, Some(caster_id), cvict_id, ovict),
-            SPELL_SUMMON => spell_summon(game, db,texts, level, Some(caster_id), cvict_id, ovict),
+            SPELL_IDENTIFY => spell_identify(game, db,objs, level, Some(caster_id), cvict_id, ovict),
+            SPELL_LOCATE_OBJECT => spell_locate_object(game, db,objs,level, Some(caster_id), cvict_id, ovict),
+            SPELL_SUMMON => spell_summon(game, db,texts, objs,level, Some(caster_id), cvict_id, ovict),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(game, db, texts,level, Some(caster_id), cvict_id, ovict);
+                spell_recall(game, db, texts,objs,level, Some(caster_id), cvict_id, ovict);
             }
             SPELL_TELEPORT => {
-                spell_teleport(game, db, texts,level, Some(caster_id), cvict_id, ovict);
+                spell_teleport(game, db, texts,objs,level, Some(caster_id), cvict_id, ovict);
             }
             _ => {}
         }
@@ -622,15 +622,15 @@ pub fn call_magic(
  * the DikuMUD format did not specify staff and wand levels in the world
  * files (this is a CircleMUD enhancement).
  */
-pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, oid: DepotId, argument: &str) {
+pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, oid: DepotId, argument: &str) {
     let ch = db.ch(chid);
-    let obj = db.obj(oid);
+    let obj = objs.get(oid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
     let mut tch = None;
     let mut tobj = None;
-    let k = game.generic_find(db,
+    let k = game.generic_find(db,objs,
         &arg,
         (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -680,11 +680,11 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
                 );
             } else {
                 let oid = obj.id();
-                db.obj_mut(oid).decr_obj_val(2);
+                objs.get_mut(oid).decr_obj_val(2);
                 let ch = db.ch_mut(chid);
                 ch.set_wait_state(PULSE_VIOLENCE as i32);
                 /* Level to cast spell at. */
-                let obj = db.obj(oid);
+                let obj = objs.get(oid);
                 let k = if obj.get_obj_val(0) != 0 {
                     obj.get_obj_val(0)
                 } else {
@@ -704,17 +704,17 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
                         .len();
                     while i > 0 {
                         i -= 1;
-                        let obj = db.obj(oid);
+                        let obj = objs.get(oid);
                         let spellnum = obj.get_obj_val(i);
-                        call_magic(game, db,texts, chid, None, None, spellnum, k, CAST_STAFF);
+                        call_magic(game, db,texts, objs,chid, None, None, spellnum, k, CAST_STAFF);
                     }
                 } else {
                     for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
                         if chid != tch_id {
-                            let obj = db.obj(oid);
+                            let obj = objs.get(oid);
                             let spellnum = obj.get_obj_val(3);
                             call_magic(
-                                game,db,texts,
+                                game,db,texts,objs,
                                 chid,
                                 Some(tch_id),
                                 None,
@@ -853,13 +853,13 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
             let tch_id = tch.map(|c| c.id());
             let tobj_id = tobj.map(|o| o.id());
             let oid = obj.id();
-            db.obj_mut(oid).decr_obj_val(2);
+            objs.get_mut(oid).decr_obj_val(2);
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
-            let obj = db.obj(oid);
+            let obj = objs.get(oid);
             if obj.get_obj_val(0) != 0 {
                 call_magic(
-                    game,db,texts,
+                    game,db,texts,objs,
                     chid,
                     tch_id,
                     tobj_id,
@@ -869,7 +869,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
                 );
             } else {
                 call_magic(
-                    game,db,texts,
+                    game,db,texts,objs,
                     chid,
                     tch_id,
                     tobj_id,
@@ -922,11 +922,11 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             for i in 1..3 {
-                let obj = db.obj(oid);
+                let obj = objs.get(oid);
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,db,texts,
+                    game,db,texts,objs,
                     chid,tch_id,
                     tobj_id,
                     spellnum,
@@ -938,7 +938,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
                 }
             }
 
-            db.extract_obj(oid);
+            db.extract_obj(objs,oid);
         }
         ITEM_POTION => {
             game
@@ -959,11 +959,11 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             for i in 1..3 {
-                let obj = db.obj(oid);
+                let obj = objs.get(oid);
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,db,texts,
+                    game,db,texts,objs,
                     chid,
                     Some(chid),
                     None,
@@ -976,7 +976,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
                 }
             }
 
-            db.extract_obj(oid);
+            db.extract_obj(objs,oid);
         }
         _ => {
             error!(
@@ -996,7 +996,7 @@ pub fn mag_objectmagic(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>
  * by NPCs via specprocs.
  */
 pub fn cast_spell(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, 
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     tch_id: Option<DepotId>,
     tobj_id: Option<DepotId>,
@@ -1053,10 +1053,10 @@ pub fn cast_spell(
         return 0;
     }
     game.send_to_char(ch, OK);
-    say_spell(game, db,chid, spellnum, tch_id, tobj_id);
+    say_spell(game, db,objs,chid, spellnum, tch_id, tobj_id);
     let ch = db.ch(chid);
     return call_magic(
-        game,db,texts,
+        game,db,texts,objs,
         chid,
         tch_id,
         tobj_id,
@@ -1072,7 +1072,7 @@ pub fn cast_spell(
  * the spell can be cast, checks for sufficient mana and subtracts it, and
  * passes control to cast_spell().
  */
-pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if ch.is_npc() {
         return;
@@ -1146,7 +1146,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: 
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
             if {
-                tobj = game.get_obj_in_list_vis(db,ch, &t, None, &ch.carrying);
+                tobj = game.get_obj_in_list_vis(db,objs,ch, &t, None, &ch.carrying);
                 tobj.is_some()
             } {
                 target = true;
@@ -1155,15 +1155,15 @@ pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: 
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
-                if ch.get_eq(i).is_some() && isname(&t, db.obj(ch.get_eq(i).unwrap()).name.as_ref()) {
-                    tobj = Some(db.obj(ch.get_eq(i).unwrap()));
+                if ch.get_eq(i).is_some() && isname(&t, objs.get(ch.get_eq(i).unwrap()).name.as_ref()) {
+                    tobj = Some(objs.get(ch.get_eq(i).unwrap()));
                     target = true;
                 }
             }
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
             if {
-                tobj = game.get_obj_in_list_vis2(db,
+                tobj = game.get_obj_in_list_vis2(db,objs,
                     ch,
                     &t,
                     None,
@@ -1177,7 +1177,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: 
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) {
             if {
-                tobj = game.get_obj_vis(db,ch, &t, None);
+                tobj = game.get_obj_vis(db,objs,ch, &t, None);
                 tobj.is_some()
             } {
                 target = true;
@@ -1244,7 +1244,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: 
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         let ch = db.ch(chid);
         let tch = tch_id.map(|i| db.ch(i));
-        if tch.is_none() || game.skill_message(db, 0, ch, tch.unwrap(), spellnum) == 0 {
+        if tch.is_none() || game.skill_message(db, objs,0, ch, tch.unwrap(), spellnum) == 0 {
             game.send_to_char(ch, "You lost your concentration!\r\n");
         }
         if mana > 0 {
@@ -1253,13 +1253,13 @@ pub fn do_cast(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: 
         }
         let tch = tch_id.map(|i| db.ch(i));
         if sinfo.violent && tch.is_some() && tch.unwrap().is_npc() {
-            game.hit(db, texts, tch_id.unwrap(), chid, TYPE_UNDEFINED);
+            game.hit(db, texts, objs,tch_id.unwrap(), chid, TYPE_UNDEFINED);
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
         let tch_id = tch.map(|c| c.id());
         let tobj_id = tobj.map(|o| o.id());
-        if cast_spell(game, db, texts, chid, tch_id, tobj_id, spellnum) != 0 {
+        if cast_spell(game, db, texts, objs,chid, tch_id, tobj_id, spellnum) != 0 {
             let ch = db.ch_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if mana > 0 {

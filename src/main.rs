@@ -262,6 +262,7 @@ fn main() -> ExitCode {
         max_players: 0,
     };
     let mut texts: Depot<TextData> = Depot::new();
+    let mut objs: Depot<ObjData> = Depot::new();
 
     let mut db = DB::new(&mut texts);
     let mut logname: Option<&str> = LOGNAME;
@@ -400,11 +401,11 @@ fn main() -> ExitCode {
     } else {
         info!("Running game on port {}.", port);
         game.mother_desc = Some(init_socket(port));
-        game.init_game(&mut db, &mut texts, port,);
+        game.init_game(&mut db, &mut texts, &mut objs, port,);
     }
 
     info!("Clearing game world.");
-    db.destroy_db();
+    db.destroy_db(&mut objs);
 
     if !db.scheck {
         info!("Clearing other memory.");
@@ -425,7 +426,7 @@ fn main() -> ExitCode {
 
 impl Game {
     /* Init sockets, run game, and cleanup sockets */
-    fn init_game(&mut self, db: &mut DB, texts: &mut Depot<TextData>, _port: u16) {
+    fn init_game(&mut self, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,_port: u16) {
         /* We don't want to restart if we crash before we get up. */
         touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
 
@@ -433,7 +434,7 @@ impl Game {
         self.max_players = get_max_players();
 
         info!("Opening mother connection.");
-        db.boot_db(self, texts);
+        db.boot_db(self, texts, objs);
 
         // info!("Signal trapping.");
         // signal_setup();
@@ -443,13 +444,13 @@ impl Game {
 
         info!("Entering game loop.");
 
-        self.game_loop(db, texts);
+        self.game_loop(db, texts, objs);
 
-        crash_save_all(self, db);
+        crash_save_all(self, db,objs);
 
         info!("Closing all sockets.");
         let ids = self.descriptor_list.ids();
-        ids.iter().for_each(|d| self.close_socket(db, texts, *d));
+        ids.iter().for_each(|d| self.close_socket(db, texts,objs, *d));
 
         self.mother_desc = None;
 
@@ -500,7 +501,7 @@ impl Game {
         self.descriptor_list.get_mut(desc_id)
     }
 
-    fn game_loop(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
+    fn game_loop(&mut self, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
         let mut before_sleep;
@@ -616,10 +617,10 @@ impl Game {
                             && character.get_was_in() != NOWHERE
                         {
                             if character.in_room != NOWHERE {
-                                db.char_from_room(character_id);
+                                db.char_from_room(objs,character_id);
                             }
                             let character = db.ch(character_id);
-                            db.char_to_room(character_id, character.get_was_in());
+                            db.char_to_room(objs,character_id, character.get_was_in());
                             let character = db.ch_mut(character_id);
                             character.set_was_in(NOWHERE);
                             let character = db.ch(character_id);
@@ -648,7 +649,7 @@ impl Game {
                     show_string(self, db, d_id, &comm);
                 } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, db, texts, d_id, &comm);
+                    nanny(self, db, texts, objs,d_id, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
@@ -660,7 +661,7 @@ impl Game {
                     }
                     /* Send it to interpreter */
                     let chid = self.desc(d_id).character.unwrap();
-                    command_interpreter(self, db, texts, chid, &comm);
+                    command_interpreter(self, db, texts, objs,chid, &comm);
                 }
             }
 
@@ -692,7 +693,7 @@ impl Game {
             for id in desc_ids {
                 let d = self.desc(id);
                 if d.state() == ConClose || d.state() == ConDisconnect {
-                    self.close_socket(db, texts, id);
+                    self.close_socket(db, texts, objs, id);
                 }
             }
 
@@ -723,7 +724,7 @@ impl Game {
             /* Now execute the heartbeat functions */
             while missed_pulses != 0 {
                 pulse += 1;
-                self.heartbeat(db, texts, pulse);
+                self.heartbeat(db, texts, objs, pulse);
                 missed_pulses -= 1;
             }
 
@@ -750,9 +751,9 @@ impl Game {
 }
 
 impl Game {
-    fn heartbeat(&mut self, db: &mut DB, texts: &mut Depot<TextData>, pulse: u128) {
+    fn heartbeat(&mut self, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, pulse: u128) {
         if pulse % PULSE_ZONE == 0 {
-            self.zone_update(db);
+            self.zone_update(db, objs);
         }
 
         if pulse % PULSE_IDLEPWD == 0 {
@@ -761,17 +762,17 @@ impl Game {
         }
 
         if pulse % PULSE_MOBILE == 0 {
-            self.mobile_activity(db, texts);
+            self.mobile_activity(db, texts,objs);
         }
 
         if pulse % PULSE_VIOLENCE == 0 {
-            self.perform_violence(db, texts);
+            self.perform_violence(db, texts,objs);
         }
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(db, 1);
-            affect_update(self, db);
-            self.point_update(db, texts);
+            affect_update(self, db,objs);
+            self.point_update(db, texts,objs);
             //fflush(player_fl);
         }
 
@@ -780,8 +781,8 @@ impl Game {
             self.mins_since_crashsave += 1;
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave = 0;
-                crash_save_all(self, db);
-                house_save_all(db);
+                crash_save_all(self, db,objs);
+                house_save_all(db,objs);
             }
         }
 
@@ -794,7 +795,7 @@ impl Game {
         }
 
         /* Every pulse! Don't want them to stink the place up... */
-        self.extract_pending_chars(db, texts);
+        self.extract_pending_chars(db, texts, objs);
     }
 }
 
@@ -1417,7 +1418,7 @@ impl DescriptorData {
     }
 }
 impl Game {
-    pub fn close_socket(&mut self, db: &mut DB, texts: &mut Depot<TextData>, d: DepotId) {
+    pub fn close_socket(&mut self, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, d: DepotId) {
         let mut desc: DescriptorData = self.descriptor_list.take(d);
 
         desc.stream
@@ -1462,7 +1463,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.save_char(db, texts, link_challenged_id);
+                        self.save_char(db, texts, objs,link_challenged_id);
                         self.mudlog(
                             db,
                             NRM,
@@ -1492,7 +1493,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        db.free_char(desc.character.unwrap());
+                        db.free_char(objs, desc.character.unwrap());
                     }
                 }
             }

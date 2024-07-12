@@ -10,7 +10,7 @@
 ************************************************************************ */
 use std::cmp::{max, min};
 use crate::depot::{Depot, DepotId};
-use crate::{TextData, VictimRef, DB};
+use crate::{ObjData, TextData, VictimRef, DB};
 
 use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
@@ -269,7 +269,7 @@ pub struct AttackHitType {
  * Special spells appear below.
  */
 pub fn spell_create_water(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -282,24 +282,24 @@ pub fn spell_create_water(
     let obj_id = obj_id.unwrap();
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
-    if  db.obj(obj_id).get_obj_type() == ITEM_DRINKCON {
-        if  db.obj(obj_id).get_obj_val(2) != LIQ_WATER &&  db.obj(obj_id).get_obj_val(1) != 0 {
-            name_from_drinkcon(db, Some(obj_id));
-             db.obj_mut(obj_id).set_obj_val(2, LIQ_SLIME);
-            name_to_drinkcon(db, Some(obj_id), LIQ_SLIME);
+    if  objs.get(obj_id).get_obj_type() == ITEM_DRINKCON {
+        if  objs.get(obj_id).get_obj_val(2) != LIQ_WATER &&  objs.get(obj_id).get_obj_val(1) != 0 {
+            name_from_drinkcon(objs,Some(obj_id));
+             objs.get_mut(obj_id).set_obj_val(2, LIQ_SLIME);
+            name_to_drinkcon(objs,Some(obj_id), LIQ_SLIME);
         } else {
-            let water = max( db.obj(obj_id).get_obj_val(0) -  db.obj(obj_id).get_obj_val(1), 0);
+            let water = max( objs.get(obj_id).get_obj_val(0) -  objs.get(obj_id).get_obj_val(1), 0);
             if water > 0 {
-                if  db.obj(obj_id).get_obj_val(1) >= 0 {
-                    name_from_drinkcon(db, Some(obj_id));
+                if  objs.get(obj_id).get_obj_val(1) >= 0 {
+                    name_from_drinkcon( objs,Some(obj_id));
                 }
-                 db.obj_mut(obj_id).set_obj_val(2, LIQ_WATER);
-                 let v = db.obj(obj_id).get_obj_val(1) + water;
-                 db.obj_mut(obj_id).set_obj_val(1,v  );
-                name_to_drinkcon(db, Some(obj_id), LIQ_WATER);
-                weight_change_object(db, obj_id, water);
+                 objs.get_mut(obj_id).set_obj_val(2, LIQ_WATER);
+                 let v = objs.get(obj_id).get_obj_val(1) + water;
+                 objs.get_mut(obj_id).set_obj_val(1,v  );
+                name_to_drinkcon( objs, Some(obj_id), LIQ_WATER);
+                weight_change_object(db, objs,obj_id, water);
                 let ch = db.ch(chid);
-                let obj = db.obj(obj_id);
+                let obj = objs.get(obj_id);
                 game.act(db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
             }
         }
@@ -307,7 +307,7 @@ pub fn spell_create_water(
 }
 
 pub fn spell_recall(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -321,8 +321,8 @@ pub fn spell_recall(
     let victim = db.ch(victim_id);
 
     game.act(db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
-    db.char_from_room(victim_id);
-    db.char_to_room(victim_id, db.r_mortal_start_room);
+    db.char_from_room(objs,victim_id);
+    db.char_to_room(objs,victim_id, db.r_mortal_start_room);
     let victim = db.ch(victim_id);
     game.act(db,
         "$n appears in the middle of the room.",
@@ -332,11 +332,11 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, texts,victim, false);
+    look_at_room(game, db, texts,objs,victim, false);
 }
 
 pub fn spell_teleport(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -367,8 +367,8 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    db.char_from_room(victim_id);
-    db.char_to_room(victim_id, to_room as RoomRnum);
+    db.char_from_room(objs,victim_id);
+    db.char_to_room(objs,victim_id, to_room as RoomRnum);
     let victim = db.ch(victim_id);
     game.act(db,
         "$n slowly fades into existence.",
@@ -378,13 +378,13 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, texts,victim, false);
+    look_at_room(game, db, texts,objs,victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 pub fn spell_summon(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -458,9 +458,9 @@ pub fn spell_summon(
         TO_ROOM,
     );
 
-    db.char_from_room(victim_id);
+    db.char_from_room(objs,victim_id);
     let ch = db.ch(chid);
-    db.char_to_room(victim_id, ch.in_room());
+    db.char_to_room(objs,victim_id, ch.in_room());
     let victim = db.ch(victim_id);
     game.act(db,
         "$n arrives suddenly.",
@@ -479,11 +479,11 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(game, db,texts,victim, false);
+    look_at_room(game, db,texts,objs,victim, false);
 }
 
 pub fn spell_locate_object(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -498,52 +498,52 @@ pub fn spell_locate_object(
     let ch = db.ch(chid.unwrap());
     let oid = oid.unwrap();
     let mut name = String::new();
-    name.push_str(& db.obj(oid).name);
+    name.push_str(& objs.get(oid).name);
     let mut j = level / 2;
 
-    for i in db.object_list.ids() {
-        if !isname(&name, db.obj(i).name.as_ref()) {
+    for &i in &db.object_list {
+        if !isname(&name, objs.get(i).name.as_ref()) {
             continue;
         }
 
         game.send_to_char(ch,
             format!(
                 "{}{}",
-                &db.obj(i).short_description[0..0].to_uppercase(),
-                &db.obj(i).short_description[1..]
+                &objs.get(i).short_description[0..0].to_uppercase(),
+                &objs.get(i).short_description[1..]
             )
             .as_str(),
         );
 
-        if db.obj(i).carried_by.is_some() {
+        if objs.get(i).carried_by.is_some() {
             game.send_to_char(ch,
                 format!(
                     " is being carried by {}.\r\n",
-                    game.pers(db,db.ch(db.obj(i).carried_by.unwrap()), db.ch(chid.unwrap()))
+                    game.pers(db,db.ch(objs.get(i).carried_by.unwrap()), db.ch(chid.unwrap()))
                 )
                 .as_str(),
             );
-        } else if db.obj(i).in_room() != NOWHERE {
+        } else if objs.get(i).in_room() != NOWHERE {
             game.send_to_char(ch,
                 format!(
                     " is in {}.\r\n",
-                    db.world[db.obj(i).in_room() as usize].name
+                    db.world[objs.get(i).in_room() as usize].name
                 )
                 .as_str(),
             );
-        } else if db.obj(i).in_obj.is_some() {
+        } else if objs.get(i).in_obj.is_some() {
             game.send_to_char(ch,
                 format!(
                     " is in {}.\r\n",
-                    db.obj(db.obj(i).in_obj.unwrap()).short_description
+                    objs.get(objs.get(i).in_obj.unwrap()).short_description
                 )
                 .as_str(),
             );
-        } else if db.obj(i).worn_by.is_some() {
+        } else if objs.get(i).worn_by.is_some() {
             game.send_to_char(ch,
                 format!(
                     " is being worn by {}.\r\n",
-                    game.pers(db,db.ch(db.obj(i).worn_by.unwrap()), db.ch(chid.unwrap()))
+                    game.pers(db,db.ch(objs.get(i).worn_by.unwrap()), db.ch(chid.unwrap()))
                 )
                 .as_str(),
             );
@@ -560,7 +560,7 @@ pub fn spell_locate_object(
 }
 
 pub fn spell_charm(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -596,7 +596,7 @@ pub fn spell_charm(
         game.send_to_char(ch, "Your victim resists!\r\n");
     } else {
         if victim.master.is_some() {
-            game.stop_follower(db, victim_id);
+            game.stop_follower(db, objs,victim_id);
         }
 
         add_follower(game, db, victim_id, chid);
@@ -615,7 +615,7 @@ pub fn spell_charm(
         if victim.get_int() != 0 {
             af.duration /= victim.get_int() as i16;
         }
-        db.affect_to_char(victim_id, af);
+        db.affect_to_char(objs,victim_id, af);
         let victim = db.ch(victim_id);
         let ch = db.ch(chid);
         game.act(db,
@@ -634,7 +634,7 @@ pub fn spell_charm(
 }
 
 pub fn spell_identify(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -646,53 +646,53 @@ pub fn spell_identify(
         let oid = oid.unwrap();
         let mut bitbuf = String::new();
 
-        sprinttype(db.obj(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
+        sprinttype(objs.get(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
         game.send_to_char(ch,
             format!(
                 "You feel informed:\r\nObject '{}', Item type: {}\r\n",
-                db.obj(oid).short_description, bitbuf
+                objs.get(oid).short_description, bitbuf
             )
             .as_str(),
         );
 
-        if db.obj(oid).get_obj_affect() != 0 {
-            sprintbit(db.obj(oid).get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
+        if objs.get(oid).get_obj_affect() != 0 {
+            sprintbit(objs.get(oid).get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
             game.send_to_char(ch,
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
         }
 
-        sprintbit(db.obj(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
+        sprintbit(objs.get(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
         game.send_to_char(ch, format!("Item is: {}\r\n", bitbuf).as_str());
 
         game.send_to_char(ch,
             format!(
                 "Weight: {}, Value: {}, Rent: {}\r\n",
-                db.obj(oid).get_obj_weight(),
-                db.obj(oid).get_obj_cost(),
-                db.obj(oid).get_obj_rent()
+                objs.get(oid).get_obj_weight(),
+                objs.get(oid).get_obj_cost(),
+                objs.get(oid).get_obj_rent()
             )
             .as_str(),
         );
 
-        match db.obj(oid).get_obj_type() {
+        match objs.get(oid).get_obj_type() {
             ITEM_SCROLL | ITEM_POTION => {
-                if db.obj(oid).get_obj_val(1) >= 1 {
-                    bitbuf.push_str(skill_name(&db, db.obj(oid).get_obj_val(1)));
+                if objs.get(oid).get_obj_val(1) >= 1 {
+                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(1)));
                 }
 
-                if db.obj(oid).get_obj_val(2) >= 1 {
-                    bitbuf.push_str(skill_name(&db, db.obj(oid).get_obj_val(2)));
+                if objs.get(oid).get_obj_val(2) >= 1 {
+                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(2)));
                 }
 
-                if db.obj(oid).get_obj_val(3) >= 1 {
-                    bitbuf.push_str(skill_name(&db, db.obj(oid).get_obj_val(3)));
+                if objs.get(oid).get_obj_val(3) >= 1 {
+                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(3)));
                 }
 
                 game.send_to_char(ch,
                     format!(
                         "This {} casts: {}\r\n",
-                        ITEM_TYPES[db.obj(oid).get_obj_type() as usize],
+                        ITEM_TYPES[objs.get(oid).get_obj_type() as usize],
                         bitbuf
                     )
                     .as_str(),
@@ -702,11 +702,11 @@ pub fn spell_identify(
                 game.send_to_char(ch,
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
-                        ITEM_TYPES[db.obj(oid).get_obj_type() as usize],
-                        skill_name(&db, db.obj(oid).get_obj_val(3)),
-                        db.obj(oid).get_obj_val(1),
-                        if db.obj(oid).get_obj_val(1) == 1 { "" } else { "s" },
-                        db.obj(oid).get_obj_val(2)
+                        ITEM_TYPES[objs.get(oid).get_obj_type() as usize],
+                        skill_name(&db, objs.get(oid).get_obj_val(3)),
+                        objs.get(oid).get_obj_val(1),
+                        if objs.get(oid).get_obj_val(1) == 1 { "" } else { "s" },
+                        objs.get(oid).get_obj_val(2)
                     )
                     .as_str(),
                 );
@@ -715,31 +715,31 @@ pub fn spell_identify(
                 game.send_to_char(ch,
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
-                        db.obj(oid).get_obj_val(1),
-                        db.obj(oid).get_obj_val(2),
-                        (db.obj(oid).get_obj_val(2) + 1) * db.obj(oid).get_obj_val(1) / 2
+                        objs.get(oid).get_obj_val(1),
+                        objs.get(oid).get_obj_val(2),
+                        (objs.get(oid).get_obj_val(2) + 1) * objs.get(oid).get_obj_val(1) / 2
                     )
                     .as_str(),
                 );
             }
             ITEM_ARMOR => {
                 game.send_to_char(ch,
-                    format!("AC-apply is {}\r\n", db.obj(oid).get_obj_val(0)).as_str(),
+                    format!("AC-apply is {}\r\n", objs.get(oid).get_obj_val(0)).as_str(),
                 );
             }
             _ => {}
         }
         let mut found = false;
         for i in 0..MAX_OBJ_AFFECT as usize {
-            if db.obj(oid).affected[i].location != APPLY_NONE as u8
-                && db.obj(oid).affected[i].modifier != 0
+            if objs.get(oid).affected[i].location != APPLY_NONE as u8
+                && objs.get(oid).affected[i].modifier != 0
             {
                 if !found {
                     game.send_to_char(ch, "Can affect you as :\r\n");
                     found = true;
                 }
                 sprinttype(
-                    db.obj(oid).affected[i].location as i32,
+                    objs.get(oid).affected[i].location as i32,
                     &APPLY_TYPES,
                     &mut bitbuf,
                 );
@@ -747,7 +747,7 @@ pub fn spell_identify(
                     format!(
                         "   Affects: {} By {}\r\n",
                         bitbuf,
-                        db.obj(oid).affected[i].modifier
+                        objs.get(oid).affected[i].modifier
                     )
                     .as_str(),
                 );
@@ -825,7 +825,7 @@ pub fn spell_identify(
  * wielding character's hit/dam totals.
  */
 pub fn spell_enchant_weapon(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -838,7 +838,7 @@ pub fn spell_enchant_weapon(
         let oid = oid.unwrap();
 
     /* Either already enchanted or not a weapon. */
-    let obj = db.obj_mut(oid);
+    let obj = objs.get_mut(oid);
     if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ITEM_MAGIC) {
         return;
     }
@@ -863,19 +863,19 @@ pub fn spell_enchant_weapon(
     obj.affected[1] = af1;
     let ch = db.ch(chid);
     if ch.is_good() {
-        let obj = db.obj_mut(oid);
+        let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
         let ch = db.ch(chid);
-        let obj=db.obj(oid);
+        let obj=objs.get(oid);
         game.act(db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else if ch.is_evil() {
-        let obj = db.obj_mut(oid);
+        let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
         let ch = db.ch(chid);
-        let obj=db.obj(oid);
+        let obj=objs.get(oid);
         game.act(db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else {
-        let obj=db.obj(oid);
+        let obj=objs.get(oid);
         game.act(db,
             "$p glows yellow.",
             false,
@@ -888,7 +888,7 @@ pub fn spell_enchant_weapon(
 }
 
 pub fn spell_detect_poison(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -929,7 +929,7 @@ pub fn spell_detect_poison(
 
         if oid.is_some() {
             let oid = oid.unwrap();
-            let obj = db.obj(oid);
+            let obj = objs.get(oid);
             match obj.get_obj_type() {
                 ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
                     if obj.get_obj_val(3) != 0 {

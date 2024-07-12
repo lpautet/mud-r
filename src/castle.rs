@@ -260,7 +260,7 @@ fn get_victim(db: &DB, ch_at: &CharData) -> Option<DepotId> {
  * Makes a character banzaii on attackers of the castle staff.
  * Used by Guards, Tim, Tom, Dick, David, Peter, Master, King and Guards.
  */
-fn banzaii(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) -> bool {
+fn banzaii(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId) -> bool {
     let ch = db.ch(chid);
     let opponent_id = get_victim(db, ch);
     if !ch.awake() || ch.get_pos() == POS_FIGHTING || opponent_id.is_none() {
@@ -276,7 +276,7 @@ fn banzaii(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: Depo
         None,
         TO_ROOM,
     );
-    game.hit(db, texts, chid, opponent_id.unwrap(), TYPE_UNDEFINED);
+    game.hit(db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
     return true;
 }
 
@@ -288,7 +288,7 @@ fn banzaii(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: Depo
  */
 fn do_npc_rescue(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,objs: &mut Depot<ObjData>, 
     chid_hero_id: DepotId,
     ch_victim_id: DepotId,
 ) -> bool {
@@ -341,8 +341,8 @@ fn do_npc_rescue(
         db.stop_fighting(chid_hero_id);
     }
 
-    game.set_fighting(db, chid_hero_id, chid_bad_guy.unwrap());
-    game.set_fighting(db, chid_bad_guy.unwrap(), chid_hero_id);
+    game.set_fighting(db, objs,chid_hero_id, chid_bad_guy.unwrap());
+    game.set_fighting(db, objs,chid_bad_guy.unwrap(), chid_hero_id);
     return true;
 }
 
@@ -414,7 +414,7 @@ fn is_trash(i: &ObjData) -> bool {
  * Finds a suitabe victim, and cast some _NASTY_ spell on him.
  * Used by King Welmar
  */
-fn fry_victim(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,chid: DepotId) {
+fn fry_victim(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId) {
     let ch = db.ch(chid);
     if ch.points.mana < 10 {
         return;
@@ -439,7 +439,7 @@ fn fry_victim(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,chid: De
                 None,
                 TO_ROOM,
             );
-            cast_spell(game, db, texts, chid, Some(tchid), None, SPELL_COLOR_SPRAY);
+            cast_spell(game, db, texts,objs, chid, Some(tchid), None, SPELL_COLOR_SPRAY);
         }
         4 | 5 => {
             game.send_to_char(ch, "You concentrate and mumble to yourself.\r\n");
@@ -452,7 +452,7 @@ fn fry_victim(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,chid: De
                 None,
                 TO_ROOM,
             );
-            cast_spell(game, db, texts, chid, Some(tchid), None, SPELL_HARM);
+            cast_spell(game, db, texts, objs,chid, Some(tchid), None, SPELL_HARM);
         }
         6 | 7 => {
             game.act(
@@ -482,11 +482,11 @@ fn fry_victim(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,chid: De
                 Some(VictimRef::Char(tch)),
                 TO_VICT,
             );
-            cast_spell(game, db, texts, chid, Some(tchid), None, SPELL_FIREBALL);
+            cast_spell(game, db, texts, objs,chid, Some(tchid), None, SPELL_FIREBALL);
         }
         _ => {
             if !rand_number(0, 1) == 0 {
-                cast_spell(game, db, texts, chid, Some(chid), None, SPELL_HEAL);
+                cast_spell(game, db, texts,objs, chid, Some(chid), None, SPELL_HEAL);
             }
         }
     }
@@ -531,7 +531,7 @@ const MONOLOG: [&str; 4] = [
  */
 pub fn king_welmar(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -562,9 +562,9 @@ pub fn king_welmar(
     }
 
     if ch.get_pos() == POS_FIGHTING {
-        fry_victim(game, db, texts, chid);
+        fry_victim(game, db, texts, objs,chid);
         return false;
-    } else if banzaii(game, db, texts, chid) {
+    } else if banzaii(game, db, texts, objs,chid) {
         return false;
     }
 
@@ -576,7 +576,7 @@ pub fn king_welmar(
         '0' | '1' | '2' | '3' | '4' | '5' => {
             perform_move(
                 game,
-                db,texts,
+                db,texts,objs,
                 chid,
                 (db.king_welmar.path[db.king_welmar.path_index] - b'0') as i32,
                 true,
@@ -674,13 +674,13 @@ pub fn king_welmar(
         }
 
         'o' => {
-            do_gen_door(game, db,texts, chid, "door", 0, SCMD_UNLOCK); /* strcpy: OK */
-            do_gen_door(game, db, texts,chid, "door", 0, SCMD_OPEN); /* strcpy: OK */
+            do_gen_door(game, db,texts, objs,chid, "door", 0, SCMD_UNLOCK); /* strcpy: OK */
+            do_gen_door(game, db, texts,objs,chid, "door", 0, SCMD_OPEN); /* strcpy: OK */
         }
 
         'c' => {
-            do_gen_door(game, db, texts,chid, "door", 0, SCMD_CLOSE); /* strcpy: OK */
-            do_gen_door(game, db, texts,chid, "door", 0, SCMD_LOCK); /* strcpy: OK */
+            do_gen_door(game, db, texts,objs,chid, "door", 0, SCMD_CLOSE); /* strcpy: OK */
+            do_gen_door(game, db, texts,objs,chid, "door", 0, SCMD_LOCK); /* strcpy: OK */
         }
 
         '.' => {
@@ -702,7 +702,7 @@ pub fn king_welmar(
  */
 pub fn training_master(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -717,7 +717,7 @@ pub fn training_master(
         return false;
     }
 
-    if banzaii(game, db, texts, chid) || rand_number(0, 2) != 0 {
+    if banzaii(game, db, texts, objs,chid) || rand_number(0, 2) != 0 {
         return false;
     }
 
@@ -1007,24 +1007,24 @@ pub fn training_master(
 
 pub fn tom(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>, 
+    db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
-    return castle_twin_proc(game, db, texts, chid, cmd, argument, 48, "Tim");
+    return castle_twin_proc(game, db, texts, objs,chid, cmd, argument, 48, "Tim");
 }
 
 pub fn tim(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>, 
+    db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
-    return castle_twin_proc(game, db, texts, chid, cmd, argument, 49, "Tom");
+    return castle_twin_proc(game, db, texts, objs, chid, cmd, argument, 49, "Tom");
 }
 
 /*
@@ -1032,7 +1032,7 @@ pub fn tim(
  */
 fn castle_twin_proc(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     cmd: i32,
     arg: &str,
@@ -1053,9 +1053,9 @@ fn castle_twin_proc(
     if king_id.is_some() {
         let king_id = king_id.unwrap();
         if ch.master.is_none() {
-            do_follow(game, db, texts,chid, "King Welmar", 0, 0); /* strcpy: OK */
+            do_follow(game, db, texts,objs,chid, "King Welmar", 0, 0); /* strcpy: OK */
             if db.ch(king_id).fighting_id().is_some() {
-                do_npc_rescue(game, db, chid, king_id);
+                do_npc_rescue(game, db, objs, chid, king_id);
             }
         }
     }
@@ -1065,12 +1065,12 @@ fn castle_twin_proc(
         let twin_id = twin_id.unwrap();
         let twin = db.ch(twin_id);
         if twin.fighting_id().is_some() && 2 & twin.get_hit() < ch.get_hit() {
-            do_npc_rescue(game, db, chid, twin_id);
+            do_npc_rescue(game, db, objs,chid, twin_id);
         }
     }
     let ch = db.ch(chid);
     if ch.get_pos() != POS_FIGHTING {
-        banzaii(game, db, texts, chid);
+        banzaii(game, db, texts, objs,chid);
     }
 
     false
@@ -1084,19 +1084,19 @@ fn castle_twin_proc(
  */
 fn james(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>, 
+    db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    return castle_cleaner(game, db, chid, cmd, true);
+    return castle_cleaner(game, db, objs,chid, cmd, true);
 }
 
 /*
  * Common code for James and the Cleaning Woman.
  */
-fn castle_cleaner(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, gripe: bool) -> bool {
+fn castle_cleaner(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, cmd: i32, gripe: bool) -> bool {
     let ch = db.ch(chid);
 
     if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
@@ -1104,7 +1104,7 @@ fn castle_cleaner(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, gripe: 
     }
 
     for i in db.world[ch.in_room() as usize].contents.clone() {
-        if !is_trash(db.obj(i)) {
+        if !is_trash(objs.get(i)) {
             continue;
         }
 
@@ -1128,8 +1128,8 @@ fn castle_cleaner(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, gripe: 
                 TO_ROOM,
             );
         }
-        db.obj_from_room(i);
-        db.obj_to_char(i, chid);
+        db.obj_from_room(objs,i);
+        db.obj_to_char(objs,i, chid);
         return true;
     }
 
@@ -1142,13 +1142,13 @@ fn castle_cleaner(game: &mut Game, db: &mut DB, chid: DepotId, cmd: i32, gripe: 
  */
 fn cleaning(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>, 
+    db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    return castle_cleaner(game, db, chid, cmd, false);
+    return castle_cleaner(game, db, objs,chid, cmd, false);
 }
 
 /*
@@ -1158,7 +1158,7 @@ fn cleaning(
  */
 fn castle_guard(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1170,7 +1170,7 @@ fn castle_guard(
         return false;
     }
 
-    banzaii(game, db, texts, chid)
+    banzaii(game, db, texts,objs, chid)
 }
 
 /*
@@ -1180,7 +1180,7 @@ fn castle_guard(
  */
 fn dick_n_david(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1193,7 +1193,7 @@ fn dick_n_david(
     }
 
     if cmd == 0 && ch.get_pos() != POS_FIGHTING {
-        banzaii(game, db, texts, chid);
+        banzaii(game, db, texts, objs,chid);
     }
 
     block_way(game, db, chid, cmd, argument, castle_virtual(&db, 36), 1)
@@ -1205,7 +1205,7 @@ fn dick_n_david(
  */
 fn peter(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>, 
+    db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1217,7 +1217,7 @@ fn peter(
         return false;
     }
 
-    if banzaii(game, db, texts, chid) {
+    if banzaii(game, db, texts, objs,chid) {
         return false;
     }
     let db = &db;
@@ -1440,7 +1440,7 @@ fn peter(
  */
 fn jerry(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>, 
+    db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1455,7 +1455,7 @@ fn jerry(
         return false;
     }
 
-    if banzaii(game, db, texts, chid) || rand_number(0, 2) != 0 {
+    if banzaii(game, db, texts, objs, chid) || rand_number(0, 2) != 0 {
         return false;
     }
     let db = &db;

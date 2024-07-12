@@ -37,7 +37,7 @@ use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, r
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
-fn has_boat(game: &mut Game, db: &DB, ch: &CharData) -> bool {
+fn has_boat(game: &mut Game,  objs: & Depot<ObjData>, ch: &CharData) -> bool {
     if ch.get_level() > LVL_IMMORT as u8 {
         return true;
     }
@@ -49,7 +49,7 @@ fn has_boat(game: &mut Game, db: &DB, ch: &CharData) -> bool {
     /* non-wearable boats in inventory will do it */
 
     for &oid in &ch.carrying {
-        let obj = db.obj(oid);
+        let obj = objs.get(oid);
         if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(game,  ch, obj, "") < 0)
         {
             return true;
@@ -58,7 +58,7 @@ fn has_boat(game: &mut Game, db: &DB, ch: &CharData) -> bool {
 
     /* and any boat you're wearing will do it too */
     for i in 0..NUM_WEARS {
-        if ch.get_eq(i).is_some() && db.obj(ch.get_eq(i).unwrap()).get_obj_type() == ITEM_BOAT
+        if ch.get_eq(i).is_some() && objs.get(ch.get_eq(i).unwrap()).get_obj_type() == ITEM_BOAT
         {
             return true;
         }
@@ -75,7 +75,7 @@ fn has_boat(game: &mut Game, db: &DB, ch: &CharData) -> bool {
  *   1 : If succes.
  *   0 : If fail
  */
-pub fn perform_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
+pub fn perform_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
     let ch = db.ch(chid);
     if dir < 0 || dir >= NUM_OF_DIRS as i32 || ch.fighting_id().is_some() {
         return false;
@@ -117,11 +117,11 @@ pub fn perform_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, c
         }
     } else {
         if ch.followers.is_empty() {
-            return do_simple_move(game, db, texts,chid, dir, need_specials_check);
+            return do_simple_move(game, db, texts,objs,chid, dir, need_specials_check);
         }
 
         let was_in = ch.in_room();
-        if !do_simple_move(game,db, texts, chid, dir, need_specials_check) {
+        if !do_simple_move(game,db, texts, objs,chid, dir, need_specials_check) {
             return false;
         }
 
@@ -138,7 +138,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, c
                     Some(VictimRef::Char(ch)),
                     TO_CHAR,
                 );
-                perform_move(game, db,texts, f.follower, dir, true);
+                perform_move(game, db,texts, objs,f.follower, dir, true);
             }
         }
         return true;
@@ -146,7 +146,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, c
     return false;
 }
 
-pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
+pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
     let was_in;
     let need_movement;
 
@@ -154,7 +154,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
      * Check for special routines (North is 1 in command list, but 0 here) Note
      * -- only check if following; this avoids 'double spec-proc' bug
      */
-    if need_specials_check && special(game, db, texts, chid, dir + 1, "") {
+    if need_specials_check && special(game, db, texts, objs, chid, dir + 1, "") {
         return false;
     }
 
@@ -185,7 +185,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
             == SECT_WATER_NOSWIM)
     {
-        if !has_boat(game, db,ch) {
+        if !has_boat(game, objs,ch) {
             game.send_to_char(ch, "You need a boat to go there.\r\n");
             return false;
         }
@@ -259,12 +259,12 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     }
     let ch = db.ch(chid);
     was_in = ch.in_room();
-    db.char_from_room(chid);
+    db.char_from_room(objs,chid);
     let room_dir = db.world[was_in as usize].dir_option[dir as usize]
         .as_ref()
         .unwrap()
         .to_room;
-    db.char_to_room(chid, room_dir);
+    db.char_to_room(objs,chid, room_dir);
 
     let ch = db.ch(chid);
     if !ch.aff_flagged(AFF_SNEAK) {
@@ -273,7 +273,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
 
     let ch = db.ch(chid);
     if ch.desc.borrow().is_some() {
-        look_at_room(game, db, texts, ch, false);
+        look_at_room(game, db, texts, objs, ch, false);
     }
 
     let ch = db.ch(chid);
@@ -286,13 +286,13 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,
     return true;
 }
 
-pub fn do_move(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_move(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.
      * It cannot be done in perform_move because perform_move is called
      * by other functions which do not require the remapping.
      */
-    perform_move(game, db,texts, chid, subcmd - 1, false);
+    perform_move(game, db,texts, objs, chid, subcmd - 1, false);
 }
 
 fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, cmdname: &str) -> Option<i32> {
@@ -371,15 +371,15 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
     }
 }
 
-fn has_key(db: &DB, ch: &CharData, key: ObjVnum) -> bool {
+fn has_key(db: &DB,objs: & Depot<ObjData>,  ch: &CharData, key: ObjVnum) -> bool {
     for o in ch.carrying.iter() {
-        if db.get_obj_vnum(db.obj(*o)) == key {
+        if db.get_obj_vnum(objs.get(*o)) == key {
             return true;
         }
     }
 
     if ch.get_eq(WEAR_HOLD as i8).is_some() {
-        if db.get_obj_vnum(db.obj(ch.get_eq(WEAR_HOLD as i8).unwrap())) == key {
+        if db.get_obj_vnum(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) == key {
             return true;
         }
     }
@@ -401,9 +401,9 @@ const FLAGS_DOOR: [i32; 5] = [
     NEED_CLOSED | NEED_LOCKED,
 ];
 
-fn open_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+fn open_door(db: &mut DB,objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
     if oid.is_some() {
-        db.obj_mut(oid.unwrap()).remove_objval_bit(1, CONT_CLOSED);
+        objs.get_mut(oid.unwrap()).remove_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -412,9 +412,9 @@ fn open_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usi
     }
 }
 
-fn close_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+fn close_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
     if oid.is_some() {
-        db.obj_mut(oid.unwrap()).set_objval_bit(1, CONT_CLOSED);
+        objs.get_mut(oid.unwrap()).set_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -423,9 +423,9 @@ fn close_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<us
     }
 }
 
-fn lock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+fn lock_door(db: &mut DB,objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
     if oid.is_some() {
-        db.obj_mut(oid.unwrap()).set_objval_bit(1, CONT_LOCKED);
+        objs.get_mut(oid.unwrap()).set_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -434,9 +434,9 @@ fn lock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usi
     }
 }
 
-fn unlock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+fn unlock_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
     if oid.is_some() {
-        db.obj_mut(oid.unwrap()).remove_objval_bit(1, CONT_LOCKED);
+        objs.get_mut(oid.unwrap()).remove_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -445,10 +445,10 @@ fn unlock_door(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<u
     }
 }
 
-fn togle_lock(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
+fn togle_lock(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
     if oid.is_some() {
-        let v = db.obj(oid.unwrap()).get_obj_val(1) ^ CONT_LOCKED;
-        db.obj_mut(oid.unwrap()).set_obj_val(1, v);
+        let v = objs.get(oid.unwrap()).get_obj_val(1) ^ CONT_LOCKED;
+        objs.get_mut(oid.unwrap()).set_obj_val(1, v);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -458,7 +458,7 @@ fn togle_lock(db: &mut DB, room: RoomRnum, oid: Option<DepotId>, door: Option<us
 }
 
 fn do_doorcmd(
-    game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,
+    game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     oid: Option<DepotId>,
     door: Option<usize>,
@@ -497,10 +497,10 @@ fn do_doorcmd(
     match scmd {
         SCMD_OPEN => {
             let ch_in_room = ch.in_room();
-            open_door( db, ch_in_room, oid, door);
+            open_door( db, objs,ch_in_room, oid, door);
             if back_to_room.is_some() {
                 open_door(
-                     db,
+                     db,objs,
                     other_room,
                     oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
@@ -511,10 +511,10 @@ fn do_doorcmd(
         }
         SCMD_CLOSE => {
             let ch_in_room = ch.in_room();
-            close_door( db, ch_in_room,oid, door);
+            close_door( db, objs, ch_in_room,oid, door);
             if back_to_room.is_some() {
                 close_door(
-                     db,
+                     db,objs,
                     other_room,
                     oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
@@ -525,10 +525,10 @@ fn do_doorcmd(
         }
         SCMD_LOCK => {
             let ch_in_room = ch.in_room();
-            lock_door(db, ch_in_room,oid, door);
+            lock_door(db, objs,ch_in_room,oid, door);
             if back_to_room.is_some() {
                 lock_door(
-                     db,
+                     db,objs,
                     other_room,
                     oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
@@ -539,10 +539,10 @@ fn do_doorcmd(
         }
         SCMD_UNLOCK => {
             let ch_in_room = ch.in_room();
-            unlock_door(db, ch_in_room,oid, door);
+            unlock_door(db, objs,ch_in_room,oid, door);
             if back_to_room.is_some() {
                 unlock_door(
-                    db,
+                    db,objs,
                     other_room,
                     oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
@@ -554,10 +554,10 @@ fn do_doorcmd(
 
         SCMD_PICK => {
             let ch_in_room = ch.in_room();
-            togle_lock( db, ch_in_room,oid, door);
+            togle_lock( db, objs, ch_in_room,oid, door);
             if back_to_room.is_some() {
                 togle_lock(
-                     db,
+                     db,objs,
                     other_room,
                     oid,
                     Some(REV_DIR[door.unwrap() as usize] as usize),
@@ -597,7 +597,7 @@ fn do_doorcmd(
     );
     let ch = db.ch(chid);
 
-    if oid.is_none() || db.obj(oid.unwrap()).in_room() != NOWHERE {
+    if oid.is_none() || objs.get(oid.unwrap()).in_room() != NOWHERE {
         let vict_obj = if oid.is_some() {
             None
         } else {
@@ -612,7 +612,7 @@ fn do_doorcmd(
             if oid.is_none() {
                 None
             } else {
-                Some(db.obj(oid.unwrap()))
+                Some(objs.get(oid.unwrap()))
             },
             vict_obj,
             TO_ROOM,
@@ -662,7 +662,7 @@ fn ok_pick(game: &mut Game, db: &mut DB, chid: DepotId, keynum: ObjVnum, pickpro
     return false;
 }
 
-fn door_is_openable(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
+fn door_is_openable(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
     if obj.is_some() {
         obj.as_ref().unwrap().get_obj_type() == ITEM_CONTAINER
             && obj.as_ref().unwrap().objval_flagged(CONT_CLOSEABLE)
@@ -674,7 +674,7 @@ fn door_is_openable(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<
     }
 }
 
-fn door_is_open(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
+fn door_is_open(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
     if obj.is_some() {
         !obj.as_ref().unwrap().objval_flagged(CONT_CLOSED)
     } else {
@@ -711,7 +711,7 @@ fn door_is_closed(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<us
     !door_is_open(db, ch, obj, door)
 }
 
-fn door_is_locked(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
+fn door_is_locked(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
     !door_is_unlocked(db, ch, obj, door)
 }
 
@@ -723,7 +723,7 @@ fn door_key(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) 
     }
 }
 
-pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
     let ch = db.ch(chid);
     let mut dooro: Option<usize> = None;
     let argument = argument.trim_start();
@@ -743,7 +743,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, chi
     let mut victim = None;
     let mut obj = None;
     two_arguments(argument, &mut type_, &mut dir);
-    if !game.generic_find(db,
+    if !game.generic_find(db,objs,
         &type_,
         (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
         ch,
@@ -772,7 +772,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, chi
                 Some(VictimRef::Str(CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
-        } else if !door_is_open(&db, ch, obj, dooro)
+        } else if !door_is_open(&db,ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
             game.send_to_char(ch, "But it's already closed!\r\n");
@@ -788,7 +788,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, chi
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
             game.send_to_char(ch, "It seems to be locked.\r\n");
-        } else if !has_key(&db, ch, keynum)
+        } else if !has_key(&db, objs,ch, keynum)
             && (ch.get_level() < LVL_GOD as u8)
             && ((subcmd == SCMD_LOCK) || (subcmd == SCMD_UNLOCK))
         {
@@ -797,13 +797,13 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>, chi
             let pickproof = door_is_pickproof(&db, ch, obj, dooro);
             ok_pick(game, db,chid, keynum, pickproof, subcmd)
         } {
-            do_doorcmd(game, db, texts,chid, obj_id, dooro, subcmd);
+            do_doorcmd(game, db, texts,objs,chid, obj_id, dooro, subcmd);
         }
     }
     return;
 }
 
-pub fn do_enter(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_enter(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut buf = String::new();
     one_argument(argument, &mut buf);
@@ -814,7 +814,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
             if db.exit(ch, door).is_some() {
                 if !db.exit(ch, door).as_ref().unwrap().keyword.is_empty() {
                     if db.exit(ch, door).as_ref().unwrap().keyword.as_ref() == buf {
-                        perform_move(game,db, texts, chid, door as i32, true);
+                        perform_move(game,db, texts,objs, chid, door as i32, true);
                         return;
                     }
                 }
@@ -832,7 +832,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
                         && db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, ROOM_INDOORS)
                     {
-                        perform_move(game,db, texts, chid, door as i32, true);
+                        perform_move(game,db, texts, objs,chid, door as i32, true);
                         return;
                     }
                 }
@@ -842,7 +842,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
     }
 }
 
-pub fn do_leave(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_leave(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if db.outside(ch) {
         game.send_to_char(ch, "You are outside.. where do you want to go?\r\n");
@@ -854,7 +854,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid:
                         && !db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, ROOM_INDOORS)
                     {
-                        perform_move(game, db, texts, chid, door as i32, true);
+                        perform_move(game, db, texts, objs, chid, door as i32, true);
                         return;
                     }
                 }
@@ -864,7 +864,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid:
     }
 }
 
-pub fn do_stand(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_stand(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
@@ -925,7 +925,7 @@ pub fn do_stand(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid:
     }
 }
 
-pub fn do_sit(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_sit(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, _objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
@@ -972,7 +972,7 @@ pub fn do_sit(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: D
     }
 }
 
-pub fn do_rest(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_rest(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING => {
@@ -1021,7 +1021,7 @@ pub fn do_rest(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: 
     }
 }
 
-pub fn do_sleep(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_sleep(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     match ch.get_pos() {
         POS_STANDING | POS_SITTING | POS_RESTING => {
@@ -1061,7 +1061,7 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid:
     }
 }
 
-pub fn do_wake(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_wake(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
     let vict;
@@ -1145,7 +1145,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: 
     }
 }
 
-pub fn do_follow(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_follow(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut buf = String::new();
 
@@ -1194,7 +1194,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid
                 game.send_to_char(ch, "You are already following yourself.\r\n");
                 return;
             }
-            game.stop_follower(db, chid);
+            game.stop_follower(db, objs,chid);
         } else {
             if circle_follow(&db, ch, leader) {
                 game.send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
@@ -1202,7 +1202,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,chid
             }
             let leader_id = leader.unwrap().id();
             if ch.master.is_some() {
-                game.stop_follower(db, chid);
+                game.stop_follower(db, objs,chid);
             }
             let ch = db.ch_mut(chid);
             ch.remove_aff_flags(AFF_GROUP);

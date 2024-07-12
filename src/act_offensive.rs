@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{TextData, VictimRef, DB};
+use crate::{ObjData, TextData, VictimRef, DB};
 use crate::act_movement::do_simple_move;
 use crate::config::{NOPERSON, OK, PK_ALLOWED};
 use crate::fight::{check_killer, compute_armor_class};
@@ -27,7 +27,7 @@ use crate::structs::{
 use crate::util::rand_number;
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
 
     let mut arg = String::new();
@@ -120,12 +120,12 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid
                 Some(VictimRef::Char(helpee)),
                 TO_NOTVICT,
             );
-            game.hit(db, texts, chid, opponent_id.unwrap(), TYPE_UNDEFINED);
+            game.hit(db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
         }
     }
 }
 
-pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
     let ch = db.ch(chid);
 
     let mut arg = String::new();
@@ -188,7 +188,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, chid: D
         if ch.get_pos() == POS_STANDING
             && (ch.fighting_id().is_none() || vict_id != ch.fighting_id().unwrap())
         {
-            game.hit(db,texts, chid, vict_id, TYPE_UNDEFINED);
+            game.hit(db,texts, objs,chid, vict_id, TYPE_UNDEFINED);
             let ch = db.ch_mut(chid);
             ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
         } else {
@@ -197,12 +197,12 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, chid: D
     }
 }
 
-pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
+pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
     if ch.get_level() < LVL_IMPL as u8 || ch.is_npc() {
-        do_hit(game, db, texts, chid, argument, cmd, subcmd);
+        do_hit(game, db, texts, objs,chid, argument, cmd, subcmd);
         return;
     }
     one_argument(argument, &mut arg);
@@ -243,12 +243,12 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid:
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            game.raw_kill(db, vict.id());
+            game.raw_kill(db,objs, vict.id());
         }
     }
 }
 
-pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut buf = String::new();
 
@@ -275,7 +275,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ch
         game.send_to_char(ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }
-    if db.obj(ch.get_eq(WEAR_WIELD as i8).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
+    if objs.get(ch.get_eq(WEAR_WIELD as i8).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
         game.send_to_char(ch,
             "Only piercing weapons can be used for backstabbing.\r\n",
         );
@@ -313,7 +313,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ch
             Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
-        game.hit(db,texts,vict.id(), chid, TYPE_UNDEFINED);
+        game.hit(db,texts,objs,vict.id(), chid, TYPE_UNDEFINED);
         return;
     }
 
@@ -321,15 +321,15 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ch
     let prob = ch.get_skill(SKILL_BACKSTAB);
 
     if vict.awake() && percent > prob as u32 {
-        game.damage(db, texts,chid, vict.id(), 0, SKILL_BACKSTAB);
+        game.damage(db, texts,objs,chid, vict.id(), 0, SKILL_BACKSTAB);
     } else {
-        game.hit(db, texts,chid, vict.id(), SKILL_BACKSTAB);
+        game.hit(db, texts,objs,chid, vict.id(), SKILL_BACKSTAB);
     }
     let ch = db.ch_mut(chid);
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut name = String::new();
     let mut message = String::new();
@@ -380,7 +380,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
                 );
             } else {
                 game.send_to_char(ch, OK);
-                command_interpreter(game, db, texts, vict.id(), &message);
+                command_interpreter(game, db, texts,objs, vict.id(), &message);
             }
         } else {
             /* This is order "followers" */
@@ -394,7 +394,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
                 if ch.in_room() == follower.in_room() {
                     if follower.aff_flagged(AFF_CHARM) {
                         found = true;
-                        command_interpreter(game,db, texts, k_id.follower, &message);
+                        command_interpreter(game,db, texts, objs,k_id.follower, &message);
                     }
                 }
             }
@@ -408,7 +408,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>, chid
     }
 }
 
-pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     if ch.get_pos() < POS_FIGHTING {
         game.send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
@@ -437,7 +437,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
             );
             let ch = db.ch(chid);
             was_fighting = ch.fighting_id();
-            let r = do_simple_move(game, db,texts,chid, attempt as i32, true);
+            let r = do_simple_move(game, db,texts,objs,chid, attempt as i32, true);
             let ch = db.ch(chid);
             if r {
                 game.send_to_char(ch, "You flee head over heels.\r\n");
@@ -447,7 +447,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
                     let mut loss = was_fighting.get_max_hit()
                         - was_fighting.get_hit();
                     loss *= was_fighting.get_level() as i16;
-                    gain_exp(chid, -loss as i32, game, db,texts);
+                    gain_exp(chid, -loss as i32, game, db,texts,objs);
                 }
             } else {
                 game.act(db,
@@ -465,7 +465,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
     game.send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
 }
 
-pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -509,7 +509,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
     }
 
     if percent > prob as u32 {
-        game.damage(db, texts,chid, vict.id(), 0, SKILL_BASH);
+        game.damage(db, texts,objs,chid, vict.id(), 0, SKILL_BASH);
         let ch = db.ch_mut(chid);
         ch.set_pos(POS_SITTING);
     } else {
@@ -520,7 +520,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
          * first to make sure they don't flee, then we can't bash them!  So now
          * we only set them sitting if they didn't flee. -gg 9/21/98
          */
-        if game.damage(db,texts,chid, vict_id, 1, SKILL_BASH) > 0 {
+        if game.damage(db,texts,objs,chid, vict_id, 1, SKILL_BASH) > 0 {
             /* -1 = dead, 0 = miss */
             let vict = db.ch_mut(vict_id);
             vict.set_wait_state(PULSE_VIOLENCE as i32);
@@ -536,7 +536,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,chid: 
     ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
 }
 
-pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -623,13 +623,13 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>, chid
         db.stop_fighting(chid);
     }
 
-    game.set_fighting(db,chid, tmp_ch_id);
-    game.set_fighting(db,tmp_ch_id, chid);
+    game.set_fighting(db,objs,chid, tmp_ch_id);
+    game.set_fighting(db,objs,tmp_ch_id, chid);
     let vict = db.ch_mut(vict_id);
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = db.ch(chid);
     let mut arg = String::new();
 
@@ -660,9 +660,9 @@ pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, chid: 
     let prob = ch.get_skill(SKILL_KICK);
 
     if percent > prob as i16 {
-        game.damage(db,texts,chid, vict.id(), 0, SKILL_KICK);
+        game.damage(db,texts,objs,chid, vict.id(), 0, SKILL_KICK);
     } else {
-        game.damage(db,texts,chid, vict.id(), (ch.get_level() / 2) as i32, SKILL_KICK);
+        game.damage(db,texts,objs,chid, vict.id(), (ch.get_level() / 2) as i32, SKILL_KICK);
     }
     let ch = db.ch_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);

@@ -23,11 +23,11 @@ use crate::structs::{
     MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
 use crate::util::rand_number;
-use crate::{Game, DB, TO_ROOM};
+use crate::{Game, ObjData, DB, TO_ROOM};
 use crate::{TextData, VictimRef};
 
 impl Game {
-    pub fn mobile_activity(&mut self, db: &mut DB, texts: &mut Depot<TextData>) {
+    pub fn mobile_activity(&mut self, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>) {
         for chid in db.character_list.ids() {
             let ch = db.ch(chid);
             if !db.is_mob(ch) {
@@ -47,7 +47,7 @@ impl Game {
                 } else {
                     if db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
                         self,
-                        db,texts,
+                        db,texts,objs,
                         chid,
                         MeRef::Char(chid),
                         0,
@@ -71,7 +71,7 @@ impl Game {
                     let mut best_obj_id = None;
                     {
                         for &oid in &db.world[ch.in_room() as usize].contents {
-                            let obj = db.obj(oid);
+                            let obj = objs.get(oid);
                             if self.can_get_obj(db, ch, obj) && obj.get_obj_cost() > max {
                                 best_obj_id = Some(oid);
                                 max = obj.get_obj_cost();
@@ -79,10 +79,10 @@ impl Game {
                         }
                     }
                     if best_obj_id.is_some() {
-                        db.obj_from_room(best_obj_id.unwrap());
-                        db.obj_to_char(best_obj_id.unwrap(), chid);
+                        db.obj_from_room(objs,best_obj_id.unwrap());
+                        db.obj_to_char(objs,best_obj_id.unwrap(), chid);
                         let ch = db.ch(chid);
-                        let best_obj = db.obj(best_obj_id.unwrap());
+                        let best_obj = objs.get(best_obj_id.unwrap());
                         self.act(
                             db,
                             "$n gets $p.",
@@ -111,7 +111,7 @@ impl Game {
                     || db.world[db.exit(ch, door as usize).unwrap().to_room as usize].zone
                         == db.world[ch.in_room() as usize].zone)
             {
-                perform_move(self, db, texts, chid, door as i32, true);
+                perform_move(self, db, texts,objs, chid, door as i32, true);
             }
 
             /* Aggressive Mobs */
@@ -142,10 +142,10 @@ impl Game {
                     {
                         /* Can a master successfully control the charmed monster? */
                         let master_id = ch.master.clone();
-                        if self.aggressive_mob_on_a_leash(db, texts, chid, master_id, vict_id) {
+                        if self.aggressive_mob_on_a_leash(db, texts, objs,chid, master_id, vict_id) {
                             continue;
                         }
-                        self.hit(db, texts, chid, vict_id, TYPE_UNDEFINED);
+                        self.hit(db, texts, objs,chid, vict_id, TYPE_UNDEFINED);
                         found = true;
                     }
                 }
@@ -176,7 +176,7 @@ impl Game {
                         /* Can a master successfully control the charmed monster? */
                         let ch = db.ch(chid);
                         let master_id = ch.master.clone();
-                        if self.aggressive_mob_on_a_leash(db, texts, chid, master_id, vict_id) {
+                        if self.aggressive_mob_on_a_leash(db, texts, objs,chid, master_id, vict_id) {
                             continue;
                         }
                         let ch = db.ch(chid);
@@ -190,7 +190,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.hit(db, texts, chid, vict_id, TYPE_UNDEFINED);
+                        self.hit(db, texts, objs,chid, vict_id, TYPE_UNDEFINED);
                     }
                 }
             }
@@ -211,14 +211,14 @@ impl Game {
                     > ((db.ch(ch.master.unwrap()).get_cha() - 2) / 3) as i32
             {
                 let master_id = ch.master.unwrap();
-                if !self.aggressive_mob_on_a_leash(db, texts, chid, Some(master_id), master_id) {
+                if !self.aggressive_mob_on_a_leash(db, texts, objs, chid, Some(master_id), master_id) {
                     let ch = db.ch(chid);
                     if self.can_see(db, ch, db.ch(ch.master.unwrap()))
                         && !db.ch(ch.master.unwrap()).prf_flagged(PRF_NOHASSLE)
                     {
                         let victim_id = ch.master.unwrap();
-                        self.hit(db, texts, chid, victim_id, TYPE_UNDEFINED);
-                        self.stop_follower(db, chid);
+                        self.hit(db, texts, objs,chid, victim_id, TYPE_UNDEFINED);
+                        self.stop_follower(db, objs,chid);
                     }
                 }
             }
@@ -252,7 +252,7 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_ROOM,
                     );
-                    self.hit(db, texts, chid, vict.fighting_id().unwrap(), TYPE_UNDEFINED);
+                    self.hit(db, texts, objs,chid, vict.fighting_id().unwrap(), TYPE_UNDEFINED);
                     found = true;
                 }
             }
@@ -305,7 +305,7 @@ const SNARL_CMD: AtomicUsize = AtomicUsize::new(0);
 impl Game {
     fn aggressive_mob_on_a_leash(
         &mut self,
-        db: &mut DB,texts: &mut Depot<TextData>,
+        db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
         slave_id: DepotId,
         master_id: Option<DepotId>,
         attack_id: DepotId,
@@ -332,7 +332,7 @@ impl Game {
 
                 do_action(
                     self,
-                    db,texts,
+                    db,texts,objs,
                     slave_id,
                     &victbuf.clone(),
                     SNARL_CMD.load(Ordering::Relaxed),

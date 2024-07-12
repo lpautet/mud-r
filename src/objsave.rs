@@ -50,15 +50,15 @@ const CRYO_FACTOR: i32 = 4;
 pub const LOC_INVENTORY: i32 = 0;
 pub const MAX_BAG_ROWS: i32 = 5;
 
-pub fn obj_from_store(db: &mut DB, object: &ObjFileElem, location: &mut i32) -> Option<DepotId> {
+pub fn obj_from_store(db: &mut DB, objs: &mut Depot<ObjData>, object: &ObjFileElem, location: &mut i32) -> Option<DepotId> {
     *location = 0;
     let itemnum = db.real_object(object.item_number);
     if itemnum == NOTHING {
         return None;
     }
 
-    let oid = db.read_object(itemnum, REAL).unwrap();
-    let obj = db.obj_mut(oid);
+    let oid = db.read_object(objs,itemnum, REAL).unwrap();
+    let obj = objs.get_mut(oid);
     *location = object.location as i32;
     obj.set_obj_val(0, object.value[0]);
     obj.set_obj_val(1, object.value[1]);
@@ -114,7 +114,7 @@ pub fn obj_to_store(db: &DB, obj: &ObjData, fl: &mut File, location: i32) -> boo
 /*
  * AutoEQ by Burkhard Knopf <burkhard.knopf@informatik.tu-clausthal.de>
  */
-fn auto_equip(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, location: i32) {
+fn auto_equip(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, oid: DepotId, location: i32) {
     let ch = db.ch(chid);
 
     let mut location = location;
@@ -123,7 +123,7 @@ fn auto_equip(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, locatio
     if location > 0 {
         /* Was wearing it. */
         j = location - 1;
-        let obj = db.obj(oid);
+        let obj = objs.get(oid);
         match j as i16 {
             WEAR_LIGHT => {}
             WEAR_FINGER_R | WEAR_FINGER_L => {
@@ -215,11 +215,11 @@ fn auto_equip(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, locatio
              * Check the characters's alignment to prevent them from being
              * zapped through the auto-equipping.
              */
-            let obj = db.obj(oid);
+            let obj = objs.get(oid);
             if invalid_align(ch, obj) || invalid_class(ch, obj) {
                 location = LOC_INVENTORY;
             } else {
-                game.equip_char(db, chid, oid, j as i8);
+                game.equip_char(db, objs,chid, oid, j as i8);
             }
         } else {
             /* Oops, saved a player with double equipment? */
@@ -241,7 +241,7 @@ fn auto_equip(game: &mut Game, db: &mut DB, chid: DepotId, oid: DepotId, locatio
 
     if location <= 0 {
         /* Inventory */
-        db.obj_to_char(oid, chid);
+        db.obj_to_char(objs,oid, chid);
     }
 }
 
@@ -384,7 +384,7 @@ pub fn update_obj_file(db: &DB) {
     }
 }
 
-pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
+pub fn crash_listrent(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, name: &str) {
     let ch = db.ch(chid);
     let mut filename = String::new();
     if !get_filename(&mut filename, CRASH_FILE, name) {
@@ -445,8 +445,8 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
         }
 
         if db.real_object(object.item_number) != NOTHING {
-            let oid = db.read_object(object.item_number, VIRTUAL);
-            let obj = db.obj(oid.unwrap());
+            let oid = db.read_object(objs, object.item_number, VIRTUAL);
+            let obj = objs.get(oid.unwrap());
             // #if USE_AUTOEQ
             // game.send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
             // object.item_number, obj.get_obj_rent(),
@@ -465,7 +465,7 @@ pub fn crash_listrent(game: &mut Game, db: &mut DB, chid: DepotId, name: &str) {
                 .as_str(),
             );
             // #endif
-            db.extract_obj( oid.unwrap());
+            db.extract_obj( objs, oid.unwrap());
         }
     }
 }
@@ -531,7 +531,7 @@ impl ObjFileElem {
  *  1 - load failure or load of crash items -- put char in temple.
  *  2 - rented equipment lost (no $)
  */
-pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chid: DepotId) -> i32 {
+pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId) -> i32 {
     let ch = db.ch(chid);
 
     /* AutoEQ addition. */
@@ -593,13 +593,13 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
                 )
                 .as_str(),
             );
-            crash_crashsave(db, chid);
+            crash_crashsave(db, objs,chid);
             return 2;
         } else {
             let ch = db.ch_mut(chid);
             ch.set_bank_gold(ch.get_bank_gold() - max(cost - ch.get_gold(), 0));
             ch.set_gold(max(ch.get_gold() - cost, 0));
-            game.save_char(db, texts, chid);
+            game.save_char(db, texts, objs,chid);
         }
     }
     let mut num_objs = 0;
@@ -688,13 +688,13 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
         }
 
         num_objs += 1;
-        let oid = obj_from_store(db, &object, &mut location);
+        let oid = obj_from_store(db, objs,&object, &mut location);
         if oid.is_none() {
             continue;
         }
         let mut oid = oid.unwrap();
 
-        auto_equip(game, db, chid, oid, location);
+        auto_equip(game, db, objs, chid, oid, location);
         /*
          * What to do with a new loaded item:
          *
@@ -728,7 +728,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        db.obj_to_char(*obj2, chid);
+                        db.obj_to_char(objs,*obj2, chid);
                     }
                     cont_row[j].clear();
                 }
@@ -736,18 +736,18 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
             }
             if cont_row[0].len() != 0 {
                 /* Content list existing. */
-                if db.obj(oid).get_obj_type() == ITEM_CONTAINER {
+                if objs.get(oid).get_obj_type() == ITEM_CONTAINER {
                     /* Remove object, fill it, equip again. */
-                    oid = db.unequip_char( chid, (location - 1) as i8).unwrap();
-                    db.obj_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
+                    oid = db.unequip_char( objs,chid, (location - 1) as i8).unwrap();
+                    objs.get_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
                     for oid2 in cont_row[0].iter() {
-                        db.obj_to_obj(*oid2, oid);
+                        db.obj_to_obj(objs,*oid2, oid);
                     }
-                    game.equip_char(db, chid, oid, (location - 1) as i8);
+                    game.equip_char(db, objs,chid, oid, (location - 1) as i8);
                 } else {
                     /* Object isn't container, empty the list. */
                     for oid2 in cont_row[0].iter() {
-                        db.obj_to_char(*oid2, chid);
+                        db.obj_to_char(objs,*oid2, chid);
                     }
                     cont_row[0].clear();
                 }
@@ -762,7 +762,7 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        db.obj_to_char(*obj2, chid);
+                        db.obj_to_char(objs,*obj2, chid);
                     }
                     cont_row[j].clear();
                 }
@@ -770,18 +770,18 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
             }
             if j == -location as usize && cont_row[j].len() != 0 {
                 /* Content list exists. */
-                if db.obj(oid).get_obj_type() == ITEM_CONTAINER {
+                if objs.get(oid).get_obj_type() == ITEM_CONTAINER {
                     /* Take the item, fill it, and give it back. */
-                    db.obj_from_char(oid);
-                    db.obj_mut(oid).contains.clear();
+                    db.obj_from_char(objs,oid);
+                    objs.get_mut(oid).contains.clear();
                     for oid2 in cont_row[j].iter() {
-                        db.obj_to_obj(*oid2, oid);
+                        db.obj_to_obj(objs,*oid2, oid);
                     }
-                    db.obj_to_char(oid, chid); /* Add to inventory first. */
+                    db.obj_to_char(objs,oid, chid); /* Add to inventory first. */
                 } else {
                     /* Object isn't container, empty content list. */
                     for oid2 in cont_row[j].iter() {
-                        db.obj_to_char(*oid2, chid);
+                        db.obj_to_char(objs,*oid2, chid);
                     }
                     cont_row[j].clear();
                 }
@@ -834,27 +834,27 @@ pub fn crash_load(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, chi
     };
 }
 
-fn crash_save(db: &mut DB, oid: Option<DepotId>, fp: &mut File, location: i32) -> bool {
+fn crash_save(db: &mut DB,objs: &mut Depot<ObjData>,  oid: Option<DepotId>, fp: &mut File, location: i32) -> bool {
     let location = location;
     let result;
     if oid.is_some() {
-        result = obj_to_store(db, db.obj(oid.unwrap()), fp, location);
-        for o in db.obj(oid.unwrap()).contains.clone() {
-            crash_save(db, Some(o), fp, location - 1);
+        result = obj_to_store(db, objs.get(oid.unwrap()), fp, location);
+        for o in objs.get(oid.unwrap()).contains.clone() {
+            crash_save(db, objs, Some(o), fp, location - 1);
         }
 
         let mut toid = oid.unwrap();
 
         loop {
-            if db.obj(toid).in_obj.is_none() {
+            if objs.get(toid).in_obj.is_none() {
                 break;
             }
 
-            let obj_weight = db.obj(oid.unwrap()).get_obj_weight();
-            db.obj_mut(db.obj(toid).in_obj.unwrap())
+            let obj_weight = objs.get(oid.unwrap()).get_obj_weight();
+            objs.get_mut(objs.get(toid).in_obj.unwrap())
                 .incr_obj_weight(-obj_weight);
 
-            toid = db.obj(toid).in_obj.unwrap();
+            toid = objs.get(toid).in_obj.unwrap();
         }
 
         if !result {
@@ -864,13 +864,13 @@ fn crash_save(db: &mut DB, oid: Option<DepotId>, fp: &mut File, location: i32) -
     true
 }
 
-fn crash_restore_weight(db: &mut DB, oid: DepotId) {
-    for o in db.obj(oid).contains.clone() {
-        crash_restore_weight(db, o);
+fn crash_restore_weight(db: &mut DB,objs: &mut Depot<ObjData>,  oid: DepotId) {
+    for o in objs.get(oid).contains.clone() {
+        crash_restore_weight(db, objs, o);
     }
-    if db.obj(oid).in_obj.is_some() {
-        let obj_weight = db.obj(oid).get_obj_weight();
-        db.obj_mut(db.obj(oid).in_obj.unwrap())
+    if objs.get(oid).in_obj.is_some() {
+        let obj_weight = objs.get(oid).get_obj_weight();
+        objs.get_mut(objs.get(oid).in_obj.unwrap())
             .incr_obj_weight(obj_weight);
     }
 }
@@ -879,27 +879,27 @@ fn crash_restore_weight(db: &mut DB, oid: DepotId) {
  * Get !RENT items from equipment to inventory and
  * extract !RENT out of worn containers.
  */
-fn crash_extract_norent_eq(game: &mut Game, db: &mut DB, chid: DepotId) {
+fn crash_extract_norent_eq(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
     for j in 0..NUM_WEARS {
         let ch = db.ch(chid);
         if ch.get_eq(j).is_none() {
             continue;
         }
-        if crash_is_unrentable(db.obj(ch.get_eq(j).unwrap())) {
-            let eqid = db.unequip_char( chid, j).unwrap();
-            db.obj_to_char(eqid, chid);
+        if crash_is_unrentable(objs.get(ch.get_eq(j).unwrap())) {
+            let eqid = db.unequip_char( objs,chid, j).unwrap();
+            db.obj_to_char(objs,eqid, chid);
         } else {
-            crash_extract_norents(game, db, ch.get_eq(j).unwrap());
+            crash_extract_norents(game, db, objs,ch.get_eq(j).unwrap());
         }
     }
 }
 
-fn crash_extract_objs(game: &mut Game, db: &mut DB, oid: Option<DepotId>) {
+fn crash_extract_objs(game: &mut Game, db: &mut DB, objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
     let oid = oid.unwrap();
-    for o in db.obj(oid).contains.clone() {
-        crash_extract_objs(game, db, Some(o));
+    for o in objs.get(oid).contains.clone() {
+        crash_extract_objs(game, db, objs, Some(o));
     }
-    db.extract_obj( oid);
+    db.extract_obj( objs, oid);
 }
 
 fn crash_is_unrentable(obj: &ObjData) -> bool {
@@ -913,42 +913,42 @@ fn crash_is_unrentable(obj: &ObjData) -> bool {
     false
 }
 
-fn crash_extract_norents(game: &mut Game, db: &mut DB, oid: DepotId) {
-    for o in db.obj(oid).contains.clone() {
-        crash_extract_norents(game, db, o);
+fn crash_extract_norents(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  oid: DepotId) {
+    for o in objs.get(oid).contains.clone() {
+        crash_extract_norents(game, db, objs,o);
     }
 
-    if crash_is_unrentable(db.obj(oid)) {
-        db.extract_obj( oid);
+    if crash_is_unrentable(objs.get(oid)) {
+        db.extract_obj( objs,oid);
     }
 }
 
-fn crash_extract_expensive(db: &mut DB, oids: Vec<DepotId>) {
+fn crash_extract_expensive(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
     if oids.len() == 0 {
         return;
     }
     let mut max = oids[0];
 
     for tobjid in oids {
-        if db.obj(tobjid).get_obj_rent() > db.obj(max).get_obj_rent() {
+        if objs.get(tobjid).get_obj_rent() > objs.get(max).get_obj_rent() {
             max = tobjid;
         }
     }
 
-    db.extract_obj( max);
+    db.extract_obj( objs, max);
 }
 
-fn crash_calculate_rent(db: &DB, oid: Option<DepotId>, cost: &mut i32) {
+fn crash_calculate_rent(db: &DB,objs: & Depot<ObjData>,  oid: Option<DepotId>, cost: &mut i32) {
     if oid.is_some() {
         let oid = oid.unwrap();
-        *cost += max(0, db.obj(oid).get_obj_rent());
-        for o in db.obj(oid).contains.iter() {
-            crash_calculate_rent(db, Some(*o), cost);
+        *cost += max(0, objs.get(oid).get_obj_rent());
+        for o in objs.get(oid).contains.iter() {
+            crash_calculate_rent(db, objs, Some(*o), cost);
         }
     }
 }
 
-pub fn crash_crashsave(db: &mut DB, chid: DepotId) {
+pub fn crash_crashsave(db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
     let ch = db.ch(chid);
     if ch.is_npc() {
         return;
@@ -988,28 +988,28 @@ pub fn crash_crashsave(db: &mut DB, chid: DepotId) {
     for j in 0..NUM_WEARS as usize {
         let ch = db.ch(chid);
         if ch.get_eq(j as i8).is_some() {
-            if !crash_save(db, ch.get_eq(j as i8), &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs,ch.get_eq(j as i8), &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = db.ch(chid);
-            crash_restore_weight(db, ch.get_eq(j as i8).unwrap());
+            crash_restore_weight(db, objs,ch.get_eq(j as i8).unwrap());
         }
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        if !crash_save(db, Some(o), &mut fp, 0) {
+        if !crash_save(db, objs,Some(o), &mut fp, 0) {
             return;
         }
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_restore_weight(db, o);
+        crash_restore_weight(db, objs,o);
     }
     let ch = db.ch_mut(chid);
     ch.remove_plr_flag(PLR_CRASH);
 }
 
-pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
+pub fn crash_idlesave(game: &mut Game, db: &mut DB, objs: &mut Depot<ObjData>, chid: DepotId) {
     let ch = db.ch(chid);
     let mut rent = RentInfo::new();
 
@@ -1025,21 +1025,21 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
         return;
     }
 
-    crash_extract_norent_eq(game, db, chid);
+    crash_extract_norent_eq(game, db, objs,chid);
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents(game, db, o);
+        crash_extract_norents(game, db, objs,o);
     }
 
     let mut cost = 0;
     let ch = db.ch(chid);
     for o in ch.carrying.iter() {
-        crash_calculate_rent(&db, Some(*o), &mut cost);
+        crash_calculate_rent(&db, objs,Some(*o), &mut cost);
     }
 
     let mut cost_eq = 0;
     for j in 0..NUM_WEARS {
-        crash_calculate_rent(db, ch.get_eq(j), &mut cost_eq);
+        crash_calculate_rent(db, objs,ch.get_eq(j), &mut cost_eq);
     }
 
     cost += cost_eq;
@@ -1050,8 +1050,8 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
             /* Unequip players with low gold. */
             let ch = db.ch(chid);
             if ch.get_eq(j).is_some() {
-                let eqid = db.unequip_char( chid, j).unwrap();
-                db.obj_to_char(eqid, chid);
+                let eqid = db.unequip_char( objs,chid, j).unwrap();
+                db.obj_to_char(objs,eqid, chid);
             }
         }
 
@@ -1060,11 +1060,11 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
             (cost > ch.get_gold() + ch.get_bank_gold()) && ch.carrying.len() != 0
         } {
             let ch = db.ch(chid);
-            crash_extract_expensive(db, ch.carrying.clone());
+            crash_extract_expensive(db, objs,ch.carrying.clone());
             cost = 0;
             let ch = db.ch(chid);
             for o in ch.carrying.iter() {
-                crash_calculate_rent(&db, Some(*o), &mut cost);
+                crash_calculate_rent(&db, objs,Some(*o), &mut cost);
             }
             cost *= 2;
         }
@@ -1101,32 +1101,32 @@ pub fn crash_idlesave(game: &mut Game, db: &mut DB, chid: DepotId) {
         if ch.get_eq(j).is_some() {
             let ch = db.ch(chid);
             let oid = ch.get_eq(j);
-            if !crash_save(db, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs,oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = db.ch(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(db, oid);
+            crash_restore_weight(db, objs,oid);
             let ch = db.ch(chid);
             let oid = ch.get_eq(j);
-            crash_extract_objs(game, db, oid);
+            crash_extract_objs(game, db, objs,oid);
         }
     }
     let mut location = 0;
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        if !crash_save(db, Some(o), &mut fp, location) {
+        if !crash_save(db, objs,Some(o), &mut fp, location) {
             return;
         }
         location += 1;
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(game, db, Some(o));
+        crash_extract_objs(game, db, objs, Some(o));
     }
 }
 
-pub fn crash_rentsave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
+pub fn crash_rentsave(game: &mut Game, db: &mut DB, objs: &mut Depot<ObjData>, chid: DepotId, cost: i32) {
     let ch = db.ch(chid);
     if ch.is_npc() {
         return;
@@ -1141,10 +1141,10 @@ pub fn crash_rentsave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
     }
     let mut fp = fpo.unwrap();
 
-    crash_extract_norent_eq(game, db, chid);
+    crash_extract_norent_eq(game, db, objs, chid);
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents(game, db, o);
+        crash_extract_norents(game, db, objs, o);
     }
     let ch = db.ch(chid);
     let mut rent = RentInfo {
@@ -1172,29 +1172,29 @@ pub fn crash_rentsave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
         let ch = db.ch(chid);
         if ch.get_eq(j).is_some() {
             let oid = ch.get_eq(j);
-            if !crash_save(db, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs,oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = db.ch(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(db, oid);
+            crash_restore_weight(db, objs, oid);
             let ch = db.ch(chid);
-            crash_extract_objs(game, db, ch.get_eq(j));
+            crash_extract_objs(game, db, objs, ch.get_eq(j));
         }
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        if !crash_save(db, Some(o), &mut fp, 0) {
+        if !crash_save(db, objs, Some(o), &mut fp, 0) {
             return;
         }
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(game, db, Some(o));
+        crash_extract_objs(game, db, objs, Some(o));
     }
 }
 
-fn crash_cryosave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
+fn crash_cryosave(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, cost: i32) {
     let ch = db.ch(chid);
 
     let mut buf = String::new();
@@ -1213,10 +1213,10 @@ fn crash_cryosave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
     }
     let mut fp = fp.unwrap();
 
-    crash_extract_norent_eq(game, db, chid);
+    crash_extract_norent_eq(game, db, objs, chid);
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents(game, db, o);
+        crash_extract_norents(game, db, objs, o);
     }
     let ch = db.ch_mut(chid);
     ch.set_gold(max(0, ch.get_gold() - cost));
@@ -1233,27 +1233,27 @@ fn crash_cryosave(game: &mut Game, db: &mut DB, chid: DepotId, cost: i32) {
         let ch = db.ch(chid);
         if ch.get_eq(j).is_some() {
             let oid = ch.get_eq(j);
-            if !crash_save(db, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs,oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = db.ch(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(db, oid);
+            crash_restore_weight(db, objs,oid);
             let ch = db.ch(chid);
-            crash_extract_objs(game, db, ch.get_eq(j));
+            crash_extract_objs(game, db, objs, ch.get_eq(j));
         }
     }
     let mut j = 0;
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        if !crash_save(db, Some(o), &mut fp, j) {
+        if !crash_save(db, objs, Some(o), &mut fp, j) {
             return;
         }
         j += 1;
     }
     let ch = db.ch(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(game, db, Some(o));
+        crash_extract_objs(game, db,objs, Some(o));
     }
     let ch = db.ch_mut(chid);
     ch.set_plr_flag_bit(PLR_CRYO);
@@ -1290,7 +1290,7 @@ on hand and in the bank.'\r\n",
 
 fn crash_report_unrentables(
     game: &mut Game,
-    db: &DB,
+    db: &DB,objs: & Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
@@ -1299,11 +1299,11 @@ fn crash_report_unrentables(
     let recep = db.ch(recep_id);
     let mut has_norents = 0;
 
-    if crash_is_unrentable(db.obj(oid)) {
+    if crash_is_unrentable(objs.get(oid)) {
         has_norents = 1;
         let buf = format!(
             "$n tells you, 'You cannot store {}.'",
-            game.objs(db, db.obj(oid), ch)
+            game.objs(db, objs.get(oid), ch)
         );
         game.act(
             db,
@@ -1315,8 +1315,8 @@ fn crash_report_unrentables(
             TO_VICT,
         );
     }
-    for o in db.obj(oid).contains.clone() {
-        has_norents += crash_report_unrentables(game, db, chid, recep_id, o);
+    for o in objs.get(oid).contains.clone() {
+        has_norents += crash_report_unrentables(game, db, objs,chid, recep_id, o);
     }
 
     has_norents
@@ -1324,7 +1324,7 @@ fn crash_report_unrentables(
 
 fn crash_report_rent(
     game: &mut Game,
-    db: &DB,
+    db: &DB,objs: & Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
@@ -1335,14 +1335,14 @@ fn crash_report_rent(
 ) {
     let ch = db.ch(chid);
     let recep = db.ch(recep_id);
-    if !crash_is_unrentable(db.obj(oid)) {
+    if !crash_is_unrentable(objs.get(oid)) {
         *nitems += 1;
-        *cost += max(0, db.obj(oid).get_obj_rent() * factor);
+        *cost += max(0, objs.get(oid).get_obj_rent() * factor);
         if display {
             let buf = format!(
                 "$n tells you, '{:5} coins for {}..'",
-                db.obj(oid).get_obj_rent() * factor,
-                game.objs(db, db.obj(oid), ch)
+                objs.get(oid).get_obj_rent() * factor,
+                game.objs(db, objs.get(oid), ch)
             );
             game.act(
                 db,
@@ -1355,14 +1355,14 @@ fn crash_report_rent(
             );
         }
     }
-    for &o in &db.obj(oid).contains {
-        crash_report_rent(game, db, chid, recep_id, o, cost, nitems, display, factor);
+    for &o in &objs.get(oid).contains {
+        crash_report_rent(game, db, objs,chid, recep_id, o, cost, nitems, display, factor);
     }
 }
 
 fn crash_offer_rent(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,objs: & Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     display: bool,
@@ -1374,7 +1374,7 @@ fn crash_offer_rent(
 
     let mut norent = 0;
     for &o in &ch.carrying {
-        norent += crash_report_unrentables(game, db, chid, recep_id, o);
+        norent += crash_report_unrentables(game, db, objs,chid, recep_id, o);
     }
     for i in 0..NUM_WEARS {
         let ch = db.ch(chid);
@@ -1382,7 +1382,7 @@ fn crash_offer_rent(
         if eqi.is_none() {
             continue;
         }
-        norent += crash_report_unrentables(game, db, chid, recep_id, eqi.unwrap());
+        norent += crash_report_unrentables(game, db, objs,chid, recep_id, eqi.unwrap());
     }
     if norent != 0 {
         return 0;
@@ -1393,7 +1393,7 @@ fn crash_offer_rent(
     for &o in &ch.carrying {
         crash_report_rent(
             game,
-            db,
+            db,objs,
             chid,
             recep_id,
             o,
@@ -1411,7 +1411,7 @@ fn crash_offer_rent(
         }
         crash_report_rent(
             game,
-            db,
+            db,objs,
             chid,
             recep_id,
             ch.get_eq(i).unwrap(),
@@ -1505,7 +1505,7 @@ fn crash_offer_rent(
 
 fn gen_receptionist(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     cmd: i32,
@@ -1522,7 +1522,7 @@ fn gen_receptionist(
         do_action(
             game,
             db,
-            texts,recep_id,
+            texts,objs,recep_id,
             "",
             find_command(ACTION_TABLE[rand_number(0, 8) as usize]).unwrap(),
             0,
@@ -1573,7 +1573,7 @@ fn gen_receptionist(
     }
 
     if cmd_is(cmd, "rent") {
-        let cost = crash_offer_rent(game, db, chid, recep_id, false, mode);
+        let cost = crash_offer_rent(game, db, objs,chid, recep_id, false, mode);
         if cost == 0 {
             return true;
         }
@@ -1629,7 +1629,7 @@ fn gen_receptionist(
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
-            crash_rentsave(game, db, chid, cost);
+            crash_rentsave(game, db, objs,chid, cost);
             let ch = db.ch(chid);
             game.mudlog(
                 db,
@@ -1659,7 +1659,7 @@ You begin to lose consciousness...",
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
-            crash_cryosave(game, db, chid, cost);
+            crash_cryosave(game, db, objs,chid, cost);
             let ch = db.ch(chid);
             game.mudlog(
                 db,
@@ -1688,7 +1688,7 @@ You begin to lose consciousness...",
         ch.set_loadroom(val);
         db.extract_char(chid); /* It saves. */
     } else {
-        crash_offer_rent(game, db, chid, recep_id, true, mode);
+        crash_offer_rent(game, db, objs,chid, recep_id, true, mode);
         let recep = db.ch(recep_id);
         let ch = db.ch(chid);
         game.act(
@@ -1706,37 +1706,37 @@ You begin to lose consciousness...",
 
 pub fn receptionist(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     match me {
-        MeRef::Char(recep) => gen_receptionist(game, db, texts,chid, recep, cmd, argument, RENT_FACTOR),
+        MeRef::Char(recep) => gen_receptionist(game, db, texts,objs,chid, recep, cmd, argument, RENT_FACTOR),
         _ => panic!("Unexpected MeRef type in receptionist"),
     }
 }
 
 pub fn cryogenicist(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
     match me {
-        MeRef::Char(recep) => gen_receptionist(game, db, texts, chid, recep, cmd, argument, CRYO_FACTOR),
+        MeRef::Char(recep) => gen_receptionist(game, db, texts, objs,chid, recep, cmd, argument, CRYO_FACTOR),
         _ => panic!("Unexpected MeRef type in cryogenicist"),
     }
 }
 
-pub fn crash_save_all(game: &mut Game, db: &mut DB) {
+pub fn crash_save_all(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, ) {
     for d in game.descriptor_list.iter() {
         if d.state() == ConPlaying && !db.ch(d.character.unwrap()).is_npc() {
             if db.ch(d.character.unwrap()).plr_flagged(PLR_CRASH) {
-                crash_crashsave(db, d.character.unwrap());
+                crash_crashsave(db, objs,d.character.unwrap());
                 db.ch_mut(d.character.unwrap()).remove_plr_flag(PLR_CRASH);
             }
         }

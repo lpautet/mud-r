@@ -128,7 +128,7 @@ impl Game {
 }
 fn list_obj_to_char(
     game: &mut Game,
-    db: &DB, texts: &Depot<TextData>,
+    db: &DB, texts: &Depot<TextData>,objs: & Depot<ObjData>, 
     list: &Vec<DepotId>,
     ch: &CharData,
     mode: i32,
@@ -137,7 +137,7 @@ fn list_obj_to_char(
     let mut found = true;
 
     for &oid in list {
-        let obj = db.obj(oid);
+        let obj = objs.get(oid);
         if game.can_see_obj(db, ch, obj) {
             game.show_obj_to_char(db, texts, obj, ch, mode);
             found = true;
@@ -217,7 +217,7 @@ fn diag_char_to_char(game: &mut Game, db: &DB, i: &CharData, ch: &CharData) {
     );
 }
 
-fn look_at_char(game: &mut Game, db: &DB, texts: &Depot<TextData>, i: &CharData, ch: &CharData) {
+fn look_at_char(game: &mut Game, db: &DB, texts: &Depot<TextData>, objs: & Depot<ObjData>, i: &CharData, ch: &CharData) {
     let mut found;
 
     if ch.desc.is_none() {
@@ -242,7 +242,7 @@ fn look_at_char(game: &mut Game, db: &DB, texts: &Depot<TextData>, i: &CharData,
 
     found = false;
     for j in 0..NUM_WEARS {
-        if i.get_eq(j).is_some() && game.can_see_obj(db, ch, db.obj(i.get_eq(j).unwrap())) {
+        if i.get_eq(j).is_some() && game.can_see_obj(db, ch, objs.get(i.get_eq(j).unwrap())) {
             found = true;
         }
     }
@@ -259,9 +259,9 @@ fn look_at_char(game: &mut Game, db: &DB, texts: &Depot<TextData>, i: &CharData,
             TO_VICT,
         );
         for j in 0..NUM_WEARS {
-            if i.get_eq(j).is_some() && game.can_see_obj(db, ch, db.obj(i.get_eq(j).unwrap())) {
+            if i.get_eq(j).is_some() && game.can_see_obj(db, ch, objs.get(i.get_eq(j).unwrap())) {
                 game.send_to_char(ch, WEAR_WHERE[j as usize]);
-                game.show_obj_to_char(db, texts, db.obj(i.get_eq(j).unwrap()), ch, SHOW_OBJ_SHORT);
+                game.show_obj_to_char(db, texts, objs.get(i.get_eq(j).unwrap()), ch, SHOW_OBJ_SHORT);
             }
         }
     }
@@ -277,7 +277,7 @@ fn look_at_char(game: &mut Game, db: &DB, texts: &Depot<TextData>, i: &CharData,
             TO_VICT,
         );
         for &tmp_obj_id in &i.carrying {
-            let tmp_obj = db.obj(tmp_obj_id);
+            let tmp_obj = objs.get(tmp_obj_id);
             if game.can_see_obj(db, ch, tmp_obj) && rand_number(0, 20) < ch.get_level() as u32 {
                 game.show_obj_to_char(db, texts, tmp_obj, ch, SHOW_OBJ_SHORT);
                 found = true;
@@ -464,7 +464,7 @@ fn do_auto_exits(game: &mut Game, db: &DB, ch: &CharData) {
 
 pub fn do_exits(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -522,7 +522,7 @@ pub fn do_exits(
     }
 }
 
-pub fn look_at_room(game: &mut Game, db: &DB, texts: &Depot<TextData>, ch: &CharData, ignore_brief: bool) {
+pub fn look_at_room(game: &mut Game, db: &DB, texts: &Depot<TextData>, objs: & Depot<ObjData>, ch: &CharData, ignore_brief: bool) {
     if ch.desc.is_none() {
         return;
     }
@@ -577,7 +577,7 @@ pub fn look_at_room(game: &mut Game, db: &DB, texts: &Depot<TextData>, ch: &Char
     game.send_to_char(ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
     list_obj_to_char(
         game,
-        db,texts,
+        db,texts,objs,
         &db.world[ch.in_room() as usize].contents,
         ch,
         SHOW_OBJ_LONG,
@@ -658,7 +658,7 @@ fn look_in_direction(game: &mut Game, db: &DB, chid: DepotId, dir: i32) {
     }
 }
 
-fn look_in_obj(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &CharData, arg: &str) {
+fn look_in_obj(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, objs: & Depot<ObjData>, ch: &CharData, arg: &str) {
     let mut dummy = None;
     let mut obj = None;
     let bits;
@@ -668,7 +668,7 @@ fn look_in_obj(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &CharD
         return;
     }
     bits = game.generic_find(
-        db,
+        db,objs,
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -704,7 +704,7 @@ fn look_in_obj(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &CharD
                     _ => {}
                 }
 
-                list_obj_to_char(game, db,texts,  &obj.unwrap().contains, ch, SHOW_OBJ_SHORT, true);
+                list_obj_to_char(game, db,texts,  objs,&obj.unwrap().contains, ch, SHOW_OBJ_SHORT, true);
             }
         } else {
             /* item must be a fountain or drink container */
@@ -751,7 +751,7 @@ fn find_exdesc<'a>(word: &str, list: &'a Vec<ExtraDescrData>) -> Option<&'a Rc<s
  * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
  * suggested fix to this problem.
  */
-fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &CharData, arg: &str) {
+fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>,objs: & Depot<ObjData>,  ch: &CharData, arg: &str) {
     let mut i = 0;
     let mut found = false;
     let mut found_char = None;
@@ -767,7 +767,7 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
     }
 
     let bits = game.generic_find(
-        db,
+        db,objs,
         arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP | FIND_CHAR_ROOM) as i64,
         ch,
@@ -778,7 +778,7 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
     /* Is the target a character? */
     if found_char.is_some() {
         let found_char = found_char.unwrap();
-        look_at_char(game, db, texts, found_char, ch);
+        look_at_char(game, db, texts,objs, found_char, ch);
         if ch.id() != found_char.id() {
             if game.can_see(db, found_char, ch) {
                 game.act(
@@ -824,8 +824,8 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some() && game.can_see_obj(db, ch, db.obj(ch.get_eq(j).unwrap())) {
-            let desc = find_exdesc(&arg, &db.obj(ch.get_eq(j).unwrap()).ex_descriptions);
+        if ch.get_eq(j).is_some() && game.can_see_obj(db, ch, objs.get(ch.get_eq(j).unwrap())) {
+            let desc = find_exdesc(&arg, &objs.get(ch.get_eq(j).unwrap()).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
@@ -838,8 +838,8 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
 
     /* Does the argument match an extra desc in the char's inventory? */
     for &oid in ch.carrying.iter() {
-        if game.can_see_obj(db, ch, db.obj(oid)) {
-            let desc = find_exdesc(&arg, &db.obj(oid).ex_descriptions);
+        if game.can_see_obj(db, ch, objs.get(oid)) {
+            let desc = find_exdesc(&arg, &objs.get(oid).ex_descriptions);
             if desc.is_some() {
                 i += 1;
                 if i == fnum {
@@ -852,8 +852,8 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
 
     /* Does the argument match an extra desc of an object in the room? */
     for &oid in db.world[ch.in_room() as usize].contents.iter() {
-        if game.can_see_obj(db, ch, db.obj(oid)) {
-            if let Some(desc) = find_exdesc(&arg, &db.obj(oid).ex_descriptions) {
+        if game.can_see_obj(db, ch, objs.get(oid)) {
+            if let Some(desc) = find_exdesc(&arg, &objs.get(oid).ex_descriptions) {
                 i += 1;
                 if i == fnum {
                     game.send_to_char(ch, desc.as_ref());
@@ -878,7 +878,7 @@ fn look_at_target(game: &mut Game, db: &DB, texts: &mut Depot<TextData>, ch: &Ch
 
 pub fn do_look(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>,
+    db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -907,16 +907,16 @@ pub fn do_look(
             if arg.is_empty() {
                 game.send_to_char(ch, "Read what?\r\n");
             } else {
-                look_at_target(game, db, texts, ch, &mut arg);
+                look_at_target(game, db, texts, objs,ch, &mut arg);
             }
             return;
         }
         let look_type;
         if arg.is_empty() {
             /* "look" alone, without an argument at all */
-            look_at_room(game, db, texts, ch, true);
+            look_at_room(game, db, texts,objs, ch, true);
         } else if is_abbrev(arg.as_ref(), "in") {
-            look_in_obj(game, db, texts, ch, arg2.as_str());
+            look_in_obj(game, db, texts, objs,ch, arg2.as_str());
             /* did the char type 'look <direction>?' */
         } else if {
             look_type = search_block(arg.as_str(), &DIRS, false);
@@ -925,16 +925,16 @@ pub fn do_look(
         {
             look_in_direction(game, db, chid, look_type.unwrap() as i32);
         } else if is_abbrev(arg.as_ref(), "at") {
-            look_at_target(game, db, texts, ch, arg2.as_ref());
+            look_at_target(game, db, texts, objs,ch, arg2.as_ref());
         } else {
-            look_at_target(game, db, texts, ch, arg.as_ref());
+            look_at_target(game, db, texts, objs,ch, arg.as_ref());
         }
     }
 }
 
 pub fn do_examine(
     game: &mut Game,
-    db: &mut DB, texts: &mut Depot<TextData>,
+    db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -950,11 +950,11 @@ pub fn do_examine(
     }
 
     /* look_at_target() eats the number. */
-    look_at_target(game, db, texts, ch, &arg);
+    look_at_target(game, db, texts, objs,ch, &arg);
     let mut tmp_char = None;
     let mut tmp_object = None;
     game.generic_find(
-        db,
+        db,objs,
         &arg,
         (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -969,14 +969,14 @@ pub fn do_examine(
             || tmp_object.get_obj_type() == ITEM_CONTAINER
         {
             game.send_to_char(ch, "When you look inside, you see:\r\n");
-            look_in_obj(game, db, texts, ch, &arg);
+            look_in_obj(game, db, texts, objs,ch, &arg);
         }
     }
 }
 
 pub fn do_gold(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -997,7 +997,7 @@ pub fn do_gold(
 
 pub fn do_score(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1172,7 +1172,7 @@ pub fn do_score(
 
 pub fn do_inventory(
     game: &mut Game,
-    db: &mut DB,texts: &mut Depot<TextData>,
+    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1180,12 +1180,12 @@ pub fn do_inventory(
 ) {
     let ch = db.ch(chid);
     game.send_to_char(ch, "You are carrying:\r\n");
-    list_obj_to_char(game, db, texts, &ch.carrying, ch, SHOW_OBJ_SHORT, true);
+    list_obj_to_char(game, db, texts, objs,&ch.carrying, ch, SHOW_OBJ_SHORT, true);
 }
 
 pub fn do_equipment(
     game: &mut Game,
-    db: &mut DB, texts: &mut  Depot<TextData>,
+    db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1196,9 +1196,9 @@ pub fn do_equipment(
     game.send_to_char(ch, "You are using:\r\n");
     for i in 0..NUM_WEARS {
         if ch.get_eq(i).is_some() {
-            if game.can_see_obj(db, ch, db.obj(ch.get_eq(i).unwrap())) {
+            if game.can_see_obj(db, ch, objs.get(ch.get_eq(i).unwrap())) {
                 let oid = ch.get_eq(i).unwrap();
-                let obj = db.obj(oid);
+                let obj = objs.get(oid);
                 game.send_to_char(ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
                 game.show_obj_to_char(db, texts, obj, ch, SHOW_OBJ_SHORT);
                 found = true;
@@ -1216,7 +1216,7 @@ pub fn do_equipment(
 
 pub fn do_time(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1281,7 +1281,7 @@ pub fn do_time(
 
 pub fn do_weather(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1326,7 +1326,7 @@ pub fn do_weather(
 
 pub fn do_help(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1380,7 +1380,7 @@ const WHO_FORMAT: &str =
 /* FIXME: This whole thing just needs rewritten. */
 pub fn do_who(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1609,7 +1609,7 @@ const USERS_FORMAT: &str =
 /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
 pub fn do_users(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1840,7 +1840,7 @@ pub fn do_users(
 /* Generic page_string function for displaying text */
 pub fn do_gen_ps(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1959,7 +1959,7 @@ fn perform_mortal_where(game: &mut Game, db: &DB, chid: DepotId, arg: &str) {
 }
 
 fn print_object_location(
-    game: &mut Game,
+    game: &mut Game,objs: & Depot<ObjData>, 
     db: &DB,
     num: i32,
     oid: DepotId,
@@ -1967,7 +1967,7 @@ fn print_object_location(
     recur: bool,
 ) {
     let ch = db.ch(chid);
-    let obj = db.obj(oid);
+    let obj = objs.get(oid);
     if num > 0 {
         game.send_to_char(
             ch,
@@ -2012,20 +2012,20 @@ fn print_object_location(
             ch,
             format!(
                 "inside {}{}\r\n",
-                db.obj(obj.in_obj.unwrap()).short_description,
+                objs.get(obj.in_obj.unwrap()).short_description,
                 if recur { ", which is" } else { " " }
             )
             .as_str(),
         );
         if recur {
-            print_object_location(game, db, 0, obj.in_obj.unwrap(), chid, recur);
+            print_object_location(game, objs,db, 0, obj.in_obj.unwrap(), chid, recur);
         }
     } else {
         game.send_to_char(ch, "in an unknown location\r\n");
     }
 }
 
-fn perform_immort_where(game: &mut Game, db: &DB, chid: DepotId, arg: &str) {
+fn perform_immort_where(game: &mut Game, db: &DB,objs: & Depot<ObjData>,  chid: DepotId, arg: &str) {
     let ch = db.ch(chid);
 
     if arg.is_empty() {
@@ -2087,11 +2087,11 @@ fn perform_immort_where(game: &mut Game, db: &DB, chid: DepotId, arg: &str) {
             }
         }
         num = 0;
-        for k in db.object_list.ids() {
-            if game.can_see_obj(db, ch, db.obj(k)) && isname(arg, db.obj(k).name.as_ref()) {
+        for &k in &db.object_list {
+            if game.can_see_obj(db, ch, objs.get(k)) && isname(arg, objs.get(k).name.as_ref()) {
                 found = true;
                 print_object_location(
-                    game,
+                    game,objs,
                     db,
                     {
                         num += 1;
@@ -2111,7 +2111,7 @@ fn perform_immort_where(game: &mut Game, db: &DB, chid: DepotId, arg: &str) {
 
 pub fn do_where(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2122,7 +2122,7 @@ pub fn do_where(
     one_argument(argument, &mut arg);
 
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_where(game, db, chid, &arg);
+        perform_immort_where(game, db, objs,chid, &arg);
     } else {
         perform_mortal_where(game, db, chid, &arg);
     }
@@ -2130,7 +2130,7 @@ pub fn do_where(
 
 pub fn do_levels(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2180,7 +2180,7 @@ pub fn do_levels(
 
 pub fn do_consider(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2233,7 +2233,7 @@ pub fn do_consider(
 
 pub fn do_diagnose(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2268,7 +2268,7 @@ const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
 pub fn do_color(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2347,7 +2347,7 @@ macro_rules! yesno {
 
 pub fn do_toggle(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2421,7 +2421,7 @@ pub fn sort_commands(db: &mut DB) {
 
 pub fn do_commands(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,
+    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
