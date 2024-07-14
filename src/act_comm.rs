@@ -31,19 +31,30 @@ use crate::{
 
 pub fn do_say(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
     let argument = argument.trim_start();
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
 
     if argument.is_empty() {
         game.send_to_char(ch, "Yes, but WHAT do you want to say?\r\n");
     } else {
-        game.act(db, &format!("$n says, '{}'", argument), false, Some(ch), None, None, TO_ROOM);
+        game.act(chars, 
+            db,
+            &format!("$n says, '{}'", argument),
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(ch, OK);
         } else {
@@ -56,13 +67,16 @@ pub fn do_say(
 
 pub fn do_gsay(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let argument = argument.trim_start();
 
     if !ch.aff_flagged(AFF_GROUP) {
@@ -80,9 +94,9 @@ pub fn do_gsay(
         }
 
         let buf = format!("$n tells the group, '{}'", argument);
-        let k = db.ch(k_id);
+        let k = chars.get(k_id);
         if k.aff_flagged(AFF_GROUP) && k_id != chid {
-            game.act(
+            game.act(chars, 
                 db,
                 &buf,
                 false,
@@ -94,9 +108,9 @@ pub fn do_gsay(
         }
         let followers_ids = k.followers.iter().map(|f| f.follower);
         for f_id in followers_ids {
-            let f = db.ch(f_id);
+            let f = chars.get(f_id);
             if f.aff_flagged(AFF_GROUP) && f_id != chid {
-                game.act(
+                game.act(chars, 
                     db,
                     &buf,
                     false,
@@ -110,19 +124,23 @@ pub fn do_gsay(
         if ch.prf_flagged(PRF_NOREPEAT) {
             game.send_to_char(ch, OK);
         } else {
-            game.send_to_char(
-                ch,
-                &format!("You tell the group, '{}'\r\n", argument),
-            );
+            game.send_to_char(ch, &format!("You tell the group, '{}'\r\n", argument));
         }
     }
 }
 
-fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, arg: &str) {
-    let ch = db.ch(chid);
-    let vict = db.ch(vict_id);
+fn perform_tell(
+    game: &mut Game,
+    db: & DB,
+    chars: &mut Depot<CharData>,
+    chid: DepotId,
+    vict_id: DepotId,
+    arg: &str,
+) {
+    let ch = chars.get(chid);
+    let vict = chars.get(vict_id);
     game.send_to_char(vict, CCRED!(vict, C_NRM));
-    game.act(
+    game.act(chars, 
         db,
         &format!("$n tells you, '{}'", arg),
         false,
@@ -137,7 +155,7 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
         game.send_to_char(ch, OK);
     } else {
         game.send_to_char(ch, CCRED!(ch, C_NRM));
-        game.act(
+        game.act(chars, 
             db,
             &format!("You tell $N, '{}'", arg),
             false,
@@ -150,12 +168,17 @@ fn perform_tell(game: &mut Game, db: &mut DB, chid: DepotId, vict_id: DepotId, a
     }
     if !vict.is_npc() && !ch.is_npc() {
         let ch_idnum = ch.get_idnum();
-        let vict = db.ch_mut(vict_id);
+        let vict = chars.get_mut(vict_id);
         vict.set_last_tell(ch_idnum);
     }
 }
 
-fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool {
+fn is_tell_ok(
+    game: &mut Game, chars: &Depot<CharData>, 
+    db: &DB,
+    ch: &CharData,
+    vict: &CharData,
+) -> bool {
     if ch.id() == vict.id() {
         game.send_to_char(ch, "You try to tell yourself something.\r\n");
     } else if !ch.is_npc() && ch.prf_flagged(PRF_NOTELL) {
@@ -167,7 +190,7 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
         game.send_to_char(ch, "The walls seem to absorb your words.\r\n");
     } else if !vict.is_npc() && vict.desc.is_none() {
         /* linkless */
-        game.act(
+        game.act(chars, 
             db,
             "$E's linkless at the moment.",
             false,
@@ -177,7 +200,7 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
             TO_CHAR | TO_SLEEP,
         );
     } else if vict.plr_flagged(PLR_WRITING) {
-        game.act(
+        game.act(chars, 
             db,
             "$E's writing a message right now; try again later.",
             false,
@@ -189,7 +212,7 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
         || db.room_flagged(vict.in_room(), ROOM_SOUNDPROOF)
     {
-        game.act(
+        game.act(chars, 
             db,
             "$E can't hear you.",
             false,
@@ -211,13 +234,16 @@ fn is_tell_ok(game: &mut Game, db: &DB, ch: &CharData, vict: &CharData) -> bool 
  */
 pub fn do_tell(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let mut buf = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -226,29 +252,32 @@ pub fn do_tell(
     if buf.is_empty() || buf2.is_empty() {
         game.send_to_char(ch, "Who do you wish to tell what??\r\n");
     } else if ch.get_level() < LVL_IMMORT as u8 && {
-        vict = game.get_player_vis(db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = game.get_player_vis(chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
     } else if ch.get_level() >= LVL_IMMORT as u8 && {
-        vict = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
-    } else if is_tell_ok(game, db, ch, vict.unwrap()) {
-        perform_tell(game, db, chid, vict.unwrap().id(), &buf2);
+    } else if is_tell_ok(game, chars, db, ch, vict.unwrap()) {
+        perform_tell(game, db, chars, chid, vict.unwrap().id(), &buf2);
     }
 }
 
 pub fn do_reply(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if ch.is_npc() {
         return;
     }
@@ -275,26 +304,30 @@ pub fn do_reply(
         let last_tell_chid = db
             .character_list
             .iter()
+            .map(|&i| chars.get(i))
             .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell())
             .map(|e| e.id());
 
         if last_tell_chid.is_none() {
             game.send_to_char(ch, "They are no longer playing.\r\n");
-        } else if is_tell_ok(game, db, ch, db.ch(last_tell_chid.unwrap())) {
-            perform_tell(game, db, chid, last_tell_chid.unwrap(), argument);
+        } else if is_tell_ok(game, chars, db, ch, chars.get(last_tell_chid.unwrap())) {
+            perform_tell(game, db, chars, chid, last_tell_chid.unwrap(), argument);
         }
     }
 }
 
 pub fn do_spec_comm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
 
     let action_sing;
     let action_plur;
@@ -332,7 +365,7 @@ pub fn do_spec_comm(
             format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
         );
     } else if {
-        vict = game.get_char_vis(db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
@@ -344,7 +377,7 @@ pub fn do_spec_comm(
     } else {
         let vict = vict.unwrap();
         let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
-        game.act(
+        game.act(chars, 
             db,
             &buf1,
             false,
@@ -359,16 +392,10 @@ pub fn do_spec_comm(
         } else {
             game.send_to_char(
                 ch,
-                format!(
-                    "You {} {}, '{}'\r\n",
-                    action_sing,
-                    vict.get_name(),
-                    buf2
-                )
-                .as_str(),
+                format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
             );
         }
-        game.act(
+        game.act(chars, 
             db,
             action_others,
             false,
@@ -381,14 +408,17 @@ pub fn do_spec_comm(
 }
 
 pub fn do_write(
-    game: &mut Game, 
-    db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let mut paper;
     let mut pen = None;
     let mut papername = String::new();
@@ -411,14 +441,14 @@ pub fn do_write(
     if !penname.is_empty() {
         /* there were two arguments */
         if {
-            paper = game.get_obj_in_list_vis(db, objs,ch, &papername, None, &ch.carrying);
+            paper = game.get_obj_in_list_vis(chars,db, objs, ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", papername).as_str());
             return;
         }
         if {
-            pen = game.get_obj_in_list_vis(db, objs,ch, &penname, None, &ch.carrying);
+            pen = game.get_obj_in_list_vis(chars,db, objs, ch, &penname, None, &ch.carrying);
             pen.is_none()
         } {
             game.send_to_char(ch, format!("You have no {}.\r\n", penname).as_str());
@@ -427,7 +457,7 @@ pub fn do_write(
     } else {
         /* there was one arg.. let's see what we can find */
         if {
-            paper = game.get_obj_in_list_vis(db, objs,ch, &papername, None, &ch.carrying);
+            paper = game.get_obj_in_list_vis(chars,db, objs, ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
             game.send_to_char(
@@ -457,7 +487,7 @@ pub fn do_write(
             );
             return;
         }
-        if !game.can_see_obj(db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
+        if !game.can_see_obj(chars, db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
             game.send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
             return;
         }
@@ -472,7 +502,7 @@ pub fn do_write(
 
     /* ok.. now let's see what kind of stuff we've found */
     if pen.get_obj_type() != ITEM_PEN {
-        game.act(
+        game.act(chars, 
             db,
             "$p is no good for writing with.",
             false,
@@ -482,7 +512,7 @@ pub fn do_write(
             TO_CHAR,
         );
     } else if paper.get_obj_type() != ITEM_NOTE {
-        game.act(
+        game.act(chars, 
             db,
             "You can't write on $p.",
             false,
@@ -496,7 +526,7 @@ pub fn do_write(
     } else {
         /* we can write - hooray! */
         game.send_to_char(ch, "Write your note.  End with '@' on a new line.\r\n");
-        game.act(
+        game.act(chars, 
             db,
             "$n begins to jot down a note.",
             true,
@@ -505,27 +535,25 @@ pub fn do_write(
             None,
             TO_ROOM,
         );
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         let desc_id = ch.desc.unwrap();
         let desc = game.desc_mut(desc_id);
-        desc.string_write(
-            db,
-            paper.action_description,
-            MAX_NOTE_LENGTH as usize,
-            0,
-        );
+        desc.string_write(chars,  paper.action_description, MAX_NOTE_LENGTH as usize, 0);
     }
 }
 
 pub fn do_page(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let mut arg = String::new();
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
@@ -544,8 +572,8 @@ pub fn do_page(
                     if game.desc(d_id).state() == ConPlaying && game.desc(d_id).character.is_some()
                     {
                         let vict_id = game.desc(d_id).character.unwrap();
-                        let vict = db.ch(vict_id);
-                        game.act(
+                        let vict = chars.get(vict_id);
+                        game.act(chars, 
                             db,
                             &buf,
                             false,
@@ -563,11 +591,11 @@ pub fn do_page(
         }
         let vict;
         if {
-            vict = game.get_char_vis(db, ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = game.get_char_vis(chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
             vict.is_some()
         } {
             let vict = vict.unwrap();
-            game.act(
+            game.act(chars, 
                 db,
                 &buf,
                 false,
@@ -579,7 +607,7 @@ pub fn do_page(
             if ch.prf_flagged(PRF_NOREPEAT) {
                 game.send_to_char(ch, OK);
             } else {
-                game.act(
+                game.act(chars, 
                     db,
                     &buf,
                     false,
@@ -601,13 +629,16 @@ pub fn do_page(
 
 pub fn do_gen_comm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     // char color_on[24];
 
     /* Array of flags which must _not_ be set in order for comm to be heard */
@@ -697,7 +728,7 @@ pub fn do_gen_comm(
             game.send_to_char(ch, "You're too exhausted to holler.\r\n");
             return;
         } else {
-            let ch = db.ch_mut(chid);
+            let ch = chars.get_mut(chid);
             ch.set_move(ch.get_move() - HOLLER_MOVE_COST as i16);
         }
     }
@@ -705,7 +736,7 @@ pub fn do_gen_comm(
     let color_on = COM_MSGS[subcmd as usize][3];
 
     /* first, set up strings to be given to the communicator */
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if ch.prf_flagged(PRF_NOREPEAT) {
         game.send_to_char(ch, OK);
     } else {
@@ -730,19 +761,17 @@ pub fn do_gen_comm(
         if game.desc(d_id).state() == ConPlaying
             && d_id != ch.desc.unwrap()
             && game.desc(d_id).character.is_some()
-            && !db
-                .ch(game.desc(d_id).character.unwrap())
+            && !chars.get(game.desc(d_id).character.unwrap())
                 .prf_flagged(CHANNELS[subcmd as usize])
-            && !db
-                .ch(game.desc(d_id).character.unwrap())
+            && !chars.get(game.desc(d_id).character.unwrap())
                 .plr_flagged(PLR_WRITING)
             && !db.room_flagged(
-                db.ch(game.desc(d_id).character.unwrap()).in_room(),
+                chars.get(game.desc(d_id).character.unwrap()).in_room(),
                 ROOM_SOUNDPROOF,
             )
         {
             let ic_id = game.desc(d_id).character.unwrap();
-            let ic = db.ch(ic_id);
+            let ic = chars.get(ic_id);
             if subcmd == SCMD_SHOUT
                 && (db.world[ch.in_room() as usize].zone != db.world[ic.in_room() as usize].zone
                     || !ic.awake())
@@ -753,7 +782,7 @@ pub fn do_gen_comm(
             if COLOR_LEV!(ic) >= C_NRM {
                 game.send_to_char(ic, color_on);
             }
-            game.act(
+            game.act(chars, 
                 db,
                 &buf1,
                 false,
@@ -771,13 +800,16 @@ pub fn do_gen_comm(
 
 pub fn do_qcomm(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,
     subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if ch.prf_flagged(PRF_QUEST) {
         game.send_to_char(ch, "You aren't even part of the quest!\r\n");
         return;
@@ -802,7 +834,7 @@ pub fn do_qcomm(
             game.send_to_char(ch, OK);
         } else if subcmd == SCMD_QSAY {
             buf = format!("You quest-say, '{}'", argument);
-            game.act(
+            game.act(chars, 
                 db,
                 &buf,
                 false,
@@ -812,7 +844,7 @@ pub fn do_qcomm(
                 TO_CHAR,
             );
         } else {
-            game.act(
+            game.act(chars, 
                 db,
                 argument,
                 false,
@@ -833,13 +865,12 @@ pub fn do_qcomm(
             if game.descriptor_list.get(id).state() == ConPlaying
                 && id != ch.desc.unwrap()
                 && game.descriptor_list.get(id).character.is_some()
-                && db
-                    .ch(game.descriptor_list.get(id).character.unwrap())
+                && chars.get(game.descriptor_list.get(id).character.unwrap())
                     .prf_flagged(PRF_QUEST)
             {
                 let vict_id = game.descriptor_list.get(id).character.unwrap();
-                let vict = db.ch(vict_id);
-                game.act(
+                let vict = chars.get(vict_id);
+                game.act(chars, 
                     db,
                     &buf,
                     false,

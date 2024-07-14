@@ -21,7 +21,7 @@ use crate::structs::{
      RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
-use crate::{Game, ObjData, TextData};
+use crate::{CharData, Game, ObjData, TextData};
 
 struct BfsQueueStruct {
     room: RoomRnum,
@@ -156,8 +156,8 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
 * Functions and Commands which use the above functions. *
 ********************************************************/
 
-pub fn do_track(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
         game.send_to_char(ch, "You have no idea how.\r\n");
@@ -172,7 +172,7 @@ pub fn do_track(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
     let vict;
     /* The person can't see the victim. */
     if {
-        vict = game.get_char_vis(db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = game.get_char_vis(chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
         game.send_to_char(ch, "No one is around by that name.\r\n");
@@ -206,7 +206,7 @@ pub fn do_track(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
 
     /* They passed the skill check. */
     let dir = find_first_step(game, db, ch.in_room(), vict.in_room());
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     match dir {
         BFS_ERROR => {
             game.send_to_char(ch, "Hmm.. something seems to be wrong.\r\n");
@@ -217,13 +217,13 @@ pub fn do_track(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
         }
 
         BFS_NO_PATH => {
-            let vict = db.ch(vict_id);
+            let vict = chars.get(vict_id);
             game.send_to_char(ch,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             game.send_to_char(ch,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );

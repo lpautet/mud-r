@@ -10,7 +10,7 @@
 ************************************************************************ */
 use std::cmp::{max, min};
 use crate::depot::{Depot, DepotId};
-use crate::{ObjData, TextData, VictimRef, DB};
+use crate::{CharData, ObjData, TextData, VictimRef, DB};
 
 use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
@@ -269,7 +269,7 @@ pub struct AttackHitType {
  * Special spells appear below.
  */
 pub fn spell_create_water(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -297,34 +297,34 @@ pub fn spell_create_water(
                  let v = objs.get(obj_id).get_obj_val(1) + water;
                  objs.get_mut(obj_id).set_obj_val(1,v  );
                 name_to_drinkcon( objs, Some(obj_id), LIQ_WATER);
-                weight_change_object(db, objs,obj_id, water);
-                let ch = db.ch(chid);
+                weight_change_object(db,chars, objs,obj_id, water);
+                let ch = chars.get(chid);
                 let obj = objs.get(obj_id);
-                game.act(db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+                game.act(chars, db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
             }
         }
     }
 }
 
 pub fn spell_recall(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    if victim_id.is_none() || db.ch(victim_id.unwrap()).is_npc() {
+    if victim_id.is_none() || chars.get(victim_id.unwrap()).is_npc() {
         return;
     }
 
     let victim_id = victim_id.unwrap();
-    let victim = db.ch(victim_id);
+    let victim = chars.get(victim_id);
 
-    game.act(db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
-    db.char_from_room(objs,victim_id);
-    db.char_to_room(objs,victim_id, db.r_mortal_start_room);
-    let victim = db.ch(victim_id);
-    game.act(db,
+    game.act(chars, db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    db.char_from_room(chars, objs,victim_id);
+    db.char_to_room(chars, objs,victim_id, db.r_mortal_start_room);
+    let victim = chars.get(victim_id);
+    game.act(chars, db,
         "$n appears in the middle of the room.",
         true,
         Some(victim),
@@ -332,11 +332,11 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, texts,objs,victim, false);
+    look_at_room(game, db, chars, texts,objs,victim, false);
 }
 
 pub fn spell_teleport(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -344,11 +344,11 @@ pub fn spell_teleport(
 ) {
     let mut to_room;
 
-    if victim_id.is_none() || db.ch(victim_id.unwrap()).is_npc() {
+    if victim_id.is_none() || chars.get(victim_id.unwrap()).is_npc() {
         return;
     }
     let victim_id = victim_id.unwrap();
-    let victim = db.ch(victim_id);
+    let victim = chars.get(victim_id);
     loop {
         to_room = rand_number(0, db.world.len() as u32);
         if !db.room_flagged(
@@ -359,7 +359,7 @@ pub fn spell_teleport(
         }
     }
 
-    game.act(db,
+    game.act(chars, db,
         "$n slowly fades out of existence and is gone.",
         false,
         Some(victim),
@@ -367,10 +367,10 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    db.char_from_room(objs,victim_id);
-    db.char_to_room(objs,victim_id, to_room as RoomRnum);
-    let victim = db.ch(victim_id);
-    game.act(db,
+    db.char_from_room(chars, objs,victim_id);
+    db.char_to_room(chars, objs,victim_id, to_room as RoomRnum);
+    let victim = chars.get(victim_id);
+    game.act(chars, db,
         "$n slowly fades into existence.",
         false,
         Some(victim),
@@ -378,13 +378,13 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, texts,objs,victim, false);
+    look_at_room(game, db, chars, texts,objs,victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 pub fn spell_summon(
-    game: &mut Game, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -394,10 +394,10 @@ pub fn spell_summon(
         return;
     }
     let victim_id = victim_id.unwrap();
-    let victim = db.ch(victim_id);
+    let victim = chars.get(victim_id);
 
     let chid = chid.unwrap();
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
         if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
         game.send_to_char(ch, SUMMON_FAIL);
         return;
@@ -405,7 +405,7 @@ pub fn spell_summon(
 
     if !PK_ALLOWED {
         if victim.mob_flagged(MOB_AGGRESSIVE) {
-            game.act(db,"As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
+            game.act(chars, db,"As the words escape your lips and $N travels\r\nthrough time and space towards you, you realize that $E is\r\naggressive and might harm you, so you wisely send $M back.",
                    false, Some(ch), None, Some(VictimRef::Char(victim)), TO_CHAR);
             return;
         }
@@ -416,7 +416,7 @@ pub fn spell_summon(
             game.send_to_char(victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
                                          ch.get_name(), db.world[ch.in_room() as usize].name,
                                          if ch.player.sex == SEX_MALE { "He" } else { "She" }).as_str());
-                                         let victim = db.ch(victim_id);
+                                         let victim = chars.get(victim_id);
             game.send_to_char(ch,
                 format!(
                     "You failed because {} has summon protection on.\r\n",
@@ -424,9 +424,9 @@ pub fn spell_summon(
                 )
                 .as_str(),
             );
-            let victim = db.ch(victim_id);
-            let ch = db.ch(chid);
-            game.mudlog(db,
+            let victim = chars.get(victim_id);
+            let ch = chars.get(chid);
+            game.mudlog(chars,
                 BRF,
                 LVL_IMMORT as i32,
                 true,
@@ -449,7 +449,7 @@ pub fn spell_summon(
         return;
     }
 
-    game.act(db,
+    game.act(chars, db,
         "$n disappears suddenly.",
         true,
         Some(victim),
@@ -458,11 +458,11 @@ pub fn spell_summon(
         TO_ROOM,
     );
 
-    db.char_from_room(objs,victim_id);
-    let ch = db.ch(chid);
-    db.char_to_room(objs,victim_id, ch.in_room());
-    let victim = db.ch(victim_id);
-    game.act(db,
+    db.char_from_room(chars, objs,victim_id);
+    let ch = chars.get(chid);
+    db.char_to_room(chars, objs,victim_id, ch.in_room());
+    let victim = chars.get(victim_id);
+    game.act(chars, db,
         "$n arrives suddenly.",
         true,
         Some(victim),
@@ -470,8 +470,8 @@ pub fn spell_summon(
         None,
         TO_ROOM,
     );
-    let ch = db.ch(chid);
-    game.act(db,
+    let ch = chars.get(chid);
+    game.act(chars, db,
         "$n has summoned you!",
         false,
         Some(ch),
@@ -479,11 +479,11 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(game, db,texts,objs,victim, false);
+    look_at_room(game, db,chars,texts,objs,victim, false);
 }
 
 pub fn spell_locate_object(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -495,7 +495,7 @@ pub fn spell_locate_object(
      * Since we're passed the object and not the keyword we can only guess
      * at what the player originally meant to search for. -gg
      */
-    let ch = db.ch(chid.unwrap());
+    let ch = chars.get(chid.unwrap());
     let oid = oid.unwrap();
     let mut name = String::new();
     name.push_str(& objs.get(oid).name);
@@ -519,7 +519,7 @@ pub fn spell_locate_object(
             game.send_to_char(ch,
                 format!(
                     " is being carried by {}.\r\n",
-                    game.pers(db,db.ch(objs.get(i).carried_by.unwrap()), db.ch(chid.unwrap()))
+                    game.pers(chars, db,chars.get(objs.get(i).carried_by.unwrap()), chars.get(chid.unwrap()))
                 )
                 .as_str(),
             );
@@ -543,7 +543,7 @@ pub fn spell_locate_object(
             game.send_to_char(ch,
                 format!(
                     " is being worn by {}.\r\n",
-                    game.pers(db,db.ch(objs.get(i).worn_by.unwrap()), db.ch(chid.unwrap()))
+                    game.pers(chars, db,chars.get(objs.get(i).worn_by.unwrap()), chars.get(chid.unwrap()))
                 )
                 .as_str(),
             );
@@ -560,7 +560,7 @@ pub fn spell_locate_object(
 }
 
 pub fn spell_charm(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -570,10 +570,10 @@ pub fn spell_charm(
         return;
     }
     let victim_id = victim_id.unwrap();
-    let victim = db.ch(victim_id);
+    let victim = chars.get(victim_id);
 
     let chid = chid.unwrap();
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
 
     if victim_id ==  chid {
         game.send_to_char(ch, "You like yourself even better!\r\n");
@@ -590,16 +590,16 @@ pub fn spell_charm(
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
         game.send_to_char(ch, "You fail - shouldn't be doing it anyway.\r\n");
-    } else if circle_follow(&db, victim, Some(ch)) {
+    } else if circle_follow(chars,  victim, Some(ch)) {
         game.send_to_char(ch, "Sorry, following in circles can not be allowed.\r\n");
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
         game.send_to_char(ch, "Your victim resists!\r\n");
     } else {
         if victim.master.is_some() {
-            game.stop_follower(db, objs,victim_id);
+            game.stop_follower(chars, db, objs,victim_id);
         }
 
-        add_follower(game, db, victim_id, chid);
+        add_follower(game, chars, db, victim_id, chid);
         let mut af = AffectedType {
             _type: SPELL_CHARM as i16,
             duration: 24 * 2,
@@ -607,18 +607,18 @@ pub fn spell_charm(
             location: 0,
             bitvector: AFF_CHARM,
         };
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         if ch.get_cha() != 0 {
             af.duration *= ch.get_cha() as i16;
         }
-        let victim = db.ch(victim_id);
+        let victim = chars.get(victim_id);
         if victim.get_int() != 0 {
             af.duration /= victim.get_int() as i16;
         }
-        db.affect_to_char(objs,victim_id, af);
-        let victim = db.ch(victim_id);
-        let ch = db.ch(chid);
-        game.act(db,
+        db.affect_to_char(chars, objs,victim_id, af);
+        let victim = chars.get(victim_id);
+        let ch = chars.get(chid);
+        game.act(chars, db,
             "Isn't $n just such a nice fellow?",
             false,
             Some(ch),
@@ -626,7 +626,7 @@ pub fn spell_charm(
             Some(VictimRef::Char(victim)),
             TO_VICT,
         );
-        let victim = db.ch_mut(victim_id);
+        let victim = chars.get_mut(victim_id);
         if victim.is_npc() {
             victim.remove_mob_flags_bit(MOB_SPEC);
         }
@@ -634,13 +634,13 @@ pub fn spell_charm(
 }
 
 pub fn spell_identify(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    let ch = db.ch(chid.unwrap());
+    let ch = chars.get(chid.unwrap());
 
     if oid.is_some() {
         let oid = oid.unwrap();
@@ -756,11 +756,11 @@ pub fn spell_identify(
     } else if victim_id.is_some() {
         /* victim */
         let victim_id = victim_id.unwrap();
-        let victim = db.ch(victim_id);
+        let victim = chars.get(victim_id);
         game.send_to_char(ch,
             format!("Name: {}\r\n", victim.get_name()).as_str(),
         );
-        let victim = db.ch(victim_id);
+        let victim = chars.get(victim_id);
         if !victim.is_npc() {
             game.send_to_char(ch,
                 format!(
@@ -773,7 +773,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            let victim = db.ch(victim_id);
+            let victim = chars.get(victim_id);
             game.send_to_char(ch,
                 format!(
                     "Height {} cm, Weight {} pounds\r\n",
@@ -782,7 +782,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            let victim = db.ch(victim_id);
+            let victim = chars.get(victim_id);
             game.send_to_char(ch,
                 format!(
                     "Level: {}, Hits: {}, Mana: {}\r\n",
@@ -792,7 +792,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            let victim = db.ch(victim_id);
+            let victim = chars.get(victim_id);
             game.send_to_char(ch,
                 format!(
                     "AC: {}, Hitroll: {}, Damroll: {}\r\n",
@@ -802,7 +802,7 @@ pub fn spell_identify(
                 )
                 .as_str(),
             );
-            let victim = db.ch(victim_id);
+            let victim = chars.get(victim_id);
             game.send_to_char(ch,
                 format!(
                     "Str: {}/{}, Int: {}, Wis: {}, Dex: {}, Con: {}, Cha: {}\r\n",
@@ -825,7 +825,7 @@ pub fn spell_identify(
  * wielding character's hit/dam totals.
  */
 pub fn spell_enchant_weapon(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -861,22 +861,22 @@ pub fn spell_enchant_weapon(
     af1.location = APPLY_DAMROLL as u8;
     af1.modifier = 1 + if level >= 20 { 1 } else { 0 };
     obj.affected[1] = af1;
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if ch.is_good() {
         let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         let obj=objs.get(oid);
-        game.act(db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act(chars, db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else if ch.is_evil() {
         let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         let obj=objs.get(oid);
-        game.act(db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
+        game.act(chars, db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else {
         let obj=objs.get(oid);
-        game.act(db,
+        game.act(chars, db,
             "$p glows yellow.",
             false,
             Some(ch),
@@ -888,7 +888,7 @@ pub fn spell_enchant_weapon(
 }
 
 pub fn spell_detect_poison(
-    game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -896,9 +896,9 @@ pub fn spell_detect_poison(
 ) {
     if victim_id.is_some() {
         let victim_id = victim_id.unwrap();
-        let victim = db.ch(victim_id);
+        let victim = chars.get(victim_id);
         let chid = chid.unwrap();
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         if chid == victim_id {
             if victim.aff_flagged(AFF_POISON) {
                 game.send_to_char(ch, "You can sense poison in your blood.\r\n");
@@ -907,7 +907,7 @@ pub fn spell_detect_poison(
             }
         } else {
             if victim.aff_flagged(AFF_POISON) {
-                game.act(db,
+                game.act(chars, db,
                     "You sense that $E is poisoned.",
                     false,
                     Some(ch),
@@ -916,7 +916,7 @@ pub fn spell_detect_poison(
                     TO_CHAR,
                 );
             } else {
-                game.act(db,
+                game.act(chars, db,
                     "You sense that $E is healthy.",
                     false,
                     Some(ch),
@@ -933,7 +933,7 @@ pub fn spell_detect_poison(
             match obj.get_obj_type() {
                 ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
                     if obj.get_obj_val(3) != 0 {
-                        game.act(db,
+                        game.act(chars, db,
                             "You sense that $p has been contaminated.",
                             false,
                             Some(ch),
@@ -942,7 +942,7 @@ pub fn spell_detect_poison(
                             TO_CHAR,
                         );
                     } else {
-                        game.act(db,
+                        game.act(chars, db,
                             "You sense that $p is safe for consumption.",
                             false,
                             Some(ch),

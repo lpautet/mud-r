@@ -9,41 +9,42 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
 ************************************************************************ */
 
+use crate::depot::Depot;
 use crate::structs::{
     SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
 };
 use crate::util::dice;
-use crate::{Game, DB};
+use crate::{CharData, Game, DB};
 use std::cmp::{max, min};
 
 impl Game {
-    pub(crate) fn weather_and_time(&mut self, db: &mut DB, mode: i32) {
-        self.another_hour(db, mode);
+    pub(crate) fn weather_and_time(&mut self, chars: &Depot<CharData>, db: &mut DB, mode: i32) {
+        self.another_hour(chars, db, mode);
         if mode != 0 {
-            self.weather_change(db);
+            self.weather_change(chars, db);
         }
     }
 
-    fn another_hour(&mut self, db: &mut DB,mode: i32) {
+    fn another_hour(&mut self, chars: &Depot<CharData>, db: &mut DB,mode: i32) {
         db.time_info.hours += 1;
 
         if mode != 0 {
             match db.time_info.hours {
                 5 => {
                     db.weather_info.sunlight = SUN_RISE;
-                    self.send_to_outdoor(db,"The sun rises in the east.\r\n");
+                    self.send_to_outdoor(chars, db,"The sun rises in the east.\r\n");
                 }
                 6 => {
                     db.weather_info.sunlight = SUN_LIGHT;
-                    self.send_to_outdoor(db,"The day has begun.\r\n");
+                    self.send_to_outdoor(chars, db,"The day has begun.\r\n");
                 }
                 21 => {
                     db.weather_info.sunlight = SUN_SET;
-                    self.send_to_outdoor(db,"The sun slowly disappears in the west.\r\n");
+                    self.send_to_outdoor(chars, db,"The sun slowly disappears in the west.\r\n");
                 }
                 22 => {
                     db.weather_info.sunlight = SUN_DARK;
-                    self.send_to_outdoor(db,"The night has begun.\r\n");
+                    self.send_to_outdoor(chars, db,"The night has begun.\r\n");
                 }
                 _ => {}
             }
@@ -66,7 +67,7 @@ impl Game {
         }
     }
 
-    fn weather_change(&mut self,db: &mut DB) {
+    fn weather_change(&mut self, chars: &Depot<CharData>, db: &mut DB) {
 
         let diff;
         if (db.time_info.month >= 9) && (db.time_info.month <= 16) {
@@ -146,32 +147,32 @@ impl Game {
         match change {
             0 => {}
             1 => {
-                self.send_to_outdoor(db,"The sky starts to get cloudy.\r\n");
+                self.send_to_outdoor(chars, db,"The sky starts to get cloudy.\r\n");
                 db.weather_info.sky = SKY_CLOUDY;
             }
 
             2 => {
-                self.send_to_outdoor(db,"It starts to rain.\r\n");
+                self.send_to_outdoor(chars, db,"It starts to rain.\r\n");
                 db.weather_info.sky = SKY_RAINING;
             }
 
             3 => {
-                self.send_to_outdoor(db,"The clouds disappear.\r\n");
+                self.send_to_outdoor(chars, db,"The clouds disappear.\r\n");
                 db.weather_info.sky = SKY_CLOUDLESS;
             }
 
             4 => {
-                self.send_to_outdoor(db,"Lightning starts to show in the sky.\r\n");
+                self.send_to_outdoor(chars, db,"Lightning starts to show in the sky.\r\n");
                 db.weather_info.sky = SKY_LIGHTNING;
             }
 
             5 => {
-                self.send_to_outdoor(db,"The rain stops.\r\n");
+                self.send_to_outdoor(chars, db,"The rain stops.\r\n");
                 db.weather_info.sky = SKY_CLOUDY;
             }
 
             6 => {
-                self.send_to_outdoor(db,"The lightning stops.\r\n");
+                self.send_to_outdoor(chars, db,"The lightning stops.\r\n");
                 db.weather_info.sky = SKY_RAINING;
             }
             _ => {}

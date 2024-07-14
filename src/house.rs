@@ -151,7 +151,7 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            let newobjid = obj_from_store(db, objs,&object, &mut i).unwrap();
+            let newobjid = obj_from_store( db, objs,&object, &mut i).unwrap();
             db.obj_to_room(objs,newobjid, rnum);
         }
     }
@@ -161,10 +161,10 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
 
 /* Save all objects for a house (recursive; initial call must be followed
 by a call to House_restore_weight)  Assumes file is open already. */
-fn house_save(db: &mut DB,objs: &mut Depot<ObjData>,  oids: Vec<DepotId>, fp: &mut File) -> bool {
+fn house_save(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  oids: Vec<DepotId>, fp: &mut File) -> bool {
     for oid in oids {
         for coid in objs.get(oid).contains.clone() {
-            house_save(db, objs,objs.get(coid).contains.clone(), fp);
+            house_save(chars, db, objs,objs.get(coid).contains.clone(), fp);
         }
         let result = obj_to_store(db, objs.get(oid), fp, 0);
         if !result {
@@ -180,10 +180,10 @@ fn house_save(db: &mut DB,objs: &mut Depot<ObjData>,  oids: Vec<DepotId>, fp: &m
 }
 
 /* restore weight of containers after House_save has changed them for saving */
-fn house_restore_weight(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
+fn house_restore_weight(chars: &mut Depot<CharData>, db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
     for oid in oids {
         for coid in objs.get(oid).contains.clone() {
-            house_restore_weight(db,objs, objs.get(coid).contains.clone());
+            house_restore_weight(chars, db,objs, objs.get(coid).contains.clone());
         }
 
         if objs.get(oid).in_obj.is_some() {
@@ -196,7 +196,7 @@ fn house_restore_weight(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotI
 }
 
 /* Save all objects in a house */
-pub fn house_crashsave(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
+pub fn house_crashsave(chars: &mut Depot<CharData>, db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
     let rnum;
     if {
         rnum = db.real_room(vnum);
@@ -217,7 +217,7 @@ pub fn house_crashsave(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
         return;
     }
     let mut fp = fp.unwrap();
-    if !house_save(
+    if !house_save(chars,
         db,objs,
         db.world[rnum as usize].contents.clone(),
         &mut fp,
@@ -225,7 +225,7 @@ pub fn house_crashsave(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
         return;
     }
 
-    house_restore_weight(db, objs,db.world[rnum as usize].contents.clone());
+    house_restore_weight(chars, db, objs,db.world[rnum as usize].contents.clone());
     db.remove_room_flags_bit(rnum, ROOM_HOUSE_CRASH);
 }
 
@@ -296,7 +296,7 @@ fn house_delete_file(vnum: RoomVnum) {
 //             }
 //         }
 //         let mut i = -1;
-//         let obj = obj_from_store(db, &object, &mut i);
+//         let obj = obj_from_store(chars, db, &object, &mut i);
 //         if obj.is_some() {
 //             let obj = obj.as_ref().unwrap();
 //             game.send_to_char(db,
@@ -324,7 +324,7 @@ fn find_house(db: &DB, vnum: RoomVnum) -> Option<usize> {
 }
 
 /* Save the house control information */
-fn house_save_control(db: &mut DB) {
+fn house_save_control( db: &mut DB) {
     let fl;
 
     if {
@@ -431,7 +431,7 @@ pub fn house_boot(db: &mut DB,objs: &mut Depot<ObjData>, ) {
         }
     }
 
-    house_save_control(db);
+    house_save_control( db);
 }
 
 /* "House Control" functions */
@@ -442,8 +442,8 @@ const HCONTROL_FORMAT: &str =
        hcontrol pay <house vnum>\r\n\
        hcontrol show\r\n";
 
-pub fn hcontrol_list_houses(game: &mut Game, db: &mut DB, chid: DepotId) {
-    let ch = db.ch(chid);
+pub fn hcontrol_list_houses(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId) {
+    let ch = chars.get(chid);
     if db.num_of_houses == 0 {
         game.send_to_char(ch, "No houses have been defined.\r\n");
         return;
@@ -491,12 +491,12 @@ pub fn hcontrol_list_houses(game: &mut Game, db: &mut DB, chid: DepotId) {
             .as_str(),
         );
 
-        house_list_guests(game,db, chid, i, true);
+        house_list_guests(game,chars, db, chid, i, true);
     }
 }
 
-fn hcontrol_build_house(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, arg: &mut str) {
-    let ch = db.ch(chid);
+fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, arg: &mut str) {
+    let ch = chars.get(chid);
     if db.num_of_houses >= MAX_HOUSES {
         game.send_to_char(ch, "Max houses already defined.\r\n");
         return;
@@ -605,14 +605,14 @@ fn hcontrol_build_house(game: &mut Game, db: &mut DB,objs: &mut Depot<ObjData>, 
 
     db.set_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE);
     db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
-    house_crashsave(db, objs,virt_house);
-    let ch = db.ch(chid);
+    house_crashsave(chars, db, objs,virt_house);
+    let ch = chars.get(chid);
     game.send_to_char(ch, "House built.  Mazel tov!\r\n");
     house_save_control( db);
 }
 
-fn hcontrol_destroy_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
-    let ch = db.ch(chid);
+fn hcontrol_destroy_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId, arg: &str) {
+    let ch = chars.get(chid);
     if arg.is_empty() {
         game.send_to_char(ch, HCONTROL_FORMAT);
         return;
@@ -660,7 +660,7 @@ fn hcontrol_destroy_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str
     }
 
     db.num_of_houses -= 1;
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     game.send_to_char(ch, "House deleted.\r\n");
     house_save_control( db);
 
@@ -680,8 +680,8 @@ fn hcontrol_destroy_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str
     }
 }
 
-fn hcontrol_pay_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
-    let ch = db.ch(chid);
+fn hcontrol_pay_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId, arg: &str) {
+    let ch = chars.get(chid);
 
     let argi = arg.parse::<i16>();
     let argi = if argi.is_err() { -1 } else { argi.unwrap() };
@@ -694,7 +694,7 @@ fn hcontrol_pay_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
     } {
         game.send_to_char(ch, "Unknown house.\r\n");
     } else {
-        game.mudlog(db,
+        game.mudlog(chars,
             NRM,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
@@ -704,14 +704,14 @@ fn hcontrol_pay_house(game: &mut Game, db: &mut DB, chid: DepotId, arg: &str) {
         let i = i.unwrap();
         db.house_control[i].last_payment = time_now();
         house_save_control( db);
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         game.send_to_char(ch, "Payment recorded.\r\n");
     }
 }
 
 /* The hcontrol command itself, used by imms to create/destroy houses */
-pub fn do_hcontrol(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_hcontrol(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg1 = String::new();
     let mut arg2 = String::new();
     let mut argument = argument.to_string();
@@ -719,21 +719,21 @@ pub fn do_hcontrol(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,ob
     half_chop(&mut argument, &mut arg1, &mut arg2);
 
     if is_abbrev(&arg1, "build") {
-        hcontrol_build_house( game, db,objs,chid, &mut arg2);
+        hcontrol_build_house( game, chars, db,objs,chid, &mut arg2);
     } else if is_abbrev(&arg1, "destroy") {
-        hcontrol_destroy_house(game, db, chid, &arg2);
+        hcontrol_destroy_house(game, chars, db, chid, &arg2);
     } else if is_abbrev(&arg1, "pay") {
-        hcontrol_pay_house(game, db, chid, &arg2);
+        hcontrol_pay_house(game, chars, db, chid, &arg2);
     } else if is_abbrev(&arg1, "show") {
-        hcontrol_list_houses(game, db, chid);
+        hcontrol_list_houses(game, chars, db, chid);
     } else {
         game.send_to_char(ch, HCONTROL_FORMAT);
     }
 }
 
 /* The house command, used by mortal house owners to assign guests */
-pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_house(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
 
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -749,7 +749,7 @@ pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
     } else if ch.get_idnum() != db.house_control[i.unwrap()].owner {
         game.send_to_char(ch, "Only the primary owner can set guests.\r\n");
     } else if arg.is_empty() {
-        house_list_guests(game, db, chid, i.unwrap(), false);
+        house_list_guests(game, chars, db, chid, i.unwrap(), false);
     } else if {
         id = db.get_id_by_name(&arg);
         id < 0
@@ -767,7 +767,7 @@ pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
                 }
                 db.house_control[i as usize].num_of_guests += 1;
                 house_save_control( db);
-                let ch = db.ch(chid);
+                let ch = chars.get(chid);
                 game.send_to_char(ch, "Guest deleted.\r\n");
                 return;
             }
@@ -781,7 +781,7 @@ pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
         let j = db.house_control[i as usize].num_of_guests;
         db.house_control[i as usize].guests[j as usize] = id;
         house_save_control( db);
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         game.send_to_char(ch, "Guest added.\r\n");
     }
 }
@@ -789,13 +789,13 @@ pub fn do_house(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
 /* Misc. administrative functions */
 
 /* crash-save all the houses */
-pub fn house_save_all(db: &mut DB,objs: &mut Depot<ObjData> ) {
+pub fn house_save_all(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData> ) {
     for i in 0..db.num_of_houses{
         let real_house = db.real_room(db.house_control[i].vnum);
         if real_house != NOWHERE {
             if db.room_flagged(real_house, ROOM_HOUSE_CRASH) {
                 let room_vnum = db.house_control[i].vnum;
-                house_crashsave(db, objs,room_vnum);
+                house_crashsave(chars, db, objs,room_vnum);
             }
         }
     }
@@ -828,8 +828,8 @@ pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
     false
 }
 
-fn house_list_guests(game: &mut Game, db: &DB, chid: DepotId, i: usize, quiet: bool) {
-    let ch = db.ch(chid);
+fn house_list_guests(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: DepotId, i: usize, quiet: bool) {
+    let ch = chars.get(chid);
     let house_control = db.house_control;
     if house_control[i].num_of_guests == 0 {
         if !quiet {

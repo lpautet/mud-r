@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{ObjData, TextData, VictimRef, DB};
+use crate::{CharData, ObjData, TextData, VictimRef, DB};
 use crate::act_movement::do_simple_move;
 use crate::config::{NOPERSON, OK, PK_ALLOWED};
 use crate::fight::{check_killer, compute_armor_class};
@@ -27,8 +27,8 @@ use crate::structs::{
 use crate::util::rand_number;
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
-pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
 
     let mut arg = String::new();
 
@@ -43,7 +43,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
     if arg.is_empty() {
         game.send_to_char(ch, "Whom do you wish to assist?\r\n");
     } else if {
-        helpee = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
         helpee.is_none()
     } {
         game.send_to_char(ch, NOPERSON);
@@ -64,7 +64,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
             {
                 opponent_id = Some(*p_id);
 
-                let fighting_id = db.ch(*p_id).fighting_id();
+                let fighting_id = chars.get(*p_id).fighting_id();
                 if fighting_id.is_some()
                     && fighting_id.unwrap() == helpee.id()
                 {
@@ -74,7 +74,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
         }
 
         if opponent_id.is_none() {
-            game.act(db,
+            game.act(chars, db,
                 "But nobody is fighting $M!",
                 false,
                 Some(ch),
@@ -82,8 +82,8 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
                 Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
-        } else if game.can_see(db,ch, db.ch(opponent_id.unwrap())) {
-            game.act(db,
+        } else if game.can_see(chars, db,ch, chars.get(opponent_id.unwrap())) {
+            game.act(chars, db,
                 "You can't see who is fighting $M!",
                 false,
                 Some(ch),
@@ -91,10 +91,10 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
                 Some(VictimRef::Char(helpee)),
                 TO_CHAR,
             );
-        } else if !PK_ALLOWED && !db.ch(opponent_id.unwrap()).is_npc() {
+        } else if !PK_ALLOWED && !chars.get(opponent_id.unwrap()).is_npc() {
             /* prevent accidental pkill */
-            let opponent = db.ch(opponent_id.unwrap());
-            game.act(db,
+            let opponent = chars.get(opponent_id.unwrap());
+            game.act(chars, db,
                 "Use 'murder' if you really want to attack $N.",
                 false,
                 Some(ch),
@@ -104,7 +104,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
             );
         } else {
             game.send_to_char(ch, "You join the fight!\r\n");
-            game.act(db,
+            game.act(chars, db,
                 "$N assists you!",
                 false,
                 Some(helpee),
@@ -112,7 +112,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
                 Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
-            game.act(db,
+            game.act(chars, db,
                 "$n assists $N.",
                 false,
                 Some(ch),
@@ -120,13 +120,13 @@ pub fn do_assist(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs
                 Some(VictimRef::Char(helpee)),
                 TO_NOTVICT,
             );
-            game.hit(db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
+            game.hit(chars, db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
         }
     }
 }
 
-pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
+    let ch = chars.get(chid);
 
     let mut arg = String::new();
     let vict;
@@ -135,14 +135,14 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &m
     if arg.is_empty() {
         game.send_to_char(ch, "Hit who?\r\n");
     } else if {
-        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         game.send_to_char(ch, "They don't seem to be here.\r\n");
     } else if vict.unwrap().id() == chid {
         let vict = vict.unwrap();
         game.send_to_char(ch, "You hit yourself...OUCH!.\r\n");
-        game.act(db,
+        game.act(chars, db,
             "$n hits $mself, and says OUCH!",
             false,
             Some(ch),
@@ -154,7 +154,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &m
         && ch.master.unwrap() == vict.unwrap().id()
     {
         let vict = vict.unwrap();
-        game.act(db,
+        game.act(chars, db,
             "$N is just such a good friend, you simply can't hit $M.",
             false,
             Some(ch),
@@ -171,25 +171,25 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &m
                     game.send_to_char(ch, "Use 'murder' to hit another player.\r\n");
                     return;
                 } else {
-                    check_killer(chid, vict_id, game,db);
+                    check_killer(chid, vict_id, game,chars, db);
                 }
             }
-            let ch = db.ch(chid);
-            let vict = db.ch(vict_id);
+            let ch = chars.get(chid);
+            let vict = chars.get(vict_id);
             if ch.aff_flagged(AFF_CHARM)
-                && !db.ch(ch.master.unwrap()).is_npc()
+                && !chars.get(ch.master.unwrap()).is_npc()
                 && !vict.is_npc()
             {
                 return; /* you can't order a charmed pet to attack a
                          * player */
             }
         }
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         if ch.get_pos() == POS_STANDING
             && (ch.fighting_id().is_none() || vict_id != ch.fighting_id().unwrap())
         {
-            game.hit(db,texts, objs,chid, vict_id, TYPE_UNDEFINED);
-            let ch = db.ch_mut(chid);
+            game.hit(chars, db,texts, objs,chid, vict_id, TYPE_UNDEFINED);
+            let ch = chars.get_mut(chid);
             ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
         } else {
             game.send_to_char(ch, "You do the best you can!\r\n");
@@ -197,12 +197,12 @@ pub fn do_hit(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>,objs: &m
     }
 }
 
-pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_kill(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg = String::new();
 
     if ch.get_level() < LVL_IMPL as u8 || ch.is_npc() {
-        do_hit(game, db, texts, objs,chid, argument, cmd, subcmd);
+        do_hit(game, db,chars, texts, objs,chid, argument, cmd, subcmd);
         return;
     }
     one_argument(argument, &mut arg);
@@ -211,7 +211,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
         game.send_to_char(ch, "Kill who?\r\n");
     } else {
         if {
-            vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
             vict.is_none()
         } {
             game.send_to_char(ch, "They aren't here.\r\n");
@@ -219,7 +219,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
             game.send_to_char(ch, "Your mother would be so sad.. :(\r\n");
         } else {
             let vict = vict.unwrap();
-            game.act(db,
+            game.act(chars, db,
                 "You chop $M to pieces!  Ah!  The blood!",
                 false,
                 Some(ch),
@@ -227,7 +227,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-            game.act(db,
+            game.act(chars, db,
                 "$N chops you to pieces!",
                 false,
                 Some(vict),
@@ -235,7 +235,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
                 Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
-            game.act(db,
+            game.act(chars, db,
                 "$n brutally slays $N!",
                 false,
                 Some(ch),
@@ -243,13 +243,13 @@ pub fn do_kill(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            game.raw_kill(db,objs, vict.id());
+            game.raw_kill(chars,db,objs, vict.id());
         }
     }
 }
 
-pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut buf = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_BACKSTAB) == 0 {
@@ -260,7 +260,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
     one_argument(argument, &mut buf);
     let vict;
     if {
-        vict = game.get_char_vis(db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         game.send_to_char(ch, "Backstab who?\r\n");
@@ -289,7 +289,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
     }
 
     if vict.mob_flagged(MOB_AWARE) && vict.awake() {
-        game.act(db,
+        game.act(chars, db,
             "You notice $N lunging at you!",
             false,
             Some(vict),
@@ -297,7 +297,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
             Some(VictimRef::Char(ch)),
             TO_CHAR,
         );
-        game.act(db,
+        game.act(chars, db,
             "$e notices you lunging at $m!",
             false,
             Some(vict),
@@ -305,7 +305,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        game.act(db,
+        game.act(chars, db,
             "$n notices $N lunging at $m!",
             false,
             Some(vict),
@@ -313,7 +313,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
             Some(VictimRef::Char(ch)),
             TO_NOTVICT,
         );
-        game.hit(db,texts,objs,vict.id(), chid, TYPE_UNDEFINED);
+        game.hit(chars, db,texts,objs,vict.id(), chid, TYPE_UNDEFINED);
         return;
     }
 
@@ -321,16 +321,16 @@ pub fn do_backstab(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,ob
     let prob = ch.get_skill(SKILL_BACKSTAB);
 
     if vict.awake() && percent > prob as u32 {
-        game.damage(db, texts,objs,chid, vict.id(), 0, SKILL_BACKSTAB);
+        game.damage(chars, db, texts,objs,chid, vict.id(), 0, SKILL_BACKSTAB);
     } else {
-        game.hit(db, texts,objs,chid, vict.id(), SKILL_BACKSTAB);
+        game.hit(chars, db, texts,objs,chid, vict.id(), SKILL_BACKSTAB);
     }
-    let ch = db.ch_mut(chid);
+    let ch = chars.get_mut(chid);
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut name = String::new();
     let mut message = String::new();
     let mut found = false;
@@ -341,7 +341,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs:
     if name.is_empty() || message.is_empty() {
         game.send_to_char(ch, "Order who to do what?\r\n");
     } else if {
-        vict = game.get_char_vis(db,ch, &mut name, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut name, None, FIND_CHAR_ROOM);
         vict.is_none() && !is_abbrev(&name, "followers")
     } {
         game.send_to_char(ch, "That person isn't here.\r\n");
@@ -357,8 +357,8 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs:
         if vict.is_some() {
             let vict = vict.unwrap();
             let buf = format!("$N orders you to '{}'", message);
-            game.act(db,&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
-            game.act(db,
+            game.act(chars, db,&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
+            game.act(chars, db,
                 "$n gives $N an order.",
                 false,
                 Some(ch),
@@ -370,7 +370,7 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs:
                 && vict.master.unwrap() != chid
                 || !vict.aff_flagged(AFF_CHARM)
             {
-                game.act(db,
+                game.act(chars, db,
                     "$n has an indifferent look.",
                     false,
                     Some(vict),
@@ -380,25 +380,25 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs:
                 );
             } else {
                 game.send_to_char(ch, OK);
-                command_interpreter(game, db, texts,objs, vict.id(), &message);
+                command_interpreter(game, db, chars, texts,objs, vict.id(), &message);
             }
         } else {
             /* This is order "followers" */
 
             let buf = format!("$n issues the order '{}'.", message);
-            game.act(db,&buf, false, Some(ch), None, None, TO_ROOM);
-            let ch = db.ch(chid);
+            game.act(chars, db,&buf, false, Some(ch), None, None, TO_ROOM);
+            let ch = chars.get(chid);
             for k_id in ch.followers.clone() {
-                let follower = db.ch(k_id.follower);
-                let ch = db.ch(chid);
+                let follower = chars.get(k_id.follower);
+                let ch = chars.get(chid);
                 if ch.in_room() == follower.in_room() {
                     if follower.aff_flagged(AFF_CHARM) {
                         found = true;
-                        command_interpreter(game,db, texts, objs,k_id.follower, &message);
+                        command_interpreter(game,db, chars, texts, objs,k_id.follower, &message);
                     }
                 }
             }
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             if found {
                 game.send_to_char(ch, OK);
             } else {
@@ -408,8 +408,8 @@ pub fn do_order(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs:
     }
 }
 
-pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     if ch.get_pos() < POS_FIGHTING {
         game.send_to_char(ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;
@@ -427,7 +427,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
                 ROOM_DEATH,
             )
         {
-            game.act(db,
+            game.act(chars, db,
                 "$n panics, and attempts to flee!",
                 true,
                 Some(ch),
@@ -435,22 +435,22 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
                 None,
                 TO_ROOM,
             );
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             was_fighting = ch.fighting_id();
-            let r = do_simple_move(game, db,texts,objs,chid, attempt as i32, true);
-            let ch = db.ch(chid);
+            let r = do_simple_move(game, db,chars,texts,objs,chid, attempt as i32, true);
+            let ch = chars.get(chid);
             if r {
                 game.send_to_char(ch, "You flee head over heels.\r\n");
-                let ch = db.ch(chid);
+                let ch = chars.get(chid);
                 if was_fighting.is_some() && !ch.is_npc() {
-                    let was_fighting = db.ch(was_fighting.unwrap());
+                    let was_fighting = chars.get(was_fighting.unwrap());
                     let mut loss = was_fighting.get_max_hit()
                         - was_fighting.get_hit();
                     loss *= was_fighting.get_level() as i16;
-                    gain_exp(chid, -loss as i32, game, db,texts,objs);
+                    gain_exp(chid, -loss as i32, game, chars, db,texts,objs);
                 }
             } else {
-                game.act(db,
+                game.act(chars, db,
                     "$n tries to flee, but can't!",
                     true,
                     Some(ch),
@@ -465,8 +465,8 @@ pub fn do_flee(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
     game.send_to_char(ch, "PANIC!  You couldn't escape!\r\n");
 }
 
-pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -487,11 +487,11 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
     }
     let mut victo;
     if {
-        victo = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        victo = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
         victo.is_some()
     } {
-        if ch.fighting_id().is_some() && ch.in_room() == db.ch(ch.fighting_id().unwrap()).in_room() {
-            victo = ch.fighting_id().map(|i| db.ch(i));
+        if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {
+            victo = ch.fighting_id().map(|i| chars.get(i));
         } else {
             game.send_to_char(ch, "Bash who?\r\n");
             return;
@@ -509,8 +509,8 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
     }
 
     if percent > prob as u32 {
-        game.damage(db, texts,objs,chid, vict.id(), 0, SKILL_BASH);
-        let ch = db.ch_mut(chid);
+        game.damage(chars, db, texts,objs,chid, vict.id(), 0, SKILL_BASH);
+        let ch = chars.get_mut(chid);
         ch.set_pos(POS_SITTING);
     } else {
         let vict_id = vict.id();
@@ -520,24 +520,24 @@ pub fn do_bash(game: &mut Game, db: &mut DB, texts: &mut  Depot<TextData>,objs: 
          * first to make sure they don't flee, then we can't bash them!  So now
          * we only set them sitting if they didn't flee. -gg 9/21/98
          */
-        if game.damage(db,texts,objs,chid, vict_id, 1, SKILL_BASH) > 0 {
+        if game.damage(chars, db,texts,objs,chid, vict_id, 1, SKILL_BASH) > 0 {
             /* -1 = dead, 0 = miss */
-            let vict = db.ch_mut(vict_id);
+            let vict = chars.get_mut(vict_id);
             vict.set_wait_state(PULSE_VIOLENCE as i32);
-            let ch = db.ch(chid);
-            let vict = db.ch(vict_id);
+            let ch = chars.get(chid);
+            let vict = chars.get(vict_id);
             if ch.in_room() == vict.in_room() {
-                let vict = db.ch_mut(vict_id);
+                let vict = chars.get_mut(vict_id);
                 vict.set_pos(POS_SITTING);
             }
         }
     }
-    let ch = db.ch_mut(chid);
+    let ch = chars.get_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
 }
 
-pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_RESCUE) == 0 {
@@ -548,7 +548,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
     one_argument(argument, &mut arg);
     let vict;
     if {
-        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         game.send_to_char(ch, "Whom do you want to rescue?\r\n");
@@ -566,7 +566,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
     let mut tmp_ch_id = None;
     {
         for tch_id in db.world[ch.in_room() as usize].peoples.iter() {
-            let tch = db.ch(*tch_id);
+            let tch = chars.get(*tch_id);
             if tch.fighting_id().is_some() && tch.fighting_id().unwrap() == vict.id() {
                 tmp_ch_id = Some(*tch_id);
                 break;
@@ -575,7 +575,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
     }
 
     if tmp_ch_id.is_none() {
-        game.act(db,
+        game.act(chars, db,
             "But nobody is fighting $M!",
             false,
             Some(ch),
@@ -594,7 +594,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
         return;
     }
     game.send_to_char(ch, "Banzai!  To the rescue...\r\n");
-    game.act(db,
+    game.act(chars, db,
         "You are rescued by $N, you are confused!",
         false,
         Some(vict),
@@ -602,7 +602,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
         Some(VictimRef::Char(ch)),
         TO_CHAR,
     );
-    game.act(db,
+    game.act(chars, db,
         "$n heroically rescues $N!",
         false,
         Some(ch),
@@ -612,25 +612,25 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,objs:
     );
     let vict_id = vict.id();
     if vict.fighting_id().is_some() && vict.fighting_id().unwrap() == tmp_ch_id {
-        db.stop_fighting(vict_id);
+        db.stop_fighting(chars, vict_id);
     }
-    let tmp_ch = db.ch(tmp_ch_id);
+    let tmp_ch = chars.get(tmp_ch_id);
     if tmp_ch.fighting_id().is_some() {
-        db.stop_fighting(tmp_ch_id);
+        db.stop_fighting(chars, tmp_ch_id);
     }
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if ch.fighting_id().is_some() {
-        db.stop_fighting(chid);
+        db.stop_fighting(chars, chid);
     }
 
-    game.set_fighting(db,objs,chid, tmp_ch_id);
-    game.set_fighting(db,objs,tmp_ch_id, chid);
-    let vict = db.ch_mut(vict_id);
+    game.set_fighting(chars, db,objs,chid, tmp_ch_id);
+    game.set_fighting(chars, db,objs,tmp_ch_id, chid);
+    let vict = chars.get_mut(vict_id);
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
-pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_kick(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg = String::new();
 
     if ch.is_npc() || ch.get_skill(SKILL_KICK) == 0 {
@@ -640,11 +640,11 @@ pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, objs: 
     one_argument(argument, &mut arg);
     let mut vict;
     if {
-        vict = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        if ch.fighting_id().is_some() && ch.in_room() == db.ch(ch.fighting_id().unwrap()).in_room() {
-            vict = ch.fighting_id().map(|i| db.ch(i));
+        if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {
+            vict = ch.fighting_id().map(|i| chars.get(i));
         } else {
             game.send_to_char(ch, "Kick who?\r\n");
             return;
@@ -660,10 +660,10 @@ pub fn do_kick(game: &mut Game, db: &mut DB,texts: &mut  Depot<TextData>, objs: 
     let prob = ch.get_skill(SKILL_KICK);
 
     if percent > prob as i16 {
-        game.damage(db,texts,objs,chid, vict.id(), 0, SKILL_KICK);
+        game.damage(chars, db,texts,objs,chid, vict.id(), 0, SKILL_KICK);
     } else {
-        game.damage(db,texts,objs,chid, vict.id(), (ch.get_level() / 2) as i32, SKILL_KICK);
+        game.damage(chars, db,texts,objs,chid, vict.id(), (ch.get_level() / 2) as i32, SKILL_KICK);
     }
-    let ch = db.ch_mut(chid);
+    let ch = chars.get_mut(chid);
     ch.set_wait_state((PULSE_VIOLENCE * 3) as i32);
 }

@@ -17,7 +17,7 @@ use std::rc::Rc;
 use log::error;
 use regex::Regex;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{ObjData, TextData, VictimRef};
+use crate::{CharData, ObjData, TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
 use crate::handler::FIND_CHAR_ROOM;
@@ -54,8 +54,8 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
-pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let act_nr;
 
     if {
@@ -86,7 +86,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
 
     if buf.is_empty() {
         game.send_to_char(ch, format!("{}\r\n", action_char_no_arg).as_str());
-        game.act(db,
+        game.act(chars, db,
             &action_others_no_arg,
             action_hide,
             Some(ch),
@@ -98,13 +98,13 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
     }
     let vict;
     if {
-        vict = game.get_char_vis(db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = game.get_char_vis(chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
         game.send_to_char(ch, format!("{}\r\n", &action_not_found).as_str());
     } else if vict.unwrap().id() == chid {
         game.send_to_char(ch, format!("{}\r\n", &action_char_auto).as_str());
-        game.act(db,
+        game.act(chars, db,
             &action_others_auto,
             action_hide,
             Some(ch),
@@ -115,7 +115,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
     } else {
         let vict = vict.unwrap();
         if vict.get_pos() < action_min_victim_position as u8 {
-            game.act(db,
+            game.act(chars, db,
                 "$N is not in a proper position for that.",
                 false,
                 Some(ch),
@@ -124,7 +124,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                 TO_CHAR | TO_SLEEP,
             );
         } else {
-            game.act(db,
+            game.act(chars, db,
                 &action_char_found,
                 false,
                 Some(ch),
@@ -132,7 +132,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                 Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
-            game.act(db,
+            game.act(chars, db,
                 &action_others_found,
                 action_hide,
                 Some(ch),
@@ -140,7 +140,7 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            game.act(db,
+            game.act(chars, db,
                 &action_vict_found,
                 action_hide,
                 Some(ch),
@@ -152,15 +152,15 @@ pub fn do_action(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
     }
 }
 
-pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
     if !arg.is_empty() {
         let victim;
         if {
-            victim = game.get_char_vis(db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            victim = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
             victim.is_none()
         } {
             game.send_to_char(ch, "Can't hear you!\r\n");
@@ -173,10 +173,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
 
                 match rand_number(0, 2) {
                     0 => {
-                        let ch = db.ch(chid);
+                        let ch = chars.get(chid);
                         if ch.get_sex() == SEX_MALE {
                             if victim.get_sex() == SEX_MALE {
-                                game.act(db,
+                                game.act(chars, db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
                                     Some(ch),
@@ -185,7 +185,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                                     TO_VICT,
                                 );
                             } else {
-                                game.act(db,
+                                game.act(chars, db,
                                     "$n says that women can't fight.",
                                     false,
                                     Some(ch),
@@ -197,7 +197,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                         } else {
                             /* Ch == Woman */
                             if victim.get_sex() == SEX_MALE {
-                                game.act(db,
+                                game.act(chars, db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,
                                     Some(ch),
@@ -206,13 +206,13 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                                     TO_VICT,
                                 );
                             } else {
-                                game.act(db,"$n tells you that you'd lose a beauty contest against a troll.",
+                                game.act(chars, db,"$n tells you that you'd lose a beauty contest against a troll.",
                                        false, Some(ch), None, Some(VictimRef::Char(victim)), TO_VICT);
                             }
                         }
                     }
                     1 => {
-                        game.act(db,
+                        game.act(chars, db,
                             "$n calls your mother a bitch!",
                             false,
                             Some(ch),
@@ -222,7 +222,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                         );
                     }
                     _ => {
-                        game.act(db,
+                        game.act(chars, db,
                             "$n tells you to get lost!",
                             false,
                             Some(ch),
@@ -233,7 +233,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_obj
                     }
                 } /* end switch */
 
-                game.act(db,
+                game.act(chars, db,
                     "$n insults $N.",
                     true,
                     Some(ch),

@@ -51,18 +51,17 @@ use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::BRF;
-use crate::{DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
+use crate::{CharData, DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
 
 impl DescriptorData {
     pub fn string_write(
-        &mut self,
-        db: &mut DB, 
+        &mut self, chars: &mut Depot<CharData>,
         writeto: DepotId,
         len: usize,
         mailto: i64,
     ) {
-        if self.character.is_some() && !db.ch(self.character.unwrap()).is_npc() {
-            db.ch_mut(self.character.unwrap())
+        if self.character.is_some() && !chars.get(self.character.unwrap()).is_npc() {
+            chars.get_mut(self.character.unwrap())
                 .set_plr_flag_bit(PLR_WRITING);
         }
 
@@ -73,7 +72,7 @@ impl DescriptorData {
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_id: DepotId, str_: &str) {
+pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, d_id: DepotId, str_: &str) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
@@ -93,7 +92,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
     if text.is_empty() {
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.unwrap();
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             game.send_to_char(ch, "String too long - Truncated.\r\n");
             str_.truncate(game.desc_mut(d_id).max_str - 3);
             str_.push_str("\r\n");
@@ -105,7 +104,7 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
     } else {
         if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.unwrap();
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             game.send_to_char(ch, "String too long.  Last line skipped.\r\n");
             terminator = true;
         } else {
@@ -115,9 +114,9 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
 
     let desc = game.desc_mut(d_id);
     if terminator {
-        if desc.state() == ConPlaying && db.ch(desc.character.unwrap()).plr_flagged(PLR_MAILING) {
+        if desc.state() == ConPlaying && chars.get(desc.character.unwrap()).plr_flagged(PLR_MAILING) {
             let mail_to = desc.mail_to;
-            let from = db.ch(desc.character.unwrap()).get_idnum();
+            let from = chars.get(desc.character.unwrap()).get_idnum();
             db.store_mail(
                 mail_to,
                 from,
@@ -126,8 +125,8 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
             desc.mail_to = 0;
             desc.str = None;
             desc.write_to_output("Message sent!\r\n");
-            if !db.ch(desc.character.unwrap()).is_npc() {
-                db.ch_mut(desc.character.unwrap())
+            if !chars.get(desc.character.unwrap()).is_npc() {
+                chars.get_mut(desc.character.unwrap())
                     .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
             }
         }
@@ -145,9 +144,9 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
         }
         if game.desc(d_id).state() == ConPlaying
             && game.desc(d_id).character.is_some()
-            && !db.ch(game.desc(d_id).character.unwrap()).is_npc()
+            && !chars.get(game.desc(d_id).character.unwrap()).is_npc()
         {
-            db.ch_mut(game.desc(d_id).character.unwrap())
+            chars.get_mut(game.desc(d_id).character.unwrap())
                 .remove_plr_flag(PLR_WRITING);
         }
     } else {
@@ -160,13 +159,13 @@ pub fn string_add(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, d_i
 // ********************************************************************** */
 pub fn do_skillset(
     game: &mut Game,
-    db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let mut name = String::new();
 
     let argument2 = one_argument(argument, &mut name);
@@ -197,7 +196,7 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict = game.get_char_vis(db, ch, &mut name, None, FIND_CHAR_WORLD);
+    let vict = game.get_char_vis(chars,db, ch, &mut name, None, FIND_CHAR_WORLD);
     if vict.is_none() {
         game.send_to_char(ch, NOPERSON);
         return;
@@ -271,25 +270,24 @@ Skill being one of the following:\r\n",
      * find_skill_num() guarantees a valid spell_info[] index, or -1, and we
      * checked for the -1 above so we are safe here.
      */
-    let vict = db.ch_mut(vict_id);
+    let vict = chars.get_mut(vict_id);
     vict.set_skill(skill, value);
-    let vict = db.ch(vict_id);
-    game.mudlog(
-        db,
+    let vict = chars.get(vict_id);
+    game.mudlog(chars,
         BRF,
         LVL_IMMORT as i32,
         true,
         format!(
             "{} changed {}'s {} to {}.",
-            db.ch(chid).get_name(),
+            chars.get(chid).get_name(),
             vict.get_name(),
             db.spell_info[skill as usize].name,
             value
         )
         .as_str(),
     );
-    let vict = db.ch(vict_id);
-    let ch = db.ch(chid);
+    let vict = chars.get(vict_id);
+    let ch = chars.get(chid);
     game.send_to_char(
         ch,
         format!(
@@ -395,7 +393,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(game: &mut Game, db: &DB, d_id: DepotId, msg: &str, keep_internal: bool) {
+pub fn page_string(game: &mut Game, chars: &Depot<CharData>,d_id: DepotId, msg: &str, keep_internal: bool) {
     if msg.is_empty() {
         return;
     }
@@ -414,11 +412,11 @@ pub fn page_string(game: &mut Game, db: &DB, d_id: DepotId, msg: &str, keep_inte
     }
 
     let actbuf = "";
-    show_string(game, db, d_id, actbuf);
+    show_string(game,  chars, d_id, actbuf);
 }
 
 /* The call that displays the next page. */
-pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
+pub fn show_string(game: &mut Game, chars: &Depot<CharData>, d_id: DepotId, input: &str) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
@@ -449,7 +447,7 @@ pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
             let nr = buf.parse::<i32>();
             if nr.is_err() {
                 let chid = game.desc_mut(d_id).character.unwrap();
-                let ch = db.ch(chid);
+                let ch = chars.get(chid);
                 game.send_to_char(
                     ch,
                     "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
@@ -462,7 +460,7 @@ pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
         } else if !buf.is_empty() {
             let to_char_id = game.desc_mut(d_id).character.unwrap();
             game.send_to_char(
-                db.ch(to_char_id),
+                chars.get(to_char_id),
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );
             return;
@@ -475,7 +473,7 @@ pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
         let chid = game.desc_mut(d_id).character.unwrap();
         let showstr_page = game.desc_mut(d_id).showstr_page as usize;
         let msg = game.desc_mut(d_id).showstr_vector[showstr_page].clone();
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         game.send_to_char(ch, msg.as_ref());
         game.desc_mut(d_id).showstr_vector.clear();
         game.desc_mut(d_id).showstr_count = 0;
@@ -490,7 +488,7 @@ pub fn show_string(game: &mut Game, db: &DB, d_id: DepotId, input: &str) {
             - game.desc_mut(d_id).showstr_vector[(showstr_page + 1) as usize].len();
         let buffer = &game.desc_mut(d_id).showstr_vector[showstr_page].as_ref()[..diff].to_string();
         let chid = game.desc_mut(d_id).character.unwrap();
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         game.send_to_char(ch, buffer);
         game.desc_mut(d_id).showstr_page = showstr_page as i32 + 1;
     }

@@ -3517,8 +3517,8 @@ pub fn roll_real_abils(ch: &mut CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId) {
-    let ch = db.ch_mut(chid);
+pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId) {
+    let ch = chars.get_mut(chid);
     ch.set_level(1);
     ch.set_exp(1);
 
@@ -3547,15 +3547,15 @@ pub fn do_start(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, objs:
         _ => {}
     }
 
-    advance_level(chid, game, db, texts, objs);
-    let ch = db.ch(chid);
-    game.mudlog(db,
+    advance_level(chid, game, chars, db, texts, objs);
+    let ch = chars.get(chid);
+    game.mudlog(chars,
         BRF,
         max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
         true,
         format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),
     );
-    let ch = db.ch_mut(chid);
+    let ch = chars.get_mut(chid);
     ch.set_hit(ch.get_max_hit());
     ch.set_mana(ch.get_max_mana());
     ch.set_move(ch.get_max_move());
@@ -3573,8 +3573,8 @@ pub fn do_start(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>, objs:
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
-    let ch = db.ch_mut(chid);
+pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
+    let ch = chars.get_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
     let mut add_move = 0;
@@ -3628,8 +3628,8 @@ pub fn advance_level(chid: DepotId, game: &mut Game, db: &mut DB, texts: &mut De
         ch.set_prf_flags_bits(PRF_HOLYLIGHT);
     }
 
-    snoop_check(game, db,chid);
-    game.save_char(db, texts, objs, chid);
+    snoop_check(game, chars, chid);
+    game.save_char(db, chars, texts, objs, chid);
 }
 
 /*
@@ -3686,74 +3686,74 @@ pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
  */
 pub fn init_spell_levels(db: &mut DB) {
     /* MAGES */
-    spell_level(db, SPELL_MAGIC_MISSILE, CLASS_MAGIC_USER, 1);
-    spell_level(db, SPELL_DETECT_INVIS, CLASS_MAGIC_USER, 2);
-    spell_level(db, SPELL_DETECT_MAGIC, CLASS_MAGIC_USER, 2);
-    spell_level(db, SPELL_CHILL_TOUCH, CLASS_MAGIC_USER, 3);
-    spell_level(db, SPELL_INFRAVISION, CLASS_MAGIC_USER, 3);
-    spell_level(db, SPELL_INVISIBLE, CLASS_MAGIC_USER, 4);
-    spell_level(db, SPELL_ARMOR, CLASS_MAGIC_USER, 4);
-    spell_level(db, SPELL_BURNING_HANDS, CLASS_MAGIC_USER, 5);
-    spell_level(db, SPELL_LOCATE_OBJECT, CLASS_MAGIC_USER, 6);
-    spell_level(db, SPELL_STRENGTH, CLASS_MAGIC_USER, 6);
-    spell_level(db, SPELL_SHOCKING_GRASP, CLASS_MAGIC_USER, 7);
-    spell_level(db, SPELL_SLEEP, CLASS_MAGIC_USER, 8);
-    spell_level(db, SPELL_LIGHTNING_BOLT, CLASS_MAGIC_USER, 9);
-    spell_level(db, SPELL_BLINDNESS, CLASS_MAGIC_USER, 9);
-    spell_level(db, SPELL_DETECT_POISON, CLASS_MAGIC_USER, 10);
-    spell_level(db, SPELL_COLOR_SPRAY, CLASS_MAGIC_USER, 11);
-    spell_level(db, SPELL_ENERGY_DRAIN, CLASS_MAGIC_USER, 13);
-    spell_level(db, SPELL_CURSE, CLASS_MAGIC_USER, 14);
-    spell_level(db, SPELL_POISON, CLASS_MAGIC_USER, 14);
-    spell_level(db, SPELL_FIREBALL, CLASS_MAGIC_USER, 15);
-    spell_level(db, SPELL_CHARM, CLASS_MAGIC_USER, 16);
-    spell_level(db, SPELL_ENCHANT_WEAPON, CLASS_MAGIC_USER, 26);
-    spell_level(db, SPELL_CLONE, CLASS_MAGIC_USER, 30);
+    spell_level( db, SPELL_MAGIC_MISSILE, CLASS_MAGIC_USER, 1);
+    spell_level( db, SPELL_DETECT_INVIS, CLASS_MAGIC_USER, 2);
+    spell_level( db, SPELL_DETECT_MAGIC, CLASS_MAGIC_USER, 2);
+    spell_level( db, SPELL_CHILL_TOUCH, CLASS_MAGIC_USER, 3);
+    spell_level( db, SPELL_INFRAVISION, CLASS_MAGIC_USER, 3);
+    spell_level( db, SPELL_INVISIBLE, CLASS_MAGIC_USER, 4);
+    spell_level( db, SPELL_ARMOR, CLASS_MAGIC_USER, 4);
+    spell_level( db, SPELL_BURNING_HANDS, CLASS_MAGIC_USER, 5);
+    spell_level( db, SPELL_LOCATE_OBJECT, CLASS_MAGIC_USER, 6);
+    spell_level( db, SPELL_STRENGTH, CLASS_MAGIC_USER, 6);
+    spell_level( db, SPELL_SHOCKING_GRASP, CLASS_MAGIC_USER, 7);
+    spell_level( db, SPELL_SLEEP, CLASS_MAGIC_USER, 8);
+    spell_level( db, SPELL_LIGHTNING_BOLT, CLASS_MAGIC_USER, 9);
+    spell_level( db, SPELL_BLINDNESS, CLASS_MAGIC_USER, 9);
+    spell_level( db, SPELL_DETECT_POISON, CLASS_MAGIC_USER, 10);
+    spell_level( db, SPELL_COLOR_SPRAY, CLASS_MAGIC_USER, 11);
+    spell_level( db, SPELL_ENERGY_DRAIN, CLASS_MAGIC_USER, 13);
+    spell_level( db, SPELL_CURSE, CLASS_MAGIC_USER, 14);
+    spell_level( db, SPELL_POISON, CLASS_MAGIC_USER, 14);
+    spell_level( db, SPELL_FIREBALL, CLASS_MAGIC_USER, 15);
+    spell_level( db, SPELL_CHARM, CLASS_MAGIC_USER, 16);
+    spell_level( db, SPELL_ENCHANT_WEAPON, CLASS_MAGIC_USER, 26);
+    spell_level( db, SPELL_CLONE, CLASS_MAGIC_USER, 30);
 
     /* CLERICS */
-    spell_level(db, SPELL_CURE_LIGHT, CLASS_CLERIC, 1);
-    spell_level(db, SPELL_ARMOR, CLASS_CLERIC, 1);
-    spell_level(db, SPELL_CREATE_FOOD, CLASS_CLERIC, 2);
-    spell_level(db, SPELL_CREATE_WATER, CLASS_CLERIC, 2);
-    spell_level(db, SPELL_DETECT_POISON, CLASS_CLERIC, 3);
-    spell_level(db, SPELL_DETECT_ALIGN, CLASS_CLERIC, 4);
-    spell_level(db, SPELL_CURE_BLIND, CLASS_CLERIC, 4);
-    spell_level(db, SPELL_BLESS, CLASS_CLERIC, 5);
-    spell_level(db, SPELL_DETECT_INVIS, CLASS_CLERIC, 6);
-    spell_level(db, SPELL_BLINDNESS, CLASS_CLERIC, 6);
-    spell_level(db, SPELL_INFRAVISION, CLASS_CLERIC, 7);
-    spell_level(db, SPELL_PROT_FROM_EVIL, CLASS_CLERIC, 8);
-    spell_level(db, SPELL_POISON, CLASS_CLERIC, 8);
-    spell_level(db, SPELL_GROUP_ARMOR, CLASS_CLERIC, 9);
-    spell_level(db, SPELL_CURE_CRITIC, CLASS_CLERIC, 9);
-    spell_level(db, SPELL_SUMMON, CLASS_CLERIC, 10);
-    spell_level(db, SPELL_REMOVE_POISON, CLASS_CLERIC, 10);
-    spell_level(db, SPELL_WORD_OF_RECALL, CLASS_CLERIC, 12);
-    spell_level(db, SPELL_EARTHQUAKE, CLASS_CLERIC, 12);
-    spell_level(db, SPELL_DISPEL_EVIL, CLASS_CLERIC, 14);
-    spell_level(db, SPELL_DISPEL_GOOD, CLASS_CLERIC, 14);
-    spell_level(db, SPELL_SANCTUARY, CLASS_CLERIC, 15);
-    spell_level(db, SPELL_CALL_LIGHTNING, CLASS_CLERIC, 15);
-    spell_level(db, SPELL_HEAL, CLASS_CLERIC, 16);
-    spell_level(db, SPELL_CONTROL_WEATHER, CLASS_CLERIC, 17);
-    spell_level(db, SPELL_SENSE_LIFE, CLASS_CLERIC, 18);
-    spell_level(db, SPELL_HARM, CLASS_CLERIC, 19);
-    spell_level(db, SPELL_GROUP_HEAL, CLASS_CLERIC, 22);
-    spell_level(db, SPELL_REMOVE_CURSE, CLASS_CLERIC, 26);
+    spell_level( db, SPELL_CURE_LIGHT, CLASS_CLERIC, 1);
+    spell_level( db, SPELL_ARMOR, CLASS_CLERIC, 1);
+    spell_level( db, SPELL_CREATE_FOOD, CLASS_CLERIC, 2);
+    spell_level( db, SPELL_CREATE_WATER, CLASS_CLERIC, 2);
+    spell_level( db, SPELL_DETECT_POISON, CLASS_CLERIC, 3);
+    spell_level( db, SPELL_DETECT_ALIGN, CLASS_CLERIC, 4);
+    spell_level( db, SPELL_CURE_BLIND, CLASS_CLERIC, 4);
+    spell_level( db, SPELL_BLESS, CLASS_CLERIC, 5);
+    spell_level( db, SPELL_DETECT_INVIS, CLASS_CLERIC, 6);
+    spell_level( db, SPELL_BLINDNESS, CLASS_CLERIC, 6);
+    spell_level( db, SPELL_INFRAVISION, CLASS_CLERIC, 7);
+    spell_level( db, SPELL_PROT_FROM_EVIL, CLASS_CLERIC, 8);
+    spell_level( db, SPELL_POISON, CLASS_CLERIC, 8);
+    spell_level( db, SPELL_GROUP_ARMOR, CLASS_CLERIC, 9);
+    spell_level( db, SPELL_CURE_CRITIC, CLASS_CLERIC, 9);
+    spell_level( db, SPELL_SUMMON, CLASS_CLERIC, 10);
+    spell_level( db, SPELL_REMOVE_POISON, CLASS_CLERIC, 10);
+    spell_level( db, SPELL_WORD_OF_RECALL, CLASS_CLERIC, 12);
+    spell_level( db, SPELL_EARTHQUAKE, CLASS_CLERIC, 12);
+    spell_level( db, SPELL_DISPEL_EVIL, CLASS_CLERIC, 14);
+    spell_level( db, SPELL_DISPEL_GOOD, CLASS_CLERIC, 14);
+    spell_level( db, SPELL_SANCTUARY, CLASS_CLERIC, 15);
+    spell_level( db, SPELL_CALL_LIGHTNING, CLASS_CLERIC, 15);
+    spell_level( db, SPELL_HEAL, CLASS_CLERIC, 16);
+    spell_level( db, SPELL_CONTROL_WEATHER, CLASS_CLERIC, 17);
+    spell_level( db, SPELL_SENSE_LIFE, CLASS_CLERIC, 18);
+    spell_level( db, SPELL_HARM, CLASS_CLERIC, 19);
+    spell_level( db, SPELL_GROUP_HEAL, CLASS_CLERIC, 22);
+    spell_level( db, SPELL_REMOVE_CURSE, CLASS_CLERIC, 26);
 
     /* THIEVES */
-    spell_level(db, SKILL_SNEAK, CLASS_THIEF, 1);
-    spell_level(db, SKILL_PICK_LOCK, CLASS_THIEF, 2);
-    spell_level(db, SKILL_BACKSTAB, CLASS_THIEF, 3);
-    spell_level(db, SKILL_STEAL, CLASS_THIEF, 4);
-    spell_level(db, SKILL_HIDE, CLASS_THIEF, 5);
-    spell_level(db, SKILL_TRACK, CLASS_THIEF, 6);
+    spell_level( db, SKILL_SNEAK, CLASS_THIEF, 1);
+    spell_level( db, SKILL_PICK_LOCK, CLASS_THIEF, 2);
+    spell_level( db, SKILL_BACKSTAB, CLASS_THIEF, 3);
+    spell_level( db, SKILL_STEAL, CLASS_THIEF, 4);
+    spell_level( db, SKILL_HIDE, CLASS_THIEF, 5);
+    spell_level( db, SKILL_TRACK, CLASS_THIEF, 6);
 
     /* WARRIORS */
-    spell_level(db, SKILL_KICK, CLASS_WARRIOR, 1);
-    spell_level(db, SKILL_RESCUE, CLASS_WARRIOR, 3);
-    spell_level(db, SKILL_TRACK, CLASS_WARRIOR, 9);
-    spell_level(db, SKILL_BASH, CLASS_WARRIOR, 12);
+    spell_level( db, SKILL_KICK, CLASS_WARRIOR, 1);
+    spell_level( db, SKILL_RESCUE, CLASS_WARRIOR, 3);
+    spell_level( db, SKILL_TRACK, CLASS_WARRIOR, 9);
+    spell_level( db, SKILL_BASH, CLASS_WARRIOR, 12);
 }
 
 /*

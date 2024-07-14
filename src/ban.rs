@@ -24,7 +24,7 @@ use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::LVL_GOD;
 use crate::util::{ctime, time_now, NRM};
-use crate::{Game, ObjData, TextData};
+use crate::{CharData, Game, ObjData, TextData};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 
@@ -118,8 +118,8 @@ macro_rules! ban_list_format {
     };
 }
 
-pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     if argument.is_empty() {
         if db.ban_list.is_empty() {
             game.send_to_char(ch, "No sites are banned.\r\n");
@@ -195,8 +195,8 @@ pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: 
 
     db.ban_list.push(ban_node);
 
-    let ch = db.ch(chid);
-    game.mudlog(db,
+    let ch = chars.get(chid);
+    game.mudlog(chars,
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -212,8 +212,8 @@ pub fn do_ban(game: &mut Game, db: &mut DB, _texts: &mut Depot<TextData>,_objs: 
     write_ban_list(&db);
 }
 
-pub fn do_unban(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
-    let ch = db.ch(chid);
+pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+    let ch = chars.get(chid);
     let mut site = String::new();
     one_argument(argument, &mut site);
     if site.is_empty() {
@@ -231,10 +231,10 @@ pub fn do_unban(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
     }
 
     let ban_node = db.ban_list.remove(p.unwrap());
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     game.send_to_char(ch, "Site unbanned.\r\n");
-    let ch = db.ch(chid);
-    game.mudlog(db,
+    let ch = chars.get(chid);
+    game.mudlog(chars,
         NRM,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -255,7 +255,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB,_texts: &mut Depot<TextData>,_objs:
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name(game: &mut Game, db:&DB,  newname: &str) -> bool {
+pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db:&DB,  newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login
@@ -270,7 +270,7 @@ pub fn valid_name(game: &mut Game, db:&DB,  newname: &str) -> bool {
         }
 
         let character_id = character_id.unwrap();
-        let character = db.ch(character_id);
+        let character = chars.get(character_id);
 
         if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
             return dt.state() == ConPlaying;

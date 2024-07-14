@@ -133,7 +133,7 @@ impl MailSystem {
 
 /* -------------------------------------------------------------------------- */
 
-fn mail_recip_ok(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  name: &str) -> bool {
+fn mail_recip_ok(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  name: &str) -> bool {
     let mut ret = false;
     let mut tmp_store = CharFileU::new();
     let mut victim = CharData::default();
@@ -141,11 +141,11 @@ fn mail_recip_ok(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs:
     if db.load_char(name, &mut tmp_store).is_some() {
         store_to_char(texts, &tmp_store, &mut victim);
         let victim = &Rc::from(victim);
-        db.char_to_room(objs,victim.id(), 0);
+        db.char_to_room(chars, objs,victim.id(), 0);
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
-        game.extract_char_final(db,texts,objs,victim.id());
+        game.extract_char_final(chars, db,texts,objs,victim.id());
     }
     ret
 }
@@ -678,8 +678,8 @@ From: {}\r\n\
 * routines.  Written by Jeremy Elson (jelson@circlemud.org) *
 ****************************************************************/
 
-pub fn postmaster(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
-    let ch = db.ch(chid);
+pub fn postmaster(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
+    let ch = chars.get(chid);
     if ch.desc.is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
     }
@@ -696,19 +696,19 @@ pub fn postmaster(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs
 
     return if cmd_is(cmd, "mail") {
         match me {
-            MeRef::Char(mailman) => postmaster_send_mail(game, db,texts,objs,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => postmaster_send_mail(game, chars, db,texts,objs,chid, mailman, cmd, argument),
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
     } else if cmd_is(cmd, "check") {
         match me {
-            MeRef::Char(mailman) => postmaster_check_mail(game,db, chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => postmaster_check_mail(game,chars, db, chid, mailman, cmd, argument),
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
     } else if cmd_is(cmd, "receive") {
         match me {
-            MeRef::Char(mailman) => postmaster_receive_mail(game, db,texts,objs,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => postmaster_receive_mail(game, chars, db,texts,objs,chid, mailman, cmd, argument),
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
@@ -718,20 +718,20 @@ pub fn postmaster(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs
 }
 
 fn postmaster_send_mail(
-    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
     arg: &str,
 ) {
-    let ch = db.ch(chid);
-    let mailman = db.ch(mailman_id);
+    let ch = chars.get(chid);
+    let mailman = chars.get(mailman_id);
     if ch.get_level() < MIN_MAIL_LEVEL as u8 {
         let buf = format!(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        game.act(db,
+        game.act(chars, db,
             &buf,
             false,
             Some(mailman),
@@ -746,7 +746,7 @@ fn postmaster_send_mail(
 
     if buf.is_empty() {
         /* you'll get no argument from me! */
-        game.act(db,
+        game.act(chars, db,
             "$n tells you, 'You need to specify an addressee!'",
             false,
             Some(mailman),
@@ -763,7 +763,7 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        game.act(db,
+        game.act(chars, db,
             &buf,
             false,
             Some(mailman),
@@ -774,10 +774,10 @@ $n tells you, '...which I see you can't afford.'",
         return;
     }
     let recipient = db.get_id_by_name(&buf);
-    if recipient < 0 || !mail_recip_ok(game, db,texts, objs,&buf) {
-        let mailman = db.ch(mailman_id);
-        let ch = db.ch(chid);
-        game.act(db,
+    if recipient < 0 || !mail_recip_ok(game, chars, db,texts, objs,&buf) {
+        let mailman = chars.get(mailman_id);
+        let ch = chars.get(chid);
+        game.act(chars, db,
             "$n tells you, 'No one by that name is registered here!'",
             false,
             Some(mailman),
@@ -787,8 +787,8 @@ $n tells you, '...which I see you can't afford.'",
         );
         return;
     }
-    let ch = db.ch(chid);
-    game.act(db,
+    let ch = chars.get(chid);
+    game.act(chars, db,
         "$n starts to write some mail.",
         true,
         Some(ch),
@@ -801,8 +801,8 @@ $n tells you, '...which I see you can't afford.'",
 $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
-    let mailman = db.ch(mailman_id);
-    game.act(db,
+    let mailman = chars.get(mailman_id);
+    game.act(chars, db,
         &buf,
         false,
         Some(mailman),
@@ -810,7 +810,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         Some(VictimRef::Char(ch)),
         TO_VICT,
     );
-    let ch = db.ch_mut(chid);
+    let ch = chars.get_mut(chid);
     ch.set_gold(ch.get_gold() - STAMP_PRICE);
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
@@ -818,7 +818,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     let desc_id = ch.desc.unwrap();
     let desc = game.desc_mut(desc_id);
     desc.string_write(
-        db,
+        chars, 
         texts.add_text(String::new()),
         MAX_MAIL_SIZE,
         recipient,
@@ -826,17 +826,17 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 }
 
 fn postmaster_check_mail(
-    game: &mut Game, db: &mut DB,
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
     _arg: &str,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if db.mails.has_mail(ch.get_idnum()) {
-        let ch = db.ch(chid);
-        let mailman = db.ch(mailman_id);
-        game.act(db,
+        let ch = chars.get(chid);
+        let mailman = chars.get(mailman_id);
+        game.act(chars, db,
             "$n tells you, 'You have mail waiting.'",
             false,
             Some(mailman),
@@ -845,9 +845,9 @@ fn postmaster_check_mail(
             TO_VICT,
         );
     } else {
-        let mailman = db.ch(mailman_id);
-        let ch = db.ch(chid);
-        game.act(db,
+        let mailman = chars.get(mailman_id);
+        let ch = chars.get(chid);
+        game.act(chars, db,
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
             Some(mailman),
@@ -859,18 +859,18 @@ fn postmaster_check_mail(
 }
 
 fn postmaster_receive_mail(
-    game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
     _arg: &str,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     if !db.mails.has_mail(ch.get_idnum()) {
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
-        let ch = db.ch(chid);
-        let mailman = db.ch(mailman_id);
-        game.act(db,
+        let ch = chars.get(chid);
+        let mailman = chars.get(mailman_id);
+        game.act(chars, db,
             buf,
             false,
             Some(mailman),
@@ -880,7 +880,7 @@ fn postmaster_receive_mail(
         );
         return;
     }
-    while { let ch = db.ch(chid); db.mails.has_mail(ch.get_idnum()) } {
+    while { let ch = chars.get(chid); db.mails.has_mail(ch.get_idnum()) } {
         let oid = db.create_obj(objs,
             NOTHING,
             "mail paper letter",
@@ -892,7 +892,7 @@ fn postmaster_receive_mail(
             30,
             10,
         );
-        let ch = db.ch(chid);
+        let ch = chars.get(chid);
         let mail_content = db.read_delete(ch.get_idnum());
         let mail_content = if mail_content.is_some() {
             mail_content.unwrap()
@@ -900,10 +900,10 @@ fn postmaster_receive_mail(
             "Mail system error - please report.  Error #11.\r\n".to_string()
         };
         objs.get_mut(oid).action_description = texts.add_text(mail_content);
-        db.obj_to_char(objs,oid, chid);
-        let mailman = db.ch(mailman_id);
-        let ch = db.ch(chid);
-        game.act(db,
+        db.obj_to_char(chars, objs,oid, chid);
+        let mailman = chars.get(mailman_id);
+        let ch = chars.get(chid);
+        game.act(chars, db,
             "$n gives you a piece of mail.",
             false,
             Some(mailman),
@@ -911,7 +911,7 @@ fn postmaster_receive_mail(
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        game.act(db,
+        game.act(chars, db,
             "$N gives $n a piece of mail.",
             false,
             Some(ch),

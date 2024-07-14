@@ -115,7 +115,7 @@ pub struct HelpIndexElement {
 
 pub struct DB {
     pub world: Vec<RoomData>,
-    pub character_list: Depot<CharData>,
+    pub character_list: Vec<DepotId>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
@@ -336,14 +336,14 @@ impl DB {
  */
 pub fn do_reboot(
     game: &mut Game,
-    db: &mut DB,
+    db: &mut DB,chars: &mut Depot<CharData>,
     texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
@@ -429,23 +429,23 @@ pub fn do_reboot(
         }
         "xhelp" => {
             db.help_table.clear();
-            db.index_boot(texts, DB_BOOT_HLP);
+            db.index_boot( texts, DB_BOOT_HLP);
         }
         _ => {
             game.send_to_char(ch, "Unknown reload option.\r\n");
             return;
         }
     }
-    let ch = db.ch(chid);
+    let ch = chars.get(chid);
     game.send_to_char(ch, OK);
 }
 
-pub(crate) fn boot_world(game: &mut Game, db: &mut DB, texts: &mut Depot<TextData>) {
+pub(crate) fn boot_world(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>) {
     info!("Loading zone table.");
-    db.index_boot(texts, DB_BOOT_ZON);
+    db.index_boot( texts, DB_BOOT_ZON);
 
     info!("Loading rooms.");
-    db.index_boot(texts, DB_BOOT_WLD);
+    db.index_boot( texts, DB_BOOT_WLD);
 
     info!("Renumbering rooms.");
     db.renum_world();
@@ -454,25 +454,25 @@ pub(crate) fn boot_world(game: &mut Game, db: &mut DB, texts: &mut Depot<TextDat
     db.check_start_rooms();
 
     info!("Loading mobs and generating index.");
-    db.index_boot(texts, DB_BOOT_MOB);
+    db.index_boot( texts, DB_BOOT_MOB);
 
     info!("Loading objs and generating index.");
-    db.index_boot(texts, DB_BOOT_OBJ);
+    db.index_boot( texts, DB_BOOT_OBJ);
 
     info!("Renumbering zone table.");
-    renum_zone_table(game, db);
+    renum_zone_table(game, db, chars);
 
     if !db.no_specials {
         info!("Loading shops.");
-        db.index_boot(texts, DB_BOOT_SHP);
+        db.index_boot( texts, DB_BOOT_SHP);
     }
 }
 impl DB {
     /* Free the world, in a memory allocation sense. */
-    pub fn destroy_db(&mut self,objs: &mut Depot<ObjData>) {
+    pub fn destroy_db(&mut self,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>) {
         /* Active Mobiles & Players */
-        for chtmp_id in self.character_list.ids() {
-            self.free_char(objs, chtmp_id);
+        for &chtmp_id in &self.character_list.clone() {
+            self.free_char(chars, objs, chtmp_id);
         }
         self.character_list.clear();
 
@@ -509,7 +509,7 @@ impl DB {
         self.mob_index.clear();
 
         /* Shops */
-        destroy_shops(self);
+        destroy_shops( self);
 
         /* Zones */
         self.zone_table.clear();
@@ -518,7 +518,7 @@ impl DB {
     pub fn new(texts: &mut Depot<TextData>) -> DB {
         DB {
             world: vec![],
-            character_list: Depot::new(),
+            character_list: vec![],
             mob_index: vec![],
             mob_protos: vec![],
             object_list: vec![],
@@ -587,7 +587,7 @@ impl DB {
     /* body of the booting system */
     pub fn boot_db(
         &mut self,
-        game: &mut Game,
+        game: &mut Game, chars: &mut Depot<CharData>,
         texts: &mut Depot<TextData>,
         objs: &mut Depot<ObjData>,
     ) {
@@ -627,10 +627,10 @@ impl DB {
         info!("Loading spell definitions.");
         mag_assign_spells(self);
 
-        boot_world(game, self, texts);
+        boot_world(game, self, chars, texts);
 
         info!("Loading help entries.");
-        self.index_boot(texts, DB_BOOT_HLP);
+        self.index_boot( texts, DB_BOOT_HLP);
 
         info!("Generating player index.");
         self.build_player_index();
@@ -645,13 +645,13 @@ impl DB {
 
         if !self.no_specials {
             info!("   Mobiles.");
-            assign_mobiles(self);
+            assign_mobiles( self);
             info!("   Shopkeepers.");
-            assign_the_shopkeepers(self);
+            assign_the_shopkeepers( self);
             info!("   Objects.");
-            assign_objects(self);
+            assign_objects( self);
             info!("   Rooms.");
-            assign_rooms(self);
+            assign_rooms( self);
         }
 
         info!("Assigning spell and skill levels.");
@@ -659,7 +659,7 @@ impl DB {
         //
         info!("Sorting command list and spells.");
         sort_commands(self);
-        sort_spells(self);
+        sort_spells( self);
 
         info!("Booting mail system.");
         if !self.mails.scan_file() {
@@ -679,7 +679,7 @@ impl DB {
         // /* Moved here so the object limit code works. -gg 6/24/98 */
         if !self.mini_mud {
             info!("Booting houses.");
-            house_boot(self, objs);
+            house_boot( self, objs);
         }
 
         let zone_count = self.zone_table.len();
@@ -691,7 +691,7 @@ impl DB {
                 self.zone_table[i].bot,
                 self.zone_table[i].top
             );
-            game.reset_zone(self, objs, i);
+            game.reset_zone(self,chars, objs, i);
         }
 
         // TODO reset_q.head = reset_q.tail = NULL;
@@ -1407,7 +1407,7 @@ impl DB {
      * NOTE 2: Assumes sizeof(RoomRnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
      */
 }
-fn renum_zone_table(game: &mut Game, db: &mut DB) {
+fn renum_zone_table(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>) {
     let mut olda;
     let mut oldb;
     let mut oldc;
@@ -1493,7 +1493,7 @@ fn renum_zone_table(game: &mut Game, db: &mut DB) {
                     let zone = db.zone_table[idx].number as usize;
                     let zcmd_command = db.zone_table[idx].cmd[cmd_no].command;
                     let zcmd_line = db.zone_table[idx].cmd[cmd_no].line;
-                    game.log_zone_error(db, zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
+                    game.log_zone_error(chars, zone, zcmd_command, zcmd_line, &buf, &mut cmd_no2);
                 }
                 db.zone_table[idx].cmd[cmd_no].command = '*';
             }
@@ -2288,8 +2288,8 @@ impl DB {
      *************************************************************************/
 }
 impl Game {
-    pub fn vnum_mobile(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
-        let ch = db.ch(chid);
+    pub fn vnum_mobile(&mut self, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
+        let ch = chars.get(chid);
         let mut found = 0;
         for nr in 0..db.mob_protos.len() {
             let mp = &db.mob_protos[nr];
@@ -2308,8 +2308,8 @@ impl Game {
         return found;
     }
 
-    pub fn vnum_object(&mut self, db: &DB, searchname: &str, chid: DepotId) -> i32 {
-        let ch = db.ch(chid);
+    pub fn vnum_object(&mut self, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
+        let ch = chars.get(chid);
         let mut found = 0;
         for nr in 0..db.obj_proto.len() {
             let op = &db.obj_proto[nr];
@@ -2330,13 +2330,6 @@ impl Game {
     }
 }
 impl DB {
-    pub fn ch(&self, c_id: DepotId) -> &CharData {
-        self.character_list.get(c_id)
-    }
-    pub fn ch_mut(&mut self, o_id: DepotId) -> &mut CharData {
-        self.character_list.get_mut(o_id)
-    }
-
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
     // {
@@ -2351,7 +2344,7 @@ impl DB {
     // }
 
     /* create a new mobile from a prototype */
-    pub(crate) fn read_mobile(&mut self, nr: MobVnum, read_type: i32) -> Option<DepotId> /* and mob_rnum */
+    pub(crate) fn read_mobile(&mut self,chars: &mut Depot<CharData>, nr: MobVnum, read_type: i32) -> Option<DepotId> /* and mob_rnum */
     {
         let i;
         if read_type == VIRTUAL {
@@ -2387,7 +2380,9 @@ impl DB {
 
         self.mob_index[i as usize].number += 1;
 
-        Some(self.character_list.push(mob))
+        let chid = chars.push(mob);
+        self.character_list.push(chid);
+        Some(chid)
     }
 
     /* create an object, and add it to the object list */
@@ -2457,7 +2452,7 @@ const ZO_DEAD: i32 = 999;
 
 impl Game {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
-    pub(crate) fn zone_update(&mut self, db: &mut DB, objs: &mut Depot<ObjData>) {
+    pub(crate) fn zone_update(&mut self, db: &mut DB,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>) {
         /* jelson 10/22/92 */
         db.timer += 1;
         if (db.timer * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
@@ -2487,10 +2482,9 @@ impl Game {
         /* dequeue zones (if possible) and reset */
         /* this code is executed every 10 seconds (i.e. PULSE_ZONE) */
         for update_u in db.reset_q.clone() {
-            if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, db, update_u) {
-                self.reset_zone(db, objs, update_u as usize);
-                self.mudlog(
-                    db,
+            if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, db, chars, update_u) {
+                self.reset_zone(db, chars, objs, update_u as usize);
+                self.mudlog(chars,
                     CMP,
                     LVL_GOD as i32,
                     false,
@@ -2504,22 +2498,20 @@ impl Game {
     /* execute the reset command table of a given zone */
     fn log_zone_error(
         &mut self,
-        db: &DB,
+        chars: &Depot<CharData>,
         zone: usize,
         zcmd_command: char,
         zcmd_line: i32,
         message: &str,
         last_cmd: &mut i32,
     ) {
-        self.mudlog(
-            db,
+        self.mudlog(chars,
             NRM,
             LVL_GOD as i32,
             true,
             format!("SYSERR: zone file: {}", message).as_str(),
         );
-        self.mudlog(
-            db,
+        self.mudlog(chars,
             NRM,
             LVL_GOD as i32,
             true,
@@ -2532,7 +2524,7 @@ impl Game {
         *last_cmd = 0;
     }
 
-    pub(crate) fn reset_zone(&mut self, db: &mut DB, objs: &mut Depot<ObjData>, zone: usize) {
+    pub(crate) fn reset_zone(&mut self, db: &mut DB,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, zone: usize) {
         let mut last_cmd = 0;
         let mut oid;
         let mut mob_id = None;
@@ -2564,9 +2556,9 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
-                        mob_id = db.read_mobile(nr, REAL);
+                        mob_id = db.read_mobile(chars, nr, REAL);
                         let room = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                        db.char_to_room(objs, mob_id.unwrap(), room);
+                        db.char_to_room(chars, objs, mob_id.unwrap(), room);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2603,12 +2595,11 @@ impl Game {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                         oid = db.read_object(objs, nr, REAL);
                         let obj_to =
-                            db.get_obj_num(objs, db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
+                            db.get_obj_num( objs, db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
                             let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
-                                db,
+                            self.log_zone_error(chars,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
@@ -2618,7 +2609,7 @@ impl Game {
                             db.zone_table[zone].cmd[cmd_no].command = '*';
                             continue;
                         }
-                        db.obj_to_obj(objs, oid.unwrap(), obj_to.unwrap());
+                        db.obj_to_obj(chars, objs, oid.unwrap(), obj_to.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2630,8 +2621,7 @@ impl Game {
                     if mob_id.is_none() {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
-                            db,
+                        self.log_zone_error(chars,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2647,7 +2637,7 @@ impl Game {
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                         oid = db.read_object(objs, nr, REAL);
-                        db.obj_to_char(objs, oid.unwrap(), mob_id.unwrap());
+                        db.obj_to_char(chars, objs, oid.unwrap(), mob_id.unwrap());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2659,8 +2649,7 @@ impl Game {
                     if mob_id.is_none() {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
-                            db,
+                        self.log_zone_error(chars,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2679,8 +2668,7 @@ impl Game {
                         {
                             let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                             let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
-                                db,
+                            self.log_zone_error(chars,
                                 zone,
                                 zcmd_command,
                                 zcmd_line,
@@ -2691,7 +2679,7 @@ impl Game {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             oid = db.read_object(objs, nr, REAL);
                             let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(db, objs, mob_id.unwrap(), oid.unwrap(), pos);
+                            self.equip_char(chars,db, objs, mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2709,7 +2697,7 @@ impl Game {
                             .as_ref(),
                     );
                     if oid.is_some() {
-                        db.extract_obj(objs, oid.unwrap());
+                        db.extract_obj(chars, objs, oid.unwrap());
                     }
                     last_cmd = 1;
                 }
@@ -2724,8 +2712,7 @@ impl Game {
                     {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                        self.log_zone_error(
-                            db,
+                        self.log_zone_error(chars,
                             zone,
                             zcmd_command,
                             zcmd_line,
@@ -2782,8 +2769,7 @@ impl Game {
                 _ => {
                     let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                     let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                    self.log_zone_error(
-                        db,
+                    self.log_zone_error(chars,
                         zone,
                         zcmd_command,
                         zcmd_line,
@@ -2800,18 +2786,18 @@ impl Game {
 }
 
 /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
-fn is_empty(game: &Game, db: &DB, zone_nr: ZoneRnum) -> bool {
+fn is_empty(game: &Game, db: &DB,chars: &Depot<CharData>, zone_nr: ZoneRnum) -> bool {
     for i in game.descriptor_list.iter() {
         if i.state() != ConPlaying {
             continue;
         }
-        if db.ch(i.character.unwrap()).in_room() == NOWHERE {
+        if chars.get(i.character.unwrap()).in_room() == NOWHERE {
             continue;
         }
-        if db.ch(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
+        if chars.get(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
             continue;
         }
-        if db.world[db.ch(i.character.unwrap()).in_room() as usize].zone != zone_nr {
+        if db.world[chars.get(i.character.unwrap()).in_room() as usize].zone != zone_nr {
             continue;
         }
         return false;
@@ -2861,16 +2847,16 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,chid: DepotId) {
-        let ch = db.ch(chid);
+    pub fn save_char(&mut self, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,chid: DepotId) {
+        let ch = chars.get(chid);
         let mut st: CharFileU = CharFileU::new();
 
         if ch.is_npc() || ch.desc.is_none() || ch.get_pfilepos() < 0 {
             return;
         }
 
-        self.char_to_store(texts, objs, db, chid, &mut st);
-        let ch = db.ch(chid);
+        self.char_to_store(texts, objs, db, chars, chid, &mut st);
+        let ch = chars.get(chid);
         copy_to_stored(
             &mut st.host,
             self.descriptor_list.get(ch.desc.unwrap()).host.as_ref(),
@@ -3047,7 +3033,7 @@ impl Game {
         &mut self,
         texts: &mut Depot<TextData>,
         objs: &mut Depot<ObjData>,
-        db: &mut DB,
+        db: &mut DB,chars: &mut Depot<CharData>,
         chid: DepotId,
         st: &mut CharFileU,
     ) {
@@ -3056,14 +3042,14 @@ impl Game {
             [(); NUM_WEARS as usize].map(|_| None);
 
         for i in 0..NUM_WEARS {
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             if ch.get_eq(i).is_some() {
-                char_eq[i as usize] = db.unequip_char(objs, chid, i);
+                char_eq[i as usize] = db.unequip_char(chars, objs, chid, i);
             } else {
                 char_eq[i as usize] = None;
             }
         }
-        let ch = db.ch_mut(chid);
+        let ch = chars.get_mut(chid);
         if ch.affected.len() > MAX_AFFECT {
             error!("SYSERR: WARNING: OUT OF STORE ROOM FOR AFFECTED TYPES!!!");
         }
@@ -3089,14 +3075,14 @@ impl Game {
          */
 
         while {
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             !ch.affected.is_empty()
         } {
-            let ch = db.ch(chid);
+            let ch = chars.get(chid);
             let af = ch.affected[0];
-            db.affect_remove(objs, chid, af);
+            db.affect_remove(chars, objs, chid, af);
         }
-        let ch = db.ch_mut(chid);
+        let ch = chars.get_mut(chid);
         ch.aff_abils = ch.real_abils;
 
         st.birth = ch.player.time.birth;
@@ -3155,7 +3141,7 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(db, objs, chid, char_eq[i as usize].unwrap(), i);
+                self.equip_char(chars,db, objs, chid, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */
@@ -3239,18 +3225,18 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
 
 impl DB {
     /* release memory allocated for a char struct */
-    pub fn free_char(&mut self, objs: &mut Depot<ObjData>, chid: DepotId) {
-        self.ch_mut(chid).player_specials.aliases.clear();
+    pub fn free_char(&mut self,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, chid: DepotId) {
+        chars.get_mut(chid).player_specials.aliases.clear();
 
-        while !self.ch(chid).affected.is_empty() {
-            self.affect_remove(objs, chid, self.ch(chid).affected[0]);
+        while !chars.get(chid).affected.is_empty() {
+            self.affect_remove(chars, objs, chid, chars.get(chid).affected[0]);
         }
 
-        if self.ch(chid).desc.is_some() {
-            self.ch_mut(chid).desc = None;
+        if chars.get(chid).desc.is_some() {
+            chars.get_mut(chid).desc = None;
         }
-        self.character_list.take(chid);
-        objs.take(chid);
+        self.character_list.retain(|&i| i!=chid);
+        chars.take(chid);
     }
 }
 
@@ -3368,10 +3354,10 @@ fn clear_object(obj: &mut ObjData) {
  * (and then never again for that character).
  */
 impl DB {
-    pub(crate) fn init_char(&mut self, texts: &mut Depot<TextData>, chid: DepotId) {
+    pub(crate) fn init_char(&mut self, chars: &mut Depot<CharData>, texts: &mut Depot<TextData>, chid: DepotId) {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
-            let ch = self.ch_mut(chid);
+            let ch = chars.get_mut(chid);
             ch.set_level(LVL_IMPL as u8);
             ch.set_exp(7000000);
 
@@ -3383,7 +3369,7 @@ impl DB {
             ch.set_mana(ch.get_max_mana());
             ch.set_move(ch.get_max_move());
         }
-        let ch = self.ch_mut(chid);
+        let ch = chars.get_mut(chid);
 
         ch.set_title(None);
         ch.player.short_descr = Rc::from("");
@@ -3416,7 +3402,7 @@ impl DB {
             ch.set_weight(rand_number(100, 160) as u8);
             ch.set_height(rand_number(150, 180) as u8); /* 5'0" - 6'0" */
         }
-        let ch = self.ch(chid);
+        let ch = chars.get(chid);
         let i = self.get_ptable_by_name(ch.get_name().as_ref());
         if i.is_none() {
             error!(
@@ -3427,10 +3413,10 @@ impl DB {
             let i = i.unwrap();
             let top_n = self.player_table.len();
             self.player_table[i].id = top_n as i64; //*self.top_idnum.borrow() as i64;
-            let ch = self.ch_mut(chid);
+            let ch = chars.get_mut(chid);
             ch.set_idnum(top_n as i64); /*self.top_idnum.borrow()*/
         }
-        let ch = self.ch_mut(chid);
+        let ch = chars.get_mut(chid);
         for i in 1..MAX_SKILLS {
             if ch.get_level() < LVL_IMPL as u8 {
                 ch.player_specials.saved.skills[i] = 0;
