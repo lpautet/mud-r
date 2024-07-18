@@ -259,7 +259,8 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     }
     let ch = chars.get(chid);
     was_in = ch.in_room();
-    db.char_from_room(chars, objs,chid);
+    let ch = chars.get_mut(chid);
+    db.char_from_room( objs,ch);
     let room_dir = db.world[was_in as usize].dir_option[dir as usize]
         .as_ref()
         .unwrap()

@@ -152,7 +152,7 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
             }
             let mut i = -1;
             let newobjid = obj_from_store( db, objs,&object, &mut i).unwrap();
-            db.obj_to_room(objs,newobjid, rnum);
+            db.obj_to_room(objs.get_mut(newobjid), rnum);
         }
     }
 

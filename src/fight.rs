@@ -23,8 +23,8 @@ use crate::config::{
 };
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
-use crate::depot::{Depot, DepotId};
-use crate::handler::affected_by_spell;
+use crate::depot::{Depot, DepotId, HasId};
+use crate::handler::{affect_from_char, affect_remove, affected_by_spell, obj_to_obj, object_list_new_owner};
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
@@ -120,9 +120,9 @@ macro_rules! is_weapon {
 /* The Fight related routines */
 impl Game {
     pub fn appear(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
-        let ch = chars.get(chid);
+        let ch = chars.get_mut(chid);
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
-            db.affect_from_char(chars, objs,chid, SPELL_INVISIBLE as i16);
+            affect_from_char( objs,ch, SPELL_INVISIBLE as i16);
         }
         let ch = chars.get_mut(chid);
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
@@ -307,10 +307,10 @@ impl Game {
         }
 
         db.combat_list.push(chid);
-        let ch = chars.get(chid);
+        let ch = chars.get_mut(chid);
 
         if ch.aff_flagged(AFF_SLEEP) {
-            db.affect_from_char(chars, objs,chid, SPELL_SLEEP as i16);
+            affect_from_char( objs,ch, SPELL_SLEEP as i16);
         }
         let ch= chars.get_mut(chid);
 
@@ -324,9 +324,8 @@ impl Game {
 }
 impl DB {
     /* remove a char from the list of fighting chars */
-    pub fn stop_fighting(&mut self, chars: &mut Depot<CharData>, chid: DepotId) {
-        self.combat_list.retain(|&c| c != chid);
-        let ch = chars.get_mut(chid);
+    pub fn stop_fighting(&mut self, ch: &mut CharData) {
+        self.combat_list.retain(|&c| c != ch.id());
         ch.set_fighting(None);
         ch.set_pos(POS_STANDING);
 
@@ -372,14 +371,14 @@ impl Game {
         }
         for oid in objs.get(corpse_id).contains.clone() {
             objs.get_mut(oid).in_obj = Some(corpse_id);
-            db.object_list_new_owner(chars, objs,oid, None);
+            object_list_new_owner(chars, objs,oid, None);
         }
         /* transfer character's equipment to the corpse */
         for i in 0..NUM_WEARS {
             let ch = chars.get(chid);
             if ch.get_eq(i).is_some() {
                 let oid = db.unequip_char(chars, objs,chid, i).unwrap();
-                db.obj_to_obj(chars, objs,oid, corpse_id);
+                obj_to_obj(chars, objs,oid, corpse_id);
             }
         }
         let ch = chars.get(chid);
@@ -393,8 +392,8 @@ impl Game {
              * test below shall live on, for a while. -gg 3/3/2002
              */
             if ch.is_npc() || ch.desc.is_some() {
-                let money = db.create_money(objs,ch.get_gold());
-                db.obj_to_obj(chars, objs,money.unwrap(), corpse_id);
+                let money_id = db.create_money(objs,ch.get_gold());
+                obj_to_obj(chars, objs,money_id.unwrap(), corpse_id);
             }
             let ch = chars.get_mut(chid);
             ch.set_gold(0);
@@ -404,7 +403,7 @@ impl Game {
         ch.set_is_carrying_w(0);
         ch.set_is_carrying_n(0);
         let ch_in_room = ch.in_room();
-        db.obj_to_room(objs,corpse_id, ch_in_room);
+        db.obj_to_room(objs.get_mut(corpse_id), ch_in_room);
     }
 }
 
@@ -449,14 +448,14 @@ impl Game {
     }
 
     pub fn raw_kill(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
-        let ch = chars.get(chid);
+        let ch = chars.get_mut(chid);
         if ch.fighting_id().is_some() {
-            db.stop_fighting(chars, chid);
+            db.stop_fighting(ch);
         }
-        let ch = chars.get(chid);
+        let ch = chars.get_mut(chid);
         let mut list = ch.affected.clone();
         list.retain(|af| {
-            db.affect_remove(chars, objs,chid, *af);
+            affect_remove(objs,ch, *af);
             false
         });
         let ch = chars.get_mut(chid);
@@ -1210,15 +1209,15 @@ impl Game {
                 );
                 let victim = chars.get_mut(victim_id);
                 victim.set_was_in(victim.in_room());
-                db.char_from_room(chars, objs,victim_id);
+                db.char_from_room(objs, victim);
                 db.char_to_room(chars, objs,victim_id, 0);
             }
         }
 
         /* stop someone from fighting if they're stunned or worse */
-        let victim = chars.get(victim_id);
+        let victim = chars.get_mut(victim_id);
         if victim.get_pos() <= POS_STUNNED && victim.fighting_id().is_some() {
-            db.stop_fighting(chars, victim_id);
+            db.stop_fighting( victim);
         }
 
         /* Uh oh.  Victim died. */
@@ -1291,7 +1290,7 @@ impl Game {
         /* Do some sanity checking, in case someone flees, etc. */
         if ch.in_room() != victim.in_room() {
             if ch.fighting_id().is_some() && ch.fighting_id().unwrap() == victim_id {
-                db.stop_fighting(chars, chid);
+                db.stop_fighting(chars.get_mut(chid));
                 return;
             }
         }
@@ -1424,7 +1423,7 @@ impl Game {
             if ch.fighting_id().is_none()
                 || ch.in_room() != chars.get(ch.fighting_id().unwrap()).in_room()
             {
-                db.stop_fighting(chars, chid);
+                db.stop_fighting(chars.get_mut(chid));
                 continue;
             }
 

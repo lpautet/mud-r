@@ -26,7 +26,7 @@ use crate::act_social::do_action;
 use crate::act_wizard::do_echo;
 use crate::constants::{DRINKS, EXTRA_BITS, ITEM_TYPES};
 use crate::db::{fread_string, DB, REAL};
-use crate::handler::{fname, get_number, isname};
+use crate::handler::{fname, get_number, get_obj_in_list_num, isname, obj_from_char, obj_to_char};
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
 use crate::structs::{
@@ -805,10 +805,10 @@ fn shopping_buy(
                 db
                 .read_object(objs, objs.get(oid.unwrap()).get_obj_rnum(), REAL);
         } else {
-            db.obj_from_char(chars, objs,oid.unwrap());
+            obj_from_char(chars, objs.get_mut(oid.unwrap()));
             db.shop_index[shop_nr].lastsort -= 1;
         }
-        db.obj_to_char(chars, objs, oid.unwrap(), chid);
+        obj_to_char(objs.get_mut( oid.unwrap()), chars.get_mut(chid));
 
         let charged = buy_price(chars, &db, objs,oid.unwrap(), shop_nr, keeper_id, chid);
         goldamt += charged;
@@ -958,8 +958,9 @@ fn slide_obj(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mu
         return;
     }
     db.shop_index[shop_nr].lastsort += 1;
-    db.obj_to_char(chars, objs, oid, keeper_id);
     let keeper = chars.get_mut(keeper_id);
+    let obj = objs.get_mut(oid);
+    obj_to_char(obj, keeper);
     let len = keeper.carrying.len();
     let obj_id = keeper.carrying.remove(len - 1);
     let mut idx: Option<usize> = None;
@@ -985,19 +986,18 @@ fn sort_keeper_objs(game: &mut Game,chars: &mut Depot<CharData>, db: &mut DB,obj
     while { let keeper = chars.get(keeper_id); db.shop_index[shop_nr].lastsort < keeper.is_carrying_n() as i32 } {
         let keeper = chars.get(keeper_id);
         let oid = keeper.carrying[0];
-        db.obj_from_char(chars, objs, oid);
+        obj_from_char(chars, objs.get_mut(oid));
         list.push(oid);
     }
 
     while list.len() != 0 {
         let temp_id = list.remove(0);
-        let keeper = chars.get(keeper_id);
+        let keeper = chars.get_mut(keeper_id);
         if shop_producing(&db, objs, temp_id, shop_nr)
-            && db
-                .get_obj_in_list_num(objs, objs.get(temp_id).get_obj_rnum(), &keeper.carrying)
+            && get_obj_in_list_num(objs, objs.get(temp_id).get_obj_rnum(), &keeper.carrying)
                 .is_none()
         {
-            db.obj_to_char(chars, objs, temp_id, keeper_id);
+            obj_to_char(objs.get_mut(temp_id), keeper);
             db.shop_index[shop_nr].lastsort += 1;
         } else {
             slide_obj(game, chars, db, objs, temp_id, keeper_id, shop_nr);
@@ -1078,7 +1078,7 @@ fn shopping_sell(
         keeper.set_gold(keeper.get_gold() - charged);
 
         sold += 1;
-        db.obj_from_char(chars, objs, oid.unwrap());
+        obj_from_char(chars, objs.get_mut (oid.unwrap()));
         slide_obj(game, chars, db,objs,oid.unwrap(), keeper_id, shop_nr); /* Seems we don't use return value. */
         oid = get_selling_obj(game, chars, db,texts,objs,chid, &name, keeper_id, shop_nr, 0);
     }
@@ -1937,9 +1937,7 @@ fn list_detailed_shop(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: D
             k = db.get_char_num(chars, db.shop_index[shop_nr as usize].keeper);
             k.is_some()
         } {
-            let k_id = k.unwrap();
-            let k = chars.get(k_id);
-
+            let k = k.unwrap();
             game.send_to_char(ch,
                 format!(
                     "Coins:      [{:9}], Bank: [{:9}] (Total: {})\r\n",

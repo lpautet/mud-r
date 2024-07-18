@@ -31,8 +31,8 @@ use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, DRINKNAMES, EXTRA_BITS_COUNT, ROOM_BITS_COUNT,
     WEAR_BITS_COUNT,
 };
-use crate::depot::{Depot, DepotId};
-use crate::handler::{fname, isname};
+use crate::depot::{Depot, DepotId, HasId};
+use crate::handler::{affect_remove, fname, get_obj_in_list_num, isname, obj_to_char, obj_to_obj};
 use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::{one_argument, one_word, search_block};
 use crate::mail::MailSystem;
@@ -2574,7 +2574,8 @@ impl Game {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             let room_nr = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
                             oid = db.read_object(objs, nr, REAL);
-                            db.obj_to_room(objs, oid.unwrap(), room_nr);
+                            let obj = objs.get_mut(oid.unwrap());
+                            db.obj_to_room(obj, room_nr);
                             last_cmd = 1;
                         } else {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
@@ -2609,7 +2610,7 @@ impl Game {
                             db.zone_table[zone].cmd[cmd_no].command = '*';
                             continue;
                         }
-                        db.obj_to_obj(chars, objs, oid.unwrap(), obj_to.unwrap());
+                        obj_to_obj(chars, objs, oid.unwrap(), obj_to.unwrap().id());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2637,7 +2638,9 @@ impl Game {
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                         oid = db.read_object(objs, nr, REAL);
-                        db.obj_to_char(chars, objs, oid.unwrap(), mob_id.unwrap());
+                        let obj = objs.get_mut(oid.unwrap());
+                        let mob = chars.get_mut(mob_id.unwrap());
+                        obj_to_char(obj, mob);
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2689,15 +2692,16 @@ impl Game {
 
                 'R' => {
                     /* rem obj from room */
-                    oid = db.get_obj_in_list_num(
+                    let obj = get_obj_in_list_num(
                         objs,
                         db.zone_table[zone].cmd[cmd_no].arg2 as i16,
                         db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize]
                             .contents
                             .as_ref(),
                     );
-                    if oid.is_some() {
-                        db.extract_obj(chars, objs, oid.unwrap());
+                    if obj.is_some() {
+                        let oid = obj.unwrap().id();
+                        db.extract_obj(chars, objs, oid);
                     }
                     last_cmd = 1;
                 }
@@ -3078,9 +3082,9 @@ impl Game {
             let ch = chars.get(chid);
             !ch.affected.is_empty()
         } {
-            let ch = chars.get(chid);
+            let ch = chars.get_mut(chid);
             let af = ch.affected[0];
-            db.affect_remove(chars, objs, chid, af);
+            affect_remove( objs, ch, af);
         }
         let ch = chars.get_mut(chid);
         ch.aff_abils = ch.real_abils;
@@ -3226,17 +3230,20 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
 impl DB {
     /* release memory allocated for a char struct */
     pub fn free_char(&mut self,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, chid: DepotId) {
-        chars.get_mut(chid).player_specials.aliases.clear();
-
-        while !chars.get(chid).affected.is_empty() {
-            self.affect_remove(chars, objs, chid, chars.get(chid).affected[0]);
-        }
-
-        if chars.get(chid).desc.is_some() {
-            chars.get_mut(chid).desc = None;
-        }
         self.character_list.retain(|&i| i!=chid);
-        chars.take(chid);
+        let mut ch = chars.take(chid);
+
+        ch.player_specials.aliases.clear();
+
+        while !ch.affected.is_empty() {
+            let af = ch.affected[0];
+            affect_remove( objs, &mut ch, af );
+        }
+
+        if ch.desc.is_some() {
+            ch.desc = None;
+        }
+        
     }
 }
 

@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::act_movement::perform_move;
 use crate::act_social::do_action;
 use crate::depot::{Depot, DepotId};
+use crate::handler::obj_to_char;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
@@ -79,8 +80,9 @@ impl Game {
                         }
                     }
                     if best_obj_id.is_some() {
-                        db.obj_from_room(objs,best_obj_id.unwrap());
-                        db.obj_to_char(chars, objs,best_obj_id.unwrap(), chid);
+                        let best_obj = objs.get_mut(best_obj_id.unwrap());
+                        db.obj_from_room(&best_obj);
+                        obj_to_char(best_obj, chars.get_mut(chid));
                         let ch = chars.get(chid);
                         let best_obj = objs.get(best_obj_id.unwrap());
                         self.act(chars, 

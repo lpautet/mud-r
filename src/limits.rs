@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -18,6 +18,7 @@ use crate::config::{
 };
 use crate::depot::{Depot, DepotId};
 use crate::fight::update_pos;
+use crate::handler::{obj_from_obj, obj_to_obj};
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
@@ -221,7 +222,15 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
 // #endif /* CIRCLE_UNIX || CIRCLE_WINDOWS */
 // }
 
-pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+pub fn gain_exp(
+    chid: DepotId,
+    gain: i32,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
     let ch = chars.get(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
@@ -248,13 +257,14 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, chars: &mut Depot<Cha
             ch.set_level(ch.get_level() + 1);
 
             num_levels += 1;
-            advance_level(chid, game, chars, db, texts,objs);
+            advance_level(chid, game, chars, db, texts, objs);
             is_altered = true;
         }
 
         if is_altered {
             let ch = chars.get(chid);
-            game.mudlog(chars,
+            game.mudlog(
+                chars,
                 BRF,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -270,9 +280,7 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, chars: &mut Depot<Cha
             if num_levels == 1 {
                 game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch,
-                    format!("You rise {} levels!\r\n", num_levels).as_str(),
-                );
+                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
                 let ch = chars.get_mut(chid);
                 set_title(ch, None);
                 let ch = chars.get(chid);
@@ -292,7 +300,15 @@ pub fn gain_exp(chid: DepotId, gain: i32, game: &mut Game, chars: &mut Depot<Cha
     }
 }
 
-pub fn gain_exp_regardless(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId, gain: i32, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+pub fn gain_exp_regardless(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    chid: DepotId,
+    gain: i32,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
     let ch = chars.get_mut(chid);
     let mut is_altered = false;
     let mut num_levels = 0;
@@ -311,13 +327,14 @@ pub fn gain_exp_regardless(game: &mut Game, chars: &mut Depot<CharData>, db: &mu
             let ch = chars.get_mut(chid);
             ch.set_level(ch.get_level() + 1);
             num_levels += 1;
-            advance_level(chid, game, chars,db, texts,objs);
+            advance_level(chid, game, chars, db, texts, objs);
             is_altered = true;
         }
 
         if is_altered {
             let ch = chars.get(chid);
-            game.mudlog(chars,
+            game.mudlog(
+                chars,
                 BRF,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
@@ -333,9 +350,7 @@ pub fn gain_exp_regardless(game: &mut Game, chars: &mut Depot<CharData>, db: &mu
             if num_levels == 1 {
                 game.send_to_char(ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch,
-                    format!("You rise {} levels!\r\n", num_levels).as_str(),
-                );
+                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
             }
             let ch = chars.get_mut(chid);
             set_title(ch, None);
@@ -347,7 +362,13 @@ pub fn gain_exp_regardless(game: &mut Game, chars: &mut Depot<CharData>, db: &mu
 }
 
 impl Game {
-    pub(crate) fn gain_condition(&mut self, chars: &mut Depot<CharData>, chid: DepotId, condition: i32, value: i32) {
+    pub(crate) fn gain_condition(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        chid: DepotId,
+        condition: i32,
+        value: i32,
+    ) {
         let ch = chars.get_mut(chid);
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
@@ -382,21 +403,29 @@ impl Game {
         }
     }
 
-    fn check_idling(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId) {
+    fn check_idling(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+        chid: DepotId,
+    ) {
         let ch = chars.get_mut(chid);
-        ch.char_specials
-            .timer += 1;
+        ch.char_specials.timer += 1;
         if ch.char_specials.timer > IDLE_VOID {
             if ch.get_was_in() == NOWHERE && ch.in_room() != NOWHERE {
                 let ch_in_room = ch.in_room();
                 chars.get_mut(chid).set_was_in(ch_in_room);
                 let ch = chars.get(chid);
                 if ch.fighting_id().is_some() {
-                    db.stop_fighting(chars, ch.fighting_id().unwrap());
-                    db.stop_fighting(chars, chid);
+                    db.stop_fighting(chars.get_mut(ch.fighting_id().unwrap()));
+                    db.stop_fighting(chars.get_mut(chid));
                 }
                 let ch = chars.get(chid);
-                self.act(chars, db,
+                self.act(
+                    chars,
+                    db,
                     "$n disappears into the void.",
                     true,
                     Some(ch),
@@ -406,20 +435,19 @@ impl Game {
                 );
                 let ch = chars.get(chid);
                 self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-                self.save_char(db, chars, texts, objs,chid);
-                crash_crashsave( chars, db, objs,chid);
-                db.char_from_room(chars, objs,chid);
-                db.char_to_room(chars, objs,chid, 1);
+                self.save_char(db, chars, texts, objs, chid);
+                crash_crashsave(chars, db, objs, chid);
+                db.char_from_room(objs, chars.get_mut(chid));
+                db.char_to_room(chars, objs, chid, 1);
             } else if ch.char_specials.timer > IDLE_RENT_TIME {
                 if ch.in_room() != NOWHERE {
-                    db.char_from_room(chars, objs,chid);
+                    db.char_from_room(objs, chars.get_mut(chid));
                 }
-                db.char_to_room(chars, objs,chid, 3);
+                db.char_to_room(chars, objs, chid, 3);
                 let ch = chars.get(chid);
                 if ch.desc.is_some() {
                     let desc_id = ch.desc.unwrap();
-                    self.desc_mut(desc_id)
-                        .set_state(ConDisconnect);
+                    self.desc_mut(desc_id).set_state(ConDisconnect);
 
                     /*
                      * For the 'if (d->character)' test in close_socket().
@@ -432,12 +460,13 @@ impl Game {
                     ch.desc = None;
                 }
                 if FREE_RENT {
-                    crash_rentsave(self,chars, db, objs,chid, 0);
+                    crash_rentsave(self, chars, db, objs, chid, 0);
                 } else {
-                    crash_idlesave(self, chars, db,objs, chid);
+                    crash_idlesave(self, chars, db, objs, chid);
                 }
                 let ch = chars.get(chid);
-                self.mudlog(chars,
+                self.mudlog(
+                    chars,
                     CMP,
                     LVL_GOD as i32,
                     true,
@@ -449,19 +478,25 @@ impl Game {
     }
 
     /* Update PCs, NPCs, and objects */
-    pub fn point_update(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+    pub fn point_update(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+    ) {
         /* characters */
         for &i_id in &db.character_list.clone() {
-            self.gain_condition(chars,i_id, FULL, -1);
-            self.gain_condition(chars,i_id, DRUNK, -1);
-            self.gain_condition(chars,i_id, THIRST, -1);
+            self.gain_condition(chars, i_id, FULL, -1);
+            self.gain_condition(chars, i_id, DRUNK, -1);
+            self.gain_condition(chars, i_id, THIRST, -1);
             let i = chars.get_mut(i_id);
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
                 if i.aff_flagged(AFF_POISON) {
-                    if self.damage(chars, db,texts,objs,i_id, i_id, 2, SPELL_POISON) == -1 {
+                    if self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1 {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }
                 }
@@ -470,17 +505,17 @@ impl Game {
                     update_pos(i);
                 }
             } else if i.get_pos() == POS_INCAP {
-                if self.damage(chars, db,texts,objs,i_id, i_id, 1, TYPE_SUFFERING) == -1 {
+                if self.damage(chars, db, texts, objs, i_id, i_id, 1, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             } else if i.get_pos() == POS_MORTALLYW {
-                if self.damage(chars, db, texts,objs,i_id, i_id, 2, TYPE_SUFFERING) == -1 {
+                if self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
                     continue;
                 }
             }
             let i = chars.get(i_id);
             if !i.is_npc() {
-                self.update_char_objects(chars, objs,db, i_id);
+                self.update_char_objects(chars, objs, db, i_id);
                 let i = chars.get(i_id);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
                     self.check_idling(chars, db, texts, objs, i_id);
@@ -506,7 +541,9 @@ impl Game {
                     if j_obj.carried_by.is_some() {
                         let chid = j_obj.carried_by.unwrap();
                         let ch = chars.get(chid);
-                        self.act(chars, db, 
+                        self.act(
+                            chars,
+                            db,
                             "$p decays in your hands.",
                             false,
                             Some(ch),
@@ -515,15 +552,13 @@ impl Game {
                             TO_CHAR,
                         );
                     } else if j_obj.in_room() != NOWHERE
-                        && db.world[j_obj.in_room() as usize]
-                            .peoples
-                            .len()
-                            != 0
+                        && db.world[j_obj.in_room() as usize].peoples.len() != 0
                     {
-                        let chid =
-                            db.world[j_obj.in_room() as usize].peoples[0];
-                            let ch = chars.get(chid);
-                        self.act(chars, db, 
+                        let chid = db.world[j_obj.in_room() as usize].peoples[0];
+                        let ch = chars.get(chid);
+                        self.act(
+                            chars,
+                            db,
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(ch),
@@ -531,7 +566,9 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.act(chars, db,
+                        self.act(
+                            chars,
+                            db,
                             "A quivering horde of maggots consumes $p.",
                             true,
                             Some(ch),
@@ -545,23 +582,25 @@ impl Game {
                         old_contains.push(c);
                     }
 
-                    for jj in old_contains.into_iter() {
-                        db.obj_from_obj(chars, objs, jj);
-                        let j_obj = objs.get(j_id);
-                        if j_obj.in_obj.is_some() {
-                            db.obj_to_obj(chars, objs, jj, j_obj.in_obj.unwrap());
-                        } else if j_obj.carried_by.is_some() {
-                            db.obj_to_room(objs,
-                                jj,
-                                chars.get(j_obj.carried_by.unwrap()).in_room(),
+                    for contained_id in old_contains.into_iter() {
+                        obj_from_obj(chars, objs, contained_id);
+                        let j = objs.get_mut(j_id);
+                        if j.in_obj.is_some() {
+                            let to_obj_id = j.in_obj.unwrap();
+                            obj_to_obj(chars, objs, contained_id, to_obj_id);
+                        } else if j.carried_by.is_some() {
+                            let to_room = chars.get(j.carried_by.unwrap()).in_room();
+                            db.obj_to_room(
+                                j,
+                                to_room,
                             );
-                        } else if j_obj.in_room() != NOWHERE {
-                            db.obj_to_room(objs, jj, j_obj.in_room());
+                        } else if j.in_room() != NOWHERE {
+                            db.obj_to_room(j, j.in_room());
                         } else {
                             //   core_dump();
                         }
                     }
-                    db.extract_obj( chars, objs, j_id);
+                    db.extract_obj(chars, objs, j_id);
                 }
             }
         }

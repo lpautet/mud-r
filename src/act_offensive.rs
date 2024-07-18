@@ -611,16 +611,17 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts
         TO_NOTVICT,
     );
     let vict_id = vict.id();
+    let vict = chars.get_mut(vict_id);
     if vict.fighting_id().is_some() && vict.fighting_id().unwrap() == tmp_ch_id {
-        db.stop_fighting(chars, vict_id);
+        db.stop_fighting(vict);
     }
-    let tmp_ch = chars.get(tmp_ch_id);
+    let tmp_ch = chars.get_mut(tmp_ch_id);
     if tmp_ch.fighting_id().is_some() {
-        db.stop_fighting(chars, tmp_ch_id);
+        db.stop_fighting(tmp_ch);
     }
-    let ch = chars.get(chid);
+    let ch = chars.get_mut(chid);
     if ch.fighting_id().is_some() {
-        db.stop_fighting(chars, chid);
+        db.stop_fighting(ch);
     }
 
     game.set_fighting(chars, db,objs,chid, tmp_ch_id);

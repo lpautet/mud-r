@@ -24,6 +24,7 @@ use std::rc::Rc;
 use std::{mem, process, slice};
 
 use crate::depot::{Depot, DepotId, HasId};
+use crate::handler::obj_to_char;
 use crate::{ObjData, TextData, VictimRef};
 use log::{error, info};
 
@@ -899,8 +900,9 @@ fn postmaster_receive_mail(
         } else {
             "Mail system error - please report.  Error #11.\r\n".to_string()
         };
-        objs.get_mut(oid).action_description = texts.add_text(mail_content);
-        db.obj_to_char(chars, objs,oid, chid);
+        let obj =  objs.get_mut(oid);
+       obj.action_description = texts.add_text(mail_content);
+        obj_to_char(obj, chars.get_mut(chid));
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
         game.act(chars, db,

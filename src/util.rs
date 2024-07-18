@@ -30,7 +30,7 @@ use rand::Rng;
 use crate::class::CLASS_ABBREVS;
 use crate::constants::STR_APP;
 use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
-use crate::handler::{affected_by_spell, fname};
+use crate::handler::{affect_from_char, affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
@@ -1508,7 +1508,7 @@ impl Game {
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                db.affect_from_char(chars, objs,chid, SPELL_CHARM as i16);
+                affect_from_char(objs,chars.get_mut(chid), SPELL_CHARM as i16);
             }
         } else {
             let master_id: DepotId = ch.master.unwrap();

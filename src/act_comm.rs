@@ -535,7 +535,6 @@ pub fn do_write(
             None,
             TO_ROOM,
         );
-        let ch = chars.get(chid);
         let desc_id = ch.desc.unwrap();
         let desc = game.desc_mut(desc_id);
         desc.string_write(chars,  paper.action_description, MAX_NOTE_LENGTH as usize, 0);

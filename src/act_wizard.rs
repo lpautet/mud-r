@@ -31,7 +31,7 @@ use crate::db::{
 };
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::{update_pos, ATTACK_HIT_TEXT};
-use crate::handler::{get_number, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{affect_remove, affect_total, get_number, obj_to_char, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::house::{hcontrol_list_houses, house_can_enter};
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
@@ -275,16 +275,16 @@ pub fn do_at(
     }
 
     /* a location has been found. */
-    let ch = chars.get(chid);
+    let ch = chars.get_mut(chid);
     let original_loc = ch.in_room();
-    db.char_from_room(chars, objs,chid);
+    db.char_from_room( objs,ch);
     db.char_to_room(chars, objs,chid, location);
     command_interpreter(game, db, chars, texts,objs,chid, &command);
 
     /* check if the char is still there */
-    let ch = chars.get(chid);
+    let ch = chars.get_mut(chid);
     if ch.in_room() == location {
-        db.char_from_room(chars, objs,chid);
+        db.char_from_room(objs, ch);
         db.char_to_room(chars, objs,chid, original_loc);
     }
 }
@@ -316,8 +316,8 @@ pub fn do_goto(
         }
     );
     game.act(chars, db, &buf, true, Some(ch), None, None, TO_ROOM);
-
-    db.char_from_room(chars, objs,chid);
+    let ch = chars.get_mut(chid);
+    db.char_from_room( objs,ch);
     db.char_to_room(chars, objs,chid, location);
     let ch = chars.get(chid);
     let x = ch.poofin();
@@ -374,7 +374,8 @@ pub fn do_trans(
                 TO_ROOM,
             );
             let victim_id = victim.id();
-            db.char_from_room(chars, objs, victim_id);
+            let victim = chars.get_mut(victim_id);
+            db.char_from_room(objs, victim);
             let ch = chars.get(chid);
             db.char_to_room(chars, objs, victim_id, ch.in_room());
             let victim = chars.get(victim_id);
@@ -428,7 +429,8 @@ pub fn do_trans(
                     None,
                     TO_ROOM,
                 );
-                db.char_from_room(chars, objs, victim_id);
+                let victim = chars.get_mut(victim_id);
+                db.char_from_room(objs, victim);
                 let ch = chars.get(chid);
                 db.char_to_room(chars, objs, victim_id, ch.in_room());
                 let victim = chars.get(victim_id);
@@ -504,7 +506,8 @@ pub fn do_teleport(
             TO_ROOM,
         );
         let victim_id = victim.id();
-        db.char_from_room(chars, objs,victim_id);
+        let victim = chars.get_mut(victim_id);
+        db.char_from_room( objs,victim);
         db.char_to_room(chars, objs,victim_id, target);
         let victim = chars.get(victim_id);
         game.act(chars, 
@@ -1991,14 +1994,15 @@ pub fn do_load(
             return;
         }
         let oid = db.read_object(objs,r_num, REAL).unwrap();
+        let obj = objs.get_mut(oid);
+        let ch = chars.get_mut(chid);
         if LOAD_INTO_INVENTORY {
-            db.obj_to_char(chars, objs,oid, chid);
+            obj_to_char(obj, ch);
         } else {
             let ch = chars.get(chid);
-            db.obj_to_room(objs,oid, ch.in_room());
+            db.obj_to_room(obj, ch.in_room());
         }
         let ch = chars.get(chid);
-        let obj = objs.get(oid);
         game.act(chars, 
             db,
             "$n makes a strange magical gesture.",
@@ -2471,7 +2475,7 @@ pub fn do_restore(
         }
         let vict = chars.get_mut(vict_id);
         update_pos(vict);
-        db.affect_total(chars, objs,vict_id);
+        affect_total( objs,vict);
         let vict = chars.get(vict_id);
         let ch = chars.get(chid);
         game.send_to_char(ch, OK);
@@ -3439,13 +3443,13 @@ pub fn do_wizutil(
                 );
             }
             SCMD_UNAFFECT => {
+                let vict = chars.get_mut(vict_id);
                 if vict.affected.len() != 0 {
                     while {
-                        let vict = chars.get(vict_id);
                         vict.affected.len() != 0
                     } {
-                        let af = chars.get(vict_id).affected[0];
-                        db.affect_remove(chars, objs,vict_id, af);
+                        let af = vict.affected[0];
+                        affect_remove( objs,vict, af);
                     }
                     let ch = chars.get(chid);
                     let vict = chars.get(vict_id);
@@ -3455,6 +3459,7 @@ pub fn do_wizutil(
                     );
                     game.send_to_char(ch, "All spells removed.\r\n");
                 } else {
+                    let ch = chars.get(chid);
                     game.send_to_char(ch, "Your victim does not have any affections!\r\n");
                     return;
                 }
@@ -4306,31 +4311,31 @@ fn perform_set(
         }
         4 => {
             vict.points.max_hit = range!(value, 1, 5000) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         5 => {
             vict.points.max_mana = range!(value, 1, 5000) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         6 => {
             vict.points.max_move = range!(value, 1, 5000) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         7 => {
             vict.points.hit = range!(value, -9, vict.points.max_hit) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         8 => {
             vict.points.mana = range!(value, 0, vict.points.max_mana) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         9 => {
             vict.points.movem = range!(value, 0, vict.points.max_move) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         10 => {
             vict.set_alignment(range!(value, -1000, 1000));
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         11 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4340,14 +4345,14 @@ fn perform_set(
             }
             vict.real_abils.str = value as i8;
             vict.real_abils.str_add = 0;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         12 => {
             vict.real_abils.str_add = range!(value, 0, 100) as i8;
             if value > 0 {
                 vict.real_abils.str = 18;
             }
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         13 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4356,7 +4361,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.intel = value as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         14 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4365,7 +4370,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.wis = value as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         15 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4374,7 +4379,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.dex = value as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         16 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4383,7 +4388,7 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.con = value as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         17 => {
             if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
@@ -4392,11 +4397,11 @@ fn perform_set(
                 value = range!(value, 3, 18);
             }
             vict.real_abils.cha = value as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         18 => {
             vict.points.armor = range!(value, -100, 100) as i16;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         19 => {
             vict.set_gold(range!(value, 0, 100000000));
@@ -4409,11 +4414,11 @@ fn perform_set(
         }
         22 => {
             vict.points.hitroll = range!(value, -20, 20) as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         23 => {
             vict.points.damroll = range!(value, -20, 20) as i8;
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
         24 => {
             let ch = chars.get(chid);
@@ -4520,10 +4525,10 @@ fn perform_set(
                 game.send_to_char(ch, "No room exists with that number.\r\n");
                 return false;
             }
-            let vict = chars.get(vict_id);
+            let vict = chars.get_mut(vict_id);
             if vict.in_room() != NOWHERE {
                 /* Another Eric Green special. */
-                db.char_from_room(chars, objs,vict_id);
+                db.char_from_room( objs,vict);
             }
             db.char_to_room(chars, objs,vict_id, rnum);
         }
@@ -4683,12 +4688,12 @@ fn perform_set(
         49 => {
             /* Blame/Thank Rick Glover. :) */
             vict.set_height(value as u8);
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
 
         50 => {
             vict.set_weight(value as u8);
-            db.affect_total(chars, objs,vict_id);
+            affect_total(objs,vict);
         }
 
         _ => {

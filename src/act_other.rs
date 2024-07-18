@@ -25,7 +25,7 @@ use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED
 use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, IDEA_FILE, TYPO_FILE};
 use crate::fight::die;
-use crate::handler::{isname, FIND_CHAR_ROOM};
+use crate::handler::{affect_from_char, affect_to_char, isname, obj_from_char, obj_to_char, FIND_CHAR_ROOM};
 use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
@@ -172,25 +172,23 @@ pub fn do_not_here(
 
 pub fn do_sneak(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
-    let ch = chars.get(chid);
+    let ch = chars.get_mut(chid);
     if ch.is_npc() || ch.get_skill(SKILL_SNEAK) == 0 {
         game.send_to_char(ch, "You have no idea how to do that.\r\n");
         return;
     }
     game.send_to_char(ch, "Okay, you'll try to move silently for a while.\r\n");
-    let ch = chars.get(chid);
     if ch.aff_flagged(AFF_SNEAK) {
-        db.affect_from_char(chars, objs,chid, SKILL_SNEAK as i16);
+        affect_from_char( objs,ch, SKILL_SNEAK as i16);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
-    let ch = chars.get(chid);
     if percent
         > (ch.get_skill(SKILL_SNEAK) as i16 + DEX_APP_SKILL[ch.get_dex() as usize].sneak) as u32
     {
@@ -205,7 +203,7 @@ pub fn do_sneak(
         bitvector: AFF_SNEAK,
     };
 
-    db.affect_to_char(chars, objs, chid, af);
+    affect_to_char( objs, ch, af);
 }
 
 pub fn do_hide(
@@ -358,7 +356,9 @@ pub fn do_steal(
                         TO_NOTVICT,
                     );
                     let eqid = db.unequip_char(chars, objs,vict.id(), the_eq_pos).unwrap();
-                    db.obj_to_char(chars, objs,eqid, chid);
+                    let eq = objs.get_mut(eqid);
+                    let ch = chars.get_mut(chid);
+                    obj_to_char(eq, ch);
                 }
             }
         } else {
@@ -392,9 +392,10 @@ pub fn do_steal(
                 if ch.is_carrying_n() + 1 < ch.can_carry_n() as u8 {
                     if ch.is_carrying_w() + obj.get_obj_weight() < ch.can_carry_w() as i32 {
                         let obj_id = obj.id();
-                        db.obj_from_char(chars, objs,obj_id);
-                        db.obj_to_char(chars, objs,obj_id, chid);
-                        let ch = chars.get(chid);
+                        let obj = objs.get_mut(obj_id);
+                        obj_from_char(chars, obj);
+                        let ch = chars.get_mut(chid);
+                        obj_to_char(obj, ch);
                         game.send_to_char(ch, "Got it!\r\n");
                     }
                 } else {

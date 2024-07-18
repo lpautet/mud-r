@@ -12,6 +12,7 @@
 use std::cmp::{max, min};
 use std::rc::Rc;
 use crate::depot::{Depot, DepotId};
+use crate::handler::{obj_from_obj, obj_to_char};
 use crate::{ObjData, TextData, VictimRef};
 
 use crate::act_comm::do_say;
@@ -709,10 +710,10 @@ pub fn fido(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: &
             None,
             TO_ROOM,
         );
-        for temp in objs.get(i).contains.clone().into_iter() {
-            db.obj_from_obj(chars, objs,temp);
+        for temp_id in objs.get(i).contains.clone().into_iter() {
+            obj_from_obj(chars, objs,temp_id);
             let ch = chars.get(chid);
-            db.obj_to_room(objs,temp, ch.in_room());
+            db.obj_to_room(objs.get_mut(temp_id), ch.in_room());
         }
         db.extract_obj(chars, objs,i);
         return true;
@@ -733,11 +734,12 @@ pub fn janitor(
     if cmd != 0 || !ch.awake() {
         return false;
     }
-    for i in db.world[ch.in_room() as usize].contents.clone().into_iter() { 
-        if !objs.get(i).can_wear(ITEM_WEAR_TAKE) {
+    for i_id in db.world[ch.in_room() as usize].contents.clone().into_iter() { 
+        let i = objs.get_mut(i_id);
+        if !i.can_wear(ITEM_WEAR_TAKE) {
             continue;
         }
-        if objs.get(i).get_obj_type() != ITEM_DRINKCON && objs.get(i).get_obj_cost() >= 15 {
+        if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {
             continue;
         }
         game.act(chars, db,
@@ -748,8 +750,8 @@ pub fn janitor(
             None,
             TO_ROOM,
         );
-        db.obj_from_room(objs,i);
-        db.obj_to_char(chars, objs,i, chid);
+        db.obj_from_room(i);
+        obj_to_char(i, chars.get_mut(chid));
         return true;
     }
 
@@ -892,21 +894,22 @@ pub fn pet_shops(
         let mut buf = String::new();
         let mut pet_name = String::new();
         two_arguments(argument, &mut buf, &mut pet_name);
-        let pet_id = db.get_char_room(chars, &buf, None, pet_room);
-        if pet_id.is_none() || !chars.get(pet_id.unwrap()).is_npc() {
+        let pet = db.get_char_room(chars, &buf, None, pet_room);
+        if pet.is_none() || !pet.unwrap().is_npc() {
             game.send_to_char(ch, "There is no such pet!\r\n");
             return true;
         }
-        let pet_id = pet_id.unwrap();
-        if ch.get_gold() < pet_price(chars.get(pet_id)) {
+        let pet = pet.unwrap();
+        if ch.get_gold() < pet_price(pet) {
             game.send_to_char(ch, "You don't have enough gold!\r\n");
             return true;
         }
-        let pet_price = pet_price(chars.get(pet_id));
+        let pet_price = pet_price(pet);
+        let pet_mob_rnum = pet.get_mob_rnum();
         let ch = chars.get_mut(chid);
         ch.set_gold(ch.get_gold() - pet_price );
 
-        let pet_id = db.read_mobile(chars, chars.get(pet_id).get_mob_rnum(), REAL).unwrap();
+        let pet_id = db.read_mobile(chars, pet_mob_rnum , REAL).unwrap();
         let pet = chars.get_mut(pet_id);
         pet.set_exp(0);
         pet.set_aff_flags_bits(AFF_CHARM);

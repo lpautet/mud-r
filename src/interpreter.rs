@@ -3462,7 +3462,7 @@ fn perform_dupe_check(
 
         /* we've found a duplicate - blow him away, dumping his eq in limbo. */
         if ch.in_room != NOWHERE {
-            db.char_from_room(chars, objs,chid);
+            db.char_from_room( objs,chars.get_mut(chid));
         }
         db.char_to_room(chars, objs,chid, 1);
         db.extract_char(chars, chid);

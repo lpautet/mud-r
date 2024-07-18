@@ -19,7 +19,7 @@ use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
 use crate::db::{DB, VIRTUAL};
 use crate::fight::update_pos;
-use crate::handler::affected_by_spell;
+use crate::handler::{affect_from_char, affect_join, affect_remove, affected_by_spell, obj_from_obj, obj_to_char};
 use crate::spells::{
     spell_recall, MAX_SPELLS, SPELL_ANIMATE_DEAD, SPELL_ARMOR, SPELL_BLESS, SPELL_BLINDNESS,
     SPELL_BURNING_HANDS, SPELL_CALL_LIGHTNING, SPELL_CHILL_TOUCH, SPELL_CLONE, SPELL_COLOR_SPRAY,
@@ -103,7 +103,8 @@ pub fn affect_update(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,o
                         }
                     }
                 }
-                db.affect_remove(chars, objs,i_id, *af);
+                let i = chars.get_mut(i_id);
+                affect_remove(objs,i, *af);
                 false
             }
         });
@@ -562,10 +563,11 @@ pub fn mag_affects(
         return;
     }
 
+    let victim = chars.get_mut(victim_id.unwrap());
     for i in 0..MAX_SPELL_AFFECTS as usize {
         if af[i].bitvector != 0 || af[i].location != APPLY_NONE as u8 {
-            db.affect_join(chars, objs,
-                victim_id.unwrap(),
+            affect_join( objs,
+                victim,
                 &mut af[i],
                 accum_duration,
                 false,
@@ -902,8 +904,10 @@ pub fn mag_summons(
 
         if handle_corpse {
             for tobjid in objs.get(oid.unwrap()).contains.clone() {
-                db.obj_from_obj(chars, objs,tobjid);
-                db.obj_to_char(chars, objs,tobjid, mob_id);
+                obj_from_obj(chars, objs,tobjid);
+                let ch = chars.get_mut(chid);
+                let tobj = objs.get_mut(tobjid);
+                obj_to_char(tobj, ch);
             }
             db.extract_obj( chars, objs,oid.unwrap());
         }
@@ -1004,8 +1008,8 @@ pub fn mag_unaffects(
         }
         return;
     }
-
-    db.affect_from_char(chars, objs,victim_id, spell as i16);
+let victim = chars.get_mut(victim_id);
+    affect_from_char( objs,victim, spell as i16);
     let victim = chars.get(victim_id);
     let ch = chars.get(chid);
     if !to_vict.is_empty() {
@@ -1129,7 +1133,8 @@ pub fn mag_creations(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, 
         return;
     }
     let tobj_id = tobj_id.unwrap();
-    db.obj_to_char(chars, objs,tobj_id, chid);
+    let tobj = objs.get_mut(tobj_id);
+    obj_to_char(tobj, chars.get_mut(chid));
     let ch = chars.get(chid);
     let tobj = objs.get(tobj_id);
     game.act(chars, db, 

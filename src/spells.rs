@@ -17,7 +17,7 @@ use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object
 use crate::config::PK_ALLOWED;
 use crate::constants::{AFFECTED_BITS, APPLY_TYPES, EXTRA_BITS, ITEM_TYPES};
 use crate::fight::compute_armor_class;
-use crate::handler::isname;
+use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
@@ -297,7 +297,7 @@ pub fn spell_create_water(
                  let v = objs.get(obj_id).get_obj_val(1) + water;
                  objs.get_mut(obj_id).set_obj_val(1,v  );
                 name_to_drinkcon( objs, Some(obj_id), LIQ_WATER);
-                weight_change_object(db,chars, objs,obj_id, water);
+                weight_change_object(chars, objs,obj_id, water);
                 let ch = chars.get(chid);
                 let obj = objs.get(obj_id);
                 game.act(chars, db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
@@ -321,7 +321,8 @@ pub fn spell_recall(
     let victim = chars.get(victim_id);
 
     game.act(chars, db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
-    db.char_from_room(chars, objs,victim_id);
+    let victim = chars.get_mut(victim_id);
+    db.char_from_room( objs,victim);
     db.char_to_room(chars, objs,victim_id, db.r_mortal_start_room);
     let victim = chars.get(victim_id);
     game.act(chars, db,
@@ -367,7 +368,8 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    db.char_from_room(chars, objs,victim_id);
+    let victim = chars.get_mut(victim_id);
+    db.char_from_room( objs,victim);
     db.char_to_room(chars, objs,victim_id, to_room as RoomRnum);
     let victim = chars.get(victim_id);
     game.act(chars, db,
@@ -457,8 +459,8 @@ pub fn spell_summon(
         None,
         TO_ROOM,
     );
-
-    db.char_from_room(chars, objs,victim_id);
+    let victim = chars.get_mut(victim_id);
+    db.char_from_room(objs,victim);
     let ch = chars.get(chid);
     db.char_to_room(chars, objs,victim_id, ch.in_room());
     let victim = chars.get(victim_id);
@@ -611,11 +613,11 @@ pub fn spell_charm(
         if ch.get_cha() != 0 {
             af.duration *= ch.get_cha() as i16;
         }
-        let victim = chars.get(victim_id);
+        let victim = chars.get_mut(victim_id);
         if victim.get_int() != 0 {
             af.duration /= victim.get_int() as i16;
         }
-        db.affect_to_char(chars, objs,victim_id, af);
+        affect_to_char( objs,victim, af);
         let victim = chars.get(victim_id);
         let ch = chars.get(chid);
         game.act(chars, db,

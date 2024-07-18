@@ -18,6 +18,7 @@ in the 8000 series... */
 use std::iter::Iterator;
 
 use crate::depot::{Depot, DepotId};
+use crate::handler::obj_to_char;
 use crate::{TextData, VictimRef};
 use log::error;
 
@@ -335,10 +336,10 @@ fn do_npc_rescue(
         TO_NOTVICT,
     );
     if chars.get(chid_bad_guy.unwrap()).fighting_id().is_some() {
-        db.stop_fighting(chars, chid_bad_guy.unwrap());
+        db.stop_fighting(chars.get_mut(chid_bad_guy.unwrap()));
     }
     if chars.get(chid_hero_id).fighting_id().is_some() {
-        db.stop_fighting(chars, chid_hero_id);
+        db.stop_fighting(chars.get_mut(chid_hero_id));
     }
 
     game.set_fighting(chars, db, objs,chid_hero_id, chid_bad_guy.unwrap());
@@ -1103,8 +1104,8 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
         return false;
     }
 
-    for i in db.world[ch.in_room() as usize].contents.clone() {
-        if !is_trash(objs.get(i)) {
+    for i_id in db.world[ch.in_room() as usize].contents.clone() {
+        if !is_trash(objs.get(i_id)) {
             continue;
         }
 
@@ -1128,8 +1129,10 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
                 TO_ROOM,
             );
         }
-        db.obj_from_room(objs,i);
-        db.obj_to_char(chars, objs,i, chid);
+        let i = objs.get_mut(i_id);
+        let ch = chars.get_mut(chid);
+        db.obj_from_room(i);
+        obj_to_char(i,  ch);
         return true;
     }
 

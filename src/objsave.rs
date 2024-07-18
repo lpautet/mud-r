@@ -25,7 +25,7 @@ use crate::config::{
     CRASH_FILE_TIMEOUT, FREE_RENT, MAX_OBJ_SAVE, MIN_RENT_COST, RENT_FILE_TIMEOUT,
 };
 use crate::db::{DB, REAL, VIRTUAL};
-use crate::handler::invalid_align;
+use crate::handler::{invalid_align, obj_from_char, obj_to_char, obj_to_obj};
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
@@ -240,7 +240,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
 
     if location <= 0 {
         /* Inventory */
-        db.obj_to_char(chars, objs,oid, chid);
+        obj_to_char(objs.get_mut(oid), chars.get_mut(chid));
     }
 }
 
@@ -719,8 +719,9 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 }
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
+                    let ch = chars.get_mut(chid);
                     for obj2 in cont_row[j].iter() {
-                        db.obj_to_char(chars, objs,*obj2, chid);
+                        obj_to_char(objs.get_mut(*obj2), ch);
                     }
                     cont_row[j].clear();
                 }
@@ -733,13 +734,14 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                     oid = db.unequip_char(chars, objs,chid, (location - 1) as i8).unwrap();
                     objs.get_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
                     for oid2 in cont_row[0].iter() {
-                        db.obj_to_obj(chars, objs,*oid2, oid);
+                        obj_to_obj(chars, objs,*oid2, oid);
                     }
                     game.equip_char(chars,db, objs,chid, oid, (location - 1) as i8);
                 } else {
                     /* Object isn't container, empty the list. */
+                    let ch = chars.get_mut(chid);
                     for oid2 in cont_row[0].iter() {
-                        db.obj_to_char(chars, objs,*oid2, chid);
+                        obj_to_char(objs.get_mut(*oid2), ch);
                     }
                     cont_row[0].clear();
                 }
@@ -747,6 +749,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         } else {
             /* location <= 0 */
             j = MAX_BAG_ROWS as usize - 1;
+            let ch = chars.get_mut(chid);
             loop {
                 if j == -location as usize {
                     break;
@@ -754,7 +757,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 if cont_row[j].len() != 0 {
                     /* No container, back to inventory. */
                     for obj2 in cont_row[j].iter() {
-                        db.obj_to_char(chars, objs,*obj2, chid);
+                        obj_to_char( objs.get_mut(*obj2), ch);
                     }
                     cont_row[j].clear();
                 }
@@ -762,18 +765,21 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             }
             if j == -location as usize && cont_row[j].len() != 0 {
                 /* Content list exists. */
-                if objs.get(oid).get_obj_type() == ITEM_CONTAINER {
+                let obj = objs.get_mut(oid);
+                if obj.get_obj_type() == ITEM_CONTAINER {
                     /* Take the item, fill it, and give it back. */
-                    db.obj_from_char(chars, objs,oid);
-                    objs.get_mut(oid).contains.clear();
-                    for oid2 in cont_row[j].iter() {
-                        db.obj_to_obj(chars, objs,*oid2, oid);
+                    obj_from_char(chars, obj);
+                    obj.contains.clear();
+                    for &oid2 in cont_row[j].iter() {
+                        obj_to_obj(chars, objs,oid2, oid);
                     }
-                    db.obj_to_char(chars, objs,oid, chid); /* Add to inventory first. */
+                    let obj = objs.get_mut(oid);
+                    obj_to_char(obj, chars.get_mut(chid)); /* Add to inventory first. */
                 } else {
+                    let ch = chars.get_mut(chid);
                     /* Object isn't container, empty content list. */
                     for oid2 in cont_row[j].iter() {
-                        db.obj_to_char(chars, objs,*oid2, chid);
+                        obj_to_char(objs.get_mut(*oid2), ch);
                     }
                     cont_row[j].clear();
                 }
@@ -878,7 +884,7 @@ fn crash_extract_norent_eq(game: &mut Game, chars: &mut Depot<CharData>, db: &mu
         }
         if crash_is_unrentable(objs.get(ch.get_eq(j).unwrap())) {
             let eqid = db.unequip_char(chars, objs,chid, j).unwrap();
-            db.obj_to_char(chars, objs,eqid, chid);
+            obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
         } else {
             crash_extract_norents(game, chars, db, objs,ch.get_eq(j).unwrap());
         }
@@ -1042,7 +1048,7 @@ pub fn crash_idlesave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
             let ch = chars.get(chid);
             if ch.get_eq(j).is_some() {
                 let eqid = db.unequip_char(chars, objs,chid, j).unwrap();
-                db.obj_to_char(chars, objs,eqid, chid);
+                obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
             }
         }
 

@@ -613,12 +613,11 @@ impl Game {
                         let character_id = self.desc(d_id).character.unwrap();
                         let character = chars.get_mut(character_id);
                         character.char_specials.timer = 0;
-                        let character = chars.get(character_id);
                         if self.desc(d_id).state() == ConPlaying
                             && character.get_was_in() != NOWHERE
                         {
                             if character.in_room != NOWHERE {
-                                db.char_from_room(chars, objs,character_id);
+                                db.char_from_room( objs,character);
                             }
                             let character = chars.get(character_id);
                             db.char_to_room(chars, objs,character_id, character.get_was_in());
