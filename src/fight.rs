@@ -119,12 +119,11 @@ macro_rules! is_weapon {
 
 /* The Fight related routines */
 impl Game {
-    pub fn appear(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn appear(&mut self, chars: &mut Depot<CharData>, db: &DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = chars.get_mut(chid);
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
             affect_from_char( objs,ch, SPELL_INVISIBLE as i16);
         }
-        let ch = chars.get_mut(chid);
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
         let ch = chars.get(chid);
         if ch.get_level() < LVL_IMMORT as u8 {
@@ -264,7 +263,7 @@ pub fn update_pos(victim: &mut CharData) {
     }
 }
 
-pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB) {
+pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &DB) {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
@@ -420,8 +419,7 @@ pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: D
 }
 
 impl Game {
-    pub fn death_cry(&mut self, chars: &Depot<CharData>, db: &DB, chid: DepotId) {
-        let ch = chars.get(chid);
+    pub fn death_cry(&mut self, chars: &Depot<CharData>, db: &DB, ch: &CharData) {
         self.act(chars, 
             db,
             "Your blood freezes as you hear $n's death cry.",
@@ -433,7 +431,6 @@ impl Game {
         );
         let ch_in_room = ch.in_room();
         for door in 0..NUM_OF_DIRS {
-            let ch = chars.get(chid);
             if db.can_go(ch, door) {
                 self.send_to_room(
                     chars, db,
@@ -460,7 +457,8 @@ impl Game {
         });
         let ch = chars.get_mut(chid);
         ch.affected = list;
-        self.death_cry(chars, db, chid);
+        let ch = chars.get(chid);
+        self.death_cry(chars, db, ch);
         self.make_corpse(chars, db, objs,chid);
         db.extract_char(chars, chid);
     }
@@ -624,12 +622,10 @@ impl Game {
         &mut self, chars: &Depot<CharData>, 
         db: &DB,
         dam: i32,
-        chid: DepotId,
-        victim_id: DepotId,
+        ch: &CharData,
+        victim: &CharData,
         mut w_type: i32,
     ) {
-        let ch = chars.get(chid);
-        let victim = chars.get(victim_id);
         struct DamWeaponType {
             to_room: &'static str,
             to_char: &'static str,
@@ -724,7 +720,6 @@ impl Game {
         );
 
         /* damage message to damager */
-        let ch = chars.get(chid);
         self.send_to_char(ch, CCYEL!(ch, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_char,
@@ -740,11 +735,9 @@ impl Game {
             Some(VictimRef::Char(victim)),
             TO_CHAR,
         );
-        let ch = chars.get(chid);
         self.send_to_char(ch, CCNRM!(ch, C_CMP));
 
         /* damage message to damagee */
-        let victim = chars.get(victim_id);
         self.send_to_char(victim, CCRED!(victim, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_victim,
@@ -760,7 +753,6 @@ impl Game {
             Some(VictimRef::Char(victim)),
             TO_VICT | TO_SLEEP,
         );
-        let victim = chars.get(victim_id);
         self.send_to_char(victim, CCNRM!(victim, C_CMP));
     }
 
@@ -1089,10 +1081,10 @@ impl Game {
         } else {
             if victim.get_pos() == POS_DEAD || dam == 0 {
                 if self.skill_message(chars, db, objs,dam, ch, victim, attacktype) == 0 {
-                    self.dam_message(chars, db, dam, chid, victim_id, attacktype);
+                    self.dam_message(chars, db, dam, ch, victim, attacktype);
                 }
             } else {
-                self.dam_message(chars, db, dam, chid, victim_id, attacktype);
+                self.dam_message(chars, db, dam, ch, victim, attacktype);
             }
         }
 

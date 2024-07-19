@@ -280,7 +280,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     let ch = chars.get(chid);
     if db.room_flagged(ch.in_room(), ROOM_DEATH) && ch.get_level() < LVL_IMMORT as u8 {
         log_death_trap(game, chars, db, chid);
-        game.death_cry(chars, db, chid);
+        game.death_cry(chars, db, ch);
         db.extract_char(chars, chid);
         return false;
     }

@@ -43,7 +43,6 @@ TO ADD A NEW BOARD, simply follow our easy 4-step program:
 
 */
 
-use std::cell::Cell;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::rc::Rc;
@@ -105,7 +104,7 @@ struct BoardInfoType {
     /* min level to remove messages from this board */
     filename: &'static str,
     /* file to save this board to */
-    rnum: Cell<ObjRnum>,
+    rnum: ObjRnum,
     /* rnum of this board */
 }
 
@@ -154,7 +153,7 @@ impl BoardSystem {
                     write_lvl: 0,
                     remove_lvl: LVL_GOD,
                     filename: "./etc/board.mort",
-                    rnum: Cell::new(0),
+                    rnum: 0,
                 },
                 BoardInfoType {
                     vnum: 3098,
@@ -162,7 +161,7 @@ impl BoardSystem {
                     write_lvl: LVL_IMMORT,
                     remove_lvl: LVL_GRGOD,
                     filename: "./etc/board.immort",
-                    rnum: Cell::new(0),
+                    rnum: 0,
                 },
                 BoardInfoType {
                     vnum: 3097,
@@ -170,7 +169,7 @@ impl BoardSystem {
                     write_lvl: LVL_FREEZE as i16,
                     remove_lvl: LVL_IMPL,
                     filename: "./etc/board.freeze",
-                    rnum: Cell::new(0),
+                    rnum:0,
                 },
                 BoardInfoType {
                     vnum: 3096,
@@ -178,7 +177,7 @@ impl BoardSystem {
                     write_lvl: 0,
                     remove_lvl: LVL_IMMORT,
                     filename: "./etc/board.social",
-                    rnum: Cell::new(0),
+                    rnum: 0,
                 },
             ],
         }
@@ -204,7 +203,7 @@ fn find_board(chars: &Depot<CharData>, db: &DB,objs: &Depot<ObjData>,  chid: Dep
         .iter()
     {
         for i in 0..NUM_OF_BOARDS {
-            if db.boards.boardinfo[i].rnum.get() == objs.get(*oid).get_obj_rnum() {
+            if db.boards.boardinfo[i].rnum == objs.get(*oid).get_obj_rnum() {
                 return Some(i);
             }
         }
@@ -213,7 +212,7 @@ fn find_board(chars: &Depot<CharData>, db: &DB,objs: &Depot<ObjData>,  chid: Dep
     if ch.get_level() >= LVL_IMMORT as u8 {
         for oid in ch.carrying.iter() {
             for i in 0..NUM_OF_BOARDS {
-                if db.boards.boardinfo[i].rnum.get() == objs.get(*oid).get_obj_rnum() {
+                if db.boards.boardinfo[i].rnum == objs.get(*oid).get_obj_rnum() {
                     return Some(i);
                 }
             }
@@ -241,7 +240,7 @@ fn init_boards(db: &mut DB, texts: &mut  Depot<TextData>,) {
             );
             fatal_error = 1;
         } else {
-            db.boards.boardinfo[i].rnum.set(rnum);
+            db.boards.boardinfo[i].rnum = rnum;
         }
         db.boards.num_of_msgs[i] = 0;
         for j in 0..MAX_BOARD_MESSAGES {

@@ -364,12 +364,10 @@ pub fn gain_exp_regardless(
 impl Game {
     pub(crate) fn gain_condition(
         &mut self,
-        chars: &mut Depot<CharData>,
-        chid: DepotId,
+        ch: &mut CharData,
         condition: i32,
         value: i32,
     ) {
-        let ch = chars.get_mut(chid);
         if ch.is_npc() || ch.get_cond(condition) == -1 {
             /* No change */
             return;
@@ -487,10 +485,10 @@ impl Game {
     ) {
         /* characters */
         for &i_id in &db.character_list.clone() {
-            self.gain_condition(chars, i_id, FULL, -1);
-            self.gain_condition(chars, i_id, DRUNK, -1);
-            self.gain_condition(chars, i_id, THIRST, -1);
             let i = chars.get_mut(i_id);
+            self.gain_condition(i, FULL, -1);
+            self.gain_condition(i, DRUNK, -1);
+            self.gain_condition(i, THIRST, -1);
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));

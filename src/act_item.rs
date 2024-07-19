@@ -1667,23 +1667,21 @@ pub fn do_drink(
     let toid = to_obj.id();
     weight_change_object( chars, objs, toid, -weight as i32); /* Subtract amount */
     let to_obj = objs.get(toid);
+    let ch = chars.get_mut(chid);
     game.gain_condition(
-        chars,
-        chid,
+        ch,
         DRUNK,
         DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK as usize] * amount / 4,
     );
     let to_obj = objs.get(toid);
     game.gain_condition(
-        chars,
-        chid,
+        ch,
         FULL,
         DRINK_AFF[to_obj.get_obj_val(2) as usize][FULL as usize] * amount / 4,
     );
     let to_obj = objs.get(toid);
     game.gain_condition(
-        chars,
-        chid,
+        ch,
         THIRST,
         DRINK_AFF[to_obj.get_obj_val(2) as usize][THIRST as usize] * amount / 4,
     );
@@ -1843,9 +1841,8 @@ pub fn do_eat(
         1
     };
     let food_id = food.id();
-    game.gain_condition(chars, chid, FULL, amount);
-    let ch = chars.get(chid);
-
+    let ch = chars.get_mut(chid);
+    game.gain_condition(ch, FULL, amount);
     if ch.get_cond(FULL) > 20 {
         game.send_to_char(ch, "You are full.\r\n");
     }
