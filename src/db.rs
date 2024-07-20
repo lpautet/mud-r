@@ -2791,7 +2791,8 @@ impl Game {
 
 /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
 fn is_empty(game: &Game, db: &DB,chars: &Depot<CharData>, zone_nr: ZoneRnum) -> bool {
-    for i in game.descriptor_list.iter() {
+    for &i_id in &game.descriptor_list {
+        let i = game.desc(i_id);
         if i.state() != ConPlaying {
             continue;
         }
@@ -2863,7 +2864,7 @@ impl Game {
         let ch = chars.get(chid);
         copy_to_stored(
             &mut st.host,
-            self.descriptor_list.get(ch.desc.unwrap()).host.as_ref(),
+            self.desc(ch.desc.unwrap()).host.as_ref(),
         );
 
         unsafe {
@@ -3267,7 +3268,8 @@ impl DB {
  */
 impl Game {
     fn file_to_string_alloc(&mut self, name: &str, buf: &mut Rc<str>) -> i32 {
-        for in_use in self.descriptor_list.iter() {
+        for &in_use_id in &self.descriptor_list {
+            let in_use = self.desc(in_use_id);
             if &in_use.showstr_vector[0].as_ref() == &buf.as_ref() {
                 return -1;
             }
@@ -3280,8 +3282,8 @@ impl Game {
         }
         let temp = r.unwrap();
 
-        for in_use_id in self.descriptor_list.ids() {
-            let in_use = self.descriptor_list.get_mut(in_use_id);
+        for in_use_id in self.descriptor_list.clone() {
+            let in_use = self.desc_mut(in_use_id);
             if in_use.showstr_count == 0 || in_use.showstr_vector[0].as_ref() != buf.as_ref() {
                 continue;
             }

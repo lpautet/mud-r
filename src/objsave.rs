@@ -1728,7 +1728,8 @@ pub fn cryogenicist(
 }
 
 pub fn crash_save_all(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, ) {
-    for d in game.descriptor_list.iter() {
+    for &d in &game.descriptor_list {
+        let d = game.desc(d);
         if d.state() == ConPlaying && !chars.get(d.character.unwrap()).is_npc() {
             if chars.get(d.character.unwrap()).plr_flagged(PLR_CRASH) {
                 crash_crashsave(chars, db, objs,d.character.unwrap());

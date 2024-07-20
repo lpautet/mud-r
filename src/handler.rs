@@ -1041,9 +1041,10 @@ impl Game {
          * we're checking below this loop to the proper value.
          */
         if !ch.is_npc() && ch.desc.is_none() {
-            for d_id in self.descriptor_list.ids() {
-                if self.desc(d_id).original.is_some() && self.desc(d_id).original.unwrap() == chid {
-                    let chid = self.desc(d_id).character.unwrap();
+            for d_id in self.descriptor_list.clone() {
+                let d = self.desc(d_id);
+                if d.original.is_some() && d.original.unwrap() == chid {
+                    let chid = d.character.unwrap();
                     do_return(self, db, chars, texts, objs, chid, "", 0, 0);
                     break;
                 }
@@ -1069,18 +1070,18 @@ impl Game {
                  * for being link-dead, so we want CON_CLOSE to clean everything up.
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
-                for d in self.descriptor_list.ids() {
-                    if d == ch.desc.unwrap() {
+                for d_id in self.descriptor_list.clone() {
+                    if d_id == ch.desc.unwrap() {
                         continue;
                     }
-
-                    if self.descriptor_list.get(d).character.is_some()
+                    let d = self.desc(d_id);
+                    if d.character.is_some()
                         && ch.get_idnum()
                             == chars
-                                .get(self.descriptor_list.get(d).character.unwrap())
+                                .get(d.character.unwrap())
                                 .get_idnum()
                     {
-                        self.descriptor_list.get_mut(d).set_state(ConClose);
+                        self.desc_mut(d_id).set_state(ConClose);
                     }
                 }
                 let ch = chars.get(chid);

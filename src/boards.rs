@@ -617,7 +617,8 @@ fn board_remove_msg(
         );
         return true;
     }
-    for d in game.descriptor_list.iter() {
+    for d_id in game.descriptor_list.clone() {
+        let d = game.desc(d_id);
         if d.state() == ConPlaying
             && d.str.is_some()
             && d.str.unwrap() == db.boards.msg_storage[slot_num]

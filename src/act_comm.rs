@@ -567,10 +567,11 @@ pub fn do_page(
         let buf = format!("\x07\x07*$n* {}", buf2);
         if arg == "all" {
             if ch.get_level() > LVL_GOD as u8 {
-                for d_id in game.descriptor_list.ids() {
-                    if game.desc(d_id).state() == ConPlaying && game.desc(d_id).character.is_some()
+                for d_id in game.descriptor_list.clone() {
+                    let d = game.desc(d_id);
+                    if d.state() == ConPlaying && d.character.is_some()
                     {
-                        let vict_id = game.desc(d_id).character.unwrap();
+                        let vict_id = d.character.unwrap();
                         let vict = chars.get(vict_id);
                         game.act(chars, 
                             db,
@@ -756,20 +757,21 @@ pub fn do_gen_comm(
     let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
 
     /* now send all the strings out */
-    for d_id in game.descriptor_list.ids() {
-        if game.desc(d_id).state() == ConPlaying
+    for d_id in game.descriptor_list.clone() {
+        let d = game.desc(d_id);
+        if d.state() == ConPlaying
             && d_id != ch.desc.unwrap()
-            && game.desc(d_id).character.is_some()
-            && !chars.get(game.desc(d_id).character.unwrap())
+            && d.character.is_some()
+            && !chars.get(d.character.unwrap())
                 .prf_flagged(CHANNELS[subcmd as usize])
-            && !chars.get(game.desc(d_id).character.unwrap())
+            && !chars.get(d.character.unwrap())
                 .plr_flagged(PLR_WRITING)
             && !db.room_flagged(
-                chars.get(game.desc(d_id).character.unwrap()).in_room(),
+                chars.get(d.character.unwrap()).in_room(),
                 ROOM_SOUNDPROOF,
             )
         {
-            let ic_id = game.desc(d_id).character.unwrap();
+            let ic_id = d.character.unwrap();
             let ic = chars.get(ic_id);
             if subcmd == SCMD_SHOUT
                 && (db.world[ch.in_room() as usize].zone != db.world[ic.in_room() as usize].zone
@@ -860,14 +862,15 @@ pub fn do_qcomm(
             buf = argument.to_string();
         }
 
-        for id in game.descriptor_list.ids() {
-            if game.descriptor_list.get(id).state() == ConPlaying
+        for id in game.descriptor_list.clone() {
+            let d = game.desc(id);
+            if d.state() == ConPlaying
                 && id != ch.desc.unwrap()
-                && game.descriptor_list.get(id).character.is_some()
-                && chars.get(game.descriptor_list.get(id).character.unwrap())
+                && d.character.is_some()
+                && chars.get(d.character.unwrap())
                     .prf_flagged(PRF_QUEST)
             {
-                let vict_id = game.descriptor_list.get(id).character.unwrap();
+                let vict_id = d.character.unwrap();
                 let vict = chars.get(vict_id);
                 game.act(chars, 
                     db,

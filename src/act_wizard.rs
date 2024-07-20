@@ -407,13 +407,14 @@ pub fn do_trans(
             return;
         }
 
-        let list = game.descriptor_list.ids();
-        for i in list {
-            if game.descriptor_list.get(i).state() == ConPlaying
-                && game.descriptor_list.get(i).character.is_some()
-                && game.descriptor_list.get(i).character.unwrap() != chid
+        let list = game.descriptor_list.clone();
+        for i_id in list {
+            let i = game.desc(i_id);
+            if i.state() == ConPlaying
+                && i.character.is_some()
+                && i.character.unwrap() != chid
             {
-                let ic = game.descriptor_list.get(i).character;
+                let ic = i.character;
                 let victim_id = ic.unwrap();
                 let victim = chars.get(victim_id);
                 let ch = chars.get(chid);
@@ -1329,7 +1330,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     if k.desc.is_some() {
         buf.clear();
         sprinttype(
-            game.descriptor_list.get(k.desc.unwrap()).state() as i32,
+            game.desc(k.desc.unwrap()).state() as i32,
             &CONNECTED_TYPES,
             &mut buf,
         );
@@ -2600,12 +2601,13 @@ pub fn do_gecho(
     if argument.is_empty() {
         game.send_to_char(ch, "That must be a mistake...\r\n");
     } else {
-        for pt_id in game.descriptor_list.ids() {
-            if game.desc(pt_id).state() == ConPlaying
-                && game.desc(pt_id).character.is_some()
-                && game.desc(pt_id).character.unwrap() != chid
+        for pt_id in game.descriptor_list.clone() {
+            let pt = game.desc(pt_id);
+            if pt.state() == ConPlaying
+                && pt.character.is_some()
+                && pt.character.unwrap() != chid
             {
-                let chid = game.desc(pt_id).character.unwrap();
+                let chid = pt.character.unwrap();
                 let ch = chars.get(chid);
                 game.send_to_char(ch, format!("{}\r\n", argument).as_str());
             }
@@ -2672,7 +2674,7 @@ pub fn do_dc(
     let num_to_dc = num_to_dc.unwrap();
     let mut d_id = None;
     {
-        for cd_id in game.descriptor_list.ids() {
+        for &cd_id in &game.descriptor_list {
             if game.desc(cd_id).desc_num == num_to_dc as usize {
                 d_id = Some(cd_id);
             }
@@ -2970,12 +2972,13 @@ pub fn do_force(
             true,
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
         );
-        for i in game.descriptor_list.ids() {
+        for i_id in game.descriptor_list.clone() {
             let mut vict_id = None;
             let ch = chars.get(chid);
-            if game.desc(i).state() != ConPlaying
+            let i = game.desc(i_id);
+            if i.state() != ConPlaying
                 || {
-                    vict_id = game.desc(i).character;
+                    vict_id = i.character;
                     vict_id.is_none()
                 }
                 || !chars.get(vict_id.unwrap()).is_npc()
@@ -3038,17 +3041,18 @@ pub fn do_wiznet(
 
         '@' => {
             game.send_to_char(ch, "God channel status:\r\n");
-            for d_id in game.descriptor_list.ids() {
-                if game.desc(d_id).state() != ConPlaying
-                    || chars.get(game.desc(d_id).character.unwrap()).get_level() < LVL_IMMORT as u8
+            for d_id in game.descriptor_list.clone() {
+                let d = game.desc(d_id);
+                if d.state() != ConPlaying
+                    || chars.get(d.character.unwrap()).get_level() < LVL_IMMORT as u8
                 {
                     continue;
                 }
                 let ch = chars.get(chid);
-                if !game.can_see(chars, db, ch, chars.get(game.desc(d_id).character.unwrap())) {
+                if !game.can_see(chars, db, ch, chars.get(d.character.unwrap())) {
                     continue;
                 }
-                let dco = game.desc(d_id).character;
+                let dco = d.character;
                 let dc_id = dco.unwrap();
                 let dc = chars.get(dc_id);
                 game.send_to_char(
@@ -3123,22 +3127,24 @@ pub fn do_wiznet(
             argument
         );
     }
-    for d_id in game.descriptor_list.ids() {
+    for d_id in game.descriptor_list.clone() {
         if {
             let ch = chars.get(chid);
-            game.desc(d_id).state() == ConPlaying
-                && chars.get(game.desc(d_id).character.unwrap()).get_level() >= level as u8
-                && !chars.get(game.desc(d_id).character.unwrap())
+            let d = game.desc(d_id);
+            d.state() == ConPlaying
+                && chars.get(d.character.unwrap()).get_level() >= level as u8
+                && !chars.get(d.character.unwrap())
                     .prf_flagged(PRF_NOWIZ)
-                && !chars.get(game.desc(d_id).character.unwrap())
+                && !chars.get(d.character.unwrap())
                     .plr_flagged(PLR_WRITING | PLR_MAILING)
                 && d_id == ch.desc.unwrap()
-                || !chars.get(game.desc(d_id).character.unwrap())
+                || !chars.get(d.character.unwrap())
                     .prf_flagged(PRF_NOREPEAT)
         } {
-            let chid = game.desc(d_id).character.unwrap();
-            game.send_to_char(ch, CCCYN!(chars.get(game.desc(d_id).character.unwrap()), C_NRM));
-            let dc_id = game.desc(d_id).character.unwrap();
+            let d = game.desc(d_id);
+            let chid = d.character.unwrap();
+            let dc_id = d.character.unwrap();
+            game.send_to_char(ch, CCCYN!(chars.get(d.character.unwrap()), C_NRM));
             let dc = chars.get(dc_id);
             let ch = chars.get(chid);
             if game.can_see(chars, db, dc, ch) {
@@ -3816,17 +3822,18 @@ pub fn do_show(
                 ch,
                 "People currently snooping:\r\n--------------------------\r\n",
             );
-            for d_id in game.descriptor_list.ids() {
-                if game.desc(d_id).snooping.borrow().is_none()
-                    || game.desc(d_id).character.is_none()
+            for d_id in game.descriptor_list.clone() {
+                let d = game.desc(d_id);
+                if d.snooping.borrow().is_none()
+                    || d.character.is_none()
                 {
                     continue;
                 }
-                let dco = game.desc(d_id).character;
+                let dco = d.character;
                 let dc_id = dco.unwrap();
                 let dc = chars.get(dc_id);
                 let ch = chars.get(chid);
-                if game.desc(d_id).state() != ConPlaying || ch.get_level() < dc.get_level() {
+                if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
                     continue;
                 }
                 if !game.can_see(chars, db, ch, dc) || dc.in_room() == NOWHERE {
@@ -3837,8 +3844,7 @@ pub fn do_show(
                     ch,
                     format!(
                         "{:10} - snooped by {}.\r\n",
-                        chars.get(game
-                            .desc(game.desc(d_id).snooping.unwrap())
+                        chars.get(game.desc(d.snooping.unwrap())
                             .character
                             .unwrap())
                             .get_name(),

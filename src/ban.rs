@@ -262,7 +262,8 @@ pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db:&DB,  newname: &s
      * will not have a character name yet and other people sitting at the
      * prompt won't have characters yet.
      */
-    for dt in game.descriptor_list.iter() {
+    for &dt_id in &game.descriptor_list {
+        let dt = game.desc(dt_id);
         let character_id = dt.character;
 
         if character_id.is_none() {

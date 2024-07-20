@@ -3375,7 +3375,7 @@ fn perform_dupe_check(
      * Now that this descriptor has successfully logged in, disconnect all
      * other descriptors controlling a character with the same ID number.
      */
-    for k_id in game.descriptor_list.ids() {
+    for k_id in game.descriptor_list.clone() {
         if k_id == d_id {
             continue;
         }

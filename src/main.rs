@@ -221,7 +221,8 @@ impl Default for DescriptorData {
 
 pub struct Game {
     mother_desc: Option<TcpListener>,
-    descriptor_list: Depot<DescriptorData>,
+    descriptors: Depot<DescriptorData>,
+    descriptor_list: Vec<DepotId>,
     last_desc: usize,
     circle_shutdown: bool,
     /* clean shutdown */
@@ -248,7 +249,8 @@ fn main() -> ExitCode {
     let mut port = DFLT_PORT;
 
     let mut game = Game {
-        descriptor_list: Depot::new(),
+        descriptors: Depot::new(),
+        descriptor_list: vec!(),
         last_desc: 0,
         circle_shutdown: false,
         circle_reboot: false,
@@ -450,7 +452,7 @@ impl Game {
         crash_save_all(self, chars, db,objs);
 
         info!("Closing all sockets.");
-        let ids = self.descriptor_list.ids();
+        let ids = self.descriptor_list.clone();
         ids.iter().for_each(|d| self.close_socket(chars, db, texts,objs, *d));
 
         self.mother_desc = None;
@@ -495,11 +497,11 @@ fn get_max_players() -> i32 {
  */
 impl Game {
     pub fn desc(&self, desc_id: DepotId) -> &DescriptorData {
-        self.descriptor_list.get(desc_id)
+        self.descriptors.get(desc_id)
     }
 
     pub fn desc_mut(&mut self, desc_id: DepotId) -> &mut DescriptorData {
-        self.descriptor_list.get_mut(desc_id)
+        self.descriptors.get_mut(desc_id)
     }
 
     fn game_loop(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
@@ -569,7 +571,7 @@ impl Game {
 
             /* Process descriptors with input pending */
             let mut buf = [0u8];
-            for d_id in self.descriptor_list.ids() {
+            for d_id in self.descriptor_list.clone() {
                 match self.desc(d_id).stream.as_ref().unwrap().peek(&mut buf) {
                     Ok(size) if size != 0 => {
                         self.process_input(d_id);
@@ -581,8 +583,7 @@ impl Game {
             }
 
             /* Process commands we just read from process_input */
-            let desc_ids = self.descriptor_list.ids();
-            for d_id in desc_ids {
+            for d_id in self.descriptor_list.clone() {
                 /*
                  * Not combined to retain --(d->wait) behavior. -gg 2/20/98
                  * If no wait state, no subtraction.  If there is a wait
@@ -666,7 +667,7 @@ impl Game {
             }
 
             /* Send queued output out to the operating system (ultimately to user). */
-            for d_id in self.descriptor_list.ids() {
+            for d_id in self.descriptor_list.clone() {
                 let desc = self.desc_mut(d_id);
                 if !desc.output.is_empty() {
                     self.process_output(chars, d_id);
@@ -678,7 +679,7 @@ impl Game {
             }
 
             /* Print prompts for other descriptors who had no other output */
-            for d_id in self.descriptor_list.ids() {
+            for d_id in self.descriptor_list.clone() {
                 let d = self.desc_mut(d_id);
                 if !d.has_prompt && d.output.is_empty() {
                     let text = &d.make_prompt(chars);
@@ -689,7 +690,7 @@ impl Game {
             }
 
             /* Kick out folks in the ConClose or ConDisconnect state */
-            let desc_ids = self.descriptor_list.ids();
+            let desc_ids = self.descriptor_list.clone();
             for id in desc_ids {
                 let d = self.desc(id);
                 if d.state() == ConClose || d.state() == ConDisconnect {
@@ -813,7 +814,8 @@ impl Game {
         let mut sockets_connected = 0;
         let mut sockets_playing = 0;
 
-        for d in self.descriptor_list.iter() {
+        for &d_id in &self.descriptor_list {
+            let d = self.desc(d_id);
             sockets_connected += 1;
             if d.state() == ConPlaying {
                 sockets_playing += 1;
@@ -1030,7 +1032,8 @@ impl Game {
         newd.write_to_output(&db.greetings);
 
         /* append to list */
-        self.descriptor_list.push(newd);
+        let newd_id = self.descriptors.push(newd);
+        self.descriptor_list.push(newd_id);
     }
 }
 
@@ -1417,8 +1420,9 @@ impl DescriptorData {
     }
 }
 impl Game {
-    pub fn close_socket(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, d: DepotId) {
-        let mut desc: DescriptorData = self.descriptor_list.take(d);
+    pub fn close_socket(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, d_id: DepotId) {
+        self.descriptor_list.retain(|&i| i != d_id);
+        let mut desc: DescriptorData = self.descriptors.take(d_id);
 
         desc.stream
             .as_mut()
@@ -1512,7 +1516,7 @@ impl Game {
 
     fn check_idle_passwords(&mut self) {
         //struct descriptor_data * d, * next_d;
-        for d_id in self.descriptor_list.ids() {
+        for d_id in self.descriptor_list.clone() {
             let desc = self.desc_mut(d_id);
             if desc.state() != ConPassword && desc.state() != ConGetName {
                 continue;
@@ -1666,7 +1670,7 @@ impl Game {
             return;
         }
 
-        for d_id in self.descriptor_list.ids() {
+        for d_id in self.descriptor_list.clone() {
             let t = self.desc_mut(d_id);
             if t.state() != ConPlaying {
                 continue;
@@ -1682,7 +1686,7 @@ impl Game {
             return;
         }
 
-        for desc_id in self.descriptor_list.ids() {
+        for desc_id in self.descriptor_list.clone() {
             let desc = self.desc(desc_id);
             if desc.state() != ConPlaying || desc.character.borrow().is_none() {
                 continue;

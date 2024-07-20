@@ -1468,16 +1468,17 @@ pub fn do_who(
     game.send_to_char(ch, "Players\r\n-------\r\n");
     let mut num_can_see = 0;
 
-    for d_id in game.descriptor_list.ids() {
-        if game.desc(d_id).state() != ConPlaying {
+    for d_id in game.descriptor_list.clone() {
+        let d = game.desc(d_id);
+        if d.state() != ConPlaying {
             continue;
         }
 
         let tch_id;
-        if game.desc(d_id).original.is_some() {
-            tch_id = game.desc(d_id).original;
+        if d.original.is_some() {
+            tch_id = d.original;
         } else if {
-            tch_id = game.desc(d_id).character;
+            tch_id = d.character;
             tch_id.is_none()
         } {
             continue;
@@ -1692,19 +1693,20 @@ pub fn do_users(
     );
 
     one_argument(argument, &mut arg);
-    for d_id in game.descriptor_list.ids() {
-        if game.desc(d_id).state() != ConPlaying && playing {
+    for d_id in game.descriptor_list.clone() {
+        let d = game.desc(d_id);
+        if d.state() != ConPlaying && playing {
             continue;
         }
-        if game.desc(d_id).state() == ConPlaying && deadweight {
+        if d.state() == ConPlaying && deadweight {
             continue;
         }
-        if game.desc(d_id).state() == ConPlaying {
+        if d.state() == ConPlaying {
             let character;
-            if game.desc(d_id).original.is_some() {
-                character = game.desc(d_id).original;
+            if d.original.is_some() {
+                character = d.original;
             } else if {
-                character = game.desc(d_id).character;
+                character = d.character;
                 character.is_none()
             } {
                 continue;
@@ -1712,7 +1714,7 @@ pub fn do_users(
             let tch_id = character.unwrap();
             let tch = chars.get(tch_id);
 
-            if !host_search.is_empty() && !game.desc(d_id).host.contains(&host_search) {
+            if !host_search.is_empty() && !d.host.contains(&host_search) {
                 continue;
             }
             if !name_search.is_empty() && tch.get_name().as_ref() != &name_search {
@@ -1735,40 +1737,40 @@ pub fn do_users(
                 continue;
             }
 
-            if game.desc(d_id).original.is_some() {
+            if d.original.is_some() {
                 classname = format!(
                     "[{:2} {}]",
-                    chars.get(game.desc(d_id).original.unwrap()).get_level(),
-                    chars.get(game.desc(d_id).original.unwrap()).class_abbr()
+                    chars.get(d.original.unwrap()).get_level(),
+                    chars.get(d.original.unwrap()).class_abbr()
                 );
             } else {
                 classname = format!(
                     "[{:2} {}]",
-                    chars.get(game.desc(d_id).character.unwrap()).get_level(),
-                    chars.get(game.desc(d_id).character.unwrap()).class_abbr()
+                    chars.get(d.character.unwrap()).get_level(),
+                    chars.get(d.character.unwrap()).class_abbr()
                 );
             }
         } else {
             classname = "   -   ".to_string();
         }
 
-        let timeptr = game.desc(d_id).login_time.elapsed().as_secs().to_string();
+        let timeptr = d.login_time.elapsed().as_secs().to_string();
 
         let state;
-        if game.desc(d_id).state() == ConPlaying && game.desc(d_id).original.is_some() {
+        if d.state() == ConPlaying && d.original.is_some() {
             state = "Switched";
         } else {
-            state = CONNECTED_TYPES[game.desc(d_id).state() as usize];
+            state = CONNECTED_TYPES[d.state() as usize];
         }
 
         let idletime;
-        if game.desc(d_id).character.is_some()
-            && game.desc(d_id).state() == ConPlaying
-            && chars.get(game.desc(d_id).character.unwrap()).get_level() < LVL_GOD as u8
+        if d.character.is_some()
+            && d.state() == ConPlaying
+            && chars.get(d.character.unwrap()).get_level() < LVL_GOD as u8
         {
             idletime = format!(
                 "{:3}",
-                chars.get(game.desc(d_id).character.unwrap())
+                chars.get(d.character.unwrap())
                     .char_specials
                     .timer
                     * SECS_PER_MUD_HOUR as i32
@@ -1780,22 +1782,22 @@ pub fn do_users(
 
         let mut line = format!(
             "{:3} {:7} {:12} {:14} {:3} {:8} ",
-            game.desc(d_id).desc_num,
+            d.desc_num,
             classname,
             if game.desc(d_id).original.is_some()
-                && !chars.get(game.desc(d_id).original.unwrap())
+                && !chars.get(d.original.unwrap())
                     .player
                     .name
                     .is_empty()
             {
-                &chars.get(game.desc(d_id).original.unwrap()).player.name
-            } else if game.desc(d_id).character.is_some()
-                && !chars.get(game.desc(d_id).character.unwrap())
+                &chars.get(d.original.unwrap()).player.name
+            } else if d.character.is_some()
+                && !chars.get(d.character.unwrap())
                     .player
                     .name
                     .is_empty()
             {
-                &chars.get(game.desc(d_id).character.unwrap()).player.name
+                &chars.get(d.character.unwrap()).player.name
             } else {
                 "UNDEFINED"
             },
@@ -1804,13 +1806,13 @@ pub fn do_users(
             timeptr
         );
 
-        if !game.desc(d_id).host.is_empty() {
-            line.push_str(&format!("[{}]\r\n", game.desc(d_id).host));
+        if !d.host.is_empty() {
+            line.push_str(&format!("[{}]\r\n", d.host));
         } else {
             line.push_str("[Hostname unknown]\r\n");
         }
 
-        if game.desc(d_id).state() != ConPlaying {
+        if d.state() != ConPlaying {
             let ch = chars.get(chid);
             line.push_str(&format!(
                 "{}{}{}",
@@ -1820,9 +1822,9 @@ pub fn do_users(
             ));
         }
         let ch = chars.get(chid);
-        if game.desc(d_id).state() != ConPlaying
-            || (game.desc(d_id).state() == ConPlaying
-                && game.can_see(chars, db, ch, chars.get(game.desc(d_id).character.unwrap())))
+        if d.state() != ConPlaying
+            || (d.state() == ConPlaying
+                && game.can_see(chars, db, ch, chars.get(d.character.unwrap())))
         {
             game.send_to_char(ch, &line);
             num_can_see += 1;
@@ -1894,19 +1896,20 @@ fn perform_mortal_where(game: &mut Game, db: &DB,chars: &Depot<CharData>, chid: 
     let ch = chars.get(chid);
     if arg.is_empty() {
         game.send_to_char(ch, "Players in your Zone\r\n--------------------\r\n");
-        for d_id in game.descriptor_list.ids() {
-            if game.desc(d_id).state() != ConPlaying
-                || (game.desc(d_id).character.is_some()
-                    && game.desc(d_id).character.unwrap() == chid)
+        for d_id in game.descriptor_list.clone() {
+            let d = game.desc(d_id);
+            if d.state() != ConPlaying
+                || (d.character.is_some()
+                    && d.character.unwrap() == chid)
             {
                 continue;
             }
             let i;
             if {
-                i = if game.desc(d_id).original.is_some() {
-                    game.desc(d_id).original
+                i = if d.original.is_some() {
+                    d.original
                 } else {
-                    game.desc(d_id).character
+                   d.character
                 };
                 i.is_none()
             } {
@@ -2029,12 +2032,13 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
 
     if arg.is_empty() {
         game.send_to_char(ch, "Players\r\n-------\r\n");
-        for d_id in game.descriptor_list.ids() {
-            if game.desc(d_id).state() == ConPlaying {
-                let oi = if game.desc(d_id).original.is_some() {
-                    game.desc(d_id).original.as_ref()
+        for d_id in game.descriptor_list.clone() {
+            let d = game.desc(d_id);
+            if d.state() == ConPlaying {
+                let oi = if d.original.is_some() {
+                    d.original.as_ref()
                 } else {
-                    game.desc(d_id).character.as_ref()
+                    d.character.as_ref()
                 };
                 if oi.is_none() {
                     continue;
@@ -2043,14 +2047,14 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
                 let i_id = *oi.unwrap();
                 let i = chars.get(i_id);
                 if game.can_see(chars, db, ch, i) && (i.in_room() != NOWHERE) {
-                    if game.desc(d_id).original.is_some() {
+                    if d.original.is_some() {
                         let messg = format!(
                             "{:20} - [{:5}] {} (in {})\r\n",
                             i.get_name(),
-                            db.get_room_vnum(chars.get(game.desc(d_id).character.unwrap()).in_room),
-                            db.world[chars.get(game.desc(d_id).character.unwrap()).in_room as usize]
+                            db.get_room_vnum(chars.get(d.character.unwrap()).in_room),
+                            db.world[chars.get(d.character.unwrap()).in_room as usize]
                                 .name,
-                            chars.get(game.desc(d_id).character.unwrap()).get_name()
+                            chars.get(d.character.unwrap()).get_name()
                         );
                         game.send_to_char(ch, messg.as_str());
                     } else {

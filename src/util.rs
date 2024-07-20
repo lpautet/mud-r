@@ -1298,7 +1298,7 @@ impl Game {
 
         let buf = format!("[ {} ]", msg);
 
-        for d_id in self.descriptor_list.ids() {
+        for d_id in self.descriptor_list.clone() {
             if self.desc(d_id).state() != ConPlaying {
                 /* switch */
                 continue;
