@@ -4838,6 +4838,6 @@ pub fn do_set(
         }
     }
     if is_file {
-        chars.take(vict_id);
+        db.free_char(&mut game.descriptors, chars, objs, vict_id);
     }
 }

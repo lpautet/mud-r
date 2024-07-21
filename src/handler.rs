@@ -901,10 +901,6 @@ impl DB {
         objs: &mut Depot<ObjData>,
         oid: DepotId,
     ) {
-        // if db.get_obj_vnum(objs.get(oid)) == 3034 { // TODO: remove
-        // info!("Extracting {}", objs.get(oid).name);
-        // println!("Custom backtrace: {}", std::backtrace::Backtrace::force_capture());
-        // }
         let tch_id = &objs.get(oid).worn_by;
         if tch_id.is_some() {
             if self
@@ -935,11 +931,12 @@ impl DB {
         }
 
         self.object_list.retain(|&i| i != oid);
-        let obj = objs.take(oid);
-
+        let obj = objs.get(oid);
         if obj.get_obj_rnum() != NOTHING {
             self.obj_index[obj.get_obj_rnum() as usize].number -= 1;
         }
+
+        self.free_obj(objs, oid);
     }
 }
 fn update_object_list(objs: &mut Depot<ObjData>, list: Vec<DepotId>, _use: i32) {
@@ -1158,8 +1155,10 @@ impl Game {
         }
 
         /* If there's a descriptor, they're in the menu now. */
-        // if (IS_NPC(ch) || !ch . desc)
-        // free_char(ch);
+        let ch = chars.get(chid);
+        if ch.is_npc() || ch.desc.is_none() {
+            db.free_char(&mut self.descriptors, chars, objs, chid)
+        }
     }
 }
 impl DB {
@@ -1206,8 +1205,6 @@ impl Game {
         texts: &mut Depot<TextData>,
         objs: &mut Depot<ObjData>,
     ) {
-        // struct char_data * vict, * next_vict, * prev_vict;
-
         if db.extractions_pending < 0 {
             error!(
                 "SYSERR: Negative ({}) extractions pending.",
@@ -1216,16 +1213,18 @@ impl Game {
         }
 
         for &vict_id in &db.character_list.clone() {
-            if chars.get(vict_id).mob_flagged(MOB_NOTDEADYET) {
-                chars.get_mut(vict_id).remove_mob_flags_bit(MOB_NOTDEADYET);
-            } else if chars.get(vict_id).plr_flagged(PLR_NOTDEADYET) {
-                chars.get_mut(vict_id).remove_plr_flag(PLR_NOTDEADYET);
+            let vict = chars.get_mut(vict_id);
+            if vict.mob_flagged(MOB_NOTDEADYET) {
+                vict.remove_mob_flags_bit(MOB_NOTDEADYET);
+            } else if vict.plr_flagged(PLR_NOTDEADYET) {
+                vict.remove_plr_flag(PLR_NOTDEADYET);
             } else {
                 /* Last non-free'd character to continue chain from. */
                 continue;
             }
 
             self.extract_char_final(chars, db, texts, objs, vict_id);
+            db.character_list.retain(|&i| i != vict_id);
             db.extractions_pending -= 1;
         }
 

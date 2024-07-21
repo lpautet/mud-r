@@ -53,7 +53,7 @@ use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
-use crate::depot::{Depot, DepotId};
+use crate::depot::{Depot, DepotId, HasId};
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
@@ -3477,13 +3477,15 @@ fn perform_dupe_check(
 
     /* Okay, we've found a target.  Connect d to target. */
     let desc = game.desc_mut(d_id);
+    let desc_char_id = desc.character.unwrap();
+    db.free_char(&mut game.descriptors, chars, objs, desc_char_id);
+    let desc = game.desc_mut(d_id);
     desc.character = Some(target_id);
     {
         let character_id = desc.character.unwrap();
         let character = chars.get_mut(character_id);
         character.desc = Some(d_id);
         desc.original = None;
-        let character = chars.get_mut(character_id);
         character.char_specials.timer = 0;
         character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
         character.remove_aff_flags(AFF_GROUP);
@@ -3556,7 +3558,6 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                 clear_char(&mut ch);
                 ch.desc = Some(d_id);
                 let chid = chars.push(ch);
-                db.character_list.push(chid); // TODO not here !
                 desc.character = Some(chid);
             }
 
@@ -3588,10 +3589,8 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
 
                     if character.prf_flagged(PLR_DELETED) {
                         /* We get a false positive from the original deleted character. */
-                        db.character_list.retain(|&i| i != desc.character.unwrap()); // TODO to remove
-                        chars.take(desc.character.unwrap());
                         desc.character = None;
-                        //free_char(d->character);
+                        db.free_char(&mut game.descriptors, chars, objs, character_id);
                         /* Check for multiple creations... */
                         if !valid_name(game, chars, db, tmp_name.unwrap()) {
                             let desc = game.desc_mut(d_id);
@@ -3607,7 +3606,6 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         new_char.player.name = Rc::from(tmp_name.unwrap());
                         new_char.pfilepos = player_i.unwrap() as i32;
                         let new_char_id = chars.push(new_char);
-                        db.character_list.push(new_char_id); // TODO remove
                         desc.character = Some(new_char_id);
                         desc.write_to_output(
                             format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
@@ -3684,8 +3682,9 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                 desc.set_state(ConNewpasswd);
             } else if arg.starts_with('n') || arg.starts_with('N') {
                 desc.write_to_output("Okay, what IS it, then? ");
-                //free_char(d->character);
                 desc.set_state(ConGetName);
+                let chid = desc.character.unwrap();
+                db.free_char(&mut game.descriptors, chars, objs, chid );
             } else {
                 desc.write_to_output("Please type Yes or No: ");
             }
@@ -3999,7 +3998,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         }
 
                         game.send_to_char(character, format!("{}", WELC_MESSG).as_str());
-                        //db.character_list.push(character);
+                        db.character_list.push(character.id());
                         db.char_to_room(chars, objs, character_id, load_room);
                         load_result = crash_load(game, chars, db, texts, objs,character_id);
 

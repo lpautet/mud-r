@@ -102,25 +102,29 @@ pub struct TextData {
 
 impl Default for TextData {
     fn default() -> Self {
-        Self { id: Default::default(), text: Default::default() }
+        Self {
+            id: Default::default(),
+            text: Default::default(),
+        }
     }
 }
 
 impl Depot<TextData> {
-
     pub fn add_text(&mut self, text: String) -> DepotId {
-        self.push(TextData{id: DepotId::default(), text})
+        self.push(TextData {
+            id: DepotId::default(),
+            text,
+        })
     }
 }
 
-
 impl HasId for TextData {
     fn id(&self) -> DepotId {
-       self.id
+        self.id
     }
 
     fn set_id(&mut self, id: DepotId) {
-       self.id = id;
+        self.id = id;
     }
 }
 
@@ -250,7 +254,7 @@ fn main() -> ExitCode {
 
     let mut game = Game {
         descriptors: Depot::new(),
-        descriptor_list: vec!(),
+        descriptor_list: vec![],
         last_desc: 0,
         circle_shutdown: false,
         circle_reboot: false,
@@ -404,16 +408,16 @@ fn main() -> ExitCode {
     } else {
         info!("Running game on port {}.", port);
         game.mother_desc = Some(init_socket(port));
-        game.init_game(&mut chars,&mut db, &mut texts, &mut objs, port,);
+        game.init_game(&mut chars, &mut db, &mut texts, &mut objs, port);
     }
 
     info!("Clearing game world.");
-    db.destroy_db(&mut chars,&mut objs);
+    db.destroy_db(&mut game.descriptors, &mut chars, &mut objs);
 
     if !db.scheck {
         info!("Clearing other memory.");
         db.free_player_index(); /* db.rs */
-        free_messages( &mut db); /* fight.rs */
+        free_messages(&mut db); /* fight.rs */
         db.mails.clear_free_list(); /* mail.rs */
         db.free_text_files(); /* db.rs */
         board_clear_all(&mut db.boards, &mut texts); /* boards.rs */
@@ -429,7 +433,14 @@ fn main() -> ExitCode {
 
 impl Game {
     /* Init sockets, run game, and cleanup sockets */
-    fn init_game(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,_port: u16) {
+    fn init_game(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+        _port: u16,
+    ) {
         /* We don't want to restart if we crash before we get up. */
         touch(Path::new(KILLSCRIPT_FILE)).expect("Cannot create KILLSCRIPT path");
 
@@ -449,11 +460,12 @@ impl Game {
 
         self.game_loop(chars, db, texts, objs);
 
-        crash_save_all(self, chars, db,objs);
+        crash_save_all(self, chars, db, objs);
 
         info!("Closing all sockets.");
         let ids = self.descriptor_list.clone();
-        ids.iter().for_each(|d| self.close_socket(chars, db, texts,objs, *d));
+        ids.iter()
+            .for_each(|d| self.close_socket(chars, db, texts, objs, *d));
 
         self.mother_desc = None;
 
@@ -504,7 +516,13 @@ impl Game {
         self.descriptors.get_mut(desc_id)
     }
 
-    fn game_loop(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
+    fn game_loop(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+    ) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
         let mut before_sleep;
@@ -618,14 +636,15 @@ impl Game {
                             && character.get_was_in() != NOWHERE
                         {
                             if character.in_room != NOWHERE {
-                                db.char_from_room( objs,character);
+                                db.char_from_room(objs, character);
                             }
                             let character = chars.get(character_id);
-                            db.char_to_room(chars, objs,character_id, character.get_was_in());
+                            db.char_to_room(chars, objs, character_id, character.get_was_in());
                             let character = chars.get_mut(character_id);
                             character.set_was_in(NOWHERE);
                             let character = chars.get(character_id);
-                            self.act(chars, 
+                            self.act(
+                                chars,
                                 db,
                                 "$n has returned.",
                                 true,
@@ -650,19 +669,19 @@ impl Game {
                     show_string(self, chars, d_id, &comm);
                 } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
-                    nanny(self, db,chars, texts, objs,d_id, &comm);
+                    nanny(self, db, chars, texts, objs, d_id, &comm);
                 } else {
                     /* else: we're playing normally. */
                     if aliased {
                         /* To prevent recursive aliases. */
                         self.desc_mut(d_id).has_prompt = true; /* To get newline before next cmd output. */
-                    } else if perform_alias(self, chars,d_id, &mut comm) {
+                    } else if perform_alias(self, chars, d_id, &mut comm) {
                         /* Run it through aliasing system */
                         get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased);
                     }
                     /* Send it to interpreter */
                     let chid = self.desc(d_id).character.unwrap();
-                    command_interpreter(self, db, chars, texts, objs,chid, &comm);
+                    command_interpreter(self, db, chars, texts, objs, chid, &comm);
                 }
             }
 
@@ -752,7 +771,14 @@ impl Game {
 }
 
 impl Game {
-    fn heartbeat(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, pulse: u128) {
+    fn heartbeat(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+        pulse: u128,
+    ) {
         if pulse % PULSE_ZONE == 0 {
             self.zone_update(db, chars, objs);
         }
@@ -763,17 +789,17 @@ impl Game {
         }
 
         if pulse % PULSE_MOBILE == 0 {
-            self.mobile_activity(chars, db, texts,objs);
+            self.mobile_activity(chars, db, texts, objs);
         }
 
         if pulse % PULSE_VIOLENCE == 0 {
-            self.perform_violence(chars, db, texts,objs);
+            self.perform_violence(chars, db, texts, objs);
         }
 
         if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
             self.weather_and_time(chars, db, 1);
-            affect_update(self, chars, db,objs);
-            self.point_update(chars, db, texts,objs);
+            affect_update(self, chars, db, objs);
+            self.point_update(chars, db, texts, objs);
             //fflush(player_fl);
         }
 
@@ -782,8 +808,8 @@ impl Game {
             self.mins_since_crashsave += 1;
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave = 0;
-                crash_save_all(self, chars, db,objs);
-                house_save_all(chars, db,objs);
+                crash_save_all(self, chars, db, objs);
+                house_save_all(chars, db, objs);
             }
         }
 
@@ -881,7 +907,8 @@ impl DescriptorData {
 
             prompt.push_str("> ");
         } else if self.connected == ConPlaying && chars.get(self.character.unwrap()).is_npc() {
-            prompt.push_str(format!("{}s>", chars.get(self.character.unwrap()).get_name()).as_str());
+            prompt
+                .push_str(format!("{}s>", chars.get(self.character.unwrap()).get_name()).as_str());
         }
 
         prompt
@@ -970,7 +997,13 @@ fn get_bind_addr() -> IpAddr {
 }
 
 impl Game {
-    fn new_descriptor(&mut self, chars: &Depot<CharData>, db: &DB, mut stream: TcpStream, addr: SocketAddr) {
+    fn new_descriptor(
+        &mut self,
+        chars: &Depot<CharData>,
+        db: &DB,
+        mut stream: TcpStream,
+        addr: SocketAddr,
+    ) {
         stream
             .set_nonblocking(true)
             .expect("Error with setting nonblocking");
@@ -1009,7 +1042,8 @@ impl Game {
                 .unwrap()
                 .shutdown(Shutdown::Both)
                 .expect("shutdowning socket which is banned");
-            self.mudlog(chars,
+            self.mudlog(
+                chars,
                 CMP,
                 LVL_GOD as i32,
                 true,
@@ -1420,9 +1454,16 @@ impl DescriptorData {
     }
 }
 impl Game {
-    pub fn close_socket(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, d_id: DepotId) {
+    pub fn close_socket(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+        d_id: DepotId,
+    ) {
         self.descriptor_list.retain(|&i| i != d_id);
-        let mut desc: DescriptorData = self.descriptors.take(d_id);
+        let desc = self.descriptors.get_mut(d_id);
 
         desc.stream
             .as_mut()
@@ -1433,15 +1474,18 @@ impl Game {
 
         /* Forget snooping */
         if desc.snooping.is_some() {
-            self.desc_mut(desc.snooping.unwrap()).snoop_by = None;
+            let snooping_id = desc.snooping.unwrap();
+            self.desc_mut(snooping_id).snoop_by = None;
         }
-
+        let desc = self.descriptors.get_mut(d_id);
         if desc.snoop_by.is_some() {
-            let snooper = self.desc_mut(desc.snoop_by.unwrap());
+            let snooper_id = self.desc(d_id).snoop_by.unwrap();
+            let snooper = self.desc_mut(snooper_id);
             snooper.write_to_output("Your victim is no longer among us.\r\n");
+            let desc = self.descriptors.get_mut(d_id);
             desc.snoop_by = None;
         }
-
+        let desc = self.descriptors.get_mut(d_id);
         match desc.character.as_ref() {
             Some(character_id) => {
                 /* If we're switched, this resets the mobile taken. */
@@ -1457,7 +1501,8 @@ impl Game {
                         };
 
                         /* We are guaranteed to have a person. */
-                        self.act(chars, 
+                        self.act(
+                            chars,
                             db,
                             "$n has lost $s link.",
                             true,
@@ -1466,21 +1511,27 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.save_char(db, chars, texts, objs,link_challenged_id);
-                        self.mudlog(chars,
+                        self.save_char(db, chars, texts, objs, link_challenged_id);
+                        self.mudlog(
+                            chars,
                             NRM,
                             max(
                                 LVL_IMMORT as i32,
                                 chars.get(link_challenged_id).get_invis_lev() as i32,
                             ),
                             true,
-                            format!("Closing link to: {}.", chars.get(link_challenged_id).get_name())
-                                .as_str(),
+                            format!(
+                                "Closing link to: {}.",
+                                chars.get(link_challenged_id).get_name()
+                            )
+                            .as_str(),
                         );
                     }
                     _ => {
                         let name = chars.get(desc.character.unwrap()).get_name();
-                        self.mudlog(chars,
+                        let char_id = desc.character.unwrap();
+                        self.mudlog(
+                            chars,
                             CMP,
                             LVL_IMMORT as i32,
                             true,
@@ -1494,12 +1545,13 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        db.free_char(chars, objs, desc.character.unwrap());
+                        db.free_char(&mut self.descriptors, chars, objs, char_id);
                     }
                 }
             }
             None => {
-                self.mudlog(chars,
+                self.mudlog(
+                    chars,
                     CMP,
                     LVL_IMMORT as i32,
                     true,
@@ -1507,11 +1559,13 @@ impl Game {
                 );
             }
         }
-
+        let desc = self.descriptors.get_mut(d_id);
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
-        if desc.original.is_some() && chars.get(desc.original.unwrap()).desc.borrow().is_some() {
+        if desc.original.is_some() && chars.get(desc.original.unwrap()).desc.is_some() {
             chars.get_mut(desc.original.unwrap()).desc = None;
         }
+
+        self.descriptors.take(d_id);
     }
 
     fn check_idle_passwords(&mut self) {
@@ -1671,13 +1725,11 @@ impl Game {
         }
 
         for d_id in self.descriptor_list.clone() {
-            let t = self.desc_mut(d_id);
-            if t.state() != ConPlaying {
+            let d = self.desc_mut(d_id);
+            if d.state() != ConPlaying {
                 continue;
             }
-            let desc = self.desc_mut(d_id);
-
-            desc.write_to_output(messg);
+            d.write_to_output(messg);
         }
     }
 
@@ -1719,7 +1771,8 @@ const ACTNULL: &str = "<NULL>";
 impl Game {
     /* higher-level communication: the act() function */
     fn perform_act(
-        &mut self, chars: &Depot<CharData>, 
+        &mut self,
+        chars: &Depot<CharData>,
         db: &DB,
         orig: &str,
         ch: Option<&CharData>,
@@ -1949,7 +2002,8 @@ pub enum VictimRef<'a> {
 
 impl Game {
     pub fn act(
-        &mut self, chars: &Depot<CharData>, 
+        &mut self,
+        chars: &Depot<CharData>,
         db: &DB,
         str: &str,
         hide_invisible: bool,

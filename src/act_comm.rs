@@ -305,13 +305,12 @@ pub fn do_reply(
             .character_list
             .iter()
             .map(|&i| chars.get(i))
-            .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell())
-            .map(|e| e.id());
+            .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell());
 
         if last_tell_chid.is_none() {
             game.send_to_char(ch, "They are no longer playing.\r\n");
-        } else if is_tell_ok(game, chars, db, ch, chars.get(last_tell_chid.unwrap())) {
-            perform_tell(game, db, chars, chid, last_tell_chid.unwrap(), argument);
+        } else if is_tell_ok(game, chars, db, ch, last_tell_chid.unwrap()) {
+            perform_tell(game, db, chars, chid, last_tell_chid.unwrap().id(), argument);
         }
     }
 }

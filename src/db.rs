@@ -61,7 +61,7 @@ use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
     CMP, NRM, SECS_PER_REAL_HOUR,
 };
-use crate::{check_player_special, get_last_tell_mut, Game, TextData};
+use crate::{check_player_special, get_last_tell_mut, DescriptorData, Game, TextData};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -469,14 +469,17 @@ pub(crate) fn boot_world(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData
 }
 impl DB {
     /* Free the world, in a memory allocation sense. */
-    pub fn destroy_db(&mut self,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>) {
+    pub fn destroy_db(&mut self, descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>) {
         /* Active Mobiles & Players */
-        for &chtmp_id in &self.character_list.clone() {
-            self.free_char(chars, objs, chtmp_id);
+        for &chid in &self.character_list.clone() {
+            self.free_char(descs, chars, objs, chid);
         }
         self.character_list.clear();
 
         /* Active Objects */
+        for oid in self.character_list.clone() {
+            self.free_obj(objs, oid);
+        }
         self.object_list.clear();
 
         /* Rooms */
@@ -3230,8 +3233,7 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
 
 impl DB {
     /* release memory allocated for a char struct */
-    pub fn free_char(&mut self,chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, chid: DepotId) {
-        self.character_list.retain(|&i| i!=chid);
+    pub fn free_char(&mut self, descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, chid: DepotId) {
         let mut ch = chars.take(chid);
 
         ch.player_specials.aliases.clear();
@@ -3242,9 +3244,12 @@ impl DB {
         }
 
         if ch.desc.is_some() {
-            ch.desc = None;
+            descs.get_mut(ch.desc.unwrap()).character = None;
         }
-        
+    }
+
+    pub fn free_obj(&mut self, objs: &mut Depot<ObjData>, oid: DepotId) {
+        objs.take(oid);
     }
 }
 
