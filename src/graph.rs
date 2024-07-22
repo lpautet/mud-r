@@ -14,14 +14,14 @@ use log::error;
 use crate::constants::DIRS;
 use crate::db::DB;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::FIND_CHAR_WORLD;
+use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
      RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
-use crate::{CharData, Game, ObjData, TextData};
+use crate::{send_to_char, CharData, Game, ObjData, TextData};
 
 struct BfsQueueStruct {
     room: RoomRnum,
@@ -160,29 +160,29 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let ch = chars.get(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
-        game.send_to_char(ch, "You have no idea how.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have no idea how.\r\n");
         return;
     }
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        game.send_to_char(ch, "Whom are you trying to track?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Whom are you trying to track?\r\n");
         return;
     }
     let vict;
     /* The person can't see the victim. */
     if {
-        vict = game.get_char_vis(chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        game.send_to_char(ch, "No one is around by that name.\r\n");
+        send_to_char(&mut game.descriptors, ch, "No one is around by that name.\r\n");
         return;
     }
     let vict = vict.unwrap();
     let vict_id = vict.id();
     /* We can't track the victim. */
     if vict.aff_flagged(AFF_NOTRACK) {
-        game.send_to_char(ch, "You sense no trail.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You sense no trail.\r\n");
         return;
     }
 
@@ -198,7 +198,7 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
                 break;
             }
         }
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
         return;
@@ -209,22 +209,22 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let ch = chars.get(chid);
     match dir {
         BFS_ERROR => {
-            game.send_to_char(ch, "Hmm.. something seems to be wrong.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Hmm.. something seems to be wrong.\r\n");
         }
 
         BFS_ALREADY_THERE => {
-            game.send_to_char(ch, "You're already in the same room!!\r\n");
+            send_to_char(&mut game.descriptors, ch, "You're already in the same room!!\r\n");
         }
 
         BFS_NO_PATH => {
             let vict = chars.get(vict_id);
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
             let ch = chars.get(chid);
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );
         }

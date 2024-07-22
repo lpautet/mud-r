@@ -35,8 +35,8 @@ use crate::structs::{
     LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
     PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
-use crate::util::{rand_number, SECS_PER_MUD_YEAR};
-use crate::{is_set, Game, TextData, TO_CHAR, TO_ROOM};
+use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
+use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
 
 pub const FIND_CHAR_ROOM: i32 = 1 << 0;
 pub const FIND_CHAR_WORLD: i32 = 1 << 1;
@@ -524,9 +524,8 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
     false
 }
 
-impl Game {
     pub(crate) fn equip_char(
-        &mut self,
+        descs: &mut Depot<DescriptorData>,
         chars: &mut Depot<CharData>,
         db: &mut DB,
         objs: &mut Depot<ObjData>,
@@ -561,7 +560,7 @@ impl Game {
 
         if invalid_align(ch, obj) || invalid_class(ch, obj) {
             let ch = chars.get(chid);
-            self.act(
+            act(descs, 
                 chars,
                 db,
                 "You are zapped by $p and instantly let go of it.",
@@ -571,7 +570,7 @@ impl Game {
                 None,
                 TO_CHAR,
             );
-            self.act(
+            act(descs, 
                 chars,
                 db,
                 "$n is zapped by $p and instantly lets go of it.",
@@ -619,7 +618,7 @@ impl Game {
 
         affect_total(objs, ch);
     }
-}
+
 impl DB {
     pub fn unequip_char(
         &mut self,
@@ -952,9 +951,8 @@ fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
     update_object_list(objs, objs.get(oid).contains.clone(), _use);
 }
 
-impl Game {
     pub(crate) fn update_char_objects(
-        &mut self,
+        descs: &mut Depot<DescriptorData>,
         chars: &Depot<CharData>,
         objs: &mut Depot<ObjData>,
         db: &mut DB,
@@ -972,8 +970,8 @@ impl Game {
                     i = objs.get(light_oid).get_obj_val(2);
                     let ch = chars.get(chid);
                     if i == 1 {
-                        self.send_to_char(ch, "Your light begins to flicker and fade.\r\n");
-                        self.act(
+                        send_to_char(descs, ch, "Your light begins to flicker and fade.\r\n");
+                        act(descs, 
                             chars,
                             db,
                             "$n's light begins to flicker and fade.",
@@ -984,8 +982,8 @@ impl Game {
                             TO_ROOM,
                         );
                     } else if i == 0 {
-                        self.send_to_char(ch, "Your light sputters out and dies.\r\n");
-                        self.act(
+                        send_to_char(descs, ch, "Your light sputters out and dies.\r\n");
+                        act(descs, 
                             chars,
                             db,
                             "$n's light sputters out and dies.",
@@ -1013,7 +1011,7 @@ impl Game {
             update_object_list(objs, ch.carrying.clone(), 2);
         }
     }
-
+impl Game {
     /* Extract a ch completely from the world, and leave his stuff behind */
     pub fn extract_char_final(
         &mut self,
@@ -1092,7 +1090,7 @@ impl Game {
         /* On with the character's assets... */
         let ch = chars.get(chid);
         if ch.followers.len() != 0 || ch.master.is_some() {
-            self.die_follower(chars, db, objs, chid);
+            die_follower(&mut self.descriptors, chars, db, objs, chid);
         }
 
         /* transfer objects to room, if any */
@@ -1149,7 +1147,7 @@ impl Game {
             let ch = chars.get_mut(chid);
             ch.clear_memory()
         } else {
-            self.save_char(db, chars, texts, objs, chid);
+            save_char(&mut self.descriptors, db, chars, texts, objs, chid);
             let ch = chars.get(chid);
             crash_delete_crashfile(ch);
         }
@@ -1243,9 +1241,8 @@ impl Game {
 * Here follows high-level versions of some earlier routines, ie functions*
 * which incorporate the actual player-data                               *.
 *********************************************************************** */
-impl Game {
     pub fn get_player_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &'a Depot<CharData>,
         db: &'a DB,
         ch: &CharData,
@@ -1275,7 +1272,7 @@ impl Game {
             if i.player.name.as_ref() != name {
                 continue;
             }
-            if !self.can_see(chars, db, ch, i) {
+            if !can_see(descs, chars, db, ch, i) {
                 continue;
             }
             *number -= 1;
@@ -1288,7 +1285,7 @@ impl Game {
     }
 
     pub fn get_char_room_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &'a Depot<CharData>,
         db: &'a DB,
         ch: &'a CharData,
@@ -1313,13 +1310,13 @@ impl Game {
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(chars, db, ch, name, None, FIND_CHAR_ROOM);
+            return get_player_vis(descs, chars, db, ch, name, None, FIND_CHAR_ROOM);
         }
 
         for i_id in db.world[ch.in_room() as usize].peoples.clone() {
             let i = chars.get(i_id);
             if isname(name, i.player.name.as_ref()) {
-                if self.can_see(chars, db, ch, i) {
+                if can_see(descs, chars, db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(i);
@@ -1331,7 +1328,7 @@ impl Game {
     }
 
     pub fn get_char_world_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &'a Depot<CharData>,
         db: &'a DB,
         ch: &'a CharData,
@@ -1348,14 +1345,14 @@ impl Game {
         }
         let number: &mut i32 = t;
 
-        let i = self.get_char_room_vis(chars, db, ch, name, Some(number));
+        let i = get_char_room_vis(descs, chars, db, ch, name, Some(number));
         if i.is_some() {
             return i;
         }
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return self.get_player_vis(chars, db, ch, name, None, 0);
+            return get_player_vis(descs, chars, db, ch, name, None, 0);
         }
 
         for &i_id in &db.character_list {
@@ -1366,7 +1363,7 @@ impl Game {
             if !isname(name, i.player.name.as_ref()) {
                 continue;
             }
-            if !self.can_see(chars, db, ch, i) {
+            if !can_see(descs, chars, db, ch, i) {
                 continue;
             }
             *number -= 1;
@@ -1379,7 +1376,7 @@ impl Game {
     }
 
     pub fn get_char_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &'a Depot<CharData>,
         db: &'a DB,
         ch: &'a CharData,
@@ -1388,16 +1385,16 @@ impl Game {
         _where: i32,
     ) -> Option<&'a CharData> {
         return if _where == FIND_CHAR_ROOM {
-            self.get_char_room_vis(chars, db, ch, name, number)
+            get_char_room_vis(descs, chars, db, ch, name, number)
         } else if _where == FIND_CHAR_WORLD {
-            self.get_char_room_vis(chars, db, ch, name, number)
+            get_char_world_vis(descs, chars, db, ch, name, number)
         } else {
             None
         };
     }
 
     pub fn get_obj_in_list_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &Depot<CharData>,
         db: &'a DB,
         objs: &'a Depot<ObjData>,
@@ -1423,7 +1420,7 @@ impl Game {
         for i in list.iter() {
             if isname(&name, objs.get(*i).name.as_ref()) {
                 let obj = objs.get(*i);
-                if self.can_see_obj(chars, db, ch, obj) {
+                if can_see_obj(descs, chars, db, ch, obj) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(obj);
@@ -1436,7 +1433,7 @@ impl Game {
     }
 
     pub fn get_obj_in_list_vis2<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &Depot<CharData>,
         db: &'a DB,
         objs: &'a Depot<ObjData>,
@@ -1462,7 +1459,7 @@ impl Game {
         for i in list.iter() {
             if isname(&name, objs.get(*i).name.as_ref()) {
                 let obj = objs.get(*i);
-                if self.can_see_obj(chars, db, ch, obj) {
+                if can_see_obj(descs, chars, db, ch, obj) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(obj);
@@ -1476,7 +1473,7 @@ impl Game {
 
     /* search the entire world for an object, and return a pointer  */
     pub fn get_obj_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &Depot<CharData>,
         db: &'a DB,
         objs: &'a Depot<ObjData>,
@@ -1499,13 +1496,13 @@ impl Game {
         }
 
         /* scan items carried */
-        let i = self.get_obj_in_list_vis(chars, db, objs, ch, &name, Some(number), &ch.carrying);
+        let i = get_obj_in_list_vis(descs, chars, db, objs, ch, &name, Some(number), &ch.carrying);
         if i.is_some() {
             return i;
         }
 
         /* scan room */
-        let i = self.get_obj_in_list_vis2(
+        let i = get_obj_in_list_vis2(descs, 
             chars,
             db,
             objs,
@@ -1522,7 +1519,7 @@ impl Game {
         for &oid in db.object_list.iter() {
             let i = objs.get(oid);
             if isname(&name, &i.name.borrow()) {
-                if self.can_see_obj(chars, db, ch, i) {
+                if can_see_obj(descs, chars, db, ch, i) {
                     *number -= 1;
                     if *number == 0 {
                         return Some(i);
@@ -1534,7 +1531,7 @@ impl Game {
     }
 
     pub fn get_obj_in_equip_vis<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &Depot<CharData>,
         db: &'a DB,
         objs: &'a Depot<ObjData>,
@@ -1559,7 +1556,7 @@ impl Game {
         let equipment = equipment;
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
-                && self.can_see_obj(chars, db, ch, objs.get(equipment[j].unwrap()))
+                && can_see_obj(descs, chars, db, ch, objs.get(equipment[j].unwrap()))
                 && isname(&arg, objs.get(equipment[j].unwrap()).name.as_ref())
             {
                 *number -= 1;
@@ -1573,7 +1570,7 @@ impl Game {
     }
 
     pub fn get_obj_pos_in_equip_vis(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &Depot<CharData>,
         db: &DB,
         objs: &Depot<ObjData>,
@@ -1599,7 +1596,7 @@ impl Game {
 
         for j in 0..NUM_WEARS as usize {
             if equipment[j].is_some()
-                && self.can_see_obj(chars, db, ch, objs.get(equipment[j].unwrap()))
+                && can_see_obj(descs, chars, db, ch, objs.get(equipment[j].unwrap()))
                 && isname(arg, objs.get(equipment[j].unwrap()).name.as_ref())
             {
                 if {
@@ -1613,7 +1610,7 @@ impl Game {
 
         return None;
     }
-}
+
 
 pub fn money_desc(amount: i32) -> &'static str {
     struct MyItem {
@@ -1745,7 +1742,6 @@ impl DB {
         Some(oid)
     }
 }
-impl Game {
     /* Generic Find, designed to find any object/character
      *
      * Calling:
@@ -1763,7 +1759,7 @@ impl Game {
      * describes what it filled in.
      */
     pub fn generic_find<'a>(
-        &self,
+        descs: &Depot<DescriptorData>,
         chars: &'a Depot<CharData>,
         db: &'a DB,
         objs: &'a Depot<ObjData>,
@@ -1788,7 +1784,7 @@ impl Game {
 
         if is_set!(bitvector, FIND_CHAR_ROOM as i64) {
             /* Find person in room */
-            *tar_ch = self.get_char_room_vis(chars, db, ch, &mut name, Some(&mut number));
+            *tar_ch = get_char_room_vis(descs, chars, db, ch, &mut name, Some(&mut number));
 
             if tar_ch.is_some() {
                 return FIND_CHAR_ROOM;
@@ -1796,7 +1792,7 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_CHAR_WORLD as i64) {
-            *tar_ch = self.get_char_room_vis(chars, db, ch, &mut name, Some(&mut number));
+            *tar_ch = get_char_world_vis(descs, chars, db, ch, &mut name, Some(&mut number));
             if tar_ch.is_some() {
                 return FIND_CHAR_WORLD;
             }
@@ -1824,7 +1820,7 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_OBJ_INV as i64) {
-            *tar_obj = self.get_obj_in_list_vis(
+            *tar_obj = get_obj_in_list_vis(descs,
                 chars,
                 db,
                 objs,
@@ -1839,7 +1835,7 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_OBJ_ROOM as i64) {
-            *tar_obj = self.get_obj_in_list_vis2(
+            *tar_obj = get_obj_in_list_vis2(descs,
                 chars,
                 db,
                 objs,
@@ -1854,14 +1850,14 @@ impl Game {
         }
 
         if is_set!(bitvector, FIND_OBJ_WORLD as i64) {
-            *tar_obj = self.get_obj_vis(chars, db, objs, ch, &name, Some(&mut number));
+            *tar_obj = get_obj_vis(descs, chars, db, objs, ch, &name, Some(&mut number));
             if tar_obj.is_some() {
                 return FIND_OBJ_WORLD;
             }
         }
         0
     }
-}
+
 
 pub const FIND_INDIV: u8 = 0;
 pub const FIND_ALL: u8 = 1;

@@ -13,12 +13,13 @@ use std::cmp::{max, min};
 
 use log::error;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{ObjData, TextData, VictimRef};
+use crate::fight::skill_message;
+use crate::{act, perform_act, send_to_char, ObjData, TextData, VictimRef};
 
 use crate::config::OK;
 use crate::db::DB;
 use crate::handler::{
-    isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV, FIND_OBJ_ROOM,
+    generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV, FIND_OBJ_ROOM
 };
 use crate::interpreter::{any_one_arg, is_abbrev, one_argument};
 use crate::magic::{
@@ -387,9 +388,9 @@ fn say_spell(
         let toobj = tobj_id.map(|id| objs.get(id));
         let tch2 = chars.get(tch2_id.unwrap());
         if ch.get_class() == chars.get(i_id).get_class() {
-            game.perform_act(chars, db,&buf1, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
+            perform_act(&mut game.descriptors, chars, db,&buf1, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
         } else {
-            game.perform_act(chars, db,&buf2, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
+            perform_act(&mut game.descriptors, chars, db,&buf2, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
         }
     }
     let ch = chars.get(chid);
@@ -410,7 +411,7 @@ fn say_spell(
         );
         let tch2_id = tch_id.unwrap();
         let tch2 = chars.get(tch2_id);
-        game.act(chars, db,&buf1, false, Some(ch), None, Some(VictimRef::Char(tch2)), TO_VICT);
+        act(&mut game.descriptors, chars, db,&buf1, false, Some(ch), None, Some(VictimRef::Char(tch2)), TO_VICT);
     }
 }
 
@@ -487,8 +488,8 @@ pub fn call_magic(
         sinfo_violent = sinfo.violent;
     }
     if db.room_flagged(chars.get(caster_id).in_room(), ROOM_NOMAGIC) {
-        game.send_to_char(chars.get(caster_id), "Your magic fizzles out and dies.\r\n");
-        game.act(chars, db,
+        send_to_char(&mut game.descriptors, chars.get(caster_id), "Your magic fizzles out and dies.\r\n");
+        act(&mut game.descriptors, chars, db,
             "$n's magic fizzles out and dies.",
             false,
             Some(caster),
@@ -501,11 +502,11 @@ pub fn call_magic(
     if db.room_flagged(chars.get(caster_id).in_room(), ROOM_PEACEFUL)
         && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
-        game.send_to_char(chars.get(
+        send_to_char(&mut game.descriptors, chars.get(
             caster_id),
             "A flash of white light fills the room, dispelling your violent magic!\r\n",
         );
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "White light from no particular source suddenly fills the room, then vanishes.",
             false,
             Some(caster),
@@ -630,7 +631,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
     one_argument(argument, &mut arg);
     let mut tch = None;
     let mut tobj = None;
-    let k = game.generic_find(chars,db,objs,
+    let k = generic_find(&game.descriptors, chars,db,objs,
         &arg,
         (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
         ch,
@@ -640,7 +641,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
 
     match obj.get_obj_type() {
         ITEM_STAFF => {
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You tap $p three times on the ground.",
                 false,
                 Some(ch),
@@ -649,7 +650,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 TO_CHAR,
             );
             if !texts.get(obj.action_description).text.is_empty() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -658,7 +659,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "$n taps $p three times on the ground.",
                     false,
                     Some(ch),
@@ -669,8 +670,8 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
             }
 
             if obj.get_obj_val(2) <= 0 {
-                game.send_to_char(ch, "It seems powerless.\r\n");
-                game.act(chars, db,
+                send_to_char(&mut game.descriptors, ch, "It seems powerless.\r\n");
+                act(&mut game.descriptors, chars, db,
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -730,7 +731,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         ITEM_WAND => {
             if k == FIND_CHAR_ROOM {
                 if tch.unwrap().id() == chid {
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         "You point $p at yourself.",
                         false,
                         Some(ch),
@@ -738,7 +739,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         None,
                         TO_CHAR,
                     );
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         "$n points $p at $mself.",
                         false,
                         Some(ch),
@@ -748,7 +749,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     );
                 } else {
                     let tch = tch.unwrap();
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         "You point $p at $N.",
                         false,
                         Some(ch),
@@ -757,7 +758,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         TO_CHAR,
                     );
                     if !texts.get(obj.action_description).text.is_empty() {
-                        game.act(chars, db,
+                        act(&mut game.descriptors, chars, db,
                             &texts.get(obj.action_description).text,
                             false,
                             Some(ch),
@@ -766,7 +767,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                             TO_ROOM,
                         );
                     } else {
-                        game.act(chars, db,
+                        act(&mut game.descriptors, chars, db,
                             "$n points $p at $N.",
                             true,
                             Some(ch),
@@ -778,7 +779,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 }
             } else if tobj.is_some() {
                 let tobj = tobj.unwrap();
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "You point $p at $P.",
                     false,
                     Some(ch),
@@ -787,7 +788,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_CHAR,
                 );
                 if !texts.get(obj.action_description).text.is_empty() {
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         &texts.get(obj.action_description).text,
                         false,
                         Some(ch),
@@ -796,7 +797,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         TO_ROOM,
                     );
                 } else {
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         "$n points $p at $P.",
                         true,
                         Some(ch),
@@ -810,7 +811,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 MAG_AREAS | MAG_MASSES
             ) {
                 /* Wands with area spells don't need to be pointed. */
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "You point $p outward.",
                     false,
                     Some(ch),
@@ -818,7 +819,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     None,
                     TO_CHAR,
                 );
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "$n points $p outward.",
                     true,
                     Some(ch),
@@ -827,7 +828,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "At what should $p be pointed?",
                     false,
                     Some(ch),
@@ -839,8 +840,8 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
             }
 
             if obj.get_obj_val(2) <= 0 {
-                game.send_to_char(ch, "It seems powerless.\r\n");
-                game.act(chars, db,
+                send_to_char(&mut game.descriptors, ch, "It seems powerless.\r\n");
+                act(&mut game.descriptors, chars, db,
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -882,7 +883,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         ITEM_SCROLL => {
             if !arg.is_empty() {
                 if k == 0 {
-                    game.act(chars, db,
+                    act(&mut game.descriptors, chars, db,
                         "There is nothing to here to affect with $p.",
                         false,
                         Some(ch),
@@ -896,7 +897,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 tch = Some(ch);
             }
 
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You recite $p which dissolves.",
                 true,
                 Some(ch),
@@ -905,7 +906,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 TO_CHAR,
             );
             if !texts.get(obj.action_description).text.is_empty() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -914,8 +915,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                game
-                    .act(chars, db,"$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
+                act(&mut game.descriptors, chars, db,"$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
             }
             let tch_id = tch.map(|c| c.id());
             let tobj_id = tobj.map(|o| o.id());
@@ -941,10 +941,9 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
             db.extract_obj(chars, objs,oid);
         }
         ITEM_POTION => {
-            game
-                .act(chars, db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
+            act(&mut game.descriptors, chars, db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
             if !texts.get(obj.action_description).text.is_empty() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -953,8 +952,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                game
-                    .act(chars, db,"$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
+                act(&mut game.descriptors, chars, db,"$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
             }
             let ch = chars.get_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -1014,19 +1012,19 @@ pub fn cast_spell(
     if ch.get_pos() < sinfo.min_position {
         match ch.get_pos() {
             POS_SLEEPING => {
-                game.send_to_char(ch, "You dream about great magical powers.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You dream about great magical powers.\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(ch, "You cannot concentrate while resting.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You cannot concentrate while resting.\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(ch, "You can't do this sitting!\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can't do this sitting!\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(ch, "Impossible!  You can't concentrate enough!\r\n");
+                send_to_char(&mut game.descriptors, ch, "Impossible!  You can't concentrate enough!\r\n");
             }
             _ => {
-                game.send_to_char(ch, "You can't do much of anything like this!\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can't do much of anything like this!\r\n");
             }
         }
         return 0;
@@ -1035,24 +1033,24 @@ pub fn cast_spell(
         && tch_id.is_some()
         && ch.master.unwrap() == tch_id.unwrap()
     {
-        game.send_to_char(ch, "You are afraid you might hurt your master!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are afraid you might hurt your master!\r\n");
         return 0;
     }
     if (tch_id.is_none() || chid != tch_id.unwrap()) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
-        game.send_to_char(ch, "You can only cast this spell upon yourself!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You can only cast this spell upon yourself!\r\n");
         return 0;
     }
     if tch_id.is_some() && chid == tch_id.unwrap() && is_set!(sinfo.targets, TAR_NOT_SELF) {
-        game.send_to_char(ch, "You cannot cast this spell upon yourself!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
     if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "You can't cast this spell if you're not in a group!\r\n",
         );
         return 0;
     }
-    game.send_to_char(ch, OK);
+    send_to_char(&mut game.descriptors, ch, OK);
     say_spell(game, chars,db,objs,chid, spellnum, tch_id, tobj_id);
     let ch = chars.get(chid);
     return call_magic(
@@ -1082,12 +1080,12 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     let mut i = argument.splitn(3, '\'');
 
     if i.next().is_none() {
-        game.send_to_char(ch, "Cast what where?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Cast what where?\r\n");
         return;
     }
     let s = i.next();
     if s.is_none() {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
         );
         return;
@@ -1098,17 +1096,17 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     let spellnum = find_skill_num(db, s);
 
     if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
-        game.send_to_char(ch, "Cast what?!?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Cast what?!?\r\n");
         return;
     }
     let spellnum = spellnum.unwrap();
     let sinfo = db.spell_info[spellnum as usize];
     if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
-        game.send_to_char(ch, "You do not know that spell!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You do not know that spell!\r\n");
         return;
     }
     if ch.get_skill(spellnum) == 0 {
-        game.send_to_char(ch, "You are unfamiliar with that spell.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are unfamiliar with that spell.\r\n");
         return;
     }
     let arg;
@@ -1129,7 +1127,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                tch = game.get_char_vis(chars,db,ch, &mut t, None, FIND_CHAR_ROOM);
+                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FIND_CHAR_ROOM);
                 tch.is_some()
             } {
                 target = true;
@@ -1137,7 +1135,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         }
         if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
             if {
-                tch = game.get_char_vis(chars,db,ch, &mut t, None, FIND_CHAR_WORLD);
+                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FIND_CHAR_WORLD);
                 tch.is_some()
             } {
                 target = true;
@@ -1146,7 +1144,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
             if {
-                tobj = game.get_obj_in_list_vis(chars,db,objs,ch, &t, None, &ch.carrying);
+                tobj = get_obj_in_list_vis(&game.descriptors, chars,db,objs,ch, &t, None, &ch.carrying);
                 tobj.is_some()
             } {
                 target = true;
@@ -1163,7 +1161,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
             if {
-                tobj = game.get_obj_in_list_vis2(chars,db,objs,
+                tobj = get_obj_in_list_vis2(&game.descriptors, chars,db,objs,
                     ch,
                     &t,
                     None,
@@ -1177,7 +1175,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) {
             if {
-                tobj = game.get_obj_vis(chars,db,objs,ch, &t, None);
+                tobj = get_obj_vis(&game.descriptors, chars,db,objs,ch, &t, None);
                 tobj.is_some()
             } {
                 target = true;
@@ -1203,7 +1201,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
             target = true;
         }
         if !target {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!(
                     "Upon {} should the spell be cast?\r\n",
                     if is_set!(
@@ -1223,18 +1221,18 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
 
     let tch_id = tch.map(|c| c.id());
     if target && tch.unwrap().id() == chid && sinfo.violent {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
         );
         return;
     }
     if !target {
-        game.send_to_char(ch, "Cannot find the target of your spell!\r\n");
+        send_to_char(&mut game.descriptors, ch, "Cannot find the target of your spell!\r\n");
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
     if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(ch, "You haven't the energy to cast that spell!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You haven't the energy to cast that spell!\r\n");
         return;
     }
 
@@ -1244,8 +1242,8 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         let ch = chars.get(chid);
         let tch = tch_id.map(|i| chars.get(i));
-        if tch.is_none() || game.skill_message(chars, db, objs,0, ch, tch.unwrap(), spellnum) == 0 {
-            game.send_to_char(ch, "You lost your concentration!\r\n");
+        if tch.is_none() || skill_message(&mut game.descriptors, chars, db, objs,0, ch, tch.unwrap(), spellnum) == 0 {
+            send_to_char(&mut game.descriptors, ch, "You lost your concentration!\r\n");
         }
         if mana > 0 {
             let ch = chars.get_mut(chid);

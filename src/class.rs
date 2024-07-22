@@ -50,7 +50,7 @@ use crate::structs::{
     PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
-use crate::{check_player_special, set_skill, Game, TextData};
+use crate::{check_player_special, save_char, set_skill, Game, TextData};
 
 pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
@@ -3629,7 +3629,7 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
     }
 
     snoop_check(game, chars, chid);
-    game.save_char(db, chars, texts, objs, chid);
+    save_char(&mut game.descriptors, db, chars, texts, objs, chid);
 }
 
 /*

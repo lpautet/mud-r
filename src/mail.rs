@@ -25,7 +25,7 @@ use std::{mem, process, slice};
 
 use crate::depot::{Depot, DepotId, HasId};
 use crate::handler::obj_to_char;
-use crate::{ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, ObjData, TextData, VictimRef};
 use log::{error, info};
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
@@ -689,7 +689,7 @@ pub fn postmaster(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         return false;
     }
     if db.no_mail {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
         );
         return false;
@@ -732,7 +732,7 @@ fn postmaster_send_mail(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             &buf,
             false,
             Some(mailman),
@@ -747,7 +747,7 @@ fn postmaster_send_mail(
 
     if buf.is_empty() {
         /* you'll get no argument from me! */
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n tells you, 'You need to specify an addressee!'",
             false,
             Some(mailman),
@@ -764,7 +764,7 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             &buf,
             false,
             Some(mailman),
@@ -778,7 +778,7 @@ $n tells you, '...which I see you can't afford.'",
     if recipient < 0 || !mail_recip_ok(game, chars, db,texts, objs,&buf) {
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n tells you, 'No one by that name is registered here!'",
             false,
             Some(mailman),
@@ -789,7 +789,7 @@ $n tells you, '...which I see you can't afford.'",
         return;
     }
     let ch = chars.get(chid);
-    game.act(chars, db,
+    act(&mut game.descriptors, chars, db,
         "$n starts to write some mail.",
         true,
         Some(ch),
@@ -803,7 +803,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
     let mailman = chars.get(mailman_id);
-    game.act(chars, db,
+    act(&mut game.descriptors, chars, db,
         &buf,
         false,
         Some(mailman),
@@ -837,7 +837,7 @@ fn postmaster_check_mail(
     if db.mails.has_mail(ch.get_idnum()) {
         let ch = chars.get(chid);
         let mailman = chars.get(mailman_id);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n tells you, 'You have mail waiting.'",
             false,
             Some(mailman),
@@ -848,7 +848,7 @@ fn postmaster_check_mail(
     } else {
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
             Some(mailman),
@@ -871,7 +871,7 @@ fn postmaster_receive_mail(
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
         let ch = chars.get(chid);
         let mailman = chars.get(mailman_id);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             buf,
             false,
             Some(mailman),
@@ -905,7 +905,7 @@ fn postmaster_receive_mail(
         obj_to_char(obj, chars.get_mut(chid));
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n gives you a piece of mail.",
             false,
             Some(mailman),
@@ -913,7 +913,7 @@ fn postmaster_receive_mail(
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$N gives $n a piece of mail.",
             false,
             Some(ch),

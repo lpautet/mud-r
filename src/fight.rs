@@ -41,8 +41,8 @@ use crate::structs::{
     POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE,
     ROOM_PEACEFUL, WEAR_WIELD,
 };
-use crate::util::{dice, rand_number, BRF};
-use crate::{TextData, VictimRef};
+use crate::util::{dice, rand_number, stop_follower, BRF};
+use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
 use crate::{
     _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT,
 };
@@ -118,8 +118,7 @@ macro_rules! is_weapon {
 }
 
 /* The Fight related routines */
-impl Game {
-    pub fn appear(&mut self, chars: &mut Depot<CharData>, db: &DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn appear(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = chars.get_mut(chid);
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
             affect_from_char( objs,ch, SPELL_INVISIBLE as i16);
@@ -127,7 +126,7 @@ impl Game {
         ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
         let ch = chars.get(chid);
         if ch.get_level() < LVL_IMMORT as u8 {
-            self.act(chars, 
+            act(descs, chars, 
                 db,
                 "$n slowly fades into existence.",
                 false,
@@ -137,7 +136,7 @@ impl Game {
                 TO_ROOM,
             );
         } else {
-            self.act(chars, 
+            act(descs, chars, 
                 db,
                 "You feel a strange presence as $n appears, seemingly from nowhere.",
                 false,
@@ -148,7 +147,7 @@ impl Game {
             );
         }
     }
-}
+
 
 pub fn compute_armor_class(ch: &CharData) -> i16 {
     let mut armorclass = ch.get_ac();
@@ -275,7 +274,7 @@ pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mu
     let ch = chars.get_mut(chid);
     ch.set_plr_flag_bit(PLR_KILLER);
 
-    game.send_to_char(ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
+    send_to_char(&mut game.descriptors, ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     game.mudlog(chars,
@@ -331,8 +330,7 @@ impl DB {
         update_pos(ch);
     }
 }
-impl Game {
-    pub fn make_corpse(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn make_corpse( chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = chars.get(chid);
         let mut corpse = ObjData::default();
 
@@ -404,7 +402,7 @@ impl Game {
         let ch_in_room = ch.in_room();
         db.obj_to_room(objs.get_mut(corpse_id), ch_in_room);
     }
-}
+
 
 /* When ch kills victim */
 pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
@@ -418,9 +416,8 @@ pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: D
     chars.get_mut(chid).set_alignment(alignment);
 }
 
-impl Game {
-    pub fn death_cry(&mut self, chars: &Depot<CharData>, db: &DB, ch: &CharData) {
-        self.act(chars, 
+    pub fn death_cry(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, db: &DB, ch: &CharData) {
+        act(descs, chars, 
             db,
             "Your blood freezes as you hear $n's death cry.",
             false,
@@ -432,7 +429,8 @@ impl Game {
         let ch_in_room = ch.in_room();
         for door in 0..NUM_OF_DIRS {
             if db.can_go(ch, door) {
-                self.send_to_room(
+                send_to_room(
+                    descs,
                     chars, db,
                     db.world[ch_in_room as usize].dir_option[door]
                         .as_ref()
@@ -444,7 +442,7 @@ impl Game {
         }
     }
 
-    pub fn raw_kill(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn raw_kill(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = chars.get_mut(chid);
         if ch.fighting_id().is_some() {
             db.stop_fighting(ch);
@@ -458,11 +456,11 @@ impl Game {
         let ch = chars.get_mut(chid);
         ch.affected = list;
         let ch = chars.get(chid);
-        self.death_cry(chars, db, ch);
-        self.make_corpse(chars, db, objs,chid);
+        death_cry(descs, chars, db, ch);
+        make_corpse(chars, db, objs,chid);
         db.extract_char(chars, chid);
     }
-}
+
 
 pub fn die(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
     let ch = chars.get(chid);
@@ -471,7 +469,7 @@ pub fn die(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
     }
-    game.raw_kill(chars,db, objs,chid);
+    raw_kill(&mut game.descriptors, chars,db, objs,chid);
 }
 
 pub fn perform_group_gain(
@@ -485,7 +483,7 @@ pub fn perform_group_gain(
     let share = min(MAX_EXP_GAIN, max(1, base));
 
     if share > 1 {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "You receive your share of experience -- {} points.\r\n",
@@ -494,7 +492,7 @@ pub fn perform_group_gain(
             .as_str(),
         );
     } else {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "You receive your share of experience -- one measly little point!\r\n",
         );
@@ -575,12 +573,12 @@ pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mut
     exp = max(exp, 1);
 
     if exp > 1 {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("You receive {} experience points.\r\n", exp).as_str(),
         );
     } else {
-        game.send_to_char(ch, "You receive one lousy experience point.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You receive one lousy experience point.\r\n");
     }
     gain_exp(chid, exp, game, chars, db, texts,objs);
     change_alignment(chars,  chid, victim_id);
@@ -616,10 +614,9 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
     buf
 }
 
-impl Game {
     /* message for doing damage with a weapon */
     pub fn dam_message(
-        &mut self, chars: &Depot<CharData>, 
+        descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
         db: &DB,
         dam: i32,
         ch: &CharData,
@@ -709,7 +706,7 @@ impl Game {
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(chars, 
+        act(descs, chars, 
             db,
             &buf,
             false,
@@ -720,13 +717,13 @@ impl Game {
         );
 
         /* damage message to damager */
-        self.send_to_char(ch, CCYEL!(ch, C_CMP));
+        send_to_char(descs, ch, CCYEL!(ch, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_char,
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(chars, 
+        act(descs, chars, 
             db,
             &buf,
             false,
@@ -735,16 +732,16 @@ impl Game {
             Some(VictimRef::Char(victim)),
             TO_CHAR,
         );
-        self.send_to_char(ch, CCNRM!(ch, C_CMP));
+        send_to_char(descs, ch, CCNRM!(ch, C_CMP));
 
         /* damage message to damagee */
-        self.send_to_char(victim, CCRED!(victim, C_CMP));
+        send_to_char(descs, victim, CCRED!(victim, C_CMP));
         let buf = replace_string(
             DAM_WEAPONS[msgnum].to_victim,
             ATTACK_HIT_TEXT[w_type].singular,
             ATTACK_HIT_TEXT[w_type].plural,
         );
-        self.act(chars, 
+        act(descs, chars, 
             db,
             &buf,
             false,
@@ -753,7 +750,7 @@ impl Game {
             Some(VictimRef::Char(victim)),
             TO_VICT | TO_SLEEP,
         );
-        self.send_to_char(victim, CCNRM!(victim, C_CMP));
+        send_to_char(descs, victim, CCNRM!(victim, C_CMP));
     }
 
     /*
@@ -761,7 +758,7 @@ impl Game {
      *  C3.0: Also used for weapon damage on miss and death blows
      */
     pub fn skill_message(
-        &mut self, chars: &Depot<CharData>, 
+        descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
         db: &DB,objs: & Depot<ObjData>, 
         dam: i32,
         ch: &CharData,
@@ -783,7 +780,7 @@ impl Game {
                         &db.fight_messages[i].messages[nr].god_msg.victim_msg;
                     let room_msg: &Rc<str> =
                         &db.fight_messages[i].messages[nr].god_msg.room_msg;
-                    self.act(chars, 
+                    act(descs, chars, 
                         db,
                         attacker_msg,
                         false,
@@ -792,7 +789,7 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_CHAR,
                     );
-                    self.act(chars, 
+                    act(descs, chars, 
                         db,
                         victim_msg,
                         false,
@@ -801,7 +798,7 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_VICT,
                     );
-                    self.act(chars, 
+                    act(descs, chars, 
                         db,
                         room_msg,
                         false,
@@ -824,8 +821,8 @@ impl Game {
                         let room_msg: &Rc<str> =
                             &db.fight_messages[i].messages[nr].die_msg.room_msg;
                         if !attacker_msg.is_empty() {
-                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
-                            self.act(chars, 
+                            send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+                            act(descs, chars, 
                                 db,
                                 attacker_msg,
                                 false,
@@ -834,10 +831,10 @@ impl Game {
                                 Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
-                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
+                            send_to_char(descs, ch, CCNRM!(ch, C_CMP));
                         }
-                        self.send_to_char(vict, CCRED!(vict, C_CMP));
-                        self.act(chars, 
+                        send_to_char(descs, vict, CCRED!(vict, C_CMP));
+                        act(descs, chars, 
                             db,
                             victim_msg,
                             false,
@@ -846,9 +843,9 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
-                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
+                        send_to_char(descs, vict, CCNRM!(vict, C_CMP));
 
-                        self.act(chars, 
+                        act(descs, chars, 
                             db,
                             room_msg,
                             false,
@@ -866,8 +863,8 @@ impl Game {
                         let room_msg: &Rc<str> =
                             &db.fight_messages[i].messages[nr].hit_msg.room_msg;
                         if !attacker_msg.is_empty() {
-                            self.send_to_char(ch, CCYEL!(ch, C_CMP));
-                            self.act(chars, 
+                            send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+                            act(descs, chars, 
                                 db,
                                 attacker_msg,
                                 false,
@@ -876,10 +873,10 @@ impl Game {
                                 Some(VictimRef::Char(vict)),
                                 TO_CHAR,
                             );
-                            self.send_to_char(ch, CCNRM!(ch, C_CMP));
+                            send_to_char(descs, ch, CCNRM!(ch, C_CMP));
                         }
-                        self.send_to_char(vict, CCRED!(vict, C_CMP));
-                        self.act(chars, 
+                        send_to_char(descs, vict, CCRED!(vict, C_CMP));
+                        act(descs, chars, 
                             db,
                             victim_msg,
                             false,
@@ -888,9 +885,9 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_VICT | TO_SLEEP,
                         );
-                        self.send_to_char(vict, CCNRM!(vict, C_CMP));
+                        send_to_char(descs, vict, CCNRM!(vict, C_CMP));
 
-                        self.act(chars, 
+                        act(descs, chars, 
                             db,
                             room_msg,
                             false,
@@ -911,8 +908,8 @@ impl Game {
                         &db.fight_messages[i].messages[nr].miss_msg.room_msg;
                     /* Dam == 0 */
                     if !attacker_msg.is_empty() {
-                        self.send_to_char(ch, CCYEL!(ch, C_CMP));
-                        self.act(chars, 
+                        send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+                        act(descs, chars, 
                             db,
                             attacker_msg,
                             false,
@@ -921,10 +918,10 @@ impl Game {
                             Some(VictimRef::Char(vict)),
                             TO_CHAR,
                         );
-                        self.send_to_char(ch, CCNRM!(ch, C_CMP));
+                        send_to_char(descs, ch, CCNRM!(ch, C_CMP));
                     }
-                    self.send_to_char(vict, CCRED!(vict, C_CMP));
-                    self.act(chars, 
+                    send_to_char(descs, vict, CCRED!(vict, C_CMP));
+                    act(descs, chars, 
                         db,
                         victim_msg,
                         false,
@@ -933,9 +930,9 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_VICT | TO_SLEEP,
                     );
-                    self.send_to_char(vict, CCNRM!(vict, C_CMP));
+                    send_to_char(descs, vict, CCNRM!(vict, C_CMP));
 
-                    self.act(chars, 
+                    act(descs, chars, 
                         db,
                         room_msg,
                         false,
@@ -950,7 +947,7 @@ impl Game {
         }
         return 0;
     }
-
+impl Game {
     /*
      * Alert: As of bpl14, this function returns the following codes:
      *	< 0	Victim died.
@@ -987,7 +984,7 @@ impl Game {
 
         /* peaceful rooms */
         if chid != victim_id && db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-            self.send_to_char(
+            send_to_char(&mut self.descriptors, 
                 ch,
                 "This room just has such a peaceful, easy feeling...\r\n",
             );
@@ -1027,13 +1024,13 @@ impl Game {
         /* If you attack a pet, it hates your guts */
         let victim = chars.get(victim_id);
         if victim.master.is_some() && victim.master.unwrap() == chid {
-            self.stop_follower(chars, db, objs,victim_id);
+            stop_follower(&mut self.descriptors, chars, db, objs,victim_id);
         }
 
         /* If the attacker is invisible, he becomes visible */
         let ch = chars.get(chid);
         if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
-            self.appear(chars, db, objs,chid);
+            appear(&mut self.descriptors, chars, db, objs,chid);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
@@ -1077,14 +1074,14 @@ impl Game {
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
         if !is_weapon!(attacktype) {
-            self.skill_message(chars, db, objs,dam, ch, victim, attacktype);
+            skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype);
         } else {
             if victim.get_pos() == POS_DEAD || dam == 0 {
-                if self.skill_message(chars, db, objs,dam, ch, victim, attacktype) == 0 {
-                    self.dam_message(chars, db, dam, ch, victim, attacktype);
+                if skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype) == 0 {
+                    dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
                 }
             } else {
-                self.dam_message(chars, db, dam, ch, victim, attacktype);
+                dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
             }
         }
 
@@ -1092,7 +1089,7 @@ impl Game {
         let victim = chars.get(victim_id);
         match victim.get_pos() {
             POS_MORTALLYW => {
-                self.act(chars, 
+                act(&mut self.descriptors, chars, 
                     db,
                     "$n is mortally wounded, and will die soon, if not aided.",
                     true,
@@ -1101,14 +1098,14 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(
+                send_to_char(&mut self.descriptors, 
                     victim,
                     "You are mortally wounded, and will die soon, if not aided.\r\n",
                 );
             }
 
             POS_INCAP => {
-                self.act(chars, 
+                act(&mut self.descriptors, chars, 
                     db,
                     "$n is incapacitated and will slowly die, if not aided.",
                     true,
@@ -1117,13 +1114,13 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(
+                send_to_char(&mut self.descriptors, 
                     victim,
                     "You are incapacitated an will slowly die, if not aided.\r\n",
                 );
             }
             POS_STUNNED => {
-                self.act(chars, 
+                act(&mut self.descriptors, chars, 
                     db,
                     "$n is stunned, but will probably regain consciousness again.",
                     true,
@@ -1132,13 +1129,13 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(
+                send_to_char(&mut self.descriptors, 
                     victim,
                     "You're stunned, but will probably regain consciousness again.\r\n",
                 );
             }
             POS_DEAD => {
-                self.act(chars, 
+                act(&mut self.descriptors, chars, 
                     db,
                     "$n is dead!  R.I.P.",
                     false,
@@ -1147,17 +1144,17 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                self.send_to_char(victim, "You are dead!  Sorry...\r\n");
+                send_to_char(&mut self.descriptors, victim, "You are dead!  Sorry...\r\n");
             }
 
             _ => {
                 /* >= POSITION SLEEPING */
                 if dam > (victim.get_max_hit() / 4) as i32 {
-                    self.send_to_char(victim, "That really did HURT!\r\n");
+                    send_to_char(&mut self.descriptors, victim, "That really did HURT!\r\n");
                 }
                 let victim = chars.get(victim_id);
                 if victim.get_hit() < victim.get_max_hit() / 4 {
-                    self.send_to_char(
+                    send_to_char(&mut self.descriptors, 
                         victim,
                         format!(
                             "{}You wish that your wounds would stop BLEEDING so much!{}\r\n",
@@ -1178,7 +1175,7 @@ impl Game {
                     && victim.get_hit() < victim.get_wimp_lev() as i16
                     && victim.get_hit() > 0
                 {
-                    self.send_to_char(victim, "You wimp out, and attempt to flee!\r\n");
+                    send_to_char(&mut self.descriptors, victim, "You wimp out, and attempt to flee!\r\n");
                     do_flee(self, db,chars,  texts, objs,victim_id, "", 0, 0);
                 }
             }
@@ -1190,7 +1187,7 @@ impl Game {
             do_flee(self, db, chars, texts,objs, victim_id, "", 0, 0);
             let victim = chars.get(victim_id);
             if victim.fighting_id().is_none() {
-                self.act(chars, 
+                act(&mut self.descriptors, chars, 
                     db,
                     "$n is rescued by divine forces.",
                     false,
@@ -1430,7 +1427,7 @@ impl Game {
                 if ch.get_pos() < POS_FIGHTING {
                     ch.set_pos(POS_FIGHTING);
                     let ch = chars.get(chid);
-                    self.act(chars, 
+                    act(&mut self.descriptors, chars, 
                         db,
                         "$n scrambles to $s feet!",
                         true,
@@ -1443,7 +1440,7 @@ impl Game {
             }
             let ch = chars.get(chid);
             if ch.get_pos() < POS_FIGHTING {
-                self.send_to_char(ch, "You can't fight while sitting!!\r\n");
+                send_to_char(&mut self.descriptors, ch, "You can't fight while sitting!!\r\n");
                 continue;
             }
 

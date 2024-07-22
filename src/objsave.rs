@@ -16,7 +16,7 @@ use std::path::Path;
 use std::{fs, mem, slice};
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{TextData, VictimRef};
+use crate::{act, save_char, send_to_char, TextData, VictimRef};
 use log::{error, info};
 
 use crate::act_social::do_action;
@@ -25,7 +25,7 @@ use crate::config::{
     CRASH_FILE_TIMEOUT, FREE_RENT, MAX_OBJ_SAVE, MIN_RENT_COST, RENT_FILE_TIMEOUT,
 };
 use crate::db::{DB, REAL, VIRTUAL};
-use crate::handler::{invalid_align, obj_from_char, obj_to_char, obj_to_obj};
+use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_to_obj};
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
@@ -39,7 +39,7 @@ use crate::structs::{
     WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R,
 };
 use crate::util::{
-    get_filename, hssh, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY,
+    can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
 };
 use crate::{Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
@@ -219,7 +219,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
             if invalid_align(ch, obj) || invalid_class(ch, obj) {
                 location = LOC_INVENTORY;
             } else {
-                game.equip_char(chars,db, objs,chid, oid, j as i8);
+                equip_char(&mut game.descriptors, chars,db, objs,chid, oid, j as i8);
             }
         } else {
             /* Oops, saved a player with double equipment? */
@@ -391,7 +391,7 @@ pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
     }
     let fl = OpenOptions::new().read(true).open(&filename);
     if fl.is_err() {
-        game.send_to_char(ch, format!("{} has no rent file.\r\n", name).as_str());
+        send_to_char(&mut game.descriptors, ch, format!("{} has no rent file.\r\n", name).as_str());
         return;
     }
     let mut rent = RentInfo::new();
@@ -405,26 +405,26 @@ pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
 
     /* Oops, can't get the data, punt. */
     if r.is_err() {
-        game.send_to_char(ch, "Error reading rent information.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Error reading rent information.\r\n");
         return;
     }
 
-    game.send_to_char(ch, format!("{}\r\n", filename).as_str());
+    send_to_char(&mut game.descriptors, ch, format!("{}\r\n", filename).as_str());
     match rent.rentcode {
         RENT_RENTED => {
-            game.send_to_char(ch, "Rent\r\n");
+            send_to_char(&mut game.descriptors, ch, "Rent\r\n");
         }
         RENT_CRASH => {
-            game.send_to_char(ch, "Crash\r\n");
+            send_to_char(&mut game.descriptors, ch, "Crash\r\n");
         }
         RENT_CRYO => {
-            game.send_to_char(ch, "Cryo\r\n");
+            send_to_char(&mut game.descriptors, ch, "Cryo\r\n");
         }
         RENT_TIMEDOUT | RENT_FORCED => {
-            game.send_to_char(ch, "TimedOut\r\n");
+            send_to_char(&mut game.descriptors, ch, "TimedOut\r\n");
         }
         _ => {
-            game.send_to_char(ch, "Undef\r\n");
+            send_to_char(&mut game.descriptors, ch, "Undef\r\n");
         }
     }
 
@@ -447,13 +447,13 @@ pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
             let oid = db.read_object(objs, object.item_number, VIRTUAL);
             let obj = objs.get(oid.unwrap());
             // #if USE_AUTOEQ
-            // game.send_to_char(ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
+            // send_to_char(&mut game.descriptors, ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
             // object.item_number, obj.get_obj_rent(),
             // object.location, obj->short_description);
             // #else
             let oin = object.item_number;
             let ch = chars.get(chid);
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!(
                     " [{:5}] ({:5}au) {:20}\r\n",
@@ -548,7 +548,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         let err = fl.err().unwrap();
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: READING OBJECT FILE {} (5) {}", filename, err);
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                          "\r\n********************* NOTICE *********************\r\nThere was a problem loading your objects from disk.\r\nContact a God for assistance.\r\n");
         }
         let ch = chars.get(chid);
@@ -596,7 +596,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             let ch = chars.get_mut(chid);
             ch.set_bank_gold(ch.get_bank_gold() - max(cost - ch.get_gold(), 0));
             ch.set_gold(max(ch.get_gold() - cost, 0));
-            game.save_char(db, chars, texts, objs,chid);
+            save_char(&mut game.descriptors, db, chars, texts, objs,chid);
         }
     }
     let mut num_objs = 0;
@@ -736,7 +736,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                     for oid2 in cont_row[0].iter() {
                         obj_to_obj(chars, objs,*oid2, oid);
                     }
-                    game.equip_char(chars,db, objs,chid, oid, (location - 1) as i8);
+                    equip_char(&mut game.descriptors, chars,db, objs,chid, oid, (location - 1) as i8);
                 } else {
                     /* Object isn't container, empty the list. */
                     let ch = chars.get_mut(chid);
@@ -1274,7 +1274,7 @@ on hand and in the bank.'\r\n",
         rent_deadline,
         if rent_deadline != 1 { "s" } else { "" }
     );
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         &buf,
         false,
@@ -1287,7 +1287,7 @@ on hand and in the bank.'\r\n",
 
 fn crash_report_unrentables(
     game: &mut Game, chars: &Depot<CharData>,
-    db: &DB,objs: & Depot<ObjData>, 
+    db: &DB,objs_: & Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
@@ -1296,13 +1296,13 @@ fn crash_report_unrentables(
     let recep = chars.get(recep_id);
     let mut has_norents = 0;
 
-    if crash_is_unrentable(objs.get(oid)) {
+    if crash_is_unrentable(objs_.get(oid)) {
         has_norents = 1;
         let buf = format!(
             "$n tells you, 'You cannot store {}.'",
-            game.objs(chars, db, objs.get(oid), ch)
+            objs(&game.descriptors, chars, db, objs_.get(oid), ch)
         );
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             false,
@@ -1312,8 +1312,8 @@ fn crash_report_unrentables(
             TO_VICT,
         );
     }
-    for o in objs.get(oid).contains.clone() {
-        has_norents += crash_report_unrentables(game, chars, db, objs,chid, recep_id, o);
+    for o in objs_.get(oid).contains.clone() {
+        has_norents += crash_report_unrentables(game, chars, db, objs_,chid, recep_id, o);
     }
 
     has_norents
@@ -1321,7 +1321,7 @@ fn crash_report_unrentables(
 
 fn crash_report_rent(
     game: &mut Game, chars: &Depot<CharData>,
-    db: &DB,objs: & Depot<ObjData>, 
+    db: &DB,objs_: &Depot<ObjData>, 
     chid: DepotId,
     recep_id: DepotId,
     oid: DepotId,
@@ -1332,16 +1332,16 @@ fn crash_report_rent(
 ) {
     let ch = chars.get(chid);
     let recep = chars.get(recep_id);
-    if !crash_is_unrentable(objs.get(oid)) {
+    if !crash_is_unrentable(objs_.get(oid)) {
         *nitems += 1;
-        *cost += max(0, objs.get(oid).get_obj_rent() * factor);
+        *cost += max(0, objs_.get(oid).get_obj_rent() * factor);
         if display {
             let buf = format!(
                 "$n tells you, '{:5} coins for {}..'",
-                objs.get(oid).get_obj_rent() * factor,
-                game.objs(chars, db, objs.get(oid), ch)
+                objs_.get(oid).get_obj_rent() * factor,
+                objs(&game.descriptors, chars, db, objs_.get(oid), ch)
             );
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -1352,8 +1352,8 @@ fn crash_report_rent(
             );
         }
     }
-    for &o in &objs.get(oid).contains {
-        crash_report_rent(game, chars, db, objs,chid, recep_id, o, cost, nitems, display, factor);
+    for &o in &objs_.get(oid).contains {
+        crash_report_rent(game, chars, db, objs_,chid, recep_id, o, cost, nitems, display, factor);
     }
 }
 
@@ -1420,7 +1420,7 @@ fn crash_offer_rent(
     }
 
     if numitems == 0 {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$n tells you, 'But you are not carrying anything!  Just quit!'",
             false,
@@ -1436,7 +1436,7 @@ fn crash_offer_rent(
             "$n tells you, 'Sorry, but I cannot store more than {} items.'",
             MAX_OBJ_SAVE
         );
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             false,
@@ -1452,7 +1452,7 @@ fn crash_offer_rent(
             "$n tells you, 'Plus, my {} coin fee..'",
             MIN_RENT_COST * factor
         );
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             false,
@@ -1471,7 +1471,7 @@ fn crash_offer_rent(
                 ""
             }
         );
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             false,
@@ -1483,7 +1483,7 @@ fn crash_offer_rent(
 
         let ch = chars.get(chid);
         if totalcost > ch.get_gold() + ch.get_bank_gold() {
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n tells you, '...which I see you can't afford.'",
                 false,
@@ -1536,15 +1536,15 @@ fn gen_receptionist(
     }
 
     if recep.awake() {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("{} is unable to talk to you...\r\n", hssh(recep)).as_str(),
         );
         return true;
     }
 
-    if !game.can_see(chars, db, recep, ch) {
-        game.act(chars, 
+    if !can_see(&game.descriptors, chars, db, recep, ch) {
+        act(&mut game.descriptors, chars, 
             db,
             "$n says, 'I don't deal with people I can't see!'",
             false,
@@ -1557,7 +1557,7 @@ fn gen_receptionist(
     }
 
     if FREE_RENT {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$n tells you, 'Rent is free here.  Just quit, and your objects will be saved!'",
             false,
@@ -1588,7 +1588,7 @@ fn gen_receptionist(
         }
         let recep = chars.get(recep_id);
         let ch = chars.get(chid);
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             false,
@@ -1599,7 +1599,7 @@ fn gen_receptionist(
         );
         let ch = chars.get(chid);
         if cost > ch.get_gold() + ch.get_bank_gold() {
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n tells you, '...which I see you can't afford.'",
                 false,
@@ -1617,7 +1617,7 @@ fn gen_receptionist(
         if mode == RENT_FACTOR {
             let recep = chars.get(recep_id);
             let ch = chars.get(chid);
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n stores your belongings and helps you into your private chamber.",
                 false,
@@ -1644,7 +1644,7 @@ fn gen_receptionist(
             /* cryo */
             let ch = chars.get(chid);
             let recep = chars.get(recep_id);
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n stores your belongings and helps you into your private chamber.\r\n\
 A white mist appears in the room, chilling you to the bone...\r\n\
@@ -1668,7 +1668,7 @@ You begin to lose consciousness...",
         }
         let ch = chars.get(chid);
         let recep = chars.get(recep_id);
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$n helps $N into $S private chamber.",
             false,
@@ -1686,7 +1686,7 @@ You begin to lose consciousness...",
         crash_offer_rent(game, chars, db, objs,chid, recep_id, true, mode);
         let recep = chars.get(recep_id);
         let ch = chars.get(chid);
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$N gives $n an offer.",
             false,

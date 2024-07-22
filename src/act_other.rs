@@ -16,7 +16,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{CharData, ObjData, TextData, VictimRef, DB};
+use crate::{act, save_char, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -24,8 +24,8 @@ use crate::alias::write_aliases;
 use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED};
 use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, IDEA_FILE, TYPO_FILE};
-use crate::fight::die;
-use crate::handler::{affect_from_char, affect_to_char, isname, obj_from_char, obj_to_char, FIND_CHAR_ROOM};
+use crate::fight::{appear, die};
+use crate::handler::{affect_from_char, affect_to_char, get_char_vis, get_obj_in_list_vis, isname, obj_from_char, obj_to_char, FIND_CHAR_ROOM};
 use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
@@ -48,7 +48,7 @@ use crate::structs::{
     PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PEACEFUL,
     WEAR_HOLD,
 };
-use crate::util::{rand_number, CMP, NRM};
+use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 pub fn do_quit(
@@ -65,14 +65,14 @@ pub fn do_quit(
     }
 
     if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT as u8 {
-        game.send_to_char(ch, "You have to type quit--no less, to quit!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have to type quit--no less, to quit!\r\n");
     } else if ch.get_pos() == POS_FIGHTING {
-        game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
+        send_to_char(&mut game.descriptors, ch, "No way!  You're fighting for your life!\r\n");
     } else if ch.get_pos() < POS_STUNNED {
-        game.send_to_char(ch, "You die before your time...\r\n");
+        send_to_char(&mut game.descriptors, ch, "You die before your time...\r\n");
         die(chid, game,chars, db, texts,objs);
     } else {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$n has left the game.",
             true,
@@ -88,7 +88,7 @@ pub fn do_quit(
             true,
             format!("{} has quit the game.", ch.get_name()).as_str(),
         );
-        game.send_to_char(ch, "Goodbye, friend.. Come back soon!\r\n");
+        send_to_char(&mut game.descriptors, ch, "Goodbye, friend.. Come back soon!\r\n");
 
         /*  We used to check here for duping attempts, but we may as well
          *  do it right in extract_char(), since there is no check if a
@@ -135,19 +135,19 @@ pub fn do_save(
          * immortal advances from mortality, you may want < instead of <=.
          */
         if AUTO_SAVE && ch.get_level() <= LVL_IMMORT as u8 {
-            game.send_to_char(ch, "Saving aliases.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Saving aliases.\r\n");
             let ch = chars.get(chid);
             write_aliases(ch);
             return;
         }
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("Saving {} and aliases.\r\n", ch.get_name()).as_str(),
         );
     }
     let ch = chars.get(chid);
     write_aliases(ch);
-    game.save_char(db, chars,texts, objs,chid);
+    save_char(&mut game.descriptors, db, chars,texts, objs,chid);
     crash_crashsave(chars, db,objs, chid);
     let ch = chars.get(chid);
     if db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
@@ -167,7 +167,7 @@ pub fn do_not_here(
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    game.send_to_char(ch, "Sorry, but you cannot do that here!\r\n");
+    send_to_char(&mut game.descriptors, ch, "Sorry, but you cannot do that here!\r\n");
 }
 
 pub fn do_sneak(
@@ -180,10 +180,10 @@ pub fn do_sneak(
 ) {
     let ch = chars.get_mut(chid);
     if ch.is_npc() || ch.get_skill(SKILL_SNEAK) == 0 {
-        game.send_to_char(ch, "You have no idea how to do that.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
         return;
     }
-    game.send_to_char(ch, "Okay, you'll try to move silently for a while.\r\n");
+    send_to_char(&mut game.descriptors, ch, "Okay, you'll try to move silently for a while.\r\n");
     if ch.aff_flagged(AFF_SNEAK) {
         affect_from_char( objs,ch, SKILL_SNEAK as i16);
     }
@@ -216,11 +216,11 @@ pub fn do_hide(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() || ch.get_skill(SKILL_HIDE) == 0 {
-        game.send_to_char(ch, "You have no idea how to do that.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
         return;
     }
 
-    game.send_to_char(ch, "You attempt to hide yourself.\r\n");
+    send_to_char(&mut game.descriptors, ch, "You attempt to hide yourself.\r\n");
     let ch = chars.get_mut(chid);
     if ch.aff_flagged(AFF_HIDE) {
         ch.remove_aff_flags(AFF_HIDE);
@@ -246,11 +246,11 @@ pub fn do_steal(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() || ch.get_skill(SKILL_STEAL) == 0 {
-        game.send_to_char(ch, "You have no idea how to do that.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
         return;
     }
     if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "This room just has such a peaceful, easy feeling...\r\n",
         );
@@ -261,13 +261,13 @@ pub fn do_steal(
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
     if {
-        vict = game.get_char_vis(chars,db, ch, &mut vict_name, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut vict_name, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        game.send_to_char(ch, "Steal what from who?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Steal what from who?\r\n");
         return;
     } else if vict.unwrap().id() == chid {
-        game.send_to_char(ch, "Come on now, that's rather stupid!\r\n");
+        send_to_char(&mut game.descriptors, ch, "Come on now, that's rather stupid!\r\n");
         return;
     }
     let mut ohoh = false;
@@ -304,7 +304,7 @@ pub fn do_steal(
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
         if {
-            obj = game.get_obj_in_list_vis(chars,db, objs,ch, &mut obj_name, None, &vict.carrying);
+            obj = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &mut obj_name, None, &vict.carrying);
             obj.is_none()
         } {
             for eq_pos in 0..NUM_WEARS {
@@ -313,14 +313,14 @@ pub fn do_steal(
                         &obj_name,
                         objs.get(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
                     )
-                    && game.can_see_obj(chars, db, ch, objs.get(vict.get_eq(eq_pos).unwrap()))
+                    && can_see_obj(&game.descriptors, chars, db, ch, objs.get(vict.get_eq(eq_pos).unwrap()))
                 {
                     obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
                     the_eq_pos = eq_pos;
                 }
             }
             if obj.is_none() {
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     "$E hasn't got that item.",
                     false,
@@ -333,11 +333,11 @@ pub fn do_steal(
             } else {
                 /* It is equipment */
                 if vict.get_pos() > POS_STUNNED {
-                    game.send_to_char(ch, "Steal the equipment now?  Impossible!\r\n");
+                    send_to_char(&mut game.descriptors, ch, "Steal the equipment now?  Impossible!\r\n");
                     return;
                 } else {
                     let obj = obj.unwrap();
-                    game.act(chars, 
+                    act(&mut game.descriptors, chars, 
                         db,
                         "You unequip $p and steal it.",
                         false,
@@ -346,7 +346,7 @@ pub fn do_steal(
                         None,
                         TO_CHAR,
                     );
-                    game.act(chars, 
+                    act(&mut game.descriptors, chars, 
                         db,
                         "$n steals $p from $N.",
                         false,
@@ -368,8 +368,8 @@ pub fn do_steal(
             percent += obj.get_obj_weight(); /* Make heavy harder */
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
-                game.send_to_char(ch, "Oops..\r\n");
-                game.act(chars, 
+                send_to_char(&mut game.descriptors, ch, "Oops..\r\n");
+                act(&mut game.descriptors, chars, 
                     db,
                     "$n tried to steal something from you!",
                     false,
@@ -378,7 +378,7 @@ pub fn do_steal(
                     Some(VictimRef::Char(vict)),
                     TO_VICT,
                 );
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     "$n tries to steal something from $N.",
                     true,
@@ -396,10 +396,10 @@ pub fn do_steal(
                         obj_from_char(chars, obj);
                         let ch = chars.get_mut(chid);
                         obj_to_char(obj, ch);
-                        game.send_to_char(ch, "Got it!\r\n");
+                        send_to_char(&mut game.descriptors, ch, "Got it!\r\n");
                     }
                 } else {
-                    game.send_to_char(ch, "You cannot carry that much.\r\n");
+                    send_to_char(&mut game.descriptors, ch, "You cannot carry that much.\r\n");
                 }
             }
         }
@@ -407,8 +407,8 @@ pub fn do_steal(
         /* Steal some coins */
         if vict.awake() && percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
             ohoh = true;
-            game.send_to_char(ch, "Oops..\r\n");
-            game.act(chars, 
+            send_to_char(&mut game.descriptors, ch, "Oops..\r\n");
+            act(&mut game.descriptors, chars, 
                 db,
                 "You discover that $n has $s hands in your wallet.",
                 false,
@@ -417,7 +417,7 @@ pub fn do_steal(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n tries to steal gold from $N.",
                 true,
@@ -437,15 +437,15 @@ pub fn do_steal(
                 vict.set_gold(vict.get_gold() - gold);
                 let ch = chars.get(chid);
                 if gold > 1 {
-                    game.send_to_char(
+                    send_to_char(&mut game.descriptors, 
                         ch,
                         format!("Bingo!  You got {} gold coins.\r\n", gold).as_str(),
                     );
                 } else {
-                    game.send_to_char(ch, "You manage to swipe a solitary gold coin.\r\n");
+                    send_to_char(&mut game.descriptors, ch, "You manage to swipe a solitary gold coin.\r\n");
                 }
             } else {
-                game.send_to_char(ch, "You couldn't get any gold...\r\n");
+                send_to_char(&mut game.descriptors, ch, "You couldn't get any gold...\r\n");
             }
         }
     }
@@ -471,7 +471,7 @@ pub fn do_practice(
     one_argument(argument, &mut arg);
 
     if !arg.is_empty() {
-        game.send_to_char(ch, "You can only practice skills in your guild.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You can only practice skills in your guild.\r\n");
     } else {
         list_skills(game, chars, db, chid);
     }
@@ -492,11 +492,11 @@ pub fn do_visible(
     }
     let ch = chars.get(chid);
     if ch.aff_flagged(AFF_INVISIBLE) {
-        game.appear(chars, db, objs,chid);
+        appear(&mut game.descriptors, chars, db, objs,chid);
         let ch = chars.get(chid);
-        game.send_to_char(ch, "You break the spell of invisibility.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You break the spell of invisibility.\r\n");
     } else {
-        game.send_to_char(ch, "You are already visible.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are already visible.\r\n");
     }
 }
 
@@ -513,16 +513,16 @@ pub fn do_title(
     delete_doubledollar(&mut argument);
 
     if ch.is_npc() {
-        game.send_to_char(ch, "Your title is fine... go away.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Your title is fine... go away.\r\n");
     } else if ch.plr_flagged(PLR_NOTITLE) {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "You can't title yourself -- you shouldn't have abused it!\r\n",
         );
     } else if argument.contains('(') || argument.contains('(') {
-        game.send_to_char(ch, "Titles can't contain the ( or ) characters.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Titles can't contain the ( or ) characters.\r\n");
     } else if argument.len() > MAX_TITLE_LENGTH {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "Sorry, titles can't be longer than {} characters.\r\n",
@@ -535,7 +535,7 @@ pub fn do_title(
         ch.set_title(Some(argument.into()));
         let ch = chars.get(chid);
 
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("Okay, you're now {} {}.\r\n", ch.get_name(), ch.get_title()).as_str(),
         );
@@ -545,7 +545,7 @@ pub fn do_title(
 fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId, vict_id: DepotId) -> i32 {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    if vict.aff_flagged(AFF_GROUP) || !game.can_see(chars, db, ch, vict) {
+    if vict.aff_flagged(AFF_GROUP) || !can_see(&game.descriptors, chars, db, ch, vict) {
         return 0;
     }
     let vict = chars.get_mut(vict_id);
@@ -553,7 +553,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if chid != vict_id {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$N is now a member of your group.",
             false,
@@ -563,7 +563,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
             TO_CHAR,
         );
     }
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         "You are now a member of $n's group.",
         false,
@@ -572,7 +572,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
         Some(VictimRef::Char(vict)),
         TO_VICT,
     );
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         "$N is now a member of $n's group.",
         false,
@@ -587,9 +587,9 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
 fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(ch, "But you are not the member of a group!\r\n");
+        send_to_char(&mut game.descriptors, ch, "But you are not the member of a group!\r\n");
     } else {
-        game.send_to_char(ch, "Your group consists of:\r\n");
+        send_to_char(&mut game.descriptors, ch, "Your group consists of:\r\n");
         let ch = chars.get(chid);
         let k_id = if ch.master.is_some() {
             ch.master.unwrap()
@@ -607,7 +607,7 @@ fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: D
                 k.get_level(),
                 k.class_abbr()
             );
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -631,7 +631,7 @@ fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: D
                 follower.get_level(),
                 follower.class_abbr()
             );
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -663,7 +663,7 @@ pub fn do_group(
     }
 
     if ch.master.is_some() {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "You can not enroll group members without being head of a group.",
             false,
@@ -684,23 +684,23 @@ pub fn do_group(
         }
         if found == 0 {
             let ch = chars.get(chid);
-            game.send_to_char(ch, "Everyone following you is already in your group.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Everyone following you is already in your group.\r\n");
         }
         return;
     }
     let vict;
 
     if {
-        vict = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        game.send_to_char(ch, NOPERSON);
+        send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if (vict.unwrap().master.is_none()
         ||vict.unwrap().master.unwrap() != chid)
         && vict.unwrap().id() != chid
     {
         let vict = vict.unwrap();
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$N must follow you to enter your group.",
             false,
@@ -717,7 +717,7 @@ pub fn do_group(
             perform_group(game, db, chars,chid, vict.id());
         } else {
             if chid != vict.id() {
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     "$N is no longer a member of your group.",
                     false,
@@ -727,7 +727,7 @@ pub fn do_group(
                     TO_CHAR,
                 );
             }
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "You have been kicked out of $n's group!",
                 false,
@@ -736,7 +736,7 @@ pub fn do_group(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$N has been kicked out of $n's group!",
                 false,
@@ -765,7 +765,7 @@ pub fn do_ungroup(
 
     if buf.is_empty() {
         if ch.master.is_some() || !ch.aff_flagged(AFF_GROUP) {
-            game.send_to_char(ch, "But you lead no group!\r\n");
+            send_to_char(&mut game.descriptors, ch, "But you lead no group!\r\n");
             return;
         }
 
@@ -776,7 +776,7 @@ pub fn do_ungroup(
                 follower.remove_aff_flags(AFF_GROUP);
                 let follower = chars.get(f.follower);
                 let ch = chars.get(chid);
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     "$N has disbanded the group.",
                     true,
@@ -787,32 +787,32 @@ pub fn do_ungroup(
                 );
                 let follower = chars.get(f.follower);
                 if !follower.aff_flagged(AFF_CHARM) {
-                    game.stop_follower(chars, db, objs,f.follower);
+                    stop_follower(&mut game.descriptors, chars, db, objs,f.follower);
                 }
             }
         }
         let ch = chars.get_mut(chid);
         ch.remove_aff_flags(AFF_GROUP);
 
-        game.send_to_char(ch, "You disband the group.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You disband the group.\r\n");
         return;
     }
     let tch;
     if {
-        tch = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        tch = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
         tch.is_none()
     } {
-        game.send_to_char(ch, "There is no such person!\r\n");
+        send_to_char(&mut game.descriptors, ch, "There is no such person!\r\n");
         return;
     }
     let tch = tch.unwrap();
     if tch.master.is_none() || tch.master.unwrap() != chid {
-        game.send_to_char(ch, "That person is not following you!\r\n");
+        send_to_char(&mut game.descriptors, ch, "That person is not following you!\r\n");
         return;
     }
 
     if !tch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(ch, "That person isn't in your group.\r\n");
+        send_to_char(&mut game.descriptors, ch, "That person isn't in your group.\r\n");
         return;
     }
     let tchid = tch.id();
@@ -820,7 +820,7 @@ pub fn do_ungroup(
     tch.remove_aff_flags(AFF_GROUP);
     let ch = chars.get(chid);
     let tch = chars.get(tchid);
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         "$N is no longer a member of your group.",
         false,
@@ -829,7 +829,7 @@ pub fn do_ungroup(
         Some(VictimRef::Char(tch)),
         TO_CHAR,
     );
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         "You have been kicked out of $n's group!",
         false,
@@ -838,7 +838,7 @@ pub fn do_ungroup(
         Some(VictimRef::Char(tch)),
         TO_VICT,
     );
-    game.act(chars, 
+    act(&mut game.descriptors, chars, 
         db,
         "$N has been kicked out of $n's group!",
         false,
@@ -849,7 +849,7 @@ pub fn do_ungroup(
     );
     let tch = chars.get(tchid);
     if !tch.aff_flagged(AFF_CHARM) {
-        game.stop_follower(chars, db,objs, tchid);
+        stop_follower(&mut game.descriptors, chars, db,objs, tchid);
     }
 }
 
@@ -863,7 +863,7 @@ pub fn do_report(
 ) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(ch, "But you are not a member of any group!\r\n");
+        send_to_char(&mut game.descriptors, ch, "But you are not a member of any group!\r\n");
         return;
     }
 
@@ -886,7 +886,7 @@ pub fn do_report(
     for f in &k.followers {
         let follower = chars.get(f.follower);
         if follower.aff_flagged(AFF_GROUP) && f.follower != chid {
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 true,
@@ -898,7 +898,7 @@ pub fn do_report(
         }
     }
     if k_id != chid {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf,
             true,
@@ -909,7 +909,7 @@ pub fn do_report(
         );
     }
 
-    game.send_to_char(ch, "You report to the group.\r\n");
+    send_to_char(&mut game.descriptors, ch, "You report to the group.\r\n");
 }
 
 pub fn do_split(
@@ -930,11 +930,11 @@ pub fn do_split(
     if is_number(&buf) {
         amount = buf.parse::<i32>().unwrap();
         if amount <= 0 {
-            game.send_to_char(ch, "Sorry, you can't do that.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Sorry, you can't do that.\r\n");
             return;
         }
         if amount > ch.get_gold() {
-            game.send_to_char(ch, "You don't seem to have that much gold to split.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You don't seem to have that much gold to split.\r\n");
             return;
         }
         let k_id = if ch.master.is_some() {
@@ -965,7 +965,7 @@ pub fn do_split(
             share = amount / num;
             rest = amount % num;
         } else {
-            game.send_to_char(ch, "With whom do you wish to share your gold?\r\n");
+            send_to_char(&mut game.descriptors, ch, "With whom do you wish to share your gold?\r\n");
             return;
         }
         let ch = chars.get_mut(chid);
@@ -995,7 +995,7 @@ pub fn do_split(
         if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() && !k.is_npc() && k_id != chid {
             let k = chars.get_mut(k_id);
             k.set_gold(k.get_gold() + share);
-            game.send_to_char(k, &buf);
+            send_to_char(&mut game.descriptors, k, &buf);
         }
         let k = chars.get(k_id);
         for f in  k.followers.clone() {
@@ -1009,11 +1009,11 @@ pub fn do_split(
                 let follower = chars.get_mut(f.follower);
                 follower.set_gold(follower.get_gold() + share);
 
-                game.send_to_char(follower, &buf);
+                send_to_char(&mut game.descriptors, follower, &buf);
             }
         }
         let ch = chars.get(chid);
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "You split {} coins among {} members -- {} coins each.\r\n",
@@ -1023,7 +1023,7 @@ pub fn do_split(
         );
 
         if rest != 0 {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!(
                     "{} coin{} {} not splitable, so you keep the money.\r\n",
@@ -1037,7 +1037,7 @@ pub fn do_split(
             ch.set_gold(ch.get_gold() + rest);
         }
     } else {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "How many coins do you wish to split with your group?\r\n",
         );
@@ -1060,7 +1060,7 @@ pub fn do_use(
 
     half_chop(&mut argument, &mut arg, &mut buf);
     if arg.is_empty() {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("What do you want to {}?\r\n", CMD_INFO[cmd].command).as_str(),
         );
@@ -1072,10 +1072,10 @@ pub fn do_use(
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 if {
-                    mag_item = game.get_obj_in_list_vis(chars,db, objs,ch, &arg, None, &ch.carrying);
+                    mag_item = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &arg, None, &ch.carrying);
                     mag_item.is_none()
                 } {
-                    game.send_to_char(
+                    send_to_char(&mut game.descriptors, 
                         ch,
                         format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                     );
@@ -1083,7 +1083,7 @@ pub fn do_use(
                 }
             }
             SCMD_USE => {
-                game.send_to_char(
+                send_to_char(&mut game.descriptors, 
                     ch,
                     format!("You don't seem to be holding {} {}.\r\n", an!(arg), arg).as_str(),
                 );
@@ -1099,13 +1099,13 @@ pub fn do_use(
     match subcmd {
         SCMD_QUAFF => {
             if mag_item.get_obj_type() != ITEM_POTION {
-                game.send_to_char(ch, "You can only quaff potions.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can only quaff potions.\r\n");
                 return;
             }
         }
         SCMD_RECITE => {
             if mag_item.get_obj_type() != ITEM_SCROLL {
-                game.send_to_char(ch, "You can only recite scrolls.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can only recite scrolls.\r\n");
                 return;
             }
         }
@@ -1113,7 +1113,7 @@ pub fn do_use(
             if mag_item.get_obj_type() != ITEM_WAND
                 && mag_item.get_obj_type() != ITEM_STAFF
             {
-                game.send_to_char(ch, "You can't seem to figure out how to use it.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can't seem to figure out how to use it.\r\n");
                 return;
             }
         }
@@ -1143,7 +1143,7 @@ pub fn do_wimpy(
 
     if arg.is_empty() {
         if ch.get_wimp_lev() != 0 {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!(
                     "Your current wimp level is {} hit points.\r\n",
@@ -1153,7 +1153,7 @@ pub fn do_wimpy(
             );
             return;
         } else {
-            game.send_to_char(ch, "At the moment, you're not a wimp.  (sure, sure...)\r\n");
+            send_to_char(&mut game.descriptors, ch, "At the moment, you're not a wimp.  (sure, sure...)\r\n");
             return;
         }
     }
@@ -1164,16 +1164,16 @@ pub fn do_wimpy(
             wimp_lev != 0
         } {
             if wimp_lev < 0 {
-                game.send_to_char(ch, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
+                send_to_char(&mut game.descriptors, ch, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
             } else if wimp_lev > ch.get_max_hit() as i32 {
-                game.send_to_char(ch, "That doesn't make much sense, now does it?\r\n");
+                send_to_char(&mut game.descriptors, ch, "That doesn't make much sense, now does it?\r\n");
             } else if wimp_lev > (ch.get_max_hit() / 2) as i32 {
-                game.send_to_char(
+                send_to_char(&mut game.descriptors, 
                     ch,
                     "You can't set your wimp level above half your hit points.\r\n",
                 );
             } else {
-                game.send_to_char(
+                send_to_char(&mut game.descriptors, 
                     ch,
                     format!(
                         "Okay, you'll wimp out if you drop below {} hit points.\r\n",
@@ -1185,7 +1185,7 @@ pub fn do_wimpy(
                 ch.set_wimp_lev(wimp_lev);
             }
         } else {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 "Okay, you'll now tough out fights to the bitter end.\r\n",
             );
@@ -1193,7 +1193,7 @@ pub fn do_wimpy(
             ch.set_wimp_lev(0);
         }
     } else {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "Specify at how many hit points you want to wimp out at.  (0 to disable)\r\n",
         );
@@ -1210,13 +1210,13 @@ pub fn do_display(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() {
-        game.send_to_char(ch, "Monsters don't need displays.  Go away.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Monsters don't need displays.  Go away.\r\n");
         return;
     }
     let argument = argument.trim_start();
 
     if argument.len() == 0 {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
         );
@@ -1227,7 +1227,7 @@ pub fn do_display(
         let ch = chars.get_mut(chid);
         ch.toggle_prf_flag_bits(PRF_DISPAUTO);
         let ch = chars.get(chid);
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "Auto prompt {}abled.\r\n",
@@ -1262,7 +1262,7 @@ pub fn do_display(
                     ch.set_prf_flags_bits(PRF_DISPMOVE);
                 }
                 _ => {
-                    game.send_to_char(
+                    send_to_char(&mut game.descriptors, 
                         ch,
                         "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
                     );
@@ -1272,7 +1272,7 @@ pub fn do_display(
         }
     }
 
-    game.send_to_char(ch, OK);
+    send_to_char(&mut game.descriptors, ch, OK);
 }
 
 pub fn do_gen_write(
@@ -1303,7 +1303,7 @@ pub fn do_gen_write(
     let dt = Utc::now();
 
     if ch.is_npc() {
-        game.send_to_char(ch, "Monsters can't have ideas - Go away.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Monsters can't have ideas - Go away.\r\n");
         return;
     }
 
@@ -1311,7 +1311,7 @@ pub fn do_gen_write(
     delete_doubledollar(&mut argument);
 
     if argument.is_empty() {
-        game.send_to_char(ch, "That must be a mistake...\r\n");
+        send_to_char(&mut game.descriptors, ch, "That must be a mistake...\r\n");
         return;
     }
     game.mudlog(chars,
@@ -1339,7 +1339,7 @@ pub fn do_gen_write(
     let fm = r.unwrap();
 
     if fm.len() >= MAX_FILESIZE as u64 {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "Sorry, the file is full right now.. try again later.\r\n",
         );
@@ -1352,7 +1352,7 @@ pub fn do_gen_write(
             filename,
             fl.err().unwrap()
         );
-        game.send_to_char(ch, "Could not open the file.  Sorry.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Could not open the file.  Sorry.\r\n");
         return;
     }
     let ch = chars.get(chid);
@@ -1370,11 +1370,11 @@ pub fn do_gen_write(
             filename,
             r.err().unwrap()
         );
-        game.send_to_char(ch, "Could not write to the file.  Sorry.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Could not write to the file.  Sorry.\r\n");
         return;
     }
 
-    game.send_to_char(ch, "Okay.  Thanks!\r\n");
+    send_to_char(&mut game.descriptors, ch, "Okay.  Thanks!\r\n");
 }
 
 const TOG_ON: usize = 1;
@@ -1521,9 +1521,9 @@ pub fn do_gen_tog(
     }
 
     if result {
-        game.send_to_char(ch, TOG_MESSAGES[subcmd as usize][TOG_ON]);
+        send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_ON]);
     } else {
-        game.send_to_char(ch, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
+        send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
     }
 
     return;

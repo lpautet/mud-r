@@ -6,12 +6,12 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 /* defines for mudlog() */
 use crate::depot::{Depot, DepotId, HasId};
-use crate::VictimRef;
+use crate::{act, send_to_char, VictimRef};
 use std::borrow::Borrow;
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -492,10 +492,7 @@ macro_rules! get_last_tell_mut {
 #[macro_export]
 macro_rules! set_skill {
     ($ch:expr, $i:expr, $pct:expr) => {{
-        check_player_special!(
-            ($ch),
-            ($ch).player_specials.saved.skills[$i as usize]
-        ) = $pct;
+        check_player_special!(($ch), ($ch).player_specials.saved.skills[$i as usize]) = $pct;
     }};
 }
 
@@ -763,22 +760,13 @@ impl CharData {
     }
 }
 
-impl Game {
-    pub fn get_real_level(&self, chars: &Depot<CharData>, ch: &CharData) -> u8 {
-        if ch.desc.is_some()
-            && self
-                .desc(ch.desc.unwrap())
-                .original
-                .borrow()
-                .is_some()
-        {
-            chars.get(self.desc(ch.desc.unwrap())
-                .original
-                .unwrap())
-                .get_level()
-        } else {
-            ch.get_level()
-        }
+pub fn get_real_level(descs: &Depot<DescriptorData>, chars: &Depot<CharData>, ch: &CharData) -> u8 {
+    if ch.desc.is_some() && descs.get(ch.desc.unwrap()).original.borrow().is_some() {
+        chars
+            .get(descs.get(ch.desc.unwrap()).original.unwrap())
+            .get_level()
+    } else {
+        ch.get_level()
     }
 }
 
@@ -984,54 +972,100 @@ impl DB {
     }
 }
 
-impl Game {
-    pub fn can_get_obj(&self, chars: &Depot<CharData>, db: &DB, ch: &CharData, obj: &ObjData) -> bool {
-        obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && self.can_see_obj(chars, db, ch, obj)
+pub fn can_get_obj(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    ch: &CharData,
+    obj: &ObjData,
+) -> bool {
+    obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && can_see_obj(descs, chars, db, ch, obj)
+}
+pub fn mort_can_see_obj(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    sub: &CharData,
+    obj: &ObjData,
+) -> bool {
+    db.light_ok(sub) && invis_ok_obj(sub, obj) && can_see_obj_carrier(descs, chars, db, sub, obj)
+}
+pub fn can_see(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    sub: &CharData,
+    obj: &CharData,
+) -> bool {
+    self_(sub, obj)
+        || ((get_real_level(descs, chars, sub)
+            >= (if obj.is_npc() {
+                0
+            } else {
+                obj.get_invis_lev() as u8
+            }))
+            && db.imm_can_see(sub, obj))
+}
+pub fn can_see_obj_carrier(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    sub: &CharData,
+    obj: &ObjData,
+) -> bool {
+    (obj.carried_by.borrow().is_none()
+        || can_see(descs, chars, db, sub, chars.get(obj.carried_by.unwrap())))
+        && (obj.worn_by.borrow().is_none()
+            || can_see(descs, chars, db, sub, chars.get(obj.worn_by.unwrap())))
+}
+pub fn pers(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    ch: &CharData,
+    vict: &CharData,
+) -> Rc<str> {
+    if can_see(descs, chars, db, vict, ch) {
+        ch.get_name().clone()
+    } else {
+        Rc::from("someone")
     }
-    pub fn mort_can_see_obj(&self, chars: &Depot<CharData>, db: &DB, sub: &CharData, obj: &ObjData) -> bool {
-        db.light_ok(sub) && invis_ok_obj(sub, obj) && self.can_see_obj_carrier(chars, db, sub, obj)
+}
+pub fn objs(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    obj: &ObjData,
+    vict: &CharData,
+) -> Rc<str> {
+    if can_see_obj(descs, chars, db, vict, obj) {
+        obj.short_description.clone()
+    } else {
+        Rc::from("something")
     }
-    pub fn can_see(&self, chars: &Depot<CharData>, db: &DB, sub: &CharData, obj: &CharData) -> bool {
-        self_(sub, obj)
-            || ((self.get_real_level(chars,  sub)
-                >= (if obj.is_npc() {
-                    0
-                } else {
-                    obj.get_invis_lev() as u8
-                }))
-                && db.imm_can_see(sub, obj))
-    }
-    pub fn can_see_obj_carrier(&self, chars: &Depot<CharData>, db:&DB, sub: &CharData, obj: &ObjData) -> bool {
-        (obj.carried_by.borrow().is_none()
-            || self.can_see(chars, db, sub, chars.get(obj.carried_by.unwrap())))
-            && (obj.worn_by.borrow().is_none()
-                || self.can_see(chars, db, sub, chars.get(obj.worn_by.unwrap())))
-    }
-    pub fn pers(&self, chars: &Depot<CharData>, db: &DB, ch: &CharData, vict: &CharData) -> Rc<str> {
-        if self.can_see(chars, db, vict, ch) {
-            ch.get_name().clone()
-        } else {
-            Rc::from("someone")
-        }
-    }
-    pub fn objs(&self, chars: &Depot<CharData>, db: &DB, obj: &ObjData, vict: &CharData) -> Rc<str> {
-        if self.can_see_obj(chars, db, vict, obj) {
-            obj.short_description.clone()
-        } else {
-            Rc::from("something")
-        }
-    }
+}
 
-    pub fn objn(&self, chars: &Depot<CharData>, db: &DB, obj: &ObjData, vict: &CharData) -> Rc<str> {
-        if self.can_see_obj(chars, db, vict, obj) {
-            fname(obj.name.as_ref())
-        } else {
-            Rc::from("something")
-        }
+pub fn objn(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    obj: &ObjData,
+    vict: &CharData,
+) -> Rc<str> {
+    if can_see_obj(descs, chars, db, vict, obj) {
+        fname(obj.name.as_ref())
+    } else {
+        Rc::from("something")
     }
-    pub fn can_see_obj(&self, chars: &Depot<CharData>, db: &DB, sub: &CharData, obj: &ObjData) -> bool {
-        self.mort_can_see_obj(chars, db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
-    }
+}
+pub fn can_see_obj(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    sub: &CharData,
+    obj: &ObjData,
+) -> bool {
+    mort_can_see_obj(descs, chars, db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
 }
 
 pub fn self_(sub: &CharData, obj: &CharData) -> bool {
@@ -1223,7 +1257,7 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>,db: &DB, chid: DepotId) {
+pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: DepotId) {
     let ch = chars.get(chid);
     let mesg = format!(
         "{} hit death trap #{} ({})",
@@ -1231,7 +1265,7 @@ pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>,db: &DB, chid: De
         db.get_room_vnum(ch.in_room()),
         db.world[ch.in_room() as usize].name
     );
-    game.mudlog(chars,BRF, LVL_IMMORT as i32, true, mesg.as_str());
+    game.mudlog(chars, BRF, LVL_IMMORT as i32, true, mesg.as_str());
 }
 
 /*
@@ -1283,7 +1317,14 @@ pub fn touch(path: &Path) -> io::Result<()> {
  * based on syslog by Fen Jul 3, 1992
  */
 impl Game {
-    pub(crate) fn mudlog(&mut self, chars: &Depot<CharData>, log_type: u8, level: i32, file: bool, msg: &str) {
+    pub(crate) fn mudlog(
+        &mut self,
+        chars: &Depot<CharData>,
+        log_type: u8,
+        level: i32,
+        file: bool,
+        msg: &str,
+    ) {
         if msg == "" {
             return;
         }
@@ -1315,10 +1356,22 @@ impl Game {
             if character.plr_flagged(PLR_WRITING) {
                 continue;
             }
-            if log_type > { if character.prf_flagged(PRF_LOG1) {1} else {0} } + {if character.prf_flagged(PRF_LOG2) {2} else {0} } {
+            if log_type > {
+                if character.prf_flagged(PRF_LOG1) {
+                    1
+                } else {
+                    0
+                }
+            } + {
+                if character.prf_flagged(PRF_LOG2) {
+                    2
+                } else {
+                    0
+                }
+            } {
                 continue;
             }
-            self.send_to_char(
+            send_to_char(&mut self.descriptors, 
                 character,
                 format!(
                     "{}{}{}",
@@ -1473,8 +1526,13 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
-impl Game {
-    pub fn stop_follower(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn stop_follower(
+        descs: &mut Depot<DescriptorData>,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        objs: &mut Depot<ObjData>,
+        chid: DepotId,
+    ) {
         let ch = chars.get(chid);
         if ch.master.is_none() {
             return;
@@ -1483,7 +1541,9 @@ impl Game {
         if ch.aff_flagged(AFF_CHARM) {
             let master_id = ch.master.unwrap();
             let master = chars.get(master_id);
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "You realize that $N is a jerk!",
                 false,
                 Some(ch),
@@ -1491,7 +1551,9 @@ impl Game {
                 Some(VictimRef::Char(master)),
                 TO_CHAR,
             );
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "$n realizes that $N is a jerk!",
                 false,
                 Some(ch),
@@ -1499,7 +1561,9 @@ impl Game {
                 Some(VictimRef::Char(master)),
                 TO_NOTVICT,
             );
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "$n hates your guts!",
                 false,
                 Some(ch),
@@ -1508,12 +1572,14 @@ impl Game {
                 TO_VICT,
             );
             if affected_by_spell(ch, SPELL_CHARM as i16) {
-                affect_from_char(objs,chars.get_mut(chid), SPELL_CHARM as i16);
+                affect_from_char(objs, chars.get_mut(chid), SPELL_CHARM as i16);
             }
         } else {
             let master_id: DepotId = ch.master.unwrap();
             let master = chars.get(master_id);
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "You stop following $N.",
                 false,
                 Some(ch),
@@ -1521,7 +1587,9 @@ impl Game {
                 Some(VictimRef::Char(master)),
                 TO_CHAR,
             );
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "$n stops following $N.",
                 true,
                 Some(ch),
@@ -1529,7 +1597,9 @@ impl Game {
                 Some(VictimRef::Char(master)),
                 TO_NOTVICT,
             );
-            self.act(chars, db,
+            act(descs, 
+                chars,
+                db,
                 "$n stops following you.",
                 true,
                 Some(ch),
@@ -1539,8 +1609,8 @@ impl Game {
             );
         }
         let ch = chars.get(chid);
-        chars.get_mut(ch.master
-            .unwrap())
+        chars
+            .get_mut(ch.master.unwrap())
             .followers
             .retain(|c| c.follower == chid);
         let ch = chars.get_mut(chid);
@@ -1548,38 +1618,48 @@ impl Game {
         ch.remove_aff_flags(AFF_CHARM | AFF_GROUP);
     }
 
+    pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
+        let ch = chars.get(chid);
+        let mut total = 0;
 
-pub fn num_followers_charmed(&self, chars: &Depot<CharData>, chid: DepotId) -> i32 {
-    let ch = chars.get(chid);
-    let mut total = 0;
-
-    for lackey in ch.followers.iter() {
-        if chars.get(lackey.follower).aff_flagged(AFF_CHARM)
-            && chars.get(lackey.follower).master.unwrap() == chid
-        {
-            total += 1;
+        for lackey in ch.followers.iter() {
+            if chars.get(lackey.follower).aff_flagged(AFF_CHARM)
+                && chars.get(lackey.follower).master.unwrap() == chid
+            {
+                total += 1;
+            }
         }
+        total
     }
-    total
-}
-}
-impl Game {
+
     /* Called when a character that follows/is followed dies */
-    pub fn die_follower(&mut self,chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
+    pub fn die_follower(
+        descs: &mut Depot<DescriptorData>,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        objs: &mut Depot<ObjData>,
+        chid: DepotId,
+    ) {
         let ch = chars.get(chid);
         if ch.master.is_some() {
-            self.stop_follower(chars, db, objs,chid);
+            stop_follower(descs, chars, db, objs, chid);
         }
         let ch = chars.get(chid);
-        for k in  ch.followers.clone() {
-            self.stop_follower(chars, db, objs,k.follower);
+        for k in ch.followers.clone() {
+            stop_follower(descs, chars, db, objs, k.follower);
         }
     }
-}
+
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
-pub fn add_follower(game: &mut Game, chars: &mut Depot<CharData>,db: &mut DB, chid: DepotId, leader_id: DepotId) {
+pub fn add_follower(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    chid: DepotId,
+    leader_id: DepotId,
+) {
     let ch = chars.get_mut(chid);
     if ch.master.is_some() {
         // core_dump();
@@ -1588,14 +1668,14 @@ pub fn add_follower(game: &mut Game, chars: &mut Depot<CharData>,db: &mut DB, ch
 
     ch.master = Some(leader_id);
 
-    let k = FollowType {
-        follower: chid,
-    };
+    let k = FollowType { follower: chid };
     let leader = chars.get_mut(leader_id);
     leader.followers.push(k);
     let ch = chars.get(chid);
     let leader = chars.get(leader_id);
-    game.act(chars, db,
+    act(descs, 
+        chars,
+        db,
         "You now follow $N.",
         false,
         Some(ch),
@@ -1605,8 +1685,10 @@ pub fn add_follower(game: &mut Game, chars: &mut Depot<CharData>,db: &mut DB, ch
     );
     let ch = chars.get(chid);
     let leader = chars.get(leader_id);
-    if game.can_see(chars, db, leader, ch) {
-        game.act(chars, db,
+    if can_see(descs, chars, db, leader, ch) {
+        act(descs, 
+            chars,
+            db,
             "$n starts following you.",
             true,
             Some(ch),
@@ -1615,7 +1697,9 @@ pub fn add_follower(game: &mut Game, chars: &mut Depot<CharData>,db: &mut DB, ch
             TO_VICT,
         );
     }
-    game.act(chars, db,
+    act(descs, 
+        chars,
+        db,
         "$n starts to follow $N.",
         true,
         Some(ch),

@@ -13,7 +13,7 @@ use std::cmp::{max, min};
 
 use log::error;
 use crate::depot::{Depot, DepotId};
-use crate::{ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, ObjData, TextData, VictimRef};
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
@@ -91,7 +91,7 @@ pub fn affect_update(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,o
                     if af._type != last_type_notification {
                         if db.spell_info[af._type as usize].wear_off_msg.is_some() {
                             let i = chars.get(i_id);
-                            game.send_to_char(
+                            send_to_char(&mut game.descriptors, 
                                 i,
                                 format!(
                                     "{}\r\n",
@@ -143,13 +143,13 @@ pub fn affect_update(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,o
 // if (verbose) {
 // switch (rand_number(0, 2)) {
 // case 0:
-// game.send_to_char(ch, "A wart sprouts on your nose.\r\n");
+// send_to_char(&mut game.descriptors, ch, "A wart sprouts on your nose.\r\n");
 // break;
 // case 1:
-// game.send_to_char(ch, "Your hair falls out in clumps.\r\n");
+// send_to_char(&mut game.descriptors, ch, "Your hair falls out in clumps.\r\n");
 // break;
 // case 2:
-// game.send_to_char(ch, "A huge corn develops on your big toe.\r\n");
+// send_to_char(&mut game.descriptors, ch, "A huge corn develops on your big toe.\r\n");
 // break;
 // }
 // }
@@ -164,7 +164,7 @@ pub fn affect_update(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,o
 // extract_obj(obj2);
 // }
 // if (verbose) {
-// game.send_to_char(ch, "A puff of smoke rises from your pack.\r\n");
+// send_to_char(&mut game.descriptors, ch, "A puff of smoke rises from your pack.\r\n");
 // act("A puff of smoke rises from $n's pack.", TRUE, ch, NULL, NULL, TO_ROOM);
 // }
 // return (TRUE);
@@ -243,7 +243,7 @@ pub fn mag_damage(
                 victim = ch;
                 dam = (ch.get_hit() - 1) as i32;
             } else if victim.is_good() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "The gods protect $N.",
                     false,
                     Some(ch),
@@ -260,7 +260,7 @@ pub fn mag_damage(
                 victim = ch;
                 dam = (ch.get_hit() - 1) as i32;
             } else if victim.is_evil() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "The gods protect $N.",
                     false,
                     Some(ch),
@@ -379,7 +379,7 @@ pub fn mag_affects(
             if victim.as_ref().unwrap().mob_flagged(MOB_NOBLIND)
                 || mag_savingthrow(victim.as_ref().unwrap(), savetype, 0)
             {
-                game.send_to_char(ch, "You fail.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You fail.\r\n");
                 return;
             }
 
@@ -398,7 +398,7 @@ pub fn mag_affects(
         }
         SPELL_CURSE => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch, NOEFFECT);
+                send_to_char(&mut game.descriptors, ch, NOEFFECT);
                 return;
             }
 
@@ -457,7 +457,7 @@ pub fn mag_affects(
         }
         SPELL_POISON => {
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
-                game.send_to_char(ch, NOEFFECT);
+                send_to_char(&mut game.descriptors, ch, NOEFFECT);
                 return;
             }
             af[0].location = APPLY_STR as u8;
@@ -496,11 +496,11 @@ pub fn mag_affects(
             af[0].bitvector = AFF_SLEEP;
 
             if victim.as_ref().unwrap().get_pos() > POS_SLEEPING {
-                game.send_to_char(
+                send_to_char(&mut game.descriptors, 
                     victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
-                game.act(chars, db,"$n goes to sleep.", true, victim, None, None, TO_ROOM);
+                act(&mut game.descriptors, chars, db,"$n goes to sleep.", true, victim, None, None, TO_ROOM);
                 let mut victim = victim_id.map(|v| chars.get_mut(v));
                 victim.as_mut().unwrap().set_pos(POS_SLEEPING);
             }
@@ -545,7 +545,7 @@ pub fn mag_affects(
     {
         for i in 0..MAX_SPELL_AFFECTS as usize {
             if victim.as_ref().unwrap().aff_flagged(af[i].bitvector) {
-                game.send_to_char(ch, NOEFFECT);
+                send_to_char(&mut game.descriptors, ch, NOEFFECT);
                 return;
             }
         }
@@ -559,7 +559,7 @@ pub fn mag_affects(
     if affected_by_spell(victim.as_ref().unwrap(), spellnum as i16)
         && !(accum_duration || accum_affect)
     {
-        game.send_to_char(ch, NOEFFECT);
+        send_to_char(&mut game.descriptors, ch, NOEFFECT);
         return;
     }
 
@@ -579,11 +579,11 @@ pub fn mag_affects(
     let victim = victim_id.map(|v| chars.get(v));
     let ch = chars.get(chid);
     if !to_vict.is_empty() {
-        game.act(chars, db,to_vict, false, victim, None, Some(VictimRef::Char(ch)), TO_CHAR);
+        act(&mut game.descriptors, chars, db,to_vict, false, victim, None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     let victim = victim_id.map(|v| chars.get(v));
     if !to_room.is_empty() {
-        game.act(chars, db,to_room, true, victim, None, Some(VictimRef::Char(ch)), TO_ROOM);
+        act(&mut game.descriptors, chars, db,to_room, true, victim, None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 /*
@@ -719,10 +719,10 @@ pub fn mag_areas(
     }
 
     if !to_char.is_empty() {
-        game.act(chars, db, to_char, false, Some(ch), None, None, TO_CHAR);
+        act(&mut game.descriptors, chars, db, to_char, false, Some(ch), None, None, TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(chars, db, to_room, false, Some(ch), None, None, TO_ROOM);
+        act(&mut game.descriptors, chars, db, to_room, false, Some(ch), None, None, TO_ROOM);
     }
     let ch = chars.get(chid);
     for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -832,7 +832,7 @@ pub fn mag_summons(
         }
         SPELL_ANIMATE_DEAD => {
             if oid.is_none() || !objs.get(oid.unwrap()).is_corpse() {
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     MAG_SUMMON_FAIL_MSGS[7],
                     false,
                     Some(ch),
@@ -855,11 +855,11 @@ pub fn mag_summons(
     }
 
     if ch.aff_flagged(AFF_CHARM) {
-        game.send_to_char(ch, "You are too giddy to have any followers!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are too giddy to have any followers!\r\n");
         return;
     }
     if rand_number(0, 101) < pfail {
-        game.send_to_char(ch, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
+        send_to_char(&mut game.descriptors, ch, MAG_SUMMON_FAIL_MSGS[fmsg as usize]);
         return;
     }
     for _ in 0..num {
@@ -869,7 +869,7 @@ pub fn mag_summons(
             mob_id.is_none()
         } {
             let ch = chars.get(chid);
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 "You don't quite remember how to make that creature.\r\n",
             );
             return;
@@ -892,7 +892,7 @@ pub fn mag_summons(
         }
         let ch = chars.get(chid);
         let mob = chars.get(mob_id);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             MAG_SUMMON_MSGS[msg],
             false,
             Some(ch),
@@ -900,7 +900,7 @@ pub fn mag_summons(
             Some(VictimRef::Char(mob)),
             TO_ROOM,
         );
-        add_follower(game, chars, db, mob_id, chid);
+        add_follower(&mut game.descriptors, chars, db, mob_id, chid);
 
         if handle_corpse {
             for tobjid in objs.get(oid.unwrap()).contains.clone() {
@@ -933,15 +933,15 @@ pub fn mag_points(
     match spellnum {
         SPELL_CURE_LIGHT => {
             healing = dice(1, 8) + 1 + (level / 4);
-            game.send_to_char(victim, "You feel better.\r\n");
+            send_to_char(&mut game.descriptors, victim, "You feel better.\r\n");
         }
         SPELL_CURE_CRITIC => {
             healing = dice(3, 8) + 3 + (level / 4);
-            game.send_to_char(victim, "You feel a lot better!\r\n");
+            send_to_char(&mut game.descriptors, victim, "You feel a lot better!\r\n");
         }
         SPELL_HEAL => {
             healing = 100 + dice(3, 8);
-            game.send_to_char(victim, "A warm feeling floods your body.\r\n");
+            send_to_char(&mut game.descriptors, victim, "A warm feeling floods your body.\r\n");
         }
         _ => {
             return;
@@ -1004,7 +1004,7 @@ pub fn mag_unaffects(
 
     if !affected_by_spell(victim, spell as i16) {
         if msg_not_affected {
-            game.send_to_char(ch, NOEFFECT);
+            send_to_char(&mut game.descriptors, ch, NOEFFECT);
         }
         return;
     }
@@ -1013,10 +1013,10 @@ let victim = chars.get_mut(victim_id);
     let victim = chars.get(victim_id);
     let ch = chars.get(chid);
     if !to_vict.is_empty() {
-        game.act(chars, db, to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
+        act(&mut game.descriptors, chars, db, to_vict, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_CHAR);
     }
     if !to_room.is_empty() {
-        game.act(chars, db, to_room, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_ROOM);
+        act(&mut game.descriptors, chars, db, to_room, false, Some(victim), None, Some(VictimRef::Char(ch)), TO_ROOM);
     }
 }
 
@@ -1093,15 +1093,15 @@ pub fn mag_alter_objs(
     let ch = chars.get(chid);
     let obj = objs.get(oid);
     if to_char.is_empty() {
-        game.send_to_char(ch, NOEFFECT);
+        send_to_char(&mut game.descriptors, ch, NOEFFECT);
     } else {
-        game.act(chars, db, to_char, true, Some(ch), Some(obj), None, TO_CHAR);
+        act(&mut game.descriptors, chars, db, to_char, true, Some(ch), Some(obj), None, TO_CHAR);
     }
 
     if !to_room.is_empty() {
-        game.act(chars, db, to_room, true, Some(ch), Some(obj), None, TO_ROOM);
+        act(&mut game.descriptors, chars, db, to_room, true, Some(ch), Some(obj), None, TO_ROOM);
     } else if !to_char.is_empty() {
-        game.act(chars, db, to_char, true, Some(ch), Some(obj), None, TO_ROOM);
+        act(&mut game.descriptors, chars, db, to_char, true, Some(ch), Some(obj), None, TO_ROOM);
     }
 }
 
@@ -1118,14 +1118,14 @@ pub fn mag_creations(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, 
             z = 10;
         }
         _ => {
-            game.send_to_char(ch, "Spell unimplemented, it would seem.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Spell unimplemented, it would seem.\r\n");
             return;
         }
     }
     let tobj_id = db.read_object(objs,z, VIRTUAL);
     let ch = chars.get(chid);
     if tobj_id.is_none() {
-        game.send_to_char(ch, "I seem to have goofed.\r\n");
+        send_to_char(&mut game.descriptors, ch, "I seem to have goofed.\r\n");
         error!(
             "SYSERR: spell_creations, spell {}, obj {}: obj not found",
             spellnum, z
@@ -1137,7 +1137,7 @@ pub fn mag_creations(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, 
     obj_to_char(tobj, chars.get_mut(chid));
     let ch = chars.get(chid);
     let tobj = objs.get(tobj_id);
-    game.act(chars, db, 
+    act(&mut game.descriptors, chars, db, 
         "$n creates $p.",
         false,
         Some(ch),
@@ -1145,7 +1145,7 @@ pub fn mag_creations(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, 
         None,
         TO_ROOM,
     );
-    game.act(chars, db, 
+    act(&mut game.descriptors, chars, db, 
         "You create $p.",
         false,
         Some(ch),

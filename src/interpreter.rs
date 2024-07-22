@@ -77,7 +77,7 @@ use crate::structs::{
     SEX_MALE,
 };
 use crate::util::{BRF, NRM};
-use crate::{_clrlevel, clr, write_to_q, Game, ObjData, TextData, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM};
+use crate::{_clrlevel, act, clr, save_char, send_to_char, write_to_q, Game, ObjData, TextData, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM};
 
 /*
  * Alert! Changed from 'struct alias' to 'struct AliasData' in bpl15
@@ -2834,38 +2834,38 @@ pub fn command_interpreter(
     }
 
     if cmd.command == "\n" {
-        game.send_to_char(ch, "Huh?!?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Huh?!?\r\n");
     } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
-        game.send_to_char(ch, "You try, but the mind-numbing cold prevents you...\r\n");
+        send_to_char(&mut game.descriptors, ch, "You try, but the mind-numbing cold prevents you...\r\n");
     } else if cmd.command_pointer as usize == do_nothing as usize {
-        game.send_to_char(ch, "Sorry, that command hasn't been implemented yet.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Sorry, that command hasn't been implemented yet.\r\n");
     } else if ch.is_npc() && cmd.minimum_level >= LVL_IMMORT {
-        game.send_to_char(ch, "You can't use immortal commands while switched.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You can't use immortal commands while switched.\r\n");
     } else if ch.get_pos() < cmd.minimum_position {
         match ch.get_pos() {
             POS_DEAD => {
-                game.send_to_char(ch, "Lie still; you are DEAD!!! :-(\r\n");
+                send_to_char(&mut game.descriptors, ch, "Lie still; you are DEAD!!! :-(\r\n");
             }
             POS_INCAP | POS_MORTALLYW => {
-                game.send_to_char(
+                send_to_char(&mut game.descriptors, 
                     ch,
                     "You are in a pretty bad shape, unable to do anything!\r\n",
                 );
             }
             POS_STUNNED => {
-                game.send_to_char(ch, "All you can do right now is think about the stars!\r\n");
+                send_to_char(&mut game.descriptors, ch, "All you can do right now is think about the stars!\r\n");
             }
             POS_SLEEPING => {
-                game.send_to_char(ch, "In your dreams, or what?\r\n");
+                send_to_char(&mut game.descriptors, ch, "In your dreams, or what?\r\n");
             }
             POS_RESTING => {
-                game.send_to_char(ch, "Nah... You feel too relaxed to do that..\r\n");
+                send_to_char(&mut game.descriptors, ch, "Nah... You feel too relaxed to do that..\r\n");
             }
             POS_SITTING => {
-                game.send_to_char(ch, "Maybe you should get on your feet first?\r\n");
+                send_to_char(&mut game.descriptors, ch, "Maybe you should get on your feet first?\r\n");
             }
             POS_FIGHTING => {
-                game.send_to_char(ch, "No way!  You're fighting for your life!\r\n");
+                send_to_char(&mut game.descriptors, ch, "No way!  You're fighting for your life!\r\n");
             }
             _ => {}
         }
@@ -2903,13 +2903,13 @@ pub fn do_alias(
 
     if arg.is_empty() {
         /* no argument specified -- list currently defined aliases */
-        game.send_to_char(ch, "Currently defined aliases:\r\n");
+        send_to_char(&mut game.descriptors, ch, "Currently defined aliases:\r\n");
         let ch = chars.get(chid);
         if ch.player_specials.aliases.len() == 0 {
-            game.send_to_char(ch, " None.\r\n");
+            send_to_char(&mut game.descriptors, ch, " None.\r\n");
         } else {
             for a in &ch.player_specials.aliases {
-                game.send_to_char(ch, format!("{:15} {}\r\n", a.alias, a.replacement).as_str());
+                send_to_char(&mut game.descriptors, ch, format!("{:15} {}\r\n", a.alias, a.replacement).as_str());
             }
         }
     } else {
@@ -2928,14 +2928,14 @@ pub fn do_alias(
         /* if no replacement string is specified, assume we want to delete */
         if repl.is_empty() {
             if a.is_none() {
-                game.send_to_char(ch, "No such alias.\r\n");
+                send_to_char(&mut game.descriptors, ch, "No such alias.\r\n");
             } else {
-                game.send_to_char(ch, "Alias deleted.\r\n");
+                send_to_char(&mut game.descriptors, ch, "Alias deleted.\r\n");
             }
         } else {
             /* otherwise, either add or redefine an alias */
             if arg == "alias" {
-                game.send_to_char(ch, "You can't alias 'alias'.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You can't alias 'alias'.\r\n");
                 return;
             }
             delete_doubledollar(&mut repl);
@@ -2953,7 +2953,7 @@ pub fn do_alias(
             }
             let ch = chars.get_mut(chid);
             ch.player_specials.aliases.push(a);
-            game.send_to_char(ch, "Alias added.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Alias added.\r\n");
         }
     }
 }
@@ -3497,7 +3497,7 @@ fn perform_dupe_check(
             desc.write_to_output("Reconnecting.\r\n");
             let chid = desc.character.unwrap();
             let ch = chars.get(chid);
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 "$n has reconnected.",
                 true,
@@ -3519,7 +3519,7 @@ fn perform_dupe_check(
             desc.write_to_output("You take over your own body, already in use!\r\n");
             let chid = desc.character.unwrap();
             let ch = chars.get(chid);
-            game.act(chars, db, "$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!",
+            act(&mut game.descriptors, chars, db, "$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!",
              true, Some(ch), None, None, TO_ROOM);
             let desc = game.desc_mut(d_id);
             let v2 = chars.get(desc.character.unwrap()).get_invis_lev() as i32;
@@ -3734,7 +3734,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         let desc = game.desc_mut(d_id);
 
                         let chid = desc.character.unwrap();
-                        game.save_char(db, chars, texts, objs, chid);
+                        save_char(&mut game.descriptors, db, chars, texts, objs, chid);
                         let desc = game.desc_mut(d_id);
 
                         desc.bad_pws += 1;
@@ -3933,7 +3933,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
 
             /* Now GET_NAME() will work properly. */
             db.init_char(chars, texts, character_id);
-            game.save_char(db, chars, texts, objs, character_id);
+            save_char(&mut game.descriptors, db, chars, texts, objs, character_id);
             let desc = game.desc_mut(d_id);
 
             desc.write_to_output(format!("{}\r\n*** PRESS RETURN: ", db.motd).as_str());
@@ -3997,7 +3997,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                             load_room = db.r_frozen_start_room;
                         }
 
-                        game.send_to_char(character, format!("{}", WELC_MESSG).as_str());
+                        send_to_char(&mut game.descriptors, character, format!("{}", WELC_MESSG).as_str());
                         db.character_list.push(character.id());
                         db.char_to_room(chars, objs, character_id, load_room);
                         load_result = crash_load(game, chars, db, texts, objs,character_id);
@@ -4007,9 +4007,9 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         if !character.plr_flagged(PLR_LOADROOM) {
                             character.set_loadroom(NOWHERE);
                         }
-                        game.save_char(db, chars, texts, objs, character_id);
+                        save_char(&mut game.descriptors, db, chars, texts, objs, character_id);
                         let character = chars.get(character_id);
-                        game.act(chars, 
+                        act(&mut game.descriptors, chars, 
                             db,
                             "$n has entered the game.",
                             true,
@@ -4025,7 +4025,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     if character.get_level() == 0 {
                         do_start(game, chars, db, texts, objs, character_id);
                         let character = chars.get(character_id);
-                        game.send_to_char(character, format!("{}", START_MESSG).as_str());
+                        send_to_char(&mut game.descriptors, character, format!("{}", START_MESSG).as_str());
                         look_at_room(game, db, chars, texts, objs,character, false);
                     }
                     let desc = game.desc_mut(d_id);
@@ -4035,14 +4035,14 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     {
                         let chid = desc.character.unwrap();
                         let ch = chars.get(chid);
-                        game.send_to_char(ch, "You have mail waiting.\r\n");
+                        send_to_char(&mut game.descriptors, ch, "You have mail waiting.\r\n");
                     }
                     let desc = game.desc_mut(d_id);
                     if load_result == 2 {
                         /* rented items lost */
                         let chid = desc.character.unwrap();
                         let ch = chars.get(chid);
-                        game.send_to_char(ch, "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
+                        send_to_char(&mut game.descriptors, ch, "\r\n\007You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
                     }
                     let desc = game.desc_mut(d_id);
                     desc.has_prompt = false;
@@ -4062,7 +4062,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                 }
                 '3' => {
                     let msg = db.background.as_ref();
-                    page_string(game, chars,  d_id, msg, false);
+                    page_string(&mut game.descriptors, chars,  d_id, msg, false);
                     let desc = game.desc_mut(d_id);
                     desc.set_state(ConRmotd);
                 }
@@ -4150,7 +4150,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                 if d_ch.get_level() < LVL_GRGOD as u8 {
                     d_ch.set_plr_flag_bit(PLR_DELETED);
                 }
-                game.save_char(db, chars, texts, objs, d_chid);
+                save_char(&mut game.descriptors, db, chars, texts, objs, d_chid);
                 let desc = game.desc_mut(d_id);
                 let d_ch = chars.get(d_chid);
                 crash_delete_file(&d_ch.get_name());

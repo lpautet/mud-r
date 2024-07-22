@@ -24,7 +24,7 @@ use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::LVL_GOD;
 use crate::util::{ctime, time_now, NRM};
-use crate::{CharData, Game, ObjData, TextData};
+use crate::{send_to_char, CharData, Game, ObjData, TextData};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 
@@ -122,17 +122,17 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
     let ch = chars.get(chid);
     if argument.is_empty() {
         if db.ban_list.is_empty() {
-            game.send_to_char(ch, "No sites are banned.\r\n");
+            send_to_char(&mut game.descriptors, ch, "No sites are banned.\r\n");
             return;
         }
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             format!(
                 ban_list_format!(),
                 "Banned Site Name", "Ban Type", "Banned On", "Banned By"
             )
             .as_str(),
         );
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             format!(
                 ban_list_format!(),
                 "---------------------------------",
@@ -150,7 +150,7 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
             } else {
                 timestr = "Unknown".to_string();
             }
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!(
                     ban_list_format!(),
                     db.ban_list[idx].site, BAN_TYPES[db.ban_list[idx].type_ as usize], timestr, db.ban_list[idx].name
@@ -164,16 +164,16 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
     let mut site = String::new();
     two_arguments(argument, &mut flag, &mut site);
     if site.is_empty() || flag.is_empty() {
-        game.send_to_char(ch, "Usage: ban {all | select | new} site_name\r\n");
+        send_to_char(&mut game.descriptors, ch, "Usage: ban {all | select | new} site_name\r\n");
         return;
     }
     if !(flag == "select" || flag == "all" || flag == "new") {
-        game.send_to_char(ch, "Flag must be ALL, SELECT, or NEW.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Flag must be ALL, SELECT, or NEW.\r\n");
         return;
     }
     let ban_node = db.ban_list.iter().find(|b| b.site.as_ref() == site);
     if ban_node.is_some() {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "That site has already been banned -- unban it to change the ban type.\r\n",
         );
         return;
@@ -208,7 +208,7 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
         )
         .as_str(),
     );
-    game.send_to_char(ch, "Site banned.\r\n");
+    send_to_char(&mut game.descriptors, ch, "Site banned.\r\n");
     write_ban_list(&db);
 }
 
@@ -217,7 +217,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     let mut site = String::new();
     one_argument(argument, &mut site);
     if site.is_empty() {
-        game.send_to_char(ch, "A site to unban might help.\r\n");
+        send_to_char(&mut game.descriptors, ch, "A site to unban might help.\r\n");
         return;
     }
     let p = db
@@ -226,13 +226,13 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
         .position(|b| b.site.as_ref() == site);
 
     if p.is_none() {
-        game.send_to_char(ch, "That site is not currently banned.\r\n");
+        send_to_char(&mut game.descriptors, ch, "That site is not currently banned.\r\n");
         return;
     }
 
     let ban_node = db.ban_list.remove(p.unwrap());
     let ch = chars.get(chid);
-    game.send_to_char(ch, "Site unbanned.\r\n");
+    send_to_char(&mut game.descriptors, ch, "Site unbanned.\r\n");
     let ch = chars.get(chid);
     game.mudlog(chars,
         NRM,

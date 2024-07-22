@@ -23,8 +23,8 @@ use crate::structs::{
     MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE,
     MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
 };
-use crate::util::rand_number;
-use crate::{Game, ObjData, DB, TO_ROOM};
+use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
+use crate::{act, Game, ObjData, DB, TO_ROOM};
 use crate::{TextData, VictimRef};
 
 impl Game {
@@ -73,7 +73,7 @@ impl Game {
                     {
                         for &oid in &db.world[ch.in_room() as usize].contents {
                             let obj = objs.get(oid);
-                            if self.can_get_obj(chars, db, ch, obj) && obj.get_obj_cost() > max {
+                            if can_get_obj(&self.descriptors, chars, db, ch, obj) && obj.get_obj_cost() > max {
                                 best_obj_id = Some(oid);
                                 max = obj.get_obj_cost();
                             }
@@ -85,7 +85,7 @@ impl Game {
                         obj_to_char(best_obj, chars.get_mut(chid));
                         let ch = chars.get(chid);
                         let best_obj = objs.get(best_obj_id.unwrap());
-                        self.act(chars, 
+                        act(&mut self.descriptors, chars, 
                             db,
                             "$n gets $p.",
                             false,
@@ -127,7 +127,7 @@ impl Game {
                     }
                     let ch = chars.get(chid);
                     if vict.is_npc()
-                        || !self.can_see(chars, db, ch, vict)
+                        || !can_see(&self.descriptors, chars, db, ch, vict)
                         || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
@@ -164,7 +164,7 @@ impl Game {
                     }
                     let ch = chars.get(chid);
                     if vict.is_npc()
-                        || !self.can_see(chars, db, ch, vict)
+                        || !can_see(&self.descriptors, chars, db, ch, vict)
                         || vict.prf_flagged(PRF_NOHASSLE)
                     {
                         continue;
@@ -183,7 +183,7 @@ impl Game {
                         }
                         let ch = chars.get(chid);
                         found = true;
-                        self.act(chars, 
+                        act(&mut self.descriptors, chars, 
                             db,
                             "'Hey!  You're the fiend that attacked me!!!', exclaims $n.",
                             false,
@@ -209,18 +209,18 @@ impl Game {
             let ch = chars.get(chid);
             if ch.aff_flagged(AFF_CHARM)
                 && ch.master.is_some()
-                && self.num_followers_charmed(chars, ch.master.unwrap())
+                && num_followers_charmed(chars, ch.master.unwrap())
                     > ((chars.get(ch.master.unwrap()).get_cha() - 2) / 3) as i32
             {
                 let master_id = ch.master.unwrap();
                 if !self.aggressive_mob_on_a_leash(chars, db, texts, objs, chid, Some(master_id), master_id) {
                     let ch = chars.get(chid);
-                    if self.can_see(chars, db, ch, chars.get(ch.master.unwrap()))
+                    if can_see(&self.descriptors, chars, db, ch, chars.get(ch.master.unwrap()))
                         && !chars.get(ch.master.unwrap()).prf_flagged(PRF_NOHASSLE)
                     {
                         let victim_id = ch.master.unwrap();
                         self.hit(chars, db, texts, objs,chid, victim_id, TYPE_UNDEFINED);
-                        self.stop_follower(chars, db, objs,chid);
+                        stop_follower(&mut self.descriptors, chars, db, objs,chid);
                     }
                 }
             }
@@ -245,7 +245,7 @@ impl Game {
                     let ch = chars.get(chid);
                     let vict = chars.get(vict_id);
 
-                    self.act(chars, 
+                    act(&mut self.descriptors, chars, 
                         db,
                         "$n jumps to the aid of $N!",
                         false,

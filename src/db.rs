@@ -32,7 +32,7 @@ use crate::constants::{
     WEAR_BITS_COUNT,
 };
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{affect_remove, fname, get_obj_in_list_num, isname, obj_to_char, obj_to_obj};
+use crate::handler::{affect_remove, equip_char, fname, get_obj_in_list_num, isname, obj_to_char, obj_to_obj};
 use crate::house::{house_boot, HouseControlRec, MAX_HOUSES};
 use crate::interpreter::{one_argument, one_word, search_block};
 use crate::mail::MailSystem;
@@ -61,7 +61,7 @@ use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
     CMP, NRM, SECS_PER_REAL_HOUR,
 };
-use crate::{check_player_special, get_last_tell_mut, DescriptorData, Game, TextData};
+use crate::{check_player_special, get_last_tell_mut, send_to_char, DescriptorData, Game, TextData};
 
 const CREDITS_FILE: &str = "./text/credits";
 const NEWS_FILE: &str = "./text/news";
@@ -432,12 +432,12 @@ pub fn do_reboot(
             db.index_boot( texts, DB_BOOT_HLP);
         }
         _ => {
-            game.send_to_char(ch, "Unknown reload option.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Unknown reload option.\r\n");
             return;
         }
     }
     let ch = chars.get(chid);
-    game.send_to_char(ch, OK);
+    send_to_char(&mut game.descriptors, ch, OK);
 }
 
 pub(crate) fn boot_world(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>) {
@@ -2290,15 +2290,14 @@ impl DB {
      *  procedures for resetting, both play-time and boot-time	 	 *
      *************************************************************************/
 }
-impl Game {
-    pub fn vnum_mobile(&mut self, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
+    pub fn vnum_mobile(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
         let ch = chars.get(chid);
         let mut found = 0;
         for nr in 0..db.mob_protos.len() {
             let mp = &db.mob_protos[nr];
             if isname(searchname, &mp.player.name) {
                 found += 1;
-                self.send_to_char(
+                send_to_char(descs, 
                     ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
@@ -2311,14 +2310,14 @@ impl Game {
         return found;
     }
 
-    pub fn vnum_object(&mut self, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
+    pub fn vnum_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, searchname: &str, chid: DepotId) -> i32 {
         let ch = chars.get(chid);
         let mut found = 0;
         for nr in 0..db.obj_proto.len() {
             let op = &db.obj_proto[nr];
             if isname(searchname, &op.name) {
                 found += 1;
-                self.send_to_char(
+                send_to_char(descs, 
                     ch,
                     format!(
                         "{:3}. [{:5}] {}\r\n",
@@ -2331,7 +2330,7 @@ impl Game {
 
         return found;
     }
-}
+
 impl DB {
     // /* create a character, and add it to the char list */
     // struct char_data *create_char(void)
@@ -2685,7 +2684,7 @@ impl Game {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             oid = db.read_object(objs, nr, REAL);
                             let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
-                            self.equip_char(chars,db, objs, mob_id.unwrap(), oid.unwrap(), pos);
+                            equip_char(&mut self.descriptors, chars,db, objs, mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }
                     } else {
@@ -2847,7 +2846,6 @@ impl DB {
         return Some(player_i);
     }
 }
-impl Game {
     /*
      * write the vital data of a player to the player file
      *
@@ -2855,7 +2853,7 @@ impl Game {
      * Unfortunately, 'host' modifying is still here due to lack
      * of that variable in the char_data structure.
      */
-    pub fn save_char(&mut self, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,chid: DepotId) {
+    pub fn save_char(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,chid: DepotId) {
         let ch = chars.get(chid);
         let mut st: CharFileU = CharFileU::new();
 
@@ -2863,11 +2861,11 @@ impl Game {
             return;
         }
 
-        self.char_to_store(texts, objs, db, chars, chid, &mut st);
+        char_to_store(descs, texts, objs, db, chars, chid, &mut st);
         let ch = chars.get(chid);
         copy_to_stored(
             &mut st.host,
-            self.desc(ch.desc.unwrap()).host.as_ref(),
+            descs.get(ch.desc.unwrap()).host.as_ref(),
         );
 
         unsafe {
@@ -2881,7 +2879,7 @@ impl Game {
                 .expect("Error while writing player record to file");
         }
     }
-}
+
 
 impl CharFileU {
     pub fn new() -> CharFileU {
@@ -3036,9 +3034,8 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
 } /* store_to_char */
 
 /* copy vital data from a players char-structure to the file structure */
-impl Game {
     pub fn char_to_store(
-        &mut self,
+        descs: &mut Depot<DescriptorData>,
         texts: &mut Depot<TextData>,
         objs: &mut Depot<ObjData>,
         db: &mut DB,chars: &mut Depot<CharData>,
@@ -3149,12 +3146,12 @@ impl Game {
 
         for i in 0..NUM_WEARS {
             if char_eq[i as usize].is_some() {
-                self.equip_char(chars,db, objs, chid, char_eq[i as usize].unwrap(), i);
+                equip_char(descs, chars,db, objs, chid, char_eq[i as usize].unwrap(), i);
             }
         }
         /*   affect_total(ch); unnecessary, I think !?! */
     } /* Char to store */
-}
+
 
 pub fn copy_to_stored(to: &mut [u8], from: &str) -> usize {
     let bytes = from.as_bytes();

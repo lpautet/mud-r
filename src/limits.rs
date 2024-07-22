@@ -18,7 +18,7 @@ use crate::config::{
 };
 use crate::depot::{Depot, DepotId};
 use crate::fight::update_pos;
-use crate::handler::{obj_from_obj, obj_to_obj};
+use crate::handler::{obj_from_obj, obj_to_obj, update_char_objects};
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
@@ -30,7 +30,7 @@ use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
 };
 use crate::util::{age, BRF, CMP};
-use crate::{Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
+use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -278,9 +278,9 @@ pub fn gain_exp(
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(ch, "You rise a level!\r\n");
+                send_to_char(&mut game.descriptors, ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                send_to_char(&mut game.descriptors, ch, format!("You rise {} levels!\r\n", num_levels).as_str());
                 let ch = chars.get_mut(chid);
                 set_title(ch, None);
                 let ch = chars.get(chid);
@@ -348,9 +348,9 @@ pub fn gain_exp_regardless(
                 .as_str(),
             );
             if num_levels == 1 {
-                game.send_to_char(ch, "You rise a level!\r\n");
+                send_to_char(&mut game.descriptors, ch, "You rise a level!\r\n");
             } else {
-                game.send_to_char(ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                send_to_char(&mut game.descriptors, ch, format!("You rise {} levels!\r\n", num_levels).as_str());
             }
             let ch = chars.get_mut(chid);
             set_title(ch, None);
@@ -361,9 +361,8 @@ pub fn gain_exp_regardless(
     }
 }
 
-impl Game {
     pub(crate) fn gain_condition(
-        &mut self,
+        descs: &mut Depot<DescriptorData>,
         ch: &mut CharData,
         condition: i32,
         value: i32,
@@ -387,20 +386,20 @@ impl Game {
 
         match condition {
             FULL => {
-                self.send_to_char(ch, "You are hungry.\r\n");
+                send_to_char(descs, ch, "You are hungry.\r\n");
             }
             THIRST => {
-                self.send_to_char(ch, "You are thirsty.\r\n");
+                send_to_char(descs, ch, "You are thirsty.\r\n");
             }
             DRUNK => {
                 if intoxicated {
-                    self.send_to_char(ch, "You are now sober.\r\n");
+                    send_to_char(descs, ch, "You are now sober.\r\n");
                 }
             }
             _ => {}
         }
     }
-
+impl Game {
     fn check_idling(
         &mut self,
         chars: &mut Depot<CharData>,
@@ -421,7 +420,7 @@ impl Game {
                     db.stop_fighting(chars.get_mut(chid));
                 }
                 let ch = chars.get(chid);
-                self.act(
+                act(&mut self.descriptors, 
                     chars,
                     db,
                     "$n disappears into the void.",
@@ -432,8 +431,8 @@ impl Game {
                     TO_ROOM,
                 );
                 let ch = chars.get(chid);
-                self.send_to_char(ch, "You have been idle, and are pulled into a void.\r\n");
-                self.save_char(db, chars, texts, objs, chid);
+                send_to_char(&mut self.descriptors, ch, "You have been idle, and are pulled into a void.\r\n");
+                save_char(&mut self.descriptors, db, chars, texts, objs, chid);
                 crash_crashsave(chars, db, objs, chid);
                 db.char_from_room(objs, chars.get_mut(chid));
                 db.char_to_room(chars, objs, chid, 1);
@@ -486,9 +485,10 @@ impl Game {
         /* characters */
         for &i_id in &db.character_list.clone() {
             let i = chars.get_mut(i_id);
-            self.gain_condition(i, FULL, -1);
-            self.gain_condition(i, DRUNK, -1);
-            self.gain_condition(i, THIRST, -1);
+            let descs = &mut self.descriptors;
+            gain_condition(descs, i, FULL, -1);
+        gain_condition(descs, i, DRUNK, -1);
+            gain_condition(descs, i, THIRST, -1);
             if i.get_pos() >= POS_STUNNED {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
@@ -513,7 +513,7 @@ impl Game {
             }
             let i = chars.get(i_id);
             if !i.is_npc() {
-                self.update_char_objects(chars, objs, db, i_id);
+                update_char_objects(&mut self.descriptors, chars, objs, db, i_id);
                 let i = chars.get(i_id);
                 if i.get_level() < IDLE_MAX_LEVEL as u8 {
                     self.check_idling(chars, db, texts, objs, i_id);
@@ -539,7 +539,7 @@ impl Game {
                     if j_obj.carried_by.is_some() {
                         let chid = j_obj.carried_by.unwrap();
                         let ch = chars.get(chid);
-                        self.act(
+                        act(&mut self.descriptors, 
                             chars,
                             db,
                             "$p decays in your hands.",
@@ -554,7 +554,7 @@ impl Game {
                     {
                         let chid = db.world[j_obj.in_room() as usize].peoples[0];
                         let ch = chars.get(chid);
-                        self.act(
+                        act(&mut self.descriptors, 
                             chars,
                             db,
                             "A quivering horde of maggots consumes $p.",
@@ -564,7 +564,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.act(
+                        act(&mut self.descriptors, 
                             chars,
                             db,
                             "A quivering horde of maggots consumes $p.",

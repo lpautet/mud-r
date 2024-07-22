@@ -17,10 +17,10 @@ use std::rc::Rc;
 use log::error;
 use regex::Regex;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{CharData, ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
-use crate::handler::FIND_CHAR_ROOM;
+use crate::handler::{get_char_vis, FIND_CHAR_ROOM};
 use crate::interpreter::{find_command, one_argument, CMD_INFO};
 use crate::structs::SEX_MALE;
 use crate::util::rand_number;
@@ -62,7 +62,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         act_nr = find_action(db, cmd);
         act_nr.is_none()
     } {
-        game.send_to_char(ch, "That action is not supported.\r\n");
+        send_to_char(&mut game.descriptors, ch, "That action is not supported.\r\n");
         return;
     }
     let act_nr = act_nr.unwrap();
@@ -85,8 +85,8 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
 
     if buf.is_empty() {
-        game.send_to_char(ch, format!("{}\r\n", action_char_no_arg).as_str());
-        game.act(chars, db,
+        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", action_char_no_arg).as_str());
+        act(&mut game.descriptors, chars, db,
             &action_others_no_arg,
             action_hide,
             Some(ch),
@@ -98,13 +98,13 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
     let vict;
     if {
-        vict = game.get_char_vis(chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        game.send_to_char(ch, format!("{}\r\n", &action_not_found).as_str());
+        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_not_found).as_str());
     } else if vict.unwrap().id() == chid {
-        game.send_to_char(ch, format!("{}\r\n", &action_char_auto).as_str());
-        game.act(chars, db,
+        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_char_auto).as_str());
+        act(&mut game.descriptors, chars, db,
             &action_others_auto,
             action_hide,
             Some(ch),
@@ -115,7 +115,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     } else {
         let vict = vict.unwrap();
         if vict.get_pos() < action_min_victim_position as u8 {
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$N is not in a proper position for that.",
                 false,
                 Some(ch),
@@ -124,7 +124,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 TO_CHAR | TO_SLEEP,
             );
         } else {
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 &action_char_found,
                 false,
                 Some(ch),
@@ -132,7 +132,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 &action_others_found,
                 action_hide,
                 Some(ch),
@@ -140,7 +140,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 &action_vict_found,
                 action_hide,
                 Some(ch),
@@ -160,14 +160,14 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     if !arg.is_empty() {
         let victim;
         if {
-            victim = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            victim = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
             victim.is_none()
         } {
-            game.send_to_char(ch, "Can't hear you!\r\n");
+            send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");
         } else {
             let victim = victim.unwrap();
             if victim.id() != chid {
-                game.send_to_char(ch,
+                send_to_char(&mut game.descriptors, ch,
                     format!("You insult {}.\r\n", victim.get_name()).as_str(),
                 );
 
@@ -176,7 +176,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         let ch = chars.get(chid);
                         if ch.get_sex() == SEX_MALE {
                             if victim.get_sex() == SEX_MALE {
-                                game.act(chars, db,
+                                act(&mut game.descriptors, chars, db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
                                     Some(ch),
@@ -185,7 +185,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                                     TO_VICT,
                                 );
                             } else {
-                                game.act(chars, db,
+                                act(&mut game.descriptors, chars, db,
                                     "$n says that women can't fight.",
                                     false,
                                     Some(ch),
@@ -197,7 +197,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         } else {
                             /* Ch == Woman */
                             if victim.get_sex() == SEX_MALE {
-                                game.act(chars, db,
+                                act(&mut game.descriptors, chars, db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,
                                     Some(ch),
@@ -206,13 +206,13 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                                     TO_VICT,
                                 );
                             } else {
-                                game.act(chars, db,"$n tells you that you'd lose a beauty contest against a troll.",
+                                act(&mut game.descriptors, chars, db,"$n tells you that you'd lose a beauty contest against a troll.",
                                        false, Some(ch), None, Some(VictimRef::Char(victim)), TO_VICT);
                             }
                         }
                     }
                     1 => {
-                        game.act(chars, db,
+                        act(&mut game.descriptors, chars, db,
                             "$n calls your mother a bitch!",
                             false,
                             Some(ch),
@@ -222,7 +222,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         );
                     }
                     _ => {
-                        game.act(chars, db,
+                        act(&mut game.descriptors, chars, db,
                             "$n tells you to get lost!",
                             false,
                             Some(ch),
@@ -233,7 +233,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                     }
                 } /* end switch */
 
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "$n insults $N.",
                     true,
                     Some(ch),
@@ -243,11 +243,11 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 );
             } else {
                 /* ch == victim */
-                game.send_to_char(ch, "You feel insulted.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You feel insulted.\r\n");
             }
         }
     } else {
-        game.send_to_char(ch, "I'm sure you don't want to insult *everybody*...\r\n");
+        send_to_char(&mut game.descriptors, ch, "I'm sure you don't want to insult *everybody*...\r\n");
     }
 }
 

@@ -11,7 +11,7 @@
 
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{get_char_vis, get_obj_in_list_vis, get_player_vis, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
 use crate::interpreter::{
     delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
     SCMD_SHOUT, SCMD_WHISPER,
@@ -23,7 +23,8 @@ use crate::structs::{
     PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
     PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
-use crate::{CharData, ObjData, TextData, VictimRef, DB};
+use crate::util::can_see_obj;
+use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
 use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
@@ -44,9 +45,9 @@ pub fn do_say(
     let ch = chars.get(chid);
 
     if argument.is_empty() {
-        game.send_to_char(ch, "Yes, but WHAT do you want to say?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Yes, but WHAT do you want to say?\r\n");
     } else {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &format!("$n says, '{}'", argument),
             false,
@@ -56,11 +57,11 @@ pub fn do_say(
             TO_ROOM,
         );
         if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         } else {
             let mut argument = argument.to_string();
             delete_doubledollar(&mut argument);
-            game.send_to_char(ch, &format!("You say, '{}'\r\n", argument));
+            send_to_char(&mut game.descriptors, ch, &format!("You say, '{}'\r\n", argument));
         }
     }
 }
@@ -80,11 +81,11 @@ pub fn do_gsay(
     let argument = argument.trim_start();
 
     if !ch.aff_flagged(AFF_GROUP) {
-        game.send_to_char(ch, "But you are not the member of a group!\r\n");
+        send_to_char(&mut game.descriptors, ch, "But you are not the member of a group!\r\n");
         return;
     }
     if argument.is_empty() {
-        game.send_to_char(ch, "Yes, but WHAT do you want to group-say?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Yes, but WHAT do you want to group-say?\r\n");
     } else {
         let k_id: DepotId;
         if ch.master.is_some() {
@@ -96,7 +97,7 @@ pub fn do_gsay(
         let buf = format!("$n tells the group, '{}'", argument);
         let k = chars.get(k_id);
         if k.aff_flagged(AFF_GROUP) && k_id != chid {
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -110,7 +111,7 @@ pub fn do_gsay(
         for f_id in followers_ids {
             let f = chars.get(f_id);
             if f.aff_flagged(AFF_GROUP) && f_id != chid {
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     &buf,
                     false,
@@ -122,9 +123,9 @@ pub fn do_gsay(
             }
         }
         if ch.prf_flagged(PRF_NOREPEAT) {
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         } else {
-            game.send_to_char(ch, &format!("You tell the group, '{}'\r\n", argument));
+            send_to_char(&mut game.descriptors, ch, &format!("You tell the group, '{}'\r\n", argument));
         }
     }
 }
@@ -139,8 +140,8 @@ fn perform_tell(
 ) {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    game.send_to_char(vict, CCRED!(vict, C_NRM));
-    game.act(chars, 
+    send_to_char(&mut game.descriptors, vict, CCRED!(vict, C_NRM));
+    act(&mut game.descriptors, chars, 
         db,
         &format!("$n tells you, '{}'", arg),
         false,
@@ -149,13 +150,13 @@ fn perform_tell(
         Some(VictimRef::Char(vict)),
         TO_VICT | TO_SLEEP,
     );
-    game.send_to_char(vict, CCNRM!(vict, C_NRM));
+    send_to_char(&mut game.descriptors, vict, CCNRM!(vict, C_NRM));
 
     if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
-        game.send_to_char(ch, OK);
+        send_to_char(&mut game.descriptors, ch, OK);
     } else {
-        game.send_to_char(ch, CCRED!(ch, C_NRM));
-        game.act(chars, 
+        send_to_char(&mut game.descriptors, ch, CCRED!(ch, C_NRM));
+        act(&mut game.descriptors, chars, 
             db,
             &format!("You tell $N, '{}'", arg),
             false,
@@ -164,7 +165,7 @@ fn perform_tell(
             Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
-        game.send_to_char(ch, CCNRM!(ch, C_NRM));
+        send_to_char(&mut game.descriptors, ch, CCNRM!(ch, C_NRM));
     }
     if !vict.is_npc() && !ch.is_npc() {
         let ch_idnum = ch.get_idnum();
@@ -180,17 +181,17 @@ fn is_tell_ok(
     vict: &CharData,
 ) -> bool {
     if ch.id() == vict.id() {
-        game.send_to_char(ch, "You try to tell yourself something.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You try to tell yourself something.\r\n");
     } else if !ch.is_npc() && ch.prf_flagged(PRF_NOTELL) {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "You can't tell other people while you have notell on.\r\n",
         );
     } else if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
-        game.send_to_char(ch, "The walls seem to absorb your words.\r\n");
+        send_to_char(&mut game.descriptors, ch, "The walls seem to absorb your words.\r\n");
     } else if !vict.is_npc() && vict.desc.is_none() {
         /* linkless */
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$E's linkless at the moment.",
             false,
@@ -200,7 +201,7 @@ fn is_tell_ok(
             TO_CHAR | TO_SLEEP,
         );
     } else if vict.plr_flagged(PLR_WRITING) {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$E's writing a message right now; try again later.",
             false,
@@ -212,7 +213,7 @@ fn is_tell_ok(
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
         || db.room_flagged(vict.in_room(), ROOM_SOUNDPROOF)
     {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$E can't hear you.",
             false,
@@ -250,17 +251,17 @@ pub fn do_tell(
     half_chop(&mut argument, &mut buf, &mut buf2);
     let mut vict = None;
     if buf.is_empty() || buf2.is_empty() {
-        game.send_to_char(ch, "Who do you wish to tell what??\r\n");
+        send_to_char(&mut game.descriptors, ch, "Who do you wish to tell what??\r\n");
     } else if ch.get_level() < LVL_IMMORT as u8 && {
-        vict = game.get_player_vis(chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = get_player_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        game.send_to_char(ch, NOPERSON);
+        send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if ch.get_level() >= LVL_IMMORT as u8 && {
-        vict = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
         vict.is_none()
     } {
-        game.send_to_char(ch, NOPERSON);
+        send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if is_tell_ok(game, chars, db, ch, vict.unwrap()) {
         perform_tell(game, db, chars, chid, vict.unwrap().id(), &buf2);
     }
@@ -285,9 +286,9 @@ pub fn do_reply(
     let argument = argument.trim_start();
 
     if ch.get_last_tell() == NOBODY as i64 {
-        game.send_to_char(ch, "You have nobody to reply to!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You have nobody to reply to!\r\n");
     } else if argument.is_empty() {
-        game.send_to_char(ch, "What is your reply?\r\n");
+        send_to_char(&mut game.descriptors, ch, "What is your reply?\r\n");
     } else {
         /*
          * Make sure the person you're replying to is still playing by searching
@@ -308,7 +309,7 @@ pub fn do_reply(
             .find(|c| !c.is_npc() && c.get_idnum() == ch.get_last_tell());
 
         if last_tell_chid.is_none() {
-            game.send_to_char(ch, "They are no longer playing.\r\n");
+            send_to_char(&mut game.descriptors, ch, "They are no longer playing.\r\n");
         } else if is_tell_ok(game, chars, db, ch, last_tell_chid.unwrap()) {
             perform_tell(game, db, chars, chid, last_tell_chid.unwrap().id(), argument);
         }
@@ -359,24 +360,24 @@ pub fn do_spec_comm(
     half_chop(&mut argument, &mut buf, &mut buf2);
     let vict;
     if buf.is_empty() || buf2.is_empty() {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
         );
     } else if {
-        vict = game.get_char_vis(chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
         vict.is_none()
     } {
-        game.send_to_char(ch, NOPERSON);
+        send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if vict.unwrap().id() == chid {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "You can't get your mouth close enough to your ear...\r\n",
         );
     } else {
         let vict = vict.unwrap();
         let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             &buf1,
             false,
@@ -387,14 +388,14 @@ pub fn do_spec_comm(
         );
 
         if ch.prf_flagged(PRF_NOREPEAT) {
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         } else {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
             );
         }
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             action_others,
             false,
@@ -431,7 +432,7 @@ pub fn do_write(
 
     if papername.is_empty() {
         /* nothing was delivered */
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             "Write?  With what?  ON what?  What are you trying to do?!?\r\n",
         );
@@ -440,26 +441,26 @@ pub fn do_write(
     if !penname.is_empty() {
         /* there were two arguments */
         if {
-            paper = game.get_obj_in_list_vis(chars,db, objs, ch, &papername, None, &ch.carrying);
+            paper = get_obj_in_list_vis(&game.descriptors, chars,db, objs, ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
-            game.send_to_char(ch, format!("You have no {}.\r\n", papername).as_str());
+            send_to_char(&mut game.descriptors, ch, format!("You have no {}.\r\n", papername).as_str());
             return;
         }
         if {
-            pen = game.get_obj_in_list_vis(chars,db, objs, ch, &penname, None, &ch.carrying);
+            pen = get_obj_in_list_vis(&game.descriptors, chars,db, objs, ch, &penname, None, &ch.carrying);
             pen.is_none()
         } {
-            game.send_to_char(ch, format!("You have no {}.\r\n", penname).as_str());
+            send_to_char(&mut game.descriptors, ch, format!("You have no {}.\r\n", penname).as_str());
             return;
         }
     } else {
         /* there was one arg.. let's see what we can find */
         if {
-            paper = game.get_obj_in_list_vis(chars,db, objs, ch, &papername, None, &ch.carrying);
+            paper = get_obj_in_list_vis(&game.descriptors, chars,db, objs, ch, &papername, None, &ch.carrying);
             paper.is_none()
         } {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!("There is no {} in your inventory.\r\n", papername).as_str(),
             );
@@ -470,12 +471,12 @@ pub fn do_write(
             pen = paper;
             paper = None;
         } else if paper.unwrap().get_obj_type() != ITEM_NOTE {
-            game.send_to_char(ch, "That thing has nothing to do with writing.\r\n");
+            send_to_char(&mut game.descriptors, ch, "That thing has nothing to do with writing.\r\n");
             return;
         }
         /* One object was found.. now for the other one. */
         if ch.get_eq(WEAR_HOLD as i8).is_none() {
-            game.send_to_char(
+            send_to_char(&mut game.descriptors, 
                 ch,
                 format!(
                     "You can't write with {} {} alone.\r\n",
@@ -486,8 +487,8 @@ pub fn do_write(
             );
             return;
         }
-        if !game.can_see_obj(chars, db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
-            game.send_to_char(ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
+        if !can_see_obj(&game.descriptors, chars, db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
+            send_to_char(&mut game.descriptors, ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
             return;
         }
         if pen.is_some() {
@@ -501,7 +502,7 @@ pub fn do_write(
 
     /* ok.. now let's see what kind of stuff we've found */
     if pen.get_obj_type() != ITEM_PEN {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "$p is no good for writing with.",
             false,
@@ -511,7 +512,7 @@ pub fn do_write(
             TO_CHAR,
         );
     } else if paper.get_obj_type() != ITEM_NOTE {
-        game.act(chars, 
+        act(&mut game.descriptors, chars, 
             db,
             "You can't write on $p.",
             false,
@@ -521,11 +522,11 @@ pub fn do_write(
             TO_CHAR,
         );
     } else if !texts.get(paper.action_description).text.is_empty() {
-        game.send_to_char(ch, "There's something written on it already.\r\n");
+        send_to_char(&mut game.descriptors, ch, "There's something written on it already.\r\n");
     } else {
         /* we can write - hooray! */
-        game.send_to_char(ch, "Write your note.  End with '@' on a new line.\r\n");
-        game.act(chars, 
+        send_to_char(&mut game.descriptors, ch, "Write your note.  End with '@' on a new line.\r\n");
+        act(&mut game.descriptors, chars, 
             db,
             "$n begins to jot down a note.",
             true,
@@ -559,9 +560,9 @@ pub fn do_page(
     half_chop(&mut argument, &mut arg, &mut buf2);
 
     if ch.is_npc() {
-        game.send_to_char(ch, "Monsters can't page.. go away.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Monsters can't page.. go away.\r\n");
     } else if arg.is_empty() {
-        game.send_to_char(ch, "Whom do you wish to page?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Whom do you wish to page?\r\n");
     } else {
         let buf = format!("\x07\x07*$n* {}", buf2);
         if arg == "all" {
@@ -572,7 +573,7 @@ pub fn do_page(
                     {
                         let vict_id = d.character.unwrap();
                         let vict = chars.get(vict_id);
-                        game.act(chars, 
+                        act(&mut game.descriptors, chars, 
                             db,
                             &buf,
                             false,
@@ -582,7 +583,7 @@ pub fn do_page(
                             TO_VICT,
                         );
                     } else {
-                        game.send_to_char(ch, "You will never be godly enough to do that!\r\n");
+                        send_to_char(&mut game.descriptors, ch, "You will never be godly enough to do that!\r\n");
                     }
                 }
                 return;
@@ -590,11 +591,11 @@ pub fn do_page(
         }
         let vict;
         if {
-            vict = game.get_char_vis(chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
             vict.is_some()
         } {
             let vict = vict.unwrap();
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -604,9 +605,9 @@ pub fn do_page(
                 TO_VICT,
             );
             if ch.prf_flagged(PRF_NOREPEAT) {
-                game.send_to_char(ch, OK);
+                send_to_char(&mut game.descriptors, ch, OK);
             } else {
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     &buf,
                     false,
@@ -617,7 +618,7 @@ pub fn do_page(
                 );
             }
         } else {
-            game.send_to_char(ch, "There is no such person in the game!\r\n");
+            send_to_char(&mut game.descriptors, ch, "There is no such person in the game!\r\n");
         }
     }
 }
@@ -683,16 +684,16 @@ pub fn do_gen_comm(
     }
 
     if ch.plr_flagged(PLR_NOSHOUT) {
-        game.send_to_char(ch, COM_MSGS[subcmd as usize][0]);
+        send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][0]);
         return;
     }
     if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
-        game.send_to_char(ch, "The walls seem to absorb your words.\r\n");
+        send_to_char(&mut game.descriptors, ch, "The walls seem to absorb your words.\r\n");
         return;
     }
     /* level_can_shout defined in config.c */
     if ch.get_level() < LEVEL_CAN_SHOUT as u8 {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "You must be at least level {} before you can {}.\r\n",
@@ -704,7 +705,7 @@ pub fn do_gen_comm(
     }
     /* make sure the char is on the channel */
     if ch.prf_flagged(CHANNELS[subcmd as usize]) {
-        game.send_to_char(ch, COM_MSGS[subcmd as usize][2]);
+        send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][2]);
         return;
     }
     /* skip leading spaces */
@@ -712,7 +713,7 @@ pub fn do_gen_comm(
 
     /* make sure that there is something there to say! */
     if argument.is_empty() {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "Yes, {}, fine, {} we must, but WHAT???\r\n",
@@ -724,7 +725,7 @@ pub fn do_gen_comm(
     }
     if subcmd == SCMD_HOLLER {
         if ch.get_move() < HOLLER_MOVE_COST as i16 {
-            game.send_to_char(ch, "You're too exhausted to holler.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You're too exhausted to holler.\r\n");
             return;
         } else {
             let ch = chars.get_mut(chid);
@@ -737,7 +738,7 @@ pub fn do_gen_comm(
     /* first, set up strings to be given to the communicator */
     let ch = chars.get(chid);
     if ch.prf_flagged(PRF_NOREPEAT) {
-        game.send_to_char(ch, OK);
+        send_to_char(&mut game.descriptors, ch, OK);
     } else {
         let messg = format!(
             "{}You {}, '{}'{}\r\n",
@@ -750,7 +751,7 @@ pub fn do_gen_comm(
             argument,
             CCNRM!(ch, C_CMP)
         );
-        game.send_to_char(ch, messg.as_str());
+        send_to_char(&mut game.descriptors, ch, messg.as_str());
     }
 
     let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
@@ -780,9 +781,9 @@ pub fn do_gen_comm(
             }
 
             if COLOR_LEV!(ic) >= C_NRM {
-                game.send_to_char(ic, color_on);
+                send_to_char(&mut game.descriptors, ic, color_on);
             }
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf1,
                 false,
@@ -792,7 +793,7 @@ pub fn do_gen_comm(
                 TO_VICT | TO_SLEEP,
             );
             if COLOR_LEV!(ic) >= C_NRM {
-                game.send_to_char(ic, KNRM);
+                send_to_char(&mut game.descriptors, ic, KNRM);
             }
         }
     }
@@ -811,13 +812,13 @@ pub fn do_qcomm(
 ) {
     let ch = chars.get(chid);
     if ch.prf_flagged(PRF_QUEST) {
-        game.send_to_char(ch, "You aren't even part of the quest!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You aren't even part of the quest!\r\n");
         return;
     }
     let argument = argument.trim_start();
 
     if argument.is_empty() {
-        game.send_to_char(
+        send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "{}{}?  Yes, fine, {} we must, but WHAT??\r\n",
@@ -831,10 +832,10 @@ pub fn do_qcomm(
         let mut buf;
 
         if ch.prf_flagged(PRF_NOREPEAT) {
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         } else if subcmd == SCMD_QSAY {
             buf = format!("You quest-say, '{}'", argument);
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 &buf,
                 false,
@@ -844,7 +845,7 @@ pub fn do_qcomm(
                 TO_CHAR,
             );
         } else {
-            game.act(chars, 
+            act(&mut game.descriptors, chars, 
                 db,
                 argument,
                 false,
@@ -871,7 +872,7 @@ pub fn do_qcomm(
             {
                 let vict_id = d.character.unwrap();
                 let vict = chars.get(vict_id);
-                game.act(chars, 
+                act(&mut game.descriptors, chars, 
                     db,
                     &buf,
                     false,

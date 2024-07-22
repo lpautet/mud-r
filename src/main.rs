@@ -28,6 +28,7 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::Appender;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
+use util::{can_see, objn, objs, pers};
 
 use crate::act_social::free_social_messages;
 use crate::ban::{free_invalid_list, isbanned};
@@ -592,7 +593,7 @@ impl Game {
             for d_id in self.descriptor_list.clone() {
                 match self.desc(d_id).stream.as_ref().unwrap().peek(&mut buf) {
                     Ok(size) if size != 0 => {
-                        self.process_input(d_id);
+                        process_input(&mut self.descriptors, d_id);
                     }
                     Ok(_) => (),
                     Err(err) if err.kind() == ErrorKind::WouldBlock => (),
@@ -643,7 +644,7 @@ impl Game {
                             let character = chars.get_mut(character_id);
                             character.set_was_in(NOWHERE);
                             let character = chars.get(character_id);
-                            self.act(
+                            act(&mut self.descriptors, 
                                 chars,
                                 db,
                                 "$n has returned.",
@@ -666,7 +667,7 @@ impl Game {
                     string_add(self, chars, db, texts, d_id, &comm);
                 } else if self.desc(d_id).showstr_count != 0 {
                     /* Reading something w/ pager */
-                    show_string(self, chars, d_id, &comm);
+                    show_string(&mut self.descriptors, chars, d_id, &comm);
                 } else if self.desc(d_id).state() != ConPlaying {
                     /* In menus, etc. */
                     nanny(self, db, chars, texts, objs, d_id, &comm);
@@ -689,7 +690,7 @@ impl Game {
             for d_id in self.descriptor_list.clone() {
                 let desc = self.desc_mut(d_id);
                 if !desc.output.is_empty() {
-                    self.process_output(chars, d_id);
+                    process_output(&mut self.descriptors, chars, d_id);
                     let desc = self.desc_mut(d_id);
                     if desc.output.is_empty() {
                         desc.has_prompt = true;
@@ -768,9 +769,7 @@ impl Game {
             }
         }
     }
-}
 
-impl Game {
     fn heartbeat(
         &mut self,
         chars: &mut Depot<CharData>,
@@ -1081,13 +1080,12 @@ impl Game {
  *	 2 bytes: extra \r\n for non-comapct
  *      14 bytes: unused
  */
-impl Game {
-    fn process_output(&mut self, chars: &Depot<CharData>, desc_id: DepotId) -> i32 {
+    fn process_output(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, desc_id: DepotId) -> i32 {
         /* we may need this \r\n for later -- see below */
         let mut i = "\r\n".as_bytes().to_vec();
         let mut result;
 
-        let desc = self.desc_mut(desc_id);
+        let desc = descs.get_mut(desc_id);
         /* now, append the 'real' output */
         i.append(&mut desc.output);
 
@@ -1128,24 +1126,24 @@ impl Game {
 
         /* Handle snooping: prepend "% " and send to snooper. */
         if desc.snoop_by.is_some() {
-            let snooper_id = self.desc(desc_id).snoop_by.unwrap();
-            let snooper = self.desc_mut(snooper_id);
+            let snooper_id =  descs.get_mut(desc_id).snoop_by.unwrap();
+            let snooper =  descs.get_mut(snooper_id);
             snooper.write_to_output(format!("% {}%%", result).as_str());
         }
-        let desc = self.desc_mut(desc_id);
+        let desc =  descs.get_mut(desc_id);
 
         /* The common case: all saved output was handed off to the kernel buffer. */
         let exp_len = (i.len() - 2) as i32;
         if result >= exp_len {
             // already cleared by append ...
-            //self.desc_mut(desc_id).output.clear();
+            // descs.get_mut(desc_id).output.clear();
         } else {
             /* Not all data in buffer sent.  result < output buffersize. */
             desc.output = i.split_off(result as usize);
         }
         result
     }
-}
+
 /*
  * write_to_descriptor takes a descriptor, and text to write to the
  * descriptor.  It keeps calling the system-level write() until all
@@ -1229,15 +1227,14 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-impl Game {
-    fn process_input(&mut self, d_id: DepotId) -> i32 {
+    fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
         let buf_length;
         let mut failed_subst;
         let mut bytes_read;
         let mut read_point = 0;
         let mut nl_pos: Option<usize> = None;
         let mut tmp = String::new();
-        let desc = self.desc_mut(d_id);
+        let desc = descs.get_mut(d_id);
 
         /* first, find the point where we left off reading data */
         buf_length = desc.inbuf.len();
@@ -1289,7 +1286,7 @@ impl Game {
             space_left = MAX_INPUT_LENGTH - 1;
 
             /* The '> 1' reserves room for a '$ => $$' expansion. */
-            let desc = self.desc_mut(d_id);
+            let desc =  descs.get_mut(d_id);
             for ptr in 0..desc.inbuf.len() {
                 let x = desc.inbuf.chars().nth(ptr).unwrap();
                 if space_left <= 1 || ptr >= nl_pos.unwrap() {
@@ -1325,11 +1322,11 @@ impl Game {
 
             if desc.snoop_by.is_some() {
                 let snooper_id = desc.snoop_by.unwrap();
-                let snooper = self.desc_mut(snooper_id);
+                let snooper =  descs.get_mut(snooper_id);
                 snooper.write_to_output(format!("% {}\r\n", tmp).as_str());
             }
             failed_subst = false;
-            let desc = self.desc_mut(d_id);
+            let desc =  descs.get_mut(d_id);
 
             if tmp == "!" {
                 /* Redo last command. */
@@ -1396,13 +1393,13 @@ impl Game {
                 }
             }
         }
-        let desc = self.desc_mut(d_id);
+        let desc =  descs.get_mut(d_id);
 
         desc.inbuf.drain(..read_point);
 
         return 1;
     }
-}
+
 /* perform substitution for the '^..^' csh-esque syntax orig is the
  * orig string, i.e. the one being modified.  subst contains the
  * substition string, i.e. "^telm^tell"
@@ -1501,7 +1498,7 @@ impl Game {
                         };
 
                         /* We are guaranteed to have a person. */
-                        self.act(
+                        act(&mut self.descriptors, 
                             chars,
                             db,
                             "$n has lost $s link.",
@@ -1511,7 +1508,7 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        self.save_char(db, chars, texts, objs, link_challenged_id);
+                        save_char(&mut self.descriptors, db, chars, texts, objs, link_challenged_id);
                         self.mudlog(
                             chars,
                             NRM,
@@ -1709,15 +1706,15 @@ impl Game {
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-impl Game {
-    pub fn send_to_char(&mut self, ch: &CharData, messg: &str) -> usize {
+    pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
         if ch.desc.is_some() && messg != "" {
-            let desc = self.desc_mut(ch.desc.unwrap());
+            let desc = descs.get_mut(ch.desc.unwrap());
             desc.write_to_output(messg)
         } else {
             0
         }
     }
+impl Game {
 
     pub fn send_to_all(&mut self, messg: &str) {
         if messg.is_empty() {
@@ -1753,236 +1750,234 @@ impl Game {
             desc.write_to_output(messg);
         }
     }
-
-    pub fn send_to_room(&mut self, chars: &Depot<CharData>, db: &DB, room: RoomRnum, msg: &str) {
+}
+    pub fn send_to_room(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, db: &DB, room: RoomRnum, msg: &str) {
         for &chid in &db.world[room as usize].peoples {
             let ch = chars.get(chid);
             if ch.desc.is_none() {
                 continue;
             }
-            let desc = self.desc_mut(ch.desc.unwrap());
+            let desc = descs.get_mut(ch.desc.unwrap());
             desc.write_to_output(msg);
         }
     }
-}
+
 
 const ACTNULL: &str = "<NULL>";
 
-impl Game {
-    /* higher-level communication: the act() function */
-    fn perform_act(
-        &mut self,
-        chars: &Depot<CharData>,
-        db: &DB,
-        orig: &str,
-        ch: Option<&CharData>,
-        obj: Option<&ObjData>,
-        vict_obj: Option<VictimRef>,
-        to: &CharData,
-    ) {
-        let mut uppercasenext = false;
-        let mut orig = orig.to_string();
-        let mut i: Rc<str>;
-        let mut buf = String::new();
+/* higher-level communication: the act() function */
+fn perform_act(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    orig: &str,
+    ch: Option<&CharData>,
+    obj: Option<&ObjData>,
+    vict_obj: Option<VictimRef>,
+    to: &CharData,
+) {
+    let mut uppercasenext = false;
+    let mut orig = orig.to_string();
+    let mut i: Rc<str>;
+    let mut buf = String::new();
 
-        loop {
-            if orig.starts_with('$') {
-                orig.remove(0);
-                match if orig.len() != 0 {
-                    orig.chars().next().unwrap()
-                } else {
-                    '\0'
-                } {
-                    'n' => {
-                        i = self.pers(chars, db, ch.unwrap(), to);
-                    }
-                    'N' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Char(p)) = vict_obj {
-                                self.pers(chars, db, p, to)
-                            } else {
-                                Rc::from("<INV_CHAR_REF>")
-                            }
-                        };
-                    }
-                    'm' => {
-                        i = Rc::from(hmhr(ch.unwrap()));
-                    }
-                    'M' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hmhr(p))
-                            } else {
-                                Rc::from("<INV_CHAR_DATA>")
-                            }
-                        };
-                    }
-                    's' => {
-                        i = Rc::from(hshr(ch.unwrap()));
-                    }
-                    'S' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hshr(p))
-                            } else {
-                                Rc::from("<INV_CHAR_DATA>")
-                            }
-                        };
-                    }
-                    'e' => {
-                        i = Rc::from(hssh(ch.unwrap()));
-                    }
-                    'E' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Char(p)) = vict_obj {
-                                Rc::from(hssh(p))
-                            } else {
-                                Rc::from("<INV_CHAR_DATA>")
-                            }
-                        };
-                    }
-                    'o' => {
-                        i = if obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            self.objn(chars, db, obj.unwrap(), to)
-                        };
-                    }
-                    'O' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Obj(p)) = vict_obj {
-                                self.objn(chars, db, p, to)
-                            } else {
-                                Rc::from("<INV_OBJ_DATA>")
-                            }
-                        };
-                    }
-                    'p' => {
-                        i = if obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            Rc::from(self.objs(chars, db, obj.unwrap(), to))
-                        };
-                    }
-                    'P' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(self.objs(chars, db, p, to))
-                            } else {
-                                Rc::from("<INV_OBJ_REF>")
-                            }
-                        };
-                    }
-                    'a' => {
-                        i = if obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            Rc::from(sana(obj.unwrap()))
-                        };
-                    }
-                    'A' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Obj(p)) = vict_obj {
-                                Rc::from(sana(p))
-                            } else {
-                                Rc::from("<INV_OBJ_REF>")
-                            }
-                        };
-                    }
-                    'T' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Str(ref p)) = vict_obj {
-                                Rc::from(p.as_ref())
-                            } else {
-                                Rc::from("<INV_STR_REF>")
-                            }
-                        };
-                    }
-                    'F' => {
-                        i = if vict_obj.is_none() {
-                            Rc::from(ACTNULL)
-                        } else {
-                            if let Some(VictimRef::Str(ref p)) = vict_obj {
-                                fname(p)
-                            } else {
-                                Rc::from("<INV_STR_REF>")
-                            }
-                        };
-                    }
-                    /* uppercase previous word */
-                    'u' => {
-                        let pos = buf.rfind(' ');
-                        let posi;
-                        if pos.is_none() {
-                            posi = 0;
-                        } else {
-                            posi = pos.unwrap();
-                        }
-                        let sec_part = buf.split_off(posi);
-                        buf.push_str(sec_part.to_uppercase().as_str());
-                        i = Rc::from("");
-                    }
-                    /* uppercase next word */
-                    'U' => {
-                        uppercasenext = true;
-                        i = Rc::from("");
-                    }
-                    '$' => {
-                        i = Rc::from("$");
-                    }
-                    _ => {
-                        error!("SYSERR: Illegal $-code to act(): {}", orig);
-                        error!("SYSERR: {}", orig);
-                        i = Rc::from("");
-                    }
-                }
-                for c in i.chars() {
-                    if uppercasenext && !c.is_whitespace() {
-                        buf.push(c.to_ascii_uppercase());
-                        uppercasenext = false;
-                    } else {
-                        buf.push(c);
-                    }
-                }
-                orig.remove(0);
+    loop {
+        if orig.starts_with('$') {
+            orig.remove(0);
+            match if orig.len() != 0 {
+                orig.chars().next().unwrap()
             } else {
-                if orig.len() == 0 {
-                    break;
+                '\0'
+            } {
+                'n' => {
+                    i = pers(descs, chars, db, ch.unwrap(), to);
                 }
-                let k = orig.remove(0);
-
-                if uppercasenext && !k.is_whitespace() {
-                    buf.push(k.to_ascii_uppercase());
-                    uppercasenext = false;
-                } else {
-                    buf.push(k);
+                'N' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Char(p)) = vict_obj {
+                            pers(descs, chars, db, p, to)
+                        } else {
+                            Rc::from("<INV_CHAR_REF>")
+                        }
+                    };
+                }
+                'm' => {
+                    i = Rc::from(hmhr(ch.unwrap()));
+                }
+                'M' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Char(p)) = vict_obj {
+                            Rc::from(hmhr(p))
+                        } else {
+                            Rc::from("<INV_CHAR_DATA>")
+                        }
+                    };
+                }
+                's' => {
+                    i = Rc::from(hshr(ch.unwrap()));
+                }
+                'S' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Char(p)) = vict_obj {
+                            Rc::from(hshr(p))
+                        } else {
+                            Rc::from("<INV_CHAR_DATA>")
+                        }
+                    };
+                }
+                'e' => {
+                    i = Rc::from(hssh(ch.unwrap()));
+                }
+                'E' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Char(p)) = vict_obj {
+                            Rc::from(hssh(p))
+                        } else {
+                            Rc::from("<INV_CHAR_DATA>")
+                        }
+                    };
+                }
+                'o' => {
+                    i = if obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        objn(descs, chars, db, obj.unwrap(), to)
+                    };
+                }
+                'O' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Obj(p)) = vict_obj {
+                            objn(descs, chars, db, p, to)
+                        } else {
+                            Rc::from("<INV_OBJ_DATA>")
+                        }
+                    };
+                }
+                'p' => {
+                    i = if obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        Rc::from(objs(descs, chars, db, obj.unwrap(), to))
+                    };
+                }
+                'P' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Obj(p)) = vict_obj {
+                            Rc::from(objs(descs, chars, db, p, to))
+                        } else {
+                            Rc::from("<INV_OBJ_REF>")
+                        }
+                    };
+                }
+                'a' => {
+                    i = if obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        Rc::from(sana(obj.unwrap()))
+                    };
+                }
+                'A' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Obj(p)) = vict_obj {
+                            Rc::from(sana(p))
+                        } else {
+                            Rc::from("<INV_OBJ_REF>")
+                        }
+                    };
+                }
+                'T' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Str(ref p)) = vict_obj {
+                            Rc::from(p.as_ref())
+                        } else {
+                            Rc::from("<INV_STR_REF>")
+                        }
+                    };
+                }
+                'F' => {
+                    i = if vict_obj.is_none() {
+                        Rc::from(ACTNULL)
+                    } else {
+                        if let Some(VictimRef::Str(ref p)) = vict_obj {
+                            fname(p)
+                        } else {
+                            Rc::from("<INV_STR_REF>")
+                        }
+                    };
+                }
+                /* uppercase previous word */
+                'u' => {
+                    let pos = buf.rfind(' ');
+                    let posi;
+                    if pos.is_none() {
+                        posi = 0;
+                    } else {
+                        posi = pos.unwrap();
+                    }
+                    let sec_part = buf.split_off(posi);
+                    buf.push_str(sec_part.to_uppercase().as_str());
+                    i = Rc::from("");
+                }
+                /* uppercase next word */
+                'U' => {
+                    uppercasenext = true;
+                    i = Rc::from("");
+                }
+                '$' => {
+                    i = Rc::from("$");
+                }
+                _ => {
+                    error!("SYSERR: Illegal $-code to act(): {}", orig);
+                    error!("SYSERR: {}", orig);
+                    i = Rc::from("");
                 }
             }
+            for c in i.chars() {
+                if uppercasenext && !c.is_whitespace() {
+                    buf.push(c.to_ascii_uppercase());
+                    uppercasenext = false;
+                } else {
+                    buf.push(c);
+                }
+            }
+            orig.remove(0);
+        } else {
+            if orig.len() == 0 {
+                break;
+            }
+            let k = orig.remove(0);
+
+            if uppercasenext && !k.is_whitespace() {
+                buf.push(k.to_ascii_uppercase());
+                uppercasenext = false;
+            } else {
+                buf.push(k);
+            }
         }
-
-        // TODO orig.pop();
-        buf.push_str("\r\n");
-
-        let desc_id = to.desc.unwrap();
-        let desc = self.desc_mut(desc_id);
-        desc.write_to_output(format!("{}", buf).as_str());
     }
+
+    // TODO orig.pop();
+    buf.push_str("\r\n");
+
+    let desc_id = to.desc.unwrap();
+    let desc = descs.get_mut(desc_id);
+    desc.write_to_output(format!("{}", buf).as_str());
 }
 
 macro_rules! sendok {
@@ -2000,98 +1995,105 @@ pub enum VictimRef<'a> {
     Str(&'a str),
 }
 
-impl Game {
-    pub fn act(
-        &mut self,
-        chars: &Depot<CharData>,
-        db: &DB,
-        str: &str,
-        hide_invisible: bool,
-        ch: Option<&CharData>,
-        obj: Option<&ObjData>,
-        vict_obj: Option<VictimRef>,
-        _type: i32,
-    ) {
-        if str.is_empty() {
-            return;
-        }
+pub fn act(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    str: &str,
+    hide_invisible: bool,
+    ch: Option<&CharData>,
+    obj: Option<&ObjData>,
+    vict_obj: Option<VictimRef>,
+    _type: i32,
+) {
+    if str.is_empty() {
+        return;
+    }
 
-        /*
-         * Warning: the following TO_SLEEP code is a hack.
-         *
-         * I wanted to be able to tell act to deliver a message regardless of sleep
-         * without adding an additional argument.  TO_SLEEP is 128 (a single bit
-         * high up).  It's ONLY legal to combine TO_SLEEP with one other TO_x
-         * command.  It's not legal to combine TO_x's with each other otherwise.
-         * TO_SLEEP only works because its value "happens to be" a single bit;
-         * do not change it to something else.  In short, it is a hack.
-         */
+    /*
+     * Warning: the following TO_SLEEP code is a hack.
+     *
+     * I wanted to be able to tell act to deliver a message regardless of sleep
+     * without adding an additional argument.  TO_SLEEP is 128 (a single bit
+     * high up).  It's ONLY legal to combine TO_SLEEP with one other TO_x
+     * command.  It's not legal to combine TO_x's with each other otherwise.
+     * TO_SLEEP only works because its value "happens to be" a single bit;
+     * do not change it to something else.  In short, it is a hack.
+     */
 
-        /* check if TO_SLEEP is there, and remove it if it is. */
-        let mut _type = _type;
-        let to_sleeping = _type & TO_SLEEP;
-        if to_sleeping != 0 {
-            _type &= !TO_SLEEP;
-        }
+    /* check if TO_SLEEP is there, and remove it if it is. */
+    let mut _type = _type;
+    let to_sleeping = _type & TO_SLEEP;
+    if to_sleeping != 0 {
+        _type &= !TO_SLEEP;
+    }
 
-        if _type == TO_CHAR {
-            if ch.is_some() && sendok!(ch.unwrap(), to_sleeping) {
-                self.perform_act(chars, db, str, ch, obj, vict_obj, ch.as_ref().unwrap());
-            }
-            return;
+    if _type == TO_CHAR {
+        if ch.is_some() && sendok!(ch.unwrap(), to_sleeping) {
+            perform_act(
+                descs,
+                chars,
+                db,
+                str,
+                ch,
+                obj,
+                vict_obj,
+                ch.as_ref().unwrap(),
+            );
         }
+        return;
+    }
 
-        if _type == TO_VICT {
-            if vict_obj.is_some() {
-                if let Some(VictimRef::Char(to_ch)) = vict_obj {
-                    if sendok!(to_ch, to_sleeping) {
-                        self.perform_act(chars, db, str, ch, obj, vict_obj, to_ch);
-                    }
-                } else {
-                    error!("Invalid CharData ref for victim! in act");
-                }
-            }
-            return;
-        }
-        /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
-        let char_list;
-        if ch.is_some() && ch.unwrap().in_room() != NOWHERE {
-            char_list = &db.world[ch.unwrap().in_room() as usize].peoples;
-        } else if obj.is_some() && obj.as_ref().unwrap().in_room() != NOWHERE {
-            char_list = &db.world[obj.as_ref().unwrap().in_room() as usize].peoples;
-        } else {
-            error!("SYSERR: no valid target to act()!");
-            return;
-        }
-
-        for &to_id in char_list {
-            let to = chars.get(to_id);
-            if !sendok!(to, to_sleeping) || (ch.is_some() && to_id == ch.unwrap().id()) {
-                continue;
-            }
-            if hide_invisible && ch.is_some() && !self.can_see(chars, db, to, ch.unwrap()) {
-                continue;
-            }
-            if _type != TO_ROOM && vict_obj.is_none() {
-                continue;
-            }
-            let same_chr;
-            if vict_obj.is_some() {
-                if let Some(VictimRef::Char(p)) = vict_obj {
-                    same_chr = to_id == p.id();
-                } else {
-                    error!("Error in act: invalid CharData ref");
-                    continue;
+    if _type == TO_VICT {
+        if vict_obj.is_some() {
+            if let Some(VictimRef::Char(to_ch)) = vict_obj {
+                if sendok!(to_ch, to_sleeping) {
+                    perform_act(descs, chars, db, str, ch, obj, vict_obj, to_ch);
                 }
             } else {
-                same_chr = false;
+                error!("Invalid CharData ref for victim! in act");
             }
-            if _type != TO_ROOM && same_chr {
+        }
+        return;
+    }
+    /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
+    let char_list;
+    if ch.is_some() && ch.unwrap().in_room() != NOWHERE {
+        char_list = &db.world[ch.unwrap().in_room() as usize].peoples;
+    } else if obj.is_some() && obj.as_ref().unwrap().in_room() != NOWHERE {
+        char_list = &db.world[obj.as_ref().unwrap().in_room() as usize].peoples;
+    } else {
+        error!("SYSERR: no valid target to act()!");
+        return;
+    }
+
+    for &to_id in char_list {
+        let to = chars.get(to_id);
+        if !sendok!(to, to_sleeping) || (ch.is_some() && to_id == ch.unwrap().id()) {
+            continue;
+        }
+        if hide_invisible && ch.is_some() && !can_see(descs, chars, db, to, ch.unwrap()) {
+            continue;
+        }
+        if _type != TO_ROOM && vict_obj.is_none() {
+            continue;
+        }
+        let same_chr;
+        if vict_obj.is_some() {
+            if let Some(VictimRef::Char(p)) = vict_obj {
+                same_chr = to_id == p.id();
+            } else {
+                error!("Error in act: invalid CharData ref");
                 continue;
             }
-
-            self.perform_act(chars, db, str, ch, obj, vict_obj, to);
+        } else {
+            same_chr = false;
         }
+        if _type != TO_ROOM && same_chr {
+            continue;
+        }
+
+        perform_act(descs, chars, db, str, ch, obj, vict_obj, to);
     }
 }
 

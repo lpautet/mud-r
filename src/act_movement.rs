@@ -10,7 +10,8 @@
 ************************************************************************ */
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{TextData, VictimRef};
+use crate::fight::death_cry;
+use crate::{act, send_to_char, send_to_room, TextData, VictimRef};
 use std::borrow::Borrow;
 
 use crate::act_informative::look_at_room;
@@ -18,7 +19,7 @@ use crate::act_item::find_eq_pos;
 use crate::config::{NOPERSON, OK, TUNNEL_SIZE};
 use crate::constants::{DEX_APP_SKILL, DIRS, MOVEMENT_LOSS, REV_DIR};
 use crate::db::DB;
-use crate::handler::{fname, isname, FIND_CHAR_ROOM, FIND_OBJ_INV, FIND_OBJ_ROOM};
+use crate::handler::{fname, generic_find, get_char_vis, isname, FIND_CHAR_ROOM, FIND_OBJ_INV, FIND_OBJ_ROOM};
 use crate::house::house_can_enter;
 use crate::interpreter::{
     one_argument, search_block, special, two_arguments, SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN,
@@ -33,7 +34,7 @@ use crate::structs::{
     POS_STANDING, ROOM_ATRIUM, ROOM_DEATH, ROOM_GODROOM, ROOM_INDOORS, ROOM_TUNNEL,
     SECT_WATER_NOSWIM, WEAR_HOLD,
 };
-use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number};
+use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
@@ -82,7 +83,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
     } else if db.exit(ch, dir as usize).is_none()
         || db.exit(ch, dir as usize).as_ref().unwrap().to_room == NOWHERE
     {
-        game.send_to_char(ch, "Alas, you cannot go that way...\r\n");
+        send_to_char(&mut game.descriptors, ch, "Alas, you cannot go that way...\r\n");
     } else if 
         db
         .exit(ch, dir as usize)
@@ -98,7 +99,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
             .keyword
             .is_empty()
         {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!(
                     "The {} seems to be closed.\r\n",
                     fname(
@@ -113,7 +114,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
                 .as_str(),
             );
         } else {
-            game.send_to_char(ch, "It seems to be closed.\r\n");
+            send_to_char(&mut game.descriptors, ch, "It seems to be closed.\r\n");
         }
     } else {
         if ch.followers.is_empty() {
@@ -130,7 +131,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
             let follower = chars.get(f.follower);
             if follower.in_room() == was_in && follower.get_pos() >= POS_STANDING {
                 let ch = chars.get(chid);
-                game.act(chars, db,
+                act(&mut game.descriptors, chars, db,
                     "You follow $N.\r\n",
                     false,
                     Some(follower),
@@ -164,10 +165,10 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         && ch.master.is_some()
         && ch.in_room() == chars.get(ch.master.unwrap()).in_room()
     {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             "The thought of leaving your master makes you weep.\r\n",
         );
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "$n bursts into tears.",
             false,
             Some(ch),
@@ -186,7 +187,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
             == SECT_WATER_NOSWIM)
     {
         if !has_boat(game, objs,ch) {
-            game.send_to_char(ch, "You need a boat to go there.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You need a boat to go there.\r\n");
             return false;
         }
     }
@@ -202,9 +203,9 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
 
     if ch.get_move() < need_movement as i16 && !ch.is_npc() {
         if need_specials_check && ch.master.is_some() {
-            game.send_to_char(ch, "You are too exhausted to follow.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You are too exhausted to follow.\r\n");
         } else {
-            game.send_to_char(ch, "You are too exhausted.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You are too exhausted.\r\n");
         }
 
         return false;
@@ -217,7 +218,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
             db
                 .get_room_vnum(db.exit(ch, dir as usize).as_ref().unwrap().to_room),
         ) {
-            game.send_to_char(ch, "That's private property -- no trespassing!\r\n");
+            send_to_char(&mut game.descriptors, ch, "That's private property -- no trespassing!\r\n");
             return false;
         }
     }
@@ -229,9 +230,9 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     ) >= TUNNEL_SIZE
     {
         if TUNNEL_SIZE > 1 {
-            game.send_to_char(ch, "There isn't enough room for you to go there!\r\n");
+            send_to_char(&mut game.descriptors, ch, "There isn't enough room for you to go there!\r\n");
         } else {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 "There isn't enough room there for more than one person!\r\n",
             );
         }
@@ -243,7 +244,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         ROOM_GODROOM,
     ) && ch.get_level() < LVL_GRGOD as u8
     {
-        game.send_to_char(ch, "You aren't godly enough to use that room!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You aren't godly enough to use that room!\r\n");
         return false;
     }
 
@@ -255,7 +256,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     let ch = chars.get(chid);
     if !ch.aff_flagged(AFF_SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
-        game.act(chars, db,buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
+        act(&mut game.descriptors, chars, db,buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
     let ch = chars.get(chid);
     was_in = ch.in_room();
@@ -269,7 +270,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
 
     let ch = chars.get(chid);
     if !ch.aff_flagged(AFF_SNEAK) {
-        game.act(chars, db,"$n has arrived.", true, Some(ch), None, None, TO_ROOM);
+        act(&mut game.descriptors, chars, db,"$n has arrived.", true, Some(ch), None, None, TO_ROOM);
     }
 
     let ch = chars.get(chid);
@@ -280,7 +281,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     let ch = chars.get(chid);
     if db.room_flagged(ch.in_room(), ROOM_DEATH) && ch.get_level() < LVL_IMMORT as u8 {
         log_death_trap(game, chars, db, chid);
-        game.death_cry(chars, db, ch);
+        death_cry(&mut game.descriptors, chars, db, ch);
         db.extract_char(chars, chid);
         return false;
     }
@@ -306,7 +307,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
             dooro.is_none()
         } {
             /* Partial Match */
-            game.send_to_char(ch, "That's not a direction.\r\n");
+            send_to_char(&mut game.descriptors, ch, "That's not a direction.\r\n");
             return None;
         }
         let door = dooro.unwrap();
@@ -326,14 +327,14 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
                 ) {
                     return Some(door as i32);
                 } else {
-                    game.send_to_char(ch, format!("I see no {} there.\r\n", type_).as_str());
+                    send_to_char(&mut game.descriptors, ch, format!("I see no {} there.\r\n", type_).as_str());
                     return None;
                 }
             } else {
                 return Some(door as i32);
             }
         } else {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!(
                     "I really don't see how you can {} anything there.\r\n",
                     cmdname
@@ -345,7 +346,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
     } else {
         /* try to locate the keyword */
         if type_.is_empty() {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 format!("What is it you want to {}?\r\n", cmdname).as_str(),
             );
             return None;
@@ -360,7 +361,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
             }
         }
 
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             format!(
                 "There doesn't seem to be {} {} here.\r\n",
                 an!(type_),
@@ -508,7 +509,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         }
         SCMD_CLOSE => {
             let ch_in_room = ch.in_room();
@@ -522,7 +523,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         }
         SCMD_LOCK => {
             let ch_in_room = ch.in_room();
@@ -536,7 +537,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         }
         SCMD_UNLOCK => {
             let ch_in_room = ch.in_room();
@@ -550,7 +551,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            game.send_to_char(ch, OK);
+            send_to_char(&mut game.descriptors, ch, OK);
         }
 
         SCMD_PICK => {
@@ -565,7 +566,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            game.send_to_char(ch, "The lock quickly yields to your skills.\r\n");
+            send_to_char(&mut game.descriptors, ch, "The lock quickly yields to your skills.\r\n");
             buf = "$n skillfully picks the lock on ".to_string();
         }
         _ => {}
@@ -606,7 +607,7 @@ fn do_doorcmd(
             Some(VictimRef::Str(
                 db.exit(ch, door.unwrap()).unwrap().keyword.as_ref()))
         };
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             &buf,
             false,
             Some(ch),
@@ -624,7 +625,7 @@ fn do_doorcmd(
     if back_to_room.is_some() && (scmd == SCMD_OPEN || scmd == SCMD_CLOSE) {
         let x = fname(back_keyword.as_ref().unwrap());
         let ch = chars.get(chid);
-        game.send_to_room(chars, db,
+        send_to_room(&mut game.descriptors, chars, db,
             db.exit(ch, door.unwrap()).as_ref().unwrap().to_room,
             format!(
                 "The {} is {}{} from the other side.",
@@ -652,11 +653,11 @@ fn ok_pick(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId, keynum: 
         ch.get_skill(SKILL_PICK_LOCK) as i16 + DEX_APP_SKILL[ch.get_dex() as usize].p_locks;
 
     if keynum == NOTHING {
-        game.send_to_char(ch, "Odd - you can't seem to find a keyhole.\r\n");
+        send_to_char(&mut game.descriptors, ch, "Odd - you can't seem to find a keyhole.\r\n");
     } else if pickproof {
-        game.send_to_char(ch, "It resists your attempts to pick it.\r\n");
+        send_to_char(&mut game.descriptors, ch, "It resists your attempts to pick it.\r\n");
     } else if percent > skill_lvl as u32 {
-        game.send_to_char(ch, "You failed to pick the lock.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You failed to pick the lock.\r\n");
     } else {
         return true;
     }
@@ -729,7 +730,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
     let mut dooro: Option<usize> = None;
     let argument = argument.trim_start();
     if argument.is_empty() {
-        game.send_to_char(ch,
+        send_to_char(&mut game.descriptors, ch,
             format!(
                 "{}{} what?\r\n",
                 CMD_DOOR[subcmd as usize][0..0].to_lowercase(),
@@ -744,7 +745,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
     let mut victim = None;
     let mut obj = None;
     two_arguments(argument, &mut type_, &mut dir);
-    if !game.generic_find(chars,db,objs,
+    if !generic_find(&game.descriptors, chars,db,objs,
         &type_,
         (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
         ch,
@@ -765,7 +766,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
         let ch = chars.get(chid);
         let keynum = door_key(&db, ch, obj, dooro);
         if !door_is_openable(&db, ch, obj, dooro) {
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You can't $F that!",
                 false,
                 Some(ch),
@@ -776,24 +777,24 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
         } else if !door_is_open(&db,ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
-            game.send_to_char(ch, "But it's already closed!\r\n");
+            send_to_char(&mut game.descriptors, ch, "But it's already closed!\r\n");
         } else if !door_is_closed(&db, ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
-            game.send_to_char(ch, "But it's currently open!\r\n");
+            send_to_char(&mut game.descriptors, ch, "But it's currently open!\r\n");
         } else if !(door_is_locked(&db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
-            game.send_to_char(ch, "Oh.. it wasn't locked, after all..\r\n");
+            send_to_char(&mut game.descriptors, ch, "Oh.. it wasn't locked, after all..\r\n");
         } else if !(door_is_unlocked(&db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
-            game.send_to_char(ch, "It seems to be locked.\r\n");
+            send_to_char(&mut game.descriptors, ch, "It seems to be locked.\r\n");
         } else if !has_key(&db, objs,ch, keynum)
             && (ch.get_level() < LVL_GOD as u8)
             && ((subcmd == SCMD_LOCK) || (subcmd == SCMD_UNLOCK))
         {
-            game.send_to_char(ch, "You don't seem to have the proper key.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You don't seem to have the proper key.\r\n");
         } else if {
             let pickproof = door_is_pickproof(&db, ch, obj, dooro);
             ok_pick(game, chars, chid, keynum, pickproof, subcmd)
@@ -821,9 +822,9 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 }
             }
         }
-        game.send_to_char(ch, format!("There is no {} here.\r\n", buf).as_str());
+        send_to_char(&mut game.descriptors, ch, format!("There is no {} here.\r\n", buf).as_str());
     } else if db.room_flagged(ch.in_room(), ROOM_INDOORS) {
-        game.send_to_char(ch, "You are already indoors.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are already indoors.\r\n");
     } else {
         /* try to locate an entrance */
         for door in 0..NUM_OF_DIRS {
@@ -839,14 +840,14 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 }
             }
         }
-        game.send_to_char(ch, "You can't seem to find anything to enter.\r\n");
+        send_to_char(&mut game.descriptors, ch, "You can't seem to find anything to enter.\r\n");
     }
 }
 
 pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     if db.outside(ch) {
-        game.send_to_char(ch, "You are outside.. where do you want to go?\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are outside.. where do you want to go?\r\n");
     } else {
         for door in 0..NUM_OF_DIRS {
             if db.exit(ch, door).is_some() {
@@ -861,7 +862,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 }
             }
         }
-        game.send_to_char(ch, "I see no obvious exits to the outside.\r\n");
+        send_to_char(&mut game.descriptors, ch, "I see no obvious exits to the outside.\r\n");
     }
 }
 
@@ -869,11 +870,11 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let ch = chars.get(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(ch, "You are already standing.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You are already standing.\r\n");
         }
         POS_SITTING => {
-            game.send_to_char(ch, "You stand up.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You stand up.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n clambers to $s feet.",
                 true,
                 Some(ch),
@@ -890,8 +891,8 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
             });
         }
         POS_RESTING => {
-            game.send_to_char(ch, "You stop resting, and stand up.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You stop resting, and stand up.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n stops resting, and clambers on $s feet.",
                 true,
                 Some(ch),
@@ -903,16 +904,16 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
             ch.set_pos(POS_STANDING);
         }
         POS_SLEEPING => {
-            game.send_to_char(ch, "You have to wake up first!\r\n");
+            send_to_char(&mut game.descriptors, ch, "You have to wake up first!\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(ch, "Do you not consider fighting as standing?\r\n");
+            send_to_char(&mut game.descriptors, ch, "Do you not consider fighting as standing?\r\n");
         }
         _ => {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 "You stop floating around, and put your feet on the ground.\r\n",
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$n stops floating around, and puts $s feet on the ground.",
                 true,
                 Some(ch),
@@ -930,17 +931,17 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
     let ch = chars.get(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(ch, "You sit down.\r\n");
-            game.act(chars, db,"$n sits down.", false, Some(ch), None, None, TO_ROOM);
+            send_to_char(&mut game.descriptors, ch, "You sit down.\r\n");
+            act(&mut game.descriptors, chars, db,"$n sits down.", false, Some(ch), None, None, TO_ROOM);
             let ch = chars.get_mut(chid);
             ch.set_pos(POS_SITTING);
         }
         POS_SITTING => {
-            game.send_to_char(ch, "You're sitting already.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You're sitting already.\r\n");
         }
         POS_RESTING => {
-            game.send_to_char(ch, "You stop resting, and sit up.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You stop resting, and sit up.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n stops resting.",
                 true,
                 Some(ch),
@@ -952,14 +953,14 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
             ch.set_pos(POS_SITTING);
         }
         POS_SLEEPING => {
-            game.send_to_char(ch, "You have to wake up first.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You have to wake up first.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(ch, "Sit down while fighting? Are you MAD?\r\n");
+            send_to_char(&mut game.descriptors, ch, "Sit down while fighting? Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(ch, "You stop floating around, and sit down.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You stop floating around, and sit down.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n stops floating around, and sits down.",
                 true,
                 Some(ch),
@@ -977,8 +978,8 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     let ch = chars.get(chid);
     match ch.get_pos() {
         POS_STANDING => {
-            game.send_to_char(ch, "You sit down and rest your tired bones.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You sit down and rest your tired bones.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n sits down and rests.",
                 true,
                 Some(ch),
@@ -990,25 +991,25 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
             ch.set_pos(POS_RESTING);
         }
         POS_SITTING => {
-            game.send_to_char(ch, "You rest your tired bones.\r\n");
-            game.act(chars, db,"$n rests.", true, Some(ch), None, None, TO_ROOM);
+            send_to_char(&mut game.descriptors, ch, "You rest your tired bones.\r\n");
+            act(&mut game.descriptors, chars, db,"$n rests.", true, Some(ch), None, None, TO_ROOM);
             let ch = chars.get_mut(chid);
             ch.set_pos(POS_RESTING);
         }
         POS_RESTING => {
-            game.send_to_char(ch, "You are already resting.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You are already resting.\r\n");
         }
         POS_SLEEPING => {
-            game.send_to_char(ch, "You have to wake up first.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You have to wake up first.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(ch, "Rest while fighting?  Are you MAD?\r\n");
+            send_to_char(&mut game.descriptors, ch, "Rest while fighting?  Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 "You stop floating around, and stop to rest your tired bones.\r\n",
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$n stops floating around, and rests.",
                 false,
                 Some(ch),
@@ -1026,8 +1027,8 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     let ch = chars.get(chid);
     match ch.get_pos() {
         POS_STANDING | POS_SITTING | POS_RESTING => {
-            game.send_to_char(ch, "You go to sleep.\r\n");
-            game.act(chars, db,
+            send_to_char(&mut game.descriptors, ch, "You go to sleep.\r\n");
+            act(&mut game.descriptors, chars, db,
                 "$n lies down and falls asleep.",
                 true,
                 Some(ch),
@@ -1039,16 +1040,16 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
             ch.set_pos(POS_SLEEPING);
         }
         POS_SLEEPING => {
-            game.send_to_char(ch, "You are already sound asleep.\r\n");
+            send_to_char(&mut game.descriptors, ch, "You are already sound asleep.\r\n");
         }
         POS_FIGHTING => {
-            game.send_to_char(ch, "Sleep while fighting?  Are you MAD?\r\n");
+            send_to_char(&mut game.descriptors, ch, "Sleep while fighting?  Are you MAD?\r\n");
         }
         _ => {
-            game.send_to_char(ch,
+            send_to_char(&mut game.descriptors, ch,
                 "You stop floating around, and lie down to sleep.\r\n",
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$n stops floating around, and lie down to sleep.",
                 true,
                 Some(ch),
@@ -1071,17 +1072,17 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     one_argument(argument, &mut arg);
     if !arg.is_empty() {
         if ch.get_pos() == POS_SLEEPING {
-            game.send_to_char(ch, "Maybe you should wake yourself up first.\r\n");
+            send_to_char(&mut game.descriptors, ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
-            vict = game.get_char_vis(chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
             vict.is_none()
         } {
-            game.send_to_char(ch, NOPERSON);
+            send_to_char(&mut game.descriptors, ch, NOPERSON);
         } else if vict.unwrap().id() == chid {
             self_ = true;
         } else if vict.unwrap().awake() {
             let vict = vict.unwrap();
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$E is already awake.",
                 false,
                 Some(ch),
@@ -1091,7 +1092,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
             );
         } else if vict.unwrap().aff_flagged(AFF_SLEEP) {
             let vict =vict.unwrap();
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You can't wake $M up!",
                 false,
                 Some(ch),
@@ -1101,7 +1102,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
             );
         } else if vict.unwrap().get_pos() < POS_SLEEPING {
             let vict = vict.unwrap();
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "$E's in pretty bad shape!",
                 false,
                 Some(ch),
@@ -1111,7 +1112,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
             );
         } else {
             let vict = vict.unwrap();
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You wake $M up.",
                 false,
                 Some(ch),
@@ -1119,7 +1120,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-            game.act(chars, db,
+            act(&mut game.descriptors, chars, db,
                 "You are awakened by $n.",
                 false,
                 Some(ch),
@@ -1135,12 +1136,12 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     }
     let ch = chars.get(chid);
     if ch.aff_flagged(AFF_SLEEP) {
-        game.send_to_char(ch, "You can't wake up!\r\n");
+        send_to_char(&mut game.descriptors, ch, "You can't wake up!\r\n");
     } else if ch.get_pos() > POS_SLEEPING {
-        game.send_to_char(ch, "You are already awake...\r\n");
+        send_to_char(&mut game.descriptors, ch, "You are already awake...\r\n");
     } else {
-        game.send_to_char(ch, "You awaken, and sit up.\r\n");
-        game.act(chars, db,"$n awakens.", true, Some(ch), None, None, TO_ROOM);
+        send_to_char(&mut game.descriptors, ch, "You awaken, and sit up.\r\n");
+        act(&mut game.descriptors, chars, db,"$n awakens.", true, Some(ch), None, None, TO_ROOM);
         let ch = chars.get_mut(chid);
         ch.set_pos(POS_SITTING);
     }
@@ -1154,20 +1155,20 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     let leader;
     if !buf.is_empty() {
         if {
-            leader = game.get_char_vis(chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
+            leader = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
             leader.is_none()
         } {
-            game.send_to_char(ch, NOPERSON);
+            send_to_char(&mut game.descriptors, ch, NOPERSON);
             return;
         }
     } else {
-        game.send_to_char(ch, "Whom do you wish to follow?\r\n");
+        send_to_char(&mut game.descriptors, ch, "Whom do you wish to follow?\r\n");
         return;
     }
 
     if ch.master.is_some() && ch.master.unwrap() == leader.unwrap().id() {
         let leader = leader.unwrap();
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "You are already following $M.",
             false,
             Some(ch),
@@ -1180,7 +1181,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     if ch.aff_flagged(AFF_CHARM) && (ch.master.is_some()) {
         let master_id = ch.master.unwrap();
         let master = chars.get(master_id);
-        game.act(chars, db,
+        act(&mut game.descriptors, chars, db,
             "But you only feel like following $N!",
             false,
             Some(ch),
@@ -1192,23 +1193,23 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         /* Not Charmed follow person */
         if leader.unwrap().id() == chid {
             if ch.master.is_none() {
-                game.send_to_char(ch, "You are already following yourself.\r\n");
+                send_to_char(&mut game.descriptors, ch, "You are already following yourself.\r\n");
                 return;
             }
-            game.stop_follower(chars, db, objs,chid);
+            stop_follower(&mut game.descriptors, chars, db, objs,chid);
         } else {
             if circle_follow(chars,  ch, leader) {
-                game.send_to_char(ch, "Sorry, but following in loops is not allowed.\r\n");
+                send_to_char(&mut game.descriptors, ch, "Sorry, but following in loops is not allowed.\r\n");
                 return;
             }
             let leader_id = leader.unwrap().id();
             if ch.master.is_some() {
-                game.stop_follower(chars, db, objs,chid);
+                stop_follower(&mut game.descriptors, chars, db, objs,chid);
             }
             let ch = chars.get_mut(chid);
             ch.remove_aff_flags(AFF_GROUP);
 
-            add_follower(game, chars, db, chid, leader_id);
+            add_follower(&mut game.descriptors, chars, db, chid, leader_id);
         }
     }
 }
