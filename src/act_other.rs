@@ -16,7 +16,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{act, save_char, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
+use crate::{act, save_char, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -487,7 +487,7 @@ pub fn do_visible(
 ) {
     let ch = chars.get(chid);
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_vis(game, db, chars, objs,chid);
+        perform_immort_vis(&mut game.descriptors, db, chars, objs,chid);
         return;
     }
     let ch = chars.get(chid);
@@ -542,10 +542,10 @@ pub fn do_title(
     }
 }
 
-fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId, vict_id: DepotId) -> i32 {
+fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId, vict_id: DepotId) -> i32 {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    if vict.aff_flagged(AFF_GROUP) || !can_see(&game.descriptors, chars, db, ch, vict) {
+    if vict.aff_flagged(AFF_GROUP) || !can_see(descs, chars, db, ch, vict) {
         return 0;
     }
     let vict = chars.get_mut(vict_id);
@@ -553,7 +553,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if chid != vict_id {
-        act(&mut game.descriptors, chars, 
+        act(descs, chars, 
             db,
             "$N is now a member of your group.",
             false,
@@ -563,7 +563,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
             TO_CHAR,
         );
     }
-    act(&mut game.descriptors, chars, 
+    act(descs, chars, 
         db,
         "You are now a member of $n's group.",
         false,
@@ -572,7 +572,7 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
         Some(VictimRef::Char(vict)),
         TO_VICT,
     );
-    act(&mut game.descriptors, chars, 
+    act(descs, chars, 
         db,
         "$N is now a member of $n's group.",
         false,
@@ -584,12 +584,12 @@ fn perform_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid:
     return 1;
 }
 
-fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
+fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AFF_GROUP) {
-        send_to_char(&mut game.descriptors, ch, "But you are not the member of a group!\r\n");
+        send_to_char(descs, ch, "But you are not the member of a group!\r\n");
     } else {
-        send_to_char(&mut game.descriptors, ch, "Your group consists of:\r\n");
+        send_to_char(descs, ch, "Your group consists of:\r\n");
         let ch = chars.get(chid);
         let k_id = if ch.master.is_some() {
             ch.master.unwrap()
@@ -607,7 +607,7 @@ fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: D
                 k.get_level(),
                 k.class_abbr()
             );
-            act(&mut game.descriptors, chars, 
+            act(descs, chars, 
                 db,
                 &buf,
                 false,
@@ -631,7 +631,7 @@ fn print_group(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, chid: D
                 follower.get_level(),
                 follower.class_abbr()
             );
-            act(&mut game.descriptors, chars, 
+            act(descs, chars, 
                 db,
                 &buf,
                 false,
@@ -658,7 +658,7 @@ pub fn do_group(
     one_argument(argument, &mut buf);
 
     if buf.is_empty() {
-        print_group(game, db,chars, chid);
+        print_group(&mut game.descriptors, db,chars, chid);
         return;
     }
 
@@ -676,11 +676,11 @@ pub fn do_group(
     }
 
     if buf == "all" {
-        perform_group(game, db, chars,chid, chid);
+        perform_group(&mut game.descriptors, db, chars,chid, chid);
         let mut found = 0;
         let ch = chars.get(chid);
         for f in ch.followers.clone() {
-            found += perform_group(game, db, chars,chid, f.follower);
+            found += perform_group(&mut game.descriptors, db, chars,chid, f.follower);
         }
         if found == 0 {
             let ch = chars.get(chid);
@@ -714,7 +714,7 @@ pub fn do_group(
         let ch = chars.get(chid);
 
         if !vict.aff_flagged(AFF_GROUP) {
-            perform_group(game, db, chars,chid, vict.id());
+            perform_group(&mut game.descriptors, db, chars,chid, vict.id());
         } else {
             if chid != vict.id() {
                 act(&mut game.descriptors, chars, 

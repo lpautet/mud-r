@@ -24,7 +24,7 @@ use crate::structs::{
     PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
 };
 use crate::util::can_see_obj;
-use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
+use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
 use crate::{
     _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
     TO_VICT,
@@ -131,7 +131,7 @@ pub fn do_gsay(
 }
 
 fn perform_tell(
-    game: &mut Game,
+    descs: &mut Depot<DescriptorData>,
     db: & DB,
     chars: &mut Depot<CharData>,
     chid: DepotId,
@@ -140,8 +140,8 @@ fn perform_tell(
 ) {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    send_to_char(&mut game.descriptors, vict, CCRED!(vict, C_NRM));
-    act(&mut game.descriptors, chars, 
+    send_to_char(descs, vict, CCRED!(vict, C_NRM));
+    act(descs, chars, 
         db,
         &format!("$n tells you, '{}'", arg),
         false,
@@ -150,13 +150,13 @@ fn perform_tell(
         Some(VictimRef::Char(vict)),
         TO_VICT | TO_SLEEP,
     );
-    send_to_char(&mut game.descriptors, vict, CCNRM!(vict, C_NRM));
+    send_to_char(descs, vict, CCNRM!(vict, C_NRM));
 
     if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
-        send_to_char(&mut game.descriptors, ch, OK);
+        send_to_char(descs, ch, OK);
     } else {
-        send_to_char(&mut game.descriptors, ch, CCRED!(ch, C_NRM));
-        act(&mut game.descriptors, chars, 
+        send_to_char(descs, ch, CCRED!(ch, C_NRM));
+        act(descs, chars, 
             db,
             &format!("You tell $N, '{}'", arg),
             false,
@@ -165,7 +165,7 @@ fn perform_tell(
             Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
-        send_to_char(&mut game.descriptors, ch, CCNRM!(ch, C_NRM));
+        send_to_char(descs, ch, CCNRM!(ch, C_NRM));
     }
     if !vict.is_npc() && !ch.is_npc() {
         let ch_idnum = ch.get_idnum();
@@ -175,23 +175,23 @@ fn perform_tell(
 }
 
 fn is_tell_ok(
-    game: &mut Game, chars: &Depot<CharData>, 
+    descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
     db: &DB,
     ch: &CharData,
     vict: &CharData,
 ) -> bool {
     if ch.id() == vict.id() {
-        send_to_char(&mut game.descriptors, ch, "You try to tell yourself something.\r\n");
+        send_to_char(descs, ch, "You try to tell yourself something.\r\n");
     } else if !ch.is_npc() && ch.prf_flagged(PRF_NOTELL) {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(descs, 
             ch,
             "You can't tell other people while you have notell on.\r\n",
         );
     } else if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
-        send_to_char(&mut game.descriptors, ch, "The walls seem to absorb your words.\r\n");
+        send_to_char(descs, ch, "The walls seem to absorb your words.\r\n");
     } else if !vict.is_npc() && vict.desc.is_none() {
         /* linkless */
-        act(&mut game.descriptors, chars, 
+        act(descs, chars, 
             db,
             "$E's linkless at the moment.",
             false,
@@ -201,7 +201,7 @@ fn is_tell_ok(
             TO_CHAR | TO_SLEEP,
         );
     } else if vict.plr_flagged(PLR_WRITING) {
-        act(&mut game.descriptors, chars, 
+        act(descs, chars, 
             db,
             "$E's writing a message right now; try again later.",
             false,
@@ -213,7 +213,7 @@ fn is_tell_ok(
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
         || db.room_flagged(vict.in_room(), ROOM_SOUNDPROOF)
     {
-        act(&mut game.descriptors, chars, 
+        act(descs, chars, 
             db,
             "$E can't hear you.",
             false,
@@ -262,8 +262,8 @@ pub fn do_tell(
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if is_tell_ok(game, chars, db, ch, vict.unwrap()) {
-        perform_tell(game, db, chars, chid, vict.unwrap().id(), &buf2);
+    } else if is_tell_ok(&mut game.descriptors, chars, db, ch, vict.unwrap()) {
+        perform_tell(&mut game.descriptors, db, chars, chid, vict.unwrap().id(), &buf2);
     }
 }
 
@@ -310,8 +310,8 @@ pub fn do_reply(
 
         if last_tell_chid.is_none() {
             send_to_char(&mut game.descriptors, ch, "They are no longer playing.\r\n");
-        } else if is_tell_ok(game, chars, db, ch, last_tell_chid.unwrap()) {
-            perform_tell(game, db, chars, chid, last_tell_chid.unwrap().id(), argument);
+        } else if is_tell_ok(&mut game.descriptors, chars, db, ch, last_tell_chid.unwrap()) {
+            perform_tell(&mut game.descriptors, db, chars, chid, last_tell_chid.unwrap().id(), argument);
         }
     }
 }

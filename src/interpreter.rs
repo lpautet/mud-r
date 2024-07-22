@@ -4026,7 +4026,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         do_start(game, chars, db, texts, objs, character_id);
                         let character = chars.get(character_id);
                         send_to_char(&mut game.descriptors, character, format!("{}", START_MESSG).as_str());
-                        look_at_room(game, db, chars, texts, objs,character, false);
+                        look_at_room(&mut game.descriptors, db, chars, texts, objs,character, false);
                     }
                     let desc = game.desc_mut(d_id);
                     if db

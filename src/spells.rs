@@ -333,7 +333,7 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, chars, texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db, chars, texts,objs,victim, false);
 }
 
 pub fn spell_teleport(
@@ -380,7 +380,7 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(game, db, chars, texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db, chars, texts,objs,victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
@@ -481,7 +481,7 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(game, db,chars,texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db,chars,texts,objs,victim, false);
 }
 
 pub fn spell_locate_object(

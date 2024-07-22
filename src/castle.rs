@@ -19,7 +19,7 @@ use std::iter::Iterator;
 
 use crate::depot::{Depot, DepotId};
 use crate::handler::obj_to_char;
-use crate::{act, send_to_char, TextData, VictimRef};
+use crate::{act, send_to_char, DescriptorData, TextData, VictimRef};
 use log::error;
 
 use crate::act_movement::{do_follow, do_gen_door, perform_move};
@@ -352,7 +352,7 @@ fn do_npc_rescue(
  * Used by Tim/Tom at Kings bedroom and Dick/David at treasury.
  */
 fn block_way(
-    game: &mut Game,
+    descs: &mut Depot<DescriptorData>,
     chars: &Depot<CharData>, db: &DB,
     chid: DepotId,
     cmd: i32,
@@ -375,7 +375,7 @@ fn block_way(
     }
 
     if !member_of_staff(&db, ch) {
-        act(&mut game.descriptors, chars, 
+        act(descs, chars, 
             db,
             "The guard roars at $n and pushes $m back.",
             false,
@@ -386,7 +386,7 @@ fn block_way(
         );
     }
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(descs, 
         ch,
         "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
     );
@@ -1046,7 +1046,7 @@ fn castle_twin_proc(
     }
 
     if cmd != 0 {
-        return block_way(game, chars, db, chid, cmd, arg, castle_virtual(&db, ctlnum), 1);
+        return block_way(&mut game.descriptors, chars, db, chid, cmd, arg, castle_virtual(&db, ctlnum), 1);
     }
 
     let king_id = find_npc_by_name(chars, &db, ch, "King Welmar");
@@ -1199,7 +1199,7 @@ fn dick_n_david(
         banzaii(game, chars, db, texts, objs,chid);
     }
 
-    block_way(game, chars, db, chid, cmd, argument, castle_virtual(&db, 36), 1)
+    block_way(&mut game.descriptors, chars, db, chid, cmd, argument, castle_virtual(&db, 36), 1)
 }
 
 /*

@@ -11,7 +11,7 @@
 
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::death_cry;
-use crate::{act, send_to_char, send_to_room, TextData, VictimRef};
+use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
 use std::borrow::Borrow;
 
 use crate::act_informative::look_at_room;
@@ -38,7 +38,7 @@ use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, r
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
-fn has_boat(game: &mut Game, objs: & Depot<ObjData>, ch: &CharData) -> bool {
+fn has_boat(descs: &mut Depot<DescriptorData>, objs: & Depot<ObjData>, ch: &CharData) -> bool {
     if ch.get_level() > LVL_IMMORT as u8 {
         return true;
     }
@@ -51,7 +51,7 @@ fn has_boat(game: &mut Game, objs: & Depot<ObjData>, ch: &CharData) -> bool {
 
     for &oid in &ch.carrying {
         let obj = objs.get(oid);
-        if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(game, ch, obj, "") < 0)
+        if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(descs, ch, obj, "") < 0)
         {
             return true;
         }
@@ -186,7 +186,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
             == SECT_WATER_NOSWIM)
     {
-        if !has_boat(game, objs,ch) {
+        if !has_boat(&mut game.descriptors, objs,ch) {
             send_to_char(&mut game.descriptors, ch, "You need a boat to go there.\r\n");
             return false;
         }
@@ -275,7 +275,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
 
     let ch = chars.get(chid);
     if ch.desc.borrow().is_some() {
-        look_at_room(game, db,chars, texts, objs, ch, false);
+        look_at_room(&mut game.descriptors, db,chars, texts, objs, ch, false);
     }
 
     let ch = chars.get(chid);
@@ -297,7 +297,7 @@ pub fn do_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     perform_move(game, db,chars,texts, objs, chid, subcmd - 1, false);
 }
 
-fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, cmdname: &str) -> Option<i32> {
+fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: &str, dir: &str, cmdname: &str) -> Option<i32> {
     let dooro;
 
     if !dir.is_empty() {
@@ -307,7 +307,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
             dooro.is_none()
         } {
             /* Partial Match */
-            send_to_char(&mut game.descriptors, ch, "That's not a direction.\r\n");
+            send_to_char(descs, ch, "That's not a direction.\r\n");
             return None;
         }
         let door = dooro.unwrap();
@@ -327,14 +327,14 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
                 ) {
                     return Some(door as i32);
                 } else {
-                    send_to_char(&mut game.descriptors, ch, format!("I see no {} there.\r\n", type_).as_str());
+                    send_to_char(descs, ch, format!("I see no {} there.\r\n", type_).as_str());
                     return None;
                 }
             } else {
                 return Some(door as i32);
             }
         } else {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(descs, ch,
                 format!(
                     "I really don't see how you can {} anything there.\r\n",
                     cmdname
@@ -346,7 +346,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
     } else {
         /* try to locate the keyword */
         if type_.is_empty() {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(descs, ch,
                 format!("What is it you want to {}?\r\n", cmdname).as_str(),
             );
             return None;
@@ -361,7 +361,7 @@ fn find_door(game: &mut Game, db:  &DB, ch: &CharData, type_: &str, dir: &str, c
             }
         }
 
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(descs, ch,
             format!(
                 "There doesn't seem to be {} {} here.\r\n",
                 an!(type_),
@@ -460,7 +460,7 @@ fn togle_lock(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Optio
 }
 
 fn do_doorcmd(
-    game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
     oid: Option<DepotId>,
     door: Option<usize>,
@@ -509,7 +509,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, OK);
+            send_to_char(descs, ch, OK);
         }
         SCMD_CLOSE => {
             let ch_in_room = ch.in_room();
@@ -523,7 +523,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, OK);
+            send_to_char(descs, ch, OK);
         }
         SCMD_LOCK => {
             let ch_in_room = ch.in_room();
@@ -537,7 +537,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, OK);
+            send_to_char(descs, ch, OK);
         }
         SCMD_UNLOCK => {
             let ch_in_room = ch.in_room();
@@ -551,7 +551,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, OK);
+            send_to_char(descs, ch, OK);
         }
 
         SCMD_PICK => {
@@ -566,7 +566,7 @@ fn do_doorcmd(
                 );
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "The lock quickly yields to your skills.\r\n");
+            send_to_char(descs, ch, "The lock quickly yields to your skills.\r\n");
             buf = "$n skillfully picks the lock on ".to_string();
         }
         _ => {}
@@ -607,7 +607,7 @@ fn do_doorcmd(
             Some(VictimRef::Str(
                 db.exit(ch, door.unwrap()).unwrap().keyword.as_ref()))
         };
-        act(&mut game.descriptors, chars, db,
+        act(descs, chars, db,
             &buf,
             false,
             Some(ch),
@@ -625,7 +625,7 @@ fn do_doorcmd(
     if back_to_room.is_some() && (scmd == SCMD_OPEN || scmd == SCMD_CLOSE) {
         let x = fname(back_keyword.as_ref().unwrap());
         let ch = chars.get(chid);
-        send_to_room(&mut game.descriptors, chars, db,
+        send_to_room(descs, chars, db,
             db.exit(ch, door.unwrap()).as_ref().unwrap().to_room,
             format!(
                 "The {} is {}{} from the other side.",
@@ -642,7 +642,7 @@ fn do_doorcmd(
     }
 }
 
-fn ok_pick(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId, keynum: ObjVnum, pickproof: bool, scmd: i32) -> bool {
+fn ok_pick(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, chid: DepotId, keynum: ObjVnum, pickproof: bool, scmd: i32) -> bool {
     let ch = chars.get(chid);
     if scmd != SCMD_PICK {
         return true;
@@ -653,11 +653,11 @@ fn ok_pick(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId, keynum: 
         ch.get_skill(SKILL_PICK_LOCK) as i16 + DEX_APP_SKILL[ch.get_dex() as usize].p_locks;
 
     if keynum == NOTHING {
-        send_to_char(&mut game.descriptors, ch, "Odd - you can't seem to find a keyhole.\r\n");
+        send_to_char(descs, ch, "Odd - you can't seem to find a keyhole.\r\n");
     } else if pickproof {
-        send_to_char(&mut game.descriptors, ch, "It resists your attempts to pick it.\r\n");
+        send_to_char(descs, ch, "It resists your attempts to pick it.\r\n");
     } else if percent > skill_lvl as u32 {
-        send_to_char(&mut game.descriptors, ch, "You failed to pick the lock.\r\n");
+        send_to_char(descs, ch, "You failed to pick the lock.\r\n");
     } else {
         return true;
     }
@@ -753,7 +753,7 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
         &mut obj,
     ) != 0
     {
-        let dooroi = find_door(game,db, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
+        let dooroi = find_door(&mut game.descriptors,db, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
         dooro = if dooroi.is_some() {
             Some(dooroi.unwrap() as usize)
         } else {
@@ -797,9 +797,9 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
             send_to_char(&mut game.descriptors, ch, "You don't seem to have the proper key.\r\n");
         } else if {
             let pickproof = door_is_pickproof(&db, ch, obj, dooro);
-            ok_pick(game, chars, chid, keynum, pickproof, subcmd)
+            ok_pick(&mut game.descriptors, chars, chid, keynum, pickproof, subcmd)
         } {
-            do_doorcmd(game, db, chars,texts,objs,chid, obj_id, dooro, subcmd);
+            do_doorcmd(&mut game.descriptors, db, chars,texts,objs,chid, obj_id, dooro, subcmd);
         }
     }
     return;
