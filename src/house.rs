@@ -26,7 +26,7 @@ use crate::structs::{
     NUM_OF_DIRS, ROOM_ATRIUM, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PRIVATE,
 };
 use crate::util::{ctime, time_now, NRM};
-use crate::{send_to_char, Game, ObjData, TextData};
+use crate::{send_to_char, DescriptorData, Game, ObjData, TextData};
 
 pub const MAX_HOUSES: usize = 100;
 pub const MAX_GUESTS: usize = 10;
@@ -442,13 +442,13 @@ const HCONTROL_FORMAT: &str =
        hcontrol pay <house vnum>\r\n\
        hcontrol show\r\n";
 
-pub fn hcontrol_list_houses(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId) {
+pub fn hcontrol_list_houses(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId) {
     let ch = chars.get(chid);
     if db.num_of_houses == 0 {
-        send_to_char(&mut game.descriptors, ch, "No houses have been defined.\r\n");
+        send_to_char(descs, ch, "No houses have been defined.\r\n");
         return;
     }
-    send_to_char(&mut game.descriptors, ch,
+    send_to_char(descs, ch,
         "Address  Atrium  Build Date  Guests  Owner        Last Paymt\r\n\
 -------  ------  ----------  ------  ------------ ----------\r\n",
     );
@@ -478,7 +478,7 @@ pub fn hcontrol_list_houses(game: &mut Game, chars: &mut Depot<CharData>, db: &m
 
         /* Now we need a copy of the owner's name to capitalize. -gg 6/21/98 */
 
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(descs, ch,
             format!(
                 "{:7} {:7}  {:10}    {:2}    {:12} {}\r\n",
                 house_control[i].vnum,
@@ -491,14 +491,14 @@ pub fn hcontrol_list_houses(game: &mut Game, chars: &mut Depot<CharData>, db: &m
             .as_str(),
         );
 
-        house_list_guests(game,chars, db, chid, i, true);
+        house_list_guests(descs,chars, db, chid, i, true);
     }
 }
 
-fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, arg: &mut str) {
+fn hcontrol_build_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, arg: &mut str) {
     let ch = chars.get(chid);
     if db.num_of_houses >= MAX_HOUSES {
-        send_to_char(&mut game.descriptors, ch, "Max houses already defined.\r\n");
+        send_to_char(descs, ch, "Max houses already defined.\r\n");
         return;
     }
 
@@ -507,12 +507,12 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
     let arg2 = one_argument(arg, &mut arg1);
     let arg = arg2;
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, format!("{}", HCONTROL_FORMAT).as_str());
+        send_to_char(descs, ch, format!("{}", HCONTROL_FORMAT).as_str());
         return;
     }
     let virt_house = arg.parse::<i16>();
     if virt_house.is_err() {
-        send_to_char(&mut game.descriptors, ch, "No such room exists.\r\n");
+        send_to_char(descs, ch, "No such room exists.\r\n");
         return;
     }
     let virt_house = virt_house.unwrap();
@@ -521,11 +521,11 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
         real_house = db.real_room(virt_house);
         real_house == NOWHERE
     } {
-        send_to_char(&mut game.descriptors, ch, "No such room exists.\r\n");
+        send_to_char(descs, ch, "No such room exists.\r\n");
         return;
     }
     if find_house(&db, virt_house).is_some() {
-        send_to_char(&mut game.descriptors, ch, "House already exists.\r\n");
+        send_to_char(descs, ch, "House already exists.\r\n");
         return;
     }
 
@@ -533,7 +533,7 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
     let arg2 = one_argument(arg, &mut arg1);
     let arg = arg2;
     if arg1.is_empty() {
-        send_to_char(&mut game.descriptors, ch, HCONTROL_FORMAT);
+        send_to_char(descs, ch, HCONTROL_FORMAT);
         return;
     }
     let exit_num;
@@ -541,14 +541,14 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
         exit_num = search_block(&arg1, &DIRS, false);
         exit_num.is_none()
     } {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(descs, ch,
             format!("'{}' is not a valid direction.\r\n", arg1).as_str(),
         );
         return;
     }
     let exit_num = exit_num.unwrap();
     if toroom(&db, real_house as usize, exit_num) == NOWHERE {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(descs, ch,
             format!(
                 "There is no exit {} from room {}.\r\n",
                 DIRS[exit_num], virt_house
@@ -562,14 +562,14 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
     let virt_atrium = db.get_room_vnum(real_atrium);
 
     if toroom(&db, real_atrium as usize, REV_DIR[exit_num] as usize) != real_house {
-        send_to_char(&mut game.descriptors, ch, "A house's exit must be a two-way door.\r\n");
+        send_to_char(descs, ch, "A house's exit must be a two-way door.\r\n");
         return;
     }
 
     /* third arg: player's name */
     one_argument(arg, &mut arg1);
     if arg1.is_empty() {
-        send_to_char(&mut game.descriptors, ch, HCONTROL_FORMAT);
+        send_to_char(descs, ch, HCONTROL_FORMAT);
         return;
     }
     let owner;
@@ -577,7 +577,7 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
         owner = db.get_id_by_name(&arg1);
         owner < 0
     } {
-        send_to_char(&mut game.descriptors, ch, format!("Unknown player '{}'.\r\n", arg1).as_str());
+        send_to_char(descs, ch, format!("Unknown player '{}'.\r\n", arg1).as_str());
         return;
     }
     let temp_house = HouseControlRec {
@@ -607,14 +607,14 @@ fn hcontrol_build_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut D
     db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
     house_crashsave(chars, db, objs,virt_house);
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, ch, "House built.  Mazel tov!\r\n");
+    send_to_char(descs, ch, "House built.  Mazel tov!\r\n");
     house_save_control( db);
 }
 
-fn hcontrol_destroy_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId, arg: &str) {
+fn hcontrol_destroy_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId, arg: &str) {
     let ch = chars.get(chid);
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, HCONTROL_FORMAT);
+        send_to_char(descs, ch, HCONTROL_FORMAT);
         return;
     }
     let argi = arg.parse::<i16>();
@@ -624,7 +624,7 @@ fn hcontrol_destroy_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut
         i = find_house(&db, argi);
         i.is_none()
     } {
-        send_to_char(&mut game.descriptors, ch, "Unknown house.\r\n");
+        send_to_char(descs, ch, "Unknown house.\r\n");
         return;
     }
     let i = i.unwrap();
@@ -661,7 +661,7 @@ fn hcontrol_destroy_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut
 
     db.num_of_houses -= 1;
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, ch, "House deleted.\r\n");
+    send_to_char(descs, ch, "House deleted.\r\n");
     house_save_control( db);
 
     /*
@@ -719,13 +719,13 @@ pub fn do_hcontrol(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _te
     half_chop(&mut argument, &mut arg1, &mut arg2);
 
     if is_abbrev(&arg1, "build") {
-        hcontrol_build_house( game, chars, db,objs,chid, &mut arg2);
+        hcontrol_build_house( &mut game.descriptors, chars, db,objs,chid, &mut arg2);
     } else if is_abbrev(&arg1, "destroy") {
-        hcontrol_destroy_house(game, chars, db, chid, &arg2);
+        hcontrol_destroy_house(&mut game.descriptors, chars, db, chid, &arg2);
     } else if is_abbrev(&arg1, "pay") {
         hcontrol_pay_house(game, chars, db, chid, &arg2);
     } else if is_abbrev(&arg1, "show") {
-        hcontrol_list_houses(game, chars, db, chid);
+        hcontrol_list_houses(&mut game.descriptors, chars, db, chid);
     } else {
         send_to_char(&mut game.descriptors, ch, HCONTROL_FORMAT);
     }
@@ -749,7 +749,7 @@ pub fn do_house(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     } else if ch.get_idnum() != db.house_control[i.unwrap()].owner {
         send_to_char(&mut game.descriptors, ch, "Only the primary owner can set guests.\r\n");
     } else if arg.is_empty() {
-        house_list_guests(game, chars, db, chid, i.unwrap(), false);
+        house_list_guests(&mut game.descriptors, chars, db, chid, i.unwrap(), false);
     } else if {
         id = db.get_id_by_name(&arg);
         id < 0
@@ -828,17 +828,17 @@ pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
     false
 }
 
-fn house_list_guests(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: DepotId, i: usize, quiet: bool) {
+fn house_list_guests(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, db: &DB, chid: DepotId, i: usize, quiet: bool) {
     let ch = chars.get(chid);
     let house_control = db.house_control;
     if house_control[i].num_of_guests == 0 {
         if !quiet {
-            send_to_char(&mut game.descriptors, ch, "  Guests: None\r\n");
+            send_to_char(descs, ch, "  Guests: None\r\n");
         }
         return;
     }
 
-    send_to_char(&mut game.descriptors, ch, "  Guests: ");
+    send_to_char(descs, ch, "  Guests: ");
     let mut num_printed = 0;
     for j in 0..house_control[i].num_of_guests as usize {
         /* Avoid <UNDEF>. -gg 6/21/98 */
@@ -851,7 +851,7 @@ fn house_list_guests(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: De
         }
         let temp = temp.unwrap();
         num_printed += 1;
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(descs, ch,
             format!(
                 "{}{} ",
                 temp.chars().next().unwrap().to_uppercase(),
@@ -862,8 +862,8 @@ fn house_list_guests(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: De
     }
 
     if num_printed == 0 {
-        send_to_char(&mut game.descriptors, ch, "all dead");
+        send_to_char(descs, ch, "all dead");
     }
 
-    send_to_char(&mut game.descriptors, ch, "\r\n");
+    send_to_char(descs, ch, "\r\n");
 }

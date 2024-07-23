@@ -3812,7 +3812,7 @@ pub fn do_show(
 
         /* show houses */
         9 => {
-            hcontrol_list_houses(game, chars, db, chid);
+            hcontrol_list_houses(&mut game.descriptors, chars, db, chid);
         }
 
         /* show snoop */
