@@ -571,182 +571,182 @@ pub const DEX_APP_SKILL: [DexSkillType; 26] = [
     DexSkillType {
         p_pocket: -99,
         p_locks: -99,
-        traps: -90,
+        //traps: -90,
         sneak: -99,
         hide: -60,
     }, /* dex = 0 */
     DexSkillType {
         p_pocket: -90,
         p_locks: -90,
-        traps: -60,
+        //traps: -60,
         sneak: -90,
         hide: -50,
     }, /* dex = 1 */
     DexSkillType {
         p_pocket: -80,
         p_locks: -80,
-        traps: -40,
+        //traps: -40,
         sneak: -80,
         hide: -45,
     },
     DexSkillType {
         p_pocket: -70,
         p_locks: -70,
-        traps: -30,
+        //traps: -30,
         sneak: -70,
         hide: -40,
     },
     DexSkillType {
         p_pocket: -60,
         p_locks: -60,
-        traps: -30,
+        //traps: -30,
         sneak: -60,
         hide: -35,
     },
     DexSkillType {
         p_pocket: -50,
         p_locks: -50,
-        traps: -20,
+        //traps: -20,
         sneak: -50,
         hide: -30,
     }, /* dex = 5 */
     DexSkillType {
         p_pocket: -40,
         p_locks: -40,
-        traps: -20,
+        //traps: -20,
         sneak: -40,
         hide: -25,
     },
     DexSkillType {
         p_pocket: -30,
         p_locks: -30,
-        traps: -15,
+        //traps: -15,
         sneak: -30,
         hide: -20,
     },
     DexSkillType {
         p_pocket: -20,
         p_locks: -20,
-        traps: -15,
+        //traps: -15,
         sneak: -20,
         hide: -15,
     },
     DexSkillType {
         p_pocket: -15,
         p_locks: -10,
-        traps: -10,
+        //traps: -10,
         sneak: -20,
         hide: -10,
     },
     DexSkillType {
         p_pocket: -10,
         p_locks: -5,
-        traps: -10,
+        //traps: -10,
         sneak: -15,
         hide: -5,
     }, /* dex = 10 */
     DexSkillType {
         p_pocket: -5,
         p_locks: 0,
-        traps: -5,
+        //traps: -5,
         sneak: -10,
         hide: 0,
     },
     DexSkillType {
         p_pocket: 0,
         p_locks: 0,
-        traps: 0,
+        //traps: 0,
         sneak: -5,
         hide: 0,
     },
     DexSkillType {
         p_pocket: 0,
         p_locks: 0,
-        traps: 0,
+        //traps: 0,
         sneak: 0,
         hide: 0,
     },
     DexSkillType {
         p_pocket: 0,
         p_locks: 0,
-        traps: 0,
+        //traps: 0,
         sneak: 0,
         hide: 0,
     },
     DexSkillType {
         p_pocket: 0,
         p_locks: 0,
-        traps: 0,
+        //traps: 0,
         sneak: 0,
         hide: 0,
     }, /* dex = 15 */
     DexSkillType {
         p_pocket: 0,
         p_locks: 5,
-        traps: 0,
+        //traps: 0,
         sneak: 0,
         hide: 0,
     },
     DexSkillType {
         p_pocket: 5,
         p_locks: 10,
-        traps: 0,
+        //traps: 0,
         sneak: 5,
         hide: 5,
     },
     DexSkillType {
         p_pocket: 10,
         p_locks: 15,
-        traps: 5,
+        //traps: 5,
         sneak: 10,
         hide: 10,
     }, /* dex = 18 */
     DexSkillType {
         p_pocket: 15,
         p_locks: 20,
-        traps: 10,
+        //traps: 10,
         sneak: 15,
         hide: 15,
     },
     DexSkillType {
         p_pocket: 15,
         p_locks: 20,
-        traps: 10,
+        //traps: 10,
         sneak: 15,
         hide: 15,
     }, /* dex = 20 */
     DexSkillType {
         p_pocket: 20,
         p_locks: 25,
-        traps: 10,
+        //traps: 10,
         sneak: 15,
         hide: 20,
     },
     DexSkillType {
         p_pocket: 20,
         p_locks: 25,
-        traps: 15,
+        //traps: 15,
         sneak: 20,
         hide: 20,
     },
     DexSkillType {
         p_pocket: 25,
         p_locks: 25,
-        traps: 15,
+        //traps: 15,
         sneak: 20,
         hide: 20,
     },
     DexSkillType {
         p_pocket: 25,
         p_locks: 30,
-        traps: 15,
+        //traps: 15,
         sneak: 25,
         hide: 25,
     },
     DexSkillType {
         p_pocket: 25,
         p_locks: 30,
-        traps: 15,
+        //traps: 15,
         sneak: 25,
         hide: 25,
     }, /* dex = 25 */
@@ -755,133 +755,133 @@ pub const DEX_APP_SKILL: [DexSkillType; 26] = [
 /* [dex] apply (all) */
 pub const DEX_APP: [DexAppType; 26] = [
     DexAppType {
-        reaction: -7,
-        miss_att: -7,
+        //reaction: -7,
+        //miss_att: -7,
         defensive: 6,
     }, /* dex = 0 */
     DexAppType {
-        reaction: -6,
-        miss_att: -6,
+        //reaction: -6,
+        //miss_att: -6,
         defensive: 5,
     }, /* dex = 1 */
     DexAppType {
-        reaction: -4,
-        miss_att: -4,
+        //reaction: -4,
+        //miss_att: -4,
         defensive: 5,
     },
     DexAppType {
-        reaction: -3,
-        miss_att: -3,
+        //reaction: -3,
+        //miss_att: -3,
         defensive: 4,
     },
     DexAppType {
-        reaction: -2,
-        miss_att: -2,
+        //reaction: -2,
+        //miss_att: -2,
         defensive: 3,
     },
     DexAppType {
-        reaction: -1,
-        miss_att: -1,
+        //reaction: -1,
+        //miss_att: -1,
         defensive: 2,
     }, /* dex = 5 */
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 1,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     }, /* dex = 10 */
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: 0,
     },
     DexAppType {
-        reaction: 0,
-        miss_att: 0,
+        //reaction: 0,
+        //miss_att: 0,
         defensive: -1,
     }, /* dex = 15 */
     DexAppType {
-        reaction: 1,
-        miss_att: 1,
+        //reaction: 1,
+        //miss_att: 1,
         defensive: -2,
     },
     DexAppType {
-        reaction: 2,
-        miss_att: 2,
+        //reaction: 2,
+        //miss_att: 2,
         defensive: -3,
     },
     DexAppType {
-        reaction: 2,
-        miss_att: 2,
+        //reaction: 2,
+        //miss_att: 2,
         defensive: -4,
     }, /* dex = 18 */
     DexAppType {
-        reaction: 3,
-        miss_att: 3,
+        //reaction: 3,
+        //miss_att: 3,
         defensive: -4,
     },
     DexAppType {
-        reaction: 3,
-        miss_att: 3,
+        //reaction: 3,
+        //miss_att: 3,
         defensive: -4,
     }, /* dex = 20 */
     DexAppType {
-        reaction: 4,
-        miss_att: 4,
+        //reaction: 4,
+        //miss_att: 4,
         defensive: -5,
     },
     DexAppType {
-        reaction: 4,
-        miss_att: 4,
+        //reaction: 4,
+        //miss_att: 4,
         defensive: -5,
     },
     DexAppType {
-        reaction: 4,
-        miss_att: 4,
+        //reaction: 4,
+        //miss_att: 4,
         defensive: -5,
     },
     DexAppType {
-        reaction: 5,
-        miss_att: 5,
+        //reaction: 5,
+        //miss_att: 5,
         defensive: -6,
     },
     DexAppType {
-        reaction: 5,
-        miss_att: 5,
+        //reaction: 5,
+        //miss_att: 5,
         defensive: -6,
     }, /* dex = 25 */
 ];
@@ -890,51 +890,51 @@ pub const DEX_APP: [DexAppType; 26] = [
 pub const CON_APP: [ConAppType; 26] = [
     ConAppType {
         hitp: -4,
-        shock: 20,
+        /*shock: 20*/
     }, /* con = 0 */
     ConAppType {
         hitp: -3,
-        shock: 25,
+        /*shock: 25*/
     }, /* con = 1 */
     ConAppType {
         hitp: -2,
-        shock: 30,
+        /*shock: 30*/
     },
     ConAppType {
         hitp: -2,
-        shock: 35,
+        /*shock: 35*/
     },
     ConAppType {
         hitp: -1,
-        shock: 40,
+        /*shock: 40*/
     },
     ConAppType {
         hitp: -1,
-        shock: 45,
+        /*shock: 45*/
     }, /* con = 5 */
     ConAppType {
         hitp: -1,
-        shock: 50,
+        /*shock: 50*/
     },
-    ConAppType { hitp: 0, shock: 55 },
-    ConAppType { hitp: 0, shock: 60 },
-    ConAppType { hitp: 0, shock: 65 },
-    ConAppType { hitp: 0, shock: 70 }, /* con = 10 */
-    ConAppType { hitp: 0, shock: 75 },
-    ConAppType { hitp: 0, shock: 80 },
-    ConAppType { hitp: 0, shock: 85 },
-    ConAppType { hitp: 0, shock: 88 },
-    ConAppType { hitp: 1, shock: 90 }, /* con = 15 */
-    ConAppType { hitp: 2, shock: 95 },
-    ConAppType { hitp: 2, shock: 97 },
-    ConAppType { hitp: 3, shock: 99 }, /* con = 18 */
-    ConAppType { hitp: 3, shock: 99 },
-    ConAppType { hitp: 4, shock: 99 }, /* con = 20 */
-    ConAppType { hitp: 5, shock: 99 },
-    ConAppType { hitp: 5, shock: 99 },
-    ConAppType { hitp: 5, shock: 99 },
-    ConAppType { hitp: 6, shock: 99 },
-    ConAppType { hitp: 6, shock: 99 }, /* con = 25 */
+    ConAppType { hitp: 0, /*shock: 55*/ },
+    ConAppType { hitp: 0, /*shock: 60*/ },
+    ConAppType { hitp: 0, /*shock: 65*/ },
+    ConAppType { hitp: 0, /*shock: 70*/ }, /* con = 10 */
+    ConAppType { hitp: 0, /*shock: 75*/ },
+    ConAppType { hitp: 0, /*shock: 80*/ },
+    ConAppType { hitp: 0, /*shock: 85*/ },
+    ConAppType { hitp: 0, /*shock: 88*/ },
+    ConAppType { hitp: 1, /*shock: 90*/ }, /* con = 15 */
+    ConAppType { hitp: 2, /*shock: 95*/ },
+    ConAppType { hitp: 2, /*shock: 97*/ },
+    ConAppType { hitp: 3, /*shock: 99*/ }, /* con = 18 */
+    ConAppType { hitp: 3, /*shock: 99*/ },
+    ConAppType { hitp: 4, /*shock: 99*/ }, /* con = 20 */
+    ConAppType { hitp: 5, /*shock: 99*/ },
+    ConAppType { hitp: 5, /*shock: 99*/ },
+    ConAppType { hitp: 5, /*shock: 99*/ },
+    ConAppType { hitp: 6, /*shock: 99*/ },
+    ConAppType { hitp: 6, /*shock: 99*/ }, /* con = 25 */
 ];
 
 /* [int] apply (all) */

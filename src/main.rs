@@ -20,6 +20,8 @@ use std::string::ToString;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
+use tungstenite::{WebSocket, accept, Message};
+
 use depot::{Depot, DepotId, HasId};
 use log::{debug, error, info, warn, LevelFilter};
 
@@ -96,6 +98,12 @@ pub const TO_NOTVICT: i32 = 3;
 pub const TO_CHAR: i32 = 4;
 pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 
+#[derive(Debug)]
+pub enum ConnectionType {
+    Telnet(TcpStream),
+    WebSocket(WebSocket<TcpStream>),
+}
+
 pub struct TextData {
     id: DepotId,
     pub text: String,
@@ -131,8 +139,8 @@ impl HasId for TextData {
 
 pub struct DescriptorData {
     id: DepotId,
-    stream: Option<TcpStream>,
-    // file descriptor for socket
+    connection: Option<ConnectionType>,
+    // connection type (telnet or websocket)
     host: Rc<str>,
     // hostname
     bad_pws: u8,
@@ -179,6 +187,8 @@ pub struct DescriptorData {
     /* Who is this char snooping	*/
     snoop_by: Option<DepotId>,
     /* And who is snooping this char	*/
+    websocket_input_buffer: Vec<u8>,
+    /* Buffer for WebSocket input messages */
 }
 
 impl HasId for DescriptorData {
@@ -195,7 +205,7 @@ impl Default for DescriptorData {
     fn default() -> Self {
         DescriptorData {
             id: Default::default(),
-            stream: None,
+            connection: None,
             host: Rc::from(""),
             bad_pws: 0,
             idle_tics: 0,
@@ -206,6 +216,7 @@ impl Default for DescriptorData {
             showstr_vector: vec![],
             showstr_count: 0,
             showstr_page: 0,
+            websocket_input_buffer: vec![],
             str: None,
             max_str: 0,
             mail_to: 0,
@@ -226,6 +237,7 @@ impl Default for DescriptorData {
 
 pub struct Game {
     mother_desc: Option<TcpListener>,
+    websocket_listener: Option<TcpListener>,
     descriptors: Depot<DescriptorData>,
     descriptor_list: Vec<DepotId>,
     last_desc: usize,
@@ -260,6 +272,7 @@ fn main() -> ExitCode {
         circle_shutdown: false,
         circle_reboot: false,
         mother_desc: None,
+        websocket_listener: None,
         // tics: 0,
         mins_since_crashsave: 0,
         config: Config {
@@ -409,6 +422,8 @@ fn main() -> ExitCode {
     } else {
         info!("Running game on port {}.", port);
         game.mother_desc = Some(init_socket(port));
+        game.websocket_listener = Some(init_socket(port + 1));
+        info!("WebSocket server listening on port {}.", port + 1);
         game.init_game(&mut chars, &mut db, &mut texts, &mut objs, port);
     }
 
@@ -575,29 +590,61 @@ impl Game {
             }
             last_time = now;
 
-            /* If there are new connections waiting, accept them. */
-            let accept_result = self.mother_desc.as_ref().unwrap().accept();
-            match accept_result {
-                Ok((stream, addr)) => {
-                    info!("New connection {}.  Waking up.", addr);
-                    self.new_descriptor(chars, db, stream, addr);
+            /* If there are new telnet connections waiting, accept them. */
+            if let Some(ref listener) = self.mother_desc {
+                match listener.accept() {
+                    Ok((stream, addr)) => {
+                        info!("New telnet connection {}.  Waking up.", addr);
+                        self.new_descriptor(chars, db, stream, addr);
+                    }
+                    Err(e) => match e.kind() {
+                        ErrorKind::WouldBlock => (),
+                        _ => error!("SYSERR: Could not get telnet client {e:?}"),
+                    },
                 }
-                Err(e) => match e.kind() {
-                    ErrorKind::WouldBlock => (),
-                    _ => error!("SYSERR: Could not get client {e:?}"),
-                },
+            }
+
+            /* If there are new WebSocket connections waiting, accept them. */
+            if let Some(ref listener) = self.websocket_listener {
+                match listener.accept() {
+                    Ok((stream, addr)) => {
+                        info!("New WebSocket connection {}.  Waking up.", addr);
+                        self.new_websocket_descriptor(chars, db, stream, addr);
+                    }
+                    Err(e) => match e.kind() {
+                        ErrorKind::WouldBlock => (),
+                        _ => error!("SYSERR: Could not get WebSocket client {e:?}"),
+                    },
+                }
             }
 
             /* Process descriptors with input pending */
             let mut buf = [0u8];
             for d_id in self.descriptor_list.clone() {
-                match self.desc(d_id).stream.as_ref().unwrap().peek(&mut buf) {
-                    Ok(size) if size != 0 => {
-                        process_input(&mut self.descriptors, d_id);
+                // First, try to poll WebSocket for new messages
+                self.poll_websocket_input(d_id);
+                
+                let has_input = match &self.desc(d_id).connection {
+                    Some(ConnectionType::Telnet(stream)) => {
+                        match stream.peek(&mut buf) {
+                            Ok(size) if size != 0 => true,
+                            Ok(_) => false,
+                            Err(err) if err.kind() == ErrorKind::WouldBlock => false,
+                            Err(err) => {
+                                error!("Error while peeking TCP Stream: {} ({})", err, err.kind());
+                                false
+                            }
+                        }
                     }
-                    Ok(_) => (),
-                    Err(err) if err.kind() == ErrorKind::WouldBlock => (),
-                    Err(err) => error!("Error while peeking TCP Stream: {} ({})", err, err.kind()),
+                    Some(ConnectionType::WebSocket(_)) => {
+                        // Check if WebSocket has buffered input
+                        !self.desc(d_id).websocket_input_buffer.is_empty()
+                    }
+                    None => false,
+                };
+                
+                if has_input {
+                    process_input(&mut self.descriptors, d_id);
                 }
             }
 
@@ -704,7 +751,9 @@ impl Game {
                 if !d.has_prompt && d.output.is_empty() {
                     let text = &d.make_prompt(chars);
                     let d = self.desc_mut(d_id);
-                    write_to_descriptor(d.stream.as_mut().unwrap(), text.as_bytes());
+                    if let Some(ConnectionType::Telnet(ref mut stream)) = d.connection {
+                        write_to_descriptor(stream, text.as_bytes());
+                    }
                     d.has_prompt = true;
                 }
             }
@@ -855,18 +904,37 @@ impl Game {
 }
 
 impl DescriptorData {
+
     /*
-     * Turn off echoing (specific to telnet client)
+     * Turn off echoing (works for both telnet and WebSocket)
      */
     fn echo_off(&mut self) {
-        self.output.extend_from_slice(&[IAC, WILL, TELOPT_ECHO]);
+        match &self.connection {
+            Some(ConnectionType::Telnet(_)) => {
+                self.output.extend_from_slice(&[IAC, WILL, TELOPT_ECHO]);
+            }
+            Some(ConnectionType::WebSocket(_)) => {
+                // Send special WebSocket control message
+                self.output.extend_from_slice(b"\x1b[ECHO_OFF]");
+            }
+            None => {}
+        }
     }
 
     /*
-     * Turn on echoing (specific to telnet client)
+     * Turn on echoing (works for both telnet and WebSocket)
      */
     fn echo_on(&mut self) {
-        self.output.extend_from_slice(&[IAC, WONT, TELOPT_ECHO]);
+        match &self.connection {
+            Some(ConnectionType::Telnet(_)) => {
+                self.output.extend_from_slice(&[IAC, WONT, TELOPT_ECHO]);
+            }
+            Some(ConnectionType::WebSocket(_)) => {
+                // Send special WebSocket control message
+                self.output.extend_from_slice(b"\x1b[ECHO_ON]");
+            }
+            None => {}
+        }
     }
 
     fn make_prompt(&mut self, chars: &Depot<CharData>) -> String {
@@ -1019,7 +1087,7 @@ impl Game {
         /* create a new descriptor */
         /* initialize descriptor data */
         let mut newd = DescriptorData::default();
-        newd.stream = Some(stream);
+        newd.connection = Some(ConnectionType::Telnet(stream));
 
         /* find the sitename */
         if !self.config.nameserver_is_slow {
@@ -1036,11 +1104,10 @@ impl Game {
 
         /* determine if the site is banned */
         if isbanned(db, &newd.host) == BAN_ALL {
-            newd.stream
-                .as_mut()
-                .unwrap()
-                .shutdown(Shutdown::Both)
-                .expect("shutdowning socket which is banned");
+            if let Some(ConnectionType::Telnet(ref mut stream)) = newd.connection {
+                stream.shutdown(Shutdown::Both)
+                    .expect("shutdowning socket which is banned");
+            }
             self.mudlog(
                 chars,
                 CMP,
@@ -1048,6 +1115,7 @@ impl Game {
                 true,
                 format!("Connection attempt denied from [{}]", newd.host).as_str(),
             );
+            return;
         }
 
         /*
@@ -1067,6 +1135,107 @@ impl Game {
         /* append to list */
         let newd_id = self.descriptors.push(newd);
         self.descriptor_list.push(newd_id);
+    }
+
+    fn new_websocket_descriptor(
+        &mut self,
+        chars: &Depot<CharData>,
+        db: &DB,
+        stream: TcpStream,
+        addr: SocketAddr,
+    ) {
+        // Set non-blocking for the initial stream
+        stream.set_nonblocking(true).expect("Error with setting nonblocking");
+
+        /* make sure we have room for it */
+        if self.descriptor_list.len() >= self.max_players as usize {
+            // For WebSocket, we can't easily write a rejection message before handshake
+            // Just close the connection
+            return;
+        }
+
+        // Perform WebSocket handshake (this would need to be async in a real implementation)
+        // For now, we'll create a placeholder - in practice you'd use tokio-tungstenite
+        // This is a simplified synchronous approach
+        match self.perform_websocket_handshake(stream) {
+            Ok(ws_stream) => {
+                let mut newd = DescriptorData::default();
+                newd.connection = Some(ConnectionType::WebSocket(ws_stream));
+
+                /* find the sitename */
+                if !self.config.nameserver_is_slow {
+                    let r = dns_lookup::lookup_addr(&addr.ip());
+                    if r.is_err() {
+                        error!("Error resolving address: {}", r.err().unwrap());
+                        newd.host = Rc::from(addr.ip().to_string());
+                    } else {
+                        newd.host = Rc::from(r.unwrap());
+                    }
+                } else {
+                    newd.host = Rc::from(addr.ip().to_string());
+                }
+
+                /* determine if the site is banned */
+                if isbanned(db, &newd.host) == BAN_ALL {
+                    self.mudlog(
+                        chars,
+                        CMP,
+                        LVL_GOD as i32,
+                        true,
+                        format!("WebSocket connection attempt denied from [{}]", newd.host).as_str(),
+                    );
+                    return;
+                }
+
+                self.last_desc += 1;
+                if self.last_desc == 1000 {
+                    self.last_desc = 1;
+                }
+                newd.desc_num = self.last_desc;
+
+                newd.write_to_output(&db.greetings);
+
+                let desc_id = self.descriptors.push(newd);
+                self.descriptor_list.push(desc_id);
+                
+                info!("WebSocket connection established for {}", addr);
+            }
+            Err(e) => {
+                error!("WebSocket handshake failed: {}", e);
+            }
+        }
+    }
+
+    fn perform_websocket_handshake(&self, stream: TcpStream) -> Result<WebSocket<TcpStream>, Box<dyn std::error::Error>> {
+        match accept(stream) {
+            Ok(websocket) => Ok(websocket),
+            Err(e) => Err(e.into())
+        }
+    }
+
+    fn poll_websocket_input(&mut self, d_id: DepotId) {
+        if let Some(ConnectionType::WebSocket(ref mut ws)) = self.desc_mut(d_id).connection.as_mut() {
+            match ws.read() {
+                Ok(Message::Text(text)) => {
+                    self.desc_mut(d_id).websocket_input_buffer.extend_from_slice(text.as_bytes());
+                }
+                Ok(Message::Binary(data)) => {
+                    self.desc_mut(d_id).websocket_input_buffer.extend_from_slice(&data);
+                }
+                Ok(Message::Close(_)) => {
+                    // Connection closed - this will be handled elsewhere
+                }
+                Ok(_) => {
+                    // Ignore ping/pong frames
+                }
+                Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // No data available - this is normal for non-blocking sockets
+                }
+                Err(_) => {
+                    // Other errors - connection may be broken
+                }
+            }
+        }
     }
 }
 
@@ -1107,17 +1276,39 @@ impl Game {
          */
         if desc.has_prompt {
             desc.has_prompt = false;
-            result = write_to_descriptor(desc.stream.as_mut().unwrap(), &i);
+            result = match &mut desc.connection {
+                Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i),
+                Some(ConnectionType::WebSocket(ref mut ws)) => {
+                    // Send WebSocket text message
+                    match ws.send(Message::Text(String::from_utf8_lossy(&i).to_string())) {
+                        Ok(_) => i.len() as i32,
+                        Err(_) => -1,
+                    }
+                }
+                None => -1,
+            };
             if result >= 2 {
                 result -= 2;
             }
         } else {
-            result = write_to_descriptor(desc.stream.as_mut().unwrap(), &i[2..]);
+            result = match &mut desc.connection {
+                Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i[2..]),
+                Some(ConnectionType::WebSocket(ref mut ws)) => {
+                    // Send WebSocket text message (skip the first 2 bytes)
+                    match ws.send(Message::Text(String::from_utf8_lossy(&i[2..]).to_string())) {
+                        Ok(_) => (i.len() - 2) as i32,
+                        Err(_) => -1,
+                    }
+                }
+                None => -1,
+            };
         }
 
         if result < 0 {
             /* Oops, fatal error. Bye! */
-            let _ = desc.stream.as_mut().unwrap().shutdown(Shutdown::Both);
+            if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
             return -1;
         } else if result == 0 {
             /* Socket buffer full. Try later. */
@@ -1182,12 +1373,26 @@ fn write_to_descriptor(stream: &mut TcpStream, txt: &[u8]) -> i32 {
  * standards, there are so many of them. -gg 6/30/98
  */
 fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
-    let stream = d.stream.as_mut().unwrap();
     let input = &mut d.inbuf;
-
     let mut buf = [0u8; 4096];
 
-    match stream.read(&mut buf) {
+    let read_result = match &mut d.connection {
+        Some(ConnectionType::Telnet(ref mut stream)) => stream.read(&mut buf),
+        Some(ConnectionType::WebSocket(_)) => {
+            // Read from the buffered WebSocket input
+            if d.websocket_input_buffer.is_empty() {
+                Ok(0) // No buffered data
+            } else {
+                let len = d.websocket_input_buffer.len().min(buf.len());
+                buf[..len].copy_from_slice(&d.websocket_input_buffer[..len]);
+                d.websocket_input_buffer.drain(..len);
+                Ok(len)
+            }
+        }
+        None => return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "No connection")),
+    };
+
+    match read_result {
         Err(err) => {
             error!("{:?}", err);
             Err(err)
@@ -1315,7 +1520,17 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
             }
 
             if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-                if write_to_descriptor(desc.stream.as_mut().unwrap(), tmp.as_bytes()) < 0 {
+                let write_result = match &mut desc.connection {
+                    Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, tmp.as_bytes()),
+                    Some(ConnectionType::WebSocket(ref mut ws)) => {
+                        match ws.send(Message::Text(tmp.clone())) {
+                            Ok(_) => tmp.len() as i32,
+                            Err(_) => -1,
+                        }
+                    }
+                    None => -1,
+                };
+                if write_result < 0 {
                     return -1;
                 }
             }
@@ -1462,11 +1677,11 @@ impl Game {
         self.descriptor_list.retain(|&i| i != d_id);
         let desc = self.descriptors.get_mut(d_id);
 
-        desc.stream
-            .as_mut()
-            .unwrap()
-            .shutdown(Shutdown::Both)
-            .expect("SYSERR while closing socket");
+        if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
+            stream
+                .shutdown(Shutdown::Both)
+                .expect("SYSERR while closing socket");
+        }
         desc.flush_queues();
 
         /* Forget snooping */

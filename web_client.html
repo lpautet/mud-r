@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUD-R Web Client</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+        }
+        
+        #terminal {
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        #terminal::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #terminal::-webkit-scrollbar-track {
+            background: #000;
+        }
+        
+        #terminal::-webkit-scrollbar-thumb {
+            background: #0f0;
+            border-radius: 4px;
+        }
+        
+        .input-container {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .prompt {
+            color: #0f0;
+            margin-right: 5px;
+            font-weight: bold;
+        }
+        
+        #input {
+            flex: 1;
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            border-radius: 3px;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        #input:focus {
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        
+        .status {
+            text-align: center;
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .status.connected {
+            background: rgba(0, 255, 0, 0.2);
+            color: #0f0;
+        }
+        
+        .status.disconnected {
+            background: rgba(255, 0, 0, 0.2);
+            color: #f00;
+        }
+        
+        .status.connecting {
+            background: rgba(255, 255, 0, 0.2);
+            color: #ff0;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        button {
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            border-radius: 3px;
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        
+        button:hover {
+            background: rgba(0, 255, 0, 0.1);
+        }
+        
+        button:disabled {
+            color: #555;
+            border-color: #555;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MUD-R Web Client</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div id="terminal"></div>
+        
+        <div class="input-container">
+            <span class="prompt">&gt;</span>
+            <input type="text" id="input" placeholder="Enter command..." disabled />
+        </div>
+        
+        <div class="controls">
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <button id="clearBtn">Clear Screen</button>
+        </div>
+    </div>
+
+    <script>
+        class MudClient {
+            constructor() {
+                this.ws = null;
+                this.terminal = document.getElementById('terminal');
+                this.input = document.getElementById('input');
+                this.status = document.getElementById('status');
+                this.connectBtn = document.getElementById('connectBtn');
+                this.passwordMode = false;
+                this.disconnectBtn = document.getElementById('disconnectBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                
+                this.setupEventListeners();
+                this.commandHistory = [];
+                this.historyIndex = -1;
+            }
+            
+            setupEventListeners() {
+                this.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.clearBtn.addEventListener('click', () => this.clearTerminal());
+            }
+            
+            connect() {
+                const wsUrl = 'ws://localhost:4001';
+                this.updateStatus('connecting', 'Connecting...');
+                
+                try {
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.updateStatus('connected', 'Connected to MUD-R');
+                        this.input.disabled = false;
+                        this.input.focus();
+                        this.connectBtn.disabled = true;
+                        this.disconnectBtn.disabled = false;
+                        this.appendToTerminal('=== Connected to MUD-R WebSocket Server ===\n', 'system');
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        this.handleMessage(event.data);
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.updateStatus('disconnected', 'Disconnected');
+                        this.input.disabled = true;
+                        this.connectBtn.disabled = false;
+                        this.disconnectBtn.disabled = true;
+                        this.appendToTerminal('=== Connection closed ===\n', 'system');
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateStatus('disconnected', 'Connection error');
+                        this.appendToTerminal('=== Connection error ===\n', 'error');
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to connect:', error);
+                    this.updateStatus('disconnected', 'Failed to connect');
+                }
+            }
+            
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+            }
+            
+            updateStatus(type, message) {
+                this.status.className = `status ${type}`;
+                this.status.textContent = message;
+            }
+            
+            handleMessage(data) {
+                // Check for server echo control commands
+                if (data.includes('\x1b[ECHO_OFF]')) {
+                    this.setPasswordMode(true);
+                    // Remove the control sequence from display
+                    data = data.replace('\x1b[ECHO_OFF]', '');
+                } else if (data.includes('\x1b[ECHO_ON]')) {
+                    this.setPasswordMode(false);
+                    // Remove the control sequence from display
+                    data = data.replace('\x1b[ECHO_ON]', '');
+                }
+                
+                // Only display if there's content left after removing control sequences
+                if (data.trim()) {
+                    this.appendToTerminal(data);
+                }
+            }
+            
+            setPasswordMode(enabled) {
+                this.passwordMode = enabled;
+                this.input.type = enabled ? 'password' : 'text';
+                this.input.placeholder = enabled ? 'Enter password...' : 'Enter command...';
+            }
+            
+            appendToTerminal(text, type = 'normal') {
+                const span = document.createElement('span');
+                
+                if (type === 'system') {
+                    span.style.color = '#ff0';
+                } else if (type === 'error') {
+                    span.style.color = '#f00';
+                } else {
+                    // Process ANSI escape sequences for colors
+                    text = this.processAnsiColors(text);
+                }
+                
+                span.innerHTML = text.replace(/\n/g, '<br>');
+                this.terminal.appendChild(span);
+                this.terminal.scrollTop = this.terminal.scrollHeight;
+            }
+            
+            processAnsiColors(text) {
+                // Basic ANSI color processing
+                const ansiMap = {
+                    '30': 'color: #000',
+                    '31': 'color: #f00',
+                    '32': 'color: #0f0',
+                    '33': 'color: #ff0',
+                    '34': 'color: #00f',
+                    '35': 'color: #f0f',
+                    '36': 'color: #0ff',
+                    '37': 'color: #fff',
+                    '0': 'color: #0f0' // reset
+                };
+                
+                return text.replace(/\x1b\[(\d+)m/g, (match, code) => {
+                    const style = ansiMap[code] || '';
+                    return style ? `<span style="${style}">` : '</span>';
+                });
+            }
+            
+            handleKeyDown(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.sendCommand();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    this.navigateHistory(-1);
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    this.navigateHistory(1);
+                } else if (e.key === 'Escape' && this.passwordMode) {
+                    // Emergency exit from password mode
+                    this.setPasswordMode(false);
+                    this.appendToTerminal('\n[Password mode disabled manually]\n', 'system');
+                }
+            }
+            
+            sendCommand() {
+                const command = this.input.value.trim();
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+                
+                // Add to history (only non-empty commands)
+                if (command && command !== this.commandHistory[this.commandHistory.length - 1]) {
+                    this.commandHistory.push(command);
+                    if (this.commandHistory.length > 50) {
+                        this.commandHistory.shift();
+                    }
+                }
+                this.historyIndex = -1;
+                
+                // Send command (including empty ones for MUD paging)
+                this.ws.send(command + '\n');
+                this.input.value = '';
+            }
+            
+            navigateHistory(direction) {
+                if (this.commandHistory.length === 0) return;
+                
+                if (direction === -1) { // Up arrow
+                    if (this.historyIndex === -1) {
+                        this.historyIndex = this.commandHistory.length - 1;
+                    } else if (this.historyIndex > 0) {
+                        this.historyIndex--;
+                    }
+                } else { // Down arrow
+                    if (this.historyIndex === -1) return;
+                    if (this.historyIndex < this.commandHistory.length - 1) {
+                        this.historyIndex++;
+                    } else {
+                        this.historyIndex = -1;
+                        this.input.value = '';
+                        return;
+                    }
+                }
+                
+                this.input.value = this.commandHistory[this.historyIndex];
+            }
+            
+            clearTerminal() {
+                this.terminal.innerHTML = '';
+            }
+        }
+        
+        // Initialize the client when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MudClient();
+        });
+    </script>
+</body>
+</html>

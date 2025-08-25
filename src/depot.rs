@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+//use std::marker::PhantomData;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct DepotId {
@@ -144,7 +144,7 @@ where
     //     }
     // }
 
-    pub fn iter(&self) -> DepotRefIterator<T> {
+    pub fn iter(&self) -> DepotRefIterator<'_, T> {
         DepotRefIterator {
             depot: self,
             index: 0,
@@ -209,32 +209,32 @@ where
 //     }
 // }
 
-pub struct DepotIdIterator<'a, T>
-where
-    T: Default + HasId
-{
-    depot: &'a Depot<T>,
-    index: usize,
-    marker: PhantomData<T>,
-}
+// pub struct DepotIdIterator<'a, T>
+// where
+//     T: Default + HasId
+// {
+//     depot: &'a Depot<T>,
+//     index: usize,
+//     marker: PhantomData<T>,
+// }
 
-impl<'a, T> Iterator for DepotIdIterator<'a, T>
-where
-    T: Default + HasId
-{
-    type Item = DepotId;
+// impl<'a, T> Iterator for DepotIdIterator<'a, T>
+// where
+//     T: Default + HasId
+// {
+//     type Item = DepotId;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut ret = None;
-        while self.index < self.depot.slots.len() && ret.is_none() {
-            if !self.depot.slots[self.index].free {
-                ret = Some(DepotId {
-                    index: self.index as u32,
-                    seq: self.depot.slots[self.index].seq,
-                });
-            }
-            self.index += 1;
-        }
-        ret
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         let mut ret = None;
+//         while self.index < self.depot.slots.len() && ret.is_none() {
+//             if !self.depot.slots[self.index].free {
+//                 ret = Some(DepotId {
+//                     index: self.index as u32,
+//                     seq: self.depot.slots[self.index].seq,
+//                 });
+//             }
+//             self.index += 1;
+//         }
+//         ret
+//     }
+// }

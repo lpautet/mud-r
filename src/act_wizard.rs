@@ -744,30 +744,6 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
             &mut buf2,
         );
         let ch = chars.get(chid);
-        format!(
-            "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
-            CCCYN!(ch, C_NRM),
-            DIRS[i],
-            CCNRM!(ch, C_NRM),
-            buf1,
-            rm_dir_option[i].as_ref().unwrap().key,
-            if !rm_dir_option[i].as_ref().unwrap().keyword.is_empty() {
-                &rm_dir_option[i].as_ref().unwrap().keyword
-            } else {
-                "None"
-            },
-            buf2,
-            if !rm_dir_option[i]
-                .as_ref()
-                .unwrap()
-                .general_description
-                .is_empty()
-            {
-                &rm_dir_option[i].as_ref().unwrap().general_description
-            } else {
-                "  No exit description.\r\n"
-            }
-        );
         let msg = format!(
             "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
             CCCYN!(ch, C_NRM),

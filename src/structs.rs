@@ -978,14 +978,14 @@ pub struct MessageList {
 pub struct DexSkillType {
     pub p_pocket: i16,
     pub p_locks: i16,
-    pub traps: i16,
+ //   pub traps: i16,
     pub sneak: i16,
     pub hide: i16,
 }
 
 pub struct DexAppType {
-    pub reaction: i16,
-    pub miss_att: i16,
+//    pub reaction: i16,
+//    pub miss_att: i16,
     pub defensive: i16,
 }
 
@@ -1012,7 +1012,7 @@ pub struct IntAppType {
 
 pub struct ConAppType {
     pub hitp: i16,
-    pub shock: i16,
+    //pub shock: i16,
 }
 
 
