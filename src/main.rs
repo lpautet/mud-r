@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
 use tungstenite::{WebSocket, accept, Message};
+use clap::Parser;
 
 use depot::{Depot, DepotId, HasId};
 use log::{debug, error, info, warn, LevelFilter};
@@ -88,6 +89,45 @@ mod structs;
 mod telnet;
 mod util;
 mod weather;
+
+/// CircleMUD server - A classic text-based multiplayer online role-playing game
+#[derive(Parser, Debug)]
+#[command(name = "mudr")]
+#[command(about = "CircleMUD server")]
+#[command(long_about = None)]
+struct Args {
+    /// Enable syntax check mode
+    #[arg(short = 'c', long = "check")]
+    syntax_check: bool,
+
+    /// Specify library directory (defaults to 'lib')
+    #[arg(short = 'd', long = "dir", default_value = "lib")]
+    directory: String,
+
+    /// Start in mini-MUD mode
+    #[arg(short = 'm', long = "mini")]
+    mini_mud: bool,
+
+    /// Write log to file instead of stderr
+    #[arg(short = 'o', long = "log")]
+    log_file: Option<String>,
+
+    /// Quick boot (doesn't scan rent for object limits)
+    #[arg(short = 'q', long = "quick")]
+    quick_boot: bool,
+
+    /// Restrict MUD -- no new players allowed
+    #[arg(short = 'r', long = "restrict")]
+    restrict: bool,
+
+    /// Suppress special procedure assignments
+    #[arg(short = 's', long = "no-specials")]
+    no_specials: bool,
+
+    /// Port number to listen on (must be > 1024)
+    #[arg(value_name = "PORT")]
+    port: Option<u16>,
+}
 
 pub const PAGE_LENGTH: i32 = 22;
 pub const PAGE_WIDTH: i32 = 80;
@@ -262,7 +302,6 @@ pub struct Game {
 fn main() -> ExitCode {
     // env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-    let mut dir = DFLT_DIR.to_string();
     let mut port = DFLT_PORT;
 
     let mut game = Game {
@@ -286,114 +325,53 @@ fn main() -> ExitCode {
     let mut chars: Depot<CharData> = Depot::new();
 
     let mut db = DB::new(&mut texts);
+    
+    // Parse command line arguments using clap
+    let args = Args::parse();
+    
+    // Apply parsed arguments
     let mut logname: Option<&str> = LOGNAME;
-
-    let mut pos = 1;
-    let args: Vec<String> = env::args().collect();
-    let mut arg;
-    let mut custom_logfile;
-    loop {
-        if pos >= args.len() {
-            break;
-        }
-        arg = args[pos].clone();
-        if !arg.starts_with('-') {
-            break;
-        }
-
-        arg.remove(0);
-        match arg.chars().next().unwrap() {
-            'o' => {
-                arg.remove(0);
-                if arg.len() != 0 {
-                    custom_logfile = arg.to_string();
-                    logname = Some(&custom_logfile);
-                } else if {
-                    pos += 1;
-                    pos < args.len()
-                } {
-                    custom_logfile = args[pos].to_string();
-                    logname = Some(&custom_logfile);
-                } else {
-                    error!("SYSERR: File name to log to expected after option -o.");
-                    process::exit(1);
-                }
-            }
-            'd' => {
-                arg.remove(0);
-                if arg.len() != 0 {
-                    dir = arg.clone();
-                } else if {
-                    pos += 1;
-                    pos < args.len()
-                } {
-                    dir = args[pos].clone();
-                } else {
-                    error!("SYSERR: Directory arg expected after option -d.");
-                    process::exit(1);
-                }
-            }
-            'm' => {
-                db.mini_mud = true;
-                db.no_rent_check = true;
-                info!("Running in minimized mode & with no rent check.");
-            }
-            'c' => {
-                db.scheck = true;
-                info!("Syntax check mode enabled.");
-            }
-            'q' => {
-                db.no_rent_check = true;
-                info!("Quick boot mode -- rent check supressed.");
-            }
-            'r' => {
-                db.circle_restrict = 1;
-                info!("Restricting game -- no new players allowed.");
-            }
-            's' => {
-                db.no_specials = true;
-                info!("Suppressing assignment of special routines.");
-            }
-            'h' => {
-                /* From: Anil Mahajan <amahajan@proxicom.com> */
-                println!(
-                    "Usage: {} [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n\
-                  -c             Enable syntax check mode.\n\
-                  -d <directory> Specify library directory (defaults to 'lib').\n\
-                  -h             Print this command line argument help.\n\
-                  -m             Start in mini-MUD mode.\n\
-                  -o <file>      Write log to <file> instead of stderr.\n\
-                  -q             Quick boot (doesn't scan rent for object limits)\n\
-                  -r             Restrict MUD -- no new players allowed.\n\
-                  -s             Suppress special procedure assignments.\n",
-                    args[0]
-                );
-                process::exit(0);
-            }
-            _ => {
-                eprint!("SYSERR: Unknown option -{} in argument string.\n", arg);
-                break;
-            }
-        }
-        pos += 1;
+    let custom_logfile;
+    if let Some(ref log_file) = args.log_file {
+        custom_logfile = log_file.clone();
+        logname = Some(&custom_logfile);
     }
-
-    if pos < args.len() {
-        if !args[pos].chars().next().unwrap().is_digit(10) {
-            println!(
-                "Usage: {} [-c] [-m] [-q] [-r] [-s] [-d pathname] [port #]\n",
-                args[0]
-            );
+    
+    let dir = args.directory;
+    
+    if let Some(arg_port) = args.port {
+        if arg_port <= 1024 {
+            error!("SYSERR: Illegal port number {}.", arg_port);
             process::exit(1);
         }
-        let r = args[pos].parse::<u16>();
-        if r.is_err() || {
-            port = r.unwrap();
-            port <= 1024
-        } {
-            println!("SYSERR: Illegal port number {}.\n", port);
-            process::exit(1);
-        }
+        port = arg_port;
+    }
+    
+    // Apply boolean flags
+    if args.syntax_check {
+        db.scheck = true;
+        info!("Syntax check mode enabled.");
+    }
+    
+    if args.mini_mud {
+        db.mini_mud = true;
+        db.no_rent_check = true;
+        info!("Running in minimized mode & with no rent check.");
+    }
+    
+    if args.quick_boot {
+        db.no_rent_check = true;
+        info!("Quick boot mode -- rent check supressed.");
+    }
+    
+    if args.restrict {
+        db.circle_restrict = 1;
+        info!("Restricting game -- no new players allowed.");
+    }
+    
+    if args.no_specials {
+        db.no_specials = true;
+        info!("Suppressing assignment of special routines.");
     }
 
     /* All arguments have been parsed, try to open log file. */

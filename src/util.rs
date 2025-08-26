@@ -219,16 +219,6 @@ impl DB {
     }
 }
 
-#[macro_export]
-macro_rules! get_room_spec {
-    ($db:expr, $room:expr) => {
-        (if valid_room_rnum!($room) {
-            (RefCell::borrow(($db).world.get($rnum).unwrap()).func)
-        } else {
-            None
-        })
-    };
-}
 
 impl CharData {
     pub fn get_pc_name(&self) -> &Rc<str> {
@@ -417,15 +407,6 @@ macro_rules! get_age {
     };
 }
 
-#[macro_export]
-macro_rules! get_talk {
-    ($ch:expr, $i:expr) => {
-        (check_player_special!(
-            ($ch),
-            RefCell::borrow(&($ch).player_specials).saved.talks[($i)]
-        ))
-    };
-}
 
 impl CharData {
     pub fn get_talk_mut(&self, i: usize) -> bool {
@@ -475,12 +456,6 @@ impl CharData {
     }
 }
 
-#[macro_export]
-macro_rules! get_last_tell {
-    ($ch:expr) => {
-        (check_player_special!(($ch), RefCell::borrow(&($ch).player_specials).last_tell))
-    };
-}
 
 #[macro_export]
 macro_rules! get_last_tell_mut {

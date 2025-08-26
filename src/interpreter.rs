@@ -3414,7 +3414,7 @@ fn perform_dupe_check(
             let k = game.desc_mut(k_id);
             if target_id.is_none() && k.state() == ConPlaying {
                 k.write_to_output("\r\nThis body has been usurped!\r\n");
-                //target = Some(Rc::new(RefCell::new(k.character.as_ref().unwrap())));
+                target_id = Some(k.character.unwrap());
                 mode = USURP;
             }
 

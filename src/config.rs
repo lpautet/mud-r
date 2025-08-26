@@ -186,7 +186,7 @@ pub const DFLT_IP: Option<&str> = None; /* bind to all interfaces */
 /* pub const DFLT_IP :Option<&str> = Some("192.168.1.1");  -- bind only to one interface */
 
 /* default directory to use as data directory */
-pub const DFLT_DIR: &str = "lib";
+/* pub const DFLT_DIR: &str = "lib"; */ /* Now handled by clap argument parsing */
 
 /*
 * What file to log messages to (ex: "log/syslog").  Setting this to NULL
