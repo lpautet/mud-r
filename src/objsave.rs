@@ -29,7 +29,7 @@ use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
+    AffectFlags, ApplyType, CharData, ExtraFlags, ItemType, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
     can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
@@ -83,7 +83,7 @@ pub fn obj_to_store(db: &DB, obj: &ObjData, fl: &mut File, location: i32) -> boo
         timer: obj.get_obj_timer(),
         bitvector: obj.get_obj_affect(),
         affected: [ObjAffectedType {
-            location: 0,
+            location: ApplyType::None,
             modifier: 0,
         }; 6],
     };
@@ -512,7 +512,7 @@ impl ObjFileElem {
             timer: 0,
             bitvector: AffectFlags::empty(),
             affected: [ObjAffectedType {
-                location: 0,
+                location: ApplyType::None,
                 modifier: 0,
             }; MAX_OBJ_AFFECT as usize],
         }

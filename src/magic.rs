@@ -32,7 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectFlags, AffectedType, CharData, ExtraFlags, MobVnum, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ItemType, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
+    AffectFlags, AffectedType, ApplyType, CharData, ExtraFlags, ItemType, MobVnum, CLASS_WARRIOR, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -324,7 +324,7 @@ pub fn mag_affects(
         _type: 0,
         duration: 0,
         modifier: 0,
-        location: 0,
+        location: ApplyType::None,
         bitvector: AffectFlags::empty(),
     }; MAX_SPELL_AFFECTS as usize];
 
@@ -332,7 +332,7 @@ pub fn mag_affects(
         af[i]._type = spellnum as i16;
         af[i].bitvector = AffectFlags::empty();
         af[i].modifier = 0;
-        af[i].location = APPLY_NONE as u8;
+        af[i].location = ApplyType::None;
     }
     let mut accum_duration = false;
     let mut to_vict = "";
@@ -340,7 +340,7 @@ pub fn mag_affects(
     let mut accum_affect = false;
     match spellnum {
         SPELL_CHILL_TOUCH => {
-            af[0].location = APPLY_STR as u8;
+            af[0].location = ApplyType::Str;
             if mag_savingthrow(victim.as_ref().unwrap(), savetype, 0) {
                 af[0].duration = 1;
             } else {
@@ -352,18 +352,18 @@ pub fn mag_affects(
         }
 
         SPELL_ARMOR => {
-            af[0].location = APPLY_AC as u8;
+            af[0].location = ApplyType::Ac;
             af[0].modifier = -20;
             af[0].duration = 24;
             accum_duration = true;
             to_vict = "You feel someone protecting you.";
         }
         SPELL_BLESS => {
-            af[0].location = APPLY_HITROLL as u8;
+            af[0].location = ApplyType::Hitroll;
             af[0].modifier = 2;
             af[0].duration = 6;
 
-            af[1].location = APPLY_SAVING_SPELL as u8;
+            af[1].location = ApplyType::SavingSpell;
             af[1].modifier = -1;
             af[1].duration = 6;
 
@@ -378,12 +378,12 @@ pub fn mag_affects(
                 return;
             }
 
-            af[0].location = APPLY_HITROLL as u8;
+            af[0].location = ApplyType::Hitroll;
             af[0].modifier = -4;
             af[0].duration = 2;
             af[0].bitvector = AffectFlags::BLIND;
 
-            af[1].location = APPLY_AC as u8;
+            af[1].location = ApplyType::Ac;
             af[1].modifier = 40;
             af[1].duration = 2;
             af[1].bitvector = AffectFlags::BLIND;
@@ -397,12 +397,12 @@ pub fn mag_affects(
                 return;
             }
 
-            af[0].location = APPLY_HITROLL as u8;
+            af[0].location = ApplyType::Hitroll;
             af[0].duration = (1 + (ch.get_level() / 2)) as i16;
             af[0].modifier = -1;
             af[0].bitvector = AffectFlags::CURSE;
 
-            af[1].location = APPLY_DAMROLL as u8;
+            af[1].location = ApplyType::Damroll;
             af[1].duration = (1 + (ch.get_level() / 2)) as i16;
             af[1].modifier = -1;
             af[1].bitvector = AffectFlags::CURSE;
@@ -444,7 +444,7 @@ pub fn mag_affects(
             }
             af[0].duration = 12 + (ch.get_level() as i16 / 4);
             af[0].modifier = -40;
-            af[0].location = APPLY_AC as u8;
+            af[0].location = ApplyType::Ac;
             af[0].bitvector = AffectFlags::INVISIBLE;
             accum_duration = true;
             to_vict = "You vanish.";
@@ -455,7 +455,7 @@ pub fn mag_affects(
                 send_to_char(&mut game.descriptors, ch, NOEFFECT);
                 return;
             }
-            af[0].location = APPLY_STR as u8;
+            af[0].location = ApplyType::Str;
             af[0].duration = ch.get_level() as i16;
             af[0].modifier = -2;
             af[0].bitvector = AffectFlags::POISON;
@@ -505,7 +505,7 @@ pub fn mag_affects(
                 return;
             }
 
-            af[0].location = APPLY_STR as u8;
+            af[0].location = ApplyType::Str;
             af[0].duration = (ch.get_level() as i16 / 2) + 4;
             af[0].modifier = 1 + if level > 18 { 1 } else { 0 };
             accum_duration = true;
@@ -561,7 +561,7 @@ pub fn mag_affects(
     let victim = chars.get_mut(victim_id.unwrap());
     for i in 0..MAX_SPELL_AFFECTS as usize {        
         let flags = af[i].bitvector;
-        if !flags.is_empty() || af[i].location != APPLY_NONE as u8 {
+        if !flags.is_empty() || af[i].location != ApplyType::None {
             affect_join( objs,
                 victim,
                 &mut af[i],

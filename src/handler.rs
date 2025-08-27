@@ -26,7 +26,7 @@ use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    AffectFlags, AffectedType, CharData, ExtraDescrData, ExtraFlags, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ItemType, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
+    AffectFlags, AffectedType, ApplyType, CharData, ExtraDescrData, ExtraFlags, ItemType, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
 use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
@@ -86,7 +86,7 @@ pub fn isname(txt: &str, namelist: &str) -> bool {
     }
 }
 
-fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: AffectFlags, add: bool) {
+fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags, add: bool) {
     let mut _mod = _mod;
     if add {
         ch.set_aff_flags(bitv);
@@ -96,27 +96,27 @@ fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: AffectFlags, add: 
     }
 
     match loc {
-        APPLY_NONE => {}
-        APPLY_STR => {
+        ApplyType::None => {}
+        ApplyType::Str => {
             ch.incr_str(_mod as i8);
         }
-        APPLY_DEX => {
+        ApplyType::Dex => {
             ch.incr_dex(_mod as i8);
         }
-        APPLY_INT => {
+        ApplyType::Int => {
             ch.incr_int(_mod as i8);
         }
-        APPLY_WIS => {
+        ApplyType::Wis => {
             ch.incr_wis(_mod as i8);
         }
-        APPLY_CON => {
+        ApplyType::Con => {
             ch.incr_con(_mod as i8);
         }
-        APPLY_CHA => {
+        ApplyType::Cha => {
             ch.incr_cha(_mod as i8);
         }
 
-        APPLY_CLASS => { /* ??? GET_CLASS(ch) += mod; */ }
+        ApplyType::Class => { /* ??? GET_CLASS(ch) += mod; */ }
 
         /*
          * My personal thoughts on these two would be to set the person to the
@@ -125,77 +125,70 @@ fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: AffectFlags, add: 
          * immortal level of course).  It also makes more sense to set someone
          * to a class rather than adding to the class number. -gg
          */
-        APPLY_LEVEL => { /* ??? GET_LEVEL(ch) += mod; */ }
+        ApplyType::Level => { /* ??? GET_LEVEL(ch) += mod; */ }
 
-        APPLY_AGE => {
+        ApplyType::Age => {
             ch.player.time.birth -= _mod as u64 * SECS_PER_MUD_YEAR;
         }
 
-        APPLY_CHAR_WEIGHT => {
+        ApplyType::CharWeight => {
             ch.set_weight(ch.get_weight() + _mod as u8);
         }
 
-        APPLY_CHAR_HEIGHT => {
+        ApplyType::CharHeight=> {
             ch.set_height(ch.get_height() + _mod as u8);
         }
 
-        APPLY_MANA => {
+        ApplyType::Mana => {
             ch.incr_max_mana(_mod as i16);
         }
 
-        APPLY_HIT => {
+        ApplyType::Hit => {
             ch.incr_max_hit(_mod as i16);
         }
 
-        APPLY_MOVE => {
+        ApplyType::Move => {
             ch.incr_max_move(_mod as i16);
         }
 
-        APPLY_GOLD => {}
+        ApplyType::Gold => {}
 
-        APPLY_EXP => {}
+        ApplyType::Exp => {}
 
-        APPLY_AC => {
+        ApplyType::Ac => {
             ch.set_ac(ch.get_ac() + _mod as i16);
         }
 
-        APPLY_HITROLL => {
+        ApplyType::Hitroll => {
             ch.set_hitroll(ch.get_hitroll() + _mod as i8);
         }
 
-        APPLY_DAMROLL => {
+        ApplyType::Damroll => {
             ch.set_damroll(ch.get_damroll() + _mod as i8);
         }
 
-        APPLY_SAVING_PARA => {
+        ApplyType::SavingPara => {
             ch.set_save(SAVING_PARA as usize, ch.get_save(SAVING_PARA) + _mod as i16);
         }
-        APPLY_SAVING_ROD => {
+        ApplyType::SavingRod => {
             ch.set_save(SAVING_ROD as usize, ch.get_save(SAVING_ROD) + _mod as i16);
         }
-        APPLY_SAVING_PETRI => {
+        ApplyType::SavingPetri => {
             ch.set_save(
                 SAVING_PETRI as usize,
                 ch.get_save(SAVING_PETRI) + _mod as i16,
             );
         }
 
-        APPLY_SAVING_BREATH => {
+        ApplyType::SavingBreath => {
             ch.set_save(
                 SAVING_BREATH as usize,
                 ch.get_save(SAVING_BREATH) + _mod as i16,
             );
         }
 
-        APPLY_SAVING_SPELL => {
+        ApplyType::SavingSpell => {
             ch.set_save(SAVING_SPELL as usize, ch.get_save(SAVING_SPELL) + _mod);
-        }
-
-        _ => {
-            error!(
-                "SYSERR: Unknown apply adjust {} attempt (affect_modify).",
-                loc
-            );
         }
     } /* switch */
 }
@@ -207,7 +200,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
         if ch.get_eq(i).is_some() {
             for j in 0..MAX_OBJ_AFFECT {
                 let eq = objs.get(ch.get_eq(i).unwrap());
-                let loc = eq.affected[j as usize].location as i8;
+                let loc = eq.affected[j as usize].location;
                 let mod_ = eq.affected[j as usize].modifier as i16;
                 let bitv = eq.get_obj_affect();
                 affect_modify(ch, loc, mod_, bitv, false);
@@ -217,7 +210,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
     for af in ch.affected.clone() {
         affect_modify(
             ch,
-            af.location as i8,
+            af.location,
             af.modifier as i16,
             af.bitvector,
             false,
@@ -230,7 +223,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
         if ch.get_eq(i).is_some() {
             for j in 0..MAX_OBJ_AFFECT {
                 let eq = objs.get(ch.get_eq(i).unwrap());
-                let loc = eq.affected[j as usize].location as i8;
+                let loc = eq.affected[j as usize].location;
                 let mod_ = eq.affected[j as usize].modifier as i16;
                 let bitv = eq.get_obj_affect();
                 affect_modify(ch, loc, mod_, bitv, true)
@@ -240,7 +233,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
     for af in ch.affected.clone() {
         affect_modify(
             ch,
-            af.location as i8,
+            af.location,
             af.modifier as i16,
             af.bitvector,
             true,
@@ -280,7 +273,7 @@ pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType
 
     affect_modify(
         ch,
-        af.location as i8,
+        af.location,
         af.modifier as i16,
         af.bitvector,
         true,
@@ -296,7 +289,7 @@ pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType
 pub fn affect_remove(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType) {
     affect_modify(
         ch,
-        af.location as i8,
+        af.location,
         af.modifier as i16,
         af.bitvector,
         false,
@@ -603,7 +596,7 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
         }
 
         for j in 0..MAX_OBJ_AFFECT {
-            let loc = obj.affected[j as usize].location as i8;
+            let loc = obj.affected[j as usize].location;
             let mod_ = obj.affected[j as usize].modifier as i16;
             let bitv = obj.get_obj_affect();
             affect_modify(ch, loc, mod_, bitv, true);
@@ -650,7 +643,7 @@ impl DB {
         ch.set_eq(pos, None);
 
         for j in 0..MAX_OBJ_AFFECT {
-            let loc = obj.affected[j as usize].location as i8;
+            let loc = obj.affected[j as usize].location;
             let mod_ = obj.affected[j as usize].modifier as i16;
             let bitv = obj.get_obj_affect();
             affect_modify(ch, loc, mod_, bitv, false);

@@ -29,7 +29,7 @@ use crate::interpreter::{
 };
 use crate::spells::SPELL_POISON;
 use crate::structs::{
-    AffectFlags, AffectedType, ExtraFlags, ItemType, RoomRnum, WearFlags, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, RoomRnum, WearFlags, CONT_CLOSED, DRUNK, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
 };
 use crate::util::{can_see_obj, rand_number};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -1711,7 +1711,7 @@ pub fn do_drink(
             _type: SPELL_POISON as i16,
             duration: (amount * 3) as i16,
             modifier: 0,
-            location: APPLY_NONE as u8,
+            location: ApplyType::None,
             bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);
@@ -1859,7 +1859,7 @@ pub fn do_eat(
             _type: SPELL_POISON as i16,
             duration: (amount * 2) as i16,
             modifier: 0,
-            location: APPLY_NONE as u8,
+            location: ApplyType::None,
             bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);

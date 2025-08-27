@@ -276,31 +276,68 @@ bitflags! {
 }
 
 /* Modifier constants used with obj affects ('A' fields) */
-pub const APPLY_NONE: i8 = 0; /* No effect			*/
-pub const APPLY_STR: i8 = 1; /* Apply to strength		*/
-pub const APPLY_DEX: i8 = 2; /* Apply to dexterity		*/
-pub const APPLY_INT: i8 = 3; /* Apply to intelligence	*/
-pub const APPLY_WIS: i8 = 4; /* Apply to wisdom		*/
-pub const APPLY_CON: i8 = 5; /* Apply to constitution	*/
-pub const APPLY_CHA: i8 = 6; /* Apply to charisma		*/
-pub const APPLY_CLASS: i8 = 7; /* Reserved			*/
-pub const APPLY_LEVEL: i8 = 8; /* Reserved			*/
-pub const APPLY_AGE: i8 = 9; /* Apply to age			*/
-pub const APPLY_CHAR_WEIGHT: i8 = 10; /* Apply to weight		*/
-pub const APPLY_CHAR_HEIGHT: i8 = 11; /* Apply to height		*/
-pub const APPLY_MANA: i8 = 12; /* Apply to max mana		*/
-pub const APPLY_HIT: i8 = 13; /* Apply to max hit points	*/
-pub const APPLY_MOVE: i8 = 14; /* Apply to max move points	*/
-pub const APPLY_GOLD: i8 = 15; /* Reserved			*/
-pub const APPLY_EXP: i8 = 16; /* Reserved			*/
-pub const APPLY_AC: i8 = 17; /* Apply to Armor Class		*/
-pub const APPLY_HITROLL: i8 = 18; /* Apply to hitroll		*/
-pub const APPLY_DAMROLL: i8 = 19; /* Apply to damage roll		*/
-pub const APPLY_SAVING_PARA: i8 = 20; /* Apply to save throw: paralz	*/
-pub const APPLY_SAVING_ROD: i8 = 21; /* Apply to save throw: rods	*/
-pub const APPLY_SAVING_PETRI: i8 = 22; /* Apply to save throw: petrif	*/
-pub const APPLY_SAVING_BREATH: i8 = 23; /* Apply to save throw: breath	*/
-pub const APPLY_SAVING_SPELL: i8 = 24; /* Apply to save throw: spells	*/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i8)]
+pub enum ApplyType {
+    None = 0,           /* No effect */
+    Str = 1,            /* Apply to strength */
+    Dex = 2,            /* Apply to dexterity */
+    Int = 3,            /* Apply to intelligence */
+    Wis = 4,            /* Apply to wisdom */
+    Con = 5,            /* Apply to constitution */
+    Cha = 6,            /* Apply to charisma */
+    Class = 7,          /* Reserved */
+    Level = 8,          /* Reserved */
+    Age = 9,            /* Apply to age */
+    CharWeight = 10,    /* Apply to weight */
+    CharHeight = 11,    /* Apply to height */
+    Mana = 12,          /* Apply to max mana */
+    Hit = 13,           /* Apply to max hit points */
+    Move = 14,          /* Apply to max move points */
+    Gold = 15,          /* Reserved */
+    Exp = 16,           /* Reserved */
+    Ac = 17,            /* Apply to Armor Class */
+    Hitroll = 18,       /* Apply to hitroll */
+    Damroll = 19,       /* Apply to damage roll */
+    SavingPara = 20,    /* Apply to save throw: paralz */
+    SavingRod = 21,     /* Apply to save throw: rods */
+    SavingPetri = 22,   /* Apply to save throw: petrif */
+    SavingBreath = 23,  /* Apply to save throw: breath */
+    SavingSpell = 24,   /* Apply to save throw: spells */
+}
+
+impl ApplyType {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => ApplyType::None,
+            1 => ApplyType::Str,
+            2 => ApplyType::Dex,
+            3 => ApplyType::Int,
+            4 => ApplyType::Wis,
+            5 => ApplyType::Con,
+            6 => ApplyType::Cha,
+            7 => ApplyType::Class,
+            8 => ApplyType::Level,
+            9 => ApplyType::Age,
+            10 => ApplyType::CharWeight,
+            11 => ApplyType::CharHeight,
+            12 => ApplyType::Mana,
+            13 => ApplyType::Hit,
+            14 => ApplyType::Move,
+            15 => ApplyType::Gold,
+            16 => ApplyType::Exp,
+            17 => ApplyType::Ac,
+            18 => ApplyType::Hitroll,
+            19 => ApplyType::Damroll,
+            20 => ApplyType::SavingPara,
+            21 => ApplyType::SavingRod,
+            22 => ApplyType::SavingPetri,
+            23 => ApplyType::SavingBreath,
+            24 => ApplyType::SavingSpell,
+            _ => panic!("Unknown apply type: {}", value),
+        }
+    }
+}
 
 /* Container flags - value[1] this one is kept as i32 as it is stored (generically) as such */
 pub const CONT_CLOSEABLE: i32 = 1 << 0; /* Container can be closed	*/
@@ -739,7 +776,7 @@ pub struct ObjFlagData {
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct ObjAffectedType {
-    pub(crate) location: u8,
+    pub(crate) location: ApplyType,
     /* Which ability to change (APPLY_XXX) */
     pub(crate) modifier: i8,
     /* How much it changes by              */
@@ -848,7 +885,7 @@ pub struct AffectedType {
     /* For how long its effects will last      */
     pub modifier: i8,
     /* This is added to apropriate ability     */
-    pub location: u8,
+    pub location: ApplyType,
     /* Tells which ability to change(APPLY_XXX)*/
     pub bitvector: AffectFlags,
     /* Tells which bits to set (AFF_XXX) */

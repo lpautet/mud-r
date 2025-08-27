@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ExtraFlags, RoomFlags, RoomRnum, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, ItemType, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -601,7 +601,7 @@ pub fn spell_charm(
             _type: SPELL_CHARM as i16,
             duration: 24 * 2,
             modifier: 0,
-            location: 0,
+            location: ApplyType::None,
             bitvector: AffectFlags::CHARM,
         };
         let ch = chars.get(chid);
@@ -728,7 +728,7 @@ pub fn spell_identify(
         }
         let mut found = false;
         for i in 0..MAX_OBJ_AFFECT as usize {
-            if objs.get(oid).affected[i].location != APPLY_NONE as u8
+            if objs.get(oid).affected[i].location != ApplyType::None
                 && objs.get(oid).affected[i].modifier != 0
             {
                 if !found {
@@ -842,7 +842,7 @@ pub fn spell_enchant_weapon(
 
     /* Make sure no other affections. */
     for i in 0..MAX_OBJ_AFFECT as usize {
-        if obj.affected[i].location != APPLY_NONE as u8 {
+        if obj.affected[i].location != ApplyType::None {
             return;
         }
     }
@@ -850,12 +850,12 @@ pub fn spell_enchant_weapon(
     obj.set_obj_extra_bit(ExtraFlags::MAGIC);
 
     let mut af0 = obj.affected[0];
-    af0.location = APPLY_HITROLL as u8;
+    af0.location = ApplyType::Hitroll;
     af0.modifier = 1 + if level >= 18 { 1 } else { 0 };
     obj.affected[0] = af0;
 
     let mut af1 = obj.affected[1];
-    af1.location = APPLY_DAMROLL as u8;
+    af1.location = ApplyType::Damroll;
     af1.modifier = 1 + if level >= 20 { 1 } else { 0 };
     obj.affected[1] = af1;
     let ch = chars.get(chid);

@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, APPLY_NONE, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1843,27 +1843,27 @@ impl DB {
             },
             affected: [
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location:  ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
             ],
@@ -1982,7 +1982,7 @@ impl DB {
 
         /* *** extra descriptions and affect fields *** */
         for j in 0..MAX_OBJ_AFFECT {
-            obj.affected[j as usize].location = APPLY_NONE as u8;
+            obj.affected[j as usize].location = ApplyType::None;
             obj.affected[j as usize].modifier = 0;
         }
 
@@ -2022,7 +2022,7 @@ impl DB {
                     }
                     let f = f.unwrap();
 
-                    obj.affected[j].location = f[1].parse::<i32>().unwrap() as u8;
+                    obj.affected[j].location = ApplyType::from_u8(f[1].parse::<u8>().unwrap());
                     obj.affected[j].modifier = f[2].parse().unwrap();
                     j += 1;
                 }
@@ -2962,7 +2962,7 @@ impl CharFileU {
                 _type: 0,
                 duration: 0,
                 modifier: 0,
-                location: 0,
+                location: ApplyType::None,
                 bitvector: AffectFlags::empty(),
             }; MAX_AFFECT],
             last_logon: 0,
@@ -3067,7 +3067,7 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
                 st.affected[i]._type = 0; /* Zero signifies not used */
                 st.affected[i].duration = 0;
                 st.affected[i].modifier = 0;
-                st.affected[i].location = 0;
+                st.affected[i].location = ApplyType::None;
                 st.affected[i].bitvector = AffectFlags::empty();
             }
         }
@@ -3958,27 +3958,27 @@ impl Default for ObjData {
             },
             affected: [
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
             ],
@@ -4019,27 +4019,27 @@ impl ObjData {
             },
             affected: [
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
                 ObjAffectedType {
-                    location: 0,
+                    location: ApplyType::None,
                     modifier: 0,
                 },
             ],
