@@ -134,12 +134,16 @@ pub enum SkyCondition {
 }
 
 /* Rent codes */
-// pub const RENT_UNDEF: i32 = 0;
-pub const RENT_CRASH: i32 = 1;
-pub const RENT_RENTED: i32 = 2;
-pub const RENT_CRYO: i32 = 3;
-pub const RENT_FORCED: i32 = 4;
-pub const RENT_TIMEDOUT: i32 = 5;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum RentCode {
+    Undef = 0,
+    Crash = 1,
+    Rented = 2,
+    Cryo = 3,
+    Forced = 4,
+    Timedout = 5,
+}
 
 /* object-related defines ********************************************/
 
@@ -837,7 +841,7 @@ pub struct ObjFileElem {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct RentInfo {
     pub time: i64,
-    pub rentcode: i32,
+    pub rentcode: RentCode,
     pub net_cost_per_diem: i32,
     pub gold: i32,
     pub account: i32,

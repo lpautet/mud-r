@@ -29,7 +29,7 @@ use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentInfo, WearFlags, ITEM_CONTAINER, ITEM_KEY, ITEM_WEAPON, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, RENT_CRASH, RENT_CRYO, RENT_FORCED, RENT_RENTED, RENT_TIMEDOUT, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
+    AffectFlags, CharData, ExtraFlags, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, ITEM_CONTAINER, ITEM_KEY, ITEM_WEAPON, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
     can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
@@ -295,7 +295,8 @@ pub fn crash_delete_crashfile(ch: &CharData) -> bool {
         return false;
     }
 
-    if rent_info.rentcode == RENT_CRASH {
+    let rentcode = rent_info.rentcode;
+    if rentcode == RentCode::Crash {
         crash_delete_file(ch.get_name().as_ref());
     }
 
@@ -335,19 +336,20 @@ fn crash_clean_file(name: &str) -> bool {
         return false;
     }
 
-    if rent.rentcode == RENT_CRASH || rent.rentcode == RENT_FORCED || rent.rentcode == RENT_TIMEDOUT
+    let rentcode = rent.rentcode;
+    if rentcode == RentCode::Crash || rentcode == RentCode::Forced || rentcode == RentCode::Timedout
     {
         if rent.time < time_now() as i64 - (CRASH_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64) {
             crash_delete_file(name);
             let filetype;
-            match rent.rentcode {
-                RENT_CRASH => {
+            match rentcode {
+                RentCode::Crash => {
                     filetype = "crash";
                 }
-                RENT_FORCED => {
+                RentCode::Forced => {
                     filetype = "forced rent";
                 }
-                RENT_TIMEDOUT => {
+                RentCode::Timedout => {
                     filetype = "idlesave";
                 }
                 _ => {
@@ -358,7 +360,7 @@ fn crash_clean_file(name: &str) -> bool {
             return true;
         }
         /* Must retrieve rented items w/in 30 days */
-    } else if rent.rentcode == RENT_RENTED {
+    } else if rentcode == RentCode::Rented {
         if rent.time < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64)) {
             crash_delete_file(name);
             info!("    Deleting {}'s rent file.", name);
@@ -404,16 +406,16 @@ pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
 
     send_to_char(&mut game.descriptors, ch, format!("{}\r\n", filename).as_str());
     match rent.rentcode {
-        RENT_RENTED => {
+        RentCode::Rented => {
             send_to_char(&mut game.descriptors, ch, "Rent\r\n");
         }
-        RENT_CRASH => {
+        RentCode::Crash => {
             send_to_char(&mut game.descriptors, ch, "Crash\r\n");
         }
-        RENT_CRYO => {
+        RentCode::Cryo => {
             send_to_char(&mut game.descriptors, ch, "Cryo\r\n");
         }
-        RENT_TIMEDOUT | RENT_FORCED => {
+        RentCode::Timedout | RentCode::Forced => {
             send_to_char(&mut game.descriptors, ch, "TimedOut\r\n");
         }
         _ => {
@@ -482,7 +484,7 @@ impl RentInfo {
     fn new() -> RentInfo {
         RentInfo {
             time: 0,
-            rentcode: 0,
+            rentcode: RentCode::Undef,
             net_cost_per_diem: 0,
             gold: 0,
             account: 0,
@@ -569,7 +571,8 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         );
         return 1;
     }
-    if rent.rentcode == RENT_RENTED || rent.rentcode == RENT_TIMEDOUT {
+    let rentcode = rent.rentcode;
+    if rentcode == RentCode::Rented || rentcode == RentCode::Timedout {
         let num_of_days = (time_now() - rent.time as u64) / SECS_PER_REAL_DAY;
         let cost = rent.net_cost_per_diem * num_of_days as i32;
         if cost > ch.get_gold() + ch.get_bank_gold() {
@@ -596,7 +599,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     let orig_rent_code = rent.rentcode;
     let ch = chars.get(chid);
     match orig_rent_code {
-        RENT_RENTED => {
+        RentCode::Rented => {
             game.mudlog(chars,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
@@ -604,7 +607,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 format!("{} un-renting and entering game.", ch.get_name()).as_str(),
             );
         }
-        RENT_CRASH => {
+        RentCode::Crash => {
             game.mudlog(chars,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
@@ -616,7 +619,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 .as_str(),
             );
         }
-        RENT_CRYO => {
+        RentCode::Cryo => {
             game.mudlog(chars,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
@@ -624,7 +627,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 format!("{} un-cryo'ing and entering game.", ch.get_name()).as_str(),
             );
         }
-        RENT_FORCED | RENT_TIMEDOUT => {
+        RentCode::Forced | RentCode::Timedout => {
             game.mudlog(chars,
                 NRM,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
@@ -645,7 +648,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 format!(
                     "SYSERR: {} entering game with undefined rent code {}.",
                     ch.get_name(),
-                    rc
+                    rc as i32
                 )
                 .as_str(),
             );
@@ -812,12 +815,12 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     );
 
     /* turn this into a crash file by re-writing the control block */
-    rent.rentcode = RENT_CRASH;
+    rent.rentcode = RentCode::Crash;
     rent.time = time_now() as i64;
     fl.rewind().expect("Cannot unwrap file");
     crash_write_rentcode(chid, &mut fl, &mut rent);
 
-    return if (orig_rent_code == RENT_RENTED) || (orig_rent_code == RENT_CRYO) {
+    return if (orig_rent_code == RentCode::Rented) || (orig_rent_code == RentCode::Cryo) {
         0
     } else {
         1
@@ -956,7 +959,7 @@ pub fn crash_crashsave(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot
 
     let mut rent = RentInfo {
         time: time_now() as i64,
-        rentcode: RENT_CRASH,
+        rentcode: RentCode::Crash,
         net_cost_per_diem: 0,
         gold: 0,
         account: 0,
@@ -1078,7 +1081,7 @@ pub fn crash_idlesave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
     }
     rent.net_cost_per_diem = cost;
 
-    rent.rentcode = RENT_TIMEDOUT;
+    rent.rentcode = RentCode::Timedout;
     rent.time = time_now() as i64;
     rent.gold = ch.get_gold();
     rent.account = ch.get_bank_gold();
@@ -1139,7 +1142,7 @@ pub fn crash_rentsave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
     let ch = chars.get(chid);
     let mut rent = RentInfo {
         time: time_now() as i64,
-        rentcode: RENT_RENTED,
+        rentcode: RentCode::Rented,
         net_cost_per_diem: cost,
         gold: ch.get_gold(),
         account: ch.get_bank_gold(),
@@ -1211,7 +1214,7 @@ fn crash_cryosave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
     let ch = chars.get_mut(chid);
     ch.set_gold(max(0, ch.get_gold() - cost));
 
-    rent.rentcode = RENT_CRYO;
+    rent.rentcode = RentCode::Cryo;
     rent.time = time_now() as i64;
     rent.gold = ch.get_gold();
     rent.account = ch.get_bank_gold();
