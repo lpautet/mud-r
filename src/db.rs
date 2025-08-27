@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, EX_CLOSED, EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExtraDescrData, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, ExitFlags, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1321,7 +1321,7 @@ impl DB {
         let mut rdr = RoomDirectionData {
             general_description: Rc::from(fread_string(reader, buf2.as_str())),
             keyword: Rc::from(fread_string(reader, buf2.as_str())),
-            exit_info: 0,
+            exit_info: ExitFlags::empty(),
             key: 0,
             to_room: 0,
         };
@@ -1342,11 +1342,11 @@ impl DB {
         t[1] = f[2].parse::<i32>().unwrap();
         t[2] = f[3].parse::<i32>().unwrap();
         if t[0] == 1 {
-            rdr.exit_info = EX_ISDOOR;
+            rdr.exit_info = ExitFlags::ISDOOR;
         } else if t[0] == 2 {
-            rdr.exit_info = EX_ISDOOR | EX_PICKPROOF;
+            rdr.exit_info = ExitFlags::ISDOOR | ExitFlags::PICKPROOF;
         } else {
-            rdr.exit_info = 0;
+            rdr.exit_info = ExitFlags::empty();
         }
 
         rdr.key = t[1] as ObjVnum;
@@ -2731,12 +2731,12 @@ impl Game {
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .remove_exit_info_bit(EX_LOCKED as i32);
+                                    .remove_exit_info_bit(ExitFlags::LOCKED);
                                 db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .remove_exit_info_bit(EX_CLOSED as i32);
+                                    .remove_exit_info_bit(ExitFlags::CLOSED);
                             }
 
                             1 => {
@@ -2744,12 +2744,12 @@ impl Game {
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .set_exit_info_bit(EX_LOCKED as i32);
+                                    .set_exit_info_bit(ExitFlags::LOCKED);
                                 db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .remove_exit_info_bit(EX_CLOSED as i32);
+                                    .remove_exit_info_bit(ExitFlags::CLOSED);
                             }
 
                             2 => {
@@ -2757,12 +2757,12 @@ impl Game {
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .set_exit_info_bit(EX_LOCKED as i32);
+                                    .set_exit_info_bit(ExitFlags::LOCKED);
                                 db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
                                     .as_mut()
                                     .unwrap()
-                                    .set_exit_info_bit(EX_CLOSED as i32);
+                                    .set_exit_info_bit(ExitFlags::CLOSED);
                             }
                             _ => {}
                         }

@@ -35,7 +35,7 @@ use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY,
-    CONT_CLOSED, EX_CLOSED, EX_ISDOOR, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
+    CONT_CLOSED, ExitFlags, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
     ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE,
     NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1,
     PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
@@ -439,7 +439,7 @@ fn do_auto_exits(descs: &mut Depot<DescriptorData>, db: &DB, ch: &CharData) {
         if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
             continue;
         }
-        if db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED) {
+        if db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED) {
             continue;
         }
         send_to_char(descs, ch, format!("{} ", DIRS[door].to_lowercase()).as_str());
@@ -476,7 +476,7 @@ pub fn do_exits(
         if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
             continue;
         }
-        if db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED) {
+        if db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED) {
             continue;
         }
         len += 1;
@@ -610,7 +610,7 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_CLOSED)
+            .exit_flagged(ExitFlags::CLOSED)
             && !db
                 .exit(ch, dir as usize)
                 .as_ref()
@@ -630,7 +630,7 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
             .exit(ch, dir as usize)
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_ISDOOR)
+            .exit_flagged(ExitFlags::ISDOOR)
             && !db
                 .exit(ch, dir as usize)
                 .as_ref()

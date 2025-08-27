@@ -62,11 +62,16 @@ bitflags! {
     }
 }
 
-/* Exit info: used in room_data.dir_option.exit_info */
-pub const EX_ISDOOR: i16 = 1 << 0; /* Exit is a door		*/
-pub const EX_CLOSED: i16 = 1 << 1; /* The door is closed	*/
-pub const EX_LOCKED: i16 = 1 << 2; /* The door is locked	*/
-pub const EX_PICKPROOF: i16 = 1 << 3; /* Lock can't be picked	*/
+bitflags! {
+    /// Exit info: used in room_data.dir_option.exit_info
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct ExitFlags: i16 {
+        const ISDOOR = 1 << 0;      // Exit is a door
+        const CLOSED = 1 << 1;      // The door is closed
+        const LOCKED = 1 << 2;      // The door is locked
+        const PICKPROOF = 1 << 3;   // Lock can't be picked
+    }
+}
 
 /* Sector types: used in room_data.sector_type */
 pub const SECT_INSIDE: i32 = 0; /* Indoors			*/
@@ -907,7 +912,7 @@ pub struct RoomDirectionData {
     /* When look DIR.			*/
     pub keyword: Rc<str>,
     /* for open/close			*/
-    pub exit_info: i16,
+    pub exit_info: ExitFlags,
     /* Exit info			*/
     pub key: ObjVnum,
     /* Key's number (-1 for no key)		*/

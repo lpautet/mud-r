@@ -18,7 +18,7 @@ use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
-     RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, RoomFlags,
+     RoomRnum, AFF_NOTRACK, ExitFlags, NOWHERE, NUM_OF_DIRS, RoomFlags,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
@@ -53,8 +53,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         .as_ref()
         .unwrap()
         .exit_info
-        & EX_CLOSED
-        != 0
+        .contains(ExitFlags::CLOSED)
 }
 
 fn valid_edge(game: &Game, db: &DB, x: RoomRnum, y: usize) -> bool {

@@ -42,7 +42,7 @@ use crate::structs::{
     RoomFlags, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET,
 };
 use crate::structs::{
-    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
+    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, ExitFlags,
     ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
@@ -897,7 +897,7 @@ impl DB {
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
         self.exit(ch, door).is_some()
             && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
-            && !is_set!(self.exit(ch, door).as_ref().unwrap().exit_info, EX_CLOSED)
+            && !self.exit(ch, door).as_ref().unwrap().exit_info.contains(ExitFlags::CLOSED)
     }
 
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
@@ -1116,14 +1116,14 @@ pub fn sana(obj: &ObjData) -> &str {
 }
 
 impl RoomDirectionData {
-    pub fn exit_flagged(&self, flag: i16) -> bool {
-        is_set!(self.exit_info, flag)
+    pub fn exit_flagged(&self, flag: ExitFlags) -> bool {
+        self.exit_info.contains(flag)
     }
-    pub fn remove_exit_info_bit(&mut self, flag: i32) {
-        self.exit_info &= !flag as i16;
+    pub fn remove_exit_info_bit(&mut self, flag: ExitFlags) {
+        self.exit_info.remove(flag);
     }
-    pub fn set_exit_info_bit(&mut self, flag: i32) {
-        self.exit_info |= !flag as i16;
+    pub fn set_exit_info_bit(&mut self, flag: ExitFlags) {
+        self.exit_info.insert(flag);
     }
 }
 

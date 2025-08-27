@@ -28,8 +28,8 @@ use crate::interpreter::{
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
     CharData, ObjData, ObjVnum, RoomDirectionData, RoomRnum, AFF_CHARM, AFF_GROUP, AFF_SLEEP,
-    AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, EX_CLOSED,
-    EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
+    AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ExitFlags,
+    ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
     NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
     POS_STANDING, RoomFlags,
     SECT_WATER_NOSWIM, WEAR_HOLD,
@@ -89,7 +89,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
         .exit(ch, dir as usize)
         .as_ref()
         .unwrap()
-        .exit_flagged(EX_CLOSED)
+        .exit_flagged(ExitFlags::CLOSED)
     {
         if !
             db
@@ -410,7 +410,7 @@ fn open_door(db: &mut DB, objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Optio
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
             .unwrap()
-            .exit_info &= !EX_CLOSED;
+            .remove_exit_info_bit(ExitFlags::CLOSED);
     }
 }
 
@@ -421,7 +421,7 @@ fn close_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Optio
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
             .unwrap()
-            .exit_info |= EX_CLOSED;
+            .set_exit_info_bit(ExitFlags::CLOSED);
     }
 }
 
@@ -432,7 +432,7 @@ fn lock_door(db: &mut DB,objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
             .unwrap()
-            .exit_info |= EX_LOCKED;
+            .set_exit_info_bit(ExitFlags::LOCKED);
     }
 }
 
@@ -443,7 +443,7 @@ fn unlock_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Opti
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
             .unwrap()
-            .exit_info &= !EX_LOCKED;
+            .remove_exit_info_bit(ExitFlags::LOCKED);
     }
 }
 
@@ -455,7 +455,7 @@ fn togle_lock(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Optio
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
             .unwrap()
-            .exit_info ^= EX_LOCKED;
+            .exit_info.toggle(ExitFlags::LOCKED);
     }
 }
 
@@ -672,7 +672,7 @@ fn door_is_openable(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option
         db.exit(ch, door.unwrap())
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_ISDOOR)
+            .exit_flagged(ExitFlags::ISDOOR)
     }
 }
 
@@ -683,7 +683,7 @@ fn door_is_open(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usi
         !db.exit(ch, door.unwrap())
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_CLOSED)
+            .exit_flagged(ExitFlags::CLOSED)
     }
 }
 
@@ -694,7 +694,7 @@ fn door_is_unlocked(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<
         !db.exit(ch, door.unwrap())
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_LOCKED)
+            .exit_flagged(ExitFlags::LOCKED)
     }
 }
 
@@ -705,7 +705,7 @@ fn door_is_pickproof(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option
         !db.exit(ch, door.unwrap())
             .as_ref()
             .unwrap()
-            .exit_flagged(EX_PICKPROOF)
+            .exit_flagged(ExitFlags::PICKPROOF)
     }
 }
 
@@ -830,7 +830,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
         for door in 0..NUM_OF_DIRS {
             if db.exit(ch, door).is_some() {
                 if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
-                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED)
+                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
                         && db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {
@@ -852,7 +852,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
         for door in 0..NUM_OF_DIRS {
             if db.exit(ch, door).is_some() {
                 if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
-                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED)
+                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
                         && !db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {

@@ -739,7 +739,7 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
         }
         let mut buf2 = String::new();
         sprintbit(
-            rm_dir_option[i].as_ref().unwrap().exit_info as i64,
+            rm_dir_option[i].as_ref().unwrap().exit_info.bits().into(),
             &EXIT_BITS,
             &mut buf2,
         );
