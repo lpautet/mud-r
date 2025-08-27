@@ -19,7 +19,7 @@ use crate::interpreter::{
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-     AffectFlags, RoomFlags, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
+     AffectFlags, RoomFlags, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
 };
 use crate::util::can_see_obj;
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};

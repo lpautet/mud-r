@@ -19,8 +19,8 @@ pub const C_CMP: u8 = 3;
 macro_rules! _clrlevel {
     ($ch:expr) => {
         (if !($ch).is_npc() {
-            (if ($ch).prf_flagged(PRF_COLOR_1) { 1 } else { 0 })
-                + (if ($ch).prf_flagged(PRF_COLOR_2) { 2 } else { 0 })
+            (if ($ch).prf_flagged(crate::structs::PRF_COLOR_1) { 1 } else { 0 })
+                + (if ($ch).prf_flagged(crate::structs::PRF_COLOR_2) { 2 } else { 0 })
         } else {
             0
         })

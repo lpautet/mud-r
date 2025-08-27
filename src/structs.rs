@@ -74,16 +74,33 @@ bitflags! {
 }
 
 /* Sector types: used in room_data.sector_type */
-pub const SECT_INSIDE: i32 = 0; /* Indoors			*/
-pub const SECT_CITY: i32 = 1; /* In a city			*/
-// pub const SECT_FIELD: i32 = 2; /* In a field		*/
-// pub const SECT_FOREST: i32 = 3; /* In a forest		*/
-// pub const SECT_HILLS: i32 = 4; /* In the hills		*/
-// pub const SECT_MOUNTAIN: i32 = 5; /* On a mountain		*/
-// pub const SECT_WATER_SWIM: i32 = 6; /* Swimmable water		*/
-pub const SECT_WATER_NOSWIM: i32 = 7; /* Water - need a boat	*/
-// pub const SECT_FLYING: i32 = 8; /* Wheee!			*/
-// pub const SECT_UNDERWATER: i32 = 9; /* Underwater		*/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(i32)]
+pub enum SectorType {
+    #[default]
+    Inside = 0,         /* Indoors */
+    City = 1,           /* In a city */
+    // Field = 2,       /* In a field */
+    // Forest = 3,      /* In a forest */
+    // Hills = 4,       /* In the hills */
+    // Mountain = 5,    /* On a mountain */
+    // WaterSwim = 6,   /* Swimmable water */
+    WaterNoSwim = 7,    /* Water - need a boat */
+    // Flying = 8,      /* Wheee! */
+    // Underwater = 9,  /* Underwater */
+}
+
+impl SectorType {
+    pub fn from_i32(value: i32) -> Self {
+        match value {
+            0 => SectorType::Inside,
+            1 => SectorType::City,
+            7 => SectorType::WaterNoSwim,
+            _ => panic!("Invalid sector type: {}", value),
+        }
+    }
+}
+
 /* Player conditions */
 pub const DRUNK: i32 = 0;
 pub const FULL: i32 = 1;
@@ -937,7 +954,7 @@ pub struct RoomData {
     /* Rooms number	(vnum)		      */
     pub zone: ZoneRnum,
     /* Room zone (for resetting)          */
-    pub sector_type: i32,
+    pub sector_type: SectorType,
     /* sector type (move/hide)            */
     pub name: String,
     /* Rooms name 'You are ...'           */

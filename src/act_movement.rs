@@ -27,7 +27,7 @@ use crate::interpreter::{
 };
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
-    AffectFlags, CharData, ExitFlags, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, SECT_WATER_NOSWIM, WEAR_HOLD
+    AffectFlags, CharData, ExitFlags, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, SectorType, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, WEAR_HOLD
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -175,11 +175,11 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     }
 
     /* if this room or the one we're going to needs a boat, check for one */
-    if (db.sect(ch.in_room()) == SECT_WATER_NOSWIM)
+    if (db.sect(ch.in_room()) == SectorType::WaterNoSwim)
         || (
             db
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
-            == SECT_WATER_NOSWIM)
+            == SectorType::WaterNoSwim)
     {
         if !has_boat(&mut game.descriptors, objs,ch) {
             send_to_char(&mut game.descriptors, ch, "You need a boat to go there.\r\n");

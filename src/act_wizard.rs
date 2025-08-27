@@ -584,7 +584,7 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
         .as_str(),
     );
     let mut buf2 = String::new();
-    sprinttype(rm_sector_type, &SECTOR_TYPES, &mut buf2);
+    sprinttype(rm_sector_type as i32, &SECTOR_TYPES, &mut buf2);
     let ch = chars.get(chid);
     send_to_char(descs, 
         ch,

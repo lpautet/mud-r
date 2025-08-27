@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, Special, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET
+    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE, SUN_DARK, SUN_SET
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -1143,11 +1143,11 @@ impl DB {
     pub fn remove_room_flags_bit(&mut self, loc: RoomRnum, flags: RoomFlags) {
         self.world[loc as usize].room_flags.remove(flags);
     }
-    pub fn sect(&self, loc: RoomRnum) -> i32 {
+    pub fn sect(&self, loc: RoomRnum) -> SectorType {
         if self.valid_room_rnum(loc) {
             self.world[loc as usize].sector_type
         } else {
-            SECT_INSIDE
+            SectorType::Inside
         }
     }
 }
@@ -1843,7 +1843,7 @@ impl DB {
             return true;
         }
 
-        if self.sect(room) == SECT_INSIDE || self.sect(room) == SECT_CITY {
+        if self.sect(room) == SectorType::Inside || self.sect(room) == SectorType::City {
             return false;
         }
 
