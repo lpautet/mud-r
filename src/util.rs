@@ -760,10 +760,10 @@ impl ObjData {
         self.obj_flags.extra_flags = val;
     }
     pub fn set_obj_extra_bit(&mut self, val: ExtraFlags) {
-        self.obj_flags.extra_flags |= val;
+        self.obj_flags.extra_flags.insert(val);
     }
     pub fn remove_obj_extra_bit(&mut self, val: ExtraFlags) {
-        self.obj_flags.extra_flags &= !val;
+        self.obj_flags.extra_flags.remove(val);
     }
     pub fn get_obj_wear(&self) -> WearFlags {
         self.obj_flags.wear_flags
@@ -784,7 +784,7 @@ impl ObjData {
         self.obj_flags.value[val] += 1;
     }
     pub fn obj_flagged(&self, flag: ExtraFlags) -> bool {
-        self.get_obj_extra().contains(flag)
+        self.get_obj_extra().intersects(flag)
     }
     pub fn objval_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_val(1), flag)
@@ -844,7 +844,7 @@ impl ObjData {
 
 impl ObjData {
     pub fn objwear_flagged(&self, flag: WearFlags) -> bool {
-        self.get_obj_wear().contains(flag)
+        self.get_obj_wear().intersects(flag)
     }
     pub fn can_wear(&self, part: WearFlags) -> bool {
         self.objwear_flagged(part)
@@ -897,7 +897,7 @@ impl DB {
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
         self.exit(ch, door).is_some()
             && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
-            && !self.exit(ch, door).as_ref().unwrap().exit_info.contains(ExitFlags::CLOSED)
+            && !self.exit(ch, door).as_ref().unwrap().exit_info.intersects(ExitFlags::CLOSED)
     }
 
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
@@ -1117,7 +1117,7 @@ pub fn sana(obj: &ObjData) -> &str {
 
 impl RoomDirectionData {
     pub fn exit_flagged(&self, flag: ExitFlags) -> bool {
-        self.exit_info.contains(flag)
+        self.exit_info.intersects(flag)
     }
     pub fn remove_exit_info_bit(&mut self, flag: ExitFlags) {
         self.exit_info.remove(flag);
@@ -1135,15 +1135,13 @@ impl DB {
         self.world[loc as usize].room_flags
     }
     pub fn room_flagged(&self, loc: RoomRnum, flag: RoomFlags) -> bool {
-        self.room_flags(loc).contains(flag)
+        self.room_flags(loc).intersects(flag)
     }
     pub fn set_room_flags_bit(&mut self, loc: RoomRnum, flags: RoomFlags) {
-        let flags = self.room_flags(loc) | flags;
-        self.world[loc as usize].room_flags = flags;
+        self.world[loc as usize].room_flags.insert(flags);
     }
     pub fn remove_room_flags_bit(&mut self, loc: RoomRnum, flags: RoomFlags) {
-        let flags = self.room_flags(loc) & !flags;
-        self.world[loc as usize].room_flags = flags;
+        self.world[loc as usize].room_flags.remove(flags);
     }
     pub fn sect(&self, loc: RoomRnum) -> i32 {
         if self.valid_room_rnum(loc) {

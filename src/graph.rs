@@ -53,7 +53,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
         .as_ref()
         .unwrap()
         .exit_info
-        .contains(ExitFlags::CLOSED)
+        .intersects(ExitFlags::CLOSED)
 }
 
 fn valid_edge(game: &Game, db: &DB, x: RoomRnum, y: usize) -> bool {
