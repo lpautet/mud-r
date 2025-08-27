@@ -29,7 +29,7 @@ use crate::interpreter::{
 };
 use crate::spells::SPELL_POISON;
 use crate::structs::{
-    AffectFlags, AffectedType, ExtraFlags, RoomRnum, WearFlags, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
+    AffectFlags, AffectedType, ExtraFlags, ItemType, RoomRnum, WearFlags, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
 };
 use crate::util::{can_see_obj, rand_number};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -198,7 +198,7 @@ pub fn do_put(
                 ch,
                 format!("You don't see {} {} here.\r\n", an!(thecont), thecont).as_str(),
             );
-        } else if c.unwrap().get_obj_type() != ITEM_CONTAINER {
+        } else if c.unwrap().get_obj_type() != ItemType::Container {
             act(&mut game.descriptors, 
                 chars,
                 db,
@@ -340,7 +340,7 @@ fn get_check_money(
 ) {
     let value = objs.get(oid).get_obj_val(0);
 
-    if objs.get(oid).get_obj_type() != ITEM_MONEY || value <= 0 {
+    if objs.get(oid).get_obj_type() != ItemType::Money || value <= 0 {
         return;
     }
 
@@ -665,7 +665,7 @@ pub fn do_get(
                     ch,
                     format!("You don't have {} {}.\r\n", an!(&arg2), &arg2).as_str(),
                 );
-            } else if c.unwrap().get_obj_type() != ITEM_CONTAINER {
+            } else if c.unwrap().get_obj_type() != ItemType::Container {
                 act(&mut game.descriptors, 
                     chars,
                     db,
@@ -701,7 +701,7 @@ pub fn do_get(
                 if can_see_obj(&game.descriptors, chars, db, ch, contobj)
                     && (cont_dotmode == FIND_ALL || isname(&arg2, &contobj.name))
                 {
-                    if contobj.get_obj_type() == ITEM_CONTAINER {
+                    if contobj.get_obj_type() == ItemType::Container {
                         found = true;
                         get_from_container(
                             &mut game.descriptors,
@@ -736,7 +736,7 @@ pub fn do_get(
                 if can_see_obj(&game.descriptors, chars, db, ch, cont_obj)
                     && (cont_dotmode == FIND_ALL || isname(&arg2, &cont_obj.name))
                 {
-                    if cont_obj.get_obj_type() == ITEM_CONTAINER {
+                    if cont_obj.get_obj_type() == ItemType::Container {
                         get_from_container(
                             &mut game.descriptors,
                             db,
@@ -1457,8 +1457,8 @@ pub fn weight_change_object(
 
 pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
     if oid.is_none()
-        || objs.get(oid.unwrap()).get_obj_type() != ITEM_DRINKCON
-            && objs.get(oid.unwrap()).get_obj_type() != ITEM_FOUNTAIN
+        || objs.get(oid.unwrap()).get_obj_type() != ItemType::Drinkcon
+            && objs.get(oid.unwrap()).get_obj_type() != ItemType::Fountain
     {
         return;
     }
@@ -1510,8 +1510,8 @@ pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
 pub fn name_to_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>, type_: i32) {
     let mut new_name = String::new();
     if oid.is_none()
-        || objs.get(oid.unwrap()).get_obj_type() != ITEM_DRINKCON
-            && objs.get(oid.unwrap()).get_obj_type() != ITEM_FOUNTAIN
+        || objs.get(oid.unwrap()).get_obj_type() != ItemType::Drinkcon
+            && objs.get(oid.unwrap()).get_obj_type() != ItemType::Fountain
     {
         return;
     }
@@ -1577,11 +1577,11 @@ pub fn do_drink(
         }
     }
     let to_obj = tobj.unwrap();
-    if to_obj.get_obj_type() != ITEM_DRINKCON && to_obj.get_obj_type() != ITEM_FOUNTAIN {
+    if to_obj.get_obj_type() != ItemType::Drinkcon && to_obj.get_obj_type() != ItemType::Fountain {
         send_to_char(&mut game.descriptors, ch, "You can't drink from that!\r\n");
         return;
     }
-    if on_ground && to_obj.get_obj_type() == ITEM_DRINKCON {
+    if on_ground && to_obj.get_obj_type() == ItemType::Drinkcon {
         send_to_char(&mut game.descriptors, ch, "You have to be holding that to drink from it.\r\n");
         return;
     }
@@ -1770,12 +1770,12 @@ pub fn do_eat(
     }
     let food = food.unwrap();
     if subcmd == SCMD_TASTE
-        && (food.get_obj_type() == ITEM_DRINKCON || food.get_obj_type() == ITEM_FOUNTAIN)
+        && (food.get_obj_type() == ItemType::Drinkcon || food.get_obj_type() == ItemType::Fountain)
     {
         do_drink(game, db, chars, texts, objs, chid, argument, 0, SCMD_SIP);
         return;
     }
-    if (food.get_obj_type() != ITEM_FOOD) && (ch.get_level() < LVL_GOD as u8) {
+    if (food.get_obj_type() != ItemType::Food) && (ch.get_level() < LVL_GOD as u8) {
         send_to_char(&mut game.descriptors, ch, "You can't eat THAT!\r\n");
         return;
     }
@@ -1914,7 +1914,7 @@ pub fn do_pour(
             return;
         }
         let from_obj = from_obj.unwrap();
-        if from_obj.get_obj_type() != ITEM_DRINKCON {
+        if from_obj.get_obj_type() != ItemType::Drinkcon {
             send_to_char(&mut game.descriptors, ch, "You can't pour from that!\r\n");
             return;
         }
@@ -1936,7 +1936,7 @@ pub fn do_pour(
             return;
         }
         let to_obj = to_obj.unwrap();
-        if to_obj.get_obj_type() != ITEM_DRINKCON {
+        if to_obj.get_obj_type() != ItemType::Drinkcon {
             act(&mut game.descriptors, 
                 chars,
                 db,
@@ -1982,7 +1982,7 @@ pub fn do_pour(
             return;
         }
         let from_obj = from_obj.unwrap();
-        if from_obj.get_obj_type() != ITEM_FOUNTAIN {
+        if from_obj.get_obj_type() != ItemType::Fountain {
             act(&mut game.descriptors, 
                 chars,
                 db,
@@ -2057,7 +2057,7 @@ pub fn do_pour(
             return;
         }
         let to_obj = to_obj.unwrap();
-        if (to_obj.get_obj_type() != ITEM_DRINKCON) && (to_obj.get_obj_type() != ITEM_FOUNTAIN) {
+        if (to_obj.get_obj_type() != ItemType::Drinkcon) && (to_obj.get_obj_type() != ItemType::Fountain) {
             send_to_char(&mut game.descriptors, ch, "You can't pour anything into that.\r\n");
             return;
         }
@@ -2608,14 +2608,14 @@ pub fn do_grab(
     } else {
         let obj = obj.unwrap();
 
-        if obj.get_obj_type() == ITEM_LIGHT {
+        if obj.get_obj_type() == ItemType::Light {
             perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_LIGHT as i32);
         } else {
             if !obj.can_wear(WearFlags::HOLD)
-                && obj.get_obj_type() != ITEM_WAND
-                && obj.get_obj_type() != ITEM_STAFF
-                && obj.get_obj_type() != ITEM_SCROLL
-                && obj.get_obj_type() != ITEM_POTION
+                && obj.get_obj_type() != ItemType::Wand
+                && obj.get_obj_type() != ItemType::Staff
+                && obj.get_obj_type() != ItemType::Scroll
+                && obj.get_obj_type() != ItemType::Potion
             {
                 send_to_char(&mut game.descriptors, ch, "You can't hold that.\r\n");
             } else {

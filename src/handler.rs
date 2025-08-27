@@ -26,7 +26,7 @@ use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    AffectFlags, AffectedType, CharData, ExtraDescrData, ExtraFlags, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
+    AffectFlags, AffectedType, CharData, ExtraDescrData, ExtraFlags, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ItemType, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
 use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
@@ -381,7 +381,7 @@ impl DB {
         }
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             let light = objs.get(ch.get_eq(WEAR_LIGHT as i8).unwrap());
-            if light.get_obj_type() == ITEM_LIGHT {
+            if light.get_obj_type() == ItemType::Light {
                 if light.get_obj_val(2) != 0 {
                     let in_room = ch.in_room();
                     self.world[in_room as usize].light -= 1;
@@ -417,7 +417,7 @@ impl DB {
 
         if ch.get_eq(WEAR_LIGHT as i8).is_some() {
             let light = objs.get(ch.get_eq(WEAR_LIGHT as i8).unwrap());
-            if light.get_obj_type() == ITEM_LIGHT {
+            if light.get_obj_type() == ItemType::Light {
                 if light.get_obj_val(2) != 0 {
                     let in_room = ch.in_room();
                     self.world[in_room as usize].light += 1; /* Light ON */
@@ -481,7 +481,7 @@ fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: i16) -> i32 {
     let eq_id = eq_id.unwrap();
     let eq = objs.get(eq_id);
 
-    if eq.get_obj_type() != ITEM_ARMOR as u8 {
+    if eq.get_obj_type() != ItemType::Armor {
         return 0;
     }
 
@@ -583,13 +583,13 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
         obj.worn_by = Some(chid);
         obj.worn_on = pos as i16;
 
-        if obj.get_obj_type() == ITEM_ARMOR as u8 {
+        if obj.get_obj_type() == ItemType::Armor {
             let armor = apply_ac(objs, ch, pos as i16);
             ch.set_ac(ch.get_ac() - armor as i16);
         }
         let obj = objs.get_mut(oid);
         if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
+            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ItemType::Light {
                 if obj.get_obj_val(2) != 0 {
                     /* if light is ON */
                     db.world[ch.in_room() as usize].light += 1;
@@ -630,13 +630,13 @@ impl DB {
         let obj = objs.get_mut(oid);
         obj.worn_by = None;
         obj.worn_on = -1;
-        if obj.get_obj_type() == ITEM_ARMOR as u8 {
+        if obj.get_obj_type() == ItemType::Armor {
             let armor = apply_ac(objs, ch, pos as i16);
             ch.set_ac(ch.get_ac() + armor as i16);
         }
         let obj = objs.get_mut(oid);
         if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ITEM_LIGHT as u8 {
+            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ItemType::Light {
                 if obj.get_obj_val(2) != 0 {
                     let ch_in_room = ch.in_room();
                     self.world[ch_in_room as usize].light -= 1;
@@ -957,7 +957,7 @@ fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
 
         if light_oid.is_some() {
             let light_oid = light_oid.unwrap();
-            if objs.get(light_oid).get_obj_type() == ITEM_LIGHT {
+            if objs.get(light_oid).get_obj_type() == ItemType::Light {
                 if objs.get(light_oid).get_obj_val(2) > 0 {
                     objs.get_mut(light_oid).decr_obj_val(2);
                     i = objs.get(light_oid).get_obj_val(2);
@@ -1723,7 +1723,7 @@ impl DB {
             new_descr.description = Rc::from(buf.as_str());
         }
 
-        obj.set_obj_type(ITEM_MONEY);
+        obj.set_obj_type(ItemType::Money);
         obj.set_obj_wear(WearFlags::TAKE);
         obj.set_obj_val(0, amount);
         obj.set_obj_cost(amount);

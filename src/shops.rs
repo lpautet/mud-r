@@ -30,7 +30,7 @@ use crate::handler::{fname, get_number, get_obj_in_list_num, get_obj_in_list_vis
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, MeRef, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING, NOWHERE
+    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING, NOWHERE
 };
 use crate::util::{can_see, can_see_obj, get_line, sprintbit};
 use crate::{an, is_set,  yesno, Game, PAGE_LENGTH, TO_CHAR, TO_ROOM};
@@ -433,7 +433,7 @@ fn trade_with(item: &ObjData, shop: &ShopData) -> i32 {
     while shop.type_[counter].type_ != NOTHING as i32 {
         if shop.type_[counter].type_ == item.get_obj_type() as i32 {
             if item.get_obj_val(2) == 0
-                && (item.get_obj_type() == ITEM_WAND || item.get_obj_type() == ITEM_STAFF)
+                && (item.get_obj_type() == ItemType::Wand || item.get_obj_type() == ItemType::Staff)
             {
                 return OBJECT_DEAD;
             }
@@ -1203,7 +1203,7 @@ fn list_object(
         quantity.push_str(format!("{}", cnt).as_str());
     }
     match objs.get(oid).get_obj_type() {
-        ITEM_DRINKCON => {
+        ItemType::Drinkcon => {
             if objs.get(oid).get_obj_val(1) != 0 {
                 itemname = Rc::from(format!(
                     "{} of {}",
@@ -1215,7 +1215,7 @@ fn list_object(
             }
         }
 
-        ITEM_WAND | ITEM_STAFF => {
+        ItemType::Wand | ItemType::Staff => {
             itemname = Rc::from(format!(
                 "{}{}",
                 objs.get(oid).short_description,

@@ -50,7 +50,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, RoomFlags, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE
+    AffectFlags, CharData, RoomFlags, ItemType, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
 use crate::util::{ has_spell_routine, rand_number};
@@ -638,7 +638,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
     );
 
     match obj.get_obj_type() {
-        ITEM_STAFF => {
+        ItemType::Staff => {
             act(&mut game.descriptors, chars, db,
                 "You tap $p three times on the ground.",
                 false,
@@ -726,7 +726,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 }
             }
         }
-        ITEM_WAND => {
+        ItemType::Wand => {
             if k == FIND_CHAR_ROOM {
                 if tch.unwrap().id() == chid {
                     act(&mut game.descriptors, chars, db,
@@ -878,7 +878,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 );
             }
         }
-        ITEM_SCROLL => {
+        ItemType::Scroll => {
             if !arg.is_empty() {
                 if k == 0 {
                     act(&mut game.descriptors, chars, db,
@@ -938,7 +938,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
 
             db.extract_obj(chars, objs,oid);
         }
-        ITEM_POTION => {
+        ItemType::Potion => {
             act(&mut game.descriptors, chars, db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
             if !texts.get(obj.action_description).text.is_empty() {
                 act(&mut game.descriptors, chars, db,
@@ -977,7 +977,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         _ => {
             error!(
                 "SYSERR: Unknown object_type {} in mag_objectmagic.",
-                obj.get_obj_type()
+                obj.get_obj_type() as i32
             );
         }
     }

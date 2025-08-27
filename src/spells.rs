@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ExtraFlags, RoomFlags, RoomRnum, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, ITEM_ARMOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
+    AffectFlags, AffectedType, ExtraFlags, RoomFlags, RoomRnum, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, ItemType, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -277,7 +277,7 @@ pub fn spell_create_water(
     let obj_id = obj_id.unwrap();
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
-    if  objs.get(obj_id).get_obj_type() == ITEM_DRINKCON {
+    if  objs.get(obj_id).get_obj_type() == ItemType::Drinkcon {
         if  objs.get(obj_id).get_obj_val(2) != LIQ_WATER &&  objs.get(obj_id).get_obj_val(1) != 0 {
             name_from_drinkcon(objs,Some(obj_id));
              objs.get_mut(obj_id).set_obj_val(2, LIQ_SLIME);
@@ -673,7 +673,7 @@ pub fn spell_identify(
         );
 
         match objs.get(oid).get_obj_type() {
-            ITEM_SCROLL | ITEM_POTION => {
+            ItemType::Scroll | ItemType::Potion => {
                 if objs.get(oid).get_obj_val(1) >= 1 {
                     bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(1)));
                 }
@@ -695,7 +695,7 @@ pub fn spell_identify(
                     .as_str(),
                 );
             }
-            ITEM_WAND | ITEM_STAFF => {
+            ItemType::Wand | ItemType::Staff => {
                 send_to_char(&mut game.descriptors, ch,
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
@@ -708,7 +708,7 @@ pub fn spell_identify(
                     .as_str(),
                 );
             }
-            ITEM_WEAPON => {
+            ItemType::Weapon => {
                 send_to_char(&mut game.descriptors, ch,
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
@@ -719,7 +719,7 @@ pub fn spell_identify(
                     .as_str(),
                 );
             }
-            ITEM_ARMOR => {
+            ItemType::Armor => {
                 send_to_char(&mut game.descriptors, ch,
                     format!("AC-apply is {}\r\n", objs.get(oid).get_obj_val(0)).as_str(),
                 );
@@ -836,7 +836,7 @@ pub fn spell_enchant_weapon(
 
     /* Either already enchanted or not a weapon. */
     let obj = objs.get_mut(oid);
-    if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ExtraFlags::MAGIC) {
+    if obj.get_obj_type() != ItemType::Weapon || obj.obj_flagged(ExtraFlags::MAGIC) {
         return;
     }
 
@@ -928,7 +928,7 @@ pub fn spell_detect_poison(
             let oid = oid.unwrap();
             let obj = objs.get(oid);
             match obj.get_obj_type() {
-                ITEM_DRINKCON | ITEM_FOUNTAIN | ITEM_FOOD => {
+                ItemType::Drinkcon | ItemType::Fountain | ItemType::Food => {
                     if obj.get_obj_val(3) != 0 {
                         act(&mut game.descriptors, chars, db,
                             "You sense that $p has been contaminated.",

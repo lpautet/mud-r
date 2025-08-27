@@ -34,7 +34,7 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, CONT_CLOSED, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, CONT_CLOSED, ItemType, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
 };
 use crate::structs::{PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, RoomFlags};
 use crate::structs::{
@@ -66,7 +66,7 @@ pub const SHOW_OBJ_ACTION: i32 = 2;
             }
 
             SHOW_OBJ_ACTION => match obj.get_obj_type() {
-                ITEM_NOTE => {
+                ItemType::Note => {
                     let description = texts.get(obj.action_description);
                     if !description.text.is_empty() {
                         let notebuf = format!(
@@ -80,7 +80,7 @@ pub const SHOW_OBJ_ACTION: i32 = 2;
                     }
                     return;
                 }
-                ITEM_DRINKCON => {
+                ItemType::Drinkcon => {
                     send_to_char(descs, ch, "It looks like a drink container.");
                 }
 
@@ -668,13 +668,13 @@ fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData
             ch,
             format!("There doesn't seem to be {} {} here.\r\n", an!(arg), arg).as_str(),
         );
-    } else if obj.unwrap().get_obj_type() != ITEM_DRINKCON
-        && obj.unwrap().get_obj_type() != ITEM_FOUNTAIN
-        && obj.unwrap().get_obj_type() != ITEM_CONTAINER
+    } else if obj.unwrap().get_obj_type() != ItemType::Drinkcon
+        && obj.unwrap().get_obj_type() != ItemType::Fountain
+        && obj.unwrap().get_obj_type() != ItemType::Container
     {
         send_to_char(descs, ch, "There's nothing inside that!\r\n");
     } else {
-        if obj.unwrap().get_obj_type() == ITEM_CONTAINER {
+        if obj.unwrap().get_obj_type() == ItemType::Container {
             if obj.unwrap().objval_flagged(CONT_CLOSED) {
                 send_to_char(descs, ch, "It is closed.\r\n");
             } else {
@@ -952,9 +952,9 @@ pub fn do_examine(
 
     if tmp_object.is_some() {
         let tmp_object = tmp_object.unwrap();
-        if tmp_object.get_obj_type() == ITEM_DRINKCON
-            || tmp_object.get_obj_type() == ITEM_FOUNTAIN
-            || tmp_object.get_obj_type() == ITEM_CONTAINER
+        if tmp_object.get_obj_type() == ItemType::Drinkcon
+            || tmp_object.get_obj_type() == ItemType::Fountain
+            || tmp_object.get_obj_type() == ItemType::Container
         {
             send_to_char(&mut game.descriptors, ch, "When you look inside, you see:\r\n");
             look_in_obj(&mut game.descriptors, db,chars, texts, objs,ch, &arg);

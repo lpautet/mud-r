@@ -29,7 +29,7 @@ use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, ITEM_CONTAINER, ITEM_KEY, ITEM_WEAPON, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
+    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
     can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
@@ -189,7 +189,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
                 if obj.can_wear(WearFlags::HOLD) {
                 } else if ch.is_warrior()
                     && obj.can_wear(WearFlags::WIELD)
-                    && obj.get_obj_type() == ITEM_WEAPON
+                    && obj.get_obj_type() == ItemType::Weapon
                 {
                 } else {
                     location = LOC_INVENTORY;
@@ -725,7 +725,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             }
             if cont_row[0].len() != 0 {
                 /* Content list existing. */
-                if objs.get(oid).get_obj_type() == ITEM_CONTAINER {
+                if objs.get(oid).get_obj_type() == ItemType::Container {
                     /* Remove object, fill it, equip again. */
                     oid = db.unequip_char(chars, objs,chid, (location - 1) as i8).unwrap();
                     objs.get_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
@@ -762,7 +762,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             if j == -location as usize && cont_row[j].len() != 0 {
                 /* Content list exists. */
                 let obj = objs.get_mut(oid);
-                if obj.get_obj_type() == ITEM_CONTAINER {
+                if obj.get_obj_type() == ItemType::Container {
                     /* Take the item, fill it, and give it back. */
                     obj_from_char(chars, obj);
                     obj.contains.clear();
@@ -899,7 +899,7 @@ fn crash_is_unrentable(obj: &ObjData) -> bool {
     if obj.obj_flagged(ExtraFlags::NORENT)
         || obj.get_obj_rent() < 0
         || obj.get_obj_rnum() == NOTHING
-        || obj.get_obj_type() == ITEM_KEY
+        || obj.get_obj_type() == ItemType::Key
     {
         return true;
     }

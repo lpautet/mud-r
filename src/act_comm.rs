@@ -19,7 +19,7 @@ use crate::interpreter::{
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-     AffectFlags, RoomFlags, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
+     AffectFlags, ItemType, RoomFlags, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
 };
 use crate::util::can_see_obj;
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
@@ -464,11 +464,11 @@ pub fn do_write(
             );
             return;
         }
-        if paper.unwrap().get_obj_type() == ITEM_PEN {
+        if paper.unwrap().get_obj_type() == ItemType::Pen {
             /* oops, a pen.. */
             pen = paper;
             paper = None;
-        } else if paper.unwrap().get_obj_type() != ITEM_NOTE {
+        } else if paper.unwrap().get_obj_type() != ItemType::Note {
             send_to_char(&mut game.descriptors, ch, "That thing has nothing to do with writing.\r\n");
             return;
         }
@@ -499,7 +499,7 @@ pub fn do_write(
     let paper = paper.unwrap();
 
     /* ok.. now let's see what kind of stuff we've found */
-    if pen.get_obj_type() != ITEM_PEN {
+    if pen.get_obj_type() != ItemType::Pen {
         act(&mut game.descriptors, chars, 
             db,
             "$p is no good for writing with.",
@@ -509,7 +509,7 @@ pub fn do_write(
             None,
             TO_CHAR,
         );
-    } else if paper.get_obj_type() != ITEM_NOTE {
+    } else if paper.get_obj_type() != ItemType::Note {
         act(&mut game.descriptors, chars, 
             db,
             "You can't write on $p.",

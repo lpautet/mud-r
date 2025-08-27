@@ -35,11 +35,11 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE
+    AffectFlags, CharData, ConState, FollowType, ItemType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
-    ITEM_CONTAINER, ExtraFlags, WearFlags, NOBODY, NOTHING,
+    ExtraFlags, WearFlags, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
@@ -746,10 +746,10 @@ pub fn get_real_level(descs: &Depot<DescriptorData>, chars: &Depot<CharData>, ch
 }
 
 impl ObjData {
-    pub fn get_obj_type(&self) -> u8 {
+    pub fn get_obj_type(&self) -> ItemType {
         self.obj_flags.type_flag
     }
-    pub fn set_obj_type(&mut self, val: u8) {
+    pub fn set_obj_type(&mut self, val: ItemType) {
         self.obj_flags.type_flag = val;
     }
 
@@ -829,7 +829,7 @@ impl ObjData {
         self.in_room = val;
     }
     pub fn is_corpse(&self) -> bool {
-        self.get_obj_type() == ITEM_CONTAINER && self.get_obj_val(3) == 1
+        self.get_obj_type() == ItemType::Container && self.get_obj_val(3) == 1
     }
     pub fn get_obj_timer(&self) -> i32 {
         self.obj_flags.timer

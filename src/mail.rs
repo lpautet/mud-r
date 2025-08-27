@@ -31,7 +31,7 @@ use log::{error, info};
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
 use crate::structs::{
-    CharData, CharFileU, MeRef, ITEM_NOTE, WearFlags, NOTHING, PLR_DELETED,
+    CharData, CharFileU, MeRef, ItemType, WearFlags, NOTHING, PLR_DELETED,
     PLR_MAILING,
 };
 use crate::util::{ctime, time_now, touch};
@@ -887,7 +887,7 @@ fn postmaster_receive_mail(
             "mail paper letter",
             "a piece of mail",
             "Someone has left a piece of mail here.",
-            ITEM_NOTE,
+            ItemType::Note,
             WearFlags::TAKE | WearFlags::HOLD,
             1,
             30,

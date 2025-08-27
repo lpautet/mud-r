@@ -34,7 +34,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, ITEM_CONTAINER, ITEM_WEAPON, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PULSE_VIOLENCE, WEAR_WIELD
+    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PULSE_VIOLENCE, WEAR_WIELD
 };
 use crate::util::{dice, rand_number, stop_follower, BRF};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
@@ -339,7 +339,7 @@ impl DB {
         let buf2 = format!("the corpse of {}", ch.get_name());
         corpse.short_description = Rc::from(buf2.as_str());
 
-        corpse.set_obj_type(ITEM_CONTAINER);
+        corpse.set_obj_type(ItemType::Container);
         corpse.set_obj_wear(WearFlags::TAKE);
         corpse.set_obj_extra(ExtraFlags::NODONATE);
         corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
@@ -1281,7 +1281,7 @@ impl Game {
 
         let w_type;
         /* Find the weapon type (for display purposes only) */
-        if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ITEM_WEAPON {
+        if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
             w_type = objs.get(wielded.unwrap()).get_obj_val(3) + TYPE_HIT;
         } else {
             if ch.is_npc() && ch.mob_specials.attack_type != 0 {
@@ -1342,7 +1342,7 @@ impl Game {
             dam += ch.get_damroll() as i32;
 
             /* Maybe holding arrow? */
-            if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ITEM_WEAPON {
+            if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
                 /* Add weapon-based damage if a weapon is being wielded */
                 dam += dice(
                     objs.get(wielded.unwrap()).get_obj_val(1),

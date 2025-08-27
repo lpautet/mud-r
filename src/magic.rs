@@ -32,7 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectFlags, AffectedType, CharData, ExtraFlags, MobVnum, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
+    AffectFlags, AffectedType, CharData, ExtraFlags, MobVnum, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ItemType, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -1043,7 +1043,7 @@ pub fn mag_alter_objs(
         SPELL_CURSE => {
             if ! objs.get(oid).obj_flagged(ExtraFlags::NODROP) {
                  objs.get_mut(oid).set_obj_extra_bit(ExtraFlags::NODROP);
-                if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
+                if  objs.get(oid).get_obj_type() == ItemType::Weapon {
                      objs.get_mut(oid).decr_obj_val(2);
                 }
                 to_char = "$p briefly glows red.";
@@ -1056,9 +1056,9 @@ pub fn mag_alter_objs(
             }
         }
         SPELL_POISON => {
-            if (( objs.get(oid).get_obj_type() == ITEM_DRINKCON)
-                || ( objs.get(oid).get_obj_type() == ITEM_FOUNTAIN)
-                || ( objs.get(oid).get_obj_type() == ITEM_FOOD))
+            if (( objs.get(oid).get_obj_type() == ItemType::Drinkcon)
+                || ( objs.get(oid).get_obj_type() == ItemType::Fountain)
+                || ( objs.get(oid).get_obj_type() == ItemType::Food))
                 &&  objs.get(oid).get_obj_val(3) == 0
             {
                  objs.get_mut(oid).set_obj_val(3, 1);
@@ -1069,16 +1069,16 @@ pub fn mag_alter_objs(
             if  objs.get(oid).obj_flagged(ExtraFlags::NODROP) {
                  objs.get_mut(oid).remove_obj_extra_bit(ExtraFlags::NODROP);
             }
-            if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
+            if  objs.get(oid).get_obj_type() == ItemType::Weapon {
                  objs.get_mut(oid).incr_obj_val(2);
                 to_char = "$p briefly glows blue.";
             }
         }
 
         SPELL_REMOVE_POISON => {
-            if ( objs.get(oid).get_obj_type() == ITEM_DRINKCON)
-                || (( objs.get(oid).get_obj_type() == ITEM_FOUNTAIN)
-                    || ( objs.get(oid).get_obj_type() == ITEM_FOOD) &&  objs.get(oid).get_obj_val(3) != 0)
+            if ( objs.get(oid).get_obj_type() == ItemType::Drinkcon)
+                || (( objs.get(oid).get_obj_type() == ItemType::Fountain)
+                    || ( objs.get(oid).get_obj_type() == ItemType::Food) &&  objs.get(oid).get_obj_val(3) != 0)
             {
                  objs.get_mut(oid).set_obj_val(3, 0);
                 to_char = "$p steams briefly.";

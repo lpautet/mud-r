@@ -27,7 +27,7 @@ use crate::interpreter::{
 };
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
-    AffectFlags, CharData, ExitFlags, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, SectorType, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, WEAR_HOLD
+    AffectFlags, CharData, ExitFlags, ItemType, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, SectorType, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, WEAR_HOLD
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -46,7 +46,7 @@ fn has_boat(descs: &mut Depot<DescriptorData>, objs: & Depot<ObjData>, ch: &Char
 
     for &oid in &ch.carrying {
         let obj = objs.get(oid);
-        if obj.get_obj_type() == ITEM_BOAT && (find_eq_pos(descs, ch, obj, "") < 0)
+        if obj.get_obj_type() == ItemType::Boat && (find_eq_pos(descs, ch, obj, "") < 0)
         {
             return true;
         }
@@ -54,7 +54,7 @@ fn has_boat(descs: &mut Depot<DescriptorData>, objs: & Depot<ObjData>, ch: &Char
 
     /* and any boat you're wearing will do it too */
     for i in 0..NUM_WEARS {
-        if ch.get_eq(i).is_some() && objs.get(ch.get_eq(i).unwrap()).get_obj_type() == ITEM_BOAT
+        if ch.get_eq(i).is_some() && objs.get(ch.get_eq(i).unwrap()).get_obj_type() == ItemType::Boat
         {
             return true;
         }
@@ -661,7 +661,7 @@ fn ok_pick(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, chid:
 
 fn door_is_openable(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
     if obj.is_some() {
-        obj.as_ref().unwrap().get_obj_type() == ITEM_CONTAINER
+        obj.as_ref().unwrap().get_obj_type() == ItemType::Container
             && obj.as_ref().unwrap().objval_flagged(CONT_CLOSEABLE)
     } else {
         db.exit(ch, door.unwrap())

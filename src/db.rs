@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
+    AffectFlags, AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, APPLY_NONE, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1832,7 +1832,7 @@ impl DB {
             in_room: 0,
             obj_flags: ObjFlagData {
                 value: [0, 0, 0, 0],
-                type_flag: 0,
+                type_flag: ItemType::Light,
                 wear_flags: WearFlags::empty(),
                 extra_flags: ExtraFlags::empty(),
                 weight: 0,
@@ -1925,7 +1925,7 @@ impl DB {
         let f = f.unwrap();
 
         /* Object flags checked in check_object(). */
-        obj.set_obj_type(f[1].parse::<u8>().unwrap());
+        obj.set_obj_type(ItemType::from_u8(f[1].parse::<u8>().unwrap()));
         obj.set_obj_extra(ExtraFlags::from_bits_truncate(asciiflag_conv(&f[2]) as i32));
         obj.set_obj_wear(WearFlags::from_bits_truncate(asciiflag_conv(&f[3]) as i32));
 
@@ -1974,7 +1974,7 @@ impl DB {
         obj.set_obj_rent(f[3].parse::<i32>().unwrap());
 
         /* check to make sure that weight of containers exceeds curr. quantity */
-        if obj.get_obj_type() == ITEM_DRINKCON || obj.get_obj_type() == ITEM_FOUNTAIN {
+        if obj.get_obj_type() == ItemType::Drinkcon || obj.get_obj_type() == ItemType::Fountain {
             if obj.get_obj_weight() < obj.get_obj_val(1) {
                 obj.set_obj_weight(obj.get_obj_val(1) + 5);
             }
@@ -2393,7 +2393,7 @@ impl DB {
         name: &str,
         short_description: &str,
         description: &str,
-        obj_type: u8,
+        obj_type: ItemType,
         obj_wear: WearFlags,
         weight: i32,
         cost: i32,
@@ -3544,7 +3544,7 @@ impl DB {
         );
 
         match obj.get_obj_type() {
-            ITEM_DRINKCON => {
+            ItemType::Drinkcon => {
                 let space_pos = obj.name.rfind(' ');
                 let onealias = if space_pos.is_some() {
                     (&obj.name[space_pos.unwrap() + 1..]).to_string()
@@ -3571,7 +3571,7 @@ impl DB {
                     );
                 }
             }
-            ITEM_FOUNTAIN => {
+            ItemType::Fountain => {
                 if obj.get_obj_val(1) > obj.get_obj_val(0) {
                     error = true;
                     error!(
@@ -3583,14 +3583,14 @@ impl DB {
                     );
                 }
             }
-            ITEM_SCROLL | ITEM_POTION => {
+            ItemType::Scroll | ItemType::Potion => {
                 error |= self.check_object_level(obj, 0);
                 error |= self.check_object_spell_number(obj, 1);
                 error |= self.check_object_spell_number(obj, 2);
                 error |= self.check_object_spell_number(obj, 3);
             }
 
-            ITEM_WAND | ITEM_STAFF => {
+            ItemType::Wand | ItemType::Staff => {
                 error |= self.check_object_level(obj, 0);
                 error |= self.check_object_spell_number(obj, 3);
                 if obj.get_obj_val(2) > obj.get_obj_val(1) {
@@ -3947,7 +3947,7 @@ impl Default for ObjData {
             in_room: 0,
             obj_flags: ObjFlagData {
                 value: [0, 0, 0, 0],
-                type_flag: 0,
+                type_flag: ItemType::Light,
                 wear_flags: WearFlags::empty(),
                 extra_flags: ExtraFlags::empty(),
                 weight: 0,

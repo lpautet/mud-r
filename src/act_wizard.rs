@@ -46,7 +46,8 @@ use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    AffectFlags, CharData, CharFileU, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL, ITEM_ARMOR, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY, ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, THIRST
+    AffectFlags, CharData, CharFileU, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL,  ItemType,
+    LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, THIRST
 };
 use crate::util::{
     age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
@@ -888,7 +889,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     );
 
     match obj.get_obj_type() {
-        ITEM_LIGHT => {
+        ItemType::Light => {
             if obj.get_obj_val(2) == -1 {
                 send_to_char(descs, ch, "Hours left: Infinite\r\n");
             } else {
@@ -898,7 +899,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 );
             }
         }
-        ITEM_SCROLL | ITEM_POTION => {
+        ItemType::Scroll | ItemType::Potion => {
             send_to_char(descs, 
                 ch,
                 format!(
@@ -911,7 +912,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_WAND | ITEM_STAFF => {
+        ItemType::Wand | ItemType::Staff => {
             send_to_char(descs, 
                 ch,
                 format!(
@@ -924,7 +925,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_WEAPON => {
+        ItemType::Weapon => {
             send_to_char(descs, 
                 ch,
                 format!(
@@ -936,13 +937,13 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_ARMOR => {
+        ItemType::Armor => {
             send_to_char(descs, 
                 ch,
                 format!("AC-apply: [{}]\r\n", obj.get_obj_val(0)).as_str(),
             );
         }
-        ITEM_TRAP => {
+        ItemType::Trap => {
             send_to_char(descs, 
                 ch,
                 format!(
@@ -953,7 +954,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_CONTAINER => {
+        ItemType::Container => {
             buf.clear();
             sprintbit(obj.get_obj_val(1) as i64, &CONTAINER_BITS, &mut buf);
             send_to_char(descs, 
@@ -968,7 +969,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_DRINKCON | ITEM_FOUNTAIN => {
+        ItemType::Drinkcon | ItemType::Fountain => {
             buf.clear();
             sprinttype(obj.get_obj_val(2), &DRINKS, &mut buf);
             send_to_char(descs, 
@@ -983,14 +984,14 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_NOTE => {
+        ItemType::Note => {
             send_to_char(descs, 
                 ch,
                 format!("Tongue: {}\r\n", obj.get_obj_val(0)).as_str(),
             );
         }
-        ITEM_KEY => { /* Nothing */ }
-        ITEM_FOOD => {
+        ItemType::Key => { /* Nothing */ }
+        ItemType::Food => {
             send_to_char(descs, 
                 ch,
                 format!(
@@ -1001,7 +1002,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 .as_str(),
             );
         }
-        ITEM_MONEY => {
+        ItemType::Money => {
             send_to_char(descs, 
                 ch,
                 format!("Coins: {}\r\n", obj.get_obj_val(0)).as_str(),

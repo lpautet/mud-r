@@ -40,7 +40,7 @@ use crate::spec_procs::list_skills;
 use crate::spell_parser::mag_objectmagic;
 use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    AffectFlags, AffectedType, RoomFlags, APPLY_NONE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, WEAR_HOLD
+    AffectFlags, AffectedType, ItemType, RoomFlags, APPLY_NONE, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, WEAR_HOLD
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -1092,20 +1092,20 @@ pub fn do_use(
     let mag_item = mag_item.unwrap();
     match subcmd {
         SCMD_QUAFF => {
-            if mag_item.get_obj_type() != ITEM_POTION {
+            if mag_item.get_obj_type() != ItemType::Potion {
                 send_to_char(&mut game.descriptors, ch, "You can only quaff potions.\r\n");
                 return;
             }
         }
         SCMD_RECITE => {
-            if mag_item.get_obj_type() != ITEM_SCROLL {
+            if mag_item.get_obj_type() != ItemType::Scroll {
                 send_to_char(&mut game.descriptors, ch, "You can only recite scrolls.\r\n");
                 return;
             }
         }
         SCMD_USE => {
-            if mag_item.get_obj_type() != ITEM_WAND
-                && mag_item.get_obj_type() != ITEM_STAFF
+            if mag_item.get_obj_type() != ItemType::Wand
+                && mag_item.get_obj_type() != ItemType::Staff
             {
                 send_to_char(&mut game.descriptors, ch, "You can't seem to figure out how to use it.\r\n");
                 return;

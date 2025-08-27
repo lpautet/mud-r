@@ -28,7 +28,7 @@ use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, MeRef, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, WearFlags,
+    CharData, MeRef, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ItemType, WearFlags,
     NOBODY, NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::rand_number;
@@ -402,7 +402,7 @@ fn is_trash(i: &ObjData) -> bool {
         return false;
     }
 
-    if i.get_obj_type() == ITEM_DRINKCON || i.get_obj_cost() <= 10 {
+    if i.get_obj_type() == ItemType::Drinkcon || i.get_obj_cost() <= 10 {
         return true;
     }
 

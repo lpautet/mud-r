@@ -148,29 +148,58 @@ pub enum RentCode {
 /* object-related defines ********************************************/
 
 /* Item types: used by obj_data.obj_flags.type_flag */
-pub const ITEM_LIGHT: u8 = 1; /* Item is a light source	*/
-pub const ITEM_SCROLL: u8 = 2; /* Item is a scroll		*/
-pub const ITEM_WAND: u8 = 3; /* Item is a wand		*/
-pub const ITEM_STAFF: u8 = 4; /* Item is a staff		*/
-pub const ITEM_WEAPON: u8 = 5; /* Item is a weapon		*/
-// pub const ITEM_FIREWEAPON: u8 = 6; /* Unimplemented		*/
-// pub const ITEM_MISSILE: u8 = 7; /* Unimplemented		*/
-// pub const ITEM_TREASURE: u8 = 8; /* Item is a treasure, not gold	*/
-pub const ITEM_ARMOR: u8 = 9; /* Item is armor		*/
-pub const ITEM_POTION: u8 = 10; /* Item is a potion		*/
-// pub const ITEM_WORN: u8 = 11; /* Unimplemented		*/
-// pub const ITEM_OTHER: u8 = 12; /* Misc object			*/
-// pub const ITEM_TRASH: u8 = 13; /* Trash - shopkeeps won't buy	*/
-pub const ITEM_TRAP: u8 = 14; /* Unimplemented		*/
-pub const ITEM_CONTAINER: u8 = 15; /* Item is a container		*/
-pub const ITEM_NOTE: u8 = 16; /* Item is note 		*/
-pub const ITEM_DRINKCON: u8 = 17; /* Item is a drink container	*/
-pub const ITEM_KEY: u8 = 18; /* Item is a key		*/
-pub const ITEM_FOOD: u8 = 19; /* Item is food			*/
-pub const ITEM_MONEY: u8 = 20; /* Item is money (gold)		*/
-pub const ITEM_PEN: u8 = 21; /* Item is a pen		*/
-pub const ITEM_BOAT: u8 = 22; /* Item is a boat		*/
-pub const ITEM_FOUNTAIN: u8 = 23; /* Item is a fountain		*/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum ItemType {
+    Light = 1,      /* Item is a light source */
+    Scroll = 2,     /* Item is a scroll */
+    Wand = 3,       /* Item is a wand */
+    Staff = 4,      /* Item is a staff */
+    Weapon = 5,     /* Item is a weapon */
+    // Fireweapon = 6, /* Unimplemented */
+    // Missile = 7,    /* Unimplemented */
+    // Treasure = 8,   /* Item is a treasure, not gold */
+    Armor = 9,      /* Item is armor */
+    Potion = 10,    /* Item is a potion */
+    // Worn = 11,      /* Unimplemented */
+    // Other = 12,     /* Misc object */
+    // Trash = 13,     /* Trash - shopkeeps won't buy */
+    Trap = 14,      /* Unimplemented */
+    Container = 15, /* Item is a container */
+    Note = 16,      /* Item is note */
+    Drinkcon = 17,  /* Item is a drink container */
+    Key = 18,       /* Item is a key */
+    Food = 19,      /* Item is food */
+    Money = 20,     /* Item is money (gold) */
+    Pen = 21,       /* Item is a pen */
+    Boat = 22,      /* Item is a boat */
+    Fountain = 23,  /* Item is a fountain */
+}
+
+impl ItemType {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            1 => ItemType::Light,
+            2 => ItemType::Scroll,
+            3 => ItemType::Wand,
+            4 => ItemType::Staff,
+            5 => ItemType::Weapon,
+            9 => ItemType::Armor,
+            10 => ItemType::Potion,
+            14 => ItemType::Trap,
+            15 => ItemType::Container,
+            16 => ItemType::Note,
+            17 => ItemType::Drinkcon,
+            18 => ItemType::Key,
+            19 => ItemType::Food,
+            20 => ItemType::Money,
+            21 => ItemType::Pen,
+            22 => ItemType::Boat,
+            23 => ItemType::Fountain,
+            _ => panic!("Unknown item type: {}", value),
+        }
+    }
+}
 
 bitflags! {
     /// Take/Wear flags: used by obj_data.obj_flags.wear_flags
@@ -684,7 +713,7 @@ pub struct TxtBlock {
 pub struct ObjFlagData {
     pub value: [i32; 4],
     /* Values of the item (see list)    */
-    pub type_flag: u8,
+    pub type_flag: ItemType,
     /* Type of item			    */
     pub wear_flags: WearFlags,
     /* Where you can wear it	    */

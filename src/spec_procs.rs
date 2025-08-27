@@ -35,7 +35,7 @@ use crate::spells::{
     SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, MeRef, WearFlags, ITEM_DRINKCON, LVL_IMMORT, MAX_SKILLS, NOWHERE, PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING
+    AffectFlags, CharData, MeRef, WearFlags, ItemType, LVL_IMMORT, MAX_SKILLS, NOWHERE, PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING
 };
 use crate::util::{add_follower, can_see, rand_number};
 use crate::{ Game, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -738,7 +738,7 @@ pub fn janitor(
         if !i.can_wear(WearFlags::TAKE) {
             continue;
         }
-        if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {
+        if i.get_obj_type() != ItemType::Drinkcon && i.get_obj_cost() >= 15 {
             continue;
         }
         act(&mut game.descriptors, chars, db,
