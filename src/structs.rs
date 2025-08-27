@@ -80,14 +80,14 @@ pub enum SectorType {
     #[default]
     Inside = 0,         /* Indoors */
     City = 1,           /* In a city */
-    // Field = 2,       /* In a field */
-    // Forest = 3,      /* In a forest */
-    // Hills = 4,       /* In the hills */
-    // Mountain = 5,    /* On a mountain */
-    // WaterSwim = 6,   /* Swimmable water */
+    Field = 2,          /* In a field */
+    Forest = 3,      /* In a forest */
+    Hills = 4,       /* In the hills */
+    Mountain = 5,    /* On a mountain */
+    WaterSwim = 6,   /* Swimmable water */
     WaterNoSwim = 7,    /* Water - need a boat */
-    // Flying = 8,      /* Wheee! */
-    // Underwater = 9,  /* Underwater */
+    Flying = 8,      /* Wheee! */
+    Underwater = 9,  /* Underwater */
 }
 
 impl SectorType {
@@ -95,7 +95,14 @@ impl SectorType {
         match value {
             0 => SectorType::Inside,
             1 => SectorType::City,
+            2 => SectorType::Field,
+            3 => SectorType::Forest,
+            4 => SectorType::Hills,
+            5 => SectorType::Mountain,
+            6 => SectorType::WaterSwim,
             7 => SectorType::WaterNoSwim,
+            8 => SectorType::Flying,
+            9 => SectorType::Underwater,
             _ => panic!("Invalid sector type: {}", value),
         }
     }
