@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE, SUN_DARK, SUN_SET
+    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -1847,7 +1847,7 @@ impl DB {
             return false;
         }
 
-        if self.weather_info.sunlight == SUN_SET || self.weather_info.sunlight == SUN_DARK {
+        if self.weather_info.sunlight == SunState::Set || self.weather_info.sunlight == SunState::Dark {
             return true;
         }
 

@@ -107,10 +107,14 @@ pub const FULL: usize = 1;
 pub const THIRST: usize = 2;
 
 /* Sun state for weather_data */
-pub const SUN_DARK: i32 = 0;
-pub const SUN_RISE: i32 = 1;
-pub const SUN_LIGHT: i32 = 2;
-pub const SUN_SET: i32 = 3;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum SunState {
+    Dark = 0,
+    Rise = 1,
+    Light = 2,
+    Set = 3,
+}
 
 /* Sky conditions for weather_data */
 pub const SKY_CLOUDLESS: i32 = 0;
@@ -1063,7 +1067,7 @@ pub struct WeatherData {
     /* How fast and what way does it change. */
     pub sky: i32,
     /* How is the sky. */
-    pub sunlight: i32,
+    pub sunlight: SunState,
     /* And how much sun. */
 }
 

@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, AffectFlags, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
+    AffectFlags, AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING,
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -563,7 +563,7 @@ impl DB {
                 pressure: 0,
                 change: 0,
                 sky: 0,
-                sunlight: 0,
+                sunlight: SunState::Dark,
             },
             reset_q: vec![],
             extractions_pending: 0,
@@ -731,11 +731,11 @@ impl DB {
         self.time_info = mud_time_passed(time_now(), beginning_of_time as u64);
 
         self.weather_info.sunlight = match self.time_info.hours {
-            0..=4 => SUN_DARK,
-            5 => SUN_RISE,
-            6..=20 => SUN_LIGHT,
-            21 => SUN_SET,
-            _ => SUN_DARK,
+            0..=4 => SunState::Dark,
+            5 => SunState::Rise,
+            6..=20 => SunState::Light,
+            21 => SunState::Set,
+            _ => SunState::Dark,
         };
 
         info!(

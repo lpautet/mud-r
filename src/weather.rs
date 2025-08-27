@@ -11,7 +11,7 @@
 
 use crate::depot::Depot;
 use crate::structs::{
-    SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET,
+    SunState, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING
 };
 use crate::util::dice;
 use crate::{CharData, Game, DB};
@@ -31,19 +31,19 @@ impl Game {
         if mode != 0 {
             match db.time_info.hours {
                 5 => {
-                    db.weather_info.sunlight = SUN_RISE;
+                    db.weather_info.sunlight = SunState::Rise;
                     self.send_to_outdoor(chars, db,"The sun rises in the east.\r\n");
                 }
                 6 => {
-                    db.weather_info.sunlight = SUN_LIGHT;
+                    db.weather_info.sunlight = SunState::Light;
                     self.send_to_outdoor(chars, db,"The day has begun.\r\n");
                 }
                 21 => {
-                    db.weather_info.sunlight = SUN_SET;
+                    db.weather_info.sunlight = SunState::Set;
                     self.send_to_outdoor(chars, db,"The sun slowly disappears in the west.\r\n");
                 }
                 22 => {
-                    db.weather_info.sunlight = SUN_DARK;
+                    db.weather_info.sunlight = SunState::Dark;
                     self.send_to_outdoor(chars, db,"The night has begun.\r\n");
                 }
                 _ => {}
