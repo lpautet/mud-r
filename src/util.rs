@@ -43,7 +43,7 @@ use crate::structs::{
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, ExitFlags,
-    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING,
+    ITEM_CONTAINER, ITEM_INVISIBLE, WearFlags, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
@@ -765,10 +765,10 @@ impl ObjData {
     pub fn remove_obj_extra_bit(&mut self, val: i32) {
         self.obj_flags.extra_flags &= !val;
     }
-    pub fn get_obj_wear(&self) -> i32 {
+    pub fn get_obj_wear(&self) -> WearFlags {
         self.obj_flags.wear_flags
     }
-    pub fn set_obj_wear(&mut self, val: i32) {
+    pub fn set_obj_wear(&mut self, val: WearFlags) {
         self.obj_flags.wear_flags = val;
     }
     pub fn get_obj_val(&self, val: usize) -> i32 {
@@ -843,10 +843,10 @@ impl ObjData {
 }
 
 impl ObjData {
-    pub fn objwear_flagged(&self, flag: i32) -> bool {
-        is_set!(self.get_obj_wear(), flag)
+    pub fn objwear_flagged(&self, flag: WearFlags) -> bool {
+        self.get_obj_wear().contains(flag)
     }
-    pub fn can_wear(&self, part: i32) -> bool {
+    pub fn can_wear(&self, part: WearFlags) -> bool {
         self.objwear_flagged(part)
     }
 }
@@ -954,7 +954,7 @@ pub fn can_get_obj(
     ch: &CharData,
     obj: &ObjData,
 ) -> bool {
-    obj.can_wear(ITEM_WEAR_TAKE) && ch.can_carry_obj(obj) && can_see_obj(descs, chars, db, ch, obj)
+    obj.can_wear(WearFlags::TAKE) && ch.can_carry_obj(obj) && can_see_obj(descs, chars, db, ch, obj)
 }
 pub fn mort_can_see_obj(
     descs: &Depot<DescriptorData>,

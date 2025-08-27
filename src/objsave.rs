@@ -30,9 +30,7 @@ use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     CharData, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentInfo, ITEM_CONTAINER, ITEM_KEY,
-    ITEM_NORENT, ITEM_WEAPON, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS, ITEM_WEAR_BODY, ITEM_WEAR_FEET,
-    ITEM_WEAR_FINGER, ITEM_WEAR_HANDS, ITEM_WEAR_HEAD, ITEM_WEAR_HOLD, ITEM_WEAR_LEGS,
-    ITEM_WEAR_NECK, ITEM_WEAR_SHIELD, ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, LVL_GOD,
+    ITEM_NORENT, ITEM_WEAPON, WearFlags, LVL_GOD,
     LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, RENT_CRASH, RENT_CRYO,
     RENT_FORCED, RENT_RENTED, RENT_TIMEDOUT, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET,
     WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT,
@@ -127,75 +125,75 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
         match j as i16 {
             WEAR_LIGHT => {}
             WEAR_FINGER_R | WEAR_FINGER_L => {
-                if !obj.can_wear(ITEM_WEAR_FINGER) {
+                if !obj.can_wear(WearFlags::FINGER) {
                     /* not fitting :( */
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_NECK_1 | WEAR_NECK_2 => {
-                if !obj.can_wear(ITEM_WEAR_NECK) {
+                if !obj.can_wear(WearFlags::NECK) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_BODY => {
-                if !obj.can_wear(ITEM_WEAR_BODY) {
+                if !obj.can_wear(WearFlags::BODY) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_HEAD => {
-                if !obj.can_wear(ITEM_WEAR_HEAD) {
+                if !obj.can_wear(WearFlags::HEAD) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_LEGS => {
-                if !obj.can_wear(ITEM_WEAR_LEGS) {
+                if !obj.can_wear(WearFlags::LEGS) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_FEET => {
-                if !obj.can_wear(ITEM_WEAR_FEET) {
+                if !obj.can_wear(WearFlags::FEET) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_HANDS => {
-                if !obj.can_wear(ITEM_WEAR_HANDS) {
+                if !obj.can_wear(WearFlags::HANDS) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_ARMS => {
-                if !obj.can_wear(ITEM_WEAR_ARMS) {
+                if !obj.can_wear(WearFlags::ARMS) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_SHIELD => {
-                if !obj.can_wear(ITEM_WEAR_SHIELD) {
+                if !obj.can_wear(WearFlags::SHIELD) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_ABOUT => {
-                if !obj.can_wear(ITEM_WEAR_ABOUT) {
+                if !obj.can_wear(WearFlags::ABOUT) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_WAIST => {
-                if !obj.can_wear(ITEM_WEAR_WAIST) {
+                if !obj.can_wear(WearFlags::WAIST) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_WRIST_R | WEAR_WRIST_L => {
-                if !obj.can_wear(ITEM_WEAR_WRIST) {
+                if !obj.can_wear(WearFlags::WRIST) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_WIELD => {
-                if !obj.can_wear(ITEM_WEAR_WIELD) {
+                if !obj.can_wear(WearFlags::WIELD) {
                     location = LOC_INVENTORY;
                 }
             }
             WEAR_HOLD => {
-                if obj.can_wear(ITEM_WEAR_HOLD) {
+                if obj.can_wear(WearFlags::HOLD) {
                 } else if ch.is_warrior()
-                    && obj.can_wear(ITEM_WEAR_WIELD)
+                    && obj.can_wear(WearFlags::WIELD)
                     && obj.get_obj_type() == ITEM_WEAPON
                 {
                 } else {

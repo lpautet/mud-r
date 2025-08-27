@@ -31,10 +31,7 @@ use crate::spells::SPELL_POISON;
 use crate::structs::{
     AffectedType, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER,
     ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE, ITEM_NODROP,
-    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAR_ABOUT, ITEM_WEAR_ARMS,
-    ITEM_WEAR_BODY, ITEM_WEAR_FEET, ITEM_WEAR_FINGER, ITEM_WEAR_HANDS, ITEM_WEAR_HEAD,
-    ITEM_WEAR_HOLD, ITEM_WEAR_LEGS, ITEM_WEAR_NECK, ITEM_WEAR_SHIELD, ITEM_WEAR_TAKE,
-    ITEM_WEAR_WAIST, ITEM_WEAR_WIELD, ITEM_WEAR_WRIST, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
+    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, WearFlags, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
     PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
     WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
     WEAR_WRIST_R,
@@ -322,7 +319,7 @@ fn can_take_obj(
             TO_CHAR,
         );
         return false;
-    } else if !objs.get(oid).can_wear(ITEM_WEAR_TAKE) {
+    } else if !objs.get(oid).can_wear(WearFlags::TAKE) {
         act(descs, 
             chars,
             db,
@@ -2261,25 +2258,25 @@ fn perform_wear(
     let ch = chars.get(chid);
     let obj = objs.get_mut(oid);
     let mut _where = _where;
-    const WEAR_BITVECTORS: [i32; 18] = [
-        ITEM_WEAR_TAKE,
-        ITEM_WEAR_FINGER,
-        ITEM_WEAR_FINGER,
-        ITEM_WEAR_NECK,
-        ITEM_WEAR_NECK,
-        ITEM_WEAR_BODY,
-        ITEM_WEAR_HEAD,
-        ITEM_WEAR_LEGS,
-        ITEM_WEAR_FEET,
-        ITEM_WEAR_HANDS,
-        ITEM_WEAR_ARMS,
-        ITEM_WEAR_SHIELD,
-        ITEM_WEAR_ABOUT,
-        ITEM_WEAR_WAIST,
-        ITEM_WEAR_WRIST,
-        ITEM_WEAR_WRIST,
-        ITEM_WEAR_WIELD,
-        ITEM_WEAR_TAKE,
+    const WEAR_BITVECTORS: [WearFlags; 18] = [
+        WearFlags::TAKE,
+        WearFlags::FINGER,
+        WearFlags::FINGER,
+        WearFlags::NECK,
+        WearFlags::NECK,
+        WearFlags::BODY,
+        WearFlags::HEAD,
+        WearFlags::LEGS,
+        WearFlags::FEET,
+        WearFlags::HANDS,
+        WearFlags::ARMS,
+        WearFlags::SHIELD,
+        WearFlags::ABOUT,
+        WearFlags::WAIST,
+        WearFlags::WRIST,
+        WearFlags::WRIST,
+        WearFlags::WIELD,
+        WearFlags::TAKE,
     ];
 
     const ALREADY_WEARING: [&str; 18] = [
@@ -2363,40 +2360,40 @@ pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjD
     ];
     let _where_o;
     if arg.is_empty() {
-        if obj.can_wear(ITEM_WEAR_FINGER) {
+        if obj.can_wear(WearFlags::FINGER) {
             _where = WEAR_FINGER_R;
         }
-        if obj.can_wear(ITEM_WEAR_NECK) {
+        if obj.can_wear(WearFlags::NECK) {
             _where = WEAR_NECK_1;
         }
-        if obj.can_wear(ITEM_WEAR_BODY) {
+        if obj.can_wear(WearFlags::BODY) {
             _where = WEAR_BODY;
         }
-        if obj.can_wear(ITEM_WEAR_HEAD) {
+        if obj.can_wear(WearFlags::HEAD) {
             _where = WEAR_HEAD;
         }
-        if obj.can_wear(ITEM_WEAR_LEGS) {
+        if obj.can_wear(WearFlags::LEGS) {
             _where = WEAR_LEGS;
         }
-        if obj.can_wear(ITEM_WEAR_FEET) {
+        if obj.can_wear(WearFlags::FEET) {
             _where = WEAR_FEET;
         }
-        if obj.can_wear(ITEM_WEAR_HANDS) {
+        if obj.can_wear(WearFlags::HANDS) {
             _where = WEAR_HANDS;
         }
-        if obj.can_wear(ITEM_WEAR_ARMS) {
+        if obj.can_wear(WearFlags::ARMS) {
             _where = WEAR_ARMS;
         }
-        if obj.can_wear(ITEM_WEAR_SHIELD) {
+        if obj.can_wear(WearFlags::SHIELD) {
             _where = WEAR_SHIELD;
         }
-        if obj.can_wear(ITEM_WEAR_ABOUT) {
+        if obj.can_wear(WearFlags::ABOUT) {
             _where = WEAR_ABOUT;
         }
-        if obj.can_wear(ITEM_WEAR_WAIST) {
+        if obj.can_wear(WearFlags::WAIST) {
             _where = WEAR_WAIST;
         }
-        if obj.can_wear(ITEM_WEAR_WRIST) {
+        if obj.can_wear(WearFlags::WRIST) {
             _where = WEAR_WRIST_R;
         }
     } else if {
@@ -2577,7 +2574,7 @@ pub fn do_wield(
         );
     } else {
         let obj = obj.unwrap();
-        if !obj.can_wear(ITEM_WEAR_WIELD) {
+        if !obj.can_wear(WearFlags::WIELD) {
             send_to_char(&mut game.descriptors, ch, "You can't wield that.\r\n");
         } else if obj.get_obj_weight() > STR_APP[ch.strength_apply_index()].wield_w as i32 {
             send_to_char(&mut game.descriptors, ch, "It's too heavy for you to use.\r\n");
@@ -2619,7 +2616,7 @@ pub fn do_grab(
         if obj.get_obj_type() == ITEM_LIGHT {
             perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_LIGHT as i32);
         } else {
-            if !obj.can_wear(ITEM_WEAR_HOLD)
+            if !obj.can_wear(WearFlags::HOLD)
                 && obj.get_obj_type() != ITEM_WAND
                 && obj.get_obj_type() != ITEM_STAFF
                 && obj.get_obj_type() != ITEM_SCROLL

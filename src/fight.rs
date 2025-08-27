@@ -36,7 +36,7 @@ use crate::spells::{
 use crate::structs::{
     CharData, MeRef, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE,
     AFF_INVISIBLE, AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON,
-    ITEM_WEAR_TAKE, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE,
+    WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE,
     NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING,
     POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE,
     RoomFlags, WEAR_WIELD,
@@ -345,7 +345,7 @@ impl DB {
         corpse.short_description = Rc::from(buf2.as_str());
 
         corpse.set_obj_type(ITEM_CONTAINER);
-        corpse.set_obj_wear(ITEM_WEAR_TAKE);
+        corpse.set_obj_wear(WearFlags::TAKE);
         corpse.set_obj_extra(ITEM_NODONATE);
         corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
         corpse.set_obj_val(3, 1); /* corpse identifier */

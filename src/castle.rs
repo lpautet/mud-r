@@ -28,7 +28,7 @@ use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, MeRef, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_WEAR_TAKE,
+    CharData, MeRef, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, WearFlags,
     NOBODY, NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::rand_number;
@@ -398,7 +398,7 @@ fn block_way(
  * Used by James the Butler and the Cleaning Lady.
  */
 fn is_trash(i: &ObjData) -> bool {
-    if !i.objwear_flagged(ITEM_WEAR_TAKE) {
+    if !i.objwear_flagged(WearFlags::TAKE) {
         return false;
     }
 

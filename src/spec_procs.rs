@@ -35,7 +35,7 @@ use crate::spells::{
     SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, ITEM_WEAR_TAKE, LVL_IMMORT, MAX_SKILLS, NOWHERE,
+    MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, WearFlags, LVL_IMMORT, MAX_SKILLS, NOWHERE,
     PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
 };
 use crate::util::{add_follower, can_see, rand_number};
@@ -736,7 +736,7 @@ pub fn janitor(
     }
     for i_id in db.world[ch.in_room() as usize].contents.clone().into_iter() { 
         let i = objs.get_mut(i_id);
-        if !i.can_wear(ITEM_WEAR_TAKE) {
+        if !i.can_wear(WearFlags::TAKE) {
             continue;
         }
         if i.get_obj_type() != ITEM_DRINKCON && i.get_obj_cost() >= 15 {

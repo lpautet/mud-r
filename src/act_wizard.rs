@@ -819,7 +819,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
         }
     }
     buf.clear();
-    sprintbit(obj.get_obj_wear() as i64, &WEAR_BITS, &mut buf);
+    sprintbit(obj.get_obj_wear().bits().into(), &WEAR_BITS, &mut buf);
     send_to_char(descs, ch, format!("Can be worn on: {}\r\n", buf).as_str());
     buf.clear();
     sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut buf);

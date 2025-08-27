@@ -136,22 +136,27 @@ pub const ITEM_PEN: u8 = 21; /* Item is a pen		*/
 pub const ITEM_BOAT: u8 = 22; /* Item is a boat		*/
 pub const ITEM_FOUNTAIN: u8 = 23; /* Item is a fountain		*/
 
-/* Take/Wear flags: used by obj_data.obj_flags.wear_flags */
-pub const ITEM_WEAR_TAKE: i32 = 1 << 0; /* Item can be takes		*/
-pub const ITEM_WEAR_FINGER: i32 = 1 << 1; /* Can be worn on finger	*/
-pub const ITEM_WEAR_NECK: i32 = 1 << 2; /* Can be worn around neck 	*/
-pub const ITEM_WEAR_BODY: i32 = 1 << 3; /* Can be worn on body 	*/
-pub const ITEM_WEAR_HEAD: i32 = 1 << 4; /* Can be worn on head 	*/
-pub const ITEM_WEAR_LEGS: i32 = 1 << 5; /* Can be worn on legs	*/
-pub const ITEM_WEAR_FEET: i32 = 1 << 6; /* Can be worn on feet	*/
-pub const ITEM_WEAR_HANDS: i32 = 1 << 7; /* Can be worn on hands	*/
-pub const ITEM_WEAR_ARMS: i32 = 1 << 8; /* Can be worn on arms	*/
-pub const ITEM_WEAR_SHIELD: i32 = 1 << 9; /* Can be used as a shield	*/
-pub const ITEM_WEAR_ABOUT: i32 = 1 << 10; /* Can be worn about body 	*/
-pub const ITEM_WEAR_WAIST: i32 = 1 << 11; /* Can be worn around waist 	*/
-pub const ITEM_WEAR_WRIST: i32 = 1 << 12; /* Can be worn on wrist 	*/
-pub const ITEM_WEAR_WIELD: i32 = 1 << 13; /* Can be wielded		*/
-pub const ITEM_WEAR_HOLD: i32 = 1 << 14; /* Can be held		*/
+bitflags! {
+    /// Take/Wear flags: used by obj_data.obj_flags.wear_flags
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct WearFlags: i32 {
+        const TAKE = 1 << 0;        // Item can be taken
+        const FINGER = 1 << 1;      // Can be worn on finger
+        const NECK = 1 << 2;        // Can be worn around neck
+        const BODY = 1 << 3;        // Can be worn on body
+        const HEAD = 1 << 4;        // Can be worn on head
+        const LEGS = 1 << 5;        // Can be worn on legs
+        const FEET = 1 << 6;        // Can be worn on feet
+        const HANDS = 1 << 7;       // Can be worn on hands
+        const ARMS = 1 << 8;        // Can be worn on arms
+        const SHIELD = 1 << 9;      // Can be used as a shield
+        const ABOUT = 1 << 10;      // Can be worn about body
+        const WAIST = 1 << 11;      // Can be worn around waist
+        const WRIST = 1 << 12;      // Can be worn on wrist
+        const WIELD = 1 << 13;      // Can be wielded
+        const HOLD = 1 << 14;       // Can be held
+    }
+}
 
 /* Character equipment positions: used as index for char_data.equipment[] */
 /* NOTE: Don't confuse these constants with the ITEM_ bitvectors
@@ -640,7 +645,7 @@ pub struct ObjFlagData {
     /* Values of the item (see list)    */
     pub type_flag: u8,
     /* Type of item			    */
-    pub wear_flags: i32,
+    pub wear_flags: WearFlags,
     /* Where you can wear it	    */
     pub(crate) extra_flags: i32,
     /* If it hums, glows, etc.	    */
