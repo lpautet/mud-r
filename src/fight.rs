@@ -760,7 +760,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
         vict: &CharData,
         attacktype: i32,
     ) -> i32 {
-        let weap_id = ch.get_eq(WEAR_WIELD as i8);
+        let weap_id = ch.get_eq(WEAR_WIELD);
         let weap = weap_id.map(|id| objs.get(id));
 
         for i in 0..db.fight_messages.len() {
@@ -1269,7 +1269,7 @@ impl Game {
     pub fn hit(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, victim_id: DepotId, _type: i32) {
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
-        let wielded = ch.get_eq(WEAR_WIELD as i8);
+        let wielded = ch.get_eq(WEAR_WIELD);
 
         /* Do some sanity checking, in case someone flees, etc. */
         if ch.in_room() != victim.in_room() {

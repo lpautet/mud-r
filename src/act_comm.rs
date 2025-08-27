@@ -473,7 +473,7 @@ pub fn do_write(
             return;
         }
         /* One object was found.. now for the other one. */
-        if ch.get_eq(WEAR_HOLD as i8).is_none() {
+        if ch.get_eq(WEAR_HOLD).is_none() {
             send_to_char(&mut game.descriptors, 
                 ch,
                 format!(
@@ -485,14 +485,14 @@ pub fn do_write(
             );
             return;
         }
-        if !can_see_obj(&game.descriptors, chars, db, ch, objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) {
+        if !can_see_obj(&game.descriptors, chars, db, ch, objs.get(ch.get_eq(WEAR_HOLD).unwrap())) {
             send_to_char(&mut game.descriptors, ch, "The stuff in your hand is invisible!  Yeech!!\r\n");
             return;
         }
         if pen.is_some() {
-            paper = Some(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap()));
+            paper = Some(objs.get(ch.get_eq(WEAR_HOLD).unwrap()));
         } else {
-            pen = Some(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap()));
+            pen = Some(objs.get(ch.get_eq(WEAR_HOLD).unwrap()));
         }
     }
     let pen = pen.unwrap();

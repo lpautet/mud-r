@@ -270,11 +270,11 @@ pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, tex
         send_to_char(&mut game.descriptors, ch, "How can you sneak up on yourself?\r\n");
         return;
     }
-    if ch.get_eq(WEAR_WIELD as i8).is_none() {
+    if ch.get_eq(WEAR_WIELD).is_none() {
         send_to_char(&mut game.descriptors, ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }
-    if objs.get(ch.get_eq(WEAR_WIELD as i8).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
+    if objs.get(ch.get_eq(WEAR_WIELD).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
         send_to_char(&mut game.descriptors, ch,
             "Only piercing weapons can be used for backstabbing.\r\n",
         );
@@ -480,7 +480,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         );
         return;
     }
-    if ch.get_eq(WEAR_WIELD as i8).is_none() {
+    if ch.get_eq(WEAR_WIELD).is_none() {
         send_to_char(&mut game.descriptors, ch, "You need to wield a weapon to make it a success.\r\n");
         return;
     }

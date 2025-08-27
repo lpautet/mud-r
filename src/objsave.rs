@@ -117,7 +117,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
         /* Was wearing it. */
         j = location - 1;
         let obj = objs.get(oid);
-        match j as i16 {
+        match j as usize {
             WEAR_LIGHT => {}
             WEAR_FINGER_R | WEAR_FINGER_L => {
                 if !obj.can_wear(WearFlags::FINGER) {
@@ -203,7 +203,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
 
     if location > 0 {
         /* Wearable. */
-        if ch.get_eq(j as i8).is_none() {
+        if ch.get_eq(j as usize).is_none() {
             /*
              * Check the characters's alignment to prevent them from being
              * zapped through the auto-equipping.
@@ -212,7 +212,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
             if invalid_align(ch, obj) || invalid_class(ch, obj) {
                 location = LOC_INVENTORY;
             } else {
-                equip_char(&mut game.descriptors, chars,db, objs,chid, oid, j as i8);
+                equip_char(&mut game.descriptors, chars,db, objs,chid, oid, j as usize);
             }
         } else {
             /* Oops, saved a player with double equipment? */
@@ -727,12 +727,12 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
                 /* Content list existing. */
                 if objs.get(oid).get_obj_type() == ItemType::Container {
                     /* Remove object, fill it, equip again. */
-                    oid = db.unequip_char(chars, objs,chid, (location - 1) as i8).unwrap();
+                    oid = db.unequip_char(chars, objs,chid, (location - 1) as usize).unwrap();
                     objs.get_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
                     for oid2 in cont_row[0].iter() {
                         obj_to_obj(chars, objs,*oid2, oid);
                     }
-                    equip_char(&mut game.descriptors, chars,db, objs,chid, oid, (location - 1) as i8);
+                    equip_char(&mut game.descriptors, chars,db, objs,chid, oid, (location - 1) as usize);
                 } else {
                     /* Object isn't container, empty the list. */
                     let ch = chars.get_mut(chid);
@@ -980,12 +980,12 @@ pub fn crash_crashsave(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot
 
     for j in 0..NUM_WEARS as usize {
         let ch = chars.get(chid);
-        if ch.get_eq(j as i8).is_some() {
-            if !crash_save(chars, db, objs,ch.get_eq(j as i8), &mut fp, (j + 1) as i32) {
+        if ch.get_eq(j).is_some() {
+            if !crash_save(chars, db, objs,ch.get_eq(j), &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = chars.get(chid);
-            crash_restore_weight(chars, db, objs,ch.get_eq(j as i8).unwrap());
+            crash_restore_weight(chars, db, objs,ch.get_eq(j).unwrap());
         }
     }
     let ch = chars.get(chid);

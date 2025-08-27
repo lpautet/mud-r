@@ -375,8 +375,8 @@ fn has_key(db: &DB,objs: & Depot<ObjData>,  ch: &CharData, key: ObjVnum) -> bool
         }
     }
 
-    if ch.get_eq(WEAR_HOLD as i8).is_some() {
-        if db.get_obj_vnum(objs.get(ch.get_eq(WEAR_HOLD as i8).unwrap())) == key {
+    if ch.get_eq(WEAR_HOLD).is_some() {
+        if db.get_obj_vnum(objs.get(ch.get_eq(WEAR_HOLD).unwrap())) == key {
             return true;
         }
     }

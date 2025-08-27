@@ -691,11 +691,11 @@ impl CharData {
     pub fn is_warrior(&self) -> bool {
         self.is_npc() && self.get_class() == CLASS_WARRIOR
     }
-    pub fn get_eq(&self, pos: i8) -> Option<DepotId> {
-        self.equipment[pos as usize].clone()
+    pub fn get_eq(&self, pos: usize) -> Option<DepotId> {
+        self.equipment[pos].clone()
     }
-    pub fn set_eq(&mut self, pos: i8, val: Option<DepotId>) {
-        self.equipment[pos as usize] = val;
+    pub fn set_eq(&mut self, pos: usize, val: Option<DepotId>) {
+        self.equipment[pos] = val;
     }
     pub fn is_good(&self) -> bool {
         self.get_alignment() >= 350

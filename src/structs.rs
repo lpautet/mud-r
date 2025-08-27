@@ -226,26 +226,26 @@ bitflags! {
 /* Character equipment positions: used as index for char_data.equipment[] */
 /* NOTE: Don't confuse these constants with the ITEM_ bitvectors
 which control the valid places you can wear a piece of equipment */
-pub const WEAR_LIGHT: i16 = 0;
-pub const WEAR_FINGER_R: i16 = 1;
-pub const WEAR_FINGER_L: i16 = 2;
-pub const WEAR_NECK_1: i16 = 3;
-pub const WEAR_NECK_2: i16 = 4;
-pub const WEAR_BODY: i16 = 5;
-pub const WEAR_HEAD: i16 = 6;
-pub const WEAR_LEGS: i16 = 7;
-pub const WEAR_FEET: i16 = 8;
-pub const WEAR_HANDS: i16 = 9;
-pub const WEAR_ARMS: i16 = 10;
-pub const WEAR_SHIELD: i16 = 11;
-pub const WEAR_ABOUT: i16 = 12;
-pub const WEAR_WAIST: i16 = 13;
-pub const WEAR_WRIST_R: i16 = 14;
-pub const WEAR_WRIST_L: i16 = 15;
-pub const WEAR_WIELD: i16 = 16;
-pub const WEAR_HOLD: i16 = 17;
+pub const WEAR_LIGHT: usize = 0;
+pub const WEAR_FINGER_R: usize = 1;
+pub const WEAR_FINGER_L: usize = 2;
+pub const WEAR_NECK_1: usize = 3;
+pub const WEAR_NECK_2: usize = 4;
+pub const WEAR_BODY: usize = 5;
+pub const WEAR_HEAD: usize = 6;
+pub const WEAR_LEGS: usize = 7;
+pub const WEAR_FEET: usize = 8;
+pub const WEAR_HANDS: usize = 9;
+pub const WEAR_ARMS: usize = 10;
+pub const WEAR_SHIELD: usize = 11;
+pub const WEAR_ABOUT: usize = 12;
+pub const WEAR_WAIST: usize = 13;
+pub const WEAR_WRIST_R: usize = 14;
+pub const WEAR_WRIST_L: usize = 15;
+pub const WEAR_WIELD: usize = 16;
+pub const WEAR_HOLD: usize = 17;
 
-pub const NUM_WEARS: i8 = 18;
+pub const NUM_WEARS: usize = 18;
 
 bitflags! {
     /// Extra object flags: used by obj_data.obj_flags.extra_flags

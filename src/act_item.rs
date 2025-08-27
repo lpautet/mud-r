@@ -2162,7 +2162,7 @@ fn wear_message(
     objs: &Depot<ObjData>,
     chid: DepotId,
     oid: DepotId,
-    _where: i32,
+    _where: usize,
 ) {
     let ch = chars.get(chid);
     let obj = objs.get(oid);
@@ -2217,7 +2217,7 @@ fn wear_message(
     act(descs, 
         chars,
         db,
-        WEAR_MESSAGES[_where as usize][0],
+        WEAR_MESSAGES[_where][0],
         true,
         Some(ch),
         Some(obj),
@@ -2227,7 +2227,7 @@ fn wear_message(
     act(descs, 
         chars,
         db,
-        WEAR_MESSAGES[_where as usize][1],
+        WEAR_MESSAGES[_where][1],
         false,
         Some(ch),
         Some(obj),
@@ -2243,7 +2243,7 @@ fn perform_wear(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     oid: DepotId,
-    _where: i32,
+    _where: usize,
 ) {
     /*
      * ITEM_WEAR_TAKE is used for objects that do not require special bits
@@ -2310,27 +2310,27 @@ fn perform_wear(
         return;
     }
     /* for neck, finger, and wrist, try pos 2 if pos 1 is already full */
-    if (_where == WEAR_FINGER_R as i32)
-        || (_where == WEAR_NECK_1 as i32)
-        || (_where == WEAR_WRIST_R as i32)
+    if (_where == WEAR_FINGER_R)
+        || (_where == WEAR_NECK_1)
+        || (_where == WEAR_WRIST_R)
     {
-        if ch.get_eq(_where as i8).is_some() {
+        if ch.get_eq(_where).is_some() {
             _where += 1;
         }
     }
 
-    if ch.get_eq(_where as i8).is_some() {
+    if ch.get_eq(_where).is_some() {
         send_to_char(descs, ch, ALREADY_WEARING[_where as usize]);
         return;
     }
     wear_message(descs, db, chars, objs, chid, oid, _where);
     let obj = objs.get_mut(oid);
     obj_from_char(chars, obj);
-    equip_char(descs, chars, db, objs, chid, oid, _where as i8);
+    equip_char(descs, chars, db, objs, chid, oid, _where);
 }
 
 pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjData, arg: &str) -> i16 {
-    let mut _where = -1;
+    let mut _where: i16 = -1;
 
     const KEYWORDS: [&str; 19] = [
         "!RESERVED!",
@@ -2356,40 +2356,40 @@ pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjD
     let _where_o;
     if arg.is_empty() {
         if obj.can_wear(WearFlags::FINGER) {
-            _where = WEAR_FINGER_R;
+            _where = WEAR_FINGER_R as i16;
         }
         if obj.can_wear(WearFlags::NECK) {
-            _where = WEAR_NECK_1;
+            _where = WEAR_NECK_1 as i16;
         }
         if obj.can_wear(WearFlags::BODY) {
-            _where = WEAR_BODY;
+            _where = WEAR_BODY as i16;
         }
         if obj.can_wear(WearFlags::HEAD) {
-            _where = WEAR_HEAD;
+            _where = WEAR_HEAD as i16;
         }
         if obj.can_wear(WearFlags::LEGS) {
-            _where = WEAR_LEGS;
+            _where = WEAR_LEGS as i16;
         }
         if obj.can_wear(WearFlags::FEET) {
-            _where = WEAR_FEET;
+            _where = WEAR_FEET as i16;
         }
         if obj.can_wear(WearFlags::HANDS) {
-            _where = WEAR_HANDS;
+            _where = WEAR_HANDS as i16;
         }
         if obj.can_wear(WearFlags::ARMS) {
-            _where = WEAR_ARMS;
+            _where = WEAR_ARMS as i16;
         }
         if obj.can_wear(WearFlags::SHIELD) {
-            _where = WEAR_SHIELD;
+            _where = WEAR_SHIELD as i16;
         }
         if obj.can_wear(WearFlags::ABOUT) {
-            _where = WEAR_ABOUT;
+            _where = WEAR_ABOUT as i16;
         }
         if obj.can_wear(WearFlags::WAIST) {
-            _where = WEAR_WAIST;
+            _where = WEAR_WAIST as i16;
         }
         if obj.can_wear(WearFlags::WRIST) {
-            _where = WEAR_WRIST_R;
+            _where = WEAR_WRIST_R as i16;
         }
     } else if {
         _where_o = search_block(arg, &KEYWORDS, false);
@@ -2447,7 +2447,7 @@ pub fn do_wear(
                 _where >= 0
             } {
                 items_worn += 1;
-                perform_wear(&mut game.descriptors, db, chars, objs, chid, oid, _where as i32);
+                perform_wear(&mut game.descriptors, db, chars, objs, chid, oid, _where as usize);
             }
         }
         if items_worn == 0 {
@@ -2482,7 +2482,7 @@ pub fn do_wear(
                         objs,
                         chid,
                         obj.unwrap().id(),
-                        _where as i32,
+                        _where as usize,
                     );
                 } else {
                     act(&mut game.descriptors, 
@@ -2522,7 +2522,7 @@ pub fn do_wear(
                     objs,
                     chid,
                     obj.unwrap().id(),
-                    _where as i32,
+                    _where as usize,
                 );
             } else if arg2.is_empty() {
                 act(&mut game.descriptors, 
@@ -2574,7 +2574,7 @@ pub fn do_wield(
         } else if obj.get_obj_weight() > STR_APP[ch.strength_apply_index()].wield_w as i32 {
             send_to_char(&mut game.descriptors, ch, "It's too heavy for you to use.\r\n");
         } else {
-            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_WIELD as i32);
+            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_WIELD);
         }
     }
 }
@@ -2609,7 +2609,7 @@ pub fn do_grab(
         let obj = obj.unwrap();
 
         if obj.get_obj_type() == ItemType::Light {
-            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_LIGHT as i32);
+            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_LIGHT);
         } else {
             if !obj.can_wear(WearFlags::HOLD)
                 && obj.get_obj_type() != ItemType::Wand
@@ -2619,7 +2619,7 @@ pub fn do_grab(
             {
                 send_to_char(&mut game.descriptors, ch, "You can't hold that.\r\n");
             } else {
-                perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_HOLD as i32);
+                perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_HOLD);
             }
         }
     }
@@ -2631,13 +2631,13 @@ fn perform_remove(
     chars: &mut Depot<CharData>,
     objs: &mut Depot<ObjData>,
     chid: DepotId,
-    pos: i8,
+    pos: usize,
 ) {
     let ch = chars.get(chid);
     let oid;
 
     if {
-        oid = ch.get_eq(pos as i8);
+        oid = ch.get_eq(pos);
         oid.is_none()
     } {
         error!("SYSERR: perform_remove: bad pos {} passed.", pos);

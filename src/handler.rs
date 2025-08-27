@@ -379,8 +379,8 @@ impl DB {
         if ch.fighting_id().is_some() {
             self.stop_fighting(ch);
         }
-        if ch.get_eq(WEAR_LIGHT as i8).is_some() {
-            let light = objs.get(ch.get_eq(WEAR_LIGHT as i8).unwrap());
+        if ch.get_eq(WEAR_LIGHT).is_some() {
+            let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
             if light.get_obj_type() == ItemType::Light {
                 if light.get_obj_val(2) != 0 {
                     let in_room = ch.in_room();
@@ -415,8 +415,8 @@ impl DB {
         ch.set_in_room(room);
         let ch = chars.get(chid);
 
-        if ch.get_eq(WEAR_LIGHT as i8).is_some() {
-            let light = objs.get(ch.get_eq(WEAR_LIGHT as i8).unwrap());
+        if ch.get_eq(WEAR_LIGHT).is_some() {
+            let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
             if light.get_obj_type() == ItemType::Light {
                 if light.get_obj_val(2) != 0 {
                     let in_room = ch.in_room();
@@ -468,8 +468,8 @@ pub fn obj_from_char(chars: &mut Depot<CharData>, obj: &mut ObjData) {
 }
 
 /* Return the effect of a piece of armor in position eq_pos */
-fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: i16) -> i32 {
-    let eq_id = ch.get_eq(eq_pos as i8);
+fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: usize) -> i32 {
+    let eq_id = ch.get_eq(eq_pos);
     if eq_id.is_none() {
         panic!(
             "apply_ac cannot find eq at pos {} for {}",
@@ -524,11 +524,11 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
         objs: &mut Depot<ObjData>,
         chid: DepotId,
         oid: DepotId,
-        pos: i8,
+        pos: usize,
     ) {
         let ch = chars.get_mut(chid);
 
-        if pos < 0 || pos >= NUM_WEARS {
+        if pos >= NUM_WEARS {
             panic!("Invalid position in equip_char: {}", pos);
         }
 
@@ -584,12 +584,12 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
         obj.worn_on = pos as i16;
 
         if obj.get_obj_type() == ItemType::Armor {
-            let armor = apply_ac(objs, ch, pos as i16);
+            let armor = apply_ac(objs, ch, pos);
             ch.set_ac(ch.get_ac() - armor as i16);
         }
         let obj = objs.get_mut(oid);
         if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ItemType::Light {
+            if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light {
                 if obj.get_obj_val(2) != 0 {
                     /* if light is ON */
                     db.world[ch.in_room() as usize].light += 1;
@@ -618,12 +618,11 @@ impl DB {
         chars: &mut Depot<CharData>,
         objs: &mut Depot<ObjData>,
         chid: DepotId,
-        pos: i8,
+        pos: usize,
     ) -> Option<DepotId> {
         let ch = chars.get_mut(chid);
-        if pos < 0 || pos > NUM_WEARS || ch.get_eq(pos).is_none() {
-            //core_dump();
-            return None;
+        if pos > NUM_WEARS || ch.get_eq(pos).is_none() {
+            panic!("Invalid position in unequip_char: {}", pos);
         }
 
         let oid = ch.get_eq(pos).unwrap();
@@ -631,12 +630,12 @@ impl DB {
         obj.worn_by = None;
         obj.worn_on = -1;
         if obj.get_obj_type() == ItemType::Armor {
-            let armor = apply_ac(objs, ch, pos as i16);
+            let armor = apply_ac(objs, ch, pos);
             ch.set_ac(ch.get_ac() + armor as i16);
         }
         let obj = objs.get_mut(oid);
         if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT as i8 && obj.get_obj_type() == ItemType::Light {
+            if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light {
                 if obj.get_obj_val(2) != 0 {
                     let ch_in_room = ch.in_room();
                     self.world[ch_in_room as usize].light -= 1;
@@ -896,7 +895,7 @@ impl DB {
         let tch_id = &objs.get(oid).worn_by;
         if tch_id.is_some() {
             if self
-                .unequip_char(chars, objs, tch_id.unwrap(), objs.get(oid).worn_on as i8)
+                .unequip_char(chars, objs, tch_id.unwrap(), objs.get(oid).worn_on as usize)
                 .unwrap()
                 != oid
             {
@@ -953,7 +952,7 @@ fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
     ) {
         let ch = chars.get(chid);
         let i;
-        let light_oid = ch.get_eq(WEAR_LIGHT as i8);
+        let light_oid = ch.get_eq(WEAR_LIGHT);
 
         if light_oid.is_some() {
             let light_oid = light_oid.unwrap();
@@ -1571,7 +1570,7 @@ impl Game {
         arg: &str,
         number: Option<&mut i32>,
         equipment: &[Option<DepotId>],
-    ) -> Option<i8> {
+    ) -> Option<usize> {
         let equipment = equipment;
         let mut num;
         let t: &mut i32;
@@ -1596,7 +1595,7 @@ impl Game {
                     *number -= 1;
                     *number == 0
                 } {
-                    return Some(j as i8);
+                    return Some(j);
                 }
             }
         }

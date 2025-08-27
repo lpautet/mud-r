@@ -2681,7 +2681,7 @@ impl Game {
                         } else {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             oid = db.read_object(objs, nr, LoadType::Real);
-                            let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
+                            let pos = db.zone_table[zone].cmd[cmd_no].arg3 as usize;
                             equip_char(&mut self.descriptors, chars,db, objs, mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;
                         }

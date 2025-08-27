@@ -294,7 +294,7 @@ pub fn do_steal(
         percent = 101; /* Failure */
     }
     let mut obj;
-    let mut the_eq_pos = -1;
+    let mut the_eq_pos:i16 = -1;
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
         if {
@@ -310,7 +310,7 @@ pub fn do_steal(
                     && can_see_obj(&game.descriptors, chars, db, ch, objs.get(vict.get_eq(eq_pos).unwrap()))
                 {
                     obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
-                    the_eq_pos = eq_pos;
+                    the_eq_pos = eq_pos as i16;
                 }
             }
             if obj.is_none() {
@@ -349,7 +349,7 @@ pub fn do_steal(
                         Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
-                    let eqid = db.unequip_char(chars, objs,vict.id(), the_eq_pos).unwrap();
+                    let eqid = db.unequip_char(chars, objs,vict.id(), the_eq_pos as usize).unwrap();
                     let eq = objs.get_mut(eqid);
                     let ch = chars.get_mut(chid);
                     obj_to_char(eq, ch);
@@ -1060,7 +1060,7 @@ pub fn do_use(
         );
         return;
     }
-    let mut mag_item = ch.get_eq(WEAR_HOLD as i8).map(|i| objs.get(i));
+    let mut mag_item = ch.get_eq(WEAR_HOLD).map(|i| objs.get(i));
 
     if mag_item.is_none() || !isname(&arg, mag_item.unwrap().name.as_ref()) {
         match subcmd {
