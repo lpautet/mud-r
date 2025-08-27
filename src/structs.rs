@@ -101,10 +101,10 @@ impl SectorType {
     }
 }
 
-/* Player conditions */
-pub const DRUNK: i32 = 0;
-pub const FULL: i32 = 1;
-pub const THIRST: i32 = 2;
+/* Player conditions: are indexes into char_specials.saved.conditions */
+pub const DRUNK: usize = 0;
+pub const FULL: usize = 1;
+pub const THIRST: usize = 2;
 
 /* Sun state for weather_data */
 pub const SUN_DARK: i32 = 0;

@@ -417,14 +417,14 @@ impl CharData {
     pub fn set_mob_rnum(&mut self, val: MobRnum) {
         self.nr = val;
     }
-    pub fn get_cond(&self, i: i32) -> i16 {
-        self.player_specials.saved.conditions[i as usize]
+    pub fn get_cond(&self, i: usize) -> i16 {
+        self.player_specials.saved.conditions[i]
     }
-    pub fn set_cond(&mut self, i: i32, val: i16) {
-        self.player_specials.saved.conditions[i as usize] = val;
+    pub fn set_cond(&mut self, i: usize, val: i16) {
+        self.player_specials.saved.conditions[i] = val;
     }
-    pub fn incr_cond(&mut self, i: i32, val: i16) {
-        self.player_specials.saved.conditions[i as usize] += val;
+    pub fn incr_cond(&mut self, i: usize, val: i16) {
+        self.player_specials.saved.conditions[i] += val;
     }
     pub fn get_loadroom(&self) -> RoomVnum {
         self.player_specials.saved.load_room

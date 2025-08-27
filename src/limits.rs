@@ -363,7 +363,7 @@ pub fn gain_exp_regardless(
     pub(crate) fn gain_condition(
         descs: &mut Depot<DescriptorData>,
         ch: &mut CharData,
-        condition: i32,
+        condition: usize,
         value: i32,
     ) {
         if ch.is_npc() || ch.get_cond(condition) == -1 {

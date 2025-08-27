@@ -4433,7 +4433,7 @@ fn perform_set(
         }
         29 | 30 | 31 => {
             if val_arg == "off" {
-                vict.set_cond((mode - 29) as i32, -1); /* warning: magic number here */
+                vict.set_cond(mode - 29, -1); /* warning: magic number here */
                 let vict = chars.get(vict_id);
                 let ch = chars.get(chid);
                 send_to_char(descs, 
@@ -4448,7 +4448,7 @@ fn perform_set(
             } else if is_number(val_arg) {
                 value = val_arg.parse::<i32>().unwrap();
                 value = range!(value, 0, 24);
-                vict.set_cond((mode - 29) as i32, value as i16); /* and here too */
+                vict.set_cond(mode - 29, value as i16); /* and here too */
                 let vict = chars.get(vict_id);
                 let ch = chars.get(chid);
                 send_to_char(descs, 
