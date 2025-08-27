@@ -117,10 +117,14 @@ pub enum SunState {
 }
 
 /* Sky conditions for weather_data */
-pub const SKY_CLOUDLESS: i32 = 0;
-pub const SKY_CLOUDY: i32 = 1;
-pub const SKY_RAINING: i32 = 2;
-pub const SKY_LIGHTNING: i32 = 3;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum SkyCondition {
+    Cloudless = 0,
+    Cloudy = 1,
+    Raining = 2,
+    Lightning = 3,
+}
 
 /* Rent codes */
 // pub const RENT_UNDEF: i32 = 0;
@@ -1065,7 +1069,7 @@ pub struct WeatherData {
     /* How is the pressure ( Mb ) */
     pub change: i32,
     /* How fast and what way does it change. */
-    pub sky: i32,
+    pub sky: SkyCondition,
     /* How is the sky. */
     pub sunlight: SunState,
     /* And how much sun. */

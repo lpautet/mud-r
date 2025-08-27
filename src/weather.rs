@@ -11,7 +11,7 @@
 
 use crate::depot::Depot;
 use crate::structs::{
-    SunState, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING
+    SunState, SkyCondition
 };
 use crate::util::dice;
 use crate::{CharData, Game, DB};
@@ -89,7 +89,7 @@ impl Game {
         let mut change = 0;
 
         match db.weather_info.sky {
-            SKY_CLOUDLESS => {
+            SkyCondition::Cloudless => {
                 if db.weather_info.pressure < 990 {
                     change = 1;
                 } else if db.weather_info.pressure < 1010 {
@@ -98,7 +98,7 @@ impl Game {
                     }
                 }
             }
-            SKY_CLOUDY => {
+            SkyCondition::Cloudy => {
                 if db.weather_info.pressure < 970 {
                     change = 2;
                 } else if db.weather_info.pressure < 990 {
@@ -113,7 +113,7 @@ impl Game {
                     }
                 }
             }
-            SKY_RAINING => {
+            SkyCondition::Raining => {
                 if db.weather_info.pressure < 970 {
                     if dice(1, 4) == 1 {
                         change = 4;
@@ -128,7 +128,7 @@ impl Game {
                     }
                 }
             }
-            SKY_LIGHTNING => {
+            SkyCondition::Lightning => {
                 if db.weather_info.pressure > 1010 {
                     change = 6;
                 } else if db.weather_info.pressure > 990 {
@@ -137,43 +137,38 @@ impl Game {
                     }
                 }
             }
-
-            _ => {
-                change = 0;
-                db.weather_info.sky = SKY_CLOUDLESS;
-            }
         }
 
         match change {
             0 => {}
             1 => {
                 self.send_to_outdoor(chars, db,"The sky starts to get cloudy.\r\n");
-                db.weather_info.sky = SKY_CLOUDY;
+                db.weather_info.sky = SkyCondition::Cloudy;
             }
 
             2 => {
                 self.send_to_outdoor(chars, db,"It starts to rain.\r\n");
-                db.weather_info.sky = SKY_RAINING;
+                db.weather_info.sky = SkyCondition::Raining;
             }
 
             3 => {
                 self.send_to_outdoor(chars, db,"The clouds disappear.\r\n");
-                db.weather_info.sky = SKY_CLOUDLESS;
+                db.weather_info.sky = SkyCondition::Cloudless;
             }
 
             4 => {
                 self.send_to_outdoor(chars, db,"Lightning starts to show in the sky.\r\n");
-                db.weather_info.sky = SKY_LIGHTNING;
+                db.weather_info.sky = SkyCondition::Lightning;
             }
 
             5 => {
                 self.send_to_outdoor(chars, db,"The rain stops.\r\n");
-                db.weather_info.sky = SKY_CLOUDY;
+                db.weather_info.sky = SkyCondition::Cloudy;
             }
 
             6 => {
                 self.send_to_outdoor(chars, db,"The lightning stops.\r\n");
-                db.weather_info.sky = SKY_RAINING;
+                db.weather_info.sky = SkyCondition::Raining;
             }
             _ => {}
         }

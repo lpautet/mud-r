@@ -1301,7 +1301,7 @@ pub fn do_weather(
                     "Pressure: {} (change: {}), Sky: {} ({})\r\n",
                     db.weather_info.pressure,
                     db.weather_info.change,
-                    db.weather_info.sky,
+                    db.weather_info.sky as usize,
                     SKY_LOOK[db.weather_info.sky as usize],
                 )
                 .as_str(),
