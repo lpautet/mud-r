@@ -32,7 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectedType, CharData, ExtraFlags, MobVnum, AFF_BLIND, AFF_CHARM, AFF_CURSE, AFF_DETECT_ALIGN, AFF_DETECT_INVIS, AFF_DETECT_MAGIC, AFF_GROUP, AFF_INFRAVISION, AFF_INVISIBLE, AFF_POISON, AFF_PROTECT_EVIL, AFF_SANCTUARY, AFF_SENSE_LIFE, AFF_SLEEP, AFF_WATERWALK, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
+    AffectFlags, AffectedType, CharData, ExtraFlags, MobVnum, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -325,12 +325,12 @@ pub fn mag_affects(
         duration: 0,
         modifier: 0,
         location: 0,
-        bitvector: 0,
+        bitvector: AffectFlags::empty(),
     }; MAX_SPELL_AFFECTS as usize];
 
     for i in 0..MAX_SPELL_AFFECTS as usize {
         af[i]._type = spellnum as i16;
-        af[i].bitvector = 0;
+        af[i].bitvector = AffectFlags::empty();
         af[i].modifier = 0;
         af[i].location = APPLY_NONE as u8;
     }
@@ -381,12 +381,12 @@ pub fn mag_affects(
             af[0].location = APPLY_HITROLL as u8;
             af[0].modifier = -4;
             af[0].duration = 2;
-            af[0].bitvector = AFF_BLIND;
+            af[0].bitvector = AffectFlags::BLIND;
 
             af[1].location = APPLY_AC as u8;
             af[1].modifier = 40;
             af[1].duration = 2;
-            af[1].bitvector = AFF_BLIND;
+            af[1].bitvector = AffectFlags::BLIND;
 
             to_room = "$n seems to be blinded!";
             to_vict = "You have been blinded!";
@@ -400,12 +400,12 @@ pub fn mag_affects(
             af[0].location = APPLY_HITROLL as u8;
             af[0].duration = (1 + (ch.get_level() / 2)) as i16;
             af[0].modifier = -1;
-            af[0].bitvector = AFF_CURSE;
+            af[0].bitvector = AffectFlags::CURSE;
 
             af[1].location = APPLY_DAMROLL as u8;
             af[1].duration = (1 + (ch.get_level() / 2)) as i16;
             af[1].modifier = -1;
-            af[1].bitvector = AFF_CURSE;
+            af[1].bitvector = AffectFlags::CURSE;
 
             accum_duration = true;
             accum_affect = true;
@@ -414,25 +414,25 @@ pub fn mag_affects(
         }
         SPELL_DETECT_ALIGN => {
             af[0].duration = 12 + level as i16;
-            af[0].bitvector = AFF_DETECT_ALIGN;
+            af[0].bitvector = AffectFlags::DETECT_ALIGN;
             accum_duration = true;
             to_vict = "Your eyes tingle.";
         }
         SPELL_DETECT_INVIS => {
             af[0].duration = 12 + level as i16;
-            af[0].bitvector = AFF_DETECT_INVIS;
+            af[0].bitvector = AffectFlags::DETECT_INVIS;
             accum_duration = true;
             to_vict = "Your eyes tingle.";
         }
         SPELL_DETECT_MAGIC => {
             af[0].duration = 12 + level as i16;
-            af[0].bitvector = AFF_DETECT_MAGIC;
+            af[0].bitvector = AffectFlags::DETECT_MAGIC;
             accum_duration = true;
             to_vict = "Your eyes tingle.";
         }
         SPELL_INFRAVISION => {
             af[0].duration = 12 + level as i16;
-            af[0].bitvector = AFF_INFRAVISION;
+            af[0].bitvector = AffectFlags::INFRAVISION;
             accum_duration = true;
             to_vict = "Your eyes glow red.";
             to_room = "$n's eyes glow red.";
@@ -445,7 +445,7 @@ pub fn mag_affects(
             af[0].duration = 12 + (ch.get_level() as i16 / 4);
             af[0].modifier = -40;
             af[0].location = APPLY_AC as u8;
-            af[0].bitvector = AFF_INVISIBLE;
+            af[0].bitvector = AffectFlags::INVISIBLE;
             accum_duration = true;
             to_vict = "You vanish.";
             to_room = "$n slowly fades out of existence.";
@@ -458,19 +458,19 @@ pub fn mag_affects(
             af[0].location = APPLY_STR as u8;
             af[0].duration = ch.get_level() as i16;
             af[0].modifier = -2;
-            af[0].bitvector = AFF_POISON;
+            af[0].bitvector = AffectFlags::POISON;
             to_vict = "You feel very sick.";
             to_room = "$n gets violently ill!";
         }
         SPELL_PROT_FROM_EVIL => {
             af[0].duration = 24;
-            af[0].bitvector = AFF_PROTECT_EVIL;
+            af[0].bitvector = AffectFlags::PROTECT_EVIL;
             accum_duration = true;
             to_vict = "You feel invulnerable!";
         }
         SPELL_SANCTUARY => {
             af[0].duration = 4;
-            af[0].bitvector = AFF_SANCTUARY;
+            af[0].bitvector = AffectFlags::SANCTUARY;
 
             accum_duration = true;
             to_vict = "A white aura momentarily surrounds you.";
@@ -488,7 +488,7 @@ pub fn mag_affects(
             }
 
             af[0].duration = 4 + (ch.get_level() as i16 / 4);
-            af[0].bitvector = AFF_SLEEP;
+            af[0].bitvector = AffectFlags::SLEEP;
 
             if victim.as_ref().unwrap().get_pos() > POS_SLEEPING {
                 send_to_char(&mut game.descriptors, 
@@ -516,12 +516,12 @@ pub fn mag_affects(
         SPELL_SENSE_LIFE => {
             to_vict = "Your feel your awareness improve.";
             af[0].duration = ch.get_level() as i16;
-            af[0].bitvector = AFF_SENSE_LIFE;
+            af[0].bitvector = AffectFlags::SENSE_LIFE;
             accum_duration = true;
         }
         SPELL_WATERWALK => {
             af[0].duration = 24;
-            af[0].bitvector = AFF_WATERWALK;
+            af[0].bitvector = AffectFlags::WATERWALK;
             accum_duration = true;
             to_vict = "You feel webbing between your toes.";
         }
@@ -559,8 +559,9 @@ pub fn mag_affects(
     }
 
     let victim = chars.get_mut(victim_id.unwrap());
-    for i in 0..MAX_SPELL_AFFECTS as usize {
-        if af[i].bitvector != 0 || af[i].location != APPLY_NONE as u8 {
+    for i in 0..MAX_SPELL_AFFECTS as usize {        
+        let flags = af[i].bitvector;
+        if !flags.is_empty() || af[i].location != APPLY_NONE as u8 {
             affect_join( objs,
                 victim,
                 &mut af[i],
@@ -625,7 +626,7 @@ pub fn mag_groups(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     let chid = chid.unwrap();
     let ch = chars.get(chid);
 
-    if !ch.aff_flagged(AFF_GROUP) {
+    if !ch.aff_flagged(AffectFlags::GROUP) {
         return;
     }
     let k_id;
@@ -642,7 +643,7 @@ pub fn mag_groups(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         if tch.in_room() != ch.in_room() {
             continue;
         }
-        if !tch.aff_flagged(AFF_GROUP) {
+        if !tch.aff_flagged(AffectFlags::GROUP) {
             continue;
         }
         if chid == tch_id {
@@ -651,7 +652,7 @@ pub fn mag_groups(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         perform_mag_groups(game, chars, db, texts, objs,level, chid, tch_id, spellnum, savetype);
     }
     let k = chars.get(k_id);
-    if k_id != chid && k.aff_flagged(AFF_GROUP) {
+    if k_id != chid && k.aff_flagged(AffectFlags::GROUP) {
         perform_mag_groups(game, chars, db, texts, objs,level, chid, k_id, spellnum, savetype);
     }
     perform_mag_groups(game, chars, db, texts, objs, level, chid, chid, spellnum, savetype);
@@ -739,7 +740,7 @@ pub fn mag_areas(
         if !PK_ALLOWED && !ch.is_npc() && !tch.is_npc() {
             continue;
         }
-        if !ch.is_npc() && tch.is_npc() && tch.aff_flagged(AFF_CHARM) {
+        if !ch.is_npc() && tch.is_npc() && tch.aff_flagged(AffectFlags::CHARM) {
             continue;
         }
 
@@ -849,7 +850,7 @@ pub fn mag_summons(
         }
     }
 
-    if ch.aff_flagged(AFF_CHARM) {
+    if ch.aff_flagged(AffectFlags::CHARM) {
         send_to_char(&mut game.descriptors, ch, "You are too giddy to have any followers!\r\n");
         return;
     }
@@ -875,7 +876,7 @@ pub fn mag_summons(
         let mob = chars.get_mut(mob_id);
         mob.set_is_carrying_w(0);
         mob.set_is_carrying_n(0);
-        mob.set_aff_flags_bits(AFF_CHARM);
+        mob.set_aff_flags_bits(AffectFlags::CHARM);
         if spellnum == SPELL_CLONE {
             /* Don't mess up the prototype; use new string copies. */
             let ch = chars.get(chid);

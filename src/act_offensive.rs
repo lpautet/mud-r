@@ -21,8 +21,7 @@ use crate::spells::{
     SKILL_BACKSTAB, SKILL_BASH, SKILL_KICK, SKILL_RESCUE, TYPE_HIT, TYPE_PIERCE, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AFF_CHARM, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS, POS_FIGHTING, POS_SITTING,
-    POS_STANDING, PULSE_VIOLENCE, RoomFlags, WEAR_WIELD,
+     AffectFlags, RoomFlags, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS, POS_FIGHTING, POS_SITTING, POS_STANDING, PULSE_VIOLENCE, WEAR_WIELD
 };
 use crate::util::{can_see, rand_number};
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -150,7 +149,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
             Some(VictimRef::Char(vict)),
             TO_ROOM,
         );
-    } else if ch.aff_flagged(AFF_CHARM)
+    } else if ch.aff_flagged(AffectFlags::CHARM)
         && ch.master.unwrap() == vict.unwrap().id()
     {
         let vict = vict.unwrap();
@@ -176,7 +175,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
             }
             let ch = chars.get(chid);
             let vict = chars.get(vict_id);
-            if ch.aff_flagged(AFF_CHARM)
+            if ch.aff_flagged(AffectFlags::CHARM)
                 && !chars.get(ch.master.unwrap()).is_npc()
                 && !vict.is_npc()
             {
@@ -348,7 +347,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
     } else if vict.is_some() && chid == vict.unwrap().id() {
         send_to_char(&mut game.descriptors, ch, "You obviously suffer from skitzofrenia.\r\n");
     } else {
-        if ch.aff_flagged(AFF_CHARM) {
+        if ch.aff_flagged(AffectFlags::CHARM) {
             send_to_char(&mut game.descriptors, ch,
                 "Your superior would not aprove of you giving orders.\r\n",
             );
@@ -368,7 +367,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
             );
             if vict.master.is_some()
                 && vict.master.unwrap() != chid
-                || !vict.aff_flagged(AFF_CHARM)
+                || !vict.aff_flagged(AffectFlags::CHARM)
             {
                 act(&mut game.descriptors, chars, db,
                     "$n has an indifferent look.",
@@ -392,7 +391,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 let follower = chars.get(k_id.follower);
                 let ch = chars.get(chid);
                 if ch.in_room() == follower.in_room() {
-                    if follower.aff_flagged(AFF_CHARM) {
+                    if follower.aff_flagged(AffectFlags::CHARM) {
                         found = true;
                         command_interpreter(game,db, chars, texts, objs,k_id.follower, &message);
                     }

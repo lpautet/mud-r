@@ -50,9 +50,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, AFF_CHARM, AFF_GROUP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
-    LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    PULSE_VIOLENCE, RoomFlags,
+    AffectFlags, CharData, RoomFlags, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
 use crate::util::{ has_spell_routine, rand_number};
@@ -1029,7 +1027,7 @@ pub fn cast_spell(
         }
         return 0;
     }
-    if ch.aff_flagged(AFF_CHARM)
+    if ch.aff_flagged(AffectFlags::CHARM)
         && tch_id.is_some()
         && ch.master.unwrap() == tch_id.unwrap()
     {
@@ -1044,7 +1042,7 @@ pub fn cast_spell(
         send_to_char(&mut game.descriptors, ch, "You cannot cast this spell upon yourself!\r\n");
         return 0;
     }
-    if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AFF_GROUP) {
+    if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(&mut game.descriptors, ch,
             "You can't cast this spell if you're not in a group!\r\n",
         );

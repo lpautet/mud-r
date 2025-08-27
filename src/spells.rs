@@ -21,12 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectedType, RoomRnum, AFF_CHARM, AFF_POISON, AFF_SANCTUARY, APPLY_DAMROLL,
-    APPLY_HITROLL, APPLY_NONE, ExtraFlags, ITEM_ARMOR, ITEM_DRINKCON,
-    ITEM_FOOD, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
-    ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE,
-    MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
-    RoomFlags, SEX_MALE,
+    AffectFlags, AffectedType, ExtraFlags, RoomFlags, RoomRnum, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, ITEM_ARMOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -581,13 +576,13 @@ pub fn spell_charm(
         send_to_char(&mut game.descriptors, ch, "You like yourself even better!\r\n");
     } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
         send_to_char(&mut game.descriptors, ch, "You fail because SUMMON protection is on!\r\n");
-    } else if victim.aff_flagged(AFF_SANCTUARY) {
+    } else if victim.aff_flagged(AffectFlags::SANCTUARY) {
         send_to_char(&mut game.descriptors, ch, "Your victim is protected by sanctuary!\r\n");
     } else if victim.mob_flagged(MOB_NOCHARM) {
         send_to_char(&mut game.descriptors, ch, "Your victim resists!\r\n");
-    } else if ch.aff_flagged(AFF_CHARM) {
+    } else if ch.aff_flagged(AffectFlags::CHARM) {
         send_to_char(&mut game.descriptors, ch, "You can't have any followers of your own!\r\n");
-    } else if victim.aff_flagged(AFF_CHARM) || level < victim.get_level() as i32 {
+    } else if victim.aff_flagged(AffectFlags::CHARM) || level < victim.get_level() as i32 {
         send_to_char(&mut game.descriptors, ch, "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
@@ -607,7 +602,7 @@ pub fn spell_charm(
             duration: 24 * 2,
             modifier: 0,
             location: 0,
-            bitvector: AFF_CHARM,
+            bitvector: AffectFlags::CHARM,
         };
         let ch = chars.get(chid);
         if ch.get_cha() != 0 {
@@ -657,8 +652,8 @@ pub fn spell_identify(
             .as_str(),
         );
 
-        if objs.get(oid).get_obj_affect() != 0 {
-            sprintbit(objs.get(oid).get_obj_affect(), &AFFECTED_BITS, &mut bitbuf);
+        if !objs.get(oid).get_obj_affect().is_empty() {
+            sprintbit(objs.get(oid).get_obj_affect().bits() as i64, &AFFECTED_BITS, &mut bitbuf);
             send_to_char(&mut game.descriptors, ch,
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
@@ -902,13 +897,13 @@ pub fn spell_detect_poison(
         let chid = chid.unwrap();
         let ch = chars.get(chid);
         if chid == victim_id {
-            if victim.aff_flagged(AFF_POISON) {
+            if victim.aff_flagged(AffectFlags::POISON) {
                 send_to_char(&mut game.descriptors, ch, "You can sense poison in your blood.\r\n");
             } else {
                 send_to_char(&mut game.descriptors, ch, "You feel healthy.\r\n");
             }
         } else {
-            if victim.aff_flagged(AFF_POISON) {
+            if victim.aff_flagged(AffectFlags::POISON) {
                 act(&mut game.descriptors, chars, db,
                     "You sense that $E is poisoned.",
                     false,

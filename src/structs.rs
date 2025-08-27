@@ -469,7 +469,7 @@ pub struct CharSpecialDataSaved {
     /* player's idnum; -1 for mobiles	*/
     pub act: i64,
     /* act flag for NPC's; player flag for PC's */
-    pub affected_by: i64,
+    pub affected_by: AffectFlags,
     /* Bitvector for spells/skills affected by */
     pub apply_saving_throw: [i16; 5],
     /* Saving throw (Bonuses)		*/
@@ -662,7 +662,7 @@ pub struct ObjFlagData {
     /* Cost to keep pr. real day        */
     pub timer: i32,
     /* Timer for object                 */
-    pub bitvector: i64,
+    pub bitvector: AffectFlags,
     /* To set chars bits                */
 }
 
@@ -781,7 +781,7 @@ pub struct AffectedType {
     /* This is added to apropriate ability     */
     pub location: u8,
     /* Tells which ability to change(APPLY_XXX)*/
-    pub bitvector: i64,
+    pub bitvector: AffectFlags,
     /* Tells which bits to set (AFF_XXX) */
 }
 
@@ -796,7 +796,7 @@ pub struct ObjFileElem {
     pub extra_flags: ExtraFlags,
     pub weight: i32,
     pub timer: i32,
-    pub bitvector: i64,
+    pub bitvector: AffectFlags,
     pub affected: [ObjAffectedType; MAX_OBJ_AFFECT as usize],
 }
 
@@ -862,28 +862,29 @@ pub const NUM_OF_DIRS: usize = 6; /* number of directions in a room (nsewud) */
 // pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */
 /* Affect bits: used in char_data.char_specials.saved.affected_by */
 /* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
-pub const AFF_BLIND: i64 = 1 << 0; /* (R) Char is blind		*/
-pub const AFF_INVISIBLE: i64 = 1 << 1; /* Char is invisible		*/
-pub const AFF_DETECT_ALIGN: i64 = 1 << 2; /* Char is sensitive to align*/
-pub const AFF_DETECT_INVIS: i64 = 1 << 3; /* Char can see invis chars  */
-pub const AFF_DETECT_MAGIC: i64 = 1 << 4; /* Char is sensitive to magic*/
-pub const AFF_SENSE_LIFE: i64 = 1 << 5; /* Char can sense hidden life*/
-pub const AFF_WATERWALK: i64 = 1 << 6; /* Char can walk on water	*/
-pub const AFF_SANCTUARY: i64 = 1 << 7; /* Char protected by sanct.	*/
-pub const AFF_GROUP: i64 = 1 << 8; /* (R) Char is grouped	*/
-pub const AFF_CURSE: i64 = 1 << 9; /* Char is cursed		*/
-pub const AFF_INFRAVISION: i64 = 1 << 10; /* Char can see in dark	*/
-pub const AFF_POISON: i64 = 1 << 11; /* (R) Char is poisoned	*/
-pub const AFF_PROTECT_EVIL: i64 = 1 << 12; /* Char protected from evil  */
-// pub const AFF_PROTECT_GOOD: i64 = 1 << 13; /* Char protected from good  */
-pub const AFF_SLEEP: i64 = 1 << 14; /* (R) Char magically asleep	*/
-pub const AFF_NOTRACK: i64 = 1 << 15; /* Char can't be tracked	*/
-// pub const AFF_UNUSED16: i64 = 1 << 16; /* Room for future expansion	*/
-// pub const AFF_UNUSED17: i64 = 1 << 17; /* Room for future expansion	*/
-pub const AFF_SNEAK: i64 = 1 << 18; /* Char can move quietly	*/
-pub const AFF_HIDE: i64 = 1 << 19; /* Char is hidden		*/
-// pub const AFF_UNUSED20: i64 = 1 << 20; /* Room for future expansion	*/
-pub const AFF_CHARM: i64 = 1 << 21; /* Char is charmed		*/
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct AffectFlags: i64 {
+        const BLIND = 1 << 0;           /* (R) Char is blind */
+        const INVISIBLE = 1 << 1;       /* Char is invisible */
+        const DETECT_ALIGN = 1 << 2;    /* Char is sensitive to align */
+        const DETECT_INVIS = 1 << 3;    /* Char can see invis chars */
+        const DETECT_MAGIC = 1 << 4;    /* Char is sensitive to magic */
+        const SENSE_LIFE = 1 << 5;      /* Char can sense hidden life */
+        const WATERWALK = 1 << 6;       /* Char can walk on water */
+        const SANCTUARY = 1 << 7;       /* Char protected by sanct. */
+        const GROUP = 1 << 8;           /* (R) Char is grouped */
+        const CURSE = 1 << 9;           /* Char is cursed */
+        const INFRAVISION = 1 << 10;    /* Char can see in dark */
+        const POISON = 1 << 11;         /* (R) Char is poisoned */
+        const PROTECT_EVIL = 1 << 12;   /* Char protected from evil */
+        const SLEEP = 1 << 14;          /* (R) Char magically asleep */
+        const NOTRACK = 1 << 15;        /* Char can't be tracked */
+        const SNEAK = 1 << 18;          /* Char can move quietly */
+        const HIDE = 1 << 19;           /* Char is hidden */
+        const CHARM = 1 << 21;          /* Char is charmed */
+    }
+}
 
 /* Player flags: used by char_data.char_specials.act */
 pub const PLR_KILLER: i64 = 1 << 0; /* Player is a player-killer		*/

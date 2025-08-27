@@ -34,7 +34,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, ExtraFlags, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_WEAPON, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE, WEAR_WIELD
+    AffectFlags, CharData, ExtraFlags, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, ITEM_CONTAINER, ITEM_WEAPON, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE, WEAR_WIELD
 };
 use crate::util::{dice, rand_number, stop_follower, BRF};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
@@ -118,7 +118,7 @@ macro_rules! is_weapon {
         if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
             affect_from_char( objs,ch, SPELL_INVISIBLE as i16);
         }
-        ch.remove_aff_flags(AFF_INVISIBLE | AFF_HIDE);
+        ch.remove_aff_flags(AffectFlags::INVISIBLE | AffectFlags::HIDE);
         let ch = chars.get(chid);
         if ch.get_level() < LVL_IMMORT as u8 {
             act(descs, chars, 
@@ -302,7 +302,7 @@ impl Game {
         db.combat_list.push(chid);
         let ch = chars.get_mut(chid);
 
-        if ch.aff_flagged(AFF_SLEEP) {
+        if ch.aff_flagged(AffectFlags::SLEEP) {
             affect_from_char( objs,ch, SPELL_SLEEP as i16);
         }
         let ch= chars.get_mut(chid);
@@ -507,7 +507,7 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mu
     }
     let k = chars.get(k_id);
     let mut tot_members;
-    if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
+    if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
         tot_members = 1;
     } else {
         tot_members = 0;
@@ -515,7 +515,7 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mu
 
     for f in k.followers.iter() {
         let follower = chars.get(f.follower);
-        if follower.aff_flagged(AFF_GROUP) && follower.in_room() == ch.in_room() {
+        if follower.aff_flagged(AffectFlags::GROUP) && follower.in_room() == ch.in_room() {
             tot_members += 1;
         }
     }
@@ -535,14 +535,14 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mu
         base = 0;
     }
 
-    if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
+    if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
         perform_group_gain(k_id, base, victim_id, game, chars, db, texts,objs);
     }
     let k = chars.get(k_id);
     for f in k.followers.clone() {
         let follower = chars.get(f.follower);
         let ch = chars.get(chid);
-        if follower.aff_flagged(AFF_GROUP) && follower.in_room() == ch.in_room() {
+        if follower.aff_flagged(AffectFlags::GROUP) && follower.in_room() == ch.in_room() {
             perform_group_gain(f.follower, base, victim_id, game, chars, db, texts,objs);
         }
     }
@@ -1024,13 +1024,13 @@ impl Game {
 
         /* If the attacker is invisible, he becomes visible */
         let ch = chars.get(chid);
-        if ch.aff_flagged(AFF_INVISIBLE | AFF_HIDE) {
+        if ch.aff_flagged(AffectFlags::INVISIBLE | AffectFlags::HIDE) {
             appear(&mut self.descriptors, chars, db, objs,chid);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
         let victim = chars.get(victim_id);
-        if victim.aff_flagged(AFF_SANCTUARY) && dam >= 2 {
+        if victim.aff_flagged(AffectFlags::SANCTUARY) && dam >= 2 {
             dam /= 2;
         }
 
@@ -1209,7 +1209,7 @@ impl Game {
         if victim.get_pos() == POS_DEAD {
             if chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
                 let ch = chars.get(chid);
-                if ch.aff_flagged(AFF_GROUP) {
+                if ch.aff_flagged(AffectFlags::GROUP) {
                     group_gain(chid, victim_id, self, chars, db, texts,objs);
                 } else {
                     solo_gain(chid, victim_id, self, chars, db, texts,objs);

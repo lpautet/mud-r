@@ -34,17 +34,11 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY,
-    CONT_CLOSED, ExitFlags, ExtraFlags, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
- ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE,
-    NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1,
-    PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
-    PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST,
-    SEX_FEMALE, SEX_MALE, SEX_NEUTRAL,
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, CONT_CLOSED, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
 };
-use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, RoomFlags};
+use crate::structs::{PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, RoomFlags};
 use crate::structs::{
-    AFF_CHARM, AFF_DETECT_INVIS, AFF_INFRAVISION, AFF_POISON, DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
+  DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
     POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
     POS_STUNNED, PRF_SUMMONABLE, THIRST,
 };
@@ -109,10 +103,10 @@ pub const SHOW_OBJ_ACTION: i32 = 2;
         if obj.obj_flagged(ExtraFlags::INVISIBLE) {
             send_to_char(descs, ch, " (invisible)");
         }
-        if obj.obj_flagged(ExtraFlags::BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
+        if obj.obj_flagged(ExtraFlags::BLESS) && ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
             send_to_char(descs, ch, " ..It glows blue!");
         }
-        if obj.obj_flagged(ExtraFlags::MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
+        if obj.obj_flagged(ExtraFlags::MAGIC) && ch.aff_flagged(AffectFlags::DETECT_MAGIC) {
             send_to_char(descs, ch, " ..It glows yellow!");
         }
         if obj.obj_flagged(ExtraFlags::GLOW) {
@@ -302,11 +296,11 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
 
 
     if  i.is_npc() && !i.player.long_descr.is_empty() && i.get_pos() == i.get_default_pos() {
-        if i.aff_flagged(AFF_INVISIBLE) {
+        if i.aff_flagged(AffectFlags::INVISIBLE) {
             send_to_char(descs, ch, "*");
         }
 
-        if ch.aff_flagged(AFF_DETECT_ALIGN) {
+        if ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
             if i.is_evil() {
                 send_to_char(descs, ch, "(Red Aura) ");
             } else if i.is_good() {
@@ -315,7 +309,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
         }
         send_to_char(descs, ch, &i.player.long_descr);
 
-        if i.aff_flagged(AFF_SANCTUARY) {
+        if i.aff_flagged(AffectFlags::SANCTUARY) {
             act(descs, chars, 
                 db,
                 "...$e glows with a bright light!",
@@ -326,7 +320,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
                 TO_VICT,
             );
         }
-        if i.aff_flagged(AFF_BLIND) {
+        if i.aff_flagged(AffectFlags::BLIND) {
             act(descs, chars, 
                 db,
                 "...$e is groping around blindly!",
@@ -354,10 +348,10 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
         send_to_char(descs, ch, format!("{} {}", i.player.name, i.get_title()).as_str());
     }
 
-    if i.aff_flagged(AFF_INVISIBLE) {
+    if i.aff_flagged(AffectFlags::INVISIBLE) {
         send_to_char(descs, ch, " (invisible)");
     }
-    if i.aff_flagged(AFF_HIDE) {
+    if i.aff_flagged(AffectFlags::HIDE) {
         send_to_char(descs, ch, " (hidden)");
     }
     if !i.is_npc() && i.desc.is_none() {
@@ -390,7 +384,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
         }
     }
 
-    if ch.aff_flagged(AFF_DETECT_ALIGN) {
+    if ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
         if i.is_evil() {
             send_to_char(descs, ch, " (Red Aura)");
         } else if i.is_good() {
@@ -399,7 +393,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     }
     send_to_char(descs, ch, "\r\n");
 
-    if i.aff_flagged(AFF_SANCTUARY) {
+    if i.aff_flagged(AffectFlags::SANCTUARY) {
         act(descs, chars, 
             db,
             "...$e glows with a bright light!",
@@ -421,7 +415,7 @@ fn list_char_to_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
                 list_one_char(descs, db,chars, obj, ch);
             } else if db.is_dark(ch.in_room())
                 && !ch.can_see_in_dark()
-                && obj.aff_flagged(AFF_INFRAVISION)
+                && obj.aff_flagged(AffectFlags::INFRAVISION)
             {
                 send_to_char(descs, 
                     ch,
@@ -465,7 +459,7 @@ pub fn do_exits(
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    if ch.aff_flagged(AFF_BLIND) {
+    if ch.aff_flagged(AffectFlags::BLIND) {
         send_to_char(&mut game.descriptors, ch, "You can't see a damned thing, you're blind!\r\n");
         return;
     }
@@ -524,7 +518,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
     if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(descs, ch, "It is pitch black...\r\n");
         return;
-    } else if ch.aff_flagged(AFF_BLIND) {
+    } else if ch.aff_flagged(AffectFlags::BLIND) {
         send_to_char(descs, ch, "You see nothing but infinite darkness...\r\n");
         return;
     }
@@ -884,7 +878,7 @@ pub fn do_look(
     }
     if ch.get_pos() < POS_SLEEPING {
         send_to_char(&mut game.descriptors, ch, "You can't see anything but stars!\r\n");
-    } else if ch.aff_flagged(AFF_BLIND) {
+    } else if ch.aff_flagged(AffectFlags::BLIND) {
         send_to_char(&mut game.descriptors, ch, "You can't see a damned thing, you're blind!\r\n");
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(&mut game.descriptors, ch, "It is pitch black...\r\n");
@@ -1132,34 +1126,34 @@ pub fn do_score(
     if ch.get_cond(THIRST) == 0 {
         send_to_char(&mut game.descriptors, ch, "You are thirsty.\r\n");
     }
-    if ch.aff_flagged(AFF_BLIND) {
+    if ch.aff_flagged(AffectFlags::BLIND) {
         send_to_char(&mut game.descriptors, ch, "You have been blinded!\r\n");
     }
-    if ch.aff_flagged(AFF_INVISIBLE) {
+    if ch.aff_flagged(AffectFlags::INVISIBLE) {
         send_to_char(&mut game.descriptors, ch, "You are invisible.\r\n");
     }
-    if ch.aff_flagged(AFF_DETECT_INVIS) {
+    if ch.aff_flagged(AffectFlags::DETECT_INVIS) {
         send_to_char(&mut game.descriptors, 
             ch,
             "You are sensitive to the presence of invisible things.\r\n",
         );
     }
-    if ch.aff_flagged(AFF_SANCTUARY) {
+    if ch.aff_flagged(AffectFlags::SANCTUARY) {
         send_to_char(&mut game.descriptors, ch, "You are protected by Sanctuary.\r\n");
     }
-    if ch.aff_flagged(AFF_POISON) {
+    if ch.aff_flagged(AffectFlags::POISON) {
         send_to_char(&mut game.descriptors, ch, "You are poisoned!\r\n");
     }
-    if ch.aff_flagged(AFF_CHARM) {
+    if ch.aff_flagged(AffectFlags::CHARM) {
         send_to_char(&mut game.descriptors, ch, "You have been charmed!\r\n");
     }
     if affected_by_spell(ch, SPELL_ARMOR as i16) {
         send_to_char(&mut game.descriptors, ch, "You feel protected.\r\n");
     }
-    if ch.aff_flagged(AFF_INFRAVISION) {
+    if ch.aff_flagged(AffectFlags::INFRAVISION) {
         send_to_char(&mut game.descriptors, ch, "Your eyes are glowing red.\r\n");
     }
-    if ch.aff_flagged(PRF_SUMMONABLE) {
+    if ch.prf_flagged(PRF_SUMMONABLE) {
         send_to_char(&mut game.descriptors, ch, "You are summonable by other players.\r\n");
     }
 }
@@ -1553,7 +1547,7 @@ pub fn do_who(
 
             if tch.get_invis_lev() != 0 {
                 send_to_char(&mut game.descriptors, ch, format!(" (i{})", tch.get_invis_lev()).as_str());
-            } else if tch.aff_flagged(AFF_INVISIBLE) {
+            } else if tch.aff_flagged(AffectFlags::INVISIBLE) {
                 send_to_char(&mut game.descriptors, ch, " (invis)");
             }
             if tch.plr_flagged(PLR_MAILING) {

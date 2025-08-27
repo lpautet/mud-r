@@ -29,12 +29,7 @@ use crate::interpreter::{
 };
 use crate::spells::SPELL_POISON;
 use crate::structs::{
-    AffectedType, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER,
-    ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY,
-    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ExtraFlags, WearFlags, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
-    PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
-    WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
-    WEAR_WRIST_R,
+    AffectFlags, AffectedType, ExtraFlags, RoomRnum, WearFlags, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
 };
 use crate::util::{can_see_obj, rand_number};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -1717,7 +1712,7 @@ pub fn do_drink(
             duration: (amount * 3) as i16,
             modifier: 0,
             location: APPLY_NONE as u8,
-            bitvector: AFF_POISON,
+            bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);
         affect_join( objs, ch, &mut af, false, false, false, false);
@@ -1865,7 +1860,7 @@ pub fn do_eat(
             duration: (amount * 2) as i16,
             modifier: 0,
             location: APPLY_NONE as u8,
-            bitvector: AFF_POISON,
+            bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);
         affect_join( objs, ch, &mut af, false, false, false, false);

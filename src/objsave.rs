@@ -29,12 +29,7 @@ use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentInfo, ITEM_CONTAINER, ITEM_KEY,
-    ExtraFlags, ITEM_WEAPON, WearFlags, LVL_GOD,
-    LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, RENT_CRASH, RENT_CRYO,
-    RENT_FORCED, RENT_RENTED, RENT_TIMEDOUT, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET,
-    WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT,
-    WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R,
+    AffectFlags, CharData, ExtraFlags, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentInfo, WearFlags, ITEM_CONTAINER, ITEM_KEY, ITEM_WEAPON, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, RENT_CRASH, RENT_CRYO, RENT_FORCED, RENT_RENTED, RENT_TIMEDOUT, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
     can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
@@ -513,7 +508,7 @@ impl ObjFileElem {
             extra_flags: ExtraFlags::empty(),
             weight: 0,
             timer: 0,
-            bitvector: 0,
+            bitvector: AffectFlags::empty(),
             affected: [ObjAffectedType {
                 location: 0,
                 modifier: 0,

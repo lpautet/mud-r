@@ -23,8 +23,7 @@ use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    CharData, AFF_POISON, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW,
-    THIRST,
+    AffectFlags, CharData, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST
 };
 use crate::structs::{
     DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
@@ -96,7 +95,7 @@ pub fn mana_gain(ch: &CharData) -> u8 {
         if ch.get_cond(FULL) == 0 || ch.get_cond(THIRST) == 0 {
             gain /= 4;
         }
-        if ch.aff_flagged(AFF_POISON) {
+        if ch.aff_flagged(AffectFlags::POISON) {
             gain /= 4;
         }
     }
@@ -137,7 +136,7 @@ pub fn hit_gain(ch: &CharData) -> u8 {
             gain /= 4;
         }
 
-        if ch.aff_flagged(AFF_POISON) {
+        if ch.aff_flagged(AffectFlags::POISON) {
             gain /= 4;
         }
     }
@@ -176,7 +175,7 @@ pub fn move_gain(ch: &CharData) -> u8 {
             gain /= 4;
         }
 
-        if ch.aff_flagged(AFF_POISON) {
+        if ch.aff_flagged(AffectFlags::POISON) {
             gain /= 4;
         }
     }
@@ -493,7 +492,7 @@ impl Game {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
-                if i.aff_flagged(AFF_POISON) {
+                if i.aff_flagged(AffectFlags::POISON) {
                     if self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1 {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }

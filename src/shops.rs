@@ -30,9 +30,7 @@ use crate::handler::{fname, get_number, get_obj_in_list_num, get_obj_in_list_vis
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
 use crate::structs::{
-    MeRef, CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, AFF_CHARM,
-    ITEM_DRINKCON, ExtraFlags, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
-    NOWHERE,
+    AffectFlags, CharData, ExtraFlags, MeRef, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, ITEM_DRINKCON, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING, NOWHERE
 };
 use crate::util::{can_see, can_see_obj, get_line, sprintbit};
 use crate::{an, is_set,  yesno, Game, PAGE_LENGTH, TO_CHAR, TO_ROOM};
@@ -1435,7 +1433,7 @@ pub fn ok_damage_shopkeeper(game: &mut Game, chars: &mut Depot<CharData>, db: &m
     }
 
     /* Prevent "invincible" shopkeepers if they're charmed. */
-    if victim.aff_flagged(AFF_CHARM) {
+    if victim.aff_flagged(AffectFlags::CHARM) {
         return true;
     }
 

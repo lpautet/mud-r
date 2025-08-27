@@ -40,13 +40,7 @@ use crate::spec_procs::list_skills;
 use crate::spell_parser::mag_objectmagic;
 use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    AffectedType, AFF_CHARM, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE, AFF_SNEAK, APPLY_NONE,
-    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS,
-    PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF,
-    PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
-    PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ,
-    PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, RoomFlags,
-    WEAR_HOLD,
+    AffectFlags, AffectedType, RoomFlags, APPLY_NONE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, WEAR_HOLD
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -184,7 +178,7 @@ pub fn do_sneak(
         return;
     }
     send_to_char(&mut game.descriptors, ch, "Okay, you'll try to move silently for a while.\r\n");
-    if ch.aff_flagged(AFF_SNEAK) {
+    if ch.aff_flagged(AffectFlags::SNEAK) {
         affect_from_char( objs,ch, SKILL_SNEAK as i16);
     }
 
@@ -200,7 +194,7 @@ pub fn do_sneak(
         duration: ch.get_level() as i16,
         modifier: 0,
         location: APPLY_NONE as u8,
-        bitvector: AFF_SNEAK,
+        bitvector: AffectFlags::SNEAK,
     };
 
     affect_to_char( objs, ch, af);
@@ -222,8 +216,8 @@ pub fn do_hide(
 
     send_to_char(&mut game.descriptors, ch, "You attempt to hide yourself.\r\n");
     let ch = chars.get_mut(chid);
-    if ch.aff_flagged(AFF_HIDE) {
-        ch.remove_aff_flags(AFF_HIDE);
+    if ch.aff_flagged(AffectFlags::HIDE) {
+        ch.remove_aff_flags(AffectFlags::HIDE);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
@@ -233,7 +227,7 @@ pub fn do_hide(
     {
         return;
     }
-    ch.set_aff_flags_bits(AFF_HIDE);
+    ch.set_aff_flags_bits(AffectFlags::HIDE);
 }
 
 pub fn do_steal(
@@ -491,7 +485,7 @@ pub fn do_visible(
         return;
     }
     let ch = chars.get(chid);
-    if ch.aff_flagged(AFF_INVISIBLE) {
+    if ch.aff_flagged(AffectFlags::INVISIBLE) {
         appear(&mut game.descriptors, chars, db, objs,chid);
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, ch, "You break the spell of invisibility.\r\n");
@@ -545,11 +539,11 @@ pub fn do_title(
 fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId, vict_id: DepotId) -> i32 {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    if vict.aff_flagged(AFF_GROUP) || !can_see(descs, chars, db, ch, vict) {
+    if vict.aff_flagged(AffectFlags::GROUP) || !can_see(descs, chars, db, ch, vict) {
         return 0;
     }
     let vict = chars.get_mut(vict_id);
-    vict.set_aff_flags_bits(AFF_GROUP);
+    vict.set_aff_flags_bits(AffectFlags::GROUP);
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if chid != vict_id {
@@ -586,7 +580,7 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
 
 fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
     let ch = chars.get(chid);
-    if !ch.aff_flagged(AFF_GROUP) {
+    if !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(descs, ch, "But you are not the member of a group!\r\n");
     } else {
         send_to_char(descs, ch, "Your group consists of:\r\n");
@@ -598,7 +592,7 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
         };
         let k = chars.get(k_id);
 
-        if k.aff_flagged(AFF_GROUP) {
+        if k.aff_flagged(AffectFlags::GROUP) {
             let buf = format!(
                 "     [{:3}H {:3}M {:3}V] [{:2} {}] $N (Head of group)",
                 k.get_hit(),
@@ -619,7 +613,7 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
         }
         for f in &k.followers {
             let follower = chars.get(f.follower);
-            if !follower.aff_flagged(AFF_GROUP) {
+            if !follower.aff_flagged(AffectFlags::GROUP) {
                 continue;
             }
 
@@ -713,7 +707,7 @@ pub fn do_group(
         let vict = vict.unwrap();
         let ch = chars.get(chid);
 
-        if !vict.aff_flagged(AFF_GROUP) {
+        if !vict.aff_flagged(AffectFlags::GROUP) {
             perform_group(&mut game.descriptors, db, chars,chid, vict.id());
         } else {
             if chid != vict.id() {
@@ -746,7 +740,7 @@ pub fn do_group(
                 TO_NOTVICT,
             );
             let vict = chars.get_mut(vict.id());
-            vict.remove_prf_flags_bits(AFF_GROUP);
+            vict.remove_aff_flags(AffectFlags::GROUP);
         }
     }
 }
@@ -764,16 +758,16 @@ pub fn do_ungroup(
     one_argument(argument, &mut buf);
 
     if buf.is_empty() {
-        if ch.master.is_some() || !ch.aff_flagged(AFF_GROUP) {
+        if ch.master.is_some() || !ch.aff_flagged(AffectFlags::GROUP) {
             send_to_char(&mut game.descriptors, ch, "But you lead no group!\r\n");
             return;
         }
 
         for f in ch.followers.clone() {
             let follower = chars.get(f.follower);
-            if follower.aff_flagged(AFF_GROUP) {
+            if follower.aff_flagged(AffectFlags::GROUP) {
                 let follower = chars.get_mut(f.follower);
-                follower.remove_aff_flags(AFF_GROUP);
+                follower.remove_aff_flags(AffectFlags::GROUP);
                 let follower = chars.get(f.follower);
                 let ch = chars.get(chid);
                 act(&mut game.descriptors, chars, 
@@ -786,13 +780,13 @@ pub fn do_ungroup(
                     TO_CHAR,
                 );
                 let follower = chars.get(f.follower);
-                if !follower.aff_flagged(AFF_CHARM) {
+                if !follower.aff_flagged(AffectFlags::CHARM) {
                     stop_follower(&mut game.descriptors, chars, db, objs,f.follower);
                 }
             }
         }
         let ch = chars.get_mut(chid);
-        ch.remove_aff_flags(AFF_GROUP);
+        ch.remove_aff_flags(AffectFlags::GROUP);
 
         send_to_char(&mut game.descriptors, ch, "You disband the group.\r\n");
         return;
@@ -811,13 +805,13 @@ pub fn do_ungroup(
         return;
     }
 
-    if !tch.aff_flagged(AFF_GROUP) {
+    if !tch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(&mut game.descriptors, ch, "That person isn't in your group.\r\n");
         return;
     }
     let tchid = tch.id();
     let tch = chars.get_mut(tchid);
-    tch.remove_aff_flags(AFF_GROUP);
+    tch.remove_aff_flags(AffectFlags::GROUP);
     let ch = chars.get(chid);
     let tch = chars.get(tchid);
     act(&mut game.descriptors, chars, 
@@ -848,7 +842,7 @@ pub fn do_ungroup(
         TO_NOTVICT,
     );
     let tch = chars.get(tchid);
-    if !tch.aff_flagged(AFF_CHARM) {
+    if !tch.aff_flagged(AffectFlags::CHARM) {
         stop_follower(&mut game.descriptors, chars, db,objs, tchid);
     }
 }
@@ -862,7 +856,7 @@ pub fn do_report(
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    if !ch.aff_flagged(AFF_GROUP) {
+    if !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(&mut game.descriptors, ch, "But you are not a member of any group!\r\n");
         return;
     }
@@ -885,7 +879,7 @@ pub fn do_report(
     let k = chars.get(k_id);
     for f in &k.followers {
         let follower = chars.get(f.follower);
-        if follower.aff_flagged(AFF_GROUP) && f.follower != chid {
+        if follower.aff_flagged(AffectFlags::GROUP) && f.follower != chid {
             act(&mut game.descriptors, chars, 
                 db,
                 &buf,
@@ -944,7 +938,7 @@ pub fn do_split(
         };
         let k = chars.get(k_id);
         let mut num;
-        if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() {
+        if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
             num = 1;
         } else {
             num = 0;
@@ -952,7 +946,7 @@ pub fn do_split(
 
         for f in &k.followers {
             let follower = chars.get(f.follower);
-            if follower.aff_flagged(AFF_GROUP)
+            if follower.aff_flagged(AffectFlags::GROUP)
                 && !follower.is_npc()
                 && follower.in_room() == ch.in_room()
             {
@@ -961,7 +955,7 @@ pub fn do_split(
         }
         let share;
         let rest;
-        if num != 0 && ch.aff_flagged(AFF_GROUP) {
+        if num != 0 && ch.aff_flagged(AffectFlags::GROUP) {
             share = amount / num;
             rest = amount % num;
         } else {
@@ -992,7 +986,7 @@ pub fn do_split(
         }
         let k = chars.get(k_id);
         let ch = chars.get(chid);
-        if k.aff_flagged(AFF_GROUP) && k.in_room() == ch.in_room() && !k.is_npc() && k_id != chid {
+        if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() && !k.is_npc() && k_id != chid {
             let k = chars.get_mut(k_id);
             k.set_gold(k.get_gold() + share);
             send_to_char(&mut game.descriptors, k, &buf);
@@ -1001,7 +995,7 @@ pub fn do_split(
         for f in  k.followers.clone() {
             let follower = chars.get(f.follower);
             let ch = chars.get(chid);
-            if follower.aff_flagged(AFF_GROUP)
+            if follower.aff_flagged(AffectFlags::GROUP)
                 && !follower.is_npc()
                 && follower.in_room() == ch.in_room()
                 && f.follower != chid

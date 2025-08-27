@@ -19,9 +19,7 @@ use crate::interpreter::{
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AFF_GROUP, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT,
-    PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
-    PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, RoomFlags, WEAR_HOLD,
+     AffectFlags, RoomFlags, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
 };
 use crate::util::can_see_obj;
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
@@ -80,7 +78,7 @@ pub fn do_gsay(
     let ch = chars.get(chid);
     let argument = argument.trim_start();
 
-    if !ch.aff_flagged(AFF_GROUP) {
+    if !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(&mut game.descriptors, ch, "But you are not the member of a group!\r\n");
         return;
     }
@@ -96,7 +94,7 @@ pub fn do_gsay(
 
         let buf = format!("$n tells the group, '{}'", argument);
         let k = chars.get(k_id);
-        if k.aff_flagged(AFF_GROUP) && k_id != chid {
+        if k.aff_flagged(AffectFlags::GROUP) && k_id != chid {
             act(&mut game.descriptors, chars, 
                 db,
                 &buf,
@@ -110,7 +108,7 @@ pub fn do_gsay(
         let followers_ids = k.followers.iter().map(|f| f.follower);
         for f_id in followers_ids {
             let f = chars.get(f_id);
-            if f.aff_flagged(AFF_GROUP) && f_id != chid {
+            if f.aff_flagged(AffectFlags::GROUP) && f_id != chid {
                 act(&mut game.descriptors, chars, 
                     db,
                     &buf,

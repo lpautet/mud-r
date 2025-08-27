@@ -46,15 +46,7 @@ use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    CharData, CharFileU, RoomRnum, RoomVnum, ZoneRnum, AFF_HIDE, AFF_INVISIBLE, CLASS_UNDEFINED,
-    DRUNK, FULL, ITEM_ARMOR, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY,
-    ITEM_LIGHT, ITEM_MONEY, ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND,
-    ITEM_WEAPON, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS,
-    NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART,
-    PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST,
-    PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT,
-    PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS,
-    PRF_SUMMONABLE, RoomFlags, THIRST,
+    AffectFlags, CharData, CharFileU, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL, ITEM_ARMOR, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_KEY, ITEM_LIGHT, ITEM_MONEY, ITEM_NOTE, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_TRAP, ITEM_WAND, ITEM_WEAPON, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, THIRST
 };
 use crate::util::{
     age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
@@ -822,7 +814,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     sprintbit(obj.get_obj_wear().bits().into(), &WEAR_BITS, &mut buf);
     send_to_char(descs, ch, format!("Can be worn on: {}\r\n", buf).as_str());
     buf.clear();
-    sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut buf);
+    sprintbit(obj.get_obj_affect().bits().into(), &AFFECTED_BITS, &mut buf);
     send_to_char(descs, ch, format!("Set char bits : {}\r\n", buf).as_str());
     buf.clear();
     sprintbit(obj.get_obj_extra().bits() as i64, &EXTRA_BITS, &mut buf);
@@ -1432,7 +1424,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
     /* Showing the bitvector */
     buf.clear();
-    sprintbit(k.aff_flags(), &AFFECTED_BITS, &mut buf);
+    sprintbit(k.aff_flags().bits().into(), &AFFECTED_BITS, &mut buf);
     send_to_char(descs, 
         ch,
         format!("AFF: {}{}{}\r\n", CCYEL!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
@@ -1463,13 +1455,13 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
                     .as_str(),
                 );
             }
-
-            if aff.bitvector != 0 {
+            let bitvector = aff.bitvector;
+            if !bitvector.is_empty() {
                 if aff.modifier != 0 {
                     send_to_char(descs, ch, ", ");
                 }
                 buf.clear();
-                sprintbit(aff.bitvector, &AFFECTED_BITS, &mut buf);
+                sprintbit(bitvector.bits().into(), &AFFECTED_BITS, &mut buf);
                 send_to_char(descs, ch, format!("sets {}", buf).as_str());
             }
             send_to_char(descs, ch, "\r\n");
@@ -2469,7 +2461,7 @@ pub fn do_restore(
 
 pub fn perform_immort_vis(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>,objs: &mut Depot<ObjData>,  chid: DepotId) {
     let ch = chars.get(chid);
-    if ch.get_invis_lev() == 0 && !ch.aff_flagged(AFF_HIDE | AFF_INVISIBLE) {
+    if ch.get_invis_lev() == 0 && !ch.aff_flagged(AffectFlags::HIDE | AffectFlags::INVISIBLE) {
         send_to_char(descs, ch, "You are already fully visible.\r\n");
         return;
     }

@@ -26,13 +26,7 @@ use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    AffectedType, CharData, ExtraDescrData, MobRnum, ObjData, ObjRnum, RoomRnum, APPLY_AC,
-    APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON,
-    APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT,
-    APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA,
-    APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ExtraFlags, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, WearFlags,
-    LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
-    PLR_NOTDEADYET, RoomFlags, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
+    AffectFlags, AffectedType, CharData, ExtraDescrData, ExtraFlags, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, APPLY_AC, APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON, APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT, APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA, APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
 use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
@@ -92,7 +86,7 @@ pub fn isname(txt: &str, namelist: &str) -> bool {
     }
 }
 
-fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: i64, add: bool) {
+fn affect_modify(ch: &mut CharData, loc: i8, _mod: i16, bitv: AffectFlags, add: bool) {
     let mut _mod = _mod;
     if add {
         ch.set_aff_flags(bitv);

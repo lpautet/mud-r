@@ -19,9 +19,7 @@ use crate::handler::obj_to_char;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
-    CharData, MeRef, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD,
-    MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE,
-    MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, RoomFlags,
+    AffectFlags, CharData, MeRef, RoomFlags, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE
 };
 use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
 use crate::{act, Game, ObjData, DB, TO_ROOM};
@@ -207,7 +205,7 @@ impl Game {
              * 1-4 = 0, 5-7 = 1, 8-10 = 2, 11-13 = 3, 14-16 = 4, 17-19 = 5, etc.
              */
             let ch = chars.get(chid);
-            if ch.aff_flagged(AFF_CHARM)
+            if ch.aff_flagged(AffectFlags::CHARM)
                 && ch.master.is_some()
                 && num_followers_charmed(chars, ch.master.unwrap())
                     > ((chars.get(ch.master.unwrap()).get_cha() - 2) / 3) as i32
@@ -227,7 +225,7 @@ impl Game {
 
             /* Helper Mobs */
             let ch = chars.get(chid);
-            if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AFF_BLIND | AFF_CHARM) {
+            if ch.mob_flagged(MOB_HELPER) && !ch.aff_flagged(AffectFlags::BLIND | AffectFlags::CHARM) {
                 let mut found = false;
                 for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
                     let vict = chars.get(vict_id);
@@ -313,7 +311,7 @@ impl Game {
         attack_id: DepotId,
     ) -> bool {
         let slave = chars.get(slave_id);
-        if master_id.is_none() || slave.aff_flagged(AFF_CHARM) {
+        if master_id.is_none() || slave.aff_flagged(AffectFlags::CHARM) {
             return false;
         }
         let master_id = master_id.unwrap();

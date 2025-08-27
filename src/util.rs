@@ -35,14 +35,10 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, Special,
-    AFF_BLIND, AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE,
-    CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE,
-    PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
-    RoomFlags, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET,
+    AffectFlags, CharData, ConState, FollowType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, Special, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET
 };
 use crate::structs::{
-    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, ExitFlags,
+    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
     ITEM_CONTAINER, ExtraFlags, WearFlags, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
@@ -568,8 +564,8 @@ impl CharData {
     pub fn set_alignment(&mut self, val: i32) {
         self.char_specials.saved.alignment = val;
     }
-    pub fn aff_flagged(&self, flag: i64) -> bool {
-        is_set!(self.aff_flags(), flag)
+    pub fn aff_flagged(&self, flag: AffectFlags) -> bool {
+        self.aff_flags().intersects(flag)
     }
     pub fn get_weight(&self) -> u8 {
         self.player.weight
@@ -633,24 +629,28 @@ macro_rules! mob_flags {
 }
 
 impl CharData {
-    pub fn aff_flags(&self) -> i64 {
+    pub fn aff_flags(&self) -> AffectFlags {
         self.char_specials.saved.affected_by
     }
-    pub fn set_aff_flags(&mut self, val: i64) {
+    pub fn set_aff_flags(&mut self, val: AffectFlags) {
         self.char_specials.saved.affected_by = val;
     }
-    pub fn set_aff_flags_bits(&mut self, val: i64) {
-        self.char_specials.saved.affected_by |= val;
+    pub fn set_aff_flags_bits(&mut self, val: AffectFlags) {
+        let mut current = self.char_specials.saved.affected_by;
+        current.insert(val);
+        self.char_specials.saved.affected_by = current;
     }
 
-    pub fn remove_aff_flags(&mut self, val: i64) {
-        self.char_specials.saved.affected_by &= !val;
+    pub fn remove_aff_flags(&mut self, val: AffectFlags) {
+        let mut current = self.char_specials.saved.affected_by;
+        current.remove(val);
+        self.char_specials.saved.affected_by = current;
     }
     pub fn awake(&self) -> bool {
         self.get_pos() > POS_SLEEPING
     }
     pub fn can_see_in_dark(&self) -> bool {
-        self.aff_flagged(AFF_INFRAVISION) || (!self.is_npc() && self.prf_flagged(PRF_HOLYLIGHT))
+        self.aff_flagged(AffectFlags::INFRAVISION) || (!self.is_npc() && self.prf_flagged(PRF_HOLYLIGHT))
     }
 }
 
@@ -819,10 +819,10 @@ impl ObjData {
     pub fn get_obj_rnum(&self) -> ObjVnum {
         self.item_number
     }
-    pub fn get_obj_affect(&self) -> i64 {
+    pub fn get_obj_affect(&self) -> AffectFlags {
         self.obj_flags.bitvector
     }
-    pub fn set_obj_affect(&mut self, val: i64) {
+    pub fn set_obj_affect(&mut self, val: AffectFlags) {
         self.obj_flags.bitvector = val;
     }
     pub fn set_in_room(&mut self, val: RoomRnum) {
@@ -923,18 +923,18 @@ impl DB {
 
 impl DB {
     pub fn light_ok(&self, sub: &CharData) -> bool {
-        !sub.aff_flagged(AFF_BLIND) && self.is_light(sub.in_room())
-            || sub.aff_flagged(AFF_INFRAVISION)
+        !sub.aff_flagged(AffectFlags::BLIND) && self.is_light(sub.in_room())
+            || sub.aff_flagged(AffectFlags::INFRAVISION)
     }
 }
 
 pub fn invis_ok(sub: &CharData, obj: &CharData) -> bool {
-    (!obj.aff_flagged(AFF_INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS))
-        && (!obj.aff_flagged(AFF_HIDE) || sub.aff_flagged(AFF_SENSE_LIFE))
+    (!obj.aff_flagged(AffectFlags::INVISIBLE) || sub.aff_flagged(AffectFlags::DETECT_INVIS))
+        && (!obj.aff_flagged(AffectFlags::HIDE) || sub.aff_flagged(AffectFlags::SENSE_LIFE))
 }
 
 pub fn invis_ok_obj(sub: &CharData, obj: &ObjData) -> bool {
-    !obj.obj_flagged(ExtraFlags::INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS)
+    !obj.obj_flagged(ExtraFlags::INVISIBLE) || sub.aff_flagged(AffectFlags::DETECT_INVIS)
 }
 
 impl DB {
@@ -1511,7 +1511,7 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
             return;
         }
 
-        if ch.aff_flagged(AFF_CHARM) {
+        if ch.aff_flagged(AffectFlags::CHARM) {
             let master_id = ch.master.unwrap();
             let master = chars.get(master_id);
             act(descs, 
@@ -1588,7 +1588,7 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
             .retain(|c| c.follower == chid);
         let ch = chars.get_mut(chid);
         ch.master = None;
-        ch.remove_aff_flags(AFF_CHARM | AFF_GROUP);
+        ch.remove_aff_flags(AffectFlags::CHARM | AffectFlags::GROUP);
     }
 
     pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
@@ -1596,7 +1596,7 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
         let mut total = 0;
 
         for lackey in ch.followers.iter() {
-            if chars.get(lackey.follower).aff_flagged(AFF_CHARM)
+            if chars.get(lackey.follower).aff_flagged(AffectFlags::CHARM)
                 && chars.get(lackey.follower).master.unwrap() == chid
             {
                 total += 1;

@@ -67,12 +67,12 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, MeRef, TxtBlock, AFF_HIDE, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
+    CharData, MeRef, TxtBlock, AffectFlags, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
     NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING,
     POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
 };
 use crate::structs::{
-    CharFileU, AFF_GROUP, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
+    CharFileU, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, SEX_FEMALE,
     SEX_MALE,
 };
@@ -2800,7 +2800,7 @@ pub fn command_interpreter(
     let line: &str;
     let mut arg = String::new();
 
-    ch.remove_aff_flags(AFF_HIDE);
+    ch.remove_aff_flags(AffectFlags::HIDE);
 
     /* just drop to next line for hitting CR */
     let argument = argument.trim_start();
@@ -3488,7 +3488,7 @@ fn perform_dupe_check(
         desc.original = None;
         character.char_specials.timer = 0;
         character.remove_plr_flag(PLR_MAILING | PLR_WRITING);
-        character.remove_aff_flags(AFF_GROUP);
+        character.remove_aff_flags(AffectFlags::GROUP);
     }
     desc.set_state(ConPlaying);
 
@@ -3614,7 +3614,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     } else {
                         /* undo it just in case they are set */
                         character.remove_plr_flag(PLR_WRITING | PLR_MAILING | PLR_CRYO);
-                        character.remove_aff_flags(AFF_GROUP);
+                        character.remove_aff_flags(AffectFlags::GROUP);
                         desc.write_to_output("Password: ");
                         desc.echo_off();
                         desc.idle_tics = 0;

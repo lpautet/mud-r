@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, AffectFlags, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1762,9 +1762,9 @@ impl DB {
             "mobile",
         );
 
-        mobch.set_aff_flags(asciiflag_conv(&f[2]));
+        mobch.set_aff_flags(AffectFlags::from_bits_truncate(asciiflag_conv(&f[2])));
         check_bitvector_names(
-            mobch.aff_flags(),
+            mobch.aff_flags().bits(),
             AFFECTED_BITS_COUNT,
             buf2.as_str(),
             "mobile affect",
@@ -1839,7 +1839,7 @@ impl DB {
                 cost: 0,
                 cost_per_day: 0,
                 timer: 0,
-                bitvector: 0,
+                bitvector: AffectFlags::empty(),
             },
             affected: [
                 ObjAffectedType {
@@ -2898,7 +2898,7 @@ impl CharFileU {
                 alignment: 0,
                 idnum: 0,
                 act: 0,
-                affected_by: 0,
+                affected_by: AffectFlags::empty(),
                 apply_saving_throw: [0; 5],
             },
             player_specials_saved: PlayerSpecialDataSaved {
@@ -2963,7 +2963,7 @@ impl CharFileU {
                 duration: 0,
                 modifier: 0,
                 location: 0,
-                bitvector: 0,
+                bitvector: AffectFlags::empty(),
             }; MAX_AFFECT],
             last_logon: 0,
             host: [0; HOST_LENGTH + 1],
@@ -3024,7 +3024,7 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
      * real time, we'll set your HMV back to full
      */
 
-    if !ch.aff_flagged(AFF_POISON) && time_now() - st.last_logon >= SECS_PER_REAL_HOUR {
+    if !ch.aff_flagged(AffectFlags::POISON) && time_now() - st.last_logon >= SECS_PER_REAL_HOUR {
         ch.set_hit(ch.get_max_hit());
         ch.set_move(ch.get_max_move());
         ch.set_mana(ch.get_max_mana());
@@ -3068,7 +3068,7 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
                 st.affected[i].duration = 0;
                 st.affected[i].modifier = 0;
                 st.affected[i].location = 0;
-                st.affected[i].bitvector = 0;
+                st.affected[i].bitvector = AffectFlags::empty();
             }
         }
 
@@ -3434,7 +3434,7 @@ impl DB {
             }
         }
 
-        ch.set_aff_flags(0);
+        ch.set_aff_flags(AffectFlags::empty());
 
         for i in 0..5 {
             ch.set_save(i, 0);
@@ -3537,7 +3537,7 @@ impl DB {
             "object extra",
         );
         error |= check_bitvector_names(
-            obj.get_obj_affect(),
+            obj.get_obj_affect().bits(),
             AFFECTED_BITS_COUNT,
             objname.as_str(),
             "object affect",
@@ -3784,7 +3784,7 @@ impl Default for CharData {
                     alignment: 0,
                     idnum: 0,
                     act: 0,
-                    affected_by: 0,
+                    affected_by: AffectFlags::empty(),
                     apply_saving_throw: [0; 5],
                 },
             },
@@ -3954,7 +3954,7 @@ impl Default for ObjData {
                 cost: 0,
                 cost_per_day: 0,
                 timer: 0,
-                bitvector: 0,
+                bitvector: AffectFlags::empty(),
             },
             affected: [
                 ObjAffectedType {

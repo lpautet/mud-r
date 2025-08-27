@@ -27,12 +27,7 @@ use crate::interpreter::{
 };
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
-    CharData, ObjData, ObjVnum, RoomDirectionData, RoomRnum, AFF_CHARM, AFF_GROUP, AFF_SLEEP,
-    AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ExitFlags,
-    ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
-    NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STANDING, RoomFlags,
-    SECT_WATER_NOSWIM, WEAR_HOLD,
+    AffectFlags, CharData, ExitFlags, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, SECT_WATER_NOSWIM, WEAR_HOLD
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -43,7 +38,7 @@ fn has_boat(descs: &mut Depot<DescriptorData>, objs: & Depot<ObjData>, ch: &Char
         return true;
     }
 
-    if ch.aff_flagged(AFF_WATERWALK) {
+    if ch.aff_flagged(AffectFlags::WATERWALK) {
         return true;
     }
 
@@ -161,7 +156,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
 
     /* charmed? */
     let ch = chars.get(chid);
-    if ch.aff_flagged(AFF_CHARM)
+    if ch.aff_flagged(AffectFlags::CHARM)
         && ch.master.is_some()
         && ch.in_room() == chars.get(ch.master.unwrap()).in_room()
     {
@@ -254,7 +249,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         ch.incr_move(-need_movement as i16);
     }
     let ch = chars.get(chid);
-    if !ch.aff_flagged(AFF_SNEAK) {
+    if !ch.aff_flagged(AffectFlags::SNEAK) {
         let buf2 = format!("$n leaves {}.", DIRS[dir as usize]);
         act(&mut game.descriptors, chars, db,buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
@@ -269,7 +264,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     db.char_to_room(chars, objs,chid, room_dir);
 
     let ch = chars.get(chid);
-    if !ch.aff_flagged(AFF_SNEAK) {
+    if !ch.aff_flagged(AffectFlags::SNEAK) {
         act(&mut game.descriptors, chars, db,"$n has arrived.", true, Some(ch), None, None, TO_ROOM);
     }
 
@@ -1090,7 +1085,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-        } else if vict.unwrap().aff_flagged(AFF_SLEEP) {
+        } else if vict.unwrap().aff_flagged(AffectFlags::SLEEP) {
             let vict =vict.unwrap();
             act(&mut game.descriptors, chars, db,
                 "You can't wake $M up!",
@@ -1135,7 +1130,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
         }
     }
     let ch = chars.get(chid);
-    if ch.aff_flagged(AFF_SLEEP) {
+    if ch.aff_flagged(AffectFlags::SLEEP) {
         send_to_char(&mut game.descriptors, ch, "You can't wake up!\r\n");
     } else if ch.get_pos() > POS_SLEEPING {
         send_to_char(&mut game.descriptors, ch, "You are already awake...\r\n");
@@ -1178,7 +1173,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         );
         return;
     }
-    if ch.aff_flagged(AFF_CHARM) && (ch.master.is_some()) {
+    if ch.aff_flagged(AffectFlags::CHARM) && (ch.master.is_some()) {
         let master_id = ch.master.unwrap();
         let master = chars.get(master_id);
         act(&mut game.descriptors, chars, db,
@@ -1207,7 +1202,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 stop_follower(&mut game.descriptors, chars, db, objs,chid);
             }
             let ch = chars.get_mut(chid);
-            ch.remove_aff_flags(AFF_GROUP);
+            ch.remove_aff_flags(AffectFlags::GROUP);
 
             add_follower(&mut game.descriptors, chars, db, chid, leader_id);
         }

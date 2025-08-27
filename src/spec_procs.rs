@@ -35,8 +35,7 @@ use crate::spells::{
     SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    MeRef, CharData, AFF_BLIND, AFF_CHARM, ITEM_DRINKCON, WearFlags, LVL_IMMORT, MAX_SKILLS, NOWHERE,
-    PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING,
+    AffectFlags, CharData, MeRef, WearFlags, ITEM_DRINKCON, LVL_IMMORT, MAX_SKILLS, NOWHERE, PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING
 };
 use crate::util::{add_follower, can_see, rand_number};
 use crate::{ Game, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -636,7 +635,7 @@ pub fn guild_guard(
     let buf = "The guard humiliates you, and blocks your way.\r\n";
     let buf2 = "The guard humiliates $n, and blocks $s way.";
 
-    if !is_move(cmd) || guard.aff_flagged(AFF_BLIND) {
+    if !is_move(cmd) || guard.aff_flagged(AffectFlags::BLIND) {
         return false;
     }
 
@@ -912,7 +911,7 @@ pub fn pet_shops(
         let pet_id = db.read_mobile(chars, pet_mob_rnum , LoadType::Real).unwrap();
         let pet = chars.get_mut(pet_id);
         pet.set_exp(0);
-        pet.set_aff_flags_bits(AFF_CHARM);
+        pet.set_aff_flags_bits(AffectFlags::CHARM);
 
         if !pet_name.is_empty() {
             let buf = format!("{} {}", pet.player.name, pet_name);

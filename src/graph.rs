@@ -18,7 +18,7 @@ use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
-     RoomRnum, AFF_NOTRACK, ExitFlags, NOWHERE, NUM_OF_DIRS, RoomFlags,
+     AffectFlags, ExitFlags, RoomFlags, RoomRnum, NOWHERE, NUM_OF_DIRS
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
@@ -180,7 +180,7 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let vict = vict.unwrap();
     let vict_id = vict.id();
     /* We can't track the victim. */
-    if vict.aff_flagged(AFF_NOTRACK) {
+    if vict.aff_flagged(AffectFlags::NOTRACK) {
         send_to_char(&mut game.descriptors, ch, "You sense no trail.\r\n");
         return;
     }
