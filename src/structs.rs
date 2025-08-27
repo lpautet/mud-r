@@ -233,7 +233,7 @@ pub const APPLY_SAVING_PETRI: i8 = 22; /* Apply to save throw: petrif	*/
 pub const APPLY_SAVING_BREATH: i8 = 23; /* Apply to save throw: breath	*/
 pub const APPLY_SAVING_SPELL: i8 = 24; /* Apply to save throw: spells	*/
 
-/* Container flags - value[1] */
+/* Container flags - value[1] this one is kept as i32 as it is stored (generically) as such */
 pub const CONT_CLOSEABLE: i32 = 1 << 0; /* Container can be closed	*/
 pub const CONT_PICKPROOF: i32 = 1 << 1; /* Container is pickproof	*/
 pub const CONT_CLOSED: i32 = 1 << 2; /* Container is closed		*/
