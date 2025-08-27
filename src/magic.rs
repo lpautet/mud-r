@@ -17,7 +17,7 @@ use crate::{act, send_to_char, ObjData, TextData, VictimRef};
 
 use crate::class::saving_throws;
 use crate::config::{NOEFFECT, PK_ALLOWED};
-use crate::db::{DB, VIRTUAL};
+use crate::db::{DB, LoadType};
 use crate::fight::update_pos;
 use crate::handler::{affect_from_char, affect_join, affect_remove, affected_by_spell, obj_from_obj, obj_to_char};
 use crate::spells::{
@@ -865,7 +865,7 @@ pub fn mag_summons(
     for _ in 0..num {
         let mob_id;
         if {
-            mob_id = db.read_mobile(chars, mob_num, VIRTUAL);
+            mob_id = db.read_mobile(chars, mob_num, LoadType::Virtual);
             mob_id.is_none()
         } {
             let ch = chars.get(chid);
@@ -1122,7 +1122,7 @@ pub fn mag_creations(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, 
             return;
         }
     }
-    let tobj_id = db.read_object(objs,z, VIRTUAL);
+    let tobj_id = db.read_object(objs,z, LoadType::Virtual);
     let ch = chars.get(chid);
     if tobj_id.is_none() {
         send_to_char(&mut game.descriptors, ch, "I seem to have goofed.\r\n");

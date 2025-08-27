@@ -205,8 +205,12 @@ pub struct DB {
     pub scheck: bool,
 }
 
-pub const REAL: i32 = 0;
-pub const VIRTUAL: i32 = 1;
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(i32)]
+pub enum LoadType {
+    Real = 0,
+    Virtual = 1,
+}
 
 /* structure for the reset commands */
 struct ResetCom {
@@ -263,13 +267,18 @@ pub struct ZoneData {
 }
 
 /* don't change these */
-pub const BAN_NEW: i32 = 1;
-pub const BAN_SELECT: i32 = 2;
-pub const BAN_ALL: i32 = 3;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(i32)]
+pub enum BanType {
+    None = 0,
+    New = 1,
+    Select = 2,
+    All = 3,
+}
 
 pub struct BanListElement {
     pub site: Rc<str>,
-    pub type_: i32,
+    pub type_: BanType,
     pub date: u64,
     pub name: Rc<str>,
 }
@@ -429,7 +438,7 @@ pub fn do_reboot(
         }
         "xhelp" => {
             db.help_table.clear();
-            db.index_boot( texts, DB_BOOT_HLP);
+            db.index_boot( texts, DbBootMode::Help);
         }
         _ => {
             send_to_char(&mut game.descriptors, ch, "Unknown reload option.\r\n");
@@ -442,10 +451,10 @@ pub fn do_reboot(
 
 pub(crate) fn boot_world(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>) {
     info!("Loading zone table.");
-    db.index_boot( texts, DB_BOOT_ZON);
+    db.index_boot( texts, DbBootMode::Zone);
 
     info!("Loading rooms.");
-    db.index_boot( texts, DB_BOOT_WLD);
+    db.index_boot( texts, DbBootMode::World);
 
     info!("Renumbering rooms.");
     db.renum_world();
@@ -454,17 +463,17 @@ pub(crate) fn boot_world(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData
     db.check_start_rooms();
 
     info!("Loading mobs and generating index.");
-    db.index_boot( texts, DB_BOOT_MOB);
+    db.index_boot( texts, DbBootMode::Mob);
 
     info!("Loading objs and generating index.");
-    db.index_boot( texts, DB_BOOT_OBJ);
+    db.index_boot( texts, DbBootMode::Object);
 
     info!("Renumbering zone table.");
     renum_zone_table(game, db, chars);
 
     if !db.no_specials {
         info!("Loading shops.");
-        db.index_boot( texts, DB_BOOT_SHP);
+        db.index_boot( texts, DbBootMode::Shop);
     }
 }
 impl DB {
@@ -633,7 +642,7 @@ impl DB {
         boot_world(game, self, chars, texts);
 
         info!("Loading help entries.");
-        self.index_boot( texts, DB_BOOT_HLP);
+        self.index_boot( texts, DbBootMode::Help);
 
         info!("Generating player index.");
         self.build_player_index();
@@ -937,31 +946,31 @@ const ZON_PREFIX: &str = "world/zon/"; /* zon defs & command tables */
 const SHP_PREFIX: &str = "world/shp/"; /* shop definitions	*/
 const HLP_PREFIX: &str = "text/help/"; /* for HELP <keyword>	*/
 /* arbitrary constants used by index_boot() (must be unique) */
-const DB_BOOT_WLD: u8 = 0;
-const DB_BOOT_MOB: u8 = 1;
-const DB_BOOT_OBJ: u8 = 2;
-const DB_BOOT_ZON: u8 = 3;
-const DB_BOOT_SHP: u8 = 4;
-const DB_BOOT_HLP: u8 = 5;
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u8)]
+enum DbBootMode {
+    World = 0,
+    Mob = 1,
+    Object = 2,
+    Zone = 3,
+    Shop = 4,
+    Help = 5,
+}
 
 impl DB {
-    fn index_boot(&mut self, texts: &mut Depot<TextData>, mode: u8) {
+    fn index_boot(&mut self, texts: &mut Depot<TextData>, mode: DbBootMode) {
         let index_filename: &str;
         let prefix: &str;
         let mut rec_count = 0;
         let mut size: [usize; 2] = [0; 2];
 
         prefix = match mode {
-            DB_BOOT_WLD => WLD_PREFIX,
-            DB_BOOT_MOB => MOB_PREFIX,
-            DB_BOOT_OBJ => OBJ_PREFIX,
-            DB_BOOT_ZON => ZON_PREFIX,
-            DB_BOOT_SHP => SHP_PREFIX,
-            DB_BOOT_HLP => HLP_PREFIX,
-            _ => {
-                error!("SYSERR: Unknown subcommand {} to index_boot!", mode);
-                process::exit(1);
-            }
+            DbBootMode::World => WLD_PREFIX,
+            DbBootMode::Mob => MOB_PREFIX,
+            DbBootMode::Object => OBJ_PREFIX,
+            DbBootMode::Zone => ZON_PREFIX,
+            DbBootMode::Shop => SHP_PREFIX,
+            DbBootMode::Help => HLP_PREFIX,
         };
 
         if self.mini_mud {
@@ -1001,9 +1010,9 @@ impl DB {
                 buf1 = buf1.trim_end().to_string();
                 continue;
             } else {
-                if mode == DB_BOOT_ZON {
+                if mode == DbBootMode::Zone {
                     rec_count += 1;
-                } else if mode == DB_BOOT_HLP {
+                } else if mode == DbBootMode::Help {
                     rec_count += count_alias_records(db_file.unwrap());
                 } else {
                     rec_count += count_hash_records(db_file.unwrap());
@@ -1018,7 +1027,7 @@ impl DB {
 
         /* Exit if 0 records, unless this is shops */
         if rec_count == 0 {
-            if mode == DB_BOOT_SHP {
+            if mode == DbBootMode::Shop {
                 return;
             }
             error!(
@@ -1029,12 +1038,12 @@ impl DB {
         }
 
         match mode {
-            DB_BOOT_WLD => {
+            DbBootMode::World => {
                 self.world.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<CharData>() * rec_count as usize;
                 info!("   {} rooms, {} bytes.", rec_count, size[0]);
             }
-            DB_BOOT_MOB => {
+            DbBootMode::Mob => {
                 size[0] = mem::size_of::<IndexData>() * rec_count as usize;
                 size[1] = mem::size_of::<CharData>() * rec_count as usize;
                 self.mob_protos.reserve_exact(rec_count as usize);
@@ -1044,7 +1053,7 @@ impl DB {
                     rec_count, size[0], size[1],
                 );
             }
-            DB_BOOT_OBJ => {
+            DbBootMode::Object => {
                 self.obj_proto.reserve_exact(rec_count as usize);
                 self.obj_index.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<IndexData>() * rec_count as usize;
@@ -1054,17 +1063,17 @@ impl DB {
                     rec_count, size[0], size[1]
                 );
             }
-            DB_BOOT_ZON => {
+            DbBootMode::Zone => {
                 self.zone_table.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<ZoneData>() * rec_count as usize;
                 info!("   {} zones, {} bytes.", rec_count, size[0]);
             }
-            DB_BOOT_HLP => {
+            DbBootMode::Help => {
                 self.help_table.reserve_exact(rec_count as usize);
                 size[0] = mem::size_of::<HelpIndexElement>() & rec_count as usize;
                 info!("   {} entries, {} bytes.", rec_count, size[0]);
             }
-            _ => {}
+            DbBootMode::Shop => {}
         }
 
         reader.rewind().expect("Cannot rewind DB index file reader");
@@ -1082,23 +1091,22 @@ impl DB {
             }
 
             match mode {
-                DB_BOOT_WLD | DB_BOOT_OBJ | DB_BOOT_MOB => {
+                DbBootMode::World | DbBootMode::Object | DbBootMode::Mob => {
                     self.discrete_load(texts, db_file.unwrap(), mode, buf2.as_str());
                 }
-                DB_BOOT_ZON => {
+                DbBootMode::Zone => {
                     self.load_zones(db_file.unwrap(), buf2.as_str());
                 }
-                DB_BOOT_HLP => {
+                DbBootMode::Help => {
                     /*
                      * If you think about it, we have a race here.  Although, this is the
                      * "point-the-gun-at-your-own-foot" type of race.
                      */
                     self.load_help(db_file.unwrap());
                 }
-                DB_BOOT_SHP => {
+                DbBootMode::Shop => {
                     boot_the_shops(self, db_file.unwrap(), &buf2, rec_count);
                 }
-                _ => {}
             }
 
             buf1.clear();
@@ -1109,13 +1117,13 @@ impl DB {
         }
 
         /* sort the help index */
-        if mode == DB_BOOT_HLP {
+        if mode == DbBootMode::Help {
             self.help_table
                 .sort_by_key(|e| String::from(e.keyword.as_ref()));
         }
     }
 
-    fn discrete_load(&mut self, texts: &mut Depot<TextData>, file: File, mode: u8, filename: &str) {
+    fn discrete_load(&mut self, texts: &mut Depot<TextData>, file: File, mode: DbBootMode, filename: &str) {
         let mut nr = -1;
         let mut last: i32;
         let mut line = String::new();
@@ -1128,7 +1136,7 @@ impl DB {
              * we have to do special processing with the obj files because they have
              * no end-of-record marker :(
              */
-            if mode != DB_BOOT_OBJ || nr < 0 {
+            if mode != DbBootMode::Object || nr < 0 {
                 if get_line(&mut reader, &mut line) == 0 {
                     if nr == -1 {
                         error!(
@@ -1164,13 +1172,13 @@ impl DB {
                     return;
                 } else {
                     match mode {
-                        DB_BOOT_WLD => {
+                        DbBootMode::World => {
                             self.parse_room(&mut reader, nr);
                         }
-                        DB_BOOT_MOB => {
+                        DbBootMode::Mob => {
                             self.parse_mobile(texts, &mut reader, nr);
                         }
-                        DB_BOOT_OBJ => {
+                        DbBootMode::Object => {
                             line = self
                                 .parse_object(texts, &mut reader, nr as MobVnum)
                                 .parse()
@@ -2346,10 +2354,10 @@ impl DB {
     // }
 
     /* create a new mobile from a prototype */
-    pub(crate) fn read_mobile(&mut self,chars: &mut Depot<CharData>, nr: MobVnum, read_type: i32) -> Option<DepotId> /* and mob_rnum */
+    pub(crate) fn read_mobile(&mut self,chars: &mut Depot<CharData>, nr: MobVnum, read_type: LoadType) -> Option<DepotId> /* and mob_rnum */
     {
         let i;
-        if read_type == VIRTUAL {
+        if read_type == LoadType::Virtual {
             i = self.real_mobile(nr);
             if i == NOBODY {
                 warn!("WARNING: Mobile vnum {} does not exist in database.", nr);
@@ -2423,9 +2431,9 @@ impl DB {
         &mut self,
         objs: &mut Depot<ObjData>,
         nr: ObjVnum,
-        read_type: i32,
+        read_type: LoadType,
     ) -> Option<DepotId> /* and obj_rnum */ {
-        let i = if read_type == VIRTUAL {
+        let i = if read_type == LoadType::Virtual {
             self.real_object(nr)
         } else {
             nr
@@ -2434,7 +2442,7 @@ impl DB {
         if i == NOTHING || i >= self.obj_index.len() as i16 {
             warn!(
                 "Object ({}) {} does not exist in database.",
-                if read_type == VIRTUAL { 'V' } else { 'R' },
+                if read_type == LoadType::Virtual { 'V' } else { 'R' },
                 nr
             );
             return None;
@@ -2558,7 +2566,7 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
-                        mob_id = db.read_mobile(chars, nr, REAL);
+                        mob_id = db.read_mobile(chars, nr, LoadType::Real);
                         let room = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
                         db.char_to_room(chars, objs, mob_id.unwrap(), room);
                         last_cmd = 1;
@@ -2575,13 +2583,13 @@ impl Game {
                         if db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             let room_nr = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                            oid = db.read_object(objs, nr, REAL);
+                            oid = db.read_object(objs, nr, LoadType::Real);
                             let obj = objs.get_mut(oid.unwrap());
                             db.obj_to_room(obj, room_nr);
                             last_cmd = 1;
                         } else {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = db.read_object(objs, nr, REAL);
+                            oid = db.read_object(objs, nr, LoadType::Real);
                             objs.get_mut(oid.unwrap()).in_room = NOWHERE;
                             last_cmd = 1;
                         }
@@ -2596,7 +2604,7 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = db.read_object(objs, nr, REAL);
+                        oid = db.read_object(objs, nr, LoadType::Real);
                         let obj_to =
                             db.get_obj_num( objs, db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
                         if obj_to.is_none() {
@@ -2639,7 +2647,7 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = db.read_object(objs, nr, REAL);
+                        oid = db.read_object(objs, nr, LoadType::Real);
                         let obj = objs.get_mut(oid.unwrap());
                         let mob = chars.get_mut(mob_id.unwrap());
                         obj_to_char(obj, mob);
@@ -2682,7 +2690,7 @@ impl Game {
                             );
                         } else {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = db.read_object(objs, nr, REAL);
+                            oid = db.read_object(objs, nr, LoadType::Real);
                             let pos = db.zone_table[zone].cmd[cmd_no].arg3 as i8;
                             equip_char(&mut self.descriptors, chars,db, objs, mob_id.unwrap(), oid.unwrap(), pos);
                             last_cmd = 1;

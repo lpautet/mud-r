@@ -21,7 +21,7 @@ use crate::act_movement::{do_gen_door, perform_move};
 use crate::act_social::do_action;
 use crate::class::{GUILD_INFO, PRAC_PARAMS};
 use crate::constants::INT_APP;
-use crate::db::{DB, REAL};
+use crate::db::{DB, LoadType};
 use crate::interpreter::{
     cmd_is, find_command, is_move, two_arguments, SCMD_CLOSE, SCMD_DROP, SCMD_LOCK, SCMD_OPEN,
     SCMD_UNLOCK,
@@ -909,7 +909,7 @@ pub fn pet_shops(
         let ch = chars.get_mut(chid);
         ch.set_gold(ch.get_gold() - pet_price );
 
-        let pet_id = db.read_mobile(chars, pet_mob_rnum , REAL).unwrap();
+        let pet_id = db.read_mobile(chars, pet_mob_rnum , LoadType::Real).unwrap();
         let pet = chars.get_mut(pet_id);
         pet.set_exp(0);
         pet.set_aff_flags_bits(AFF_CHARM);

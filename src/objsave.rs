@@ -24,7 +24,7 @@ use crate::class::invalid_class;
 use crate::config::{
     CRASH_FILE_TIMEOUT, FREE_RENT, MAX_OBJ_SAVE, MIN_RENT_COST, RENT_FILE_TIMEOUT,
 };
-use crate::db::{DB, REAL, VIRTUAL};
+use crate::db::{DB, LoadType};
 use crate::handler::{equip_char, invalid_align, obj_from_char, obj_to_char, obj_to_obj};
 use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
@@ -57,7 +57,7 @@ pub fn obj_from_store(db: &mut DB, objs: &mut Depot<ObjData>, object: &ObjFileEl
         return None;
     }
 
-    let oid = db.read_object(objs,itemnum, REAL).unwrap();
+    let oid = db.read_object(objs,itemnum, LoadType::Real).unwrap();
     let obj = objs.get_mut(oid);
     *location = object.location as i32;
     obj.set_obj_val(0, object.value[0]);
@@ -444,7 +444,7 @@ pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
         }
 
         if db.real_object(object.item_number) != NOTHING {
-            let oid = db.read_object(objs, object.item_number, VIRTUAL);
+            let oid = db.read_object(objs, object.item_number, LoadType::Virtual);
             let obj = objs.get(oid.unwrap());
             // #if USE_AUTOEQ
             // send_to_char(&mut game.descriptors, ch, " [%5d] (%5dau) <%2d> %-20s\r\n",

@@ -52,7 +52,7 @@ use crate::alias::{delete_aliases, read_aliases};
 use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
-use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BAN_NEW, BAN_SELECT};
+use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BanType};
 use crate::depot::{Depot, DepotId, HasId};
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
@@ -3644,7 +3644,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
         ConNameCnfrm => {
             /* wait for conf. of new name    */
             if arg.to_uppercase().starts_with('Y') {
-                if isbanned(&db, &desc.host) >= BAN_NEW {
+                if isbanned(&db, &desc.host) >= BanType::New {
                     let msg = format!(
                         "Request for new char {} denied from [{}] (siteban)",
                         chars.get(desc.character.unwrap()).get_pc_name(),
@@ -3754,7 +3754,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     let character = chars.get_mut(character_id);
                     character.reset_bad_pws();
                     desc.bad_pws = 0;
-                    if isbanned(&db, &desc.host) == BAN_SELECT
+                    if isbanned(&db, &desc.host) == BanType::Select
                         && !chars.get(desc.character.unwrap()).plr_flagged(PLR_SITEOK)
                     {
                         desc.write_to_output(

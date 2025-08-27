@@ -25,7 +25,7 @@ use crate::act_comm::{do_say, do_tell};
 use crate::act_social::do_action;
 use crate::act_wizard::do_echo;
 use crate::constants::{DRINKS, EXTRA_BITS, ITEM_TYPES};
-use crate::db::{fread_string, DB, REAL};
+use crate::db::{fread_string, DB, LoadType};
 use crate::handler::{fname, get_number, get_obj_in_list_num, get_obj_in_list_vis, isname, obj_from_char, obj_to_char};
 use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMOTE};
 use crate::modify::page_string;
@@ -803,7 +803,7 @@ fn shopping_buy(
         if shop_producing(&db,objs, oid.unwrap(), shop_nr) {
             oid = 
                 db
-                .read_object(objs, objs.get(oid.unwrap()).get_obj_rnum(), REAL);
+                .read_object(objs, objs.get(oid.unwrap()).get_obj_rnum(), LoadType::Real);
         } else {
             obj_from_char(chars, objs.get_mut(oid.unwrap()));
             db.shop_index[shop_nr].lastsort -= 1;

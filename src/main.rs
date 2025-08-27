@@ -1081,7 +1081,7 @@ impl Game {
         }
 
         /* determine if the site is banned */
-        if isbanned(db, &newd.host) == BAN_ALL {
+        if isbanned(db, &newd.host) == BanType::All {
             if let Some(ConnectionType::Telnet(ref mut stream)) = newd.connection {
                 stream.shutdown(Shutdown::Both)
                     .expect("shutdowning socket which is banned");
@@ -1154,7 +1154,7 @@ impl Game {
                 }
 
                 /* determine if the site is banned */
-                if isbanned(db, &newd.host) == BAN_ALL {
+                if isbanned(db, &newd.host) == BanType::All {
                     self.mudlog(
                         chars,
                         CMP,

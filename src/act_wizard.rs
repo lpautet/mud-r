@@ -27,7 +27,7 @@ use crate::constants::{
     POSITION_TYPES, PREFERENCE_BITS, ROOM_BITS, SECTOR_TYPES, WEAR_BITS, WIS_APP,
 };
 use crate::db::{
-    clear_char, parse_c_string, store_to_char, DB, FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, REAL,
+    clear_char, parse_c_string, store_to_char, DB, FASTBOOT_FILE, KILLSCRIPT_FILE, PAUSE_FILE, LoadType,
 };
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::{appear, update_pos, ATTACK_HIT_TEXT};
@@ -1927,7 +1927,7 @@ pub fn do_load(
             send_to_char(&mut game.descriptors, ch, "There is no monster with that number.\r\n");
             return;
         }
-        let mob_id = db.read_mobile(chars,r_num, REAL).unwrap();
+        let mob_id = db.read_mobile(chars,r_num, LoadType::Real).unwrap();
         let ch = chars.get(chid);
         db.char_to_room(chars, objs,mob_id, ch.in_room());
         let mob = chars.get(mob_id);
@@ -1969,7 +1969,7 @@ pub fn do_load(
             send_to_char(&mut game.descriptors, ch, "There is no object with that number.\r\n");
             return;
         }
-        let oid = db.read_object(objs,r_num, REAL).unwrap();
+        let oid = db.read_object(objs,r_num, LoadType::Real).unwrap();
         let obj = objs.get_mut(oid);
         let ch = chars.get_mut(chid);
         if LOAD_INTO_INVENTORY {
@@ -2044,7 +2044,7 @@ pub fn do_vstat(
             send_to_char(&mut game.descriptors, ch, "There is no monster with that number.\r\n");
             return;
         }
-        let mob_id = db.read_mobile(chars,r_num, REAL);
+        let mob_id = db.read_mobile(chars,r_num, LoadType::Real);
         db.char_to_room(chars, objs,mob_id.unwrap(), 0);
         let mob = chars.get(mob_id.unwrap());
         let ch = chars.get(chid);
@@ -2060,7 +2060,7 @@ pub fn do_vstat(
             send_to_char(&mut game.descriptors, ch, "There is no object with that number.\r\n");
             return;
         }
-        let oid = db.read_object(objs,r_num, REAL);
+        let oid = db.read_object(objs,r_num, LoadType::Real);
         let obj = objs.get(oid.unwrap());
         let ch = chars.get(chid);
         do_stat_object(&mut game.descriptors, db,chars, objs,ch, obj);

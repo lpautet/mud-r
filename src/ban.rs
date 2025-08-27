@@ -18,7 +18,7 @@ use std::rc::Rc;
 use log::{error, info};
 use regex::Regex;
 
-use crate::db::{BanListElement, BAN_FILE, DB, XNAME_FILE};
+use crate::db::{BanListElement, BanType, BAN_FILE, DB, XNAME_FILE};
 use crate::depot::{Depot, DepotId};
 use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
@@ -27,6 +27,7 @@ use crate::util::{ctime, time_now, NRM};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
+const BAN_TYPES_VALUES: [BanType; 4] = [BanType::None, BanType::New, BanType::Select, BanType::All];
 
 pub fn load_banned(db: &mut DB) {
     let fl = OpenOptions::new().read(true).open(BAN_FILE);
@@ -62,23 +63,23 @@ pub fn load_banned(db: &mut DB) {
         let ban_type = &f[1];
         let mut ble = BanListElement {
             site: Rc::from(&f[2]),
-            type_: 0,
+            type_: BanType::None,
             date: f[3].parse::<u64>().unwrap(),
             name: Rc::from(&f[4]),
         };
 
         let bt = BAN_TYPES.iter().position(|e| *e == ban_type);
-        ble.type_ = if bt.is_some() { bt.unwrap() } else { 0 } as i32;
+        ble.type_ = if bt.is_some() { BAN_TYPES_VALUES[bt.unwrap()] } else { BanType::None };
         db.ban_list.push(ble);
     }
 }
 
-pub fn isbanned(db: &DB, hostname: &str) -> i32 {
+pub fn isbanned(db: &DB, hostname: &str) -> BanType {
     if hostname.is_empty() {
-        return 0;
+        return BanType::None;
     }
     let hostname = hostname.to_lowercase();
-    let mut i = 0;
+    let mut i = BanType::None;
     db.ban_list
         .iter()
         .filter(|b| hostname.contains(b.site.as_ref()))
@@ -181,16 +182,16 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
 
     let mut ban_node = BanListElement {
         site: Rc::from(site.to_lowercase().as_str()),
-        type_: 0,
+        type_: BanType::None,
         date: time_now(),
         name: ch.get_name().clone(),
     };
 
     let p = BAN_TYPES.iter().position(|t| *t == flag);
-    let mut ban_node_type = 0;
+    let mut ban_node_type = BanType::None;
     if p.is_some() {
-        ban_node_type = p.unwrap();
-        ban_node.type_ = ban_node_type as i32;
+        ban_node_type = BAN_TYPES_VALUES[p.unwrap()];
+        ban_node.type_ = ban_node_type;
     }
 
     db.ban_list.push(ban_node);
@@ -204,7 +205,7 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
             "{} has banned {} for {} players.",
             ch.get_name(),
             site,
-            BAN_TYPES[ban_node_type]
+            BAN_TYPES[ban_node_type as usize]
         )
         .as_str(),
     );
