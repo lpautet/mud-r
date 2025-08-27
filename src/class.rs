@@ -45,8 +45,7 @@ use crate::spells::{
 };
 use crate::structs::{
     CharData, GuildInfoType, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED,
-    CLASS_WARRIOR, DRUNK, FULL, ITEM_ANTI_CLERIC, ITEM_ANTI_MAGIC_USER, ITEM_ANTI_THIEF,
-    ITEM_ANTI_WARRIOR, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK,
+    CLASS_WARRIOR, DRUNK, FULL, ExtraFlags, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK,
     PRF_HOLYLIGHT, THIRST,
 };
 use crate::util::{rand_number, BRF};
@@ -3661,18 +3660,18 @@ pub fn backstab_mult(level: u8) -> i32 {
  * usable by a particular class, based on the ITEM_ANTI_{class} bitvectors.
  */
 pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
-    if obj.obj_flagged(ITEM_ANTI_MAGIC_USER) && ch.is_magic_user() {
+    if obj.obj_flagged(ExtraFlags::ANTI_MAGIC_USER) && ch.is_magic_user() {
         return true;
     }
 
-    if obj.obj_flagged(ITEM_ANTI_CLERIC) && ch.is_cleric() {
+    if obj.obj_flagged(ExtraFlags::ANTI_CLERIC) && ch.is_cleric() {
         return true;
     }
-    if obj.obj_flagged(ITEM_ANTI_WARRIOR) && ch.is_warrior() {
+    if obj.obj_flagged(ExtraFlags::ANTI_WARRIOR) && ch.is_warrior() {
         return true;
     }
 
-    if obj.obj_flagged(ITEM_ANTI_THIEF) && ch.is_thief() {
+    if obj.obj_flagged(ExtraFlags::ANTI_THIEF) && ch.is_thief() {
         return true;
     }
 

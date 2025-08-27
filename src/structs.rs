@@ -182,24 +182,29 @@ pub const WEAR_HOLD: i16 = 17;
 
 pub const NUM_WEARS: i8 = 18;
 
-/* Extra object flags: used by obj_data.obj_flags.extra_flags */
-pub const ITEM_GLOW: i32 = 1 << 0; /* Item is glowing		*/
-pub const ITEM_HUM: i32 = 1 << 1; /* Item is humming		*/
-pub const ITEM_NORENT: i32 = 1 << 2; /* Item cannot be rented	*/
-pub const ITEM_NODONATE: i32 = 1 << 3; /* Item cannot be donated	*/
-pub const ITEM_NOINVIS: i32 = 1 << 4; /* Item cannot be made invis	*/
-pub const ITEM_INVISIBLE: i32 = 1 << 5; /* Item is invisible		*/
-pub const ITEM_MAGIC: i32 = 1 << 6; /* Item is magical		*/
-pub const ITEM_NODROP: i32 = 1 << 7; /* Item is cursed: can't drop	*/
-pub const ITEM_BLESS: i32 = 1 << 8; /* Item is blessed		*/
-pub const ITEM_ANTI_GOOD: i32 = 1 << 9; /* Not usable by good people	*/
-pub const ITEM_ANTI_EVIL: i32 = 1 << 10; /* Not usable by evil people	*/
-pub const ITEM_ANTI_NEUTRAL: i32 = 1 << 11; /* Not usable by neutral people	*/
-pub const ITEM_ANTI_MAGIC_USER: i32 = 1 << 12; /* Not usable by mages		*/
-pub const ITEM_ANTI_CLERIC: i32 = 1 << 13; /* Not usable by clerics	*/
-pub const ITEM_ANTI_THIEF: i32 = 1 << 14; /* Not usable by thieves	*/
-pub const ITEM_ANTI_WARRIOR: i32 = 1 << 15; /* Not usable by warriors	*/
-pub const ITEM_NOSELL: i32 = 1 << 16; /* Shopkeepers won't touch it	*/
+bitflags! {
+    /// Extra object flags: used by obj_data.obj_flags.extra_flags
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct ExtraFlags: i32 {
+        const GLOW = 1 << 0;            // Item is glowing
+        const HUM = 1 << 1;             // Item is humming
+        const NORENT = 1 << 2;          // Item cannot be rented
+        const NODONATE = 1 << 3;        // Item cannot be donated
+        const NOINVIS = 1 << 4;         // Item cannot be made invis
+        const INVISIBLE = 1 << 5;       // Item is invisible
+        const MAGIC = 1 << 6;           // Item is magical
+        const NODROP = 1 << 7;          // Item is cursed: can't drop
+        const BLESS = 1 << 8;           // Item is blessed
+        const ANTI_GOOD = 1 << 9;       // Not usable by good people
+        const ANTI_EVIL = 1 << 10;      // Not usable by evil people
+        const ANTI_NEUTRAL = 1 << 11;   // Not usable by neutral people
+        const ANTI_MAGIC_USER = 1 << 12; // Not usable by mages
+        const ANTI_CLERIC = 1 << 13;    // Not usable by clerics
+        const ANTI_THIEF = 1 << 14;     // Not usable by thieves
+        const ANTI_WARRIOR = 1 << 15;   // Not usable by warriors
+        const NOSELL = 1 << 16;         // Shopkeepers won't touch it
+    }
+}
 
 /* Modifier constants used with obj affects ('A' fields) */
 pub const APPLY_NONE: i8 = 0; /* No effect			*/
@@ -647,7 +652,7 @@ pub struct ObjFlagData {
     /* Type of item			    */
     pub wear_flags: WearFlags,
     /* Where you can wear it	    */
-    pub(crate) extra_flags: i32,
+    pub(crate) extra_flags: ExtraFlags,
     /* If it hums, glows, etc.	    */
     pub weight: i32,
     /* Weigt what else                  */
@@ -788,7 +793,7 @@ pub struct ObjFileElem {
     pub item_number: ObjVnum,
     pub location: i16,
     pub value: [i32; 4],
-    pub extra_flags: i32,
+    pub extra_flags: ExtraFlags,
     pub weight: i32,
     pub timer: i32,
     pub bitvector: i64,

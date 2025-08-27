@@ -30,8 +30,7 @@ use crate::structs::{
     APPLY_AGE, APPLY_CHA, APPLY_CHAR_HEIGHT, APPLY_CHAR_WEIGHT, APPLY_CLASS, APPLY_CON,
     APPLY_DAMROLL, APPLY_DEX, APPLY_EXP, APPLY_GOLD, APPLY_HIT, APPLY_HITROLL, APPLY_INT,
     APPLY_LEVEL, APPLY_MANA, APPLY_MOVE, APPLY_NONE, APPLY_SAVING_BREATH, APPLY_SAVING_PARA,
-    APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL,
-    ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, WearFlags,
+    APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ExtraFlags, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, WearFlags,
     LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
     PLR_NOTDEADYET, RoomFlags, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
@@ -512,13 +511,13 @@ fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: i16) -> i32 {
 }
 
 pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
-    if obj.obj_flagged(ITEM_ANTI_EVIL) && ch.is_evil() {
+    if obj.obj_flagged(ExtraFlags::ANTI_EVIL) && ch.is_evil() {
         return true;
     };
-    if obj.obj_flagged(ITEM_ANTI_GOOD) && ch.is_good() {
+    if obj.obj_flagged(ExtraFlags::ANTI_GOOD) && ch.is_good() {
         return true;
     }
-    if obj.obj_flagged(ITEM_ANTI_NEUTRAL) && ch.is_neutral() {
+    if obj.obj_flagged(ExtraFlags::ANTI_NEUTRAL) && ch.is_neutral() {
         return true;
     }
     false

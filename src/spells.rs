@@ -22,8 +22,8 @@ use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
     AffectedType, RoomRnum, AFF_CHARM, AFF_POISON, AFF_SANCTUARY, APPLY_DAMROLL,
-    APPLY_HITROLL, APPLY_NONE, ITEM_ANTI_EVIL, ITEM_ANTI_GOOD, ITEM_ARMOR, ITEM_DRINKCON,
-    ITEM_FOOD, ITEM_FOUNTAIN, ITEM_MAGIC, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
+    APPLY_HITROLL, APPLY_NONE, ExtraFlags, ITEM_ARMOR, ITEM_DRINKCON,
+    ITEM_FOOD, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
     ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE,
     MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
     RoomFlags, SEX_MALE,
@@ -664,7 +664,7 @@ pub fn spell_identify(
             );
         }
 
-        sprintbit(objs.get(oid).get_obj_extra() as i64, &EXTRA_BITS, &mut bitbuf);
+        sprintbit(objs.get(oid).get_obj_extra().bits() as i64, &EXTRA_BITS, &mut bitbuf);
         send_to_char(&mut game.descriptors, ch, format!("Item is: {}\r\n", bitbuf).as_str());
 
         send_to_char(&mut game.descriptors, ch,
@@ -841,7 +841,7 @@ pub fn spell_enchant_weapon(
 
     /* Either already enchanted or not a weapon. */
     let obj = objs.get_mut(oid);
-    if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ITEM_MAGIC) {
+    if obj.get_obj_type() != ITEM_WEAPON || obj.obj_flagged(ExtraFlags::MAGIC) {
         return;
     }
 
@@ -852,7 +852,7 @@ pub fn spell_enchant_weapon(
         }
     }
 
-    obj.set_obj_extra_bit(ITEM_MAGIC);
+    obj.set_obj_extra_bit(ExtraFlags::MAGIC);
 
     let mut af0 = obj.affected[0];
     af0.location = APPLY_HITROLL as u8;
@@ -866,13 +866,13 @@ pub fn spell_enchant_weapon(
     let ch = chars.get(chid);
     if ch.is_good() {
         let obj = objs.get_mut(oid);
-        obj.set_obj_extra_bit(ITEM_ANTI_EVIL);
+        obj.set_obj_extra_bit(ExtraFlags::ANTI_EVIL);
         let ch = chars.get(chid);
         let obj=objs.get(oid);
         act(&mut game.descriptors, chars, db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
     } else if ch.is_evil() {
         let obj = objs.get_mut(oid);
-        obj.set_obj_extra_bit(ITEM_ANTI_GOOD);
+        obj.set_obj_extra_bit(ExtraFlags::ANTI_GOOD);
         let ch = chars.get(chid);
         let obj=objs.get(oid);
         act(&mut game.descriptors, chars, db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);

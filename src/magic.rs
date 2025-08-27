@@ -32,12 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectedType, CharData, MobVnum, AFF_BLIND, AFF_CHARM, AFF_CURSE, AFF_DETECT_ALIGN,
-    AFF_DETECT_INVIS, AFF_DETECT_MAGIC, AFF_GROUP, AFF_INFRAVISION, AFF_INVISIBLE, AFF_POISON,
-    AFF_PROTECT_EVIL, AFF_SANCTUARY, AFF_SENSE_LIFE, AFF_SLEEP, AFF_WATERWALK, APPLY_AC,
-    APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR,
-    ITEM_BLESS, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_INVISIBLE, ITEM_NODROP, ITEM_NOINVIS,
-    ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING,
+    AffectedType, CharData, ExtraFlags, MobVnum, AFF_BLIND, AFF_CHARM, AFF_CURSE, AFF_DETECT_ALIGN, AFF_DETECT_INVIS, AFF_DETECT_MAGIC, AFF_GROUP, AFF_INFRAVISION, AFF_INVISIBLE, AFF_POISON, AFF_PROTECT_EVIL, AFF_SANCTUARY, AFF_SENSE_LIFE, AFF_SLEEP, AFF_WATERWALK, APPLY_AC, APPLY_DAMROLL, APPLY_HITROLL, APPLY_NONE, APPLY_SAVING_SPELL, APPLY_STR, CLASS_WARRIOR, ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_WEAPON, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -1039,14 +1034,14 @@ pub fn mag_alter_objs(
 
     match spellnum {
         SPELL_BLESS => {
-            if ! objs.get(oid).obj_flagged(ITEM_BLESS) && ( objs.get(oid).get_obj_weight() <= 5 * ch.get_level() as i32) {
-                 objs.get_mut(oid).set_obj_extra_bit(ITEM_BLESS);
+            if ! objs.get(oid).obj_flagged(ExtraFlags::BLESS) && ( objs.get(oid).get_obj_weight() <= 5 * ch.get_level() as i32) {
+                 objs.get_mut(oid).set_obj_extra_bit(ExtraFlags::BLESS);
                 to_char = "$p glows briefly.";
             }
         }
         SPELL_CURSE => {
-            if ! objs.get(oid).obj_flagged(ITEM_NODROP) {
-                 objs.get_mut(oid).set_obj_extra_bit(ITEM_NODROP);
+            if ! objs.get(oid).obj_flagged(ExtraFlags::NODROP) {
+                 objs.get_mut(oid).set_obj_extra_bit(ExtraFlags::NODROP);
                 if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
                      objs.get_mut(oid).decr_obj_val(2);
                 }
@@ -1054,8 +1049,8 @@ pub fn mag_alter_objs(
             }
         }
         SPELL_INVISIBLE => {
-            if ! objs.get(oid).obj_flagged(ITEM_NOINVIS | ITEM_INVISIBLE) {
-                 objs.get_mut(oid).set_obj_extra_bit(ITEM_INVISIBLE);
+            if ! objs.get(oid).obj_flagged(ExtraFlags::NOINVIS | ExtraFlags::INVISIBLE) {
+                 objs.get_mut(oid).set_obj_extra_bit(ExtraFlags::INVISIBLE);
                 to_char = "$p vanishes.";
             }
         }
@@ -1070,8 +1065,8 @@ pub fn mag_alter_objs(
             }
         }
         SPELL_REMOVE_CURSE => {
-            if  objs.get(oid).obj_flagged(ITEM_NODROP) {
-                 objs.get_mut(oid).remove_obj_extra_bit(ITEM_NODROP);
+            if  objs.get(oid).obj_flagged(ExtraFlags::NODROP) {
+                 objs.get_mut(oid).remove_obj_extra_bit(ExtraFlags::NODROP);
             }
             if  objs.get(oid).get_obj_type() == ITEM_WEAPON {
                  objs.get_mut(oid).incr_obj_val(2);

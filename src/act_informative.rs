@@ -35,8 +35,8 @@ use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     ExtraDescrData, AFF_DETECT_ALIGN, AFF_DETECT_MAGIC, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY,
-    CONT_CLOSED, ExitFlags, ITEM_BLESS, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
-    ITEM_GLOW, ITEM_HUM, ITEM_INVISIBLE, ITEM_MAGIC, ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE,
+    CONT_CLOSED, ExitFlags, ExtraFlags, ITEM_CONTAINER, ITEM_DRINKCON, ITEM_FOUNTAIN,
+ ITEM_NOTE, LVL_GOD, LVL_IMPL, NOWHERE,
     NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1,
     PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
     PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST,
@@ -106,19 +106,19 @@ pub const SHOW_OBJ_ACTION: i32 = 2;
     }
 
     fn show_obj_modifiers(descs: &mut Depot<DescriptorData>, obj: &ObjData, ch: &CharData) {
-        if obj.obj_flagged(ITEM_INVISIBLE) {
+        if obj.obj_flagged(ExtraFlags::INVISIBLE) {
             send_to_char(descs, ch, " (invisible)");
         }
-        if obj.obj_flagged(ITEM_BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
+        if obj.obj_flagged(ExtraFlags::BLESS) && ch.aff_flagged(AFF_DETECT_ALIGN) {
             send_to_char(descs, ch, " ..It glows blue!");
         }
-        if obj.obj_flagged(ITEM_MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
+        if obj.obj_flagged(ExtraFlags::MAGIC) && ch.aff_flagged(AFF_DETECT_MAGIC) {
             send_to_char(descs, ch, " ..It glows yellow!");
         }
-        if obj.obj_flagged(ITEM_GLOW) {
+        if obj.obj_flagged(ExtraFlags::GLOW) {
             send_to_char(descs, ch, " ..It has a soft glowing aura!");
         }
-        if obj.obj_flagged(ITEM_HUM) {
+        if obj.obj_flagged(ExtraFlags::HUM) {
             send_to_char(descs, ch, " ..It emits a faint humming sound!");
         }
     }

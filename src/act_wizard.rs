@@ -825,7 +825,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     sprintbit(obj.get_obj_affect(), &AFFECTED_BITS, &mut buf);
     send_to_char(descs, ch, format!("Set char bits : {}\r\n", buf).as_str());
     buf.clear();
-    sprintbit(obj.get_obj_extra() as i64, &EXTRA_BITS, &mut buf);
+    sprintbit(obj.get_obj_extra().bits() as i64, &EXTRA_BITS, &mut buf);
     send_to_char(descs, ch, format!("Extra flags   : {}\r\n", buf).as_str());
 
     send_to_char(descs, 

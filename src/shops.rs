@@ -31,7 +31,7 @@ use crate::interpreter::{cmd_is, find_command, is_number, one_argument, SCMD_EMO
 use crate::modify::page_string;
 use crate::structs::{
     MeRef, CharData, MobRnum, MobVnum, ObjData, ObjVnum, RoomRnum, RoomVnum, Special, AFF_CHARM,
-    ITEM_DRINKCON, ITEM_NOSELL, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
+    ITEM_DRINKCON, ExtraFlags, ITEM_STAFF, ITEM_WAND, LVL_GOD, MAX_OBJ_AFFECT, NOBODY, NOTHING,
     NOWHERE,
 };
 use crate::util::{can_see, can_see_obj, get_line, sprintbit};
@@ -374,7 +374,7 @@ fn evaluate_expression(obj: &ObjData, expr: &str) -> i32 {
                 let mut findex = 0;
                 for eindex in 0..EXTRA_BITS.len() {
                     if name == EXTRA_BITS[eindex] {
-                        push(&mut vals, if obj.obj_flagged(1 << eindex) { 1 } else { 0 });
+                        push(&mut vals, if obj.obj_flagged(ExtraFlags::from_bits_truncate(1 << eindex)) { 1 } else { 0 });
                         findex = eindex;
                         break;
                     }
@@ -426,7 +426,7 @@ fn trade_with(item: &ObjData, shop: &ShopData) -> i32 {
         return OBJECT_NOVAL;
     }
 
-    if item.obj_flagged(ITEM_NOSELL) {
+    if item.obj_flagged(ExtraFlags::NOSELL) {
         return OBJECT_NOTOK;
     }
 

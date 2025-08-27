@@ -43,7 +43,7 @@ use crate::structs::{
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, ExitFlags,
-    ITEM_CONTAINER, ITEM_INVISIBLE, WearFlags, NOBODY, NOTHING,
+    ITEM_CONTAINER, ExtraFlags, WearFlags, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
@@ -753,16 +753,16 @@ impl ObjData {
         self.obj_flags.type_flag = val;
     }
 
-    pub fn get_obj_extra(&self) -> i32 {
+    pub fn get_obj_extra(&self) -> ExtraFlags {
         self.obj_flags.extra_flags
     }
-    pub fn set_obj_extra(&mut self, val: i32) {
+    pub fn set_obj_extra(&mut self, val: ExtraFlags) {
         self.obj_flags.extra_flags = val;
     }
-    pub fn set_obj_extra_bit(&mut self, val: i32) {
+    pub fn set_obj_extra_bit(&mut self, val: ExtraFlags) {
         self.obj_flags.extra_flags |= val;
     }
-    pub fn remove_obj_extra_bit(&mut self, val: i32) {
+    pub fn remove_obj_extra_bit(&mut self, val: ExtraFlags) {
         self.obj_flags.extra_flags &= !val;
     }
     pub fn get_obj_wear(&self) -> WearFlags {
@@ -783,8 +783,8 @@ impl ObjData {
     pub fn incr_obj_val(&mut self, val: usize) {
         self.obj_flags.value[val] += 1;
     }
-    pub fn obj_flagged(&self, flag: i32) -> bool {
-        is_set!(self.get_obj_extra(), flag)
+    pub fn obj_flagged(&self, flag: ExtraFlags) -> bool {
+        self.get_obj_extra().contains(flag)
     }
     pub fn objval_flagged(&self, flag: i32) -> bool {
         is_set!(self.get_obj_val(1), flag)
@@ -934,7 +934,7 @@ pub fn invis_ok(sub: &CharData, obj: &CharData) -> bool {
 }
 
 pub fn invis_ok_obj(sub: &CharData, obj: &ObjData) -> bool {
-    !obj.obj_flagged(ITEM_INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS)
+    !obj.obj_flagged(ExtraFlags::INVISIBLE) || sub.aff_flagged(AFF_DETECT_INVIS)
 }
 
 impl DB {

@@ -30,7 +30,7 @@ use crate::interpreter::{cmd_is, find_command};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     CharData, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentInfo, ITEM_CONTAINER, ITEM_KEY,
-    ITEM_NORENT, ITEM_WEAPON, WearFlags, LVL_GOD,
+    ExtraFlags, ITEM_WEAPON, WearFlags, LVL_GOD,
     LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, RENT_CRASH, RENT_CRYO,
     RENT_FORCED, RENT_RENTED, RENT_TIMEDOUT, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET,
     WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT,
@@ -510,7 +510,7 @@ impl ObjFileElem {
             item_number: 0,
             location: 0,
             value: [0; 4],
-            extra_flags: 0,
+            extra_flags: ExtraFlags::empty(),
             weight: 0,
             timer: 0,
             bitvector: 0,
@@ -898,7 +898,7 @@ fn crash_extract_objs(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
 }
 
 fn crash_is_unrentable(obj: &ObjData) -> bool {
-    if obj.obj_flagged(ITEM_NORENT)
+    if obj.obj_flagged(ExtraFlags::NORENT)
         || obj.get_obj_rent() < 0
         || obj.get_obj_rnum() == NOTHING
         || obj.get_obj_type() == ITEM_KEY

@@ -30,8 +30,8 @@ use crate::interpreter::{
 use crate::spells::SPELL_POISON;
 use crate::structs::{
     AffectedType, RoomRnum, AFF_POISON, APPLY_NONE, CONT_CLOSED, DRUNK, FULL, ITEM_CONTAINER,
-    ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY, ITEM_NODONATE, ITEM_NODROP,
-    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, WearFlags, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
+    ITEM_DRINKCON, ITEM_FOOD, ITEM_FOUNTAIN, ITEM_LIGHT, ITEM_MONEY,
+    ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, ExtraFlags, WearFlags, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS,
     PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS,
     WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD,
     WEAR_WRIST_R,
@@ -63,7 +63,7 @@ fn perform_put(
             Some(VictimRef::Obj(cobj)),
             TO_CHAR,
         );
-    } else if obj.obj_flagged(ITEM_NODROP) && cobj.in_room() != NOWHERE {
+    } else if obj.obj_flagged(ExtraFlags::NODROP) && cobj.in_room() != NOWHERE {
         act(descs, 
             chars,
             db,
@@ -93,8 +93,8 @@ fn perform_put(
         );
 
         /* Yes, I realize this is strange until we have auto-equip on rent. -gg */
-        if obj.obj_flagged(ITEM_NODROP) && !cobj.obj_flagged(ITEM_NODROP) {
-            objs.get_mut(cid).set_obj_extra_bit(ITEM_NODROP);
+        if obj.obj_flagged(ExtraFlags::NODROP) && !cobj.obj_flagged(ExtraFlags::NODROP) {
+            objs.get_mut(cid).set_obj_extra_bit(ExtraFlags::NODROP);
             let ch = chars.get(chid);
             let obj = objs.get(oid);
             let cobj = objs.get(cid);
@@ -435,7 +435,7 @@ fn get_from_container(
     let mut howmany = howmany;
     let obj_dotmode = find_all_dots(arg);
 
-    if cobj.obj_flagged(CONT_CLOSED) {
+    if cobj.objval_flagged(CONT_CLOSED) {
         act(descs, 
             chars,
             db,
@@ -883,7 +883,7 @@ fn perform_drop(
 ) -> i32 {
     let ch = chars.get(chid);
     let obj = objs.get_mut(oid);
-    if obj.obj_flagged(ITEM_NODROP) {
+    if obj.obj_flagged(ExtraFlags::NODROP) {
         let buf = format!("You can't {} $p, it must be CURSED!", sname);
         act(descs, chars, db, &buf, false, Some(ch), Some(obj), None, TO_CHAR);
         return 0;
@@ -896,7 +896,7 @@ fn perform_drop(
     act(descs, chars, db, &buf, true, Some(ch), Some(obj), None, TO_ROOM);
 
     obj_from_char(chars, obj);
-    if (mode == SCMD_DONATE as u8) && obj.obj_flagged(ITEM_NODONATE) {
+    if (mode == SCMD_DONATE as u8) && obj.obj_flagged(ExtraFlags::NODONATE) {
         mode = SCMD_JUNK as u8;
     }
 
@@ -1145,7 +1145,7 @@ fn perform_give(
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     let obj = objs.get_mut(oid);
-    if obj.obj_flagged(ITEM_NODROP) {
+    if obj.obj_flagged(ExtraFlags::NODROP) {
         act(descs, 
             chars,
             db,
@@ -2646,7 +2646,7 @@ fn perform_remove(
         oid.is_none()
     } {
         error!("SYSERR: perform_remove: bad pos {} passed.", pos);
-    } else if objs.get(oid.unwrap()).obj_flagged(ITEM_NODROP) {
+    } else if objs.get(oid.unwrap()).obj_flagged(ExtraFlags::NODROP) {
         let oid = oid.unwrap();
         let obj = objs.get(oid);
         act(descs, 

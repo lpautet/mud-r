@@ -34,12 +34,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    CharData, MeRef, MessageList, MessageType, MsgType, ObjData, AFF_GROUP, AFF_HIDE,
-    AFF_INVISIBLE, AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_NODONATE, ITEM_WEAPON,
-    WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE,
-    NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING,
-    POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE,
-    RoomFlags, WEAR_WIELD,
+    CharData, ExtraFlags, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, AFF_GROUP, AFF_HIDE, AFF_INVISIBLE, AFF_SANCTUARY, AFF_SLEEP, ITEM_CONTAINER, ITEM_WEAPON, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE, WEAR_WIELD
 };
 use crate::util::{dice, rand_number, stop_follower, BRF};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
@@ -346,7 +341,7 @@ impl DB {
 
         corpse.set_obj_type(ITEM_CONTAINER);
         corpse.set_obj_wear(WearFlags::TAKE);
-        corpse.set_obj_extra(ITEM_NODONATE);
+        corpse.set_obj_extra(ExtraFlags::NODONATE);
         corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
         corpse.set_obj_val(3, 1); /* corpse identifier */
         corpse.set_obj_weight(ch.get_weight() as i32 + ch.is_carrying_w());

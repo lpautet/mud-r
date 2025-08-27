@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
+    AffectedType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, AFF_POISON, APPLY_NONE, HOST_LENGTH, ITEM_DRINKCON, ITEM_FOUNTAIN, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE, SKY_CLOUDLESS, SKY_CLOUDY, SKY_LIGHTNING, SKY_RAINING, SUN_DARK, SUN_LIGHT, SUN_RISE, SUN_SET
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1834,7 +1834,7 @@ impl DB {
                 value: [0, 0, 0, 0],
                 type_flag: 0,
                 wear_flags: WearFlags::empty(),
-                extra_flags: 0,
+                extra_flags: ExtraFlags::empty(),
                 weight: 0,
                 cost: 0,
                 cost_per_day: 0,
@@ -1926,7 +1926,7 @@ impl DB {
 
         /* Object flags checked in check_object(). */
         obj.set_obj_type(f[1].parse::<u8>().unwrap());
-        obj.set_obj_extra(asciiflag_conv(&f[2]) as i32);
+        obj.set_obj_extra(ExtraFlags::from_bits_truncate(asciiflag_conv(&f[2]) as i32));
         obj.set_obj_wear(WearFlags::from_bits_truncate(asciiflag_conv(&f[3]) as i32));
 
         if get_line(reader, &mut line) == 0 {
@@ -3531,7 +3531,7 @@ impl DB {
             "object wear",
         );
         error |= check_bitvector_names(
-            obj.get_obj_extra() as i64,
+            obj.get_obj_extra().bits().into(),
             EXTRA_BITS_COUNT,
             objname.as_str(),
             "object extra",
@@ -3949,7 +3949,7 @@ impl Default for ObjData {
                 value: [0, 0, 0, 0],
                 type_flag: 0,
                 wear_flags: WearFlags::empty(),
-                extra_flags: 0,
+                extra_flags: ExtraFlags::empty(),
                 weight: 0,
                 cost: 0,
                 cost_per_day: 0,
