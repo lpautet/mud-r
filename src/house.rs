@@ -23,7 +23,7 @@ use crate::interpreter::{half_chop, is_abbrev, one_argument, search_block};
 use crate::objsave::{obj_from_store, obj_to_store};
 use crate::structs::{
     CharData,  ObjFileElem, RoomRnum, RoomVnum, LVL_GRGOD, LVL_IMMORT, NOWHERE,
-    NUM_OF_DIRS, ROOM_ATRIUM, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PRIVATE,
+    NUM_OF_DIRS, RoomFlags,
 };
 use crate::util::{ctime, time_now, NRM};
 use crate::{send_to_char, DescriptorData, Game, ObjData, TextData};
@@ -226,7 +226,7 @@ pub fn house_crashsave(chars: &mut Depot<CharData>, db: &mut DB, objs: &mut Depo
     }
 
     house_restore_weight(chars, db, objs,db.world[rnum as usize].contents.clone());
-    db.remove_room_flags_bit(rnum, ROOM_HOUSE_CRASH);
+    db.remove_room_flags_bit(rnum, RoomFlags::HOUSE_CRASH);
 }
 
 /* Delete a house save file */
@@ -424,8 +424,8 @@ pub fn house_boot(db: &mut DB,objs: &mut Depot<ObjData>, ) {
 
             db.house_control[db.num_of_houses] = temp_house;
             db.num_of_houses += 1;
-            db.set_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE);
-            db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
+            db.set_room_flags_bit(real_house, RoomFlags::HOUSE | RoomFlags::PRIVATE);
+            db.set_room_flags_bit(real_atrium, RoomFlags::ATRIUM);
 
             house_load(db, objs,temp_house.vnum);
         }
@@ -603,8 +603,8 @@ fn hcontrol_build_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<Cha
     db.house_control[db.num_of_houses] = temp_house;
     db.num_of_houses += 1;
 
-    db.set_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE);
-    db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
+    db.set_room_flags_bit(real_house, RoomFlags::HOUSE | RoomFlags::PRIVATE);
+    db.set_room_flags_bit(real_atrium, RoomFlags::ATRIUM);
     house_crashsave(chars, db, objs,virt_house);
     let ch = chars.get(chid);
     send_to_char(descs, ch, "House built.  Mazel tov!\r\n");
@@ -638,7 +638,7 @@ fn hcontrol_destroy_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<C
             argi, db.house_control[i].atrium
         );
     } else {
-        db.remove_room_flags_bit(real_atrium, ROOM_ATRIUM);
+        db.remove_room_flags_bit(real_atrium, RoomFlags::ATRIUM);
     }
     let real_house;
     if {
@@ -650,7 +650,7 @@ fn hcontrol_destroy_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<C
             argi, db.house_control[i].vnum
         );
     } else {
-        db.remove_room_flags_bit(real_house, ROOM_HOUSE | ROOM_PRIVATE | ROOM_HOUSE_CRASH);
+        db.remove_room_flags_bit(real_house, RoomFlags::HOUSE | RoomFlags::PRIVATE | RoomFlags::HOUSE_CRASH);
     }
 
     house_delete_file(db.house_control[i].vnum);
@@ -675,7 +675,7 @@ fn hcontrol_destroy_house(descs: &mut Depot<DescriptorData>, chars: &mut Depot<C
             real_atrium = db.real_room(db.house_control[i].atrium);
             real_atrium != NOWHERE
         } {
-            db.set_room_flags_bit(real_atrium, ROOM_ATRIUM);
+            db.set_room_flags_bit(real_atrium, RoomFlags::ATRIUM);
         }
     }
 }
@@ -739,7 +739,7 @@ pub fn do_house(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     one_argument(argument, &mut arg);
     let i;
     let id;
-    if !db.room_flagged(ch.in_room(), ROOM_HOUSE) {
+    if !db.room_flagged(ch.in_room(), RoomFlags::HOUSE) {
         send_to_char(&mut game.descriptors, ch, "You must be in your house to set guests.\r\n");
     } else if {
         i = find_house(&db, db.get_room_vnum(ch.in_room()));
@@ -793,7 +793,7 @@ pub fn house_save_all(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<
     for i in 0..db.num_of_houses{
         let real_house = db.real_room(db.house_control[i].vnum);
         if real_house != NOWHERE {
-            if db.room_flagged(real_house, ROOM_HOUSE_CRASH) {
+            if db.room_flagged(real_house, RoomFlags::HOUSE_CRASH) {
                 let room_vnum = db.house_control[i].vnum;
                 house_crashsave(chars, db, objs,room_vnum);
             }

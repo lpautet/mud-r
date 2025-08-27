@@ -52,7 +52,7 @@ use crate::spells::{
 use crate::structs::{
     CharData, AFF_CHARM, AFF_GROUP, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
     LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    PULSE_VIOLENCE, ROOM_NOMAGIC, ROOM_PEACEFUL,
+    PULSE_VIOLENCE, RoomFlags,
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
 use crate::util::{ has_spell_routine, rand_number};
@@ -487,7 +487,7 @@ pub fn call_magic(
         sinfo_routines = sinfo.routines;
         sinfo_violent = sinfo.violent;
     }
-    if db.room_flagged(chars.get(caster_id).in_room(), ROOM_NOMAGIC) {
+    if db.room_flagged(chars.get(caster_id).in_room(), RoomFlags::NOMAGIC) {
         send_to_char(&mut game.descriptors, chars.get(caster_id), "Your magic fizzles out and dies.\r\n");
         act(&mut game.descriptors, chars, db,
             "$n's magic fizzles out and dies.",
@@ -499,7 +499,7 @@ pub fn call_magic(
         );
         return 0;
     }
-    if db.room_flagged(chars.get(caster_id).in_room(), ROOM_PEACEFUL)
+    if db.room_flagged(chars.get(caster_id).in_room(), RoomFlags::PEACEFUL)
         && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
         send_to_char(&mut game.descriptors, chars.get(

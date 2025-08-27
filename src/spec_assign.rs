@@ -24,7 +24,7 @@ use crate::spec_procs::{
 };
 use crate::spec_procs::{guild, puff};
 use crate::structs::{
-    MobVnum, ObjVnum, RoomRnum, RoomVnum, Special, NOBODY, NOTHING, NOWHERE, ROOM_DEATH,
+    MobVnum, ObjVnum, RoomRnum, RoomVnum, Special, NOBODY, NOTHING, NOWHERE, RoomFlags,
 };
 
 fn assignmob( db: &mut DB, mob: MobVnum, fname: Special) {
@@ -277,7 +277,7 @@ pub fn assign_rooms(db: &mut DB) {
     if DTS_ARE_DUMPS {
         let l = db.world.len();
         for i in 0..l {
-            if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
+            if db.room_flagged(i as RoomRnum, RoomFlags::DEATH) {
                 db.world[i].func = Some(dump);
             }
         }

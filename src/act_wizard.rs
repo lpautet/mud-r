@@ -54,7 +54,7 @@ use crate::structs::{
     PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST,
     PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT,
     PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS,
-    PRF_SUMMONABLE, ROOM_DEATH, ROOM_GODROOM, ROOM_HOUSE, ROOM_PRIVATE, THIRST,
+    PRF_SUMMONABLE, RoomFlags, THIRST,
 };
 use crate::util::{
     age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
@@ -222,16 +222,16 @@ fn find_target_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         return location;
     }
 
-    if db.room_flagged(location, ROOM_GODROOM) {
+    if db.room_flagged(location, RoomFlags::GODROOM) {
         send_to_char(descs, ch, "You are not godly enough to use that room!\r\n");
-    } else if db.room_flagged(location, ROOM_PRIVATE)
+    } else if db.room_flagged(location, RoomFlags::PRIVATE)
         && db.world[location as usize].peoples.len() > 1
     {
         send_to_char(descs, 
             ch,
             "There's a private conversation going on in that room.\r\n",
         );
-    } else if db.room_flagged(location, ROOM_HOUSE)
+    } else if db.room_flagged(location, RoomFlags::HOUSE)
         && !house_can_enter(&db, ch, db.get_room_vnum(location))
     {
         send_to_char(descs, ch, "That's private property -- no trespassing!\r\n");
@@ -608,7 +608,7 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
         .as_str(),
     );
 
-    sprintbit(rm_room_flags as i64, &ROOM_BITS, &mut buf2);
+    sprintbit(rm_room_flags.bits(), &ROOM_BITS, &mut buf2);
     send_to_char(descs, 
         ch,
         format!(
@@ -1812,11 +1812,11 @@ pub fn do_switch(
     } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
         send_to_char(&mut game.descriptors, ch, "You aren't holy enough to use a mortal's body.\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_GODROOM)
+        && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::GODROOM)
     {
         send_to_char(&mut game.descriptors, ch, "You are not godly enough to use that room!\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), ROOM_HOUSE)
+        && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::HOUSE)
         && !house_can_enter(
             &db,
             ch,
@@ -3742,7 +3742,7 @@ pub fn do_show(
             let mut buf = "Death Traps\r\n-----------\r\n".to_string();
             let mut j = 0;
             for i in 0..db.world.len() {
-                if db.room_flagged(i as RoomRnum, ROOM_DEATH) {
+                if db.room_flagged(i as RoomRnum, RoomFlags::DEATH) {
                     j += 1;
                     buf.push_str(
                         format!(
@@ -3764,7 +3764,7 @@ pub fn do_show(
             let mut buf = "Godrooms\r\n--------------------------\r\n".to_string();
             let mut j = 0;
             for i in 0..db.world.len() {
-                if db.room_flagged(i as RoomRnum, ROOM_GODROOM) {
+                if db.room_flagged(i as RoomRnum, RoomFlags::GODROOM) {
                     j += 1;
                     buf.push_str(
                         format!(

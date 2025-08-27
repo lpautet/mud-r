@@ -39,7 +39,7 @@ use crate::structs::{
     ITEM_WEAR_TAKE, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE,
     NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING,
     POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PRF_COLOR_1, PRF_COLOR_2, PULSE_VIOLENCE,
-    ROOM_PEACEFUL, WEAR_WIELD,
+    RoomFlags, WEAR_WIELD,
 };
 use crate::util::{dice, rand_number, stop_follower, BRF};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
@@ -983,7 +983,7 @@ impl Game {
         }
 
         /* peaceful rooms */
-        if chid != victim_id && db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+        if chid != victim_id && db.room_flagged(ch.in_room(), RoomFlags::PEACEFUL) {
             send_to_char(&mut self.descriptors, 
                 ch,
                 "This room just has such a peaceful, easy feeling...\r\n",

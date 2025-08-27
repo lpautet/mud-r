@@ -33,7 +33,7 @@ use crate::structs::{
     APPLY_SAVING_PETRI, APPLY_SAVING_ROD, APPLY_SAVING_SPELL, APPLY_STR, APPLY_WIS, ITEM_ANTI_EVIL,
     ITEM_ANTI_GOOD, ITEM_ANTI_NEUTRAL, ITEM_ARMOR, ITEM_LIGHT, ITEM_MONEY, ITEM_WEAR_TAKE,
     LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH,
-    PLR_NOTDEADYET, ROOM_HOUSE, ROOM_HOUSE_CRASH, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
+    PLR_NOTDEADYET, RoomFlags, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT,
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
 use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
@@ -778,8 +778,8 @@ impl DB {
         obj.set_in_room(room);
         obj.carried_by = None;
 
-        if self.room_flagged(room, ROOM_HOUSE) {
-            self.set_room_flags_bit(room, ROOM_HOUSE_CRASH)
+        if self.room_flagged(room, RoomFlags::HOUSE) {
+            self.set_room_flags_bit(room, RoomFlags::HOUSE_CRASH)
         }
         self.world[room as usize].contents.push(obj.id());
     }
@@ -799,8 +799,8 @@ impl DB {
             .contents
             .retain(|x| *x != obj.id());
 
-        if self.room_flagged(in_room, ROOM_HOUSE) {
-            self.set_room_flags_bit(in_room, ROOM_HOUSE_CRASH);
+        if self.room_flagged(in_room, RoomFlags::HOUSE) {
+            self.set_room_flags_bit(in_room, RoomFlags::HOUSE_CRASH);
         }
     }
 }

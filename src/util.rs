@@ -39,11 +39,11 @@ use crate::structs::{
     AFF_BLIND, AFF_DETECT_INVIS, AFF_HIDE, AFF_INFRAVISION, AFF_INVISIBLE, AFF_SENSE_LIFE,
     CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE,
     PLR_WRITING, POS_SLEEPING, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2,
-    ROOM_DARK, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET,
+    RoomFlags, SECT_CITY, SECT_INSIDE, SEX_MALE, SUN_DARK, SUN_SET,
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, AFF_CHARM, AFF_GROUP, EX_CLOSED,
-    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING, ROOM_INDOORS,
+    ITEM_CONTAINER, ITEM_INVISIBLE, ITEM_WEAR_TAKE, NOBODY, NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
@@ -891,7 +891,7 @@ impl DB {
         }
     }
     pub fn outside(&self, ch: &CharData) -> bool {
-        !self.room_flagged(ch.in_room(), ROOM_INDOORS)
+        !self.room_flagged(ch.in_room(), RoomFlags::INDOORS)
     }
 
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
@@ -1131,18 +1131,18 @@ impl DB {
     pub fn exit(&self, ch: &CharData, door: usize) -> Option<&RoomDirectionData> {
         self.world[ch.in_room() as usize].dir_option[door].as_ref()
     }
-    pub fn room_flags(&self, loc: RoomRnum) -> i32 {
+    pub fn room_flags(&self, loc: RoomRnum) -> RoomFlags {
         self.world[loc as usize].room_flags
     }
-    pub fn room_flagged(&self, loc: RoomRnum, flag: i64) -> bool {
-        is_set!(self.room_flags(loc), flag as i32)
+    pub fn room_flagged(&self, loc: RoomRnum, flag: RoomFlags) -> bool {
+        self.room_flags(loc).contains(flag)
     }
-    pub fn set_room_flags_bit(&mut self, loc: RoomRnum, flags: i64) {
-        let flags = self.room_flags(loc) | flags as i32;
+    pub fn set_room_flags_bit(&mut self, loc: RoomRnum, flags: RoomFlags) {
+        let flags = self.room_flags(loc) | flags;
         self.world[loc as usize].room_flags = flags;
     }
-    pub fn remove_room_flags_bit(&mut self, loc: RoomRnum, flags: i64) {
-        let flags = self.room_flags(loc) & !flags as i32;
+    pub fn remove_room_flags_bit(&mut self, loc: RoomRnum, flags: RoomFlags) {
+        let flags = self.room_flags(loc) & !flags;
         self.world[loc as usize].room_flags = flags;
     }
     pub fn sect(&self, loc: RoomRnum) -> i32 {
@@ -1841,7 +1841,7 @@ impl DB {
             return false;
         }
 
-        if self.room_flagged(room, ROOM_DARK) {
+        if self.room_flagged(room, RoomFlags::DARK) {
             return true;
         }
 

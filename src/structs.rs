@@ -36,24 +36,31 @@ pub const PULSE_IDLEPWD: u128 = 15 * PASSES_PER_SEC;
 pub const PULSE_USAGE: u128 = 5 * 60 * PASSES_PER_SEC; /* 5 mins */
 pub const PULSE_TIMESAVE: u128 = 30 * 60 * PASSES_PER_SEC; /* should be >= SECS_PER_MUD_HOUR */
 
-/* Room flags: used in room_data.room_flags */
-/* WARNING: In the world files, NEVER set the bits marked "R" ("Reserved") */
-pub const ROOM_DARK: i64 = 1 << 0; /* Dark			*/
-pub const ROOM_DEATH: i64 = 1 << 1; /* Death trap		*/
-pub const ROOM_NOMOB: i64 = 1 << 2; /* MOBs not allowed		*/
-pub const ROOM_INDOORS: i64 = 1 << 3; /* Indoors			*/
-pub const ROOM_PEACEFUL: i64 = 1 << 4; /* Violence not allowed	*/
-pub const ROOM_SOUNDPROOF: i64 = 1 << 5; /* Shouts, gossip blocked	*/
-pub const ROOM_NOTRACK: i64 = 1 << 6; /* Track won't go through	*/
-pub const ROOM_NOMAGIC: i64 = 1 << 7; /* Magic not allowed		*/
-pub const ROOM_TUNNEL: i64 = 1 << 8; /* room for only 1 pers	*/
-pub const ROOM_PRIVATE: i64 = 1 << 9; /* Can't teleport in		*/
-pub const ROOM_GODROOM: i64 = 1 << 10; /* LVL_GOD+ only allowed	*/
-pub const ROOM_HOUSE: i64 = 1 << 11; /* (R) Room is a house	*/
-pub const ROOM_HOUSE_CRASH: i64 = 1 << 12; /* (R) House needs saving	*/
-pub const ROOM_ATRIUM: i64 = 1 << 13; /* (R) The door to a house	*/
-// pub const ROOM_OLC: i64 = 1 << 14; /* (R) Modifyable/!compress	*/
-pub const ROOM_BFS_MARK: i64 = 1 << 15; /* (R) breath-first srch mrk	*/
+use bitflags::bitflags;
+
+bitflags! {
+    /// Room flags: used in room_data.room_flags
+    /// WARNING: In the world files, NEVER set the bits marked "R" ("Reserved")
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct RoomFlags: i64 {
+        const DARK = 1 << 0;        // Dark
+        const DEATH = 1 << 1;       // Death trap
+        const NOMOB = 1 << 2;       // MOBs not allowed
+        const INDOORS = 1 << 3;     // Indoors
+        const PEACEFUL = 1 << 4;    // Violence not allowed
+        const SOUNDPROOF = 1 << 5;  // Shouts, gossip blocked
+        const NOTRACK = 1 << 6;     // Track won't go through
+        const NOMAGIC = 1 << 7;     // Magic not allowed
+        const TUNNEL = 1 << 8;      // room for only 1 pers
+        const PRIVATE = 1 << 9;     // Can't teleport in
+        const GODROOM = 1 << 10;    // LVL_GOD+ only allowed
+        const HOUSE = 1 << 11;      // (R) Room is a house
+        const HOUSE_CRASH = 1 << 12; // (R) House needs saving
+        const ATRIUM = 1 << 13;     // (R) The door to a house
+        // const OLC = 1 << 14;     // (R) Modifyable/!compress
+        const BFS_MARK = 1 << 15;   // (R) breath-first srch mrk
+    }
+}
 
 /* Exit info: used in room_data.dir_option.exit_info */
 pub const EX_ISDOOR: i16 = 1 << 0; /* Exit is a door		*/
@@ -924,7 +931,7 @@ pub struct RoomData {
     /* for examine/look       */
     pub dir_option: [Option<RoomDirectionData>; NUM_OF_DIRS],
     /* Directions */
-    pub room_flags: i32,
+    pub room_flags: RoomFlags,
     /* DEATH,DARK ... etc */
     pub light: u8,
     /* Number of lightsources in room     */

@@ -18,7 +18,7 @@ use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
-     RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, ROOM_BFS_MARK, ROOM_NOTRACK,
+     RoomRnum, AFF_NOTRACK, EX_CLOSED, NOWHERE, NUM_OF_DIRS, RoomFlags,
 };
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
@@ -30,15 +30,15 @@ struct BfsQueueStruct {
 
 /* Utility functions */
 fn mark(db: &mut DB, room: RoomRnum) {
-    db.set_room_flags_bit(room, ROOM_BFS_MARK);
+    db.set_room_flags_bit(room, RoomFlags::BFS_MARK);
 }
 
 fn unmark(db: &mut DB, room: RoomRnum) {
-    db.remove_room_flags_bit(room, ROOM_BFS_MARK);
+    db.remove_room_flags_bit(room, RoomFlags::BFS_MARK);
 }
 
 fn is_marked(db: &DB, room: RoomRnum) -> bool {
-    db.room_flagged(room, ROOM_BFS_MARK)
+    db.room_flagged(room, RoomFlags::BFS_MARK)
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
@@ -65,7 +65,7 @@ fn valid_edge(game: &Game, db: &DB, x: RoomRnum, y: usize) -> bool {
     if !game.config.track_through_doors && is_closed(db, x, y) {
         return false;
     }
-    if db.room_flagged(toroom(db, x, y), ROOM_NOTRACK) || is_marked(db, toroom(db, x, y)) {
+    if db.room_flagged(toroom(db, x, y), RoomFlags::NOTRACK) || is_marked(db, toroom(db, x, y)) {
         return false;
     }
     true

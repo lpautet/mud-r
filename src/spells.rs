@@ -26,7 +26,7 @@ use crate::structs::{
     ITEM_FOOD, ITEM_FOUNTAIN, ITEM_MAGIC, ITEM_POTION, ITEM_SCROLL, ITEM_STAFF, ITEM_WAND,
     ITEM_WEAPON, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE,
     MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE,
-    ROOM_DEATH, ROOM_GODROOM, ROOM_PRIVATE, SEX_MALE,
+    RoomFlags, SEX_MALE,
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -354,7 +354,7 @@ pub fn spell_teleport(
         to_room = rand_number(0, db.world.len() as u32);
         if !db.room_flagged(
             to_room as RoomRnum,
-            ROOM_PRIVATE | ROOM_DEATH | ROOM_GODROOM,
+            RoomFlags::PRIVATE | RoomFlags::DEATH | RoomFlags::GODROOM,
         ) {
             break;
         }

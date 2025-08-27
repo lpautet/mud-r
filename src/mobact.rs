@@ -21,7 +21,7 @@ use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
     CharData, MeRef, AFF_BLIND, AFF_CHARM, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD,
     MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE,
-    MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, ROOM_DEATH, ROOM_NOMOB,
+    MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE, RoomFlags,
 };
 use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
 use crate::{act, Game, ObjData, DB, TO_ROOM};
@@ -107,7 +107,7 @@ impl Game {
                 && db.can_go(ch, door as usize)
                 && !db.room_flagged(
                     db.exit(ch, door as usize).unwrap().to_room,
-                    ROOM_NOMOB | ROOM_DEATH,
+                    RoomFlags::NOMOB | RoomFlags::DEATH,
                 )
                 && (!ch.mob_flagged(MOB_STAY_ZONE)
                     || db.world[db.exit(ch, door as usize).unwrap().to_room as usize].zone
