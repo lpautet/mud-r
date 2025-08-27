@@ -21,7 +21,7 @@ use crate::structs::ConState::ConPlaying;
 use crate::structs::{
     AFF_GROUP, ITEM_NOTE, ITEM_PEN, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT,
     PLR_WRITING, PRF_COLOR_1, PRF_COLOR_2, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ,
-    PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, ROOM_SOUNDPROOF, WEAR_HOLD,
+    PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, RoomFlags, WEAR_HOLD,
 };
 use crate::util::can_see_obj;
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
@@ -187,7 +187,7 @@ fn is_tell_ok(
             ch,
             "You can't tell other people while you have notell on.\r\n",
         );
-    } else if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
+    } else if db.room_flagged(ch.in_room(), RoomFlags::SOUNDPROOF) {
         send_to_char(descs, ch, "The walls seem to absorb your words.\r\n");
     } else if !vict.is_npc() && vict.desc.is_none() {
         /* linkless */
@@ -211,7 +211,7 @@ fn is_tell_ok(
             TO_CHAR | TO_SLEEP,
         );
     } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
-        || db.room_flagged(vict.in_room(), ROOM_SOUNDPROOF)
+        || db.room_flagged(vict.in_room(), RoomFlags::SOUNDPROOF)
     {
         act(descs, chars, 
             db,
@@ -687,7 +687,7 @@ pub fn do_gen_comm(
         send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][0]);
         return;
     }
-    if db.room_flagged(ch.in_room(), ROOM_SOUNDPROOF) {
+    if db.room_flagged(ch.in_room(), RoomFlags::SOUNDPROOF) {
         send_to_char(&mut game.descriptors, ch, "The walls seem to absorb your words.\r\n");
         return;
     }
@@ -768,7 +768,7 @@ pub fn do_gen_comm(
                 .plr_flagged(PLR_WRITING)
             && !db.room_flagged(
                 chars.get(d.character.unwrap()).in_room(),
-                ROOM_SOUNDPROOF,
+                RoomFlags::SOUNDPROOF,
             )
         {
             let ic_id = d.character.unwrap();

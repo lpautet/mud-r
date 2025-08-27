@@ -45,7 +45,7 @@ use crate::structs::{
     PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF,
     PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT,
     PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ,
-    PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, ROOM_HOUSE, ROOM_HOUSE_CRASH, ROOM_PEACEFUL,
+    PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, RoomFlags,
     WEAR_HOLD,
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
@@ -102,7 +102,7 @@ pub fn do_quit(
 
         /* If someone is quitting in their house, let them load back here. */
         let ch = chars.get(chid);
-        if !ch.plr_flagged(PLR_LOADROOM) && db.room_flagged(ch.in_room(), ROOM_HOUSE) {
+        if !ch.plr_flagged(PLR_LOADROOM) && db.room_flagged(ch.in_room(), RoomFlags::HOUSE) {
             let val = db.get_room_vnum(ch.in_room());
             let ch = chars.get_mut(chid);
             ch.set_loadroom(val);
@@ -150,7 +150,7 @@ pub fn do_save(
     save_char(&mut game.descriptors, db, chars,texts, objs,chid);
     crash_crashsave(chars, db,objs, chid);
     let ch = chars.get(chid);
-    if db.room_flagged(ch.in_room(), ROOM_HOUSE_CRASH) {
+    if db.room_flagged(ch.in_room(), RoomFlags::HOUSE_CRASH) {
         let in_room = db.get_room_vnum(ch.in_room());
         house_crashsave(chars, db, objs, in_room);
     }
@@ -249,7 +249,7 @@ pub fn do_steal(
         send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
         return;
     }
-    if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+    if db.room_flagged(ch.in_room(), RoomFlags::PEACEFUL) {
         send_to_char(&mut game.descriptors, 
             ch,
             "This room just has such a peaceful, easy feeling...\r\n",

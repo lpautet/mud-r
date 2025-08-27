@@ -31,7 +31,7 @@ use crate::structs::{
     AFF_SNEAK, AFF_WATERWALK, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, EX_CLOSED,
     EX_ISDOOR, EX_LOCKED, EX_PICKPROOF, ITEM_BOAT, ITEM_CONTAINER, LVL_GOD, LVL_GRGOD, LVL_IMMORT,
     NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING,
-    POS_STANDING, ROOM_ATRIUM, ROOM_DEATH, ROOM_GODROOM, ROOM_INDOORS, ROOM_TUNNEL,
+    POS_STANDING, RoomFlags,
     SECT_WATER_NOSWIM, WEAR_HOLD,
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
@@ -211,7 +211,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         return false;
     }
 
-    if db.room_flagged(ch.in_room(), ROOM_ATRIUM) {
+    if db.room_flagged(ch.in_room(), RoomFlags::ATRIUM) {
         if !house_can_enter(
             db,
             ch,
@@ -224,7 +224,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     }
     if db.room_flagged(
         db.exit(ch, dir as usize).as_ref().unwrap().to_room,
-        ROOM_TUNNEL,
+        RoomFlags::TUNNEL,
     ) && num_pc_in_room(
         db.world[db.exit(ch, dir as usize).as_ref().unwrap().to_room as usize].borrow(),
     ) >= TUNNEL_SIZE
@@ -241,7 +241,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     /* Mortals and low level gods cannot enter greater god rooms. */
     if db.room_flagged(
         db.exit(ch, dir as usize).as_ref().unwrap().to_room,
-        ROOM_GODROOM,
+        RoomFlags::GODROOM,
     ) && ch.get_level() < LVL_GRGOD as u8
     {
         send_to_char(&mut game.descriptors, ch, "You aren't godly enough to use that room!\r\n");
@@ -279,7 +279,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     }
 
     let ch = chars.get(chid);
-    if db.room_flagged(ch.in_room(), ROOM_DEATH) && ch.get_level() < LVL_IMMORT as u8 {
+    if db.room_flagged(ch.in_room(), RoomFlags::DEATH) && ch.get_level() < LVL_IMMORT as u8 {
         log_death_trap(game, chars, db, chid);
         death_cry(&mut game.descriptors, chars, db, ch);
         db.extract_char(chars, chid);
@@ -823,7 +823,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
             }
         }
         send_to_char(&mut game.descriptors, ch, format!("There is no {} here.\r\n", buf).as_str());
-    } else if db.room_flagged(ch.in_room(), ROOM_INDOORS) {
+    } else if db.room_flagged(ch.in_room(), RoomFlags::INDOORS) {
         send_to_char(&mut game.descriptors, ch, "You are already indoors.\r\n");
     } else {
         /* try to locate an entrance */
@@ -832,7 +832,7 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
                     if !db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED)
                         && db
-                            .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, ROOM_INDOORS)
+                            .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {
                         perform_move(game,db, chars,texts, objs,chid, door as i32, true);
                         return;
@@ -854,7 +854,7 @@ pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
                 if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
                     if !db.exit(ch, door).as_ref().unwrap().exit_flagged(EX_CLOSED)
                         && !db
-                            .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, ROOM_INDOORS)
+                            .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {
                         perform_move(game, db,chars, texts, objs, chid, door as i32, true);
                         return;

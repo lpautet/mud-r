@@ -42,7 +42,7 @@ use crate::structs::{
     PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST,
     SEX_FEMALE, SEX_MALE, SEX_NEUTRAL,
 };
-use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, ROOM_DEATH};
+use crate::structs::{AFF_BLIND, PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, RoomFlags};
 use crate::structs::{
     AFF_CHARM, AFF_DETECT_INVIS, AFF_INFRAVISION, AFF_POISON, DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
     POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
@@ -532,7 +532,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
 
     if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
         let mut buf = String::new();
-        sprintbit(db.room_flags(ch.in_room()) as i64, &ROOM_BITS, &mut buf);
+        sprintbit(db.room_flags(ch.in_room()).bits(), &ROOM_BITS, &mut buf);
         send_to_char(descs, 
             ch,
             format!(
@@ -554,7 +554,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
 
     if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
         || ignore_brief
-        || db.room_flagged(ch.in_room(), ROOM_DEATH)
+        || db.room_flagged(ch.in_room(), RoomFlags::DEATH)
     {
         send_to_char(descs, 
             ch,

@@ -22,7 +22,7 @@ use crate::spells::{
 };
 use crate::structs::{
     AFF_CHARM, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS, POS_FIGHTING, POS_SITTING,
-    POS_STANDING, PULSE_VIOLENCE, ROOM_DEATH, ROOM_PEACEFUL, WEAR_WIELD,
+    POS_STANDING, PULSE_VIOLENCE, RoomFlags, WEAR_WIELD,
 };
 use crate::util::{can_see, rand_number};
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -424,7 +424,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
                     .as_ref()
                     .unwrap()
                     .to_room,
-                ROOM_DEATH,
+                RoomFlags::DEATH,
             )
         {
             act(&mut game.descriptors, chars, db,
@@ -475,7 +475,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         send_to_char(&mut game.descriptors, ch, "You have no idea how.\r\n");
         return;
     }
-    if db.room_flagged(ch.in_room(), ROOM_PEACEFUL) {
+    if db.room_flagged(ch.in_room(), RoomFlags::PEACEFUL) {
         send_to_char(&mut game.descriptors, ch,
             "This room just has such a peaceful, easy feeling...\r\n",
         );
