@@ -67,12 +67,11 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    AffectFlags, CharData, Class, MeRef, TxtBlock, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED
+    AffectFlags, CharData, Class, MeRef, Sex, TxtBlock, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED
 };
 use crate::structs::{
     CharFileU, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
-    MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, SEX_FEMALE,
-    SEX_MALE,
+    MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING,
 };
 use crate::util::{BRF, NRM};
 use crate::{_clrlevel, act, clr, save_char, send_to_char, write_to_q, Game, ObjData, TextData, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM};
@@ -3895,10 +3894,10 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
             /* query sex of new user         */
             match arg.chars().next().unwrap() {
                 'm' | 'M' => {
-                    character.player.sex = SEX_MALE;
+                    character.player.sex = Sex::Male;
                 }
                 'f' | 'F' => {
-                    character.player.sex = SEX_FEMALE;
+                    character.player.sex = Sex::Female;
                 }
                 _ => {
                     desc.write_to_output("That is not a sex..\r\nWhat IS your sex? ");

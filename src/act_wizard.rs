@@ -4645,7 +4645,7 @@ fn perform_set(
                 send_to_char(descs, ch, "Must be 'male', 'female', or 'neutral'.\r\n");
                 return false;
             }
-            vict.set_sex(i.unwrap() as u8);
+            vict.set_sex((i.unwrap() as u8).into());
         }
         48 => {
             /* set age */

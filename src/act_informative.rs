@@ -34,7 +34,7 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, PrefFlags, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, PrefFlags, Sex, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING
 };
 use crate::structs::{ RoomFlags};
 use crate::structs::{
@@ -2142,18 +2142,15 @@ pub fn do_levels(
         );
 
         match ch.get_sex() {
-            SEX_MALE | SEX_NEUTRAL => {
+            Sex::Male | Sex::Neutral => {
                 buf.push_str(
                     format!("{}\r\n", title_male(ch.get_class(), i as i32)).as_str(),
                 );
             }
-            SEX_FEMALE => {
+            Sex::Female => {
                 buf.push_str(
                     format!("{}\r\n", title_female(ch.get_class(), i as i32)).as_str(),
                 );
-            }
-            _ => {
-                buf.push_str("Oh dear.  You seem to be sexless.\r\n");
             }
         }
     }

@@ -17,12 +17,12 @@ use std::rc::Rc;
 use log::error;
 use regex::Regex;
 use crate::depot::{Depot, DepotId, HasId};
+use crate::structs::Sex;
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
 use crate::handler::{get_char_vis, FIND_CHAR_ROOM};
 use crate::interpreter::{find_command, one_argument, CMD_INFO};
-use crate::structs::SEX_MALE;
 use crate::util::rand_number;
 use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT};
 
@@ -174,8 +174,8 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 match rand_number(0, 2) {
                     0 => {
                         let ch = chars.get(chid);
-                        if ch.get_sex() == SEX_MALE {
-                            if victim.get_sex() == SEX_MALE {
+                        if ch.get_sex() == Sex::Male {
+                            if victim.get_sex() == Sex::Male {
                                 act(&mut game.descriptors, chars, db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
@@ -196,7 +196,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                             }
                         } else {
                             /* Ch == Woman */
-                            if victim.get_sex() == SEX_MALE {
+                            if victim.get_sex() == Sex::Male {
                                 act(&mut game.descriptors, chars, db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,

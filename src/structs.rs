@@ -701,7 +701,7 @@ pub struct CharPlayerData {
     /* Extra descriptions                   */
     pub title: Option<Rc<str>>,
     /* PC / NPC's title                     */
-    pub sex: u8,
+    pub sex: Sex,
     /* PC / NPC's sex                       */
     pub chclass: Class,
     /* PC / NPC's class		       */
@@ -741,19 +741,6 @@ pub enum Class {
     Cleric = 1,
     Thief = 2,
     Warrior = 3,
-}
-
-impl From<i8> for Class {
-    fn from(value: i8) -> Self {
-        match value {
-            -1 => Class::Undefined,
-            0 => Class::MagicUser,
-            1 => Class::Cleric,
-            2 => Class::Thief,
-            3 => Class::Warrior,
-            _ => panic!("Invalid class value: {}", value),
-        }
-    }
 }
 
 pub const NUM_CLASSES: usize = 4; /* This must be the number of classes!! */
@@ -857,7 +844,7 @@ pub struct CharFileU {
     pub name: [u8; MAX_NAME_LENGTH + 1],
     pub description: [u8; EXDSCR_LENGTH],
     pub title: [u8; MAX_TITLE_LENGTH + 1],
-    pub sex: u8,
+    pub sex: Sex,
     pub chclass: Class,
     pub level: u8,
     pub hometown: i16,
@@ -964,9 +951,24 @@ pub type MobRnum = IDXTYPE;
 pub type ZoneRnum = IDXTYPE;
 // pub type ShopRnum = IDXTYPE;
 
-pub const SEX_NEUTRAL: u8 = 0;
-pub const SEX_MALE: u8 = 1;
-pub const SEX_FEMALE: u8 = 2;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum Sex {
+    Neutral = 0,
+    Male = 1,
+    Female = 2,
+}
+
+impl From<u8> for Sex {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Sex::Neutral,
+            1 => Sex::Male,
+            2 => Sex::Female,
+            _ => panic!("Invalid sex value: {}", value),
+        }
+    }
+}
 
 /*
  * **DO**NOT** blindly change the number of levels in your MUD merely by

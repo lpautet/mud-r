@@ -23,10 +23,10 @@ use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    AffectFlags, CharData, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST
+    AffectFlags, CharData, Sex, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST
 };
 use crate::structs::{
-    DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED, SEX_FEMALE,
+    DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED,
 };
 use crate::util::{age, BRF, CMP};
 use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
@@ -185,7 +185,7 @@ pub fn move_gain(ch: &CharData) -> u8 {
 pub fn set_title(ch: &mut CharData, title: Option<&str>) {
     let mut title = title;
     if title.is_none() || title.unwrap().is_empty() {
-        if ch.get_sex() == SEX_FEMALE {
+        if ch.get_sex() == Sex::Female {
             title = Some(title_female(ch.get_class(), ch.get_level() as i32));
         } else {
             title = Some(title_male(ch.get_class(), ch.get_level() as i32));

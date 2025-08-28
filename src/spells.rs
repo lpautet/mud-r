@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, PrefFlags, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, PrefFlags, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, Sex
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -412,7 +412,7 @@ pub fn spell_summon(
         {
             send_to_char(&mut game.descriptors, victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
                                          ch.get_name(), db.world[ch.in_room() as usize].name,
-                                         if ch.player.sex == SEX_MALE { "He" } else { "She" }).as_str());
+                                         if ch.player.sex == Sex::Male { "He" } else { "She" }).as_str());
                                          let victim = chars.get(victim_id);
             send_to_char(&mut game.descriptors, ch,
                 format!(

@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, SEX_MALE
+    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Sex, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -480,10 +480,10 @@ impl CharData {
     pub fn set_skill(&mut self, i: i32, pct: i8) {
         self.player_specials.saved.skills[i as usize] = pct;
     }
-    pub fn get_sex(&self) -> u8 {
+    pub fn get_sex(&self) -> Sex {
         self.player.sex
     }
-    pub fn set_sex(&mut self, val: u8) {
+    pub fn set_sex(&mut self, val: Sex) {
         self.player.sex = val;
     }
     pub fn get_str(&self) -> i8 {
@@ -1070,8 +1070,8 @@ impl DB {
 }
 
 pub fn hmhr(ch: &CharData) -> &str {
-    if ch.get_sex() != 0 {
-        if ch.get_sex() == SEX_MALE {
+    if ch.get_sex() != Sex::Neutral  {
+        if ch.get_sex() == Sex::Male {
             "him"
         } else {
             "her"
@@ -1082,8 +1082,8 @@ pub fn hmhr(ch: &CharData) -> &str {
 }
 
 pub fn hshr(ch: &CharData) -> &str {
-    if ch.get_sex() != 0 {
-        if ch.get_sex() == SEX_MALE {
+    if ch.get_sex() != Sex::Neutral  {
+        if ch.get_sex() == Sex::Male {
             "his"
         } else {
             "her"
@@ -1094,8 +1094,8 @@ pub fn hshr(ch: &CharData) -> &str {
 }
 
 pub fn hssh(ch: &CharData) -> &str {
-    if ch.get_sex() != 0 {
-        if ch.get_sex() == SEX_MALE {
+    if ch.get_sex() != Sex::Neutral {
+        if ch.get_sex() == Sex::Male {
             "he"
         } else {
             "she"
