@@ -19,7 +19,8 @@ use crate::interpreter::{
 use crate::screen::{C_CMP, C_NRM, KGRN, KMAG, KNRM, KNUL, KRED, KYEL};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-     AffectFlags, ItemType, RoomFlags, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING, PRF_DEAF, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, WEAR_HOLD
+     AffectFlags, ItemType, PrefFlags, RoomFlags, LVL_GOD, LVL_IMMORT, MAX_NOTE_LENGTH, NOBODY, PLR_NOSHOUT, PLR_WRITING,
+       WEAR_HOLD
 };
 use crate::util::can_see_obj;
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
@@ -54,7 +55,7 @@ pub fn do_say(
             None,
             TO_ROOM,
         );
-        if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
+        if !ch.is_npc() && ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else {
             let mut argument = argument.to_string();
@@ -120,7 +121,7 @@ pub fn do_gsay(
                 );
             }
         }
-        if ch.prf_flagged(PRF_NOREPEAT) {
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else {
             send_to_char(&mut game.descriptors, ch, &format!("You tell the group, '{}'\r\n", argument));
@@ -150,7 +151,7 @@ fn perform_tell(
     );
     send_to_char(descs, vict, CCNRM!(vict, C_NRM));
 
-    if !ch.is_npc() && ch.prf_flagged(PRF_NOREPEAT) {
+    if !ch.is_npc() && ch.prf_flagged(PrefFlags::NOREPEAT) {
         send_to_char(descs, ch, OK);
     } else {
         send_to_char(descs, ch, CCRED!(ch, C_NRM));
@@ -180,7 +181,7 @@ fn is_tell_ok(
 ) -> bool {
     if ch.id() == vict.id() {
         send_to_char(descs, ch, "You try to tell yourself something.\r\n");
-    } else if !ch.is_npc() && ch.prf_flagged(PRF_NOTELL) {
+    } else if !ch.is_npc() && ch.prf_flagged(PrefFlags::NOTELL) {
         send_to_char(descs, 
             ch,
             "You can't tell other people while you have notell on.\r\n",
@@ -208,7 +209,7 @@ fn is_tell_ok(
             Some(VictimRef::Char(vict)),
             TO_CHAR | TO_SLEEP,
         );
-    } else if (!vict.is_npc() && vict.prf_flagged(PRF_NOTELL))
+    } else if (!vict.is_npc() && vict.prf_flagged(PrefFlags::NOTELL))
         || db.room_flagged(vict.in_room(), RoomFlags::SOUNDPROOF)
     {
         act(descs, chars, 
@@ -385,7 +386,7 @@ pub fn do_spec_comm(
             TO_VICT,
         );
 
-        if ch.prf_flagged(PRF_NOREPEAT) {
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else {
             send_to_char(&mut game.descriptors, 
@@ -602,7 +603,7 @@ pub fn do_page(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            if ch.prf_flagged(PRF_NOREPEAT) {
+            if ch.prf_flagged(PrefFlags::NOREPEAT) {
                 send_to_char(&mut game.descriptors, ch, OK);
             } else {
                 act(&mut game.descriptors, chars, 
@@ -640,7 +641,7 @@ pub fn do_gen_comm(
     // char color_on[24];
 
     /* Array of flags which must _not_ be set in order for comm to be heard */
-    const CHANNELS: [i64; 6] = [0, PRF_DEAF, PRF_NOGOSS, PRF_NOAUCT, PRF_NOGRATZ, 0];
+    const CHANNELS: [PrefFlags; 6] = [PrefFlags::empty(), PrefFlags::DEAF, PrefFlags::NOGOSS, PrefFlags::NOAUCT, PrefFlags::NOGRATZ, PrefFlags::empty()];
 
     /*
      * COM_MSGS: [0] Message if you can't perform the action because of noshout
@@ -735,7 +736,7 @@ pub fn do_gen_comm(
 
     /* first, set up strings to be given to the communicator */
     let ch = chars.get(chid);
-    if ch.prf_flagged(PRF_NOREPEAT) {
+    if ch.prf_flagged(PrefFlags::NOREPEAT) {
         send_to_char(&mut game.descriptors, ch, OK);
     } else {
         let messg = format!(
@@ -809,7 +810,7 @@ pub fn do_qcomm(
     subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    if ch.prf_flagged(PRF_QUEST) {
+    if ch.prf_flagged(PrefFlags::QUEST) {
         send_to_char(&mut game.descriptors, ch, "You aren't even part of the quest!\r\n");
         return;
     }
@@ -829,7 +830,7 @@ pub fn do_qcomm(
     } else {
         let mut buf;
 
-        if ch.prf_flagged(PRF_NOREPEAT) {
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else if subcmd == SCMD_QSAY {
             buf = format!("You quest-say, '{}'", argument);
@@ -866,7 +867,7 @@ pub fn do_qcomm(
                 && id != ch.desc.unwrap()
                 && d.character.is_some()
                 && chars.get(d.character.unwrap())
-                    .prf_flagged(PRF_QUEST)
+                    .prf_flagged(PrefFlags::QUEST)
             {
                 let vict_id = d.character.unwrap();
                 let vict = chars.get(vict_id);

@@ -935,17 +935,17 @@ impl DescriptorData {
                 prompt.push_str(format!("i{} ", il).as_str());
             }
 
-            if character.prf_flagged(PRF_DISPHP) && prompt.len() < MAX_PROMPT_LENGTH {
+            if character.prf_flagged(PrefFlags::DISPHP) && prompt.len() < MAX_PROMPT_LENGTH {
                 let hit = character.get_hit();
                 prompt.push_str(format!("{}H ", hit).as_str());
             }
 
-            if character.prf_flagged(PRF_DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH {
+            if character.prf_flagged(PrefFlags::DISPMANA) && prompt.len() < MAX_PROMPT_LENGTH {
                 let mana = character.get_mana();
                 prompt.push_str(format!("{}M ", mana).as_str());
             }
 
-            if character.prf_flagged(PRF_DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH {
+            if character.prf_flagged(PrefFlags::DISPMOVE) && prompt.len() < MAX_PROMPT_LENGTH {
                 let _move = character.get_move();
                 prompt.push_str(format!("{}V ", _move).as_str());
             }
@@ -1240,7 +1240,7 @@ impl Game {
         if desc.connected == ConPlaying
             && desc.character.is_some()
             && !chars.get(desc.character.unwrap()).is_npc()
-            && chars.get(desc.character.unwrap()).prf_flagged(PRF_COMPACT)
+            && chars.get(desc.character.unwrap()).prf_flagged(PrefFlags::COMPACT)
         {
             i.extend_from_slice("\r\n".as_bytes());
         }

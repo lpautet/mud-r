@@ -127,7 +127,7 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             desc.write_to_output("Message sent!\r\n");
             if !chars.get(desc.character.unwrap()).is_npc() {
                 chars.get_mut(desc.character.unwrap())
-                    .remove_prf_flags_bits(PLR_MAILING | PLR_WRITING);
+                    .remove_plr_flag(PLR_MAILING | PLR_WRITING);
             }
         }
 

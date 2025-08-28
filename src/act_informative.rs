@@ -34,13 +34,13 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, CONT_CLOSED, ItemType, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, PRF_COLOR_1, PRF_COLOR_2, PRF_COMPACT, PRF_DEAF, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_QUEST, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, PrefFlags, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING, SEX_FEMALE, SEX_MALE, SEX_NEUTRAL
 };
-use crate::structs::{PRF_AUTOEXIT, PRF_BRIEF, PRF_ROOMFLAGS, RoomFlags};
+use crate::structs::{ RoomFlags};
 use crate::structs::{
   DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
     POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
-    POS_STUNNED, PRF_SUMMONABLE, THIRST,
+    POS_STUNNED, THIRST,
 };
 use crate::util::{
     age, can_see, can_see_obj, pers, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
@@ -48,7 +48,7 @@ use crate::util::{
 use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef};
 use crate::{_clrlevel, an, clr, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT};
 use crate::{CCNRM, TO_VICT};
-use log::{error, info};
+use log::{error};
 use regex::Regex;
 
 pub const SHOW_OBJ_LONG: i32 = 0;
@@ -524,7 +524,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
     }
     send_to_char(descs, ch, format!("{}", CCCYN!(ch, C_NRM)).as_str());
 
-    if !ch.is_npc() && ch.prf_flagged(PRF_ROOMFLAGS) {
+    if !ch.is_npc() && ch.prf_flagged(PrefFlags::ROOMFLAGS) {
         let mut buf = String::new();
         sprintbit(db.room_flags(ch.in_room()).bits(), &ROOM_BITS, &mut buf);
         send_to_char(descs, 
@@ -546,7 +546,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
 
     send_to_char(descs, ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
 
-    if (!ch.is_npc() && !ch.prf_flagged(PRF_BRIEF))
+    if (!ch.is_npc() && !ch.prf_flagged(PrefFlags::BRIEF))
         || ignore_brief
         || db.room_flagged(ch.in_room(), RoomFlags::DEATH)
     {
@@ -557,7 +557,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
     }
 
     /* autoexits */
-    if !ch.is_npc() && ch.prf_flagged(PRF_AUTOEXIT) {
+    if !ch.is_npc() && ch.prf_flagged(PrefFlags::AUTOEXIT) {
         do_auto_exits(descs, db, ch);
     }
 
@@ -1153,7 +1153,7 @@ pub fn do_score(
     if ch.aff_flagged(AffectFlags::INFRAVISION) {
         send_to_char(&mut game.descriptors, ch, "Your eyes are glowing red.\r\n");
     }
-    if ch.prf_flagged(PRF_SUMMONABLE) {
+    if ch.prf_flagged(PrefFlags::SUMMONABLE) {
         send_to_char(&mut game.descriptors, ch, "You are summonable by other players.\r\n");
     }
 }
@@ -1490,7 +1490,7 @@ pub fn do_who(
         if outlaws && !tch.plr_flagged(PLR_KILLER) && !tch.plr_flagged(PLR_THIEF) {
             continue;
         }
-        if questwho && !tch.prf_flagged(PRF_QUEST) {
+        if questwho && !tch.prf_flagged(PrefFlags::QUEST) {
             continue;
         }
         if localwho && db.world[ch.in_room() as usize].zone != db.world[tch.in_room() as usize].zone
@@ -1555,13 +1555,13 @@ pub fn do_who(
             } else if tch.plr_flagged(PLR_WRITING) {
                 send_to_char(&mut game.descriptors, ch, " (writing)");
             }
-            if tch.plr_flagged(PRF_DEAF) {
+            if tch.prf_flagged(PrefFlags::DEAF) {
                 send_to_char(&mut game.descriptors, ch, " (deaf)");
             }
-            if tch.prf_flagged(PRF_NOTELL) {
+            if tch.prf_flagged(PrefFlags::NOTELL) {
                 send_to_char(&mut game.descriptors, ch, " (notell)");
             }
-            if tch.prf_flagged(PRF_QUEST) {
+            if tch.prf_flagged(PrefFlags::QUEST) {
                 send_to_char(&mut game.descriptors, ch, " (quest)");
             }
             if tch.plr_flagged(PLR_THIEF) {
@@ -2294,13 +2294,13 @@ pub fn do_color(
     }
     let tp = tp.unwrap() as i64;
     let ch = chars.get_mut(chid);
-    ch.remove_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2);
-    ch.set_prf_flags_bits(PRF_COLOR_1 * (tp & 1) | (PRF_COLOR_2 * (tp & 2) >> 1));
-    info!(
-        "[DEBUG] {} {}",
-        PRF_COLOR_1 * (tp & 1),
-        (PRF_COLOR_2 * (tp & 2) >> 1)
-    );
+    ch.remove_prf_flags_bits(PrefFlags::COLOR_1 | PrefFlags::COLOR_2);
+    if (tp & 1) != 0 {
+        ch.set_prf_flags_bits(PrefFlags::COLOR_1);
+    }
+    if (tp & 2) != 0 {
+        ch.set_prf_flags_bits(PrefFlags::COLOR_2);
+    }
     let ch = chars.get(chid);
     send_to_char(&mut game.descriptors, 
         ch,
@@ -2361,9 +2361,9 @@ pub fn do_toggle(
             ch,
             format!(
                 "      No Hassle: {:3}    Holylight: {:3}    Room Flags:{:3}\r\n",
-                onoff!(ch.prf_flagged(PRF_NOHASSLE)),
-                onoff!(ch.prf_flagged(PRF_HOLYLIGHT)),
-                onoff!(ch.prf_flagged(PRF_ROOMFLAGS))
+                onoff!(ch.prf_flagged(PrefFlags::NOHASSLE)),
+                onoff!(ch.prf_flagged(PrefFlags::HOLYLIGHT)),
+                onoff!(ch.prf_flagged(PrefFlags::ROOMFLAGS))
             )
             .as_str(),
         );
@@ -2378,21 +2378,21 @@ pub fn do_toggle(
  Auto Show Exit: {:3}    Deaf: {:3}    Wimp Level: {:3}\r\n\
  Gossip Channel: {:3}    Auction Channel: {:3}    Grats Channel: {:3}\r\n\
  Color Level: {}\r\n",
-            onoff!(ch.prf_flagged(PRF_DISPHP)),
-            onoff!(ch.prf_flagged(PRF_BRIEF)),
-            onoff!(!ch.prf_flagged(PRF_SUMMONABLE)),
-            onoff!(ch.prf_flagged(PRF_DISPMOVE)),
-            onoff!(ch.prf_flagged(PRF_COMPACT)),
-            yesno!(ch.prf_flagged(PRF_QUEST)),
-            onoff!(ch.prf_flagged(PRF_DISPMANA)),
-            onoff!(ch.prf_flagged(PRF_NOTELL)),
-            yesno!(!ch.prf_flagged(PRF_NOREPEAT)),
-            onoff!(ch.prf_flagged(PRF_AUTOEXIT)),
-            yesno!(ch.prf_flagged(PRF_DEAF)),
+            onoff!(ch.prf_flagged(PrefFlags::DISPHP)),
+            onoff!(ch.prf_flagged(PrefFlags::BRIEF)),
+            onoff!(!ch.prf_flagged(PrefFlags::SUMMONABLE)),
+            onoff!(ch.prf_flagged(PrefFlags::DISPMOVE)),
+            onoff!(ch.prf_flagged(PrefFlags::COMPACT)),
+            yesno!(ch.prf_flagged(PrefFlags::QUEST)),
+            onoff!(ch.prf_flagged(PrefFlags::DISPMANA)),
+            onoff!(ch.prf_flagged(PrefFlags::NOTELL)),
+            yesno!(!ch.prf_flagged(PrefFlags::NOREPEAT)),
+            onoff!(ch.prf_flagged(PrefFlags::AUTOEXIT)),
+            yesno!(ch.prf_flagged(PrefFlags::DEAF)),
             buf2,
-            onoff!(!ch.prf_flagged(PRF_NOGOSS)),
-            onoff!(!ch.prf_flagged(PRF_NOAUCT)),
-            onoff!(!ch.prf_flagged(PRF_NOGRATZ)),
+            onoff!(!ch.prf_flagged(PrefFlags::NOGOSS)),
+            onoff!(!ch.prf_flagged(PrefFlags::NOAUCT)),
+            onoff!(!ch.prf_flagged(PrefFlags::NOGRATZ)),
             CTYPES[COLOR_LEV!(ch) as usize]
         )
         .as_str(),

@@ -44,9 +44,7 @@ use crate::spells::{
     SPELL_STRENGTH, SPELL_SUMMON, SPELL_WORD_OF_RECALL,
 };
 use crate::structs::{
-    CharData, GuildInfoType, ObjData, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED,
-    CLASS_WARRIOR, DRUNK, FULL, ExtraFlags, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK,
-    PRF_HOLYLIGHT, THIRST,
+    CharData, ExtraFlags, GuildInfoType, ObjData, PrefFlags, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR, DRUNK, FULL, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, save_char, set_skill, Game, TextData};
@@ -3624,7 +3622,7 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
         for i in 0..3 {
             ch.set_cond(i, -1);
         }
-        ch.set_prf_flags_bits(PRF_HOLYLIGHT);
+        ch.set_prf_flags_bits(PrefFlags::HOLYLIGHT);
     }
 
     snoop_check(game, chars, chid);

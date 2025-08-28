@@ -40,7 +40,7 @@ use crate::spec_procs::list_skills;
 use crate::spell_parser::mag_objectmagic;
 use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ItemType, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, PRF_AUTOEXIT, PRF_BRIEF, PRF_COMPACT, PRF_DEAF, PRF_DISPAUTO, PRF_DISPHP, PRF_DISPMANA, PRF_DISPMOVE, PRF_HOLYLIGHT, PRF_NOAUCT, PRF_NOGOSS, PRF_NOGRATZ, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOTELL, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, WEAR_HOLD
+    AffectFlags, AffectedType, ApplyType, ItemType, PrefFlags, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, WEAR_HOLD
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -1219,13 +1219,13 @@ pub fn do_display(
 
     if argument == "auto" {
         let ch = chars.get_mut(chid);
-        ch.toggle_prf_flag_bits(PRF_DISPAUTO);
+        ch.toggle_prf_flag_bits(PrefFlags::DISPAUTO);
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, 
             ch,
             format!(
                 "Auto prompt {}abled.\r\n",
-                if ch.prf_flagged(PRF_DISPAUTO) {
+                if ch.prf_flagged(PrefFlags::DISPAUTO) {
                     "en"
                 } else {
                     "dis"
@@ -1238,22 +1238,22 @@ pub fn do_display(
 
     let ch = chars.get_mut(chid);
     if argument == "on" || argument == "all" {
-        ch.set_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+        ch.set_prf_flags_bits(PrefFlags::DISPHP | PrefFlags::DISPMANA | PrefFlags::DISPMOVE);
     } else if argument == "off" || argument == "none" {
-        ch.remove_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+        ch.remove_prf_flags_bits(PrefFlags::DISPHP | PrefFlags::DISPMANA | PrefFlags::DISPMOVE);
     } else {
-        ch.remove_prf_flags_bits(PRF_DISPHP | PRF_DISPMANA | PRF_DISPMOVE);
+        ch.remove_prf_flags_bits(PrefFlags::DISPHP | PrefFlags::DISPMANA | PrefFlags::DISPMOVE);
 
         for c in argument.chars() {
             match c.to_ascii_lowercase() {
                 'h' => {
-                    ch.set_prf_flags_bits(PRF_DISPHP);
+                    ch.set_prf_flags_bits(PrefFlags::DISPHP);
                 }
                 'm' => {
-                    ch.set_prf_flags_bits(PRF_DISPMANA);
+                    ch.set_prf_flags_bits(PrefFlags::DISPMANA);
                 }
                 'v' => {
-                    ch.set_prf_flags_bits(PRF_DISPMOVE);
+                    ch.set_prf_flags_bits(PrefFlags::DISPMOVE);
                 }
                 _ => {
                     send_to_char(&mut game.descriptors, 
@@ -1376,7 +1376,7 @@ const TOG_OFF: usize = 0;
 
 macro_rules! prf_tog_chk {
     ($ch:expr, $flag:expr) => {
-        ($ch.toggle_prf_flag_bits($flag) & $flag) != 0
+        ($ch.toggle_prf_flag_bits($flag).intersects($flag))
     };
 }
 
@@ -1452,46 +1452,46 @@ pub fn do_gen_tog(
     let ch = chars.get_mut(chid);
     match subcmd {
         SCMD_NOSUMMON => {
-            result = prf_tog_chk!(ch, PRF_SUMMONABLE);
+            result = prf_tog_chk!(ch, PrefFlags::SUMMONABLE);
         }
         SCMD_NOHASSLE => {
-            result = prf_tog_chk!(ch, PRF_NOHASSLE);
+            result = prf_tog_chk!(ch, PrefFlags::NOHASSLE);
         }
         SCMD_BRIEF => {
-            result = prf_tog_chk!(ch, PRF_BRIEF);
+            result = prf_tog_chk!(ch, PrefFlags::BRIEF);
         }
         SCMD_COMPACT => {
-            result = prf_tog_chk!(ch, PRF_COMPACT);
+            result = prf_tog_chk!(ch, PrefFlags::COMPACT);
         }
         SCMD_NOTELL => {
-            result = prf_tog_chk!(ch, PRF_NOTELL);
+            result = prf_tog_chk!(ch, PrefFlags::NOTELL);
         }
         SCMD_NOAUCTION => {
-            result = prf_tog_chk!(ch, PRF_NOAUCT);
+            result = prf_tog_chk!(ch, PrefFlags::NOAUCT);
         }
         SCMD_DEAF => {
-            result = prf_tog_chk!(ch, PRF_DEAF);
+            result = prf_tog_chk!(ch, PrefFlags::DEAF);
         }
         SCMD_NOGOSSIP => {
-            result = prf_tog_chk!(ch, PRF_NOGOSS);
+            result = prf_tog_chk!(ch, PrefFlags::NOGOSS);
         }
         SCMD_NOGRATZ => {
-            result = prf_tog_chk!(ch, PRF_NOGRATZ);
+            result = prf_tog_chk!(ch, PrefFlags::NOGRATZ);
         }
         SCMD_NOWIZ => {
-            result = prf_tog_chk!(ch, PRF_NOWIZ);
+            result = prf_tog_chk!(ch, PrefFlags::NOWIZ);
         }
         SCMD_QUEST => {
-            result = prf_tog_chk!(ch, PRF_QUEST);
+            result = prf_tog_chk!(ch, PrefFlags::QUEST);
         }
         SCMD_ROOMFLAGS => {
-            result = prf_tog_chk!(ch, PRF_ROOMFLAGS);
+            result = prf_tog_chk!(ch, PrefFlags::ROOMFLAGS);
         }
         SCMD_NOREPEAT => {
-            result = prf_tog_chk!(ch, PRF_NOREPEAT);
+            result = prf_tog_chk!(ch, PrefFlags::NOREPEAT);
         }
         SCMD_HOLYLIGHT => {
-            result = prf_tog_chk!(ch, PRF_HOLYLIGHT);
+            result = prf_tog_chk!(ch, PrefFlags::HOLYLIGHT);
         }
         SCMD_SLOWNS => {
             result = {
@@ -1500,7 +1500,7 @@ pub fn do_gen_tog(
             }
         }
         SCMD_AUTOEXIT => {
-            result = prf_tog_chk!(ch, PRF_AUTOEXIT);
+            result = prf_tog_chk!(ch, PrefFlags::AUTOEXIT);
         }
         SCMD_TRACK => {
             result = {

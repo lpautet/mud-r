@@ -46,8 +46,7 @@ use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    AffectFlags, CharData, CharFileU, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL,  ItemType,
-    LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, PRF_BRIEF, PRF_COLOR_1, PRF_COLOR_2, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, PRF_NOHASSLE, PRF_NOREPEAT, PRF_NOWIZ, PRF_QUEST, PRF_ROOMFLAGS, PRF_SUMMONABLE, THIRST
+    AffectFlags, CharData, CharFileU, ItemType, PrefFlags, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, THIRST
 };
 use crate::util::{
     age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
@@ -85,7 +84,7 @@ pub fn do_echo(
 
         act(&mut game.descriptors, chars, db, &buf, false, Some(ch), None, None, TO_ROOM);
         let ch = chars.get(chid);
-        if ch.prf_flagged(PRF_NOREPEAT) {
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else {
             act(&mut game.descriptors, chars, db, &buf, false, Some(ch), None, None, TO_CHAR);
@@ -123,7 +122,7 @@ pub fn do_send(
     let vict = vict.unwrap();
     send_to_char(&mut game.descriptors, vict, format!("{}\r\n", buf).as_str());
     let ch = chars.get(chid);
-    if ch.prf_flagged(PRF_NOREPEAT) {
+    if ch.prf_flagged(PrefFlags::NOREPEAT) {
         send_to_char(&mut game.descriptors, ch, "Sent.\r\n");
     } else {
         send_to_char(&mut game.descriptors, 
@@ -1332,7 +1331,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             format!("PLR: {}{}{}\r\n", CCCYN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
         );
         buf.clear();
-        sprintbit(k.prf_flags(), &PREFERENCE_BITS, &mut buf);
+        sprintbit(k.prf_flags().bits() as i64, &PREFERENCE_BITS, &mut buf);
         send_to_char(descs, 
             ch,
             format!("PRF: {}{}{}\r\n", CCGRN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
@@ -2224,8 +2223,8 @@ pub fn do_syslog(
             ch,
             format!(
                 "Your syslog is currently {}.\r\n",
-                LOGTYPES[if ch.prf_flagged(PRF_LOG1) { 1 } else { 0 }
-                    + if ch.prf_flagged(PRF_LOG2) { 2 } else { 0 }]
+                LOGTYPES[if ch.prf_flagged(PrefFlags::LOG1) { 1 } else { 0 }
+                    + if ch.prf_flagged(PrefFlags::LOG2) { 2 } else { 0 }]
             )
             .as_str(),
         );
@@ -2241,8 +2240,13 @@ pub fn do_syslog(
     }
     let tp = tp.unwrap();
     let ch = chars.get_mut(chid);
-    ch.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
-    ch.set_prf_flags_bits(PRF_LOG1 * (tp & 1) as i64 | PRF_LOG2 * (tp & 2) as i64 >> 1);
+    ch.remove_prf_flags_bits(PrefFlags::LOG1 | PrefFlags::LOG2);
+    if (tp & 1) != 0 {
+        ch.set_prf_flags_bits(PrefFlags::LOG1);
+    }
+    if (tp & 2) != 0 {
+        ch.set_prf_flags_bits(PrefFlags::LOG2);
+    }
 
     send_to_char(&mut game.descriptors, 
         ch,
@@ -2373,8 +2377,8 @@ You feel slightly different.",
          * nice immortal only flags, shall we?
          */
         let victim = chars.get_mut(victim_id);
-        victim.remove_prf_flags_bits(PRF_LOG1 | PRF_LOG2);
-        victim.remove_prf_flags_bits(PRF_NOHASSLE | PRF_HOLYLIGHT);
+        victim.remove_prf_flags_bits(PrefFlags::LOG1 | PrefFlags::LOG2);
+        victim.remove_prf_flags_bits(PrefFlags::NOHASSLE | PrefFlags::HOLYLIGHT);
 
         // TODO run_autowiz();
     }
@@ -2581,7 +2585,7 @@ pub fn do_gecho(
             }
         }
         let ch = chars.get(chid);
-        if ch.prf_flagged(PRF_NOREPEAT) {
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
             send_to_char(&mut game.descriptors, ch, OK);
         } else {
             send_to_char(&mut game.descriptors, ch, format!("{}\r\n", argument).as_str());
@@ -3038,7 +3042,7 @@ pub fn do_wiznet(
                         } else {
                             ""
                         },
-                        if dc.prf_flagged(PRF_NOWIZ) {
+                        if dc.prf_flagged(PrefFlags::NOWIZ) {
                             " (Offline)"
                         } else {
                             ""
@@ -3057,7 +3061,7 @@ pub fn do_wiznet(
         _ => {}
     }
 
-    if ch.prf_flagged(PRF_NOWIZ) {
+    if ch.prf_flagged(PrefFlags::NOWIZ) {
         send_to_char(&mut game.descriptors, ch, "You are offline!\r\n");
         return;
     }
@@ -3102,12 +3106,12 @@ pub fn do_wiznet(
             d.state() == ConPlaying
                 && chars.get(d.character.unwrap()).get_level() >= level as u8
                 && !chars.get(d.character.unwrap())
-                    .prf_flagged(PRF_NOWIZ)
+                    .prf_flagged(PrefFlags::NOWIZ)
                 && !chars.get(d.character.unwrap())
                     .plr_flagged(PLR_WRITING | PLR_MAILING)
                 && d_id == ch.desc.unwrap()
                 || !chars.get(d.character.unwrap())
-                    .prf_flagged(PRF_NOREPEAT)
+                    .prf_flagged(PrefFlags::NOREPEAT)
         } {
             let d = game.desc(d_id);
             let chid = d.character.unwrap();
@@ -3125,7 +3129,7 @@ pub fn do_wiznet(
         }
     }
     let ch = chars.get(chid);
-    if ch.prf_flagged(PRF_NOREPEAT) {
+    if ch.prf_flagged(PrefFlags::NOREPEAT) {
         send_to_char(&mut game.descriptors, ch, OK);
     }
 }
@@ -4252,14 +4256,14 @@ fn perform_set(
     match mode {
         0 => {
             if on {
-                vict.set_prf_flags_bits(PRF_BRIEF)
+                vict.set_prf_flags_bits(PrefFlags::BRIEF)
             } else {
-                vict.remove_prf_flags_bits(PRF_BRIEF)
+                vict.remove_prf_flags_bits(PrefFlags::BRIEF)
             }
         }
         1 => {
             if on {
-                vict.set_plr_flag_bit(PLR_INVSTART)
+                vict.set_plr_flag_bit(  PLR_INVSTART)
             } else {
                 vict.remove_plr_flag(PLR_INVSTART)
             }
@@ -4276,9 +4280,9 @@ fn perform_set(
         }
         3 => {
             if on {
-                vict.set_prf_flags_bits(PRF_SUMMONABLE)
+                vict.set_prf_flags_bits(PrefFlags::SUMMONABLE)
             } else {
-                vict.remove_prf_flags_bits(PRF_SUMMONABLE)
+                vict.remove_prf_flags_bits(PrefFlags::SUMMONABLE)
             }
             let messg = format!("Nosummon {} for {}.\r\n", onoff!(!on), vict.get_name());
             let ch = chars.get(chid);
@@ -4412,9 +4416,9 @@ fn perform_set(
             }
             let vict = chars.get_mut(vict_id);
             if on {
-                vict.set_prf_flags_bits(PRF_NOHASSLE)
+                vict.set_prf_flags_bits(PrefFlags::NOHASSLE)
             } else {
-                vict.remove_prf_flags_bits(PRF_NOHASSLE)
+                vict.remove_prf_flags_bits(PrefFlags::NOHASSLE)
             }
         }
         26 => {
@@ -4509,9 +4513,9 @@ fn perform_set(
         }
         36 => {
             if on {
-                vict.set_plr_flag_bit(PRF_ROOMFLAGS)
+                vict.set_prf_flags_bits(PrefFlags::ROOMFLAGS)
             } else {
-                vict.remove_plr_flag(PRF_ROOMFLAGS)
+                vict.set_prf_flags_bits(PrefFlags::ROOMFLAGS)
             }
         }
         37 => {
@@ -4549,14 +4553,14 @@ fn perform_set(
         }
         41 => {
             if on {
-                vict.set_prf_flags_bits(PRF_QUEST)
+                vict.set_prf_flags_bits(PrefFlags::QUEST)
             } else {
-                vict.remove_prf_flags_bits(PRF_QUEST)
+                vict.remove_prf_flags_bits(PrefFlags::QUEST)
             }
         }
         42 => {
             if val_arg == "off" {
-                vict.remove_prf_flags_bits(PLR_LOADROOM);
+                vict.remove_plr_flag(PLR_LOADROOM);
             } else if is_number(val_arg) {
                 let rvnum = val_arg.parse::<i32>().unwrap() as RoomRnum;
                 let ch = chars.get(chid);
@@ -4587,9 +4591,9 @@ fn perform_set(
         }
         43 => {
             if on {
-                vict.set_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2)
+                vict.set_prf_flags_bits(PrefFlags::COLOR_1 | PrefFlags::COLOR_2)
             } else {
-                vict.remove_prf_flags_bits(PRF_COLOR_1 | PRF_COLOR_2)
+                vict.remove_prf_flags_bits(PrefFlags::COLOR_1 | PrefFlags::COLOR_2)
             }
         }
         44 => {

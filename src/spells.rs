@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, PRF_SUMMONABLE, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, PrefFlags, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, SEX_MALE
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -407,7 +407,7 @@ pub fn spell_summon(
             return;
         }
         if !victim.is_npc()
-            && !victim.prf_flagged(PRF_SUMMONABLE)
+            && !victim.prf_flagged(PrefFlags::SUMMONABLE)
             && !victim.plr_flagged(PLR_KILLER)
         {
             send_to_char(&mut game.descriptors, victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
@@ -574,7 +574,7 @@ pub fn spell_charm(
 
     if victim_id ==  chid {
         send_to_char(&mut game.descriptors, ch, "You like yourself even better!\r\n");
-    } else if !victim.is_npc() && !victim.prf_flagged(PRF_SUMMONABLE) {
+    } else if !victim.is_npc() && !victim.prf_flagged(PrefFlags::SUMMONABLE) {
         send_to_char(&mut game.descriptors, ch, "You fail because SUMMON protection is on!\r\n");
     } else if victim.aff_flagged(AffectFlags::SANCTUARY) {
         send_to_char(&mut game.descriptors, ch, "Your victim is protected by sanctuary!\r\n");

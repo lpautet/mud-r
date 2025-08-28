@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ConState, FollowType, ItemType, MobVnum, ObjData, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, PRF_HOLYLIGHT, PRF_LOG1, PRF_LOG2, SEX_MALE
+    AffectFlags, CharData, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, SEX_MALE
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -111,21 +111,27 @@ impl DB {
 }
 
 impl CharData {
-    pub fn prf_flagged(&self, flag: i64) -> bool {
-        return is_set!(self.prf_flags(), flag);
+    pub fn prf_flagged(&self, flag: PrefFlags) -> bool {
+        self.prf_flags().intersects(flag)
     }
-    pub fn prf_flags(&self) -> i64 {
+    pub fn prf_flags(&self) -> PrefFlags {
         check_player_special!(self, self.player_specials.saved.pref)
     }
-    pub fn set_prf_flags_bits(&mut self, flag: i64) {
-        self.player_specials.saved.pref |= flag;
+    pub fn set_prf_flags_bits(&mut self, flag: PrefFlags) {
+        let mut pref = self.player_specials.saved.pref;
+        pref.insert(flag);
+        self.player_specials.saved.pref = pref;
     }
-    pub fn remove_prf_flags_bits(&mut self, flag: i64) {
-        self.player_specials.saved.pref &= !flag;
+    pub fn remove_prf_flags_bits(&mut self, flag: PrefFlags) {
+        let mut pref = self.player_specials.saved.pref;
+        pref.remove(flag);
+        self.player_specials.saved.pref = pref;
     }
-    pub fn toggle_prf_flag_bits(&mut self, flag: i64) -> i64 {
-        self.player_specials.saved.pref ^= flag;
-        self.player_specials.saved.pref
+    pub fn toggle_prf_flag_bits(&mut self, flag: PrefFlags) -> PrefFlags {
+        let mut pref = self.player_specials.saved.pref;
+        pref.toggle(flag);
+        self.player_specials.saved.pref = pref;
+        pref
     }
     pub fn toggle_plr_flag_bits(&mut self, flag: i64) -> i64 {
         self.char_specials.saved.act ^= flag;
@@ -134,7 +140,7 @@ impl CharData {
     pub fn plr_tog_chk(&mut self, flag: i64) -> i64 {
         self.toggle_plr_flag_bits(flag) & flag
     }
-    pub fn prf_tog_chk(&mut self, flag: i64) -> i64 {
+    pub fn prf_tog_chk(&mut self, flag: PrefFlags) -> PrefFlags {
         self.toggle_prf_flag_bits(flag) & flag
     }
 }
@@ -650,7 +656,7 @@ impl CharData {
         self.get_pos() > POS_SLEEPING
     }
     pub fn can_see_in_dark(&self) -> bool {
-        self.aff_flagged(AffectFlags::INFRAVISION) || (!self.is_npc() && self.prf_flagged(PRF_HOLYLIGHT))
+        self.aff_flagged(AffectFlags::INFRAVISION) || (!self.is_npc() && self.prf_flagged(PrefFlags::HOLYLIGHT))
     }
 }
 
@@ -943,7 +949,7 @@ impl DB {
     }
 
     pub fn imm_can_see(&self, sub: &CharData, obj: &CharData) -> bool {
-        self.mort_can_see(sub, obj) || (!sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT))
+        self.mort_can_see(sub, obj) || (!sub.is_npc() && sub.prf_flagged(PrefFlags::HOLYLIGHT))
     }
 }
 
@@ -1040,7 +1046,7 @@ pub fn can_see_obj(
     sub: &CharData,
     obj: &ObjData,
 ) -> bool {
-    mort_can_see_obj(descs, chars, db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PRF_HOLYLIGHT)
+    mort_can_see_obj(descs, chars, db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PrefFlags::HOLYLIGHT)
 }
 
 pub fn self_(sub: &CharData, obj: &CharData) -> bool {
@@ -1330,13 +1336,13 @@ impl Game {
                 continue;
             }
             if log_type > {
-                if character.prf_flagged(PRF_LOG1) {
+                if character.prf_flagged(PrefFlags::LOG1) {
                     1
                 } else {
                     0
                 }
             } + {
-                if character.prf_flagged(PRF_LOG2) {
+                if character.prf_flagged(PrefFlags::LOG2) {
                     2
                 } else {
                     0

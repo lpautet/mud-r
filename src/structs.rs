@@ -407,29 +407,34 @@ pub const MOB_NOBLIND: i64 = 1 << 17; /* Mob can't be blinded		*/
 pub const MOB_NOTDEADYET: i64 = 1 << 18; /* (R) Mob being extracted.		*/
 
 /* Preference flags: used by char_data.player_specials.pref */
-pub const PRF_BRIEF: i64 = 1 << 0; /* Room descs won't normally be shown	*/
-pub const PRF_COMPACT: i64 = 1 << 1; /* No extra CRLF pair before prompts	*/
-pub const PRF_DEAF: i64 = 1 << 2; /* Can't hear shouts			*/
-pub const PRF_NOTELL: i64 = 1 << 3; /* Can't receive tells		*/
-pub const PRF_DISPHP: i64 = 1 << 4; /* Display hit points in prompt	*/
-pub const PRF_DISPMANA: i64 = 1 << 5; /* Display mana points in prompt	*/
-pub const PRF_DISPMOVE: i64 = 1 << 6; /* Display move points in prompt	*/
-pub const PRF_AUTOEXIT: i64 = 1 << 7; /* Display exits in a room		*/
-pub const PRF_NOHASSLE: i64 = 1 << 8; /* Aggr mobs won't attack		*/
-pub const PRF_QUEST: i64 = 1 << 9; /* On quest				*/
-pub const PRF_SUMMONABLE: i64 = 1 << 10; /* Can be summoned			*/
-pub const PRF_NOREPEAT: i64 = 1 << 11; /* No repetition of comm commands	*/
-pub const PRF_HOLYLIGHT: i64 = 1 << 12; /* Can see in dark			*/
-pub const PRF_COLOR_1: i64 = 1 << 13; /* Color (low bit)			*/
-pub const PRF_COLOR_2: i64 = 1 << 14; /* Color (high bit)			*/
-pub const PRF_NOWIZ: i64 = 1 << 15; /* Can't hear wizline			*/
-pub const PRF_LOG1: i64 = 1 << 16; /* On-line System Log (low bit)	*/
-pub const PRF_LOG2: i64 = 1 << 17; /* On-line System Log (high bit)	*/
-pub const PRF_NOAUCT: i64 = 1 << 18; /* Can't hear auction channel		*/
-pub const PRF_NOGOSS: i64 = 1 << 19; /* Can't hear gossip channel		*/
-pub const PRF_NOGRATZ: i64 = 1 << 20; /* Can't hear grats channel		*/
-pub const PRF_ROOMFLAGS: i64 = 1 << 21; /* Can see room flags (ROOM_x)	*/
-pub const PRF_DISPAUTO: i64 = 1 << 22; /* Show prompt HP, MP, MV when < 30%.	*/
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct PrefFlags: i64 {
+        const BRIEF = 1 << 0;       /* Room descs won't normally be shown */
+        const COMPACT = 1 << 1;     /* No extra CRLF pair before prompts */
+        const DEAF = 1 << 2;        /* Can't hear shouts */
+        const NOTELL = 1 << 3;      /* Can't receive tells */
+        const DISPHP = 1 << 4;      /* Display hit points in prompt */
+        const DISPMANA = 1 << 5;    /* Display mana points in prompt */
+        const DISPMOVE = 1 << 6;    /* Display move points in prompt */
+        const AUTOEXIT = 1 << 7;    /* Display exits in a room */
+        const NOHASSLE = 1 << 8;    /* Aggr mobs won't attack */
+        const QUEST = 1 << 9;       /* On quest */
+        const SUMMONABLE = 1 << 10; /* Can be summoned */
+        const NOREPEAT = 1 << 11;   /* No repetition of comm commands */
+        const HOLYLIGHT = 1 << 12;  /* Can see in dark */
+        const COLOR_1 = 1 << 13;    /* Color (low bit) */
+        const COLOR_2 = 1 << 14;    /* Color (high bit) */
+        const NOWIZ = 1 << 15;      /* Can't hear wizline */
+        const LOG1 = 1 << 16;       /* On-line System Log (low bit) */
+        const LOG2 = 1 << 17;       /* On-line System Log (high bit) */
+        const NOAUCT = 1 << 18;     /* Can't hear auction channel */
+        const NOGOSS = 1 << 19;     /* Can't hear gossip channel */
+        const NOGRATZ = 1 << 20;    /* Can't hear grats channel */
+        const ROOMFLAGS = 1 << 21;  /* Can see room flags (ROOM_x) */
+        const DISPAUTO = 1 << 22;   /* Show prompt HP, MP, MV when < 30%. */
+    }
+}
 
 /* Variables for the output buffering system */
 // pub const MAX_SOCK_BUF: i32 = 12 * 1024; /* Size of kernel's sock buf   */
@@ -638,7 +643,7 @@ pub struct PlayerSpecialDataSaved {
     /* level of invisibility		*/
     pub load_room: RoomVnum,
     /* Which room to place char in		*/
-    pub pref: i64,
+    pub pref: PrefFlags,
     /*bitvector_t*/
     /* preference flags for PC's.		*/
     pub bad_pws: u8,

@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -2909,7 +2909,7 @@ impl CharFileU {
                 freeze_level: 0,
                 invis_level: 0,
                 load_room: 0,
-                pref: 0,
+                pref: PrefFlags::empty(),
                 bad_pws: 0,
                 conditions: [0; 3],
                 spare0: 0,
@@ -3797,7 +3797,7 @@ impl Default for CharData {
                     freeze_level: 0,
                     invis_level: 0,
                     load_room: 0,
-                    pref: 0,
+                    pref: PrefFlags::empty(),
                     bad_pws: 0,
                     conditions: [0; 3],
                     spare0: 0,
@@ -3890,7 +3890,7 @@ impl CharData {
                     freeze_level: 0,
                     invis_level: 0,
                     load_room: 0,
-                    pref: 0,
+                    pref: PrefFlags::empty(),
                     bad_pws: 0,
                     conditions: [0; 3],
                     spare0: 0,

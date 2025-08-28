@@ -19,7 +19,7 @@ use crate::handler::obj_to_char;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
-    AffectFlags, CharData, MeRef, RoomFlags, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS, POS_STANDING, PRF_NOHASSLE
+    AffectFlags, CharData, MeRef, PrefFlags, RoomFlags, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS, POS_STANDING
 };
 use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
 use crate::{act, Game, ObjData, DB, TO_ROOM};
@@ -126,7 +126,7 @@ impl Game {
                     let ch = chars.get(chid);
                     if vict.is_npc()
                         || !can_see(&self.descriptors, chars, db, ch, vict)
-                        || vict.prf_flagged(PRF_NOHASSLE)
+                        || vict.prf_flagged(PrefFlags::NOHASSLE)
                     {
                         continue;
                     }
@@ -163,7 +163,7 @@ impl Game {
                     let ch = chars.get(chid);
                     if vict.is_npc()
                         || !can_see(&self.descriptors, chars, db, ch, vict)
-                        || vict.prf_flagged(PRF_NOHASSLE)
+                        || vict.prf_flagged(PrefFlags::NOHASSLE)
                     {
                         continue;
                     }
@@ -214,7 +214,7 @@ impl Game {
                 if !self.aggressive_mob_on_a_leash(chars, db, texts, objs, chid, Some(master_id), master_id) {
                     let ch = chars.get(chid);
                     if can_see(&self.descriptors, chars, db, ch, chars.get(ch.master.unwrap()))
-                        && !chars.get(ch.master.unwrap()).prf_flagged(PRF_NOHASSLE)
+                        && !chars.get(ch.master.unwrap()).prf_flagged(PrefFlags::NOHASSLE)
                     {
                         let victim_id = ch.master.unwrap();
                         self.hit(chars, db, texts, objs,chid, victim_id, TYPE_UNDEFINED);
@@ -269,7 +269,7 @@ impl Game {
 pub fn remember(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
-    if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PRF_NOHASSLE) {
+    if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PrefFlags::NOHASSLE) {
         return;
     }
     let victim_idnum = victim.get_idnum();

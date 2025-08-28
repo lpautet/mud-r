@@ -67,9 +67,7 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    CharData, MeRef, TxtBlock, AffectFlags, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET,
-    NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING,
-    POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED,
+    AffectFlags, CharData, MeRef, TxtBlock, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED
 };
 use crate::structs::{
     CharFileU, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
@@ -3587,7 +3585,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     store_to_char(texts, &tmp_store, character);
                     character.set_pfilepos(player_i.unwrap() as i32);
 
-                    if character.prf_flagged(PLR_DELETED) {
+                    if character.plr_flagged(PLR_DELETED) {
                         /* We get a false positive from the original deleted character. */
                         desc.character = None;
                         db.free_char(&mut game.descriptors, chars, objs, character_id);
@@ -3970,7 +3968,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         reset_char(chars.get_mut(character_id));
                         let character = chars.get_mut(character_id);
                         read_aliases(character);
-                        if character.prf_flagged(PLR_INVSTART) {
+                        if character.plr_flagged(PLR_INVSTART) {
                             character.set_invis_lev(character.get_level() as i16);
                         }
 
