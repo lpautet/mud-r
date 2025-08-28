@@ -29,7 +29,7 @@ use rand::Rng;
 
 use crate::class::CLASS_ABBREVS;
 use crate::constants::STR_APP;
-use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, LIB_PLRTEXT, SUF_ALIAS, SUF_OBJS, SUF_TEXT};
+use crate::db::{DB, LIB_PLRALIAS, LIB_PLROBJS, SUF_ALIAS, SUF_OBJS};
 use crate::handler::{affect_from_char, affected_by_spell, fname};
 use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
@@ -53,9 +53,13 @@ pub enum DisplayMode {
 }
 
 /* get_filename() */
-pub const CRASH_FILE: i32 = 0;
-pub const ETEXT_FILE: i32 = 1;
-pub const ALIAS_FILE: i32 = 2;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(i32)]
+pub enum FileType {
+    Crash = 0,
+ //   Etext = 1,
+    Alias = 2,
+}
 
 /* breadth-first searching */
 pub const BFS_ERROR: i32 = -1;
@@ -1724,7 +1728,7 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
     return lines;
 }
 
-pub fn get_filename(filename: &mut String, mode: i32, orig_name: &str) -> bool {
+pub fn get_filename(filename: &mut String, mode: FileType, orig_name: &str) -> bool {
     if orig_name.is_empty() {
         error!(
             "SYSERR:  empty string passed to get_filename(), {} .",
@@ -1736,21 +1740,18 @@ pub fn get_filename(filename: &mut String, mode: i32, orig_name: &str) -> bool {
     let suffix;
 
     match mode {
-        CRASH_FILE => {
+        FileType::Crash => {
             prefix = LIB_PLROBJS;
             suffix = SUF_OBJS;
         }
-        ALIAS_FILE => {
+        FileType::Alias => {
             prefix = LIB_PLRALIAS;
             suffix = SUF_ALIAS;
         }
-        ETEXT_FILE => {
-            prefix = LIB_PLRTEXT;
-            suffix = SUF_TEXT;
-        }
-        _ => {
-            return false;
-        }
+        // FileType::Etext => {
+        //     prefix = LIB_PLRTEXT;
+        //     suffix = SUF_TEXT;
+        // }
     }
 
     let name = orig_name.to_lowercase();

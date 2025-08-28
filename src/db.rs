@@ -72,7 +72,7 @@ pub const MESS_FILE: &str = "./misc/messages"; /* damage messages		*/
 pub const SOCMESS_FILE: &str = "./misc/socials"; /* messages for social acts	*/
 pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 
-pub const LIB_PLRTEXT: &str = "plrtext/";
+//pub const LIB_PLRTEXT: &str = "plrtext/";
 pub const LIB_PLROBJS: &str = "plrobjs/";
 
 pub const KILLSCRIPT_FILE: &str = "./.killscript";
@@ -88,7 +88,7 @@ pub const TIME_FILE: &str = "etc/time";
 pub const LIB_PLRALIAS: &str = "plralias/";
 
 pub const SUF_OBJS: &str = "objs";
-pub const SUF_TEXT: &str = "text";
+//pub const SUF_TEXT: &str = "text";
 pub const SUF_ALIAS: &str = "alias";
 
 pub struct PlayerIndexElement {

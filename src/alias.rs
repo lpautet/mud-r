@@ -19,11 +19,11 @@ use log::error;
 
 use crate::interpreter::AliasData;
 use crate::structs::CharData;
-use crate::util::{get_filename, ALIAS_FILE};
+use crate::util::{get_filename, FileType};
 
 pub fn write_aliases(ch: &CharData) {
     let mut fname = String::new();
-    get_filename(&mut fname, ALIAS_FILE, &ch.get_name());
+    get_filename(&mut fname, FileType::Alias, &ch.get_name());
     let res = fs::remove_file(&fname);
     match res  {
         Err(e) if e.kind() != ErrorKind::NotFound => { 
@@ -69,7 +69,7 @@ pub fn write_aliases(ch: &CharData) {
 
 pub fn read_aliases(ch: &mut CharData) {
     let mut xbuf = String::new();
-    get_filename(&mut xbuf, ALIAS_FILE, &ch.get_name());
+    get_filename(&mut xbuf, FileType::Alias, &ch.get_name());
 
     let r = OpenOptions::new().read(true).open(&xbuf);
 
@@ -143,7 +143,7 @@ pub fn read_aliases(ch: &mut CharData) {
 pub fn delete_aliases(charname: &str) {
     let mut filename = String::new();
 
-    if !get_filename(&mut filename, ALIAS_FILE, charname) {
+    if !get_filename(&mut filename, FileType::Alias, charname) {
         return;
     }
 

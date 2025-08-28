@@ -32,7 +32,7 @@ use crate::structs::{
     AffectFlags, ApplyType, CharData, ExtraFlags, ItemType, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
-    can_see, get_filename, hssh, objs, rand_number, time_now, DisplayMode, CRASH_FILE, SECS_PER_REAL_DAY
+    can_see, get_filename, hssh, objs, rand_number, time_now, DisplayMode, FileType, SECS_PER_REAL_DAY
 };
 use crate::{Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
@@ -240,7 +240,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
 pub fn crash_delete_file(name: &str) -> bool {
     let mut filename = String::new();
 
-    if !get_filename(&mut filename, CRASH_FILE, name) {
+    if !get_filename(&mut filename, FileType::Crash, name) {
         return false;
     }
     {
@@ -269,7 +269,7 @@ pub fn crash_delete_file(name: &str) -> bool {
 pub fn crash_delete_crashfile(ch: &CharData) -> bool {
     let mut filename = String::new();
 
-    if !get_filename(&mut filename, CRASH_FILE, ch.get_name().as_ref()) {
+    if !get_filename(&mut filename, FileType::Crash, ch.get_name().as_ref()) {
         return false;
     }
     let fl = OpenOptions::new().read(true).open(&filename);
@@ -307,7 +307,7 @@ fn crash_clean_file(name: &str) -> bool {
     let mut filename = String::new();
     let mut rent = RentInfo::new();
 
-    if !get_filename(&mut filename, CRASH_FILE, name) {
+    if !get_filename(&mut filename, FileType::Crash, name) {
         return false;
     }
     /*
@@ -381,7 +381,7 @@ pub fn update_obj_file(db: &DB) {
 pub fn crash_listrent(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, name: &str) {
     let ch = chars.get(chid);
     let mut filename = String::new();
-    if !get_filename(&mut filename, CRASH_FILE, name) {
+    if !get_filename(&mut filename, FileType::Crash, name) {
         return;
     }
     let fl = OpenOptions::new().read(true).open(&filename);
@@ -535,7 +535,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         [vec![], vec![], vec![], vec![], vec![]];
 
     let mut filename = String::new();
-    if !get_filename(&mut filename, CRASH_FILE, &ch.get_name()) {
+    if !get_filename(&mut filename, FileType::Crash, &ch.get_name()) {
         return 1;
     }
     let fl = OpenOptions::new().read(true).write(true).open(&filename);
@@ -948,7 +948,7 @@ pub fn crash_crashsave(chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot
     }
 
     let mut buf = String::new();
-    if !get_filename(&mut buf, CRASH_FILE, &ch.get_name()) {
+    if !get_filename(&mut buf, FileType::Crash, &ch.get_name()) {
         return;
     }
     let mut fp = OpenOptions::new()
@@ -1010,7 +1010,7 @@ pub fn crash_idlesave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
         return;
     }
     let mut buf = String::new();
-    if !get_filename(&mut buf, CRASH_FILE, ch.get_name().as_ref()) {
+    if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
     let fp = OpenOptions::new().create(true).write(true).open(buf);
@@ -1125,7 +1125,7 @@ pub fn crash_rentsave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
         return;
     }
     let mut buf = String::new();
-    if !get_filename(&mut buf, CRASH_FILE, &ch.get_name()) {
+    if !get_filename(&mut buf, FileType::Crash, &ch.get_name()) {
         return;
     }
     let fpo = OpenOptions::new().write(true).create(true).open(buf);
@@ -1197,7 +1197,7 @@ fn crash_cryosave(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
         return;
     }
 
-    if !get_filename(&mut buf, CRASH_FILE, ch.get_name().as_ref()) {
+    if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
     let fp = OpenOptions::new().create(true).write(true).open(buf);
