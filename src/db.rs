@@ -294,14 +294,15 @@ impl DB {
 *  routines for booting the system                                       *
 *************************************************************************/
 
-// /* this is necessary for the autowiz system */
-// void reboot_wizlists(void)
-// {
-// file_to_string_alloc(WIZLIST_FILE, &wizlist);
-// file_to_string_alloc(IMMLIST_FILE, &immlist);
-// }
-//
-//
+/* this is necessary for the autowiz system */
+impl Game {
+    pub fn reboot_wizlists(&mut self, db: &mut DB) {
+        self.file_to_string_alloc(WIZLIST_FILE, &mut db.wizlist);
+        self.file_to_string_alloc(IMMLIST_FILE, &mut db.immlist);
+    }
+}
+
+
 /* Wipe out all the loaded text files, for shutting down. */
 impl DB {
     pub fn free_text_files(&mut self) {

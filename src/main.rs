@@ -17,11 +17,13 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::string::ToString;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
 use tungstenite::{WebSocket, accept, Message};
 use clap::Parser;
+use signal_hook::{consts::SIGTERM, consts::SIGINT, consts::SIGUSR1, consts::SIGUSR2, consts::SIGHUP, consts::SIGALRM, iterator::Signals};
 
 use depot::{Depot, DepotId, HasId};
 use log::{debug, error, info, warn, LevelFilter};
@@ -50,6 +52,11 @@ use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword,
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
 use crate::util::{hmhr, hshr, hssh, sana, touch, DisplayMode, SECS_PER_MUD_HOUR};
+
+static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
+static REREAD_WIZLIST: AtomicBool = AtomicBool::new(false);
+static EMERGENCY_UNBAN: AtomicBool = AtomicBool::new(false);
+static TICS: AtomicI32 = AtomicI32::new(0);
 
 mod act_comm;
 mod act_informative;
@@ -287,10 +294,7 @@ pub struct Game {
     /* reboot the game after a shutdown */
     max_players: i32,
     /* max descriptors available */
-    // tics: i32,
     /* for extern checkpointing */
-    // byte reread_wizlist;		/* signal: SIGUSR1 */
-    // byte emergency_unban;		/* signal: SIGUSR2 */
     mins_since_crashsave: u32,
     config: Config,
 }
@@ -312,7 +316,6 @@ fn main() -> ExitCode {
         circle_reboot: false,
         mother_desc: None,
         websocket_listener: None,
-        // tics: 0,
         mins_since_crashsave: 0,
         config: Config {
             nameserver_is_slow: false,
@@ -444,9 +447,10 @@ impl Game {
         info!("Opening mother connection.");
         db.boot_db(self, chars, texts, objs);
 
-        // info!("Signal trapping.");
-        // signal_setup();
-
+        info!("Signal trapping.");
+        if let Err(e) = setup_signal_handlers() {
+            error!("Failed to setup signal handlers: {}", e);
+        }
         /* If we made it this far, we will be able to restart without problem. */
         fs::remove_file(Path::new(KILLSCRIPT_FILE)).unwrap();
 
@@ -529,7 +533,7 @@ impl Game {
         let mut last_time = Instant::now();
 
         /* The Main Loop.  The Big Cheese.  The Top Dog.  The Head Honcho.  The.. */
-        while !self.circle_shutdown {
+        while !self.circle_shutdown && !SHUTDOWN_REQUESTED.load(Ordering::Relaxed) {
             /* Sleep if we don't have any connections */
             if self.descriptor_list.is_empty() {
                 debug!("No connections.  Going to sleep.");
@@ -777,23 +781,24 @@ impl Game {
             }
 
             /* Check for any signals we may have received. */
-            // if (reread_wizlist) {
-            //     reread_wizlist = FALSE;
-            //     mudlog(CMP, LVL_IMMORT, TRUE, "Signal received - rereading wizlists.");
-            //     reboot_wizlists();
-            // }
-            // if (emergency_unban) {
-            //     emergency_unban = FALSE;
-            //     mudlog(BRF, LVL_IMMORT, TRUE, "Received SIGUSR2 - completely unrestricting game (emergent)");
-            //     ban_list = NULL;
-            //     circle_restrict = 0;
-            //     num_invalid = 0;
-            // }
+            if REREAD_WIZLIST.load(Ordering::Relaxed) {
+                REREAD_WIZLIST.store(false, Ordering::Relaxed);
+                self.mudlog(chars, DisplayMode::Complete, LVL_IMMORT as i32, true, "Signal received - rereading wizlists.");
+                self.reboot_wizlists(db);
+            }
+            if EMERGENCY_UNBAN.load(Ordering::Relaxed) {
+                EMERGENCY_UNBAN.store(false, Ordering::Relaxed);
+                self.mudlog(chars, DisplayMode::Brief, LVL_IMMORT as i32, true, "Received SIGUSR2 - completely unrestricting game (emergent)");
+                db.ban_list.clear();
+                db.circle_restrict = 0;
+                //db.num_invalid = 0;
+            }
 
             /* Roll pulse over after 10 hours */
             if pulse >= (10 * 60 * 60 * PASSES_PER_SEC) {
                 pulse = 0;
             }
+            TICS.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -1779,123 +1784,83 @@ impl Game {
  *  signal-handling functions (formerly signals.c).  UNIX only.      *
  ****************************************************************** */
 
-// # if defined(CIRCLE_UNIX) | | defined(CIRCLE_MACINTOSH)
-//
-// RETSIGTYPE reread_wizlists(int sig)
-// {
-// reread_wizlist = TRUE;
-// }
-//
-//
-// RETSIGTYPE unrestrict_game(int sig)
-// {
-// emergency_unban = TRUE;
-// }
-//
-// # ifdef CIRCLE_UNIX
-//
-// /* clean up our zombie kids to avoid defunct processes */
-// RETSIGTYPE reap(int sig)
-// {
-// while (waitpid( - 1, NULL, WNOHANG) > 0);
-//
-// my_signal(SIGCHLD, reap);
-// }
-//
-// /* Dying anyway... */
-// RETSIGTYPE checkpointing(int sig)
-// {
-// if ( ! tics) {
-// log("SYSERR: CHECKPOINT shutdown: tics not updated. (Infinite loop suspected)");
-// abort();
-// } else
-// tics = 0;
-// }
-//
-//
-// /* Dying anyway... */
-// RETSIGTYPE hupsig(int sig)
-// {
-// log("SYSERR: Received SIGHUP, SIGINT, or SIGTERM.  Shutting down...");
-// exit(1);            /* perhaps something more elegant should
-// 				 * substituted */
-// }
-//
-// # endif    /* CIRCLE_UNIX */
-/*
- * This is an implementation of signal() using sigaction() for portability.
- * (sigaction() is POSIX; signal() is not.)  Taken from Stevens' _Advanced
- * Programming in the UNIX Environment_.  We are specifying that all system
- * calls _not_ be automatically restarted for uniformity, because BSD systems
- * do not restart select(), even if SA_RESTART is used.
- *
- * Note that NeXT 2.x is not POSIX and does not have sigaction; therefore,
- * I just define it to be the old signal.  If your system doesn't have
- * sigaction either, you can use the same fix.
- *
- * SunOS Release 4.0.2 (sun386) needs this too, according to Tim Aldric.
- */
 
-// # ifndef POSIX
-// # define my_signal(signo, func) signal(signo, func)
-// # else
-// sigfunc *my_signal(int signo, sigfunc *func)
-// {
-// struct sigaction sact, oact;
-//
-// sact.sa_handler = func;
-// sigemptyset( & sact.sa_mask);
-// sact.sa_flags = 0;
-// # ifdef SA_INTERRUPT
-// sact.sa_flags |= SA_INTERRUPT; /* SunOS */
-// # endif
-//
-// if (sigaction(signo, & sact, & oact) < 0)
-// return (SIG_ERR);
-//
-// return (oact.sa_handler);
-// }
-// # endif                /* POSIX */
-//
-//
-// void signal_setup(void)
-// {
-// # ifndef CIRCLE_MACINTOSH
-// struct itimerval itime;
-// struct timeval interval;
-//
-// /* user signal 1: reread wizlists.  Used by autowiz system. */
-// my_signal(SIGUSR1, reread_wizlists);
-//
-// /*
-//  * user signal 2: unrestrict game.  Used for emergencies if you lock
-//  * yourself out of the MUD somehow.  (Duh...)
-//  */
-// my_signal(SIGUSR2, unrestrict_game);
-//
-// /*
-//  * set up the deadlock-protection so that the MUD aborts itself if it gets
-//  * caught in an infinite loop for more than 3 minutes.
-//  */
-// interval.tv_sec = 180;
-// interval.tv_usec = 0;
-// itime.it_interval = interval;
-// itime.it_value = interval;
-// setitimer(ITIMER_VIRTUAL, & itime, NULL);
-// my_signal(SIGVTALRM, checkpointing);
-//
-// /* just to be on the safe side: */
-// my_signal(SIGHUP, hupsig);
-// my_signal(SIGCHLD, reap);
-// # endif /* CIRCLE_MACINTOSH */
-// my_signal(SIGINT, hupsig);
-// my_signal(SIGTERM, hupsig);
-// my_signal(SIGPIPE, SIG_IGN);
-// my_signal(SIGALRM, SIG_IGN);
-// }
-//
-// # endif    /* CIRCLE_UNIX || CIRCLE_MACINTOSH */
-/* ****************************************************************
+fn reread_wizlists(_sig: i32) {
+    REREAD_WIZLIST.store(true, Ordering::Relaxed);
+    info!("Received SIGUSR1: reread wizlists requested");
+}
+
+fn unrestrict_game(_sig: i32) {
+    EMERGENCY_UNBAN.store(true, Ordering::Relaxed);
+    info!("Received SIGUSR2: emergency unban requested");
+}
+
+fn checkpointing(_sig: i32) {
+    if TICS.load(Ordering::Relaxed) == 0 {
+        error!("SYSERR: CHECKPOINT shutdown: tics not updated. (Infinite loop suspected)");
+        process::abort();
+    } else {
+        TICS.store(0, Ordering::Relaxed);
+    }
+}
+
+fn hupsig(_sig: i32) {
+    info!("Received SIGHUP, SIGINT, or SIGTERM. Shutting down...");
+    SHUTDOWN_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn my_signal<F>(signo: i32, func: F) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: Fn(i32) + Send + 'static,
+{
+    let mut signals = Signals::new(&[signo])?;
+    thread::spawn(move || {
+        for sig in signals.forever() {
+            func(sig);
+        }
+    });
+    Ok(())
+}
+
+fn setup_timer<F>(interval_secs: u64, callback: F) -> thread::JoinHandle<()>
+where
+    F: Fn() + Send + 'static,
+{
+    thread::spawn(move || {
+        loop {
+            thread::sleep(Duration::from_secs(interval_secs));
+            callback();
+        }
+    })
+}
+
+fn setup_signal_handlers() -> Result<(), Box<dyn std::error::Error>> {
+    /* user signal 1: reread wizlists.  Used by autowiz system. */
+    my_signal(SIGUSR1, reread_wizlists)?;
+
+    /*
+     * user signal 2: unrestrict game.  Used for emergencies if you lock
+     * yourself out of the MUD somehow.  (Duh...)
+     */
+    my_signal(SIGUSR2, unrestrict_game)?;
+
+    /*
+     * set up the deadlock-protection so that the MUD aborts itself if it gets
+     * caught in an infinite loop for more than 3 minutes.
+     */
+    setup_timer(180, || checkpointing(SIGALRM));
+
+    /* just to be on the safe side: */
+    my_signal(SIGHUP, hupsig)?;
+    my_signal(SIGINT, hupsig)?;
+    my_signal(SIGTERM, hupsig)?;
+    
+    // Ignore SIGPIPE and SIGALRM - we'll handle these differently in Rust
+    
+    Ok(())
+}
+
+ /* ****************************************************************
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
