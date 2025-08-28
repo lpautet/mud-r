@@ -21,9 +21,12 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
-use tungstenite::{WebSocket, accept, Message};
 use clap::Parser;
-use signal_hook::{consts::SIGTERM, consts::SIGINT, consts::SIGUSR1, consts::SIGUSR2, consts::SIGHUP, consts::SIGALRM, iterator::Signals};
+use signal_hook::{
+    consts::SIGALRM, consts::SIGHUP, consts::SIGINT, consts::SIGTERM, consts::SIGUSR1,
+    consts::SIGUSR2, iterator::Signals,
+};
+use tungstenite::{accept, Message, WebSocket};
 
 use depot::{Depot, DepotId, HasId};
 use log::{debug, error, info, warn, LevelFilter};
@@ -329,10 +332,10 @@ fn main() -> ExitCode {
     let mut chars: Depot<CharData> = Depot::new();
 
     let mut db = DB::new(&mut texts);
-    
+
     // Parse command line arguments using clap
     let args = Args::parse();
-    
+
     // Apply parsed arguments
     let mut logname: Option<&str> = LOGNAME;
     let custom_logfile;
@@ -340,9 +343,9 @@ fn main() -> ExitCode {
         custom_logfile = log_file.clone();
         logname = Some(&custom_logfile);
     }
-    
+
     let dir = args.directory;
-    
+
     if let Some(arg_port) = args.port {
         if arg_port <= 1024 {
             error!("SYSERR: Illegal port number {}.", arg_port);
@@ -350,29 +353,29 @@ fn main() -> ExitCode {
         }
         port = arg_port;
     }
-    
+
     // Apply boolean flags
     if args.syntax_check {
         db.scheck = true;
         info!("Syntax check mode enabled.");
     }
-    
+
     if args.mini_mud {
         db.mini_mud = true;
         db.no_rent_check = true;
         info!("Running in minimized mode & with no rent check.");
     }
-    
+
     if args.quick_boot {
         db.no_rent_check = true;
         info!("Quick boot mode -- rent check supressed.");
     }
-    
+
     if args.restrict {
         db.circle_restrict = 1;
         info!("Restricting game -- no new players allowed.");
     }
-    
+
     if args.no_specials {
         db.no_specials = true;
         info!("Suppressing assignment of special routines.");
@@ -606,26 +609,24 @@ impl Game {
             for d_id in self.descriptor_list.clone() {
                 // First, try to poll WebSocket for new messages
                 self.poll_websocket_input(d_id);
-                
+
                 let has_input = match &self.desc(d_id).connection {
-                    Some(ConnectionType::Telnet(stream)) => {
-                        match stream.peek(&mut buf) {
-                            Ok(size) if size != 0 => true,
-                            Ok(_) => false,
-                            Err(err) if err.kind() == ErrorKind::WouldBlock => false,
-                            Err(err) => {
-                                error!("Error while peeking TCP Stream: {} ({})", err, err.kind());
-                                false
-                            }
+                    Some(ConnectionType::Telnet(stream)) => match stream.peek(&mut buf) {
+                        Ok(size) if size != 0 => true,
+                        Ok(_) => false,
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => false,
+                        Err(err) => {
+                            error!("Error while peeking TCP Stream: {} ({})", err, err.kind());
+                            false
                         }
-                    }
+                    },
                     Some(ConnectionType::WebSocket(_)) => {
                         // Check if WebSocket has buffered input
                         !self.desc(d_id).websocket_input_buffer.is_empty()
                     }
                     None => false,
                 };
-                
+
                 if has_input {
                     process_input(&mut self.descriptors, d_id);
                 }
@@ -674,7 +675,8 @@ impl Game {
                             let character = chars.get_mut(character_id);
                             character.set_was_in(NOWHERE);
                             let character = chars.get(character_id);
-                            act(&mut self.descriptors, 
+                            act(
+                                &mut self.descriptors,
                                 chars,
                                 db,
                                 "$n has returned.",
@@ -784,12 +786,24 @@ impl Game {
             /* Check for any signals we may have received. */
             if REREAD_WIZLIST.load(Ordering::Relaxed) {
                 REREAD_WIZLIST.store(false, Ordering::Relaxed);
-                self.mudlog(chars, DisplayMode::Complete, LVL_IMMORT as i32, true, "Signal received - rereading wizlists.");
+                self.mudlog(
+                    chars,
+                    DisplayMode::Complete,
+                    LVL_IMMORT as i32,
+                    true,
+                    "Signal received - rereading wizlists.",
+                );
                 self.reboot_wizlists(db);
             }
             if EMERGENCY_UNBAN.load(Ordering::Relaxed) {
                 EMERGENCY_UNBAN.store(false, Ordering::Relaxed);
-                self.mudlog(chars, DisplayMode::Brief, LVL_IMMORT as i32, true, "Received SIGUSR2 - completely unrestricting game (emergent)");
+                self.mudlog(
+                    chars,
+                    DisplayMode::Brief,
+                    LVL_IMMORT as i32,
+                    true,
+                    "Received SIGUSR2 - completely unrestricting game (emergent)",
+                );
                 db.ban_list.clear();
                 db.circle_restrict = 0;
                 //db.num_invalid = 0;
@@ -888,7 +902,6 @@ impl Game {
 }
 
 impl DescriptorData {
-
     /*
      * Turn off echoing (works for both telnet and WebSocket)
      */
@@ -1089,7 +1102,8 @@ impl Game {
         /* determine if the site is banned */
         if isbanned(db, &newd.host) == BanType::All {
             if let Some(ConnectionType::Telnet(ref mut stream)) = newd.connection {
-                stream.shutdown(Shutdown::Both)
+                stream
+                    .shutdown(Shutdown::Both)
                     .expect("shutdowning socket which is banned");
             }
             self.mudlog(
@@ -1123,7 +1137,9 @@ impl Game {
         addr: SocketAddr,
     ) {
         // Set non-blocking for the initial stream
-        stream.set_nonblocking(true).expect("Error with setting nonblocking");
+        stream
+            .set_nonblocking(true)
+            .expect("Error with setting nonblocking");
 
         /* make sure we have room for it */
         if self.descriptor_list.len() >= self.max_players as usize {
@@ -1160,7 +1176,8 @@ impl Game {
                         DisplayMode::Complete,
                         LVL_GOD as i32,
                         true,
-                        format!("WebSocket connection attempt denied from [{}]", newd.host).as_str(),
+                        format!("WebSocket connection attempt denied from [{}]", newd.host)
+                            .as_str(),
                     );
                     return;
                 }
@@ -1175,7 +1192,7 @@ impl Game {
 
                 let desc_id = self.descriptors.push(newd);
                 self.descriptor_list.push(desc_id);
-                
+
                 info!("WebSocket connection established for {}", addr);
             }
             Err(e) => {
@@ -1184,21 +1201,29 @@ impl Game {
         }
     }
 
-    fn perform_websocket_handshake(&self, stream: TcpStream) -> Result<WebSocket<TcpStream>, Box<dyn std::error::Error>> {
+    fn perform_websocket_handshake(
+        &self,
+        stream: TcpStream,
+    ) -> Result<WebSocket<TcpStream>, Box<dyn std::error::Error>> {
         match accept(stream) {
             Ok(websocket) => Ok(websocket),
-            Err(e) => Err(e.into())
+            Err(e) => Err(e.into()),
         }
     }
 
     fn poll_websocket_input(&mut self, d_id: DepotId) {
-        if let Some(ConnectionType::WebSocket(ref mut ws)) = self.desc_mut(d_id).connection.as_mut() {
+        if let Some(ConnectionType::WebSocket(ref mut ws)) = self.desc_mut(d_id).connection.as_mut()
+        {
             match ws.read() {
                 Ok(Message::Text(text)) => {
-                    self.desc_mut(d_id).websocket_input_buffer.extend_from_slice(text.as_bytes());
+                    self.desc_mut(d_id)
+                        .websocket_input_buffer
+                        .extend_from_slice(text.as_bytes());
                 }
                 Ok(Message::Binary(data)) => {
-                    self.desc_mut(d_id).websocket_input_buffer.extend_from_slice(&data);
+                    self.desc_mut(d_id)
+                        .websocket_input_buffer
+                        .extend_from_slice(&data);
                 }
                 Ok(Message::Close(_)) => {
                     // Connection closed - this will be handled elsewhere
@@ -1206,7 +1231,9 @@ impl Game {
                 Ok(_) => {
                     // Ignore ping/pong frames
                 }
-                Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(tungstenite::Error::Io(ref e))
+                    if e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
                     // No data available - this is normal for non-blocking sockets
                 }
                 Err(_) => {
@@ -1227,91 +1254,97 @@ impl Game {
  *	 2 bytes: extra \r\n for non-comapct
  *      14 bytes: unused
  */
-    fn process_output(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, desc_id: DepotId) -> i32 {
-        /* we may need this \r\n for later -- see below */
-        let mut i = "\r\n".as_bytes().to_vec();
-        let mut result;
+fn process_output(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    desc_id: DepotId,
+) -> i32 {
+    /* we may need this \r\n for later -- see below */
+    let mut i = "\r\n".as_bytes().to_vec();
+    let mut result;
 
-        let desc = descs.get_mut(desc_id);
-        /* now, append the 'real' output */
-        i.append(&mut desc.output);
+    let desc = descs.get_mut(desc_id);
+    /* now, append the 'real' output */
+    i.append(&mut desc.output);
 
-        /* add the extra CRLF if the person isn't in compact mode */
-        if desc.connected == ConPlaying
-            && desc.character.is_some()
-            && !chars.get(desc.character.unwrap()).is_npc()
-            && chars.get(desc.character.unwrap()).prf_flagged(PrefFlags::COMPACT)
-        {
-            i.extend_from_slice("\r\n".as_bytes());
-        }
-
-        /* add a prompt */
-        i.extend_from_slice(desc.make_prompt(chars).as_bytes());
-
-        /*
-         * now, send the output.  If this is an 'interruption', use the prepended
-         * CRLF, otherwise send the straight output sans CRLF.
-         */
-        if desc.has_prompt {
-            desc.has_prompt = false;
-            result = match &mut desc.connection {
-                Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i),
-                Some(ConnectionType::WebSocket(ref mut ws)) => {
-                    // Send WebSocket text message
-                    match ws.send(Message::Text(String::from_utf8_lossy(&i).to_string())) {
-                        Ok(_) => i.len() as i32,
-                        Err(_) => -1,
-                    }
-                }
-                None => -1,
-            };
-            if result >= 2 {
-                result -= 2;
-            }
-        } else {
-            result = match &mut desc.connection {
-                Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i[2..]),
-                Some(ConnectionType::WebSocket(ref mut ws)) => {
-                    // Send WebSocket text message (skip the first 2 bytes)
-                    match ws.send(Message::Text(String::from_utf8_lossy(&i[2..]).to_string())) {
-                        Ok(_) => (i.len() - 2) as i32,
-                        Err(_) => -1,
-                    }
-                }
-                None => -1,
-            };
-        }
-
-        if result < 0 {
-            /* Oops, fatal error. Bye! */
-            if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
-                let _ = stream.shutdown(Shutdown::Both);
-            }
-            return -1;
-        } else if result == 0 {
-            /* Socket buffer full. Try later. */
-            return 0;
-        }
-
-        /* Handle snooping: prepend "% " and send to snooper. */
-        if desc.snoop_by.is_some() {
-            let snooper_id =  descs.get_mut(desc_id).snoop_by.unwrap();
-            let snooper =  descs.get_mut(snooper_id);
-            snooper.write_to_output(format!("% {}%%", result).as_str());
-        }
-        let desc =  descs.get_mut(desc_id);
-
-        /* The common case: all saved output was handed off to the kernel buffer. */
-        let exp_len = (i.len() - 2) as i32;
-        if result >= exp_len {
-            // already cleared by append ...
-            // descs.get_mut(desc_id).output.clear();
-        } else {
-            /* Not all data in buffer sent.  result < output buffersize. */
-            desc.output = i.split_off(result as usize);
-        }
-        result
+    /* add the extra CRLF if the person isn't in compact mode */
+    if desc.connected == ConPlaying
+        && desc.character.is_some()
+        && !chars.get(desc.character.unwrap()).is_npc()
+        && chars
+            .get(desc.character.unwrap())
+            .prf_flagged(PrefFlags::COMPACT)
+    {
+        i.extend_from_slice("\r\n".as_bytes());
     }
+
+    /* add a prompt */
+    i.extend_from_slice(desc.make_prompt(chars).as_bytes());
+
+    /*
+     * now, send the output.  If this is an 'interruption', use the prepended
+     * CRLF, otherwise send the straight output sans CRLF.
+     */
+    if desc.has_prompt {
+        desc.has_prompt = false;
+        result = match &mut desc.connection {
+            Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i),
+            Some(ConnectionType::WebSocket(ref mut ws)) => {
+                // Send WebSocket text message
+                match ws.send(Message::Text(String::from_utf8_lossy(&i).to_string())) {
+                    Ok(_) => i.len() as i32,
+                    Err(_) => -1,
+                }
+            }
+            None => -1,
+        };
+        if result >= 2 {
+            result -= 2;
+        }
+    } else {
+        result = match &mut desc.connection {
+            Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, &i[2..]),
+            Some(ConnectionType::WebSocket(ref mut ws)) => {
+                // Send WebSocket text message (skip the first 2 bytes)
+                match ws.send(Message::Text(String::from_utf8_lossy(&i[2..]).to_string())) {
+                    Ok(_) => (i.len() - 2) as i32,
+                    Err(_) => -1,
+                }
+            }
+            None => -1,
+        };
+    }
+
+    if result < 0 {
+        /* Oops, fatal error. Bye! */
+        if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
+        return -1;
+    } else if result == 0 {
+        /* Socket buffer full. Try later. */
+        return 0;
+    }
+
+    /* Handle snooping: prepend "% " and send to snooper. */
+    if desc.snoop_by.is_some() {
+        let snooper_id = descs.get_mut(desc_id).snoop_by.unwrap();
+        let snooper = descs.get_mut(snooper_id);
+        snooper.write_to_output(format!("% {}%%", result).as_str());
+    }
+    let desc = descs.get_mut(desc_id);
+
+    /* The common case: all saved output was handed off to the kernel buffer. */
+    let exp_len = (i.len() - 2) as i32;
+    if result >= exp_len {
+        // already cleared by append ...
+        // descs.get_mut(desc_id).output.clear();
+    } else {
+        /* Not all data in buffer sent.  result < output buffersize. */
+        desc.output = i.split_off(result as usize);
+    }
+    result
+}
 
 /*
  * write_to_descriptor takes a descriptor, and text to write to the
@@ -1367,7 +1400,12 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
                 Ok(len)
             }
         }
-        None => return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "No connection")),
+        None => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "No connection",
+            ))
+        }
     };
 
     match read_result {
@@ -1410,188 +1448,189 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-    fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
-        let buf_length;
-        let mut failed_subst;
-        let mut bytes_read;
-        let mut read_point = 0;
-        let mut nl_pos: Option<usize> = None;
-        let mut tmp = String::new();
-        let desc = descs.get_mut(d_id);
+fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
+    let buf_length;
+    let mut failed_subst;
+    let mut bytes_read;
+    let mut read_point = 0;
+    let mut nl_pos: Option<usize> = None;
+    let mut tmp = String::new();
+    let desc = descs.get_mut(d_id);
 
-        /* first, find the point where we left off reading data */
-        buf_length = desc.inbuf.len();
-        let mut space_left = (MAX_RAW_INPUT_LENGTH as i128) - (buf_length as i128) - 1;
+    /* first, find the point where we left off reading data */
+    buf_length = desc.inbuf.len();
+    let mut space_left = (MAX_RAW_INPUT_LENGTH as i128) - (buf_length as i128) - 1;
 
-        loop {
-            if space_left <= 0 {
-                warn!("WARNING: process_input: about to close connection: input overflow");
-                return -1;
-            }
+    loop {
+        if space_left <= 0 {
+            warn!("WARNING: process_input: about to close connection: input overflow");
+            return -1;
+        }
 
-            match perform_socket_read(desc) {
-                Err(_) => return -1, /* Error, disconnect them. */
-                Ok(0) => return 0,   /* Just blocking, no problems. */
-                Ok(size) => bytes_read = size,
-            }
+        match perform_socket_read(desc) {
+            Err(_) => return -1, /* Error, disconnect them. */
+            Ok(0) => return 0,   /* Just blocking, no problems. */
+            Ok(size) => bytes_read = size,
+        }
 
-            /* at this point, we know we got some data from the read */
+        /* at this point, we know we got some data from the read */
 
-            /* search for a newline in the data we just read */
-            for i in read_point..read_point + bytes_read {
-                let x = desc.inbuf.chars().nth(i).unwrap();
+        /* search for a newline in the data we just read */
+        for i in read_point..read_point + bytes_read {
+            let x = desc.inbuf.chars().nth(i).unwrap();
 
-                if nl_pos.is_some() {
-                    break;
-                }
-                if isnewl!(x) {
-                    nl_pos = Some(i);
-                }
-            }
-
-            read_point += bytes_read;
-            space_left -= bytes_read as i128;
             if nl_pos.is_some() {
                 break;
             }
-        }
-
-        /*
-         * okay, at this point we have at least one newline in the string; now we
-         * can copy the formatted data to a new array for further processing.
-         */
-
-        let mut read_point = 0;
-
-        let ptr = 0usize;
-        while nl_pos.is_some() {
-            tmp.truncate(0);
-            space_left = MAX_INPUT_LENGTH as i128 - 1;
-
-            /* The '> 1' reserves room for a '$ => $$' expansion. */
-            let desc =  descs.get_mut(d_id);
-            for ptr in 0..desc.inbuf.len() {
-                let x = desc.inbuf.chars().nth(ptr).unwrap();
-                if space_left <= 1 || ptr >= nl_pos.unwrap() {
-                    break;
-                }
-                if x == 8 as char /* \b */ || x == 127 as char {
-                    /* handle backspacing or delete key */
-                    if !tmp.is_empty() {
-                        tmp.pop();
-                        if !tmp.is_empty() && tmp.ends_with('$') {
-                            tmp.pop();
-                            space_left += 2;
-                        } else {
-                            space_left += 1;
-                        }
-                    }
-                } else if x.is_ascii() && !x.is_control() {
-                    tmp.push(x);
-                    if x == '$' {
-                        tmp.push(x);
-                        space_left -= 2;
-                    } else {
-                        space_left -= 1;
-                    }
-                }
-            }
-
-            if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
-                let write_result = match &mut desc.connection {
-                    Some(ConnectionType::Telnet(ref mut stream)) => write_to_descriptor(stream, tmp.as_bytes()),
-                    Some(ConnectionType::WebSocket(ref mut ws)) => {
-                        match ws.send(Message::Text(tmp.clone())) {
-                            Ok(_) => tmp.len() as i32,
-                            Err(_) => -1,
-                        }
-                    }
-                    None => -1,
-                };
-                if write_result < 0 {
-                    return -1;
-                }
-            }
-
-            if desc.snoop_by.is_some() {
-                let snooper_id = desc.snoop_by.unwrap();
-                let snooper =  descs.get_mut(snooper_id);
-                snooper.write_to_output(format!("% {}\r\n", tmp).as_str());
-            }
-            failed_subst = false;
-            let desc =  descs.get_mut(d_id);
-
-            if tmp == "!" {
-                /* Redo last command. */
-                tmp = desc.last_input.clone();
-            } else if tmp.starts_with('!') && tmp.len() > 1 {
-                let mut commandln = &tmp[1..];
-                let starting_pos = desc.history_pos;
-                let mut cnt = if desc.history_pos == 0 {
-                    HISTORY_SIZE - 1
-                } else {
-                    desc.history_pos - 1
-                };
-
-                commandln = commandln.trim_start();
-                while cnt != starting_pos {
-                    if !desc.history[cnt].is_empty()
-                        && is_abbrev(commandln, desc.history[cnt].as_str())
-                    {
-                        tmp = desc.history[cnt].clone();
-                        desc.last_input = tmp.clone();
-                        desc.write_to_output(format!("{}\r\n", tmp).as_str());
-                        break;
-                    }
-                    if cnt == 0 {
-                        /* At top, loop to bottom. */
-                        cnt = HISTORY_SIZE;
-                    }
-                    cnt -= 1;
-                }
-            } else if tmp.starts_with('^') {
-                let orig = desc.last_input.clone();
-                failed_subst = desc.perform_subst(orig.as_str(), &mut tmp);
-                if !failed_subst {
-                    desc.last_input = tmp.to_string();
-                }
-            } else {
-                desc.last_input = tmp.to_string();
-                let pos = desc.history_pos;
-                desc.history[pos] = tmp.to_string();
-                desc.history_pos += 1;
-                if desc.history_pos >= HISTORY_SIZE {
-                    desc.history_pos = 0;
-                }
-            }
-
-            if !failed_subst {
-                write_to_q(tmp.as_str(), &mut desc.input, false);
-            }
-
-            /* find the end of this line */
-            while nl_pos.unwrap() < desc.inbuf.len()
-                && isnewl!(desc.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
-            {
-                nl_pos = Some(nl_pos.unwrap() + 1);
-            }
-
-            /* see if there's another newline in the input buffer */
-            read_point = nl_pos.unwrap();
-            nl_pos = None;
-            for i in read_point..desc.inbuf.len() {
-                if isnewl!(desc.inbuf.chars().nth(i).unwrap()) {
-                    nl_pos = Some(i);
-                    break;
-                }
+            if isnewl!(x) {
+                nl_pos = Some(i);
             }
         }
-        let desc =  descs.get_mut(d_id);
 
-        desc.inbuf.drain(..read_point);
-
-        1
+        read_point += bytes_read;
+        space_left -= bytes_read as i128;
+        if nl_pos.is_some() {
+            break;
+        }
     }
+
+    /*
+     * okay, at this point we have at least one newline in the string; now we
+     * can copy the formatted data to a new array for further processing.
+     */
+
+    let mut read_point = 0;
+
+    let ptr = 0usize;
+    while nl_pos.is_some() {
+        tmp.truncate(0);
+        space_left = MAX_INPUT_LENGTH as i128 - 1;
+
+        /* The '> 1' reserves room for a '$ => $$' expansion. */
+        let desc = descs.get_mut(d_id);
+        for ptr in 0..desc.inbuf.len() {
+            let x = desc.inbuf.chars().nth(ptr).unwrap();
+            if space_left <= 1 || ptr >= nl_pos.unwrap() {
+                break;
+            }
+            if x == 8 as char /* \b */ || x == 127 as char {
+                /* handle backspacing or delete key */
+                if !tmp.is_empty() {
+                    tmp.pop();
+                    if !tmp.is_empty() && tmp.ends_with('$') {
+                        tmp.pop();
+                        space_left += 2;
+                    } else {
+                        space_left += 1;
+                    }
+                }
+            } else if x.is_ascii() && !x.is_control() {
+                tmp.push(x);
+                if x == '$' {
+                    tmp.push(x);
+                    space_left -= 2;
+                } else {
+                    space_left -= 1;
+                }
+            }
+        }
+
+        if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
+            let write_result = match &mut desc.connection {
+                Some(ConnectionType::Telnet(ref mut stream)) => {
+                    write_to_descriptor(stream, tmp.as_bytes())
+                }
+                Some(ConnectionType::WebSocket(ref mut ws)) => {
+                    match ws.send(Message::Text(tmp.clone())) {
+                        Ok(_) => tmp.len() as i32,
+                        Err(_) => -1,
+                    }
+                }
+                None => -1,
+            };
+            if write_result < 0 {
+                return -1;
+            }
+        }
+
+        if desc.snoop_by.is_some() {
+            let snooper_id = desc.snoop_by.unwrap();
+            let snooper = descs.get_mut(snooper_id);
+            snooper.write_to_output(format!("% {}\r\n", tmp).as_str());
+        }
+        failed_subst = false;
+        let desc = descs.get_mut(d_id);
+
+        if tmp == "!" {
+            /* Redo last command. */
+            tmp = desc.last_input.clone();
+        } else if tmp.starts_with('!') && tmp.len() > 1 {
+            let mut commandln = &tmp[1..];
+            let starting_pos = desc.history_pos;
+            let mut cnt = if desc.history_pos == 0 {
+                HISTORY_SIZE - 1
+            } else {
+                desc.history_pos - 1
+            };
+
+            commandln = commandln.trim_start();
+            while cnt != starting_pos {
+                if !desc.history[cnt].is_empty() && is_abbrev(commandln, desc.history[cnt].as_str())
+                {
+                    tmp = desc.history[cnt].clone();
+                    desc.last_input = tmp.clone();
+                    desc.write_to_output(format!("{}\r\n", tmp).as_str());
+                    break;
+                }
+                if cnt == 0 {
+                    /* At top, loop to bottom. */
+                    cnt = HISTORY_SIZE;
+                }
+                cnt -= 1;
+            }
+        } else if tmp.starts_with('^') {
+            let orig = desc.last_input.clone();
+            failed_subst = desc.perform_subst(orig.as_str(), &mut tmp);
+            if !failed_subst {
+                desc.last_input = tmp.to_string();
+            }
+        } else {
+            desc.last_input = tmp.to_string();
+            let pos = desc.history_pos;
+            desc.history[pos] = tmp.to_string();
+            desc.history_pos += 1;
+            if desc.history_pos >= HISTORY_SIZE {
+                desc.history_pos = 0;
+            }
+        }
+
+        if !failed_subst {
+            write_to_q(tmp.as_str(), &mut desc.input, false);
+        }
+
+        /* find the end of this line */
+        while nl_pos.unwrap() < desc.inbuf.len()
+            && isnewl!(desc.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+        {
+            nl_pos = Some(nl_pos.unwrap() + 1);
+        }
+
+        /* see if there's another newline in the input buffer */
+        read_point = nl_pos.unwrap();
+        nl_pos = None;
+        for i in read_point..desc.inbuf.len() {
+            if isnewl!(desc.inbuf.chars().nth(i).unwrap()) {
+                nl_pos = Some(i);
+                break;
+            }
+        }
+    }
+    let desc = descs.get_mut(d_id);
+
+    desc.inbuf.drain(..read_point);
+
+    1
+}
 
 /* perform substitution for the '^..^' csh-esque syntax orig is the
  * orig string, i.e. the one being modified.  subst contains the
@@ -1684,14 +1723,15 @@ impl Game {
                 match desc.state() {
                     ConPlaying | ConDisconnect => {
                         let original = desc.original;
-                        let link_challenged_id = if let Some(orig) = original  {
+                        let link_challenged_id = if let Some(orig) = original {
                             orig
                         } else {
                             desc.character.unwrap()
                         };
 
                         /* We are guaranteed to have a person. */
-                        act(&mut self.descriptors, 
+                        act(
+                            &mut self.descriptors,
                             chars,
                             db,
                             "$n has lost $s link.",
@@ -1701,7 +1741,14 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        save_char(&mut self.descriptors, db, chars, texts, objs, link_challenged_id);
+                        save_char(
+                            &mut self.descriptors,
+                            db,
+                            chars,
+                            texts,
+                            objs,
+                            link_challenged_id,
+                        );
                         self.mudlog(
                             chars,
                             DisplayMode::Normal,
@@ -1779,7 +1826,6 @@ impl Game {
  *  signal-handling functions (formerly signals.c).  UNIX only.      *
  ****************************************************************** */
 
-
 fn reread_wizlists(_sig: i32) {
     REREAD_WIZLIST.store(true, Ordering::Relaxed);
     info!("Received SIGUSR1: reread wizlists requested");
@@ -1821,11 +1867,9 @@ fn setup_timer<F>(interval_secs: u64, callback: F) -> thread::JoinHandle<()>
 where
     F: Fn() + Send + 'static,
 {
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_secs(interval_secs));
-            callback();
-        }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(interval_secs));
+        callback();
     })
 }
 
@@ -1849,26 +1893,25 @@ fn setup_signal_handlers() -> Result<(), Box<dyn std::error::Error>> {
     my_signal(SIGHUP, hupsig)?;
     my_signal(SIGINT, hupsig)?;
     my_signal(SIGTERM, hupsig)?;
-    
+
     // Ignore SIGPIPE and SIGALRM - we'll handle these differently in Rust
-    
+
     Ok(())
 }
 
- /* ****************************************************************
+/* ****************************************************************
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-    pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
-        if ch.desc.is_some() && !messg.is_empty() {
-            let desc = descs.get_mut(ch.desc.unwrap());
-            desc.write_to_output(messg)
-        } else {
-            0
-        }
+pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
+    if ch.desc.is_some() && !messg.is_empty() {
+        let desc = descs.get_mut(ch.desc.unwrap());
+        desc.write_to_output(messg)
+    } else {
+        0
     }
+}
 impl Game {
-
     pub fn send_to_all(&mut self, messg: &str) {
         if messg.is_empty() {
             return;
@@ -1904,17 +1947,22 @@ impl Game {
         }
     }
 }
-    pub fn send_to_room(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, db: &DB, room: RoomRnum, msg: &str) {
-        for &chid in &db.world[room as usize].peoples {
-            let ch = chars.get(chid);
-            if ch.desc.is_none() {
-                continue;
-            }
-            let desc = descs.get_mut(ch.desc.unwrap());
-            desc.write_to_output(msg);
+pub fn send_to_room(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    room: RoomRnum,
+    msg: &str,
+) {
+    for &chid in &db.world[room as usize].peoples {
+        let ch = chars.get(chid);
+        if ch.desc.is_none() {
+            continue;
         }
+        let desc = descs.get_mut(ch.desc.unwrap());
+        desc.write_to_output(msg);
     }
-
+}
 
 const ACTNULL: &str = "<NULL>";
 
@@ -2181,17 +2229,11 @@ pub fn act(
     }
 
     if _type == TO_CHAR {
-        if ch.is_some() && sendok!(ch.unwrap(), to_sleeping) {
-            perform_act(
-                descs,
-                chars,
-                db,
-                str,
-                ch,
-                obj,
-                vict_obj,
-                ch.as_ref().unwrap(),
-            );
+        match ch {
+            Some(to_ch) if sendok!(to_ch, to_sleeping) => {
+                perform_act(descs, chars, db, str, ch, obj, vict_obj, to_ch);
+            }
+            _ => {}
         }
         return;
     }
