@@ -49,7 +49,7 @@ use crate::structs::{
     AffectFlags, CharData, CharFileU, ItemType, PrefFlags, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, Class, DRUNK, FULL, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, THIRST
 };
 use crate::util::{
-    age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
+    age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, DisplayMode, SECS_PER_MUD_YEAR
 };
 use crate::{act, char_to_store, save_char, send_to_char, send_to_room, vnum_mobile, vnum_object, DescriptorData, ObjData, TextData, VictimRef};
 use crate::{
@@ -2103,7 +2103,7 @@ pub fn do_purge(
             if !vict.is_npc() {
                 let ch = chars.get(chid);
                 game.mudlog(chars,
-                    BRF,
+                    DisplayMode::Brief,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
@@ -2888,7 +2888,7 @@ pub fn do_force(
             );
             let ch = chars.get(chid);
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -2905,7 +2905,7 @@ pub fn do_force(
         send_to_char(&mut game.descriptors, ch, OK);
         let ch = chars.get(chid);
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_GOD as i32, ch.get_invis_lev() as i32),
             true,
             format!(
@@ -2939,7 +2939,7 @@ pub fn do_force(
         send_to_char(&mut game.descriptors, ch, OK);
         let ch = chars.get(chid);
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_GOD as i32, ch.get_invis_lev() as i32),
             true,
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
@@ -3160,7 +3160,7 @@ pub fn do_zreset(
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, ch, "Reset world.\r\n");
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_GRGOD as i32, ch.get_invis_lev() as i32),
             true,
             format!("(GC) {} reset entire world.", ch.get_name()).as_str(),
@@ -3193,7 +3193,7 @@ pub fn do_zreset(
             .as_str(),
         );
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_GRGOD as i32, ch.get_invis_lev() as i32),
             true,
             format!(
@@ -3275,7 +3275,7 @@ pub fn do_wizutil(
                 let ch = chars.get(chid);
                 let vict = chars.get(vict_id);
                 game.mudlog(chars,
-                    BRF,
+                    DisplayMode::Brief,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!("(GC) {} pardoned by {}", vict.get_name(), ch.get_name()).as_str(),
@@ -3287,7 +3287,7 @@ pub fn do_wizutil(
                 let ch = chars.get(chid);
                 let vict = chars.get(vict_id);
                 game.mudlog(chars,
-                    NRM,
+                    DisplayMode::Normal,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!(
@@ -3317,7 +3317,7 @@ pub fn do_wizutil(
                 let ch = chars.get(chid);
                 let vict = chars.get(vict_id);
                 game.mudlog(chars,
-                    BRF,
+                    DisplayMode::Brief,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!(
@@ -3372,7 +3372,7 @@ pub fn do_wizutil(
                 let vict = chars.get(vict_id);
                 let ch = chars.get(chid);
                 game.mudlog(chars,
-                    BRF,
+                    DisplayMode::Brief,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!("(GC) {} frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
@@ -3400,7 +3400,7 @@ pub fn do_wizutil(
                     return;
                 }
                 game.mudlog(chars,
-                    BRF,
+                    DisplayMode::Brief,
                     max(LVL_GOD as i32, ch.get_invis_lev() as i32),
                     true,
                     format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name()).as_str(),

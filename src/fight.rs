@@ -36,7 +36,7 @@ use crate::spells::{
 use crate::structs::{
     AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData, Position, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, PULSE_VIOLENCE, WEAR_WIELD
 };
-use crate::util::{dice, rand_number, stop_follower, BRF};
+use crate::util::{dice, rand_number, stop_follower, DisplayMode};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
 use crate::{
     _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT,
@@ -273,7 +273,7 @@ pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mu
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     game.mudlog(chars,
-        BRF,
+        DisplayMode::Brief,
         LVL_IMMORT as i32,
         true,
         format!(
@@ -1218,7 +1218,7 @@ impl Game {
                 if !victim.is_npc() {
                     let ch = chars.get(chid);
                     self.mudlog(chars,
-                        BRF,
+                        DisplayMode::Brief,
                         LVL_IMMORT as i32,
                         true,
                         format!(

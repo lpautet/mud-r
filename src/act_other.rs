@@ -42,7 +42,7 @@ use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
     AffectFlags, AffectedType, ApplyType, ItemType, PrefFlags, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, Position, WEAR_HOLD
 };
-use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
+use crate::util::{can_see, can_see_obj, rand_number, stop_follower, DisplayMode};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 pub fn do_quit(
@@ -77,7 +77,7 @@ pub fn do_quit(
         );
         let ch = chars.get(chid);
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
             format!("{} has quit the game.", ch.get_name()).as_str(),
@@ -1309,7 +1309,7 @@ pub fn do_gen_write(
         return;
     }
     game.mudlog(chars,
-        CMP,
+        DisplayMode::Complete,
         LVL_IMMORT as i32,
         false,
         format!(

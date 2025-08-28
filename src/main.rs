@@ -49,7 +49,7 @@ use crate::objsave::crash_save_all;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConGetName, ConPassword, ConPlaying};
 use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
-use crate::util::{hmhr, hshr, hssh, sana, touch, CMP, NRM, SECS_PER_MUD_HOUR};
+use crate::util::{hmhr, hshr, hssh, sana, touch, DisplayMode, SECS_PER_MUD_HOUR};
 
 mod act_comm;
 mod act_informative;
@@ -1088,7 +1088,7 @@ impl Game {
             }
             self.mudlog(
                 chars,
-                CMP,
+                DisplayMode::Complete,
                 LVL_GOD as i32,
                 true,
                 format!("Connection attempt denied from [{}]", newd.host).as_str(),
@@ -1157,7 +1157,7 @@ impl Game {
                 if isbanned(db, &newd.host) == BanType::All {
                     self.mudlog(
                         chars,
-                        CMP,
+                        DisplayMode::Complete,
                         LVL_GOD as i32,
                         true,
                         format!("WebSocket connection attempt denied from [{}]", newd.host).as_str(),
@@ -1704,7 +1704,7 @@ impl Game {
                         save_char(&mut self.descriptors, db, chars, texts, objs, link_challenged_id);
                         self.mudlog(
                             chars,
-                            NRM,
+                            DisplayMode::Normal,
                             max(
                                 LVL_IMMORT as i32,
                                 chars.get(link_challenged_id).get_invis_lev() as i32,
@@ -1722,7 +1722,7 @@ impl Game {
                         let char_id = desc.character.unwrap();
                         self.mudlog(
                             chars,
-                            CMP,
+                            DisplayMode::Complete,
                             LVL_IMMORT as i32,
                             true,
                             format!(
@@ -1742,7 +1742,7 @@ impl Game {
             None => {
                 self.mudlog(
                     chars,
-                    CMP,
+                    DisplayMode::Complete,
                     LVL_IMMORT as i32,
                     true,
                     "Losing descriptor without char.",

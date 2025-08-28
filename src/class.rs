@@ -46,7 +46,7 @@ use crate::spells::{
 use crate::structs::{
     CharData, Class, ExtraFlags, GuildInfoType, ObjData, PrefFlags, DRUNK, FULL, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST
 };
-use crate::util::{rand_number, BRF};
+use crate::util::{rand_number, DisplayMode};
 use crate::{check_player_special, save_char, set_skill, Game, TextData};
 
 pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
@@ -3547,7 +3547,7 @@ pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts
     advance_level(chid, game, chars, db, texts, objs);
     let ch = chars.get(chid);
     game.mudlog(chars,
-        BRF,
+        DisplayMode::Brief,
         max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
         true,
         format!("{} advanced to level {}", ch.get_name(), ch.get_level()).as_str(),

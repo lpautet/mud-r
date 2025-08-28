@@ -23,7 +23,7 @@ use crate::depot::{Depot, DepotId};
 use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::LVL_GOD;
-use crate::util::{ctime, time_now, NRM};
+use crate::util::{ctime, time_now, DisplayMode};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
@@ -198,7 +198,7 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
 
     let ch = chars.get(chid);
     game.mudlog(chars,
-        NRM,
+        DisplayMode::Normal,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
         format!(
@@ -236,7 +236,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     send_to_char(&mut game.descriptors, ch, "Site unbanned.\r\n");
     let ch = chars.get(chid);
     game.mudlog(chars,
-        NRM,
+        DisplayMode::Normal,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
         format!(

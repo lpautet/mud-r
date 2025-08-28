@@ -43,10 +43,14 @@ use crate::structs::{
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
-// pub const OFF: u8 = 0;
-pub const BRF: u8 = 1;
-pub const NRM: u8 = 2;
-pub const CMP: u8 = 3;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum DisplayMode {
+    // Off = 0,
+    Brief = 1,
+    Normal = 2,
+    Complete = 3,
+}
 
 /* get_filename() */
 pub const CRASH_FILE: i32 = 0;
@@ -1244,7 +1248,7 @@ pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: D
         db.get_room_vnum(ch.in_room()),
         db.world[ch.in_room() as usize].name
     );
-    game.mudlog(chars, BRF, LVL_IMMORT as i32, true, mesg.as_str());
+    game.mudlog(chars, DisplayMode::Brief, LVL_IMMORT as i32, true, mesg.as_str());
 }
 
 /*
@@ -1299,7 +1303,7 @@ impl Game {
     pub(crate) fn mudlog(
         &mut self,
         chars: &Depot<CharData>,
-        log_type: u8,
+        log_type: DisplayMode,
         level: i32,
         file: bool,
         msg: &str,
@@ -1335,7 +1339,7 @@ impl Game {
             if character.plr_flagged(PLR_WRITING) {
                 continue;
             }
-            if log_type > {
+            if log_type as u8 > {
                 if character.prf_flagged(PrefFlags::LOG1) {
                     1
                 } else {

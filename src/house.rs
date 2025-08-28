@@ -25,7 +25,7 @@ use crate::structs::{
     CharData,  ObjFileElem, RoomRnum, RoomVnum, LVL_GRGOD, LVL_IMMORT, NOWHERE,
     NUM_OF_DIRS, RoomFlags,
 };
-use crate::util::{ctime, time_now, NRM};
+use crate::util::{ctime, time_now, DisplayMode};
 use crate::{send_to_char, DescriptorData, Game, ObjData, TextData};
 
 pub const MAX_HOUSES: usize = 100;
@@ -695,7 +695,7 @@ fn hcontrol_pay_house(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
         send_to_char(&mut game.descriptors, ch, "Unknown house.\r\n");
     } else {
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
             format!("Payment for house {} collected by {}.", arg, ch.get_name()).as_str(),

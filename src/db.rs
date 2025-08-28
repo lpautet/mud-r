@@ -48,8 +48,7 @@ use crate::structs::{
     AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, Class, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, Position, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, Sex, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, PULSE_ZONE
 };
 use crate::util::{
-    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
-    CMP, NRM, SECS_PER_REAL_HOUR,
+    dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch, DisplayMode, SECS_PER_REAL_HOUR
 };
 use crate::{check_player_special, get_last_tell_mut, send_to_char, DescriptorData, Game, TextData};
 
@@ -2485,7 +2484,7 @@ impl Game {
             if db.zone_table[update_u as usize].reset_mode == 2 || is_empty(self, db, chars, update_u) {
                 self.reset_zone(db, chars, objs, update_u as usize);
                 self.mudlog(chars,
-                    CMP,
+                    DisplayMode::Complete,
                     LVL_GOD as i32,
                     false,
                     format!("Auto zone reset: {}", db.zone_table[update_u as usize].name).as_str(),
@@ -2506,13 +2505,13 @@ impl Game {
         last_cmd: &mut i32,
     ) {
         self.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             LVL_GOD as i32,
             true,
             format!("SYSERR: zone file: {}", message).as_str(),
         );
         self.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             LVL_GOD as i32,
             true,
             format!(

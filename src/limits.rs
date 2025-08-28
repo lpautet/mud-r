@@ -28,7 +28,7 @@ use crate::structs::{
 use crate::structs::{
     DRUNK, PLR_WRITING, 
 };
-use crate::util::{age, BRF, CMP};
+use crate::util::{age, DisplayMode};
 use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
@@ -264,7 +264,7 @@ pub fn gain_exp(
             let ch = chars.get(chid);
             game.mudlog(
                 chars,
-                BRF,
+                DisplayMode::Brief,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -334,7 +334,7 @@ pub fn gain_exp_regardless(
             let ch = chars.get(chid);
             game.mudlog(
                 chars,
-                BRF,
+                DisplayMode::Brief,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -463,7 +463,7 @@ impl Game {
                 let ch = chars.get(chid);
                 self.mudlog(
                     chars,
-                    CMP,
+                    DisplayMode::Complete,
                     LVL_GOD as i32,
                     true,
                     format!("{} force-rented and extracted (idle).", ch.get_name()).as_str(),

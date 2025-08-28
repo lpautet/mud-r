@@ -50,7 +50,7 @@ use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
 use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
-use crate::util::BRF;
+use crate::util::DisplayMode;
 use crate::{send_to_char, CharData, DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
 
 impl DescriptorData {
@@ -274,7 +274,7 @@ Skill being one of the following:\r\n",
     vict.set_skill(skill, value);
     let vict = chars.get(vict_id);
     game.mudlog(chars,
-        BRF,
+        DisplayMode::Brief,
         LVL_IMMORT as i32,
         true,
         format!(

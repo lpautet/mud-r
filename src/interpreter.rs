@@ -73,7 +73,7 @@ use crate::structs::{
     CharFileU, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING,
 };
-use crate::util::{BRF, NRM};
+use crate::util::DisplayMode;
 use crate::{_clrlevel, act, clr, save_char, send_to_char, write_to_q, Game, ObjData, TextData, CCNRM, CCRED, DB, PLR_DELETED, TO_ROOM};
 
 /*
@@ -3510,7 +3510,7 @@ fn perform_dupe_check(
                 chars.get(desc.character.unwrap()).get_name(),
                 game.desc(d_id).host
             );
-            game.mudlog(chars, NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
+            game.mudlog(chars, DisplayMode::Normal, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         USURP => {
             desc.write_to_output("You take over your own body, already in use!\r\n");
@@ -3525,7 +3525,7 @@ fn perform_dupe_check(
                 chars.get(desc.character.unwrap()).get_name()
             );
 
-            game.mudlog(chars, NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
+            game.mudlog(chars, DisplayMode::Normal, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         UNSWITCH => {
             desc.write_to_output("Reconnecting to unswitched char.");
@@ -3535,7 +3535,7 @@ fn perform_dupe_check(
                 chars.get(desc.character.unwrap()).get_name(),
                 desc.host
             );
-            game.mudlog(chars, NRM, max(LVL_IMMORT as i32, v2), true, msg.as_str());
+            game.mudlog(chars, DisplayMode::Normal, max(LVL_IMMORT as i32, v2), true, msg.as_str());
         }
         _ => {}
     }
@@ -3647,7 +3647,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         chars.get(desc.character.unwrap()).get_pc_name(),
                         desc.host
                     );
-                    game.mudlog(chars, NRM, LVL_GOD as i32, true, msg.as_str());
+                    game.mudlog(chars, DisplayMode::Normal, LVL_GOD as i32, true, msg.as_str());
                     let desc = game.desc_mut(d_id);
 
                     desc.write_to_output(
@@ -3663,7 +3663,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                         chars.get(desc.character.unwrap()).get_pc_name(),
                         desc.host
                     );
-                    game.mudlog(chars, NRM, LVL_GOD as i32, true, msg.as_str());
+                    game.mudlog(chars, DisplayMode::Normal, LVL_GOD as i32, true, msg.as_str());
                     let desc = game.desc_mut(d_id);
 
                     desc.set_state(ConClose);
@@ -3725,7 +3725,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
 
                     if !matching_pwd {
                         let msg = format!("Bad PW: {} [{}]", character.get_name(), desc.host);
-                        game.mudlog(chars, BRF, LVL_GOD as i32, true, msg.as_str());
+                        game.mudlog(chars, DisplayMode::Brief, LVL_GOD as i32, true, msg.as_str());
                         let character = chars.get_mut(character_id);
                         character.incr_bad_pws();
                         let desc = game.desc_mut(d_id);
@@ -3763,7 +3763,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                             chars.get(desc.character.unwrap()).get_name(),
                             desc.host
                         );
-                        game.mudlog(chars, NRM, LVL_GOD as i32, true, msg.as_str());
+                        game.mudlog(chars, DisplayMode::Normal, LVL_GOD as i32, true, msg.as_str());
                         return;
                     }
                     let desc = game.desc_mut(d_id);
@@ -3778,7 +3778,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                             chars.get(desc.character.unwrap()).get_name(),
                             desc.host
                         );
-                        game.mudlog(chars, NRM, LVL_GOD as i32, true, msg.as_str());
+                        game.mudlog(chars, DisplayMode::Normal, LVL_GOD as i32, true, msg.as_str());
                         return;
                     }
                 }
@@ -3805,7 +3805,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     let msg = format!("{} [{}] has connected.", character.get_name(), desc.host);
                     let character = chars.get(character_id);
                     game.mudlog(chars,
-                        BRF,
+                        DisplayMode::Brief,
                         max(LVL_IMMORT as i32, character.get_invis_lev() as i32),
                         true,
                         msg.as_str(),
@@ -3939,7 +3939,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
             {
                 let character = chars.get(character_id);
                 let msg = format!("{} [{}] new player.", character.get_pc_name(), desc.host);
-                game.mudlog(chars, NRM, LVL_IMMORT as i32, true, msg.as_str());
+                game.mudlog(chars, DisplayMode::Normal, LVL_IMMORT as i32, true, msg.as_str());
             }
         }
         ConRmotd => {
@@ -4164,7 +4164,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
                     d_ch.get_name(),
                     d_ch.get_level()
                 );
-                game.mudlog(chars, NRM, LVL_GOD as i32, true, txt.as_str());
+                game.mudlog(chars, DisplayMode::Normal, LVL_GOD as i32, true, txt.as_str());
                 let desc = game.desc_mut(d_id);
                 desc.set_state(ConClose);
                 return;

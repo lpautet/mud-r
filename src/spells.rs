@@ -23,7 +23,7 @@ use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
     AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Position, PrefFlags, RoomFlags, RoomRnum, Sex, Liquid, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER
 };
-use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
+use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, DisplayMode};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 pub const DEFAULT_STAFF_LVL: i32 = 12;
@@ -424,7 +424,7 @@ pub fn spell_summon(
             let victim = chars.get(victim_id);
             let ch = chars.get(chid);
             game.mudlog(chars,
-                BRF,
+                DisplayMode::Brief,
                 LVL_IMMORT as i32,
                 true,
                 format!(

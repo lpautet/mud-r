@@ -32,7 +32,7 @@ use crate::structs::{
     AffectFlags, ApplyType, CharData, ExtraFlags, ItemType, MeRef, ObjAffectedType, ObjData, ObjFileElem, RentCode, RentInfo, WearFlags, LVL_GOD, LVL_IMMORT, MAX_OBJ_AFFECT, NOTHING, NUM_WEARS, PLR_CRASH, PLR_CRYO, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_L, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_NECK_2, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_L, WEAR_WRIST_R
 };
 use crate::util::{
-    can_see, get_filename, hssh, objs, rand_number, time_now, BRF, CRASH_FILE, NRM, SECS_PER_REAL_DAY
+    can_see, get_filename, hssh, objs, rand_number, time_now, DisplayMode, CRASH_FILE, SECS_PER_REAL_DAY
 };
 use crate::{Game, TO_NOTVICT, TO_ROOM, TO_VICT};
 
@@ -217,7 +217,7 @@ fn auto_equip(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &m
         } else {
             /* Oops, saved a player with double equipment? */
             game.mudlog(chars,
-                BRF,
+                DisplayMode::Brief,
                 LVL_IMMORT as i32,
                 true,
                 format!(
@@ -548,7 +548,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         }
         let ch = chars.get(chid);
         game.mudlog(chars,
-            NRM,
+            DisplayMode::Normal,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
             format!("{} entering game with no equipment.", ch.get_name()).as_str(),
@@ -577,7 +577,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         let cost = rent.net_cost_per_diem * num_of_days as i32;
         if cost > ch.get_gold() + ch.get_bank_gold() {
             game.mudlog(chars,
-                BRF,
+                DisplayMode::Brief,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -601,7 +601,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     match orig_rent_code {
         RentCode::Rented => {
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!("{} un-renting and entering game.", ch.get_name()).as_str(),
@@ -609,7 +609,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         }
         RentCode::Crash => {
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -621,7 +621,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         }
         RentCode::Cryo => {
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!("{} un-cryo'ing and entering game.", ch.get_name()).as_str(),
@@ -629,7 +629,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         }
         RentCode::Forced | RentCode::Timedout => {
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -642,7 +642,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         _ => {
             let rc = rent.rentcode;
             game.mudlog(chars,
-                BRF,
+                DisplayMode::Brief,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -800,7 +800,7 @@ pub fn crash_load(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     /* Little hoarding check. -gg 3/1/98 */
     let ch = chars.get(chid);
     game.mudlog(chars,
-        NRM,
+        DisplayMode::Normal,
         max(ch.get_invis_lev() as i32, LVL_GOD as i32),
         true,
         format!(
@@ -1625,7 +1625,7 @@ fn gen_receptionist(
             crash_rentsave(game, chars, db, objs,chid, cost);
             let ch = chars.get(chid);
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!(
@@ -1654,7 +1654,7 @@ You begin to lose consciousness...",
             crash_cryosave(game, chars, db, objs,chid, cost);
             let ch = chars.get(chid);
             game.mudlog(chars,
-                NRM,
+                DisplayMode::Normal,
                 max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
                 true,
                 format!("{} has cryo-rented.", ch.get_name()).as_str(),
