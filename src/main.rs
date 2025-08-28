@@ -496,7 +496,7 @@ fn init_socket(port: u16) -> TcpListener {
 }
 
 fn get_max_players() -> i32 {
-    return MAX_PLAYING;
+    MAX_PLAYING
 }
 
 /*
@@ -528,7 +528,7 @@ impl Game {
         let mut timeout;
         let mut comm = String::new();
         let mut pulse: u128 = 0;
-        let mut missed_pulses;
+        let mut missed_pulses: i128;
         let mut aliased = false;
 
         let mut last_time = Instant::now();
@@ -557,10 +557,10 @@ impl Game {
             if process_time.as_micros() < OPT_USEC {
                 missed_pulses = 0;
             } else {
-                missed_pulses = process_time.as_micros() / OPT_USEC;
+                missed_pulses = (process_time.as_micros() / OPT_USEC) as i128;
                 let secs = process_time.as_micros() / 1000000;
                 let usecs = process_time.as_micros() % 1000000;
-                process_time = process_time + Duration::new(secs as u64, usecs as u32);
+                process_time += Duration::new(secs as u64, usecs as u32);
             }
 
             /* Calculate the time we should wake up */
@@ -766,12 +766,12 @@ impl Game {
             }
 
             /* If we missed more than 30 seconds worth of pulses, just do 30 secs */
-            if missed_pulses > 30 * PASSES_PER_SEC {
+            if missed_pulses > (30 * PASSES_PER_SEC) as i128 {
                 error!(
                     "SYSERR: Missed {} seconds worth of pulses.",
-                    missed_pulses / PASSES_PER_SEC,
+                    missed_pulses / PASSES_PER_SEC as i128,
                 );
-                missed_pulses = 30 * PASSES_PER_SEC;
+                missed_pulses = (30 * PASSES_PER_SEC) as i128;
             }
 
             /* Now execute the heartbeat functions */
@@ -929,7 +929,7 @@ impl DescriptorData {
         if self.str.borrow().is_some() {
             prompt.push_str("] ");
         } else if self.showstr_count != 0 {
-            prompt.push_str(&*format!(
+            prompt.push_str(&format!(
                 "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
                 self.showstr_page, self.showstr_count
             ));
@@ -1421,7 +1421,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
 
         /* first, find the point where we left off reading data */
         buf_length = desc.inbuf.len();
-        let mut space_left = MAX_RAW_INPUT_LENGTH - buf_length - 1;
+        let mut space_left = (MAX_RAW_INPUT_LENGTH as i128) - (buf_length as i128) - 1;
 
         loop {
             if space_left <= 0 {
@@ -1450,7 +1450,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
             }
 
             read_point += bytes_read;
-            space_left -= bytes_read;
+            space_left -= bytes_read as i128;
             if nl_pos.is_some() {
                 break;
             }
@@ -1466,7 +1466,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
         let ptr = 0usize;
         while nl_pos.is_some() {
             tmp.truncate(0);
-            space_left = MAX_INPUT_LENGTH - 1;
+            space_left = MAX_INPUT_LENGTH as i128 - 1;
 
             /* The '> 1' reserves room for a '$ => $$' expansion. */
             let desc =  descs.get_mut(d_id);
@@ -1479,7 +1479,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
                     /* handle backspacing or delete key */
                     if !tmp.is_empty() {
                         tmp.pop();
-                        if !tmp.is_empty() && tmp.chars().last().unwrap() == '$' {
+                        if !tmp.is_empty() && tmp.ends_with('$') {
                             tmp.pop();
                             space_left += 2;
                         } else {
@@ -1559,7 +1559,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
                 desc.last_input = tmp.to_string();
                 let pos = desc.history_pos;
                 desc.history[pos] = tmp.to_string();
-                desc.history_pos = desc.history_pos + 1;
+                desc.history_pos += 1;
                 if desc.history_pos >= HISTORY_SIZE {
                     desc.history_pos = 0;
                 }
@@ -1590,7 +1590,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
 
         desc.inbuf.drain(..read_point);
 
-        return 1;
+        1
     }
 
 /* perform substitution for the '^..^' csh-esque syntax orig is the
@@ -1640,7 +1640,7 @@ impl DescriptorData {
 
         *subst = newsub;
 
-        return false;
+        false
     }
 }
 impl Game {
@@ -1684,8 +1684,8 @@ impl Game {
                 match desc.state() {
                     ConPlaying | ConDisconnect => {
                         let original = desc.original;
-                        let link_challenged_id = if original.is_some() {
-                            original.unwrap()
+                        let link_challenged_id = if let Some(orig) = original  {
+                            orig
                         } else {
                             desc.character.unwrap()
                         };
@@ -1808,7 +1808,7 @@ fn my_signal<F>(signo: i32, func: F) -> Result<(), Box<dyn std::error::Error>>
 where
     F: Fn(i32) + Send + 'static,
 {
-    let mut signals = Signals::new(&[signo])?;
+    let mut signals = Signals::new([signo])?;
     thread::spawn(move || {
         for sig in signals.forever() {
             func(sig);
@@ -1860,7 +1860,7 @@ fn setup_signal_handlers() -> Result<(), Box<dyn std::error::Error>> {
  **************************************************************** */
 
     pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
-        if ch.desc.is_some() && messg != "" {
+        if ch.desc.is_some() && !messg.is_empty() {
             let desc = descs.get_mut(ch.desc.unwrap());
             desc.write_to_output(messg)
         } else {
@@ -1937,7 +1937,7 @@ fn perform_act(
     loop {
         if orig.starts_with('$') {
             orig.remove(0);
-            match if orig.len() != 0 {
+            match if !orig.is_empty() {
                 orig.chars().next().unwrap()
             } else {
                 '\0'
@@ -2111,7 +2111,7 @@ fn perform_act(
             }
             orig.remove(0);
         } else {
-            if orig.len() == 0 {
+            if orig.is_empty() {
                 break;
             }
             let k = orig.remove(0);
@@ -2129,7 +2129,7 @@ fn perform_act(
 
     let desc_id = to.desc.unwrap();
     let desc = descs.get_mut(desc_id);
-    desc.write_to_output(format!("{}", buf).as_str());
+    desc.write_to_output(buf.to_string().as_str());
 }
 
 macro_rules! sendok {
