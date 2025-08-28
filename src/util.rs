@@ -61,7 +61,7 @@ pub enum FileType {
     Alias = 2,
 }
 
-/* breadth-first searching */
+/* breadth-first searching : those are used as direction */
 pub const BFS_ERROR: i32 = -1;
 pub const BFS_ALREADY_THERE: i32 = -2;
 pub const BFS_NO_PATH: i32 = -3;

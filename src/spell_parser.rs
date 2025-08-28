@@ -19,7 +19,7 @@ use crate::{act, perform_act, send_to_char, ObjData, TextData, VictimRef};
 use crate::config::OK;
 use crate::db::DB;
 use crate::handler::{
-    generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV, FIND_OBJ_ROOM
+    generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, isname, FindFlags,
 };
 use crate::interpreter::{any_one_arg, is_abbrev, one_argument};
 use crate::magic::{
@@ -631,7 +631,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
     let mut tobj = None;
     let k = generic_find(&game.descriptors, chars,db,objs,
         &arg,
-        (FIND_CHAR_ROOM | FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
+        FindFlags::CHAR_ROOM | FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP,
         ch,
         &mut tch,
         &mut tobj,
@@ -727,7 +727,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
             }
         }
         ItemType::Wand => {
-            if k == FIND_CHAR_ROOM {
+            if k == FindFlags::CHAR_ROOM {
                 if tch.unwrap().id() == chid {
                     act(&mut game.descriptors, chars, db,
                         "You point $p at yourself.",
@@ -880,7 +880,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         }
         ItemType::Scroll => {
             if !arg.is_empty() {
-                if k == 0 {
+                if k.is_empty() {
                     act(&mut game.descriptors, chars, db,
                         "There is nothing to here to affect with $p.",
                         false,
@@ -1125,7 +1125,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     } else if !t.is_empty() {
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
             if {
-                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FIND_CHAR_ROOM);
+                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_ROOM);
                 tch.is_some()
             } {
                 target = true;
@@ -1133,7 +1133,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         }
         if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
             if {
-                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FIND_CHAR_WORLD);
+                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_WORLD);
                 tch.is_some()
             } {
                 target = true;

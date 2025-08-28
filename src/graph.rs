@@ -14,7 +14,7 @@ use log::error;
 use crate::constants::DIRS;
 use crate::db::DB;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
+use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{
@@ -171,7 +171,7 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let vict;
     /* The person can't see the victim. */
     if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "No one is around by that name.\r\n");

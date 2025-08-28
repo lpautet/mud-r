@@ -22,7 +22,7 @@ use crate::db::DB;
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::compute_armor_class;
 use crate::handler::{
-    affected_by_spell, fname, generic_find, get_char_vis, get_number, isname, FIND_CHAR_ROOM, FIND_CHAR_WORLD, FIND_OBJ_EQUIP, FIND_OBJ_INV, FIND_OBJ_ROOM
+    affected_by_spell, fname, generic_find, get_char_vis, get_number, isname, FindFlags
 };
 use crate::interpreter::{
     half_chop, is_abbrev, one_argument, search_block, CMD_INFO, SCMD_CLEAR, SCMD_CREDITS,
@@ -656,12 +656,12 @@ fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData
     bits = generic_find(descs, chars,
         db,objs,
         arg,
-        (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP) as i64,
+        FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP,
         ch,
         &mut dummy,
         &mut obj,
     );
-    if bits == 0 {
+    if bits.is_empty() {
         send_to_char(descs, 
             ch,
             format!("There doesn't seem to be {} {} here.\r\n", an!(arg), arg).as_str(),
@@ -678,13 +678,13 @@ fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData
             } else {
                 send_to_char(descs, ch, fname(obj.unwrap().name.as_ref()).as_ref());
                 match bits {
-                    FIND_OBJ_INV => {
+                    FindFlags::OBJ_INV => {
                         send_to_char(descs, ch, " (carried): \r\n");
                     }
-                    FIND_OBJ_ROOM => {
+                    FindFlags::OBJ_ROOM => {
                         send_to_char(descs, ch, " (here): \r\n");
                     }
-                    FIND_OBJ_EQUIP => {
+                    FindFlags::OBJ_EQUIP => {
                         send_to_char(descs, ch, " (used): \r\n");
                     }
                     _ => {}
@@ -755,7 +755,7 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     let bits = generic_find(descs, chars,
         db,objs,
         arg,
-        (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_OBJ_EQUIP | FIND_CHAR_ROOM) as i64,
+        FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP | FindFlags::CHAR_ROOM,
         ch,
         &mut found_char,
         &mut found_obj,
@@ -850,7 +850,7 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     }
 
     /* If an object was found back in generic_find */
-    if bits != 0 {
+    if !bits.is_empty() {
         if !found {
             show_obj_to_char(descs, chars, texts, found_obj.unwrap(), ch, SHOW_OBJ_ACTION);
         } else {
@@ -942,7 +942,7 @@ pub fn do_examine(
     generic_find(&game.descriptors, chars,
         db,objs,
         &arg,
-        (FIND_OBJ_INV | FIND_OBJ_ROOM | FIND_CHAR_ROOM | FIND_OBJ_EQUIP) as i64,
+        FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::CHAR_ROOM | FindFlags::OBJ_EQUIP,
         ch,
         &mut tmp_char,
         &mut tmp_object,
@@ -2173,7 +2173,7 @@ pub fn do_consider(
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
-    let victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+    let victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
     if victim.is_none() {
         send_to_char(&mut game.descriptors, ch, "Consider killing who?\r\n");
         return;
@@ -2229,7 +2229,7 @@ pub fn do_diagnose(
     let vict;
     if !buf.is_empty() {
         if {
-            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
             vict.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -2416,7 +2416,7 @@ pub fn do_commands(
     let vict;
     let victo;
     if !arg.is_empty() {
-        victo = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        victo = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         if victo.is_none() || victo.unwrap().is_npc() {
             send_to_char(&mut game.descriptors, ch, "Who is that?\r\n");
             return;

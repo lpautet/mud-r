@@ -29,14 +29,19 @@ use crate::structs::{
     AffectFlags, AffectedType, ApplyType, CharData, ExtraDescrData, ExtraFlags, ItemType, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
-use crate::{act, is_set, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
+use crate::{act, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
 
-pub const FIND_CHAR_ROOM: i32 = 1 << 0;
-pub const FIND_CHAR_WORLD: i32 = 1 << 1;
-pub const FIND_OBJ_INV: i32 = 1 << 2;
-pub const FIND_OBJ_ROOM: i32 = 1 << 3;
-pub const FIND_OBJ_WORLD: i32 = 1 << 4;
-pub const FIND_OBJ_EQUIP: i32 = 1 << 5;
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct FindFlags: i32 {
+        const CHAR_ROOM = 1 << 0;
+        const CHAR_WORLD = 1 << 1;
+        const OBJ_INV = 1 << 2;
+        const OBJ_ROOM = 1 << 3;
+        const OBJ_WORLD = 1 << 4;
+        const OBJ_EQUIP = 1 << 5;
+    }
+}
 
 pub fn fname(namelist: &str) -> Rc<str> {
     let mut holder = String::new();
@@ -1233,7 +1238,7 @@ impl Game {
         ch: &CharData,
         name: &mut String,
         number: Option<&mut i32>,
-        inroom: i32,
+        inroom: FindFlags,
     ) -> Option<&'a CharData> {
         //let ch = chars.get(chid);
         let mut num;
@@ -1251,7 +1256,7 @@ impl Game {
             if i.is_npc() {
                 continue;
             }
-            if inroom == FIND_CHAR_ROOM && ch.in_room() != i.in_room() {
+            if inroom == FindFlags::CHAR_ROOM && ch.in_room() != i.in_room() {
                 continue;
             }
             if i.player.name.as_ref() != name {
@@ -1295,7 +1300,7 @@ impl Game {
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return get_player_vis(descs, chars, db, ch, name, None, FIND_CHAR_ROOM);
+            return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
         }
 
         for i_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -1337,7 +1342,7 @@ impl Game {
 
         /* 0.<name> means PC with name */
         if *number == 0 {
-            return get_player_vis(descs, chars, db, ch, name, None, 0);
+            return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
         }
 
         for &i_id in &db.character_list {
@@ -1367,11 +1372,11 @@ impl Game {
         ch: &'a CharData,
         name: &mut String,
         number: Option<&mut i32>,
-        _where: i32,
+        _where: FindFlags,
     ) -> Option<&'a CharData> {
-        return if _where == FIND_CHAR_ROOM {
+        return if _where == FindFlags::CHAR_ROOM {
             get_char_room_vis(descs, chars, db, ch, name, number)
-        } else if _where == FIND_CHAR_WORLD {
+        } else if _where == FindFlags::CHAR_WORLD {
             get_char_world_vis(descs, chars, db, ch, name, number)
         } else {
             None
@@ -1749,41 +1754,41 @@ impl DB {
         db: &'a DB,
         objs: &'a Depot<ObjData>,
         arg: &str,
-        bitvector: i64,
+        bitvector: FindFlags,
         ch: &'a CharData,
         tar_ch: &mut Option<&'a CharData>,
         tar_obj: &mut Option<&'a ObjData>,
-    ) -> i32 {
+    ) -> FindFlags {
         let mut name = String::new();
         let mut found = false;
 
         one_argument(arg, &mut name);
 
         if name.is_empty() {
-            return 0;
+            return FindFlags::empty();
         }
         let mut number = get_number(&mut name);
         if number == 0 {
-            return 0;
+            return FindFlags::empty();
         }
 
-        if is_set!(bitvector, FIND_CHAR_ROOM as i64) {
+        if bitvector.contains(FindFlags::CHAR_ROOM) {
             /* Find person in room */
             *tar_ch = get_char_room_vis(descs, chars, db, ch, &mut name, Some(&mut number));
 
             if tar_ch.is_some() {
-                return FIND_CHAR_ROOM;
+                return FindFlags::CHAR_ROOM;
             }
         }
 
-        if is_set!(bitvector, FIND_CHAR_WORLD as i64) {
+        if bitvector.contains(FindFlags::CHAR_WORLD) {
             *tar_ch = get_char_world_vis(descs, chars, db, ch, &mut name, Some(&mut number));
             if tar_ch.is_some() {
-                return FIND_CHAR_WORLD;
+                return FindFlags::CHAR_WORLD;
             }
         }
 
-        if is_set!(bitvector, FIND_OBJ_EQUIP as i64) {
+        if bitvector.contains(FindFlags::OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
                 if found {
                     break;
@@ -1800,11 +1805,11 @@ impl DB {
                 }
             }
             if found {
-                return FIND_OBJ_EQUIP;
+                return FindFlags::OBJ_EQUIP;
             }
         }
 
-        if is_set!(bitvector, FIND_OBJ_INV as i64) {
+        if bitvector.contains(FindFlags::OBJ_INV) {
             *tar_obj = get_obj_in_list_vis(descs,
                 chars,
                 db,
@@ -1815,11 +1820,11 @@ impl DB {
                 &ch.carrying,
             );
             if tar_obj.is_some() {
-                return FIND_OBJ_INV;
+                return FindFlags::OBJ_INV;
             }
         }
 
-        if is_set!(bitvector, FIND_OBJ_ROOM as i64) {
+        if bitvector.contains(FindFlags::OBJ_ROOM) {
             *tar_obj = get_obj_in_list_vis2(descs,
                 chars,
                 db,
@@ -1830,17 +1835,17 @@ impl DB {
                 &db.world[ch.in_room() as usize].contents,
             );
             if tar_obj.is_some() {
-                return FIND_OBJ_ROOM;
+                return FindFlags::OBJ_ROOM;
             }
         }
 
-        if is_set!(bitvector, FIND_OBJ_WORLD as i64) {
+        if bitvector.contains(FindFlags::OBJ_WORLD) {
             *tar_obj = get_obj_vis(descs, chars, db, objs, ch, &name, Some(&mut number));
             if tar_obj.is_some() {
-                return FIND_OBJ_WORLD;
+                return FindFlags::OBJ_WORLD;
             }
         }
-        0
+        FindFlags::empty()
     }
 
 

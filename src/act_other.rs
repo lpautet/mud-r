@@ -25,7 +25,7 @@ use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED
 use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, IDEA_FILE, TYPO_FILE};
 use crate::fight::{appear, die};
-use crate::handler::{affect_from_char, affect_to_char, get_char_vis, get_obj_in_list_vis, isname, obj_from_char, obj_to_char, FIND_CHAR_ROOM};
+use crate::handler::{affect_from_char, affect_to_char, get_char_vis, get_obj_in_list_vis, isname, obj_from_char, obj_to_char, FindFlags};
 use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
@@ -255,7 +255,7 @@ pub fn do_steal(
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
     if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut vict_name, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut vict_name, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "Steal what from who?\r\n");
@@ -685,7 +685,7 @@ pub fn do_group(
     let vict;
 
     if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -793,7 +793,7 @@ pub fn do_ungroup(
     }
     let tch;
     if {
-        tch = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        tch = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
         tch.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "There is no such person!\r\n");

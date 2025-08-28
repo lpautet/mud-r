@@ -19,7 +19,7 @@ use crate::act_item::find_eq_pos;
 use crate::config::{NOPERSON, OK, TUNNEL_SIZE};
 use crate::constants::{DEX_APP_SKILL, DIRS, MOVEMENT_LOSS, REV_DIR};
 use crate::db::DB;
-use crate::handler::{fname, generic_find, get_char_vis, isname, FIND_CHAR_ROOM, FIND_OBJ_INV, FIND_OBJ_ROOM};
+use crate::handler::{fname, generic_find, get_char_vis, isname, FindFlags};
 use crate::house::house_can_enter;
 use crate::interpreter::{
     one_argument, search_block, special, two_arguments, SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN,
@@ -740,13 +740,13 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
     let mut victim = None;
     let mut obj = None;
     two_arguments(argument, &mut type_, &mut dir);
-    if !generic_find(&game.descriptors, chars,db,objs,
+    if generic_find(&game.descriptors, chars,db,objs,
         &type_,
-        (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
+        FindFlags::OBJ_INV | FindFlags::OBJ_ROOM,
         ch,
         &mut victim,
         &mut obj,
-    ) != 0
+    ).is_empty()
     {
         let dooroi = find_door(&mut game.descriptors,db, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
         dooro = if dooroi.is_some() {
@@ -1069,7 +1069,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
         if ch.get_pos() == Position::Sleeping {
             send_to_char(&mut game.descriptors, ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
-            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
             vict.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -1150,7 +1150,7 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     let leader;
     if !buf.is_empty() {
         if {
-            leader = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
+            leader = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
             leader.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, NOPERSON);

@@ -21,7 +21,7 @@ use crate::structs::{Position, Sex};
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
-use crate::handler::{get_char_vis, FIND_CHAR_ROOM};
+use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::{find_command, one_argument, CMD_INFO};
 use crate::util::rand_number;
 use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -98,7 +98,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
     let vict;
     if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_not_found).as_str());
@@ -160,7 +160,7 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     if !arg.is_empty() {
         let victim;
         if {
-            victim = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            victim = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
             victim.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");

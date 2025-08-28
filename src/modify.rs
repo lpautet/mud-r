@@ -44,7 +44,7 @@ use std::rc::Rc;
 use crate::boards::{board_save_board, BOARD_MAGIC};
 use crate::config::{MENU, NOPERSON};
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{get_char_vis, FIND_CHAR_WORLD};
+use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
 use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
 use crate::spells::TOP_SPELL_DEFINE;
@@ -196,7 +196,7 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FIND_CHAR_WORLD);
+    let vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
     if vict.is_none() {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
         return;

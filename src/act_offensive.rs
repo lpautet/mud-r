@@ -14,7 +14,7 @@ use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
 use crate::act_movement::do_simple_move;
 use crate::config::{NOPERSON, OK, PK_ALLOWED};
 use crate::fight::{check_killer, compute_armor_class, raw_kill};
-use crate::handler::{get_char_vis, FIND_CHAR_ROOM};
+use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::{command_interpreter, half_chop, is_abbrev, one_argument, SCMD_MURDER};
 use crate::limits::gain_exp;
 use crate::spells::{
@@ -43,7 +43,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to assist?\r\n");
     } else if {
-        helpee = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        helpee = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         helpee.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -135,7 +135,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Hit who?\r\n");
     } else if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "They don't seem to be here.\r\n");
@@ -211,7 +211,7 @@ pub fn do_kill(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         send_to_char(&mut game.descriptors, ch, "Kill who?\r\n");
     } else {
         if {
-            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
             vict.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, "They aren't here.\r\n");
@@ -260,7 +260,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, tex
     one_argument(argument, &mut buf);
     let vict;
     if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "Backstab who?\r\n");
@@ -341,7 +341,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
     if name.is_empty() || message.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Order who to do what?\r\n");
     } else if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut name, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut name, None, FindFlags::CHAR_ROOM);
         vict.is_none() && !is_abbrev(&name, "followers")
     } {
         send_to_char(&mut game.descriptors, ch, "That person isn't here.\r\n");
@@ -487,7 +487,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     }
     let mut victo;
     if {
-        victo = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        victo = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         victo.is_some()
     } {
         if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {
@@ -548,7 +548,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts
     one_argument(argument, &mut arg);
     let vict;
     if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "Whom do you want to rescue?\r\n");
@@ -641,7 +641,7 @@ pub fn do_kick(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &
     one_argument(argument, &mut arg);
     let mut vict;
     if {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {

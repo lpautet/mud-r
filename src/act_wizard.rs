@@ -31,7 +31,7 @@ use crate::db::{
 };
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::{appear, update_pos, ATTACK_HIT_TEXT};
-use crate::handler::{affect_remove, affect_total, get_char_vis, get_number, get_obj_in_equip_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, get_player_vis, obj_to_char, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{affect_remove, affect_total, get_char_vis, get_number, get_obj_in_equip_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, get_player_vis, obj_to_char, FindFlags};
 use crate::house::{hcontrol_list_houses, house_can_enter};
 use crate::interpreter::{
     command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
@@ -113,7 +113,7 @@ pub fn do_send(
         return;
     }
     if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -165,7 +165,7 @@ fn find_target_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         let mut num = get_number(&mut mobobjstr);
         if {
             target_mob =
-                get_char_vis(descs, chars,db, ch, &mut mobobjstr, Some(&mut num), FIND_CHAR_WORLD);
+                get_char_vis(descs, chars,db, ch, &mut mobobjstr, Some(&mut num), FindFlags::CHAR_WORLD);
             target_mob.is_some()
         } {
             if {
@@ -343,7 +343,7 @@ pub fn do_trans(
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to transfer?\r\n");
     } else if "all" != buf {
         if {
-            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
             victim.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -472,7 +472,7 @@ pub fn do_teleport(
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to teleport?\r\n");
     } else if {
-        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
         victim.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -1496,7 +1496,7 @@ pub fn do_stat(
         } else {
             let victim;
             if {
-                victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FindFlags::CHAR_WORLD);
                 victim.is_some()
             } {
                 do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
@@ -1510,7 +1510,7 @@ pub fn do_stat(
         } else {
             let victim;
             if {
-                victim = get_player_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FIND_CHAR_WORLD);
+                victim = get_player_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FindFlags::CHAR_WORLD);
                 victim.is_some()
             } {
                 do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
@@ -1523,7 +1523,7 @@ pub fn do_stat(
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which player?\r\n");
         } else if {
-            victim = get_player_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FIND_CHAR_WORLD);
+            victim = get_player_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FindFlags::CHAR_WORLD);
             victim.is_some()
         } {
             do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
@@ -1579,7 +1579,7 @@ pub fn do_stat(
         } {
             do_stat_object(&mut game.descriptors, db,chars, objs, ch, obj.unwrap());
         } else if {
-            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, Some(&mut number), FIND_CHAR_ROOM);
+            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, Some(&mut number), FindFlags::CHAR_ROOM);
             victim.is_some()
         } {
             do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
@@ -1595,7 +1595,7 @@ pub fn do_stat(
         } {
             do_stat_object(&mut game.descriptors, db,chars, objs, ch, obj.unwrap());
         } else if {
-            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, Some(&mut number), FIND_CHAR_WORLD);
+            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, Some(&mut number), FindFlags::CHAR_WORLD);
             victim.is_some()
         } {
             do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
@@ -1727,7 +1727,7 @@ pub fn do_snoop(
     if arg.is_empty() {
         stop_snooping(game, chars, chid);
     } else if {
-        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         victim.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "No such person around.\r\n");
@@ -1793,7 +1793,7 @@ pub fn do_switch(
     } else if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Switch with who?\r\n");
     } else if {
-        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        victim = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         victim.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "No such character.\r\n");
@@ -2080,7 +2080,7 @@ pub fn do_purge(
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
         if {
-            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
             vict.is_some()
         } {
             if !vict.unwrap().is_npc()
@@ -2271,7 +2271,7 @@ pub fn do_advance(
 
     if name.len() != 0 {
         if {
-            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FIND_CHAR_WORLD);
+            victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
             victim.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, "That player is not here.\r\n");
@@ -2409,7 +2409,7 @@ pub fn do_restore(
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to restore?\r\n");
     } else if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -2866,7 +2866,7 @@ pub fn do_force(
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to force do what?\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
         if {
-            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
             vict.is_none()
         } {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -3228,7 +3228,7 @@ pub fn do_wizutil(
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Yes, but for whom?!?\r\n");
     } else if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
@@ -4733,7 +4733,7 @@ pub fn do_set(
     if !is_file {
         if is_player {
             if {
-                vict = get_player_vis(&game.descriptors, chars,db, ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = get_player_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
                 vict.is_none()
             } {
                 send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
@@ -4742,7 +4742,7 @@ pub fn do_set(
         } else {
             /* is_mob */
             if {
-                vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FIND_CHAR_WORLD);
+                vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
                 vict.is_none()
             } {
                 send_to_char(&mut game.descriptors, ch, "There is no such creature.\r\n");

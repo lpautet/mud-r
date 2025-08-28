@@ -11,7 +11,7 @@
 
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{get_char_vis, get_obj_in_list_vis, get_player_vis, FIND_CHAR_ROOM, FIND_CHAR_WORLD};
+use crate::handler::{get_char_vis, get_obj_in_list_vis, get_player_vis, FindFlags};
 use crate::interpreter::{
     delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
     SCMD_SHOUT, SCMD_WHISPER,
@@ -252,12 +252,12 @@ pub fn do_tell(
     if buf.is_empty() || buf2.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Who do you wish to tell what??\r\n");
     } else if ch.get_level() < LVL_IMMORT as u8 && {
-        vict = get_player_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = get_player_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if ch.get_level() >= LVL_IMMORT as u8 && {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_WORLD);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -364,7 +364,7 @@ pub fn do_spec_comm(
             format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
         );
     } else if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
@@ -590,7 +590,7 @@ pub fn do_page(
         }
         let vict;
         if {
-            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FIND_CHAR_WORLD);
+            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
             vict.is_some()
         } {
             let vict = vict.unwrap();

@@ -21,7 +21,7 @@ use crate::config::{DONATION_ROOM_1, NOPERSON, OK};
 use crate::constants::{DRINKNAMES, DRINKS, DRINK_AFF, STR_APP};
 use crate::db::DB;
 use crate::handler::{
-    affect_join, equip_char, find_all_dots, generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_pos_in_equip_vis, isname, money_desc, obj_from_char, obj_from_obj, obj_to_char, obj_to_obj, FIND_ALL, FIND_ALLDOT, FIND_CHAR_ROOM, FIND_INDIV, FIND_OBJ_INV, FIND_OBJ_ROOM
+    affect_join, equip_char, find_all_dots, generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_pos_in_equip_vis, isname, money_desc, obj_from_char, obj_from_obj, obj_to_char, obj_to_obj, FIND_ALL, FIND_ALLDOT, FIND_INDIV, FindFlags
 };
 use crate::interpreter::{
     is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DRINK, SCMD_DROP,
@@ -188,7 +188,7 @@ pub fn do_put(
             db,
             objs,
             &thecont,
-            (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
+            FindFlags::OBJ_INV | FindFlags::OBJ_ROOM,
             ch,
             &mut tmp_char,
             &mut c,
@@ -363,9 +363,9 @@ fn perform_get_from_container(
     chid: DepotId,
     oid: DepotId,
     cid: DepotId,
-    mode: i32,
+    mode: FindFlags,
 ) {
-    if mode == FIND_OBJ_INV || can_take_obj(descs, chars, db, objs, chid, oid) {
+    if mode == FindFlags::OBJ_INV || can_take_obj(descs, chars, db, objs, chid, oid) {
         let ch = chars.get(chid);
         let obj = objs.get(oid);
         if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
@@ -420,7 +420,7 @@ fn get_from_container(
     chid: DepotId,
     cid: DepotId,
     arg: &str,
-    mode: i32,
+    mode: FindFlags,
     howmany: i32,
 ) {
     let ch = chars.get(chid);
@@ -655,7 +655,7 @@ pub fn do_get(
                 db,
                 objs,
                 &arg2,
-                (FIND_OBJ_INV | FIND_OBJ_ROOM) as i64,
+                FindFlags::OBJ_INV | FindFlags::OBJ_ROOM,
                 ch,
                 &mut tmp_char,
                 &mut c,
@@ -711,7 +711,7 @@ pub fn do_get(
                             chid,
                             contid,
                             &arg1,
-                            FIND_OBJ_INV,
+                            FindFlags::OBJ_INV,
                             amount,
                         );
                     } else if cont_dotmode == FIND_ALLDOT {
@@ -745,7 +745,7 @@ pub fn do_get(
                             chid,
                             contid,
                             &arg1,
-                            FIND_OBJ_ROOM,
+                            FindFlags::OBJ_ROOM,
                             amount,
                         );
                         found = true;
@@ -1231,7 +1231,7 @@ fn give_find_vict<'a>(
     if arg.is_empty() {
         send_to_char(descs, ch, "To who?\r\n");
     } else if {
-        vict = get_char_vis(descs, chars, db, ch, &mut arg, None, FIND_CHAR_ROOM);
+        vict = get_char_vis(descs, chars, db, ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
     } {
         send_to_char(descs, ch, NOPERSON);
