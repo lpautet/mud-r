@@ -2,3 +2,4 @@
 /lib/.killscript
 /lib/plrobjs/*/*.objs
 /lib/plralias/*/*.alias
+syslog*

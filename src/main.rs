@@ -53,11 +53,6 @@ use crate::structs::*;
 use crate::telnet::{IAC, TELOPT_ECHO, WILL, WONT};
 use crate::util::{hmhr, hshr, hssh, sana, touch, DisplayMode, SECS_PER_MUD_HOUR};
 
-static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
-static REREAD_WIZLIST: AtomicBool = AtomicBool::new(false);
-static EMERGENCY_UNBAN: AtomicBool = AtomicBool::new(false);
-static TICS: AtomicI32 = AtomicI32::new(0);
-
 mod act_comm;
 mod act_informative;
 mod act_item;
@@ -281,6 +276,12 @@ impl Default for DescriptorData {
         }
     }
 }
+
+// Those are global variables that are used in multiple places (threads)
+static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
+static REREAD_WIZLIST: AtomicBool = AtomicBool::new(false);
+static EMERGENCY_UNBAN: AtomicBool = AtomicBool::new(false);
+static TICS: AtomicI32 = AtomicI32::new(0);
 
 pub struct Game {
     mother_desc: Option<TcpListener>,
@@ -1101,12 +1102,6 @@ impl Game {
             return;
         }
 
-        /*
-         * This isn't exactly optimal but allows us to make a design choice.
-         * Do we embed the history in descriptor_data or keep it dynamically
-         * allocated and allow a user defined history size?
-         */
-        // TODO CREATE(newd -> history, char *, HISTORY_SIZE);
         self.last_desc += 1;
         if self.last_desc == 1000 {
             self.last_desc = 1;
@@ -2130,7 +2125,6 @@ fn perform_act(
         }
     }
 
-    // TODO orig.pop();
     buf.push_str("\r\n");
 
     let desc_id = to.desc.unwrap();
