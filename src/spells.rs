@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Position, PrefFlags, RoomFlags, RoomRnum, Sex, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Position, PrefFlags, RoomFlags, RoomRnum, Sex, Liquid, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -278,20 +278,20 @@ pub fn spell_create_water(
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
     if  objs.get(obj_id).get_obj_type() == ItemType::Drinkcon {
-        if  objs.get(obj_id).get_obj_val(2) != LIQ_WATER &&  objs.get(obj_id).get_obj_val(1) != 0 {
+        if  objs.get(obj_id).get_obj_val(2) != Liquid::Water as i32 &&  objs.get(obj_id).get_obj_val(1) != 0 {
             name_from_drinkcon(objs,Some(obj_id));
-             objs.get_mut(obj_id).set_obj_val(2, LIQ_SLIME);
-            name_to_drinkcon(objs,Some(obj_id), LIQ_SLIME);
+             objs.get_mut(obj_id).set_obj_val(2, Liquid::Slime as i32);
+            name_to_drinkcon(objs,Some(obj_id), Liquid::Slime as i32);
         } else {
             let water = max( objs.get(obj_id).get_obj_val(0) -  objs.get(obj_id).get_obj_val(1), 0);
             if water > 0 {
                 if  objs.get(obj_id).get_obj_val(1) >= 0 {
                     name_from_drinkcon( objs,Some(obj_id));
                 }
-                 objs.get_mut(obj_id).set_obj_val(2, LIQ_WATER);
+                 objs.get_mut(obj_id).set_obj_val(2, Liquid::Water as i32);
                  let v = objs.get(obj_id).get_obj_val(1) + water;
                  objs.get_mut(obj_id).set_obj_val(1,v  );
-                name_to_drinkcon( objs, Some(obj_id), LIQ_WATER);
+                name_to_drinkcon( objs, Some(obj_id), Liquid::Water as i32);
                 weight_change_object(chars, objs,obj_id, water);
                 let ch = chars.get(chid);
                 let obj = objs.get(obj_id);
