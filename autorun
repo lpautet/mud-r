@@ -7,6 +7,7 @@
 # All Rights Reserved
 # See license.doc for more information
 #
+# Adapted for mud-r by Laurent Pautet (c) 2025
 #############################################################################
 #
 # This script can be used to run CircleMUD over and over again (i.e., have it
