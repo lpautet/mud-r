@@ -703,7 +703,7 @@ pub struct CharPlayerData {
     /* PC / NPC's title                     */
     pub sex: u8,
     /* PC / NPC's sex                       */
-    pub chclass: i8,
+    pub chclass: Class,
     /* PC / NPC's class		       */
     pub level: u8,
     /* PC / NPC's level                     */
@@ -733,13 +733,30 @@ pub const NOTHING: i16 = -1;
 pub const NOBODY: i16 = -1;
 
 /* PC classes */
-pub const CLASS_UNDEFINED: i8 = -1;
-pub const CLASS_MAGIC_USER: i8 = 0;
-pub const CLASS_CLERIC: i8 = 1;
-pub const CLASS_THIEF: i8 = 2;
-pub const CLASS_WARRIOR: i8 = 3;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(i8)]
+pub enum Class {
+    Undefined = -1,
+    MagicUser = 0,
+    Cleric = 1,
+    Thief = 2,
+    Warrior = 3,
+}
 
-pub const NUM_CLASSES: i32 = 4; /* This must be the number of classes!! */
+impl From<i8> for Class {
+    fn from(value: i8) -> Self {
+        match value {
+            -1 => Class::Undefined,
+            0 => Class::MagicUser,
+            1 => Class::Cleric,
+            2 => Class::Thief,
+            3 => Class::Warrior,
+            _ => panic!("Invalid class value: {}", value),
+        }
+    }
+}
+
+pub const NUM_CLASSES: usize = 4; /* This must be the number of classes!! */
 
 pub struct TxtBlock {
     pub text: String,
@@ -841,7 +858,7 @@ pub struct CharFileU {
     pub description: [u8; EXDSCR_LENGTH],
     pub title: [u8; MAX_TITLE_LENGTH + 1],
     pub sex: u8,
-    pub chclass: i8,
+    pub chclass: Class,
     pub level: u8,
     pub hometown: i16,
     pub birth: u64,
@@ -1184,7 +1201,7 @@ impl ExtraDescrData {
 }
 
 pub struct GuildInfoType {
-    pub pc_class: i8,
+    pub pc_class: Class,
     pub guild_room: RoomVnum,
     pub direction: i32,
 }

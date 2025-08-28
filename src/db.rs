@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
+    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, Class, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE, SEX_MALE
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1580,7 +1580,7 @@ fn parse_simple_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32)
     mobch.set_default_pos(t[2].parse::<u8>().unwrap());
     mobch.set_sex(t[3].parse::<u8>().unwrap());
 
-    mobch.set_class(0);
+    mobch.set_class(Class::Undefined);
     mobch.set_weight(200);
     mobch.set_height(198);
 
@@ -2886,7 +2886,7 @@ impl CharFileU {
             description: [0; 240],
             title: [0; MAX_TITLE_LENGTH + 1],
             sex: 0,
-            chclass: 0,
+            chclass: Class::Undefined,
             level: 0,
             hometown: 0,
             birth: 0,
@@ -3730,7 +3730,7 @@ impl Default for CharData {
                 description: DepotId::default(),
                 title: Option::from(Rc::from("")),
                 sex: 0,
-                chclass: 0,
+                chclass: Class::Undefined,
                 level: 0,
                 hometown: 0,
                 time: TimeData {

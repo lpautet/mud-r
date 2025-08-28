@@ -1500,7 +1500,7 @@ pub fn do_who(
         if who_room && tch.in_room() != ch.in_room() {
             continue;
         }
-        if showclass != 0 && (showclass & (1 << tch.get_class())) == 0 {
+        if showclass != 0 && (showclass & (1 << tch.get_class() as i8)) == 0 {
             continue;
         }
         if short_list {
@@ -1718,7 +1718,7 @@ pub fn do_users(
             if outlaws && !tch.plr_flagged(PLR_KILLER) && !tch.plr_flagged(PLR_THIEF) {
                 continue;
             }
-            if showclass != 0 && (showclass & (1 << tch.get_class())) == 0 {
+            if showclass != 0 && (showclass & (1 << tch.get_class() as i8)) == 0 {
                 continue;
             }
             if ch.get_invis_lev() > ch.get_level() as i16 {
@@ -2144,12 +2144,12 @@ pub fn do_levels(
         match ch.get_sex() {
             SEX_MALE | SEX_NEUTRAL => {
                 buf.push_str(
-                    format!("{}\r\n", title_male(ch.get_class() as i32, i as i32)).as_str(),
+                    format!("{}\r\n", title_male(ch.get_class(), i as i32)).as_str(),
                 );
             }
             SEX_FEMALE => {
                 buf.push_str(
-                    format!("{}\r\n", title_female(ch.get_class() as i32, i as i32)).as_str(),
+                    format!("{}\r\n", title_female(ch.get_class(), i as i32)).as_str(),
                 );
             }
             _ => {

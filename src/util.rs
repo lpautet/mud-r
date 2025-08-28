@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_WARRIOR, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, SEX_MALE
+    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING, SEX_MALE
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -292,10 +292,10 @@ impl CharData {
     pub(crate) fn set_wait_state(&mut self, val: i32) {
         self.wait = val;
     }
-    pub fn get_class(&self) -> i8 {
+    pub fn get_class(&self) -> Class {
         self.player.chclass
     }
-    pub fn set_class(&mut self, val: i8) {
+    pub fn set_class(&mut self, val: Class) {
         self.player.chclass = val;
     }
     pub fn get_pfilepos(&self) -> i32 {
@@ -686,16 +686,16 @@ impl CharData {
         }
     }
     pub fn is_magic_user(&self) -> bool {
-        self.is_npc() && self.get_class() == CLASS_MAGIC_USER
+        self.is_npc() && self.get_class() == Class::MagicUser
     }
     pub fn is_cleric(&self) -> bool {
-        self.is_npc() && self.get_class() == CLASS_CLERIC
+        self.is_npc() && self.get_class() == Class::Cleric
     }
     pub fn is_thief(&self) -> bool {
-        self.is_npc() && self.get_class() == CLASS_THIEF
+        self.is_npc() && self.get_class() == Class::Thief
     }
     pub fn is_warrior(&self) -> bool {
-        self.is_npc() && self.get_class() == CLASS_WARRIOR
+        self.is_npc() && self.get_class() == Class::Warrior
     }
     pub fn get_eq(&self, pos: usize) -> Option<DepotId> {
         self.equipment[pos].clone()

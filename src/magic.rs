@@ -32,7 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharData, ExtraFlags, ItemType, MobVnum, CLASS_WARRIOR, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
+    AffectFlags, AffectedType, ApplyType, CharData, Class, ExtraFlags, ItemType, MobVnum, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -46,7 +46,7 @@ use crate::{Game, TO_CHAR, TO_ROOM};
  */
 pub fn mag_savingthrow(ch: &CharData, type_: i32, modifier: i32) -> bool {
     /* NPCs use warrior tables according to some book */
-    let mut class_sav = CLASS_WARRIOR;
+    let mut class_sav = Class::Warrior;
 
     if !ch.is_npc() {
         class_sav = ch.get_class();

@@ -67,10 +67,10 @@ use crate::structs::ConState::{
 };
 use crate::structs::ConState::{ConDelcnf1, ConExdesc, ConPlaying};
 use crate::structs::{
-    AffectFlags, CharData, MeRef, TxtBlock, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED
+    AffectFlags, CharData, Class, MeRef, TxtBlock, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMPL, MOB_NOTDEADYET, NOWHERE, NUM_WEARS, PLR_FROZEN, PLR_INVSTART, PLR_LOADROOM, PLR_SITEOK, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, POS_STUNNED
 };
 use crate::structs::{
-    CharFileU, CLASS_UNDEFINED, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
+    CharFileU, EXDSCR_LENGTH, LVL_IMMORT, MAX_NAME_LENGTH,
     MAX_PWD_LENGTH, PLR_CRYO, PLR_MAILING, PLR_WRITING, SEX_FEMALE,
     SEX_MALE,
 };
@@ -3913,7 +3913,7 @@ pub fn nanny(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &m
             let character_id = desc.character.unwrap();
 
             let load_result = parse_class(arg.chars().next().unwrap());
-            if load_result == CLASS_UNDEFINED {
+            if load_result == Class::Undefined {
                 desc.write_to_output("\r\nThat's not a class.\r\nClass: ");
                 return;
             } else {

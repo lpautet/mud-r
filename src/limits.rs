@@ -186,9 +186,9 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
     let mut title = title;
     if title.is_none() || title.unwrap().is_empty() {
         if ch.get_sex() == SEX_FEMALE {
-            title = Some(title_female(ch.get_class() as i32, ch.get_level() as i32));
+            title = Some(title_female(ch.get_class(), ch.get_level() as i32));
         } else {
-            title = Some(title_male(ch.get_class() as i32, ch.get_level() as i32));
+            title = Some(title_male(ch.get_class(), ch.get_level() as i32));
         }
     }
 

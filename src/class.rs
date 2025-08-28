@@ -44,7 +44,7 @@ use crate::spells::{
     SPELL_STRENGTH, SPELL_SUMMON, SPELL_WORD_OF_RECALL,
 };
 use crate::structs::{
-    CharData, ExtraFlags, GuildInfoType, ObjData, PrefFlags, CLASS_CLERIC, CLASS_MAGIC_USER, CLASS_THIEF, CLASS_UNDEFINED, CLASS_WARRIOR, DRUNK, FULL, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST
+    CharData, Class, ExtraFlags, GuildInfoType, ObjData, PrefFlags, DRUNK, FULL, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST
 };
 use crate::util::{rand_number, BRF};
 use crate::{check_player_special, save_char, set_skill, Game, TextData};
@@ -66,15 +66,15 @@ pub const CLASS_MENU: &str = "\r\n\
  * new character is selecting a class and by 'set class' in act.wizard.c.
  */
 
-pub fn parse_class(arg: char) -> i8 {
+pub fn parse_class(arg: char) -> Class {
     let arg = arg.to_lowercase().last().unwrap();
 
     return match arg {
-        'm' => CLASS_MAGIC_USER,
-        'c' => CLASS_CLERIC,
-        'w' => CLASS_WARRIOR,
-        't' => CLASS_THIEF,
-        _ => CLASS_UNDEFINED,
+        'm' => Class::MagicUser,
+        'c' => Class::Cleric,
+        'w' => Class::Warrior,
+        't' => Class::Thief,
+        _ => Class::Undefined,
     };
 }
 
@@ -87,7 +87,7 @@ pub fn parse_class(arg: char) -> i8 {
 pub fn find_class_bitvector(arg: &str) -> i32 {
     let mut ret = 0;
     for a in arg.chars() {
-        ret |= 1 << parse_class(a);
+        ret |= 1 << parse_class(a) as i32;
     }
     ret
 }
@@ -141,35 +141,35 @@ pub const PRAC_PARAMS: [[i32; 4]; NUM_CLASSES as usize] = [
 pub const GUILD_INFO: [GuildInfoType; 6] = [
     /* Midgaard */
     GuildInfoType {
-        pc_class: CLASS_MAGIC_USER,
+        pc_class: Class::MagicUser,
         guild_room: 3017,
         direction: SCMD_SOUTH,
     },
     GuildInfoType {
-        pc_class: CLASS_CLERIC,
+        pc_class: Class::Cleric,
         guild_room: 3004,
         direction: SCMD_NORTH,
     },
     GuildInfoType {
-        pc_class: CLASS_THIEF,
+        pc_class: Class::Thief,
         guild_room: 3027,
         direction: SCMD_EAST,
     },
     GuildInfoType {
-        pc_class: CLASS_WARRIOR,
+        pc_class: Class::Warrior,
         guild_room: 3021,
         direction: SCMD_EAST,
     },
     /* Brass Dragon */
     GuildInfoType {
-        pc_class: -127,
+        pc_class: Class::Undefined,
         /* all */
         guild_room: 5065,
         direction: SCMD_WEST,
     },
     /* this must go last -- add new guards above! */
     GuildInfoType {
-        pc_class: -1,
+        pc_class: Class::Undefined,
         guild_room: NOWHERE,
         direction: -1,
     },
@@ -184,9 +184,9 @@ pub const GUILD_INFO: [GuildInfoType; 6] = [
  * Do not forget to change extern declaration in magic.c if you add to this.
  */
 
-pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
+pub fn saving_throws(class_num: Class, type_: i32, level: u8) -> u8 {
     match class_num {
-        CLASS_MAGIC_USER => {
+        Class::MagicUser => {
             match type_ {
                 SAVING_PARA => {
                     /* Paralyzation */
@@ -848,7 +848,7 @@ pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
                 }
             }
         }
-        CLASS_CLERIC => {
+        Class::Cleric => {
             match type_ {
                 SAVING_PARA => {
                     /* Paralyzation */
@@ -1510,7 +1510,7 @@ pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
                 }
             }
         }
-        CLASS_THIEF => {
+        Class::Thief => {
             match type_ {
                 SAVING_PARA => {
                     /* Paralyzation */
@@ -2172,7 +2172,7 @@ pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
                 }
             }
         }
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             match type_ {
                 SAVING_PARA => {
                     /* Paralyzation */
@@ -2994,9 +2994,9 @@ pub fn saving_throws(class_num: i8, type_: i32, level: u8) -> u8 {
 }
 
 /* THAC0 for classes and levels.  (To Hit Armor Class 0) */
-pub fn thaco(class_num: i8, level: u8) -> i32 {
+pub fn thaco(class_num: Class, level: u8) -> i32 {
     match class_num {
-        CLASS_MAGIC_USER => match level {
+        Class::MagicUser => match level {
             0 => {
                 return 100;
             }
@@ -3106,7 +3106,7 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
                 error!("SYSERR: Missing level for mage thac0.");
             }
         },
-        CLASS_CLERIC => match level {
+        Class::Cleric => match level {
             0 => {
                 return 100;
             }
@@ -3216,7 +3216,7 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
                 error!("SYSERR: Missing level for cleric thac0.");
             }
         },
-        CLASS_THIEF => match level {
+        Class::Thief => match level {
             0 => {
                 return 100;
             }
@@ -3326,7 +3326,7 @@ pub fn thaco(class_num: i8, level: u8) -> i32 {
                 error!("SYSERR: Missing level for thief thac0.");
             }
         },
-        CLASS_WARRIOR => match level {
+        Class::Warrior => match level {
             0 => {
                 return 100;
             }
@@ -3473,7 +3473,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
     ch.real_abils.str_add = 0;
 
     match ch.get_class() {
-        CLASS_MAGIC_USER => {
+        Class::MagicUser => {
             ch.real_abils.intel = table[0] as i8;
             ch.real_abils.wis = table[1] as i8;
             ch.real_abils.dex = table[2] as i8;
@@ -3481,7 +3481,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
             ch.real_abils.con = table[4] as i8;
             ch.real_abils.cha = table[5] as i8;
         }
-        CLASS_CLERIC => {
+        Class::Cleric => {
             ch.real_abils.wis = table[0] as i8;
             ch.real_abils.intel = table[1] as i8;
             ch.real_abils.str = table[2] as i8;
@@ -3489,7 +3489,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
             ch.real_abils.con = table[4] as i8;
             ch.real_abils.cha = table[5] as i8;
         }
-        CLASS_THIEF => {
+        Class::Thief => {
             ch.real_abils.dex = table[0] as i8;
             ch.real_abils.str = table[1] as i8;
             ch.real_abils.con = table[2] as i8;
@@ -3497,7 +3497,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
             ch.real_abils.wis = table[4] as i8;
             ch.real_abils.cha = table[5] as i8;
         }
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             ch.real_abils.str = table[0] as i8;
             ch.real_abils.dex = table[1] as i8;
             ch.real_abils.con = table[2] as i8;
@@ -3527,11 +3527,11 @@ pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts
     ch.set_max_move(82);
 
     match ch.get_class() {
-        CLASS_MAGIC_USER => {}
+        Class::MagicUser => {}
 
-        CLASS_CLERIC => {}
+        Class::Cleric => {}
 
-        CLASS_THIEF => {
+        Class::Thief => {
             set_skill!(ch, SKILL_SNEAK, 10);
             set_skill!(ch, SKILL_HIDE, 5);
             set_skill!(ch, SKILL_STEAL, 15);
@@ -3540,7 +3540,7 @@ pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts
             set_skill!(ch, SKILL_TRACK, 10);
         }
 
-        CLASS_WARRIOR => {}
+        Class::Warrior => {}
         _ => {}
     }
 
@@ -3577,27 +3577,27 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
     let mut add_move = 0;
 
     match ch.get_class() {
-        CLASS_MAGIC_USER => {
+        Class::MagicUser => {
             add_hp += rand_number(3, 8) as i16;
             add_mana = rand_number(ch.get_level() as u32, (3 * ch.get_level() / 2) as u32);
             add_mana = min(add_mana, 10);
             add_move = rand_number(0, 2);
         }
 
-        CLASS_CLERIC => {
+        Class::Cleric => {
             add_hp += rand_number(5, 10) as i16;
             add_mana = rand_number(ch.get_level() as u32, (3 * ch.get_level() / 2) as u32);
             add_mana = min(add_mana, 10);
             add_move = rand_number(0, 2);
         }
 
-        CLASS_THIEF => {
+        Class::Thief => {
             add_hp += rand_number(7, 13) as i16;
             add_mana = 0;
             add_move = rand_number(1, 3);
         }
 
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             add_hp += rand_number(10, 15) as i16;
             add_mana = 0;
             add_move = rand_number(1, 3);
@@ -3683,74 +3683,74 @@ pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
  */
 pub fn init_spell_levels(db: &mut DB) {
     /* MAGES */
-    spell_level( db, SPELL_MAGIC_MISSILE, CLASS_MAGIC_USER, 1);
-    spell_level( db, SPELL_DETECT_INVIS, CLASS_MAGIC_USER, 2);
-    spell_level( db, SPELL_DETECT_MAGIC, CLASS_MAGIC_USER, 2);
-    spell_level( db, SPELL_CHILL_TOUCH, CLASS_MAGIC_USER, 3);
-    spell_level( db, SPELL_INFRAVISION, CLASS_MAGIC_USER, 3);
-    spell_level( db, SPELL_INVISIBLE, CLASS_MAGIC_USER, 4);
-    spell_level( db, SPELL_ARMOR, CLASS_MAGIC_USER, 4);
-    spell_level( db, SPELL_BURNING_HANDS, CLASS_MAGIC_USER, 5);
-    spell_level( db, SPELL_LOCATE_OBJECT, CLASS_MAGIC_USER, 6);
-    spell_level( db, SPELL_STRENGTH, CLASS_MAGIC_USER, 6);
-    spell_level( db, SPELL_SHOCKING_GRASP, CLASS_MAGIC_USER, 7);
-    spell_level( db, SPELL_SLEEP, CLASS_MAGIC_USER, 8);
-    spell_level( db, SPELL_LIGHTNING_BOLT, CLASS_MAGIC_USER, 9);
-    spell_level( db, SPELL_BLINDNESS, CLASS_MAGIC_USER, 9);
-    spell_level( db, SPELL_DETECT_POISON, CLASS_MAGIC_USER, 10);
-    spell_level( db, SPELL_COLOR_SPRAY, CLASS_MAGIC_USER, 11);
-    spell_level( db, SPELL_ENERGY_DRAIN, CLASS_MAGIC_USER, 13);
-    spell_level( db, SPELL_CURSE, CLASS_MAGIC_USER, 14);
-    spell_level( db, SPELL_POISON, CLASS_MAGIC_USER, 14);
-    spell_level( db, SPELL_FIREBALL, CLASS_MAGIC_USER, 15);
-    spell_level( db, SPELL_CHARM, CLASS_MAGIC_USER, 16);
-    spell_level( db, SPELL_ENCHANT_WEAPON, CLASS_MAGIC_USER, 26);
-    spell_level( db, SPELL_CLONE, CLASS_MAGIC_USER, 30);
+    spell_level( db, SPELL_MAGIC_MISSILE, Class::MagicUser, 1);
+    spell_level( db, SPELL_DETECT_INVIS, Class::MagicUser, 2);
+    spell_level( db, SPELL_DETECT_MAGIC, Class::MagicUser, 2);
+    spell_level( db, SPELL_CHILL_TOUCH, Class::MagicUser, 3);
+    spell_level( db, SPELL_INFRAVISION, Class::MagicUser, 3);
+    spell_level( db, SPELL_INVISIBLE, Class::MagicUser, 4);
+    spell_level( db, SPELL_ARMOR, Class::MagicUser, 4);
+    spell_level( db, SPELL_BURNING_HANDS, Class::MagicUser, 5);
+    spell_level( db, SPELL_LOCATE_OBJECT, Class::MagicUser, 6);
+    spell_level( db, SPELL_STRENGTH, Class::MagicUser, 6);
+    spell_level( db, SPELL_SHOCKING_GRASP, Class::MagicUser, 7);
+    spell_level( db, SPELL_SLEEP, Class::MagicUser, 8);
+    spell_level( db, SPELL_LIGHTNING_BOLT, Class::MagicUser, 9);
+    spell_level( db, SPELL_BLINDNESS, Class::MagicUser, 9);
+    spell_level( db, SPELL_DETECT_POISON, Class::MagicUser, 10);
+    spell_level( db, SPELL_COLOR_SPRAY, Class::MagicUser, 11);
+    spell_level( db, SPELL_ENERGY_DRAIN, Class::MagicUser, 13);
+    spell_level( db, SPELL_CURSE, Class::MagicUser, 14);
+    spell_level( db, SPELL_POISON, Class::MagicUser, 14);
+    spell_level( db, SPELL_FIREBALL, Class::MagicUser, 15);
+    spell_level( db, SPELL_CHARM, Class::MagicUser, 16);
+    spell_level( db, SPELL_ENCHANT_WEAPON, Class::MagicUser, 26);
+    spell_level( db, SPELL_CLONE, Class::MagicUser, 30);
 
     /* CLERICS */
-    spell_level( db, SPELL_CURE_LIGHT, CLASS_CLERIC, 1);
-    spell_level( db, SPELL_ARMOR, CLASS_CLERIC, 1);
-    spell_level( db, SPELL_CREATE_FOOD, CLASS_CLERIC, 2);
-    spell_level( db, SPELL_CREATE_WATER, CLASS_CLERIC, 2);
-    spell_level( db, SPELL_DETECT_POISON, CLASS_CLERIC, 3);
-    spell_level( db, SPELL_DETECT_ALIGN, CLASS_CLERIC, 4);
-    spell_level( db, SPELL_CURE_BLIND, CLASS_CLERIC, 4);
-    spell_level( db, SPELL_BLESS, CLASS_CLERIC, 5);
-    spell_level( db, SPELL_DETECT_INVIS, CLASS_CLERIC, 6);
-    spell_level( db, SPELL_BLINDNESS, CLASS_CLERIC, 6);
-    spell_level( db, SPELL_INFRAVISION, CLASS_CLERIC, 7);
-    spell_level( db, SPELL_PROT_FROM_EVIL, CLASS_CLERIC, 8);
-    spell_level( db, SPELL_POISON, CLASS_CLERIC, 8);
-    spell_level( db, SPELL_GROUP_ARMOR, CLASS_CLERIC, 9);
-    spell_level( db, SPELL_CURE_CRITIC, CLASS_CLERIC, 9);
-    spell_level( db, SPELL_SUMMON, CLASS_CLERIC, 10);
-    spell_level( db, SPELL_REMOVE_POISON, CLASS_CLERIC, 10);
-    spell_level( db, SPELL_WORD_OF_RECALL, CLASS_CLERIC, 12);
-    spell_level( db, SPELL_EARTHQUAKE, CLASS_CLERIC, 12);
-    spell_level( db, SPELL_DISPEL_EVIL, CLASS_CLERIC, 14);
-    spell_level( db, SPELL_DISPEL_GOOD, CLASS_CLERIC, 14);
-    spell_level( db, SPELL_SANCTUARY, CLASS_CLERIC, 15);
-    spell_level( db, SPELL_CALL_LIGHTNING, CLASS_CLERIC, 15);
-    spell_level( db, SPELL_HEAL, CLASS_CLERIC, 16);
-    spell_level( db, SPELL_CONTROL_WEATHER, CLASS_CLERIC, 17);
-    spell_level( db, SPELL_SENSE_LIFE, CLASS_CLERIC, 18);
-    spell_level( db, SPELL_HARM, CLASS_CLERIC, 19);
-    spell_level( db, SPELL_GROUP_HEAL, CLASS_CLERIC, 22);
-    spell_level( db, SPELL_REMOVE_CURSE, CLASS_CLERIC, 26);
+    spell_level( db, SPELL_CURE_LIGHT, Class::Cleric, 1);
+    spell_level( db, SPELL_ARMOR, Class::Cleric, 1);
+    spell_level( db, SPELL_CREATE_FOOD, Class::Cleric, 2);
+    spell_level( db, SPELL_CREATE_WATER, Class::Cleric, 2);
+    spell_level( db, SPELL_DETECT_POISON, Class::Cleric, 3);
+    spell_level( db, SPELL_DETECT_ALIGN, Class::Cleric, 4);
+    spell_level( db, SPELL_CURE_BLIND, Class::Cleric, 4);
+    spell_level( db, SPELL_BLESS, Class::Cleric, 5);
+    spell_level( db, SPELL_DETECT_INVIS, Class::Cleric, 6);
+    spell_level( db, SPELL_BLINDNESS, Class::Cleric, 6);
+    spell_level( db, SPELL_INFRAVISION, Class::Cleric, 7);
+    spell_level( db, SPELL_PROT_FROM_EVIL, Class::Cleric, 8);
+    spell_level( db, SPELL_POISON, Class::Cleric, 8);
+    spell_level( db, SPELL_GROUP_ARMOR, Class::Cleric, 9);
+    spell_level( db, SPELL_CURE_CRITIC, Class::Cleric, 9);
+    spell_level( db, SPELL_SUMMON, Class::Cleric, 10);
+    spell_level( db, SPELL_REMOVE_POISON, Class::Cleric, 10);
+    spell_level( db, SPELL_WORD_OF_RECALL, Class::Cleric, 12);
+    spell_level( db, SPELL_EARTHQUAKE, Class::Cleric, 12);
+    spell_level( db, SPELL_DISPEL_EVIL, Class::Cleric, 14);
+    spell_level( db, SPELL_DISPEL_GOOD, Class::Cleric, 14);
+    spell_level( db, SPELL_SANCTUARY, Class::Cleric, 15);
+    spell_level( db, SPELL_CALL_LIGHTNING, Class::Cleric, 15);
+    spell_level( db, SPELL_HEAL, Class::Cleric, 16);
+    spell_level( db, SPELL_CONTROL_WEATHER, Class::Cleric, 17);
+    spell_level( db, SPELL_SENSE_LIFE, Class::Cleric, 18);
+    spell_level( db, SPELL_HARM, Class::Cleric, 19);
+    spell_level( db, SPELL_GROUP_HEAL, Class::Cleric, 22);
+    spell_level( db, SPELL_REMOVE_CURSE, Class::Cleric, 26);
 
     /* THIEVES */
-    spell_level( db, SKILL_SNEAK, CLASS_THIEF, 1);
-    spell_level( db, SKILL_PICK_LOCK, CLASS_THIEF, 2);
-    spell_level( db, SKILL_BACKSTAB, CLASS_THIEF, 3);
-    spell_level( db, SKILL_STEAL, CLASS_THIEF, 4);
-    spell_level( db, SKILL_HIDE, CLASS_THIEF, 5);
-    spell_level( db, SKILL_TRACK, CLASS_THIEF, 6);
+    spell_level( db, SKILL_SNEAK, Class::Thief, 1);
+    spell_level( db, SKILL_PICK_LOCK, Class::Thief, 2);
+    spell_level( db, SKILL_BACKSTAB, Class::Thief, 3);
+    spell_level( db, SKILL_STEAL, Class::Thief, 4);
+    spell_level( db, SKILL_HIDE, Class::Thief, 5);
+    spell_level( db, SKILL_TRACK, Class::Thief, 6);
 
     /* WARRIORS */
-    spell_level( db, SKILL_KICK, CLASS_WARRIOR, 1);
-    spell_level( db, SKILL_RESCUE, CLASS_WARRIOR, 3);
-    spell_level( db, SKILL_TRACK, CLASS_WARRIOR, 9);
-    spell_level( db, SKILL_BASH, CLASS_WARRIOR, 12);
+    spell_level( db, SKILL_KICK, Class::Warrior, 1);
+    spell_level( db, SKILL_RESCUE, Class::Warrior, 3);
+    spell_level( db, SKILL_TRACK, Class::Warrior, 9);
+    spell_level( db, SKILL_BASH, Class::Warrior, 12);
 }
 
 /*
@@ -3760,7 +3760,7 @@ pub fn init_spell_levels(db: &mut DB) {
 pub const EXP_MAX: i32 = 10000000;
 
 /* Function to return the exp required for each class/level */
-pub fn level_exp(chclass: i8, level: i16) -> i32 {
+pub fn level_exp(chclass: Class, level: i16) -> i32 {
     if level > LVL_IMPL || level < 0 {
         info!("SYSERR: Requesting exp for invalid level {}!", level);
         return 0;
@@ -3777,7 +3777,7 @@ pub fn level_exp(chclass: i8, level: i16) -> i32 {
     /* Exp required for normal mortals is below */
 
     match chclass {
-        CLASS_MAGIC_USER => {
+        Class::MagicUser => {
             match level {
                 0 => {
                     return 0;
@@ -3880,7 +3880,7 @@ pub fn level_exp(chclass: i8, level: i16) -> i32 {
             }
         }
 
-        CLASS_CLERIC => {
+        Class::Cleric => {
             match level {
                 0 => {
                     return 0;
@@ -3982,7 +3982,7 @@ pub fn level_exp(chclass: i8, level: i16) -> i32 {
                 _ => {}
             }
         }
-        CLASS_THIEF => {
+        Class::Thief => {
             match level {
                 0 => {
                     return 0;
@@ -4084,7 +4084,7 @@ pub fn level_exp(chclass: i8, level: i16) -> i32 {
                 _ => {}
             }
         }
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             match level {
                 0 => {
                     return 0;
@@ -4201,7 +4201,7 @@ pub fn level_exp(chclass: i8, level: i16) -> i32 {
 /*
  * Default titles of male characters.
  */
-pub fn title_male(chclass: i32, level: i32) -> &'static str {
+pub fn title_male(chclass: Class, level: i32) -> &'static str {
     if level <= 0 || level > LVL_IMPL as i32 {
         return "the Man";
     }
@@ -4209,8 +4209,8 @@ pub fn title_male(chclass: i32, level: i32) -> &'static str {
         return "the Implementor";
     }
 
-    return match chclass as i8 {
-        CLASS_MAGIC_USER => match level as i16 {
+    return match chclass {
+        Class::MagicUser => match level as i16 {
             1 => "the Apprentice of Magic",
             2 => "the Spell Student",
             3 => "the Scholar of Magic",
@@ -4246,7 +4246,7 @@ pub fn title_male(chclass: i32, level: i32) -> &'static str {
             LVL_GRGOD => "the God of Magic",
             _ => "the Mage",
         },
-        CLASS_CLERIC => {
+        Class::Cleric => {
             match level as i16 {
                 1 => "the Believer",
                 2 => "the Attendant",
@@ -4276,7 +4276,7 @@ pub fn title_male(chclass: i32, level: i32) -> &'static str {
             }
         }
 
-        CLASS_THIEF => {
+        Class::Thief => {
             match level as i16 {
                 1 => "the Pilferer",
                 2 => "the Footpad",
@@ -4306,7 +4306,7 @@ pub fn title_male(chclass: i32, level: i32) -> &'static str {
             }
         }
 
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             match level as i16 {
                 1 => "the Swordpupil",
                 2 => "the Recruit",
@@ -4345,7 +4345,7 @@ pub fn title_male(chclass: i32, level: i32) -> &'static str {
 /*
  * Default titles of female characters.
  */
-pub fn title_female(chclass: i32, level: i32) -> &'static str {
+pub fn title_female(chclass: Class, level: i32) -> &'static str {
     if level <= 0 || level > LVL_IMPL as i32 {
         return "the Woman";
     }
@@ -4353,8 +4353,8 @@ pub fn title_female(chclass: i32, level: i32) -> &'static str {
         return "the Implementress";
     }
 
-    match chclass as i8 {
-        CLASS_MAGIC_USER => match level as i16 {
+    match chclass {
+        Class::MagicUser => match level as i16 {
             1 => {
                 return "the Apprentice of Magic";
             }
@@ -4459,7 +4459,7 @@ pub fn title_female(chclass: i32, level: i32) -> &'static str {
             }
         },
 
-        CLASS_CLERIC => {
+        Class::Cleric => {
             match level as i16 {
                 1 => {
                     return "the Believer";
@@ -4536,7 +4536,7 @@ pub fn title_female(chclass: i32, level: i32) -> &'static str {
                 }
             }
         }
-        CLASS_THIEF => {
+        Class::Thief => {
             match level as i16 {
                 1 => {
                     return "the Pilferess";
@@ -4614,7 +4614,7 @@ pub fn title_female(chclass: i32, level: i32) -> &'static str {
             }
         }
 
-        CLASS_WARRIOR => {
+        Class::Warrior => {
             match level as i16 {
                 1 => {
                     return "the Swordpupil";

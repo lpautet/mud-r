@@ -46,7 +46,7 @@ use crate::shops::show_shops;
 use crate::spell_parser::skill_name;
 use crate::structs::ConState::{ConClose, ConDisconnect, ConPlaying};
 use crate::structs::{
-    AffectFlags, CharData, CharFileU, ItemType, PrefFlags, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, CLASS_UNDEFINED, DRUNK, FULL, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, THIRST
+    AffectFlags, CharData, CharFileU, ItemType, PrefFlags, RoomFlags, RoomRnum, RoomVnum, ZoneRnum, Class, DRUNK, FULL, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MAX_SKILLS, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_DELETED, PLR_FROZEN, PLR_INVSTART, PLR_KILLER, PLR_LOADROOM, PLR_MAILING, PLR_NODELETE, PLR_NOSHOUT, PLR_NOTITLE, PLR_NOWIZLIST, PLR_SITEOK, PLR_THIEF, PLR_WRITING, THIRST
 };
 use crate::util::{
     age, can_see, can_see_obj, ctime, hmhr, pers, sprintbit, sprinttype, time_now, touch, BRF, NRM, SECS_PER_MUD_YEAR
@@ -4536,7 +4536,7 @@ fn perform_set(
             let i;
             if {
                 i = parse_class(val_arg.chars().next().unwrap());
-                i == CLASS_UNDEFINED
+                i == Class::Undefined
             } {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "That is not a class.\r\n");

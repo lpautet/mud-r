@@ -50,7 +50,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, RoomFlags, ItemType, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE
+    AffectFlags, CharData, Class, ItemType, RoomFlags, LVL_IMMORT, LVL_IMPL, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, PULSE_VIOLENCE
 };
 use crate::structs::{NUM_CLASSES, POS_STANDING};
 use crate::util::{ has_spell_routine, rand_number};
@@ -1265,7 +1265,7 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     }
 }
 
-pub fn spell_level(db: &mut DB, spell: i32, chclass: i8, level: i32) {
+pub fn spell_level(db: &mut DB, spell: i32, chclass: Class, level: i32) {
     let mut bad = false;
 
     if spell < 0 || spell > TOP_SPELL_DEFINE as i32 {
@@ -1276,11 +1276,11 @@ pub fn spell_level(db: &mut DB, spell: i32, chclass: i8, level: i32) {
         return;
     }
 
-    if chclass < 0 || chclass >= NUM_CLASSES as i8 {
+    if chclass == Class::Undefined {
         error!(
             "SYSERR: assigning '{}' to illegal class {}/{}.",
             skill_name(db, spell),
-            chclass,
+            chclass as i8,
             NUM_CLASSES - 1
         );
         bad = true;
