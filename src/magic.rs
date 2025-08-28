@@ -32,7 +32,7 @@ use crate::spells::{
     SPELL_SHOCKING_GRASP, SPELL_SLEEP, SPELL_STRENGTH, SPELL_WATERWALK,
 };
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharData, Class, ExtraFlags, ItemType, MobVnum, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, POS_SLEEPING
+    AffectFlags, AffectedType, ApplyType, CharData, Class, ExtraFlags, ItemType, MobVnum, LVL_IMMORT, MOB_NOBLIND, MOB_NOSLEEP, Position
 };
 use crate::util::{add_follower, dice, rand_number};
 use crate::{Game, TO_CHAR, TO_ROOM};
@@ -490,14 +490,14 @@ pub fn mag_affects(
             af[0].duration = 4 + (ch.get_level() as i16 / 4);
             af[0].bitvector = AffectFlags::SLEEP;
 
-            if victim.as_ref().unwrap().get_pos() > POS_SLEEPING {
+            if victim.as_ref().unwrap().get_pos() > Position::Sleeping {
                 send_to_char(&mut game.descriptors, 
                     victim.as_ref().unwrap(),
                     "You feel very sleepy...  Zzzz......\r\n",
                 );
                 act(&mut game.descriptors, chars, db,"$n goes to sleep.", true, victim, None, None, TO_ROOM);
                 let mut victim = victim_id.map(|v| chars.get_mut(v));
-                victim.as_mut().unwrap().set_pos(POS_SLEEPING);
+                victim.as_mut().unwrap().set_pos(Position::Sleeping);
             }
         }
         SPELL_STRENGTH => {

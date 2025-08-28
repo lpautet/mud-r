@@ -21,7 +21,8 @@ use crate::spells::{
     SKILL_BACKSTAB, SKILL_BASH, SKILL_KICK, SKILL_RESCUE, TYPE_HIT, TYPE_PIERCE, TYPE_UNDEFINED,
 };
 use crate::structs::{
-     AffectFlags, RoomFlags, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS, POS_FIGHTING, POS_SITTING, POS_STANDING, PULSE_VIOLENCE, WEAR_WIELD
+     AffectFlags, RoomFlags, LVL_IMPL, MOB_AWARE, MOB_NOBASH, NUM_OF_DIRS,
+     PULSE_VIOLENCE, Position, WEAR_WIELD
 };
 use crate::util::{can_see, rand_number};
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -184,7 +185,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
             }
         }
         let ch = chars.get(chid);
-        if ch.get_pos() == POS_STANDING
+        if ch.get_pos() == Position::Standing
             && (ch.fighting_id().is_none() || vict_id != ch.fighting_id().unwrap())
         {
             game.hit(chars, db,texts, objs,chid, vict_id, TYPE_UNDEFINED);
@@ -409,7 +410,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
 
 pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
-    if ch.get_pos() < POS_FIGHTING {
+    if ch.get_pos() < Position::Fighting {
         send_to_char(&mut game.descriptors, ch, "You are in pretty bad shape, unable to flee!\r\n");
         return;
     }
@@ -510,7 +511,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     if percent > prob as u32 {
         game.damage(chars, db, texts,objs,chid, vict.id(), 0, SKILL_BASH);
         let ch = chars.get_mut(chid);
-        ch.set_pos(POS_SITTING);
+        ch.set_pos(Position::Sitting);
     } else {
         let vict_id = vict.id();
         /*
@@ -527,7 +528,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
             let vict = chars.get(vict_id);
             if ch.in_room() == vict.in_room() {
                 let vict = chars.get_mut(vict_id);
-                vict.set_pos(POS_SITTING);
+                vict.set_pos(Position::Sitting);
             }
         }
     }

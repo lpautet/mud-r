@@ -45,7 +45,7 @@ use crate::spell_parser::{mag_assign_spells, skill_name, UNUSED_SPELLNAME};
 use crate::spells::{SpellInfoType, MAX_SPELLS, TOP_SPELL_DEFINE};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, Class, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, Sex, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, POS_STANDING, PULSE_ZONE
+    AffectFlags, AffectedType, ApplyType, CharAbilityData, CharData, CharFileU, CharPlayerData, CharPointData, CharSpecialData, CharSpecialDataSaved, Class, ExitFlags, ExtraDescrData, ExtraFlags, IndexData, ItemType, MessageList, MobRnum, MobSpecialData, MobVnum, ObjAffectedType, ObjData, ObjFlagData, ObjRnum, ObjVnum, PlayerSpecialData, PlayerSpecialDataSaved, Position, PrefFlags, RoomData, RoomDirectionData, RoomFlags, RoomRnum, RoomVnum, SectorType, Sex, SkyCondition, SunState, TimeData, TimeInfoData, WearFlags, WeatherData, ZoneRnum, ZoneVnum, HOST_LENGTH, LVL_GOD, LVL_IMMORT, LVL_IMPL, MAX_AFFECT, MAX_NAME_LENGTH, MAX_OBJ_AFFECT, MAX_PWD_LENGTH, MAX_SKILLS, MAX_TITLE_LENGTH, MAX_TONGUE, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_ISNPC, MOB_NOTDEADYET, NOBODY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PASSES_PER_SEC, PULSE_ZONE
 };
 use crate::util::{
     dice, get_line, mud_time_passed, mud_time_to_secs, prune_crlf, rand_number, time_now, touch,
@@ -1576,8 +1576,8 @@ fn parse_simple_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32)
     }
     let t = f.unwrap();
 
-    mobch.set_pos(t[1].parse::<u8>().unwrap());
-    mobch.set_default_pos(t[2].parse::<u8>().unwrap());
+    mobch.set_pos(t[1].parse::<u8>().unwrap().into());
+    mobch.set_default_pos(t[2].parse::<u8>().unwrap().into());
     mobch.set_sex(t[3].parse::<u8>().unwrap().into());
 
     mobch.set_class(Class::Undefined);
@@ -3319,7 +3319,7 @@ pub fn reset_char(ch: &mut CharData) {
     ch.set_in_room(NOWHERE);
     ch.carrying.clear();
     ch.set_fighting(None);
-    ch.char_specials.position = POS_STANDING;
+    ch.char_specials.position = Position::Standing;
     ch.char_specials.carry_weight = 0;
     ch.char_specials.carry_items = 0;
 
@@ -3343,8 +3343,8 @@ pub fn clear_char(ch: &mut CharData) {
 
     ch.set_mob_rnum(NOBODY);
     ch.set_was_in(NOWHERE);
-    ch.set_pos(POS_STANDING);
-    ch.mob_specials.default_pos = POS_STANDING;
+    ch.set_pos(Position::Standing);
+    ch.mob_specials.default_pos = Position::Standing;
 
     ch.set_ac(100); /* Basic Armor */
     if ch.points.max_mana < 100 {
@@ -3776,7 +3776,7 @@ impl Default for CharData {
             char_specials: CharSpecialData {
                 fighting_chid: None,
                 hunting_chid: None,
-                position: 0,
+                position: Position::Dead,
                 carry_weight: 0,
                 carry_items: 0,
                 timer: 0,
@@ -3831,7 +3831,7 @@ impl Default for CharData {
             mob_specials: MobSpecialData {
                 memory: vec![],
                 attack_type: 0,
-                default_pos: 0,
+                default_pos: Position::Dead,
                 damnodice: 0,
                 damsizedice: 0,
             },

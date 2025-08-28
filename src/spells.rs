@@ -21,7 +21,7 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, PrefFlags, RoomFlags, RoomRnum, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER, Sex
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Position, PrefFlags, RoomFlags, RoomRnum, Sex, LIQ_SLIME, LIQ_WATER, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER
 };
 use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, BRF};
 use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
@@ -177,7 +177,7 @@ pub const TAR_OBJ_WORLD: i32 = 1 << 9;
 pub const TAR_OBJ_EQUIP: i32 = 1 << 10;
 
 pub struct SpellInfoType {
-    pub min_position: u8,
+    pub min_position: Position,
     /* Position for caster	 */
     pub mana_min: i32,
     /* Min amount of mana used by a spell (highest lev) */
@@ -199,7 +199,7 @@ pub struct SpellInfoType {
 impl Default for SpellInfoType {
     fn default() -> Self {
         SpellInfoType {
-            min_position: 0,
+            min_position: Position::Dead,
             mana_min: 0,
             mana_max: 0,
             mana_change: 0,

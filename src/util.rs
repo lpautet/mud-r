@@ -35,7 +35,7 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Sex, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING, POS_SLEEPING
+    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, Position, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Sex, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING 
 };
 use crate::structs::{
     MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
@@ -546,10 +546,10 @@ impl CharData {
     pub fn set_cha(&mut self, val: i8) {
         self.aff_abils.cha = val;
     }
-    pub fn get_pos(&self) -> u8 {
+    pub fn get_pos(&self) -> Position {
         self.char_specials.position
     }
-    pub fn set_pos(&mut self, val: u8) {
+    pub fn set_pos(&mut self, val: Position) {
         self.char_specials.position = val;
     }
     pub fn get_idnum(&self) -> i64 {
@@ -619,10 +619,10 @@ impl CharData {
         self.char_specials.saved.act |= flag;
     }
 
-    pub fn get_default_pos(&self) -> u8 {
+    pub fn get_default_pos(&self) -> Position {
         self.mob_specials.default_pos
     }
-    pub fn set_default_pos(&mut self, val: u8) {
+    pub fn set_default_pos(&mut self, val: Position) {
         self.mob_specials.default_pos = val;
     }
 }
@@ -653,7 +653,7 @@ impl CharData {
         self.char_specials.saved.affected_by = current;
     }
     pub fn awake(&self) -> bool {
-        self.get_pos() > POS_SLEEPING
+        self.get_pos() > Position::Sleeping
     }
     pub fn can_see_in_dark(&self) -> bool {
         self.aff_flagged(AffectFlags::INFRAVISION) || (!self.is_npc() && self.prf_flagged(PrefFlags::HOLYLIGHT))

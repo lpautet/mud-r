@@ -27,7 +27,7 @@ use crate::interpreter::{
 };
 use crate::spells::SKILL_PICK_LOCK;
 use crate::structs::{
-    AffectFlags, CharData, ExitFlags, ItemType, ObjData, ObjVnum, RoomDirectionData, RoomFlags, RoomRnum, SectorType, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, POS_FIGHTING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING, WEAR_HOLD
+    AffectFlags, CharData, ExitFlags, ItemType, ObjData, ObjVnum, Position, RoomDirectionData, RoomFlags, RoomRnum, SectorType, CONT_CLOSEABLE, CONT_CLOSED, CONT_LOCKED, CONT_PICKPROOF, LVL_GOD, LVL_GRGOD, LVL_IMMORT, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, WEAR_HOLD
 };
 use crate::util::{add_follower, circle_follow, log_death_trap, num_pc_in_room, rand_number, stop_follower};
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
@@ -124,7 +124,7 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
         let ch = chars.get(chid);
         for f in ch.followers.clone() {
             let follower = chars.get(f.follower);
-            if follower.in_room() == was_in && follower.get_pos() >= POS_STANDING {
+            if follower.in_room() == was_in && follower.get_pos() >= Position::Standing {
                 let ch = chars.get(chid);
                 act(&mut game.descriptors, chars, db,
                     "You follow $N.\r\n",
@@ -864,10 +864,10 @@ pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
 pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
-        POS_STANDING => {
+        Position::Standing => {
             send_to_char(&mut game.descriptors, ch, "You are already standing.\r\n");
         }
-        POS_SITTING => {
+        Position::Sitting => {
             send_to_char(&mut game.descriptors, ch, "You stand up.\r\n");
             act(&mut game.descriptors, chars, db,
                 "$n clambers to $s feet.",
@@ -880,12 +880,12 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
             let ch = chars.get_mut(chid);
             /* Will be sitting after a successful bash and may still be fighting. */
             ch.set_pos(if ch.fighting_id().is_some() {
-                POS_FIGHTING
+                Position::Fighting
             } else {
-                POS_STANDING
+                Position::Standing
             });
         }
-        POS_RESTING => {
+        Position::Resting => {
             send_to_char(&mut game.descriptors, ch, "You stop resting, and stand up.\r\n");
             act(&mut game.descriptors, chars, db,
                 "$n stops resting, and clambers on $s feet.",
@@ -896,12 +896,12 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_STANDING);
+            ch.set_pos(Position::Standing);
         }
-        POS_SLEEPING => {
+        Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You have to wake up first!\r\n");
         }
-        POS_FIGHTING => {
+        Position::Fighting => {
             send_to_char(&mut game.descriptors, ch, "Do you not consider fighting as standing?\r\n");
         }
         _ => {
@@ -917,7 +917,7 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_STANDING);
+            ch.set_pos(Position::Standing);
         }
     }
 }
@@ -925,16 +925,16 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
 pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>, _objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
-        POS_STANDING => {
+        Position::Standing => {
             send_to_char(&mut game.descriptors, ch, "You sit down.\r\n");
             act(&mut game.descriptors, chars, db,"$n sits down.", false, Some(ch), None, None, TO_ROOM);
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SITTING);
+            ch.set_pos(Position::Sitting);
         }
-        POS_SITTING => {
+        Position::Sitting => {
             send_to_char(&mut game.descriptors, ch, "You're sitting already.\r\n");
         }
-        POS_RESTING => {
+        Position::Resting => {
             send_to_char(&mut game.descriptors, ch, "You stop resting, and sit up.\r\n");
             act(&mut game.descriptors, chars, db,
                 "$n stops resting.",
@@ -945,12 +945,12 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SITTING);
+            ch.set_pos(Position::Sitting);
         }
-        POS_SLEEPING => {
+        Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You have to wake up first.\r\n");
         }
-        POS_FIGHTING => {
+        Position::Fighting => {
             send_to_char(&mut game.descriptors, ch, "Sit down while fighting? Are you MAD?\r\n");
         }
         _ => {
@@ -964,7 +964,7 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SITTING);
+            ch.set_pos(Position::Sitting);
         }
     }
 }
@@ -972,7 +972,7 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
 pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
-        POS_STANDING => {
+        Position::Standing => {
             send_to_char(&mut game.descriptors, ch, "You sit down and rest your tired bones.\r\n");
             act(&mut game.descriptors, chars, db,
                 "$n sits down and rests.",
@@ -983,21 +983,21 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_RESTING);
+            ch.set_pos(Position::Resting);
         }
-        POS_SITTING => {
+        Position::Sitting => {
             send_to_char(&mut game.descriptors, ch, "You rest your tired bones.\r\n");
             act(&mut game.descriptors, chars, db,"$n rests.", true, Some(ch), None, None, TO_ROOM);
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_RESTING);
+            ch.set_pos(Position::Resting);
         }
-        POS_RESTING => {
+        Position::Resting => {
             send_to_char(&mut game.descriptors, ch, "You are already resting.\r\n");
         }
-        POS_SLEEPING => {
+        Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You have to wake up first.\r\n");
         }
-        POS_FIGHTING => {
+        Position::Fighting => {
             send_to_char(&mut game.descriptors, ch, "Rest while fighting?  Are you MAD?\r\n");
         }
         _ => {
@@ -1013,7 +1013,7 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SITTING);
+            ch.set_pos(Position::Sitting);
         }
     }
 }
@@ -1021,7 +1021,7 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
 pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
-        POS_STANDING | POS_SITTING | POS_RESTING => {
+        Position::Standing | Position::Sitting | Position::Resting => {
             send_to_char(&mut game.descriptors, ch, "You go to sleep.\r\n");
             act(&mut game.descriptors, chars, db,
                 "$n lies down and falls asleep.",
@@ -1032,12 +1032,12 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SLEEPING);
+            ch.set_pos(Position::Sleeping);
         }
-        POS_SLEEPING => {
+        Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You are already sound asleep.\r\n");
         }
-        POS_FIGHTING => {
+        Position::Fighting => {
             send_to_char(&mut game.descriptors, ch, "Sleep while fighting?  Are you MAD?\r\n");
         }
         _ => {
@@ -1053,7 +1053,7 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
                 TO_ROOM,
             );
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SLEEPING);
+            ch.set_pos(Position::Sleeping);
         }
     }
 }
@@ -1066,7 +1066,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
 
     one_argument(argument, &mut arg);
     if !arg.is_empty() {
-        if ch.get_pos() == POS_SLEEPING {
+        if ch.get_pos() == Position::Sleeping {
             send_to_char(&mut game.descriptors, ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
             vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FIND_CHAR_ROOM);
@@ -1095,7 +1095,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 Some(VictimRef::Char(vict)),
                 TO_CHAR,
             );
-        } else if vict.unwrap().get_pos() < POS_SLEEPING {
+        } else if vict.unwrap().get_pos() < Position::Sleeping {
             let vict = vict.unwrap();
             act(&mut game.descriptors, chars, db,
                 "$E's in pretty bad shape!",
@@ -1123,7 +1123,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
                 Some(VictimRef::Char(vict)),
                 TO_VICT | TO_SLEEP,
             );
-            chars.get_mut(vict.id()).set_pos(POS_SITTING);
+            chars.get_mut(vict.id()).set_pos(Position::Sitting);
         }
         if !self_ {
             return;
@@ -1132,13 +1132,13 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     let ch = chars.get(chid);
     if ch.aff_flagged(AffectFlags::SLEEP) {
         send_to_char(&mut game.descriptors, ch, "You can't wake up!\r\n");
-    } else if ch.get_pos() > POS_SLEEPING {
+    } else if ch.get_pos() > Position::Sleeping {
         send_to_char(&mut game.descriptors, ch, "You are already awake...\r\n");
     } else {
         send_to_char(&mut game.descriptors, ch, "You awaken, and sit up.\r\n");
         act(&mut game.descriptors, chars, db,"$n awakens.", true, Some(ch), None, None, TO_ROOM);
         let ch = chars.get_mut(chid);
-        ch.set_pos(POS_SITTING);
+        ch.set_pos(Position::Sitting);
     }
 }
 

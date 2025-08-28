@@ -34,7 +34,7 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, POS_DEAD, POS_FIGHTING, POS_INCAP, POS_MORTALLYW, POS_STANDING, POS_STUNNED, PULSE_VIOLENCE, WEAR_WIELD
+    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData, Position, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, PULSE_VIOLENCE, WEAR_WIELD
 };
 use crate::util::{dice, rand_number, stop_follower, BRF};
 use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
@@ -242,18 +242,18 @@ impl DB {
 }
 
 pub fn update_pos(victim: &mut CharData) {
-    if victim.get_hit() > 0 && victim.get_pos() > POS_STUNNED {
+    if victim.get_hit() > 0 && victim.get_pos() > Position::Stunned {
         return;
     } else if victim.get_hit() > 0 {
-        victim.set_pos(POS_STANDING);
+        victim.set_pos(Position::Standing);
     } else if victim.get_hit() <= -11 {
-        victim.set_pos(POS_DEAD);
+        victim.set_pos(Position::Dead);
     } else if victim.get_hit() <= -6 {
-        victim.set_pos(POS_MORTALLYW);
+        victim.set_pos(Position::MortallyWounded);
     } else if victim.get_hit() <= -3 {
-        victim.set_pos(POS_INCAP);
+        victim.set_pos(Position::Incapacitated);
     } else {
-        victim.set_pos(POS_STUNNED);
+        victim.set_pos(Position::Stunned);
     }
 }
 
@@ -308,7 +308,7 @@ impl Game {
         let ch= chars.get_mut(chid);
 
         ch.set_fighting(Some(victid));
-        ch.set_pos(POS_FIGHTING);
+        ch.set_pos(Position::Fighting);
 
         if !PK_ALLOWED {
             check_killer(chid, victid, self, chars, db);
@@ -320,7 +320,7 @@ impl DB {
     pub fn stop_fighting(&mut self, ch: &mut CharData) {
         self.combat_list.retain(|&c| c != ch.id());
         ch.set_fighting(None);
-        ch.set_pos(POS_STANDING);
+        ch.set_pos(Position::Standing);
 
         update_pos(ch);
     }
@@ -807,7 +807,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
                      * Don't send redundant color codes for TYPE_SUFFERING & other types
                      * of damage without attacker_msg.
                      */
-                    if vict.get_pos() == POS_DEAD {
+                    if vict.get_pos() == Position::Dead {
                         let attacker_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
                             .die_msg
                             .attacker_msg;
@@ -961,7 +961,7 @@ impl Game {
         let victim = chars.get(victim_id);
         let mut dam = dam;
 
-        if victim.get_pos() <= POS_DEAD {
+        if victim.get_pos() <= Position::Dead {
             /* This is "normal"-ish now with delayed extraction. -gg 3/15/2001 */
             if victim.plr_flagged(PLR_NOTDEADYET) || victim.mob_flagged(MOB_NOTDEADYET) {
                 return -1;
@@ -1000,13 +1000,13 @@ impl Game {
         if victim_id != chid {
             /* Start the attacker fighting the victim */
             let ch = chars.get(chid);
-            if ch.get_pos() > POS_STUNNED && ch.fighting_id().is_none() {
+            if ch.get_pos() > Position::Stunned && ch.fighting_id().is_none() {
                 self.set_fighting(chars, db, objs,chid, victim_id);
             }
 
             /* Start the victim fighting the attacker */
             let victim = chars.get(victim_id);
-            if victim.get_pos() > POS_STUNNED && victim.fighting_id().is_none() {
+            if victim.get_pos() > Position::Stunned && victim.fighting_id().is_none() {
                 self.set_fighting(chars, db, objs,victim_id, chid);
                 let ch = chars.get(chid);
                 let victim = chars.get(victim_id);
@@ -1071,7 +1071,7 @@ impl Game {
         if !is_weapon!(attacktype) {
             skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype);
         } else {
-            if victim.get_pos() == POS_DEAD || dam == 0 {
+            if victim.get_pos() == Position::Dead || dam == 0 {
                 if skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype) == 0 {
                     dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
                 }
@@ -1083,7 +1083,7 @@ impl Game {
         /* Use game.send_to_char -- act() doesn't send message if you are DEAD. */
         let victim = chars.get(victim_id);
         match victim.get_pos() {
-            POS_MORTALLYW => {
+            Position::MortallyWounded => {
                 act(&mut self.descriptors, chars, 
                     db,
                     "$n is mortally wounded, and will die soon, if not aided.",
@@ -1099,7 +1099,7 @@ impl Game {
                 );
             }
 
-            POS_INCAP => {
+            Position::Incapacitated => {
                 act(&mut self.descriptors, chars, 
                     db,
                     "$n is incapacitated and will slowly die, if not aided.",
@@ -1114,7 +1114,7 @@ impl Game {
                     "You are incapacitated an will slowly die, if not aided.\r\n",
                 );
             }
-            POS_STUNNED => {
+            Position::Stunned => {
                 act(&mut self.descriptors, chars, 
                     db,
                     "$n is stunned, but will probably regain consciousness again.",
@@ -1129,7 +1129,7 @@ impl Game {
                     "You're stunned, but will probably regain consciousness again.\r\n",
                 );
             }
-            POS_DEAD => {
+            Position::Dead => {
                 act(&mut self.descriptors, chars, 
                     db,
                     "$n is dead!  R.I.P.",
@@ -1178,7 +1178,7 @@ impl Game {
 
         /* Help out poor linkless people who are attacked */
         let victim = chars.get(victim_id);
-        if !victim.is_npc() && victim.desc.is_none() && victim.get_pos() > POS_STUNNED {
+        if !victim.is_npc() && victim.desc.is_none() && victim.get_pos() > Position::Stunned {
             do_flee(self, db, chars, texts,objs, victim_id, "", 0, 0);
             let victim = chars.get(victim_id);
             if victim.fighting_id().is_none() {
@@ -1200,13 +1200,13 @@ impl Game {
 
         /* stop someone from fighting if they're stunned or worse */
         let victim = chars.get_mut(victim_id);
-        if victim.get_pos() <= POS_STUNNED && victim.fighting_id().is_some() {
+        if victim.get_pos() <= Position::Stunned && victim.fighting_id().is_some() {
             db.stop_fighting( victim);
         }
 
         /* Uh oh.  Victim died. */
         let victim = chars.get(victim_id);
-        if victim.get_pos() == POS_DEAD {
+        if victim.get_pos() == Position::Dead {
             if chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
                 let ch = chars.get(chid);
                 if ch.aff_flagged(AffectFlags::GROUP) {
@@ -1373,8 +1373,8 @@ impl Game {
              * Note, this is a hack because it depends on the particular
              * values of the POSITION_XXX constants.
              */
-            if victim.get_pos() < POS_FIGHTING {
-                dam *= 1 + (POS_FIGHTING as i32 - victim.get_pos() as i32) / 3;
+            if victim.get_pos() < Position::Fighting {
+                dam *= 1 + (Position::Fighting as i32 - victim.get_pos() as i32) / 3;
             }
 
             /* at least 1 hp damage min per hit */
@@ -1419,8 +1419,8 @@ impl Game {
                 }
                 ch.set_wait_state(0);
 
-                if ch.get_pos() < POS_FIGHTING {
-                    ch.set_pos(POS_FIGHTING);
+                if ch.get_pos() < Position::Fighting {
+                    ch.set_pos(Position::Fighting);
                     let ch = chars.get(chid);
                     act(&mut self.descriptors, chars, 
                         db,
@@ -1434,7 +1434,7 @@ impl Game {
                 }
             }
             let ch = chars.get(chid);
-            if ch.get_pos() < POS_FIGHTING {
+            if ch.get_pos() < Position::Fighting {
                 send_to_char(&mut self.descriptors, ch, "You can't fight while sitting!!\r\n");
                 continue;
             }

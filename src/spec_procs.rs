@@ -35,7 +35,7 @@ use crate::spells::{
     SPELL_MAGIC_MISSILE, SPELL_POISON, SPELL_SHOCKING_GRASP, TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, MeRef, WearFlags, ItemType, LVL_IMMORT, MAX_SKILLS, NOWHERE, PLR_KILLER, PLR_THIEF, POS_FIGHTING, POS_SLEEPING, POS_STANDING
+    AffectFlags, CharData, ItemType, MeRef, Position, WearFlags, LVL_IMMORT, MAX_SKILLS, NOWHERE, PLR_KILLER, PLR_THIEF
 };
 use crate::util::{add_follower, can_see, rand_number};
 use crate::{ Game, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -284,8 +284,8 @@ pub fn mayor(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &m
     let ch = chars.get(chid);
     if cmd != 0
         || !db.mayor.move_
-        || ch.get_pos() < POS_SLEEPING
-        || ch.get_pos() == POS_FIGHTING
+        || ch.get_pos() < Position::Sleeping
+        || ch.get_pos() == Position::Fighting
     {
         return false;
     }
@@ -306,7 +306,7 @@ pub fn mayor(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &m
 
         'W' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_STANDING);
+            ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, db,
                 "$n awakens and groans loudly.",
@@ -320,7 +320,7 @@ pub fn mayor(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &m
 
         'S' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SLEEPING);
+            ch.set_pos(Position::Sleeping);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, db,
                 "$n lies down and instantly falls asleep.",
@@ -473,7 +473,7 @@ fn npc_steal(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: De
 pub fn snake(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || ch.get_pos() != POS_FIGHTING || ch.fighting_id().is_none() {
+    if cmd != 0 || ch.get_pos() != Position::Fighting || ch.fighting_id().is_none() {
         return false;
     }
 
@@ -514,7 +514,7 @@ pub fn snake(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &
 pub fn thief(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || ch.get_pos() != POS_STANDING {
+    if cmd != 0 || ch.get_pos() != Position::Standing {
         return false;
     }
     for cons_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -536,7 +536,7 @@ pub fn magic_user(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || ch.get_pos() != POS_FIGHTING {
+    if cmd != 0 || ch.get_pos() != Position::Fighting {
         return false;
     }
     /* pseudo-randomly choose someone in the room who is fighting me */

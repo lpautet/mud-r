@@ -23,10 +23,10 @@ use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    AffectFlags, CharData, Sex, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, POS_INCAP, POS_MORTALLYW, THIRST
+    AffectFlags, CharData, Position, Sex, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, THIRST
 };
 use crate::structs::{
-    DRUNK, PLR_WRITING, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STUNNED,
+    DRUNK, PLR_WRITING, 
 };
 use crate::util::{age, BRF, CMP};
 use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
@@ -78,13 +78,13 @@ pub fn mana_gain(ch: &CharData) -> u8 {
 
         /* Position calculations    */
         match ch.get_pos() {
-            POS_SLEEPING => {
+            Position::Sleeping => {
                 gain *= 2; /* Divide by 2 */
             }
-            POS_RESTING => {
+            Position::Resting => {
                 gain += gain / 2; /* Divide by 4 */
             }
-            POS_SITTING => {
+            Position::Sitting => {
                 gain += gain / 4; /* Divide by 8 */
             }
             _ => {}
@@ -118,13 +118,13 @@ pub fn hit_gain(ch: &CharData) -> u8 {
         /* Position calculations    */
 
         match ch.get_pos() {
-            POS_SLEEPING => {
+            Position::Sleeping => {
                 gain += gain / 2; /* Divide by 2 */
             }
-            POS_RESTING => {
+            Position::Resting => {
                 gain += gain / 4; /* Divide by 4 */
             }
-            POS_SITTING => {
+            Position::Sitting => {
                 gain += gain / 8; /* Divide by 8 */
             }
             _ => {}
@@ -159,13 +159,13 @@ pub fn move_gain(ch: &CharData) -> u8 {
 
         /* Position calculations    */
         match ch.get_pos() {
-            POS_SLEEPING => {
+            Position::Sleeping => {
                 gain += gain / 2; /* Divide by 2 */
             }
-            POS_RESTING => {
+            Position::Resting => {
                 gain += gain / 4; /* Divide by 4 */
             }
-            POS_SITTING => {
+            Position::Sitting => {
                 gain += gain / 8; /* Divide by 8 */
             }
             _ => {}
@@ -488,7 +488,7 @@ impl Game {
             gain_condition(descs, i, FULL, -1);
         gain_condition(descs, i, DRUNK, -1);
             gain_condition(descs, i, THIRST, -1);
-            if i.get_pos() >= POS_STUNNED {
+            if i.get_pos() >= Position::Stunned {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
@@ -498,14 +498,14 @@ impl Game {
                     }
                 }
                 let i = chars.get_mut(i_id);
-                if i.get_pos() <= POS_STUNNED {
+                if i.get_pos() <= Position::Stunned {
                     update_pos(i);
                 }
-            } else if i.get_pos() == POS_INCAP {
+            } else if i.get_pos() == Position::Incapacitated {
                 if self.damage(chars, db, texts, objs, i_id, i_id, 1, TYPE_SUFFERING) == -1 {
                     continue;
                 }
-            } else if i.get_pos() == POS_MORTALLYW {
+            } else if i.get_pos() == Position::MortallyWounded {
                 if self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
                     continue;
                 }

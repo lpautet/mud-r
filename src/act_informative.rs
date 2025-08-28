@@ -34,13 +34,11 @@ use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, PrefFlags, Sex, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING, POS_FIGHTING
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, Position, PrefFlags, Sex, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING,
 };
 use crate::structs::{ RoomFlags};
 use crate::structs::{
-  DRUNK, FULL, LVL_IMMORT, NUM_WEARS,
-    POS_DEAD, POS_INCAP, POS_MORTALLYW, POS_RESTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
-    POS_STUNNED, THIRST,
+  DRUNK, FULL, LVL_IMMORT, NUM_WEARS, THIRST,
 };
 use crate::util::{
     age, can_see, can_see_obj, pers, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
@@ -360,7 +358,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     if !i.is_npc() && i.plr_flagged(PLR_WRITING) {
         send_to_char(descs, ch, " (writing)");
     }
-    if i.get_pos() != POS_FIGHTING {
+    if i.get_pos() != Position::Fighting {
         send_to_char(descs, ch, POSITIONS[i.get_pos() as usize]);
     } else {
         if i.fighting_id().is_some() {
@@ -876,7 +874,7 @@ pub fn do_look(
     if ch.desc.is_none() {
         return;
     }
-    if ch.get_pos() < POS_SLEEPING {
+    if ch.get_pos() < Position::Sleeping {
         send_to_char(&mut game.descriptors, ch, "You can't see anything but stars!\r\n");
     } else if ch.aff_flagged(AffectFlags::BLIND) {
         send_to_char(&mut game.descriptors, ch, "You can't see a damned thing, you're blind!\r\n");
@@ -1074,28 +1072,28 @@ pub fn do_score(
         .as_str(),
     );
     match ch.get_pos() {
-        POS_DEAD => {
+        Position::Dead => {
             send_to_char(&mut game.descriptors, ch, "You are DEAD!\r\n");
         }
-        POS_MORTALLYW => {
+        Position::MortallyWounded => {
             send_to_char(&mut game.descriptors, ch, "You are mortally wounded!  You should seek help!\r\n");
         }
-        POS_INCAP => {
+        Position::Incapacitated => {
             send_to_char(&mut game.descriptors, ch, "You are incapacitated, slowly fading away...\r\n");
         }
-        POS_STUNNED => {
+        Position::Stunned => {
             send_to_char(&mut game.descriptors, ch, "You are stunned!  You can't move!\r\n");
         }
-        POS_SLEEPING => {
+        Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You are sleeping.\r\n");
         }
-        POS_RESTING => {
+        Position::Resting => {
             send_to_char(&mut game.descriptors, ch, "You are resting.\r\n");
         }
-        POS_SITTING => {
+        Position::Sitting => {
             send_to_char(&mut game.descriptors, ch, "You are sitting.\r\n");
         }
-        POS_FIGHTING => {
+        Position::Fighting => {
             let v = pers(&game.descriptors, chars, db, chars.get(ch.fighting_id().unwrap()), ch);
             send_to_char(&mut game.descriptors, 
                 ch,
@@ -1110,11 +1108,8 @@ pub fn do_score(
                 .as_str(),
             );
         }
-        POS_STANDING => {
+        Position::Standing => {
             send_to_char(&mut game.descriptors, ch, "You are standing.\r\n");
-        }
-        _ => {
-            send_to_char(&mut game.descriptors, ch, "You are floating.\r\n");
         }
     }
     if ch.get_cond(DRUNK) > 10 {

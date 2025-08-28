@@ -17,7 +17,7 @@ use std::rc::Rc;
 use log::error;
 use regex::Regex;
 use crate::depot::{Depot, DepotId, HasId};
-use crate::structs::Sex;
+use crate::structs::{Position, Sex};
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
 
 use crate::db::{DB, SOCMESS_FILE};
@@ -29,7 +29,7 @@ use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT};
 pub struct SocialMessg {
     act_nr: usize,
     hide: bool,
-    min_victim_position: i32,
+    min_victim_position: Position,
     /* Position of victim */
 
     /* No argument was supplied */
@@ -114,7 +114,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         );
     } else {
         let vict = vict.unwrap();
-        if vict.get_pos() < action_min_victim_position as u8 {
+        if vict.get_pos() < action_min_victim_position  {
             act(&mut game.descriptors, chars, db,
                 "$N is not in a proper position for that.",
                 false,
@@ -315,7 +315,7 @@ pub fn boot_social_messages(db: &mut DB) {
         let f = f.unwrap();
         let next_soc = &f[1];
         let hide = f[2].parse::<i32>().unwrap();
-        let min_victim_position = f[2].parse::<i32>().unwrap();
+        let min_victim_position = Position::from(f[2].parse::<u8>().unwrap());
 
         if {
             cur_soc += 1;

@@ -28,8 +28,7 @@ use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, MeRef, MobVnum, ObjData, RoomRnum, RoomVnum, Special, ItemType, WearFlags,
-    NOBODY, NOWHERE, POS_FIGHTING, POS_SITTING, POS_SLEEPING, POS_STANDING,
+    CharData, ItemType, MeRef, MobVnum, ObjData, Position, RoomRnum, RoomVnum, Special, WearFlags, NOBODY, NOWHERE
 };
 use crate::util::rand_number;
 use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -264,7 +263,7 @@ fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
 fn banzaii(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId) -> bool {
     let ch = chars.get(chid);
     let opponent_id = get_victim(chars,db, ch);
-    if !ch.awake() || ch.get_pos() == POS_FIGHTING || opponent_id.is_none() {
+    if !ch.awake() || ch.get_pos() == Position::Fighting || opponent_id.is_none() {
         return false;
     }
 
@@ -556,13 +555,13 @@ pub fn king_welmar(
     }
     let ch = chars.get(chid);
     if cmd != 0
-        || ch.get_pos() < POS_SLEEPING
-        || (ch.get_pos() == POS_SLEEPING && !db.king_welmar.move_)
+        || ch.get_pos() < Position::Sleeping
+        || (ch.get_pos() == Position::Sleeping && !db.king_welmar.move_)
     {
         return false;
     }
 
-    if ch.get_pos() == POS_FIGHTING {
+    if ch.get_pos() == Position::Fighting {
         fry_victim(game, chars, db, texts, objs,chid);
         return false;
     } else if banzaii(game, chars, db, texts, objs,chid) {
@@ -600,7 +599,7 @@ pub fn king_welmar(
 
         'W' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_STANDING);
+            ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, 
                 db,
@@ -615,7 +614,7 @@ pub fn king_welmar(
 
         'S' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SLEEPING);
+            ch.set_pos(Position::Sleeping);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, 
                 db,
@@ -630,7 +629,7 @@ pub fn king_welmar(
 
         'r' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_SITTING);
+            ch.set_pos(Position::Sitting);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, 
                 db,
@@ -645,7 +644,7 @@ pub fn king_welmar(
 
         's' => {
             let ch = chars.get_mut(chid);
-            ch.set_pos(POS_STANDING);
+            ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
             act(&mut game.descriptors, chars, db, "$n stands up.", false, Some(ch), None, None, TO_ROOM);
         }
@@ -710,7 +709,7 @@ pub fn training_master(
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
-    if !ch.awake() || ch.get_pos() == POS_FIGHTING {
+    if !ch.awake() || ch.get_pos() == Position::Fighting {
         return false;
     }
 
@@ -1070,7 +1069,7 @@ fn castle_twin_proc(
         }
     }
     let ch = chars.get(chid);
-    if ch.get_pos() != POS_FIGHTING {
+    if ch.get_pos() != Position::Fighting {
         banzaii(game, chars, db, texts, objs,chid);
     }
 
@@ -1100,7 +1099,7 @@ fn james(
 fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, cmd: i32, gripe: bool) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
+    if cmd != 0 || !ch.awake() || ch.get_pos() == Position::Fighting {
         return false;
     }
 
@@ -1169,7 +1168,7 @@ fn castle_guard(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || !ch.awake() || (ch.get_pos() == POS_FIGHTING) {
+    if cmd != 0 || !ch.awake() || (ch.get_pos() == Position::Fighting) {
         return false;
     }
 
@@ -1195,7 +1194,7 @@ fn dick_n_david(
         return false;
     }
 
-    if cmd == 0 && ch.get_pos() != POS_FIGHTING {
+    if cmd == 0 && ch.get_pos() != Position::Fighting {
         banzaii(game, chars, db, texts, objs,chid);
     }
 
@@ -1216,7 +1215,7 @@ fn peter(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if cmd != 0 || !ch.awake() || ch.get_pos() == POS_FIGHTING {
+    if cmd != 0 || !ch.awake() || ch.get_pos() == Position::Fighting {
         return false;
     }
 
@@ -1451,7 +1450,7 @@ fn jerry(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if !ch.awake() || ch.get_pos() == POS_FIGHTING {
+    if !ch.awake() || ch.get_pos() == Position::Fighting {
         return false;
     }
     if cmd != 0 {

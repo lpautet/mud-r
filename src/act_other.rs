@@ -40,7 +40,7 @@ use crate::spec_procs::list_skills;
 use crate::spell_parser::mag_objectmagic;
 use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ItemType, PrefFlags, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, POS_FIGHTING, POS_SLEEPING, POS_STUNNED, WEAR_HOLD
+    AffectFlags, AffectedType, ApplyType, ItemType, PrefFlags, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, Position, WEAR_HOLD
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, CMP, NRM};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -60,9 +60,9 @@ pub fn do_quit(
 
     if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT as u8 {
         send_to_char(&mut game.descriptors, ch, "You have to type quit--no less, to quit!\r\n");
-    } else if ch.get_pos() == POS_FIGHTING {
+    } else if ch.get_pos() == Position::Fighting {
         send_to_char(&mut game.descriptors, ch, "No way!  You're fighting for your life!\r\n");
-    } else if ch.get_pos() < POS_STUNNED {
+    } else if ch.get_pos() < Position::Stunned {
         send_to_char(&mut game.descriptors, ch, "You die before your time...\r\n");
         die(chid, game,chars, db, texts,objs);
     } else {
@@ -271,7 +271,7 @@ pub fn do_steal(
     let mut percent =
         rand_number(1, 101) as i32 - DEX_APP_SKILL[ch.get_dex() as usize].p_pocket as i32;
 
-    if vict.get_pos() < POS_SLEEPING {
+    if vict.get_pos() < Position::Sleeping {
         percent = -1; /* ALWAYS SUCCESS, unless heavy object. */
     }
 
@@ -326,7 +326,7 @@ pub fn do_steal(
                 return;
             } else {
                 /* It is equipment */
-                if vict.get_pos() > POS_STUNNED {
+                if vict.get_pos() > Position::Stunned {
                     send_to_char(&mut game.descriptors, ch, "Steal the equipment now?  Impossible!\r\n");
                     return;
                 } else {

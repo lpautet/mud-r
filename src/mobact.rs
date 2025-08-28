@@ -19,7 +19,7 @@ use crate::handler::obj_to_char;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
 use crate::structs::{
-    AffectFlags, CharData, MeRef, PrefFlags, RoomFlags, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS, POS_STANDING
+    AffectFlags, CharData, MeRef, Position, PrefFlags, RoomFlags, MOB_AGGRESSIVE, MOB_AGGR_EVIL, MOB_AGGR_GOOD, MOB_AGGR_NEUTRAL, MOB_HELPER, MOB_MEMORY, MOB_SCAVENGER, MOB_SENTINEL, MOB_SPEC, MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS
 };
 use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
 use crate::{act, Game, ObjData, DB, TO_ROOM};
@@ -100,7 +100,7 @@ impl Game {
             let door = rand_number(0, 18);
             let ch = chars.get(chid);
             if !ch.mob_flagged(MOB_SENTINEL)
-                && ch.get_pos() == POS_STANDING
+                && ch.get_pos() == Position::Standing
                 && door < NUM_OF_DIRS as u32
                 && db.can_go(ch, door as usize)
                 && !db.room_flagged(

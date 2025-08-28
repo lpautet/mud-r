@@ -551,7 +551,7 @@ pub struct CharSpecialData {
     /* Opponent				*/
     pub hunting_chid: Option<DepotId>,
     /* Char hunted by this char		*/
-    pub position: u8,
+    pub position: Position,
     /* Standing, fighting, sleeping, etc.	*/
     pub carry_weight: i32,
     /* Carried weight			*/
@@ -610,7 +610,7 @@ pub struct MobSpecialData {
     /* List of attackers to remember	       */
     pub attack_type: u8,
     /* The Attack Type Bitvector for NPC's     */
-    pub default_pos: u8,
+    pub default_pos: Position,
     /* Default position for NPC                */
     pub damnodice: u8,
     /* The number of damage dice's	       */
@@ -1036,15 +1036,36 @@ pub const PLR_CRYO: i64 = 1 << 15; /* Player is cryo-saved (purge prog)	*/
 pub const PLR_NOTDEADYET: i64 = 1 << 16; /* (R) Player being extracted.	*/
 
 /* Positions */
-pub const POS_DEAD: u8 = 0; /* dead			*/
-pub const POS_MORTALLYW: u8 = 1; /* mortally wounded	*/
-pub const POS_INCAP: u8 = 2; /* incapacitated	*/
-pub const POS_STUNNED: u8 = 3; /* stunned		*/
-pub const POS_SLEEPING: u8 = 4; /* sleeping		*/
-pub const POS_RESTING: u8 = 5; /* resting		*/
-pub const POS_SITTING: u8 = 6; /* sitting		*/
-pub const POS_FIGHTING: u8 = 7; /* fighting		*/
-pub const POS_STANDING: u8 = 8; /* standing		*/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum Position {
+    Dead = 0,
+    MortallyWounded = 1,
+    Incapacitated = 2,
+    Stunned = 3,
+    Sleeping = 4,
+    Resting = 5,
+    Sitting = 6,
+    Fighting = 7,
+    Standing = 8,
+}
+
+impl From<u8> for Position {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Position::Dead,
+            1 => Position::MortallyWounded,
+            2 => Position::Incapacitated,
+            3 => Position::Stunned,
+            4 => Position::Sleeping,
+            5 => Position::Resting,
+            6 => Position::Sitting,
+            7 => Position::Fighting,
+            8 => Position::Standing,
+            _ => panic!("Invalid position value: {}", value),
+        }
+    }
+}
 
 /* room-related structures ************************************************/
 #[derive(Clone)]
