@@ -1529,7 +1529,7 @@ pub fn do_stat(
             do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
         } else {
             let mut loaded_victim = CharData::default();
-            let mut tmp_store = CharFileU::new();
+            let mut tmp_store = CharFileU::default();
             clear_char(&mut loaded_victim);
             if db.load_char(&buf2, &mut tmp_store).is_some() {
                 store_to_char(texts, &tmp_store, &mut loaded_victim);
@@ -2817,7 +2817,7 @@ pub fn do_last(
         send_to_char(&mut game.descriptors, ch, "For whom do you wish to search?\r\n");
         return;
     }
-    let mut chdata = CharFileU::new();
+    let mut chdata = CharFileU::default();
     if db.load_char(&arg, &mut chdata).is_none() {
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
@@ -3610,7 +3610,7 @@ pub fn do_show(
                 return;
             }
 
-            let mut vbuf = CharFileU::new();
+            let mut vbuf = CharFileU::default();
             if db.load_char(&value, &mut vbuf).is_none() {
                 let ch = chars.get(chid);
                 send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
@@ -4701,7 +4701,7 @@ pub fn do_set(
     let mut name = String::new();
     let mut buf = String::new();
     let mut field = String::new();
-    let mut tmp_store = CharFileU::new();
+    let mut tmp_store = CharFileU::default();
 
     half_chop(&mut argument, &mut name, &mut buf);
 

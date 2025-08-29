@@ -136,7 +136,7 @@ impl MailSystem {
 
 fn mail_recip_ok(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  name: &str) -> bool {
     let mut ret = false;
-    let mut tmp_store = CharFileU::new();
+    let mut tmp_store = CharFileU::default();
     let mut victim = CharData::default();
     clear_char(&mut victim);
     if db.load_char(name, &mut tmp_store).is_some() {

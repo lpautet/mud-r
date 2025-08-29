@@ -143,24 +143,17 @@ pub const TO_NOTVICT: i32 = 3;
 pub const TO_CHAR: i32 = 4;
 pub const TO_SLEEP: i32 = 128; /* to char, even if sleeping */
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum ConnectionType {
     Telnet(TcpStream),
     WebSocket(WebSocket<TcpStream>),
 }
 
+#[derive(Default)]
 pub struct TextData {
     id: DepotId,
     pub text: String,
-}
-
-impl Default for TextData {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            text: Default::default(),
-        }
-    }
 }
 
 impl Depot<TextData> {
@@ -1083,17 +1076,19 @@ impl Game {
         }
         /* create a new descriptor */
         /* initialize descriptor data */
-        let mut newd = DescriptorData::default();
-        newd.connection = Some(ConnectionType::Telnet(stream));
+        let mut newd = DescriptorData {
+            connection: Some(ConnectionType::Telnet(stream)),
+            ..Default::default()
+        };
 
         /* find the sitename */
         if !self.config.nameserver_is_slow {
             let r = dns_lookup::lookup_addr(&addr.ip());
-            if r.is_err() {
+            if let Ok(host) = r {
+                newd.host = Rc::from(host);
+            } else {
                 error!("Error resolving address: {}", r.err().unwrap());
                 newd.host = Rc::from(addr.ip().to_string());
-            } else {
-                newd.host = Rc::from(r.unwrap());
             }
         } else {
             newd.host = Rc::from(addr.ip().to_string());
@@ -1153,17 +1148,19 @@ impl Game {
         // This is a simplified synchronous approach
         match self.perform_websocket_handshake(stream) {
             Ok(ws_stream) => {
-                let mut newd = DescriptorData::default();
-                newd.connection = Some(ConnectionType::WebSocket(ws_stream));
+                let mut newd = DescriptorData {
+                    connection: Some(ConnectionType::WebSocket(ws_stream)),
+                    ..Default::default()
+                };
 
                 /* find the sitename */
                 if !self.config.nameserver_is_slow {
                     let r = dns_lookup::lookup_addr(&addr.ip());
-                    if r.is_err() {
+                    if let Ok(host) = r {
+                        newd.host = Rc::from(host);
+                    } else {
                         error!("Error resolving address: {}", r.err().unwrap());
                         newd.host = Rc::from(addr.ip().to_string());
-                    } else {
-                        newd.host = Rc::from(r.unwrap());
                     }
                 } else {
                     newd.host = Rc::from(addr.ip().to_string());
@@ -1449,16 +1446,15 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * -gg 1/21/2000
  */
 fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
-    let buf_length;
     let mut failed_subst;
     let mut bytes_read;
     let mut read_point = 0;
     let mut nl_pos: Option<usize> = None;
     let mut tmp = String::new();
     let desc = descs.get_mut(d_id);
+    let buf_length = desc.inbuf.len();
 
     /* first, find the point where we left off reading data */
-    buf_length = desc.inbuf.len();
     let mut space_left = (MAX_RAW_INPUT_LENGTH as i128) - (buf_length as i128) - 1;
 
     loop {
@@ -1967,6 +1963,7 @@ pub fn send_to_room(
 const ACTNULL: &str = "<NULL>";
 
 /* higher-level communication: the act() function */
+#[allow(clippy::too_many_arguments)]
 fn perform_act(
     descs: &mut Depot<DescriptorData>,
     chars: &Depot<CharData>,
@@ -1996,12 +1993,10 @@ fn perform_act(
                 'N' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Char(p)) = vict_obj {
+                        pers(descs, chars, db, p, to)
                     } else {
-                        if let Some(VictimRef::Char(p)) = vict_obj {
-                            pers(descs, chars, db, p, to)
-                        } else {
-                            Rc::from("<INV_CHAR_REF>")
-                        }
+                        Rc::from("<INV_CHAR_REF>")
                     };
                 }
                 'm' => {
@@ -2010,12 +2005,10 @@ fn perform_act(
                 'M' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Char(p)) = vict_obj {
+                        Rc::from(hmhr(p))
                     } else {
-                        if let Some(VictimRef::Char(p)) = vict_obj {
-                            Rc::from(hmhr(p))
-                        } else {
-                            Rc::from("<INV_CHAR_DATA>")
-                        }
+                        Rc::from("<INV_CHAR_DATA>")
                     };
                 }
                 's' => {
@@ -2024,12 +2017,10 @@ fn perform_act(
                 'S' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Char(p)) = vict_obj {
+                        Rc::from(hshr(p))
                     } else {
-                        if let Some(VictimRef::Char(p)) = vict_obj {
-                            Rc::from(hshr(p))
-                        } else {
-                            Rc::from("<INV_CHAR_DATA>")
-                        }
+                        Rc::from("<INV_CHAR_DATA>")
                     };
                 }
                 'e' => {
@@ -2038,99 +2029,82 @@ fn perform_act(
                 'E' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Char(p)) = vict_obj {
+                        Rc::from(hssh(p))
                     } else {
-                        if let Some(VictimRef::Char(p)) = vict_obj {
-                            Rc::from(hssh(p))
-                        } else {
-                            Rc::from("<INV_CHAR_DATA>")
-                        }
+                        Rc::from("<INV_CHAR_DATA>")
                     };
                 }
                 'o' => {
-                    i = if obj.is_none() {
-                        Rc::from(ACTNULL)
+                    i = if let Some(my_obj) = obj {
+                        objn(descs, chars, db, my_obj, to)
                     } else {
-                        objn(descs, chars, db, obj.unwrap(), to)
+                        Rc::from(ACTNULL)
                     };
                 }
                 'O' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Obj(p)) = vict_obj {
+                        objn(descs, chars, db, p, to)
                     } else {
-                        if let Some(VictimRef::Obj(p)) = vict_obj {
-                            objn(descs, chars, db, p, to)
-                        } else {
-                            Rc::from("<INV_OBJ_DATA>")
-                        }
+                        Rc::from("<INV_OBJ_DATA>")
                     };
                 }
                 'p' => {
-                    i = if obj.is_none() {
-                        Rc::from(ACTNULL)
+                    i = if let Some(my_obj) = obj {
+                        objs(descs, chars, db, my_obj, to)
                     } else {
-                        Rc::from(objs(descs, chars, db, obj.unwrap(), to))
+                        Rc::from(ACTNULL)
                     };
                 }
                 'P' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Obj(p)) = vict_obj {
+                        objs(descs, chars, db, p, to)
                     } else {
-                        if let Some(VictimRef::Obj(p)) = vict_obj {
-                            Rc::from(objs(descs, chars, db, p, to))
-                        } else {
-                            Rc::from("<INV_OBJ_REF>")
-                        }
+                        Rc::from("<INV_OBJ_REF>")
                     };
                 }
                 'a' => {
-                    i = if obj.is_none() {
-                        Rc::from(ACTNULL)
+                    i = if let Some(my_obj) = obj {
+                        Rc::from(sana(my_obj))
                     } else {
-                        Rc::from(sana(obj.unwrap()))
+                        Rc::from(ACTNULL)
                     };
                 }
                 'A' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Obj(p)) = vict_obj {
+                        Rc::from(sana(p))
                     } else {
-                        if let Some(VictimRef::Obj(p)) = vict_obj {
-                            Rc::from(sana(p))
-                        } else {
-                            Rc::from("<INV_OBJ_REF>")
-                        }
+                        Rc::from("<INV_OBJ_REF>")
                     };
                 }
                 'T' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Str(p)) = vict_obj {
+                        Rc::from(p)
                     } else {
-                        if let Some(VictimRef::Str(ref p)) = vict_obj {
-                            Rc::from(p.as_ref())
-                        } else {
-                            Rc::from("<INV_STR_REF>")
-                        }
+                        Rc::from("<INV_STR_REF>")
                     };
                 }
                 'F' => {
                     i = if vict_obj.is_none() {
                         Rc::from(ACTNULL)
+                    } else if let Some(VictimRef::Str(p)) = vict_obj {
+                        fname(p)
                     } else {
-                        if let Some(VictimRef::Str(ref p)) = vict_obj {
-                            fname(p)
-                        } else {
-                            Rc::from("<INV_STR_REF>")
-                        }
+                        Rc::from("<INV_STR_REF>")
                     };
                 }
                 /* uppercase previous word */
                 'u' => {
                     let pos = buf.rfind(' ');
-                    let posi;
-                    if pos.is_none() {
-                        posi = 0;
-                    } else {
-                        posi = pos.unwrap();
-                    }
+                    let posi = pos.unwrap_or_default();
                     let sec_part = buf.split_off(posi);
                     buf.push_str(sec_part.to_uppercase().as_str());
                     i = Rc::from("");
@@ -2195,6 +2169,7 @@ pub enum VictimRef<'a> {
     Str(&'a str),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn act(
     descs: &mut Depot<DescriptorData>,
     chars: &Depot<CharData>,
@@ -2252,6 +2227,7 @@ pub fn act(
     }
     /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
     let char_list;
+    #[allow(clippy::unnecessary_unwrap)]
     if ch.is_some() && ch.unwrap().in_room() != NOWHERE {
         char_list = &db.world[ch.unwrap().in_room() as usize].peoples;
     } else if obj.is_some() && obj.as_ref().unwrap().in_room() != NOWHERE {
@@ -2297,10 +2273,10 @@ fn setup_log(logfile: Option<&str>) {
     let mut config_builder = log4rs::config::Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)));
 
-    if logfile.is_some() {
+    if let Some(logfile) = logfile {
         let file = FileAppender::builder()
             .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
-            .build(logfile.unwrap())
+            .build(logfile)
             .unwrap();
 
         config_builder = config_builder.appender(Appender::builder().build("file", Box::new(file)));
