@@ -37,8 +37,9 @@ use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextDat
 /* When age in 45..59 calculate the line between p3 & p4 */
 /* When age in 60..79 calculate the line between p4 & p5 */
 /* When age >= 80 return the value p6 */
+#[allow(clippy::too_many_arguments)]
 fn graf(grafage: i32, p0: i32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32) -> i32 {
-    return if grafage < 15 {
+    if grafage < 15 {
         p0 /* < 15   */
     } else if grafage <= 29 {
         p1 + (((grafage - 15) * (p2 - p1)) / 15) /* 15..29 */
@@ -50,7 +51,7 @@ fn graf(grafage: i32, p0: i32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: 
         p4 + (((grafage - 60) * (p5 - p4)) / 20) /* 60..79 */
     } else {
         p6 /* >= 80 */
-    };
+    }
 }
 
 /*
@@ -192,7 +193,7 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
         }
     }
 
-    ch.set_title(title.map(|t| Rc::from(t)));
+    ch.set_title(title.map(Rc::from));
 }
 
 // void run_autowiz(void)
@@ -456,9 +457,9 @@ impl Game {
                     ch.desc = None;
                 }
                 if FREE_RENT {
-                    crash_rentsave(self, chars, db, objs, chid, 0);
+                    crash_rentsave( chars, db, objs, chid, 0);
                 } else {
-                    crash_idlesave(self, chars, db, objs, chid);
+                    crash_idlesave( chars, db, objs, chid);
                 }
                 let ch = chars.get(chid);
                 self.mudlog(
@@ -492,11 +493,10 @@ impl Game {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
-                if i.aff_flagged(AffectFlags::POISON) {
-                    if self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1 {
+                if i.aff_flagged(AffectFlags::POISON)
+                    && self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1 {
                         continue; /* Oops, they died. -gg 6/24/98 */
                     }
-                }
                 let i = chars.get_mut(i_id);
                 if i.get_pos() <= Position::Stunned {
                     update_pos(i);
@@ -505,11 +505,10 @@ impl Game {
                 if self.damage(chars, db, texts, objs, i_id, i_id, 1, TYPE_SUFFERING) == -1 {
                     continue;
                 }
-            } else if i.get_pos() == Position::MortallyWounded {
-                if self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
+            } else if i.get_pos() == Position::MortallyWounded
+                && self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
                     continue;
                 }
-            }
             let i = chars.get(i_id);
             if !i.is_npc() {
                 update_char_objects(&mut self.descriptors, chars, objs, db, i_id);
@@ -549,7 +548,7 @@ impl Game {
                             TO_CHAR,
                         );
                     } else if j_obj.in_room() != NOWHERE
-                        && db.world[j_obj.in_room() as usize].peoples.len() != 0
+                        && !db.world[j_obj.in_room() as usize].peoples.is_empty()
                     {
                         let chid = db.world[j_obj.in_room() as usize].peoples[0];
                         let ch = chars.get(chid);

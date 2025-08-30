@@ -306,7 +306,7 @@ fn main() -> ExitCode {
     let mut port = DFLT_PORT;
 
     let mut game = Game {
-        descriptors: Depot::new(),
+        descriptors: Depot::default(),
         descriptor_list: vec![],
         last_desc: 0,
         circle_shutdown: false,
@@ -320,9 +320,9 @@ fn main() -> ExitCode {
         },
         max_players: 0,
     };
-    let mut texts: Depot<TextData> = Depot::new();
-    let mut objs: Depot<ObjData> = Depot::new();
-    let mut chars: Depot<CharData> = Depot::new();
+    let mut texts: Depot<TextData> = Depot::default();
+    let mut objs: Depot<ObjData> = Depot::default();
+    let mut chars: Depot<CharData> = Depot::default();
 
     let mut db = DB::new(&mut texts);
 
@@ -848,7 +848,7 @@ impl Game {
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
                 self.mins_since_crashsave = 0;
                 crash_save_all(self, chars, db, objs);
-                house_save_all(chars, db, objs);
+                house_save_all(db, objs);
             }
         }
 

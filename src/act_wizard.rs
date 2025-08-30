@@ -61,6 +61,7 @@ use hmac::Hmac;
 use log::{error, info};
 use sha2::Sha256;
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_echo(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -75,12 +76,12 @@ pub fn do_echo(
     if argument.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Yes.. but what?\r\n");
     } else {
-        let buf;
+        let buf=
         if subcmd == SCMD_EMOTE {
-            buf = format!("$n {}", argument);
+            format!("$n {}", argument)
         } else {
-            buf = argument.to_string();
-        }
+            argument.to_string()
+        };
 
         act(&mut game.descriptors, chars, db, &buf, false, Some(ch), None, None, TO_ROOM);
         let ch = chars.get(chid);
@@ -92,6 +93,7 @@ pub fn do_echo(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_send(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -112,10 +114,11 @@ pub fn do_send(
         send_to_char(&mut game.descriptors, ch, "Send what to who?\r\n");
         return;
     }
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
         return;
     }
@@ -149,11 +152,12 @@ fn find_target_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         return NOWHERE;
     }
 
-    if roomstr.chars().next().unwrap().is_digit(10) && !roomstr.contains('.') {
-        if {
+    if roomstr.chars().next().unwrap().is_ascii_digit() && !roomstr.contains('.') {
+        let res = {
             location = db.real_room(roomstr.parse::<i16>().unwrap());
             location == NOWHERE
-        } {
+        }; 
+        if res {
             send_to_char(descs, ch, "No room exists with that number.\r\n");
             return NOWHERE;
         }
@@ -163,20 +167,23 @@ fn find_target_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         let mut mobobjstr = roomstr;
 
         let mut num = get_number(&mut mobobjstr);
-        if {
+        let res = {
             target_mob =
                 get_char_vis(descs, chars,db, ch, &mut mobobjstr, Some(&mut num), FindFlags::CHAR_WORLD);
             target_mob.is_some()
-        } {
-            if {
+        }; 
+        #[allow(clippy::blocks_in_conditions)]
+        if res {
+            let res = {
                 location = target_mob.unwrap().in_room();
                 location == NOWHERE
-            } {
+            }; 
+            if res {
                 send_to_char(descs, ch, "That character is currently lost.\r\n");
                 return NOWHERE;
             }
         } else if {
-            target_obj = get_obj_vis(descs, chars,db, objs,ch, &mut mobobjstr, Some(&mut num));
+            target_obj = get_obj_vis(descs, chars,db, objs,ch, &mobobjstr, Some(&mut num));
             target_obj.is_some()
         } {
             if target_obj.unwrap().in_room() != NOWHERE {
@@ -224,16 +231,17 @@ fn find_target_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
             "There's a private conversation going on in that room.\r\n",
         );
     } else if db.room_flagged(location, RoomFlags::HOUSE)
-        && !house_can_enter(&db, ch, db.get_room_vnum(location))
+        && !house_can_enter(db, ch, db.get_room_vnum(location))
     {
         send_to_char(descs, ch, "That's private property -- no trespassing!\r\n");
     } else {
         return location;
     }
 
-    return NOWHERE;
+    NOWHERE
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_at(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -258,10 +266,11 @@ pub fn do_at(
         return;
     }
     let location;
-    if {
+    let res = {
         location = find_target_room(&mut game.descriptors, db,chars, objs,ch, &buf);
         location == NOWHERE
-    } {
+    }; 
+    if res {
         return;
     }
 
@@ -280,6 +289,7 @@ pub fn do_at(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_goto(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -291,10 +301,11 @@ pub fn do_goto(
     let location;
     let ch = chars.get(chid);
 
-    if {
+    let res = {
         location = find_target_room(&mut game.descriptors, db,chars, objs,ch, argument);
         location == NOWHERE
-    } {
+    }; 
+    if res {
         return;
     }
     let x = ch.poofout();
@@ -325,6 +336,7 @@ pub fn do_goto(
     look_at_room(&mut game.descriptors, db,chars, texts,objs,ch, false);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_trans(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -342,10 +354,11 @@ pub fn do_trans(
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to transfer?\r\n");
     } else if "all" != buf {
-        if {
+        let res = {
             victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_WORLD);
             victim.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
         } else if victim.unwrap().id() == chid {
             send_to_char(&mut game.descriptors, ch, "That doesn't make much sense, does it?\r\n");
@@ -453,6 +466,7 @@ pub fn do_trans(
     send_to_char(&mut game.descriptors, ch, OK);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_teleport(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -469,6 +483,7 @@ pub fn do_teleport(
     two_arguments(argument, &mut buf, &mut buf2);
     let victim;
     let target;
+    #[allow(clippy::blocks_in_conditions)]
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to teleport?\r\n");
     } else if {
@@ -526,6 +541,7 @@ pub fn do_teleport(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_vnum(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -545,17 +561,15 @@ pub fn do_vnum(
         send_to_char(&mut game.descriptors, ch, "Usage: vnum { obj | mob } <name>\r\n");
         return;
     }
-    if is_abbrev(&buf, "mob") {
-        if vnum_mobile(&mut game.descriptors, db,chars, &buf2, chid) == 0 {
+    if is_abbrev(&buf, "mob")
+        && vnum_mobile(&mut game.descriptors, db,chars, &buf2, chid) == 0 {
             send_to_char(&mut game.descriptors, ch, "No mobiles by that name.\r\n");
         }
-    }
 
-    if is_abbrev(&buf, "obj") {
-        if vnum_object(&mut game.descriptors, db, chars,&buf2, chid) == 0 {
+    if is_abbrev(&buf, "obj")
+        && vnum_object(&mut game.descriptors, db, chars,&buf2, chid) == 0 {
             send_to_char(&mut game.descriptors, ch, "No objects by that name.\r\n");
         }
-    }
 }
 
 fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>,objs: & Depot<ObjData>, chid: DepotId) {
@@ -635,7 +649,7 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
         }
     }
 
-    if rm_peoples.len() != 0 {
+    if !rm_peoples.is_empty() {
         let ch = chars.get(chid);
         send_to_char(descs, ch, format!("Chars present:{}", CCYEL!(ch, C_NRM)).as_str());
         let mut column = 14; /* ^^^ strlen ^^^ */
@@ -655,12 +669,10 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
                     k.get_name(),
                     if !k.is_npc() {
                         "PC"
+                    } else if !db.is_mob(k) {
+                        "NPC"
                     } else {
-                        if !db.is_mob(k) {
-                            "NPC"
-                        } else {
-                            "MOB"
-                        }
+                        "MOB"
                     }
                 )
                 .as_str(),
@@ -709,26 +721,26 @@ fn do_stat_room(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot
             }
         }
         let ch = chars.get(chid);
-        send_to_char(descs, ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+        send_to_char(descs, ch, CCNRM!(ch, C_NRM));
     }
 
     for i in 0..NUM_OF_DIRS {
         if rm_dir_option[i].is_none() {
             continue;
         }
-        let buf1;
+        let buf1=
         if rm_dir_option[i].as_ref().unwrap().to_room == NOWHERE {
             let ch = chars.get(chid);
-            buf1 = format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM));
+            format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM))
         } else {
             let ch = chars.get(chid);
-            buf1 = format!(
+            format!(
                 "{}{:5}{}",
                 CCCYN!(ch, C_NRM),
                 db.get_room_vnum(rm_dir_option[i].as_ref().unwrap().to_room),
                 CCNRM!(ch, C_NRM)
-            );
-        }
+            )
+        };
         let mut buf2 = String::new();
         sprintbit(
             rm_dir_option[i].as_ref().unwrap().exit_info.bits().into(),
@@ -814,7 +826,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     sprintbit(obj.get_obj_wear().bits().into(), &WEAR_BITS, &mut buf);
     send_to_char(descs, ch, format!("Can be worn on: {}\r\n", buf).as_str());
     buf.clear();
-    sprintbit(obj.get_obj_affect().bits().into(), &AFFECTED_BITS, &mut buf);
+    sprintbit(obj.get_obj_affect().bits(), &AFFECTED_BITS, &mut buf);
     send_to_char(descs, ch, format!("Set char bits : {}\r\n", buf).as_str());
     buf.clear();
     sprintbit(obj.get_obj_extra().bits() as i64, &EXTRA_BITS, &mut buf);
@@ -904,9 +916,9 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 format!(
                     "Spells: (Level {}) {}, {}, {}\r\n",
                     obj.get_obj_val(0),
-                    skill_name(&db, obj.get_obj_val(1)),
-                    skill_name(&db, obj.get_obj_val(2)),
-                    skill_name(&db, obj.get_obj_val(3))
+                    skill_name(db, obj.get_obj_val(1)),
+                    skill_name(db, obj.get_obj_val(2)),
+                    skill_name(db, obj.get_obj_val(3))
                 )
                 .as_str(),
             );
@@ -916,7 +928,7 @@ fn do_stat_object(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                 ch,
                 format!(
                     "Spell: {} at level {}, {} (of {}) charges remaining\r\n",
-                    skill_name(&db, obj.get_obj_val(3)),
+                    skill_name(db, obj.get_obj_val(3)),
                     obj.get_obj_val(0),
                     obj.get_obj_val(2),
                     obj.get_obj_val(1)
@@ -1097,12 +1109,10 @@ fn do_stat_character(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
             buf,
             if !k.is_npc() {
                 "PC"
+            } else if !db.is_mob(k) {
+                "NPC"
             } else {
-                if !db.is_mob(k) {
-                    "NPC"
-                } else {
-                    "MOB"
-                }
+                "MOB"
             },
             k.get_name(),
             k.get_idnum(),
@@ -1331,7 +1341,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             format!("PLR: {}{}{}\r\n", CCCYN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
         );
         buf.clear();
-        sprintbit(k.prf_flags().bits() as i64, &PREFERENCE_BITS, &mut buf);
+        sprintbit(k.prf_flags().bits(), &PREFERENCE_BITS, &mut buf);
         send_to_char(descs, 
             ch,
             format!("PRF: {}{}{}\r\n", CCGRN!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
@@ -1424,14 +1434,14 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 
     /* Showing the bitvector */
     buf.clear();
-    sprintbit(k.aff_flags().bits().into(), &AFFECTED_BITS, &mut buf);
+    sprintbit(k.aff_flags().bits(), &AFFECTED_BITS, &mut buf);
     send_to_char(descs, 
         ch,
         format!("AFF: {}{}{}\r\n", CCYEL!(ch, C_NRM), buf, CCNRM!(ch, C_NRM)).as_str(),
     );
 
     /* Routine to show what spells a char is affected by */
-    if k.affected.len() != 0 {
+    if !k.affected.is_empty() {
         for aff in &k.affected {
             send_to_char(descs, 
                 ch,
@@ -1439,7 +1449,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
                     "SPL: ({:3}hr) {}{:21}{} ",
                     aff.duration + 1,
                     CCCYN!(ch, C_NRM),
-                    skill_name(&db, aff._type as i32),
+                    skill_name(db, aff._type as i32),
                     CCNRM!(ch, C_NRM)
                 )
                 .as_str(),
@@ -1461,7 +1471,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
                     send_to_char(descs, ch, ", ");
                 }
                 buf.clear();
-                sprintbit(bitvector.bits().into(), &AFFECTED_BITS, &mut buf);
+                sprintbit(bitvector.bits(), &AFFECTED_BITS, &mut buf);
                 send_to_char(descs, ch, format!("sets {}", buf).as_str());
             }
             send_to_char(descs, ch, "\r\n");
@@ -1469,6 +1479,7 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_stat(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -1487,7 +1498,6 @@ pub fn do_stat(
 
     if buf1.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Stats on who or what?\r\n");
-        return;
     } else if is_abbrev(&buf1, "room") {
         do_stat_room(&mut game.descriptors,db,chars,   objs, chid);
     } else if is_abbrev(&buf1, "mob") {
@@ -1495,10 +1505,11 @@ pub fn do_stat(
             send_to_char(&mut game.descriptors, ch, "Stats on which mobile?\r\n");
         } else {
             let victim;
-            if {
+            let res = {
                 victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FindFlags::CHAR_WORLD);
                 victim.is_some()
-            } {
+            }; 
+            if res {
                 do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
             } else {
                 send_to_char(&mut game.descriptors, ch, "No such mobile around.\r\n");
@@ -1509,10 +1520,11 @@ pub fn do_stat(
             send_to_char(&mut game.descriptors, ch, "Stats on which player?\r\n");
         } else {
             let victim;
-            if {
+            let res = {
                 victim = get_player_vis(&game.descriptors, chars,db, ch, &mut buf2, None, FindFlags::CHAR_WORLD);
                 victim.is_some()
-            } {
+            }; 
+            if res {
                 do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
             } else {
                 send_to_char(&mut game.descriptors, ch, "No such player around.\r\n");
@@ -1520,6 +1532,7 @@ pub fn do_stat(
         }
     } else if is_abbrev(&buf1, "file") {
         let victim;
+        #[allow(clippy::blocks_in_conditions)]
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which player?\r\n");
         } else if {
@@ -1554,10 +1567,11 @@ pub fn do_stat(
             send_to_char(&mut game.descriptors, ch, "Stats on which object?\r\n");
         } else {
             let obj;
-            if {
-                obj = get_obj_vis(&game.descriptors, chars,db, objs,ch, &mut buf2, None);
+            let res = {
+                obj = get_obj_vis(&game.descriptors, chars,db, objs,ch, &buf2, None);
                 obj.is_some()
-            } {
+            }; 
+            if res {
                 do_stat_object(&mut game.descriptors, db,chars,  objs,ch, obj.unwrap());
             } else {
                 send_to_char(&mut game.descriptors, ch, "No such object around.\r\n");
@@ -1568,6 +1582,8 @@ pub fn do_stat(
         let mut number = get_number(&mut name);
         let mut obj;
         let mut victim;
+        #[allow(clippy::blocks_in_conditions)]
+        #[allow(clippy::if_same_then_else)]
         if {
             obj = get_obj_in_equip_vis(&game.descriptors, chars,db, objs,ch, &name, Some(&mut number), &ch.equipment);
             obj.is_some()
@@ -1587,7 +1603,7 @@ pub fn do_stat(
             obj = get_obj_in_list_vis2(&game.descriptors, chars,
                 db,objs,
                 ch,
-                &mut name,
+                &name,
                 Some(&mut number),
                 &db.world[ch.in_room() as usize].contents,
             );
@@ -1600,7 +1616,7 @@ pub fn do_stat(
         } {
             do_stat_character(&mut game.descriptors, db,chars,  ch, victim.unwrap());
         } else if {
-            obj = get_obj_vis(&game.descriptors, chars,db,objs, ch, &mut name, Some(&mut number));
+            obj = get_obj_vis(&game.descriptors, chars,db,objs, ch, &name, Some(&mut number));
             obj.is_some()
         } {
             do_stat_object(&mut game.descriptors, db,chars,objs,  ch, obj.unwrap());
@@ -1610,6 +1626,7 @@ pub fn do_stat(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_shutdown(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1704,6 +1721,7 @@ fn stop_snooping(game: &mut Game,chars: &mut Depot<CharData>, chid: DepotId) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_snoop(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1724,6 +1742,7 @@ pub fn do_snoop(
     let victim;
     let voriginal_id;
     let tch;
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         stop_snooping(game, chars, chid);
     } else if {
@@ -1770,10 +1789,11 @@ pub fn do_snoop(
             game.desc_mut(snooping_desc_id).snoop_by = None;
         }
         let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).snooping = victim.as_ref().unwrap().desc.clone();
+        game.desc_mut(desc_id).snooping = victim.as_ref().unwrap().desc;
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_switch(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1788,6 +1808,7 @@ pub fn do_switch(
 
     one_argument(argument, &mut arg);
     let victim;
+    #[allow(clippy::blocks_in_conditions)]
     if game.desc(ch.desc.unwrap()).original.is_some() {
         send_to_char(&mut game.descriptors, ch, "You're already switched.\r\n");
     } else if arg.is_empty() {
@@ -1810,7 +1831,7 @@ pub fn do_switch(
     } else if ch.get_level() < LVL_GRGOD as u8
         && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::HOUSE)
         && !house_can_enter(
-            &db,
+            db,
             ch,
             db.get_room_vnum(victim.as_ref().unwrap().in_room()),
         )
@@ -1825,7 +1846,7 @@ pub fn do_switch(
         let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).original = Some(chid);
         let ch = chars.get(chid);
-        let val = ch.desc.clone();
+        let val = ch.desc;
         let victim_id = victim.as_ref().unwrap().id();
         let victim =chars.get_mut(victim_id);
         victim.desc = val;
@@ -1834,6 +1855,7 @@ pub fn do_switch(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_return(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut  Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1871,7 +1893,7 @@ pub fn do_return(
         /* Now our descriptor points to our original body. */
         let ch = chars.get(chid);
         let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).character = game.desc(desc_id).original.clone();
+        game.desc_mut(desc_id).character = game.desc(desc_id).original;
         let ch = chars.get(chid);
         let desc_id = ch.desc.unwrap();
         game.desc_mut(desc_id).original = None;
@@ -1880,12 +1902,13 @@ pub fn do_return(
         let ch = chars.get(chid);
 
         chars.get_mut(game.desc(ch.desc.unwrap()).character.unwrap())
-            .desc = ch.desc.clone();
+            .desc = ch.desc;
         let ch = chars.get_mut(chid);
         ch.desc = None;
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_load(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -1900,7 +1923,7 @@ pub fn do_load(
 
     two_arguments(argument, &mut buf, &mut buf2);
 
-    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
+    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_ascii_digit() {
         send_to_char(&mut game.descriptors, ch, "Usage: load { obj | mob } <number>\r\n");
         return;
     }
@@ -1912,10 +1935,11 @@ pub fn do_load(
     if is_abbrev(&buf, "mob") {
         let r_num;
 
-        if {
+        let res = {
             r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "There is no monster with that number.\r\n");
             return;
         }
@@ -1954,10 +1978,11 @@ pub fn do_load(
     } else if is_abbrev(&buf, "obj") {
         let r_num;
 
-        if {
+        let res = {
             r_num = db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "There is no object with that number.\r\n");
             return;
         }
@@ -2003,6 +2028,7 @@ pub fn do_load(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_vstat(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -2017,7 +2043,7 @@ pub fn do_vstat(
 
     two_arguments(argument, &mut buf, &mut buf2);
 
-    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_digit(10) {
+    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_ascii_digit() {
         send_to_char(&mut game.descriptors, ch, "Usage: vstat { obj | mob } <number>\r\n");
         return;
     }
@@ -2029,10 +2055,11 @@ pub fn do_vstat(
     if is_abbrev(&buf, "mob") {
         let r_num;
 
-        if {
+        let res = {
             r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
             r_num == NOBODY
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "There is no monster with that number.\r\n");
             return;
         }
@@ -2045,10 +2072,11 @@ pub fn do_vstat(
     } else if is_abbrev(&buf, "obj") {
         let r_num;
 
-        if {
+        let res = {
             r_num = db.real_object(buf2.parse::<i16>().unwrap());
             r_num == NOTHING
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "There is no object with that number.\r\n");
             return;
         }
@@ -2062,6 +2090,7 @@ pub fn do_vstat(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_purge(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -2079,10 +2108,12 @@ pub fn do_purge(
     let obj;
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
-        if {
+        let res = {
             vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
             vict.is_some()
-        } {
+        }; 
+        #[allow(clippy::blocks_in_conditions)]
+        if res {
             if !vict.unwrap().is_npc()
                 && ch.get_level() <= vict.unwrap().get_level()
             {
@@ -2122,7 +2153,7 @@ pub fn do_purge(
             obj = get_obj_in_list_vis2(&game.descriptors, chars,
                 db,objs,
                 ch,
-                &mut buf,
+                &buf,
                 None,
                 &db.world[ch.in_room() as usize].contents,
             );
@@ -2170,7 +2201,7 @@ pub fn do_purge(
             /* Dump inventory. */
             while {
                 let vict = chars.get(vict_id);
-                vict.carrying.len() > 0
+                !vict.carrying.is_empty()
             } {
                 let vict = chars.get(vict_id);
                 let oid = vict.carrying[0];
@@ -2194,7 +2225,7 @@ pub fn do_purge(
         let ch = chars.get(chid);
         let ch_in_room = ch.in_room();
         loop {
-            if db.world[ch_in_room as usize].contents.len() <= 0 {
+            if db.world[ch_in_room as usize].contents.is_empty() {
                 break;
             }
             let oid = db.world[ch_in_room as usize].contents[0];
@@ -2205,6 +2236,7 @@ pub fn do_purge(
 
 const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_syslog(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2231,10 +2263,11 @@ pub fn do_syslog(
         return;
     }
     let tp;
-    if {
+    let res = {
         tp = search_block(&arg, &LOGTYPES, false);
         tp.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "Usage: syslog { Off | Brief | Normal | Complete }\r\n");
         return;
     }
@@ -2254,6 +2287,7 @@ pub fn do_syslog(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_advance(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -2269,11 +2303,12 @@ pub fn do_advance(
     let victim;
     two_arguments(argument, &mut name, &mut level);
 
-    if name.len() != 0 {
-        if {
+    if !name.is_empty() {
+        let res = {
             victim = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
             victim.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "That player is not here.\r\n");
             return;
         }
@@ -2392,6 +2427,7 @@ You feel slightly different.",
     save_char(&mut game.descriptors, db,chars, texts,objs,victim_id);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_restore(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -2406,6 +2442,7 @@ pub fn do_restore(
 
     one_argument(argument, &mut buf);
     let vict;
+    #[allow(clippy::blocks_in_conditions)]
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to restore?\r\n");
     } else if {
@@ -2521,6 +2558,7 @@ fn perform_immort_invis(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &m
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_invis(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -2547,7 +2585,7 @@ pub fn do_invis(
         }
     } else {
         let level = arg.parse::<i32>();
-        let level = if level.is_err() { 0 } else { level.unwrap() };
+        let level = level.unwrap_or_default();
         if level > ch.get_level() as i32 {
             send_to_char(&mut game.descriptors, ch, "You can't go invisible above your own level.\r\n");
         } else if level < 1 {
@@ -2558,6 +2596,7 @@ pub fn do_invis(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_gecho(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2593,6 +2632,7 @@ pub fn do_gecho(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_poofset(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2603,20 +2643,20 @@ pub fn do_poofset(
 ) {
     let ch = chars.get_mut(chid);
     {
-        let msg;
 
         let cps = &mut ch.player_specials;
+        let msg=
         match subcmd {
             SCMD_POOFIN => {
-                msg = &mut cps.poofin;
+                &mut cps.poofin
             }
             SCMD_POOFOUT => {
-                msg = &mut cps.poofout;
+                &mut cps.poofout
             }
             _ => {
                 return;
             }
-        }
+        };
 
         let argument = argument.trim_start();
 
@@ -2625,6 +2665,7 @@ pub fn do_poofset(
     send_to_char(&mut game.descriptors, ch, OK);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_dc(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2706,6 +2747,7 @@ pub fn do_dc(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wizlock(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2722,7 +2764,7 @@ pub fn do_wizlock(
     let when;
     if !arg.is_empty() {
         value = arg.parse::<i32>();
-        let value = if value.is_err() { -1 } else { value.unwrap() };
+        let value = value.unwrap_or(-1);
         if value < 0 || value > ch.get_level() as i32 {
             send_to_char(&mut game.descriptors, ch, "Invalid wizlock value.\r\n");
             return;
@@ -2759,6 +2801,7 @@ pub fn do_wizlock(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_date(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2768,12 +2811,12 @@ pub fn do_date(
     subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    let mytime;
+    let mytime=
     if subcmd == SCMD_DATE {
-        mytime = time_now();
+        time_now()
     } else {
-        mytime = db.boot_time as u64;
-    }
+        db.boot_time
+    };
 
     let date_time = Utc.timestamp_millis_opt(mytime as i64 * 1000).unwrap();
     let tmstr = date_time.to_rfc2822();
@@ -2781,7 +2824,7 @@ pub fn do_date(
     if subcmd == SCMD_DATE {
         send_to_char(&mut game.descriptors, ch, format!("Current machine time: {}\r\n", tmstr).as_str());
     } else {
-        let mytime = time_now() - db.boot_time as u64;
+        let mytime = time_now() - db.boot_time;
         let d = mytime / 86400;
         let h = (mytime / 3600) % 24;
         let m = (mytime / 60) % 60;
@@ -2801,6 +2844,7 @@ pub fn do_date(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_last(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -2844,6 +2888,7 @@ pub fn do_last(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_force(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -2865,10 +2910,11 @@ pub fn do_force(
     if arg.is_empty() || to_force.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to force do what?\r\n");
     } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
-        if {
+        let res = {
             vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
             vict.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
         } else if !vict.unwrap().is_npc()
             && ch.get_level() <= vict.unwrap().get_level()
@@ -2973,6 +3019,7 @@ pub fn do_force(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wiznet(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -3100,7 +3147,7 @@ pub fn do_wiznet(
         );
     }
     for d_id in game.descriptor_list.clone() {
-        if {
+        let res = {
             let ch = chars.get(chid);
             let d = game.desc(d_id);
             d.state() == ConPlaying
@@ -3112,7 +3159,8 @@ pub fn do_wiznet(
                 && d_id == ch.desc.unwrap()
                 || !chars.get(d.character.unwrap())
                     .prf_flagged(PrefFlags::NOREPEAT)
-        } {
+        }; 
+        if res {
             let d = game.desc(d_id);
             let chid = d.character.unwrap();
             let dc_id = d.character.unwrap();
@@ -3120,7 +3168,7 @@ pub fn do_wiznet(
             send_to_char(&mut game.descriptors, ch, msg );
             let dc = chars.get(dc_id);
             let ch = chars.get(chid);
-            if can_see(&mut game.descriptors, chars, db, dc, ch) {
+            if can_see(&game.descriptors, chars, db, dc, ch) {
                 send_to_char(&mut game.descriptors, dc, &buf1);
             } else {
                 send_to_char(&mut game.descriptors, dc, &buf2);
@@ -3134,6 +3182,7 @@ pub fn do_wiznet(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_zreset(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -3182,7 +3231,7 @@ pub fn do_zreset(
         }
     }
     if i < db.zone_table.len() {
-        game.reset_zone(db,chars,objs, i as usize);
+        game.reset_zone(db,chars,objs, i);
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, 
             ch,
@@ -3212,6 +3261,7 @@ pub fn do_zreset(
 /*
  *  General fn for wizcommands of the sort: cmd <player>
  */
+#[allow(clippy::too_many_arguments)]
 pub fn do_wizutil(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -3225,6 +3275,7 @@ pub fn do_wizutil(
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     let vict;
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Yes, but for whom?!?\r\n");
     } else if {
@@ -3423,9 +3474,9 @@ pub fn do_wizutil(
             }
             SCMD_UNAFFECT => {
                 let vict = chars.get_mut(vict_id);
-                if vict.affected.len() != 0 {
+                if !vict.affected.is_empty() {
                     while {
-                        vict.affected.len() != 0
+                        !vict.affected.is_empty()
                     } {
                         let af = vict.affected[0];
                         affect_remove( objs,vict, af);
@@ -3465,6 +3516,7 @@ fn print_zone_to_buf(db: &DB,buf: &mut String, zone: ZoneRnum) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_show(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -3538,14 +3590,15 @@ pub fn do_show(
     if argument.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Show options:\r\n");
         let mut j = 0;
-        for i in 1..FIELDS.len() - 1 {
+        for field in FIELDS.iter() {
             let ch = chars.get(chid);
-            if FIELDS[i].level <= ch.get_level() as i16 {
+            if field.level <= ch.get_level() as i16 {
+                #[allow(clippy::blocks_in_conditions)]
                 send_to_char(&mut game.descriptors, 
                     ch,
                     format!(
                         "{:15}{}",
-                        FIELDS[i].cmd,
+                        field.cmd,
                         if {
                             j += 1;
                             j % 5 == 0
@@ -3568,7 +3621,7 @@ pub fn do_show(
     two_arguments(argument, &mut field, &mut value);
 
     let l = FIELDS.iter().position(|f| f.cmd == field);
-    let l = if l.is_some() { l.unwrap() } else { 0 };
+    let l = l.unwrap_or_default();
 
     if ch.get_level() < FIELDS[l].level as u8 {
         send_to_char(&mut game.descriptors, ch, "You are not godly enough for that!\r\n");
@@ -3584,19 +3637,19 @@ pub fn do_show(
         1 => {
             /* tightened up by JE 4/6/93 */
             if self_ {
-                print_zone_to_buf(&db, &mut buf, db.world[ch.in_room() as usize].zone);
+                print_zone_to_buf(db, &mut buf, db.world[ch.in_room() as usize].zone);
             } else if !value.is_empty() && is_number(&value) {
                 let value = value.parse::<i32>().unwrap();
                 let zrn = db.zone_table.iter().position(|z| z.number == value as i16);
-                if zrn.is_some() {
-                    print_zone_to_buf(&db, &mut buf, zrn.unwrap() as ZoneRnum);
+                if let Some(zrn) = zrn  {
+                    print_zone_to_buf(db, &mut buf, zrn as ZoneRnum);
                 } else {
                     send_to_char(&mut game.descriptors, ch, "That is not a valid zone.\r\n");
                     return;
                 }
             } else {
                 for i in 0..db.zone_table.len() {
-                    print_zone_to_buf(&db, &mut buf, i as ZoneRnum);
+                    print_zone_to_buf(db, &mut buf, i as ZoneRnum);
                 }
             }
             let desc_id = ch.desc.unwrap();
@@ -3674,7 +3727,7 @@ pub fn do_show(
                 let vict = chars.get(vict_id);
                 if vict.is_npc() {
                     j += 1;
-                } else if can_see(&mut game.descriptors, chars, db, ch, vict) {
+                } else if can_see(&game.descriptors, chars, db, ch, vict) {
                     i += 1;
                     if vict.desc.is_some() {
                         con += 1;
@@ -4177,6 +4230,7 @@ const SET_FIELDS: [SetStruct; 52] = [
     },
 ];
 
+#[allow(clippy::too_many_arguments)]
 fn perform_set(
     descs: &mut Depot<DescriptorData>,
     db: &mut DB,chars: &mut Depot<CharData>,objs: &mut Depot<ObjData>, 
@@ -4194,12 +4248,11 @@ fn perform_set(
     let mode = mode as usize;
 
     /* Check to make sure all the levels are correct */
-    if ch.get_level() != LVL_IMPL as u8 {
-        if !vict.is_npc() && ch.get_level() <= vict.get_level() && vict_id != chid {
+    if ch.get_level() != LVL_IMPL as u8
+        && !vict.is_npc() && ch.get_level() <= vict.get_level() && vict_id != chid {
             send_to_char(descs, ch, "Maybe that's not such a great idea...\r\n");
             return false;
         }
-    }
     if ch.get_level() < SET_FIELDS[mode].level as u8 {
         send_to_char(descs, ch, "You are not godly enough for that!\r\n");
         return false;
@@ -4237,7 +4290,7 @@ fn perform_set(
         );
     } else if SET_FIELDS[mode].type_ == NUMBER {
         let r = val_arg.parse::<i32>();
-        value = if r.is_ok() { r.unwrap() } else { 0 };
+        value = r.unwrap_or_default();
         send_to_char(descs, 
             ch,
             format!(
@@ -4436,7 +4489,7 @@ fn perform_set(
         27 | 28 => {
             vict.set_practices(range!(value, 0, 100));
         }
-        29 | 30 | 31 => {
+        29..=31 => {
             if val_arg == "off" {
                 vict.set_cond(mode - 29, -1); /* warning: magic number here */
                 let vict = chars.get(vict_id);
@@ -4496,10 +4549,11 @@ fn perform_set(
             chars.get_mut(vict_id).player.level = value as u8;
         }
         35 => {
-            if {
+            let res = {
                 rnum = db.real_room(value as RoomRnum);
                 rnum == NOWHERE
-            } {
+            }; 
+            if res {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "No room exists with that number.\r\n");
                 return false;
@@ -4515,7 +4569,7 @@ fn perform_set(
             if on {
                 vict.set_prf_flags_bits(PrefFlags::ROOMFLAGS)
             } else {
-                vict.set_prf_flags_bits(PrefFlags::ROOMFLAGS)
+                vict.remove_prf_flags_bits(PrefFlags::ROOMFLAGS)
             }
         }
         37 => {
@@ -4534,10 +4588,11 @@ fn perform_set(
         }
         39 => {
             let i;
-            if {
+            let res = {
                 i = parse_class(val_arg.chars().next().unwrap());
                 i == Class::Undefined
-            } {
+            }; 
+            if res {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "That is not a class.\r\n");
                 return false;
@@ -4616,7 +4671,7 @@ fn perform_set(
                 send_to_char(descs, ch, "You cannot change that.\r\n");
                 return false;
             }
-            let mut passwd2 = [0 as u8; 16];
+            let mut passwd2 = [0_u8; 16];
             let salt = vict.get_name();
             pbkdf2::pbkdf2::<Hmac<Sha256>>(val_arg.as_bytes(), salt.as_bytes(), 4, &mut passwd2)
                 .expect("Error while encrypting password");
@@ -4637,10 +4692,10 @@ fn perform_set(
         }
         47 => {
             let i;
-            if {
+            let res = {
                 i = search_block(val_arg, &GENDERS, false);
                 i.is_none()
-            } {
+            }; if res {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "Must be 'male', 'female', or 'neutral'.\r\n");
                 return false;
@@ -4649,7 +4704,7 @@ fn perform_set(
         }
         48 => {
             /* set age */
-            if value < 2 || value > 200 {
+            if !(2..=200).contains(&value) {
                 /* Arbitrary limits. */
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "Ages 2 to 200 accepted.\r\n");
@@ -4685,6 +4740,7 @@ fn perform_set(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_set(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -4732,19 +4788,21 @@ pub fn do_set(
     /* find the target */
     if !is_file {
         if is_player {
-            if {
+            let res = {
                 vict = get_player_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
                 vict.is_none()
-            } {
+            }; 
+            if res {
                 send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
                 return;
             }
         } else {
             /* is_mob */
-            if {
+            let res = {
                 vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
                 vict.is_none()
-            } {
+            }; 
+            if res {
                 send_to_char(&mut game.descriptors, ch, "There is no such creature.\r\n");
                 return;
             }
@@ -4753,10 +4811,11 @@ pub fn do_set(
         /* try to load the player off disk */
         let mut cbuf = CharData::default();
         clear_char(&mut cbuf);
-        if {
+        let res = {
             player_i = db.load_char(&name, &mut tmp_store);
             player_i.is_some()
-        } {
+        }; 
+        if res {
             store_to_char(texts,  &tmp_store, &mut cbuf);
             let ch = chars.get(chid);
             if cbuf.get_level() >= ch.get_level() {
@@ -4774,11 +4833,7 @@ pub fn do_set(
 
     /* find the command in the list */
     let mode = SET_FIELDS.iter().position(|e| e.cmd.starts_with(&field));
-    let mode = if mode.is_some() {
-        mode.unwrap()
-    } else {
-        SET_FIELDS.len() - 1
-    };
+    let mode = mode.unwrap_or(SET_FIELDS.len() - 1);
 
     /* perform the set */
     let vict_id = vict.unwrap().id();

@@ -70,7 +70,7 @@ fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
         return NOBODY;
     }
 
-    return db.zone_table[zon.unwrap()].bot + offset;
+    db.zone_table[zon.unwrap()].bot + offset
 }
 
 fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
@@ -80,7 +80,7 @@ fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
         return NOWHERE;
     }
 
-    return db.real_room(db.zone_table[zon.unwrap()].bot + roomoffset);
+    db.real_room(db.zone_table[zon.unwrap()].bot + roomoffset)
 }
 
 /*
@@ -146,7 +146,7 @@ fn member_of_staff(db: &DB, ch: &CharData) -> bool {
         return true;
     }
 
-    return false;
+    false
 }
 
 /*
@@ -174,7 +174,7 @@ fn member_of_royal_guard(db: &DB, ch: &CharData) -> bool {
         return true;
     }
 
-    return false;
+    false
 }
 
 /*
@@ -187,8 +187,7 @@ fn find_npc_by_name(chars: &Depot<CharData>, db: &DB, ch_at: &CharData, name: &s
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
-        .find(|e| chars.get(**e).is_npc() && chars.get(**e).player.short_descr.starts_with(name))
-        .map(|e| *e)
+        .find(|e| chars.get(**e).is_npc() && chars.get(**e).player.short_descr.starts_with(name)).copied()
 }
 
 /*
@@ -201,8 +200,7 @@ fn find_guard(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
-        .find(|e| chars.get(**e).fighting_id().is_none() && member_of_royal_guard(db, chars.get(**e)))
-        .map(|e| *e)
+        .find(|e| chars.get(**e).fighting_id().is_none() && member_of_royal_guard(db, chars.get(**e))).copied()
 }
 
 /*
@@ -277,7 +275,7 @@ fn banzaii(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mu
         TO_ROOM,
     );
     game.hit(chars, db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
-    return true;
+    true
 }
 
 /*
@@ -295,11 +293,7 @@ fn do_npc_rescue(
     let chid_bad_guy = db.world[chars.get(chid_hero_id).in_room() as usize]
         .peoples
         .iter()
-        .find(|id| match chars.get(**id).fighting_id() {
-            Some(fighting_id) if fighting_id != ch_victim_id => true,
-            _ => false,
-        })
-        .map(|e| *e);
+        .find(|id| matches!(chars.get(**id).fighting_id(), Some(fighting_id) if fighting_id != ch_victim_id)).copied();
 
     /* NO WAY I'll rescue the one I'm fighting! */
     if chid_bad_guy.is_none() || chid_bad_guy.unwrap() == chid_hero_id {
@@ -343,13 +337,14 @@ fn do_npc_rescue(
 
     game.set_fighting(chars, db, objs,chid_hero_id, chid_bad_guy.unwrap());
     game.set_fighting(chars, db, objs,chid_bad_guy.unwrap(), chid_hero_id);
-    return true;
+    true
 }
 
 /*
  * Procedure to block a person trying to enter a room.
  * Used by Tim/Tom at Kings bedroom and Dick/David at treasury.
  */
+#[allow(clippy::too_many_arguments)]
 fn block_way(
     descs: &mut Depot<DescriptorData>,
     chars: &Depot<CharData>, db: &DB,
@@ -373,7 +368,7 @@ fn block_way(
         return false;
     }
 
-    if !member_of_staff(&db, ch) {
+    if !member_of_staff(db, ch) {
         act(descs, chars, 
             db,
             "The guard roars at $n and pushes $m back.",
@@ -389,7 +384,7 @@ fn block_way(
         ch,
         "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
     );
-    return true;
+    true
 }
 
 /*
@@ -428,7 +423,7 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
     let tch = chars.get(tchid);
 
     match rand_number(0, 8) {
-        1 | 2 | 3 => {
+        1..=3 => {
             send_to_char(&mut game.descriptors, ch, "You raise your hand in a dramatical gesture.\r\n");
             act(&mut game.descriptors, chars, 
                 db,
@@ -492,8 +487,6 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
     }
 
     chars.get_mut(chid).points.mana -= 10;
-
-    return;
 }
 
 pub struct KingWelmar {
@@ -529,6 +522,7 @@ const MONOLOG: [&str; 4] = [
  * Control the actions and movements of the King.
  * Used by King Welmar.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn king_welmar(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -539,15 +533,15 @@ pub fn king_welmar(
 ) -> bool {
     let ch = chars.get(chid);
     if !db.king_welmar.move_ {
-        if db.time_info.hours == 8 && ch.in_room() == castle_real_room(&db, 51) {
+        if db.time_info.hours == 8 && ch.in_room() == castle_real_room(db, 51) {
             db.king_welmar.move_ = true;
             db.king_welmar.path = THRONE_PATH;
             db.king_welmar.path_index = 0;
-        } else if db.time_info.hours == 21 && ch.in_room() == castle_real_room(&db, 17) {
+        } else if db.time_info.hours == 21 && ch.in_room() == castle_real_room(db, 17) {
             db.king_welmar.move_ = true;
             db.king_welmar.path = BEDROOM_PATH;
             db.king_welmar.path_index = 0;
-        } else if db.time_info.hours == 12 && ch.in_room() == castle_real_room(&db, 17) {
+        } else if db.time_info.hours == 12 && ch.in_room() == castle_real_room(db, 17) {
             db.king_welmar.move_ = true;
             db.king_welmar.path = MONOLOG_PATH;
             db.king_welmar.path_index = 0;
@@ -700,6 +694,7 @@ pub fn king_welmar(
  * Also allowes warrior-class to practice.
  * Used by the Training Master.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn training_master(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -737,9 +732,7 @@ pub fn training_master(
         return false;
     }
     if rand_number(0, 1) != 0 {
-        let tch = pupil1_id;
-        pupil1_id = pupil2_id;
-        pupil2_id = tch;
+        std::mem::swap(&mut pupil1_id, &mut pupil2_id);
     }
 
     let pupil1 = chars.get(pupil1_id);
@@ -1005,6 +998,7 @@ pub fn training_master(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tom(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1013,9 +1007,10 @@ pub fn tom(
     cmd: i32,
     argument: &str,
 ) -> bool {
-    return castle_twin_proc(game, chars, db, texts, objs,chid, cmd, argument, 48, "Tim");
+    castle_twin_proc(game, chars, db, texts, objs,chid, cmd, argument, 48, "Tim")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tim(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1024,12 +1019,13 @@ pub fn tim(
     cmd: i32,
     argument: &str,
 ) -> bool {
-    return castle_twin_proc(game, chars, db, texts, objs, chid, cmd, argument, 49, "Tom");
+    castle_twin_proc(game, chars, db, texts, objs, chid, cmd, argument, 49, "Tom")
 }
 
 /*
  * Common routine for the Castle Twins.
  */
+#[allow(clippy::too_many_arguments)]
 fn castle_twin_proc(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1045,13 +1041,12 @@ fn castle_twin_proc(
     }
 
     if cmd != 0 {
-        return block_way(&mut game.descriptors, chars, db, chid, cmd, arg, castle_virtual(&db, ctlnum), 1);
+        return block_way(&mut game.descriptors, chars, db, chid, cmd, arg, castle_virtual(db, ctlnum), 1);
     }
 
-    let king_id = find_npc_by_name(chars, &db, ch, "King Welmar");
+    let king_id = find_npc_by_name(chars, db, ch, "King Welmar");
 
-    if king_id.is_some() {
-        let king_id = king_id.unwrap();
+    if let Some(king_id) = king_id {
         if ch.master.is_none() {
             do_follow(game, db, chars, texts,objs,chid, "King Welmar", 0, 0); /* strcpy: OK */
             if chars.get(king_id).fighting_id().is_some() {
@@ -1060,9 +1055,8 @@ fn castle_twin_proc(
         }
     }
     let ch = chars.get(chid);
-    let twin_id = find_npc_by_name(chars, &db, ch, twinname);
-    if twin_id.is_some() {
-        let twin_id = twin_id.unwrap();
+    let twin_id = find_npc_by_name(chars, db, ch, twinname);
+    if let Some(twin_id) = twin_id {
         let twin = chars.get(twin_id);
         if twin.fighting_id().is_some() && 2 & twin.get_hit() < ch.get_hit() {
             do_npc_rescue(game, chars,db, objs,chid, twin_id);
@@ -1082,6 +1076,7 @@ fn castle_twin_proc(
  *
  * This doesn't make sure he _can_ carry it...
  */
+#[allow(clippy::too_many_arguments)]
 fn james(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1090,7 +1085,7 @@ fn james(
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    return castle_cleaner(game, chars, db, objs,chid, cmd, true);
+    castle_cleaner(game, chars, db, objs,chid, cmd, true)
 }
 
 /*
@@ -1142,6 +1137,7 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
  * Routine for the Cleaning Woman.
  * Picks up any trash she finds...
  */
+#[allow(clippy::too_many_arguments)]
 fn cleaning(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1150,7 +1146,7 @@ fn cleaning(
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    return castle_cleaner(game, chars,db, objs,chid, cmd, false);
+    castle_cleaner(game, chars,db, objs,chid, cmd, false)
 }
 
 /*
@@ -1158,6 +1154,7 @@ fn cleaning(
  *
  * Standard routine for ordinary castle guards.
  */
+#[allow(clippy::too_many_arguments)]
 fn castle_guard(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1180,6 +1177,7 @@ fn castle_guard(
  *
  * Routine for the guards Dick and David.
  */
+#[allow(clippy::too_many_arguments)]
 fn dick_n_david(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1198,13 +1196,14 @@ fn dick_n_david(
         banzaii(game, chars, db, texts, objs,chid);
     }
 
-    block_way(&mut game.descriptors, chars, db, chid, cmd, argument, castle_virtual(&db, 36), 1)
+    block_way(&mut game.descriptors, chars, db, chid, cmd, argument, castle_virtual(db, 36), 1)
 }
 
 /*
  * Routine: peter
  * Routine for Captain of the Guards.
  */
+#[allow(clippy::too_many_arguments)]
 fn peter(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
@@ -1225,6 +1224,7 @@ fn peter(
     let db = &db;
     let ch = chars.get(chid);
     let ch_guard = find_guard(chars, db, ch);
+    #[allow(clippy::unnecessary_unwrap)]
     if rand_number(0, 3) == 0 && ch_guard.is_some() {
         let chid_guard = ch_guard.unwrap();
         let ch_guard = chars.get(chid_guard);
@@ -1440,6 +1440,7 @@ fn peter(
  * Procedure for Jerry and Michael in x08 of King's Castle.
  * Code by Sapowox modified by Pjotr.(Original code from Master)
  */
+#[allow(clippy::too_many_arguments)]
 fn jerry(
     game: &mut Game,
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 

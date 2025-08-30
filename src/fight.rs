@@ -108,7 +108,7 @@ pub const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
 
 macro_rules! is_weapon {
     ($type:expr) => {
-        (($type) >= TYPE_HIT && ($type) < TYPE_SUFFERING)
+        (TYPE_HIT..TYPE_SUFFERING).contains(($type))
     };
 }
 
@@ -151,7 +151,7 @@ pub fn compute_armor_class(ch: &CharData) -> i16 {
         armorclass += DEX_APP[ch.get_dex() as usize].defensive * 10;
     }
 
-    return max(-100, armorclass); /* -100 is lowest */
+    max(-100, armorclass)/* -100 is lowest */
 }
 
 pub fn free_messages(db: &mut DB) {
@@ -163,46 +163,40 @@ impl DB {
         let fl = OpenOptions::new()
             .read(true)
             .open(MESS_FILE)
-            .expect(format!("SYSERR: Error #1 reading combat message file{}", MESS_FILE).as_str());
+            .unwrap_or_else(|_| panic!("SYSERR: Error #1 reading combat message file{}", MESS_FILE));
         let mut reader = BufReader::new(fl);
         let mut buf = String::new();
         let mut r = reader
             .read_line(&mut buf)
-            .expect(format!("SYSERR: Error #2 reading combat message file{}", MESS_FILE).as_str());
+            .unwrap_or_else(|_| panic!("SYSERR: Error #2 reading combat message file{}", MESS_FILE));
 
         while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
-            r = reader.read_line(&mut buf).expect(
-                format!("SYSERR: Error #3 reading combat message file{}", MESS_FILE).as_str(),
-            );
+            r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #3 reading combat message file{}", MESS_FILE));
         }
 
         let mut a_type;
         while buf.starts_with('M') {
             buf.clear();
-            reader.read_line(&mut buf).expect(
-                format!("SYSERR: Error #4 reading combat message file{}", MESS_FILE).as_str(),
-            );
-            a_type = buf.trim().parse::<i32>().expect(
-                format!("SYSERR: Error #5 reading combat message file{}", MESS_FILE).as_str(),
-            );
+            reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #4 reading combat message file{}", MESS_FILE));
+            a_type = buf.trim().parse::<i32>().unwrap_or_else(|_| panic!("SYSERR: Error #5 reading combat message file{}", MESS_FILE));
 
             let fml = self
                 .fight_messages
                 .iter()
                 .position(|fm| fm.a_type == a_type);
-            let ml;
+            
             let i;
-            if fml.is_none() {
+            if let Some(fml) = fml {
+                i = fml;
+            } else {
                 let nml = MessageList {
                     a_type,
                     messages: vec![],
                 };
                 i = self.fight_messages.len();
                 self.fight_messages.push(nml);
-            } else {
-                i = fml.unwrap();
             }
-            ml = &mut self.fight_messages[i];
+            let ml = &mut self.fight_messages[i];
             let i = i as i32;
             let msg = MessageType {
                 die_msg: MsgType {
@@ -228,14 +222,10 @@ impl DB {
             };
             ml.messages.push(msg);
 
-            let mut r = reader.read_line(&mut buf).expect(
-                format!("SYSERR: Error #6 reading combat message file{}", MESS_FILE).as_str(),
-            );
+            let mut r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #6 reading combat message file{}", MESS_FILE));
 
             while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
-                r = reader.read_line(&mut buf).expect(
-                    format!("SYSERR: Error #7 reading combat message file{}", MESS_FILE).as_str(),
-                );
+                r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #7 reading combat message file{}", MESS_FILE));
             }
         }
     }
@@ -243,7 +233,6 @@ impl DB {
 
 pub fn update_pos(victim: &mut CharData) {
     if victim.get_hit() > 0 && victim.get_pos() > Position::Stunned {
-        return;
     } else if victim.get_hit() > 0 {
         victim.set_pos(Position::Standing);
     } else if victim.get_hit() <= -11 {
@@ -327,9 +316,7 @@ impl DB {
 }
     pub fn make_corpse( chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
         let ch = chars.get(chid);
-        let mut corpse = ObjData::default();
-
-        corpse.item_number = NOTHING;
+        let mut corpse = ObjData { item_number: NOTHING, ..Default::default() };
         corpse.set_in_room(NOWHERE);
         corpse.name = Rc::from("corpse");
 
@@ -363,7 +350,7 @@ impl DB {
         }
         for oid in objs.get(corpse_id).contains.clone() {
             objs.get_mut(oid).in_obj = Some(corpse_id);
-            object_list_new_owner(chars, objs,oid, None);
+            object_list_new_owner(objs,oid, None);
         }
         /* transfer character's equipment to the corpse */
         for i in 0..NUM_WEARS {
@@ -467,6 +454,7 @@ pub fn die(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut
     raw_kill(&mut game.descriptors, chars,db, objs,chid);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn perform_group_gain(
     chid: DepotId,
     base: i32,
@@ -475,7 +463,7 @@ pub fn perform_group_gain(
     chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
 ) {
     let ch = chars.get(chid);
-    let share = min(MAX_EXP_GAIN, max(1, base));
+    let share = base.clamp(1, MAX_EXP_GAIN);
 
     if share > 1 {
         send_to_char(&mut game.descriptors, 
@@ -499,12 +487,12 @@ pub fn perform_group_gain(
 pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
-    let k_id;
+    let k_id =
     if ch.master.is_none() {
-        k_id = chid;
+        chid
     } else {
-        k_id = ch.master.unwrap();
-    }
+        ch.master.unwrap()
+    };
     let k = chars.get(k_id);
     let mut tot_members;
     if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
@@ -528,12 +516,12 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mu
         tot_gain = min(MAX_EXP_LOSS * 2 / 3, tot_gain);
     }
 
-    let base;
+    let base=
     if tot_members >= 1 {
-        base = max(1, tot_gain / tot_members);
+        max(1, tot_gain / tot_members)
     } else {
-        base = 0;
-    }
+        0
+    };
 
     if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
         perform_group_gain(k_id, base, victim_id, game, chars, db, texts,objs);
@@ -752,6 +740,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
      *  message for doing damage with a spell or skill
      *  C3.0: Also used for weapon damage on miss and death blows
      */
+    #[allow(clippy::too_many_arguments)]
     pub fn skill_message(
         descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
         db: &DB,objs: & Depot<ObjData>, 
@@ -940,7 +929,7 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
                 return 1;
             }
         }
-        return 0;
+         0
     }
 impl Game {
     /*
@@ -949,6 +938,7 @@ impl Game {
      *	= 0	No damage.
      *	> 0	How much damage done.
      */
+    #[allow(clippy::too_many_arguments)]
     pub fn damage(
         &mut self,
         chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -1044,7 +1034,7 @@ impl Game {
         }
 
         /* Set the maximum damage per round and subtract the hit points */
-        dam = max(min(dam, 100), 0);
+        dam = dam.clamp(0, 100);
         let victim = chars.get_mut(victim_id);
         victim.decr_hit(dam as i16);
 
@@ -1068,16 +1058,14 @@ impl Game {
          */
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
-        if !is_weapon!(attacktype) {
+        if !is_weapon!(&attacktype) {
             skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype);
-        } else {
-            if victim.get_pos() == Position::Dead || dam == 0 {
-                if skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype) == 0 {
-                    dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
-                }
-            } else {
+        } else if victim.get_pos() == Position::Dead || dam == 0 {
+            if skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype) == 0 {
                 dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
             }
+        } else {
+            dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
         }
 
         /* Use game.send_to_char -- act() doesn't send message if you are DEAD. */
@@ -1206,8 +1194,8 @@ impl Game {
 
         /* Uh oh.  Victim died. */
         let victim = chars.get(victim_id);
-        if victim.get_pos() == Position::Dead {
-            if chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
+        if victim.get_pos() == Position::Dead
+            && chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
                 let ch = chars.get(chid);
                 if ch.aff_flagged(AffectFlags::GROUP) {
                     group_gain(chid, victim_id, self, chars, db, texts,objs);
@@ -1237,8 +1225,7 @@ impl Game {
                 die(victim_id, self,chars, db, texts,objs);
                 return -1;
             }
-        }
-        return dam;
+        dam
     }
 }
 /*
@@ -1262,33 +1249,32 @@ pub fn compute_thaco(ch: &CharData, _victim: &CharData) -> i32 {
     calc_thaco -= ((ch.get_int() as f32 - 13f32) / 1.5) as i32; /* Intelligence helps! */
     calc_thaco -= ((ch.get_wis() as f32 - 13f32) / 1.5) as i32; /* So does wisdom */
 
-    return calc_thaco;
+    calc_thaco
 }
 
 impl Game {
+    #[allow(clippy::too_many_arguments)]
     pub fn hit(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, victim_id: DepotId, _type: i32) {
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
         let wielded = ch.get_eq(WEAR_WIELD);
 
         /* Do some sanity checking, in case someone flees, etc. */
-        if ch.in_room() != victim.in_room() {
-            if ch.fighting_id().is_some() && ch.fighting_id().unwrap() == victim_id {
+        if ch.in_room() != victim.in_room()
+            && ch.fighting_id().is_some() && ch.fighting_id().unwrap() == victim_id {
                 db.stop_fighting(chars.get_mut(chid));
                 return;
             }
-        }
 
         let w_type;
         /* Find the weapon type (for display purposes only) */
+        #[allow(clippy::unnecessary_unwrap)]
         if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
             w_type = objs.get(wielded.unwrap()).get_obj_val(3) + TYPE_HIT;
+        } else if ch.is_npc() && ch.mob_specials.attack_type != 0 {
+            w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
         } else {
-            if ch.is_npc() && ch.mob_specials.attack_type != 0 {
-                w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
-            } else {
-                w_type = TYPE_HIT;
-            }
+            w_type = TYPE_HIT;
         }
 
         /* Calculate chance of hit. Lower THAC0 is better for attacker. */
@@ -1342,6 +1328,7 @@ impl Game {
             dam += ch.get_damroll() as i32;
 
             /* Maybe holding arrow? */
+            #[allow(clippy::unnecessary_unwrap)]
             if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
                 /* Add weapon-based damage if a weapon is being wielded */
                 dam += dice(

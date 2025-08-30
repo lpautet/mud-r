@@ -9,7 +9,7 @@
 *  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::rc::Rc;
 
 use crate::depot::{Depot, DepotId, HasId};
@@ -21,7 +21,9 @@ use crate::config::{DONATION_ROOM_1, NOPERSON, OK};
 use crate::constants::{DRINKNAMES, DRINKS, DRINK_AFF, STR_APP};
 use crate::db::DB;
 use crate::handler::{
-    affect_join, equip_char, find_all_dots, generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_pos_in_equip_vis, isname, money_desc, obj_from_char, obj_from_obj, obj_to_char, obj_to_obj, FIND_ALL, FIND_ALLDOT, FIND_INDIV, FindFlags
+    affect_join, equip_char, find_all_dots, generic_find, get_char_vis, get_obj_in_list_vis,
+    get_obj_in_list_vis2, get_obj_pos_in_equip_vis, isname, money_desc, obj_from_char,
+    obj_from_obj, obj_to_char, obj_to_obj, FindFlags, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
 };
 use crate::interpreter::{
     is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DRINK, SCMD_DROP,
@@ -29,7 +31,10 @@ use crate::interpreter::{
 };
 use crate::spells::SPELL_POISON;
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, RoomRnum, WearFlags, CONT_CLOSED, DRUNK, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT, WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS, WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, RoomRnum, WearFlags, CONT_CLOSED,
+    DRUNK, FULL, LVL_GOD, LVL_IMMORT, NOWHERE, NUM_WEARS, PULSE_VIOLENCE, THIRST, WEAR_ABOUT,
+    WEAR_ARMS, WEAR_BODY, WEAR_FEET, WEAR_FINGER_R, WEAR_HANDS, WEAR_HEAD, WEAR_HOLD, WEAR_LEGS,
+    WEAR_LIGHT, WEAR_NECK_1, WEAR_SHIELD, WEAR_WAIST, WEAR_WIELD, WEAR_WRIST_R,
 };
 use crate::util::{can_see_obj, rand_number};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -48,7 +53,8 @@ fn perform_put(
     let cobj = objs.get(cid);
 
     if cobj.get_obj_weight() + obj.get_obj_weight() > cobj.get_obj_val(0) {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p won't fit in $P.",
@@ -59,7 +65,8 @@ fn perform_put(
             TO_CHAR,
         );
     } else if obj.obj_flagged(ExtraFlags::NODROP) && cobj.in_room() != NOWHERE {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "You can't get $p out of your hand.",
@@ -76,7 +83,8 @@ fn perform_put(
         let ch = chars.get(chid);
         let obj = objs.get(oid);
         let cobj = objs.get(cid);
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$n puts $p in $P.",
@@ -93,7 +101,8 @@ fn perform_put(
             let ch = chars.get(chid);
             let obj = objs.get(oid);
             let cobj = objs.get(cid);
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "You get a strange feeling as you put $p in $P.",
@@ -104,7 +113,8 @@ fn perform_put(
                 TO_CHAR,
             );
         } else {
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "You put $p in $P.",
@@ -127,6 +137,7 @@ fn perform_put(
     <container> must be in inventory or on ground.
     all objects to be put into container must be in inventory.
 */
+#[allow(clippy::too_many_arguments)]
 pub fn do_put(
     game: &mut Game,
     db: &mut DB,
@@ -165,12 +176,14 @@ pub fn do_put(
     if theobj.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Put what in what?\r\n");
     } else if cont_dotmode != FIND_INDIV {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "You can only put things into one container at a time.\r\n",
         );
     } else if thecont.is_empty() {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "What do you want to put {} in?\r\n",
@@ -183,7 +196,8 @@ pub fn do_put(
             .as_str(),
         );
     } else {
-        generic_find(&game.descriptors, 
+        generic_find(
+            &game.descriptors,
             chars,
             db,
             objs,
@@ -193,13 +207,16 @@ pub fn do_put(
             &mut tmp_char,
             &mut c,
         );
+        #[allow(clippy::unnecessary_unwrap)]
         if c.is_none() {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("You don't see {} {} here.\r\n", an!(thecont), thecont).as_str(),
             );
         } else if c.unwrap().get_obj_type() != ItemType::Container {
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "$p is not a container.",
@@ -211,12 +228,45 @@ pub fn do_put(
             );
         } else if c.unwrap().objval_flagged(CONT_CLOSED) {
             send_to_char(&mut game.descriptors, ch, "You'd better open it first!\r\n");
-        } else {
-            if obj_dotmode == FIND_INDIV {
-                /* put <obj> <container> */
+        } else if obj_dotmode == FIND_INDIV {
+            /* put <obj> <container> */
 
-                if {
-                    obj = get_obj_in_list_vis(&game.descriptors, 
+            let res = {
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &theobj,
+                    None,
+                    ch.carrying.as_ref(),
+                );
+                obj.is_none()
+            };
+            if res {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("You aren't carrying {} {}.\r\n", an!(theobj), theobj).as_str(),
+                );
+            } else if obj.unwrap().id() == c.unwrap().id() && howmany == 1 {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You attempt to fold it into itself, but fail.\r\n",
+                );
+            } else {
+                let c_id = c.unwrap().id();
+                while obj.is_some() && howmany != 0 {
+                    let oid = obj.unwrap().id();
+                    if oid != c_id {
+                        howmany -= 1;
+                        perform_put(&mut game.descriptors, db, chars, objs, chid, oid, c_id);
+                    }
+                    let ch = chars.get(chid);
+                    obj = get_obj_in_list_vis(
+                        &game.descriptors,
                         chars,
                         db,
                         objs,
@@ -225,55 +275,32 @@ pub fn do_put(
                         None,
                         ch.carrying.as_ref(),
                     );
-                    obj.is_none()
-                } {
-                    send_to_char(&mut game.descriptors, 
+                }
+            }
+        } else {
+            let c_id = c.unwrap().id();
+            for oid in ch.carrying.clone() {
+                if oid != c_id
+                    && (obj_dotmode == FIND_ALL || isname(&theobj, objs.get(oid).name.as_ref()))
+                {
+                    found = true;
+                    perform_put(&mut game.descriptors, db, chars, objs, chid, oid, c_id);
+                }
+            }
+            let ch = chars.get(chid);
+            if !found {
+                if obj_dotmode == FIND_ALL {
+                    send_to_char(
+                        &mut game.descriptors,
                         ch,
-                        format!("You aren't carrying {} {}.\r\n", an!(theobj), theobj).as_str(),
+                        "You don't seem to have anything to put in it.\r\n",
                     );
-                } else if obj.unwrap().id() == c.unwrap().id() && howmany == 1 {
-                    send_to_char(&mut game.descriptors, ch, "You attempt to fold it into itself, but fail.\r\n");
                 } else {
-                    let c_id = c.unwrap().id();
-                    while obj.is_some() && howmany != 0 {
-                        let oid = obj.unwrap().id();
-                        if oid != c_id {
-                            howmany -= 1;
-                            perform_put(&mut game.descriptors, db, chars, objs, chid, oid, c_id);
-                        }
-                        let ch = chars.get(chid);
-                        obj = get_obj_in_list_vis(&game.descriptors, 
-                            chars,
-                            db,
-                            objs,
-                            ch,
-                            &theobj,
-                            None,
-                            ch.carrying.as_ref(),
-                        );
-                    }
-                }
-            } else {
-                let c_id = c.unwrap().id();
-                for oid in ch.carrying.clone() {
-                    if oid != c_id
-                        && (obj_dotmode == FIND_ALL
-                            || isname(&theobj, &objs.get(oid).name.as_ref()))
-                    {
-                        found = true;
-                        perform_put(&mut game.descriptors, db, chars, objs, chid, oid, c_id);
-                    }
-                }
-                let ch = chars.get(chid);
-                if !found {
-                    if obj_dotmode == FIND_ALL {
-                        send_to_char(&mut game.descriptors, ch, "You don't seem to have anything to put in it.\r\n");
-                    } else {
-                        send_to_char(&mut game.descriptors, 
-                            ch,
-                            format!("You don't seem to have any {}s.\r\n", theobj).as_str(),
-                        );
-                    }
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        format!("You don't seem to have any {}s.\r\n", theobj).as_str(),
+                    );
                 }
             }
         }
@@ -291,7 +318,8 @@ fn can_take_obj(
     let ch = chars.get(chid);
     let obj = objs.get(oid);
     if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p: you can't carry that many items.",
@@ -303,7 +331,8 @@ fn can_take_obj(
         );
         return false;
     } else if (ch.is_carrying_w() + objs.get(oid).get_obj_weight()) > ch.can_carry_w() as i32 {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p: you can't carry that much weight.",
@@ -315,7 +344,8 @@ fn can_take_obj(
         );
         return false;
     } else if !objs.get(oid).can_wear(WearFlags::TAKE) {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p: you can't take that!",
@@ -351,10 +381,15 @@ fn get_check_money(
     if value == 1 {
         send_to_char(descs, ch, "There was 1 coin.\r\n");
     } else {
-        send_to_char(descs, ch, format!("There were {} coins.\r\n", value).as_str());
+        send_to_char(
+            descs,
+            ch,
+            format!("There were {} coins.\r\n", value).as_str(),
+        );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn perform_get_from_container(
     descs: &mut Depot<DescriptorData>,
     db: &mut DB,
@@ -369,7 +404,8 @@ fn perform_get_from_container(
         let ch = chars.get(chid);
         let obj = objs.get(oid);
         if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "$p: you can't hold any more items.",
@@ -387,7 +423,8 @@ fn perform_get_from_container(
             let ch = chars.get(chid);
             let obj = objs.get(oid);
             let cobj = objs.get(cid);
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "You get $p from $P.",
@@ -397,7 +434,8 @@ fn perform_get_from_container(
                 Some(VictimRef::Obj(cobj)),
                 TO_CHAR,
             );
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "$n gets $p from $P.",
@@ -412,6 +450,7 @@ fn perform_get_from_container(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn get_from_container(
     descs: &mut Depot<DescriptorData>,
     db: &mut DB,
@@ -431,7 +470,8 @@ fn get_from_container(
     let obj_dotmode = find_all_dots(arg);
 
     if cobj.objval_flagged(CONT_CLOSED) {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p is closed.",
@@ -445,7 +485,17 @@ fn get_from_container(
         let mut obj = get_obj_in_list_vis(descs, chars, db, objs, ch, arg, None, &cobj.contains);
         if obj.is_none() {
             let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
-            act(descs, chars, db, &buf, false, Some(ch), Some(cobj), None, TO_CHAR);
+            act(
+                descs,
+                chars,
+                db,
+                &buf,
+                false,
+                Some(ch),
+                Some(cobj),
+                None,
+                TO_CHAR,
+            );
         } else {
             while obj.is_some() && howmany != 0 {
                 let oid = obj.unwrap().id();
@@ -474,7 +524,8 @@ fn get_from_container(
         let cobj = objs.get(cid);
         if !found {
             if obj_dotmode == FIND_ALL {
-                act(descs, 
+                act(
+                    descs,
                     chars,
                     db,
                     "$p seems to be empty.",
@@ -486,7 +537,17 @@ fn get_from_container(
                 );
             } else {
                 let buf = format!("You can't seem to find any {}s in $p.", arg);
-                act(descs, chars, db, &buf, false, Some(ch), Some(cobj), None, TO_CHAR);
+                act(
+                    descs,
+                    chars,
+                    db,
+                    &buf,
+                    false,
+                    Some(ch),
+                    Some(cobj),
+                    None,
+                    TO_CHAR,
+                );
             }
         }
     }
@@ -506,7 +567,8 @@ fn perform_get_from_room(
         let ch = chars.get_mut(chid);
         obj_to_char(obj, ch);
         let ch = chars.get(chid);
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "You get $p.",
@@ -516,7 +578,8 @@ fn perform_get_from_room(
             None,
             TO_CHAR,
         );
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$n gets $p.",
@@ -529,7 +592,7 @@ fn perform_get_from_room(
         get_check_money(descs, db, chars, objs, chid, oid);
         return true;
     }
-    return false;
+    false
 }
 
 fn get_from_room(
@@ -547,7 +610,8 @@ fn get_from_room(
     let dotmode = find_all_dots(arg);
 
     if dotmode == FIND_INDIV {
-        let mut obj = get_obj_in_list_vis2(descs, 
+        let mut obj = get_obj_in_list_vis2(
+            descs,
             chars,
             db,
             objs,
@@ -557,7 +621,8 @@ fn get_from_room(
             &db.world[ch.in_room() as usize].contents,
         );
         if obj.is_none() {
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 ch,
                 format!("You don't see {} {} here.\r\n", an!(arg), arg).as_str(),
             );
@@ -570,7 +635,8 @@ fn get_from_room(
                 let oid = obj.unwrap().id();
                 perform_get_from_room(descs, db, chars, objs, chid, oid);
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis2(descs, 
+                obj = get_obj_in_list_vis2(
+                    descs,
                     chars,
                     db,
                     objs,
@@ -600,12 +666,17 @@ fn get_from_room(
             if dotmode == FIND_ALL {
                 send_to_char(descs, ch, "There doesn't seem to be anything here.\r\n");
             } else {
-                send_to_char(descs, ch, format!("You don't see any {}s here.\r\n", arg).as_str());
+                send_to_char(
+                    descs,
+                    ch,
+                    format!("You don't see any {}s here.\r\n", arg).as_str(),
+                );
             }
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_get(
     game: &mut Game,
     db: &mut DB,
@@ -650,7 +721,8 @@ pub fn do_get(
         }
         let cont_dotmode = find_all_dots(&arg2);
         if cont_dotmode == FIND_INDIV {
-            let mode = generic_find(&game.descriptors, 
+            let mode = generic_find(
+                &game.descriptors,
                 chars,
                 db,
                 objs,
@@ -660,13 +732,16 @@ pub fn do_get(
                 &mut tmp_char,
                 &mut c,
             );
+            #[allow(clippy::unnecessary_unwrap)]
             if c.is_none() {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("You don't have {} {}.\r\n", an!(&arg2), &arg2).as_str(),
                 );
             } else if c.unwrap().get_obj_type() != ItemType::Container {
-                act(&mut game.descriptors, 
+                act(
+                    &mut game.descriptors,
                     chars,
                     db,
                     "$p is not a container.",
@@ -716,7 +791,8 @@ pub fn do_get(
                         );
                     } else if cont_dotmode == FIND_ALLDOT {
                         found = true;
-                        act(&mut game.descriptors, 
+                        act(
+                            &mut game.descriptors,
                             chars,
                             db,
                             "$p is not a container.",
@@ -750,7 +826,8 @@ pub fn do_get(
                         );
                         found = true;
                     } else if cont_dotmode == FIND_ALLDOT {
-                        act(&mut game.descriptors, 
+                        act(
+                            &mut game.descriptors,
                             chars,
                             db,
                             "$p is not a container.",
@@ -767,10 +844,15 @@ pub fn do_get(
             if !found {
                 if cont_dotmode == FIND_ALL {
                     let ch = chars.get(chid);
-                    send_to_char(&mut game.descriptors, ch, "You can't seem to find any containers.\r\n");
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "You can't seem to find any containers.\r\n",
+                    );
                 } else {
                     let ch = chars.get(chid);
-                    send_to_char(&mut game.descriptors, 
+                    send_to_char(
+                        &mut game.descriptors,
                         ch,
                         format!("You can't seem to find any {}s here.\r\n", &arg2).as_str(),
                     );
@@ -780,6 +862,7 @@ pub fn do_get(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn perform_drop_gold(
     descs: &mut Depot<DescriptorData>,
     db: &mut DB,
@@ -796,18 +879,20 @@ fn perform_drop_gold(
     } else if ch.get_gold() < amount {
         send_to_char(descs, ch, "You don't have that many coins!\r\n");
     } else {
-        if mode != SCMD_JUNK as u8 {
+        if mode != SCMD_JUNK {
             let ch = chars.get_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32); /* to prevent coin-bombing */
 
             let oid = db.create_money(objs, amount).unwrap();
-            if mode == SCMD_DONATE as u8 {
+            if mode == SCMD_DONATE {
                 let ch = chars.get(chid);
-                send_to_char(descs, 
+                send_to_char(
+                    descs,
                     ch,
                     "You throw some gold into the air where it disappears in a puff of smoke!\r\n",
                 );
-                act(descs, 
+                act(
+                    descs,
                     chars,
                     db,
                     "$n throws some gold into the air where it disappears in a puff of smoke!",
@@ -820,7 +905,8 @@ fn perform_drop_gold(
                 let obj = objs.get_mut(oid);
                 db.obj_to_room(obj, rdr);
                 let obj = objs.get(oid);
-                act(descs, 
+                act(
+                    descs,
                     chars,
                     db,
                     "$p suddenly appears in a puff of orange smoke!",
@@ -845,7 +931,8 @@ fn perform_drop_gold(
             );
             act(descs, chars, db, &buf, false, Some(ch), None, None, TO_ROOM);
 
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 ch,
                 "You drop some gold which disappears in a puff of smoke!\r\n",
             );
@@ -865,6 +952,7 @@ macro_rules! vanish {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 fn perform_drop(
     descs: &mut Depot<DescriptorData>,
     db: &mut DB,
@@ -880,19 +968,49 @@ fn perform_drop(
     let obj = objs.get_mut(oid);
     if obj.obj_flagged(ExtraFlags::NODROP) {
         let buf = format!("You can't {} $p, it must be CURSED!", sname);
-        act(descs, chars, db, &buf, false, Some(ch), Some(obj), None, TO_CHAR);
+        act(
+            descs,
+            chars,
+            db,
+            &buf,
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
         return 0;
     }
 
     let buf = format!("You {} $p.{}", sname, vanish!(mode));
-    act(descs, chars, db, &buf, false, Some(ch), Some(obj), None, TO_CHAR);
+    act(
+        descs,
+        chars,
+        db,
+        &buf,
+        false,
+        Some(ch),
+        Some(obj),
+        None,
+        TO_CHAR,
+    );
 
     let buf = format!("$n {}s $p.{}", sname, vanish!(mode));
-    act(descs, chars, db, &buf, true, Some(ch), Some(obj), None, TO_ROOM);
+    act(
+        descs,
+        chars,
+        db,
+        &buf,
+        true,
+        Some(ch),
+        Some(obj),
+        None,
+        TO_ROOM,
+    );
 
     obj_from_char(chars, obj);
-    if (mode == SCMD_DONATE as u8) && obj.obj_flagged(ExtraFlags::NODONATE) {
-        mode = SCMD_JUNK as u8;
+    if (mode == SCMD_DONATE) && obj.obj_flagged(ExtraFlags::NODONATE) {
+        mode = SCMD_JUNK;
     }
 
     let ch = chars.get(chid);
@@ -903,7 +1021,8 @@ fn perform_drop(
 
         SCMD_DONATE => {
             db.obj_to_room(obj, rdr);
-            act(descs, 
+            act(
+                descs,
                 chars,
                 db,
                 "$p suddenly appears in a puff a smoke!",
@@ -916,7 +1035,7 @@ fn perform_drop(
             return 0;
         }
         SCMD_JUNK => {
-            let value = max(1, min(200, obj.get_obj_cost() / 16));
+            let value = (obj.get_obj_cost() / 16).clamp(1, 200);
             db.extract_obj(chars, objs, oid);
             return value;
         }
@@ -930,6 +1049,7 @@ fn perform_drop(
     0
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_drop(
     game: &mut Game,
     db: &mut DB,
@@ -966,7 +1086,11 @@ pub fn do_drop(
                 _ => {}
             }
             if rdr == NOWHERE {
-                send_to_char(&mut game.descriptors, ch, "Sorry, you can't donate anything right now.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Sorry, you can't donate anything right now.\r\n",
+                );
                 return;
             }
         }
@@ -981,26 +1105,51 @@ pub fn do_drop(
     let mut amount = 0;
     let dotmode;
 
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, format!("What do you want to {}?\r\n", sname).as_str());
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("What do you want to {}?\r\n", sname).as_str(),
+        );
         return;
     } else if is_number(&arg) {
         let mut multi = arg.parse::<i32>().unwrap();
         one_argument(argument, &mut arg);
         if arg == "coins" || arg == "coin" {
-            perform_drop_gold(&mut game.descriptors, db, chars, objs, chid, multi, mode, rdr);
+            perform_drop_gold(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                multi,
+                mode,
+                rdr,
+            );
         } else if multi <= 0 {
             send_to_char(&mut game.descriptors, ch, "Yeah, that makes sense.\r\n");
         } else if arg.is_empty() {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("What do you want to {} {} of?\r\n", sname, multi).as_str(),
             );
         } else if {
-            obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+            obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg,
+                None,
+                &ch.carrying,
+            );
             obj.is_none()
         } {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("You don't seem to have any {}s.\r\n", arg).as_str(),
             );
@@ -1018,7 +1167,16 @@ pub fn do_drop(
                     rdr,
                 );
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
+                );
                 multi -= 1;
                 if multi == 0 {
                     break;
@@ -1031,9 +1189,14 @@ pub fn do_drop(
         /* Can't junk or donate all */
         if (dotmode == FIND_ALL) && (subcmd == SCMD_JUNK as i32 || subcmd == SCMD_DONATE as i32) {
             if subcmd == SCMD_JUNK as i32 {
-                send_to_char(&mut game.descriptors, ch, "Go to the dump if you want to junk EVERYTHING!\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Go to the dump if you want to junk EVERYTHING!\r\n",
+                );
             } else {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     "Go do the donation room if you want to donate EVERYTHING!\r\n",
                 );
@@ -1043,16 +1206,31 @@ pub fn do_drop(
         if dotmode == FIND_ALL {
             let ch = chars.get(chid);
             if ch.carrying.is_empty() {
-                send_to_char(&mut game.descriptors, ch, "You don't seem to be carrying anything.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You don't seem to be carrying anything.\r\n",
+                );
             } else {
                 let list = ch.carrying.clone();
                 for oid in list {
-                    amount += perform_drop(&mut game.descriptors, db, chars, objs, chid, oid, mode, sname, rdr);
+                    amount += perform_drop(
+                        &mut game.descriptors,
+                        db,
+                        chars,
+                        objs,
+                        chid,
+                        oid,
+                        mode,
+                        sname,
+                        rdr,
+                    );
                 }
             }
         } else if dotmode == FIND_ALLDOT {
             if arg.is_empty() {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("What do you want to {} all of?\r\n", sname).as_str(),
                 );
@@ -1060,10 +1238,20 @@ pub fn do_drop(
             }
             if {
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
+                );
                 obj.is_none()
             } {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("You don't seem to have any {}s.\r\n", arg).as_str(),
                 );
@@ -1082,38 +1270,60 @@ pub fn do_drop(
                     rdr,
                 );
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
-            }
-        } else {
-            if {
-                let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
-                obj.is_none()
-            } {
-                send_to_char(&mut game.descriptors, 
-                    ch,
-                    format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
-                );
-            } else {
-                amount += perform_drop(
-                    &mut game.descriptors,
-                    db,
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
                     chars,
+                    db,
                     objs,
-                    chid,
-                    obj.unwrap().id(),
-                    mode,
-                    sname,
-                    rdr,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
                 );
             }
+        } else if {
+            let ch = chars.get(chid);
+            obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg,
+                None,
+                &ch.carrying,
+            );
+            obj.is_none()
+        } {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
+            );
+        } else {
+            amount += perform_drop(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                obj.unwrap().id(),
+                mode,
+                sname,
+                rdr,
+            );
         }
     }
 
     if amount != 0 && subcmd == SCMD_JUNK as i32 {
         let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, ch, "You have been rewarded by the gods!\r\n");
-        act(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have been rewarded by the gods!\r\n",
+        );
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n has been rewarded by the gods!",
@@ -1141,7 +1351,8 @@ fn perform_give(
     let vict = chars.get(vict_id);
     let obj = objs.get_mut(oid);
     if obj.obj_flagged(ExtraFlags::NODROP) {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "You can't let go of $p!!  Yeech!",
@@ -1154,7 +1365,8 @@ fn perform_give(
         return;
     }
     if vict.is_carrying_n() >= vict.can_carry_n() as u8 {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$N seems to have $S hands full.",
@@ -1167,7 +1379,8 @@ fn perform_give(
         return;
     }
     if obj.get_obj_weight() + vict.is_carrying_w() > vict.can_carry_w() as i32 {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$E can't carry that much weight.",
@@ -1181,11 +1394,12 @@ fn perform_give(
     }
     obj_from_char(chars, obj);
     let vict = chars.get_mut(vict_id);
-    obj_to_char( obj, vict);
+    obj_to_char(obj, vict);
     let ch = chars.get(chid);
     let obj = objs.get(oid);
     let vict = chars.get(vict_id);
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         "You give $p to $N.",
@@ -1195,7 +1409,8 @@ fn perform_give(
         Some(VictimRef::Char(vict)),
         TO_CHAR,
     );
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         "$n gives you $p.",
@@ -1205,7 +1420,8 @@ fn perform_give(
         Some(VictimRef::Char(vict)),
         TO_VICT,
     );
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         "$n gives $p to $N.",
@@ -1228,6 +1444,7 @@ fn give_find_vict<'a>(
     let vict;
     let mut arg = arg.trim_start().to_string();
 
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(descs, ch, "To who?\r\n");
     } else if {
@@ -1257,7 +1474,11 @@ fn perform_give_gold(
     let mut buf;
 
     if amount <= 0 {
-        send_to_char(descs, ch, "Heh heh heh ... we are jolly funny today, eh?\r\n");
+        send_to_char(
+            descs,
+            ch,
+            "Heh heh heh ... we are jolly funny today, eh?\r\n",
+        );
         return;
     }
     if ch.get_gold() < amount && (ch.is_npc() || (ch.get_level() < LVL_GOD as u8)) {
@@ -1271,7 +1492,8 @@ fn perform_give_gold(
         amount,
         if amount == 1 { "" } else { "s" }
     );
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         &buf,
@@ -1283,7 +1505,8 @@ fn perform_give_gold(
     );
 
     buf = format!("$n gives {} to $N.", money_desc(amount));
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         &buf,
@@ -1303,6 +1526,7 @@ fn perform_give_gold(
     vict.set_gold(vict.get_gold() + amount);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_give(
     game: &mut Game,
     db: &mut DB,
@@ -1327,18 +1551,28 @@ pub fn do_give(
     } else if is_number(&arg) {
         amount = arg.parse::<i32>().unwrap();
         argument = one_argument(argument, &mut arg);
+        #[allow(clippy::blocks_in_conditions)]
         if arg == "coins" || arg == "coin" {
             one_argument(argument, &mut arg);
-            if {
+            let res = {
                 vict = give_find_vict(&mut game.descriptors, db, chars, ch, &arg);
                 vict.is_some()
-            } {
-                perform_give_gold(&mut game.descriptors, db, chars, chid, vict.unwrap().id(), amount);
+            };
+            if res {
+                perform_give_gold(
+                    &mut game.descriptors,
+                    db,
+                    chars,
+                    chid,
+                    vict.unwrap().id(),
+                    amount,
+                );
                 return;
             } else if arg.is_empty() {
                 /* Give multiple code. */
                 let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("What do you want to give {} of?\r\n", amount).as_str(),
                 );
@@ -1349,12 +1583,22 @@ pub fn do_give(
                 return;
             } else if {
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
+                );
                 obj.is_none()
             } {
             }
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("You don't seem to have any {}s.\r\n", arg).as_str(),
             );
@@ -1362,29 +1606,58 @@ pub fn do_give(
             let vict_id = vict.unwrap().id();
             while obj.is_some() && amount != 0 {
                 amount -= 1;
-                perform_give(&mut game.descriptors, db, chars, objs, chid, vict_id, obj.unwrap().id());
+                perform_give(
+                    &mut game.descriptors,
+                    db,
+                    chars,
+                    objs,
+                    chid,
+                    vict_id,
+                    obj.unwrap().id(),
+                );
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
+                );
             }
         }
     } else {
         let mut buf1 = String::new();
         one_argument(argument, &mut buf1);
-        if {
+        let res = {
             vict = give_find_vict(&mut game.descriptors, db, chars, ch, &buf1);
             vict.is_none()
-        } {
+        };
+        if res {
             return;
         }
         let dotmode = find_all_dots(&arg);
         if dotmode == FIND_INDIV {
-            if {
+            let res = {
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg,
+                    None,
+                    &ch.carrying,
+                );
                 obj.is_none()
-            } {
+            };
+            if res {
                 let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                 );
@@ -1406,8 +1679,12 @@ pub fn do_give(
                 return;
             }
             let ch = chars.get(chid);
-            if ch.carrying.len() == 0 {
-                send_to_char(&mut game.descriptors, ch, "You don't seem to be holding anything.\r\n");
+            if ch.carrying.is_empty() {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You don't seem to be holding anything.\r\n",
+                );
             } else {
                 let list = ch.carrying.clone();
                 let vict_id = vict.unwrap().id();
@@ -1434,15 +1711,16 @@ pub fn weight_change_object(
     let tmp_ch_id;
     let tmp_obj_id;
     let obj = objs.get_mut(oid);
+    #[allow(clippy::blocks_in_conditions)]
     if obj.in_room() != NOWHERE {
         obj.incr_obj_weight(weight);
     } else if {
-        tmp_ch_id = obj.carried_by.clone();
+        tmp_ch_id = obj.carried_by;
         tmp_ch_id.is_some()
     } {
         obj_from_char(chars, obj);
         obj.incr_obj_weight(weight);
-        obj_to_char(obj, chars.get_mut( tmp_ch_id.unwrap()));
+        obj_to_char(obj, chars.get_mut(tmp_ch_id.unwrap()));
     } else if {
         tmp_obj_id = objs.get(oid).in_obj;
         tmp_obj_id.is_some()
@@ -1479,24 +1757,19 @@ pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
     let next = "";
     let bname = &objs.get(oid).name;
     let mut cur_name = bname.as_ref();
-    while cur_name.len() != 0 {
+    while !cur_name.is_empty() {
         if cur_name.starts_with(' ') {
             cur_name = &cur_name[1..];
         }
         let i = cur_name.find(' ');
-        let cpylen;
-        if i.is_some() {
-            cpylen = i.unwrap();
-        } else {
-            cpylen = cur_name.len();
-        }
+        let cpylen= i.unwrap_or(cur_name.len());
 
         if cur_name.starts_with(liqname) {
             cur_name = next;
             continue;
         }
 
-        if new_name.len() != 0 {
+        if !new_name.is_empty() {
             new_name.push(' ');
         } else {
             new_name.push_str(&cur_name[0..cpylen])
@@ -1527,6 +1800,7 @@ pub fn name_to_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>, type_: 
     objs.get_mut(oid.unwrap()).name = Rc::from(new_name.as_str());
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_drink(
     game: &mut Game,
     db: &mut DB,
@@ -1548,18 +1822,29 @@ pub fn do_drink(
         return;
     }
 
-    if arg.len() == 0 {
+    if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Drink from what?\r\n");
         return;
     }
     let mut tobj;
     let mut on_ground = false;
-    if {
-        tobj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+    let res = {
+        tobj = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &arg,
+            None,
+            &ch.carrying,
+        );
         tobj.is_none()
-    } {
-        if {
-            tobj = get_obj_in_list_vis2(&game.descriptors, 
+    }; 
+    if res {
+        let res = {
+            tobj = get_obj_in_list_vis2(
+                &game.descriptors,
                 chars,
                 db,
                 objs,
@@ -1569,7 +1854,8 @@ pub fn do_drink(
                 &db.world[ch.in_room() as usize].contents,
             );
             tobj.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
         } else {
@@ -1582,13 +1868,22 @@ pub fn do_drink(
         return;
     }
     if on_ground && to_obj.get_obj_type() == ItemType::Drinkcon {
-        send_to_char(&mut game.descriptors, ch, "You have to be holding that to drink from it.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have to be holding that to drink from it.\r\n",
+        );
         return;
     }
     if ch.get_cond(DRUNK) > 10 && ch.get_cond(THIRST) > 0 {
         /* The pig is drunk */
-        send_to_char(&mut game.descriptors, ch, "You can't seem to get close enough to your mouth.\r\n");
-        act(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can't seem to get close enough to your mouth.\r\n",
+        );
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n tries to drink but misses $s mouth!",
@@ -1601,7 +1896,11 @@ pub fn do_drink(
         return;
     }
     if ch.get_cond(FULL) > 20 && ch.get_cond(THIRST) > 0 {
-        send_to_char(&mut game.descriptors, ch, "Your stomach can't contain anymore!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Your stomach can't contain anymore!\r\n",
+        );
         return;
     }
     if to_obj.get_obj_val(1) == 0 {
@@ -1614,9 +1913,20 @@ pub fn do_drink(
             "$n DRINKS {} from $p.",
             DRINKS[to_obj.get_obj_val(2) as usize]
         );
-        act(&mut game.descriptors, chars, db, &buf, true, Some(ch), Some(to_obj), None, TO_ROOM);
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
+            &buf,
+            true,
+            Some(ch),
+            Some(to_obj),
+            None,
+            TO_ROOM,
+        );
 
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "You drink the {}.\r\n",
@@ -1625,14 +1935,15 @@ pub fn do_drink(
             .as_str(),
         );
         let ch = chars.get(chid);
-        if DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK as usize] > 0 {
+        if DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK] > 0 {
             amount = (25 - ch.get_cond(THIRST)) as i32
-                / DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK as usize];
+                / DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK];
         } else {
             amount = rand_number(3, 10) as i32;
         }
     } else {
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n sips from $p.",
@@ -1642,7 +1953,8 @@ pub fn do_drink(
             None,
             TO_ROOM,
         );
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "It tastes like {}.\r\n",
@@ -1658,25 +1970,28 @@ pub fn do_drink(
     /* You can't subtract more than the object weighs */
     let weight = min(amount, to_obj.get_obj_weight());
     let toid = to_obj.id();
-    weight_change_object( chars, objs, toid, -weight as i32); /* Subtract amount */
+    weight_change_object(chars, objs, toid, -weight as i32); /* Subtract amount */
     let to_obj = objs.get(toid);
     let ch = chars.get_mut(chid);
-    gain_condition(&mut game.descriptors, 
+    gain_condition(
+        &mut game.descriptors,
         ch,
         DRUNK,
-        DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK as usize] * amount / 4,
+        DRINK_AFF[to_obj.get_obj_val(2) as usize][DRUNK] * amount / 4,
     );
     let to_obj = objs.get(toid);
-    gain_condition(&mut game.descriptors, 
+    gain_condition(
+        &mut game.descriptors,
         ch,
         FULL,
-        DRINK_AFF[to_obj.get_obj_val(2) as usize][FULL as usize] * amount / 4,
+        DRINK_AFF[to_obj.get_obj_val(2) as usize][FULL] * amount / 4,
     );
     let to_obj = objs.get(toid);
-    gain_condition(&mut game.descriptors, 
+    gain_condition(
+        &mut game.descriptors,
         ch,
         THIRST,
-        DRINK_AFF[to_obj.get_obj_val(2) as usize][THIRST as usize] * amount / 4,
+        DRINK_AFF[to_obj.get_obj_val(2) as usize][THIRST] * amount / 4,
     );
     let ch = chars.get(chid);
 
@@ -1686,7 +2001,11 @@ pub fn do_drink(
     let ch = chars.get(chid);
 
     if ch.get_cond(THIRST) > 20 {
-        send_to_char(&mut game.descriptors, ch, "You don't feel thirsty any more.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You don't feel thirsty any more.\r\n",
+        );
     }
     let ch = chars.get(chid);
 
@@ -1696,8 +2015,13 @@ pub fn do_drink(
     let to_obj = objs.get(toid);
     if to_obj.get_obj_val(3) != 0 {
         /* The crap was poisoned ! */
-        send_to_char(&mut game.descriptors, ch, "Oops, it tasted rather strange!\r\n");
-        act(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Oops, it tasted rather strange!\r\n",
+        );
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n chokes and utters some strange sounds.",
@@ -1707,7 +2031,7 @@ pub fn do_drink(
             None,
             TO_ROOM,
         );
-        let mut af = AffectedType {
+        let af = AffectedType {
             _type: SPELL_POISON as i16,
             duration: (amount * 3) as i16,
             modifier: 0,
@@ -1715,7 +2039,7 @@ pub fn do_drink(
             bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);
-        affect_join( objs, ch, &mut af, false, false, false, false);
+        affect_join(objs, ch, &af, false, false, false, false);
     }
     /* empty the container, and no longer poison. */
     let to_obj = objs.get(toid);
@@ -1730,9 +2054,9 @@ pub fn do_drink(
         to_obj.set_obj_val(2, 0);
         to_obj.set_obj_val(3, 0);
     }
-    return;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_eat(
     game: &mut Game,
     db: &mut DB,
@@ -1753,16 +2077,27 @@ pub fn do_eat(
         return;
     }
 
-    if arg.len() == 0 {
+    if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Eat what?\r\n");
         return;
     }
     let food;
-    if {
-        food = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+    let res = {
+        food = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &arg,
+            None,
+            &ch.carrying,
+        );
         food.is_none()
-    } {
-        send_to_char(&mut game.descriptors, 
+    }; 
+    if res {
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
@@ -1781,11 +2116,16 @@ pub fn do_eat(
     }
     if ch.get_cond(FULL) > 20 {
         /* Stomach full */
-        send_to_char(&mut game.descriptors, ch, "You are too full to eat more!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You are too full to eat more!\r\n",
+        );
         return;
     }
     if subcmd == SCMD_EAT {
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "You eat $p.",
@@ -1795,7 +2135,8 @@ pub fn do_eat(
             None,
             TO_CHAR,
         );
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n eats $p.",
@@ -1806,7 +2147,8 @@ pub fn do_eat(
             TO_ROOM,
         );
     } else {
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "You nibble a little bit of $p.",
@@ -1816,7 +2158,8 @@ pub fn do_eat(
             None,
             TO_CHAR,
         );
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n tastes a little bit of $p.",
@@ -1843,8 +2186,13 @@ pub fn do_eat(
     let food = objs.get(food_id);
     if food.get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT as u8) {
         /* The crap was poisoned ! */
-        send_to_char(&mut game.descriptors, ch, "Oops, that tasted rather strange!\r\n");
-        act(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Oops, that tasted rather strange!\r\n",
+        );
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n coughs and utters some strange sounds.",
@@ -1855,7 +2203,7 @@ pub fn do_eat(
             TO_ROOM,
         );
 
-        let mut af = AffectedType {
+        let af = AffectedType {
             _type: SPELL_POISON as i16,
             duration: (amount * 2) as i16,
             modifier: 0,
@@ -1863,23 +2211,23 @@ pub fn do_eat(
             bitvector: AffectFlags::POISON,
         };
         let ch = chars.get_mut(chid);
-        affect_join( objs, ch, &mut af, false, false, false, false);
+        affect_join(objs, ch, &af, false, false, false, false);
     }
+    #[allow(clippy::blocks_in_conditions)]
     if subcmd == SCMD_EAT {
         db.extract_obj(chars, objs, food_id);
-    } else {
-        if {
-            objs.get_mut(food_id).decr_obj_val(1);
-            let food = objs.get_mut(food_id);
-            food.get_obj_val(0) == 0
-        } {
-            let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "There's nothing left now.\r\n");
-            db.extract_obj(chars, objs, food_id);
-        }
+    } else if {
+        objs.get_mut(food_id).decr_obj_val(1);
+        let food = objs.get_mut(food_id);
+        food.get_obj_val(0) == 0
+    } {
+        let ch = chars.get(chid);
+        send_to_char(&mut game.descriptors, ch, "There's nothing left now.\r\n");
+        db.extract_obj(chars, objs, food_id);
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_pour(
     game: &mut Game,
     db: &mut DB,
@@ -1903,13 +2251,27 @@ pub fn do_pour(
     if subcmd == SCMD_POUR {
         if arg1.is_empty() {
             /* No arguments */
-            send_to_char(&mut game.descriptors, ch, "From what do you want to pour?\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "From what do you want to pour?\r\n",
+            );
             return;
         }
-        if {
-            from_obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg1, None, &ch.carrying);
+        let res = {
+            from_obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg1,
+                None,
+                &ch.carrying,
+            );
             from_obj.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
         }
@@ -1922,22 +2284,34 @@ pub fn do_pour(
     if subcmd == SCMD_FILL {
         if arg1.is_empty() {
             /* no arguments */
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 "What do you want to fill?  And what are you filling it from?\r\n",
             );
             return;
         }
-        if {
-            to_obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg1, None, &ch.carrying);
+        let res = {
+            to_obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg1,
+                None,
+                &ch.carrying,
+            );
             to_obj.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
         }
         let to_obj = to_obj.unwrap();
         if to_obj.get_obj_type() != ItemType::Drinkcon {
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "You can't fill $p!",
@@ -1951,7 +2325,8 @@ pub fn do_pour(
         }
         if arg2.is_empty() {
             /* no 2nd argument */
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "What do you want to fill $p from?",
@@ -1963,8 +2338,9 @@ pub fn do_pour(
             );
             return;
         }
-        if {
-            from_obj = get_obj_in_list_vis2(&game.descriptors, 
+        let res = {
+            from_obj = get_obj_in_list_vis2(
+                &game.descriptors,
                 chars,
                 db,
                 objs,
@@ -1974,8 +2350,10 @@ pub fn do_pour(
                 &db.world[ch.in_room() as usize].contents,
             );
             from_obj.is_none()
-        } {
-            send_to_char(&mut game.descriptors, 
+        }; 
+        if res {
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("There doesn't seem to be {} {} here.\r\n", an!(arg2), arg2).as_str(),
             );
@@ -1983,7 +2361,8 @@ pub fn do_pour(
         }
         let from_obj = from_obj.unwrap();
         if from_obj.get_obj_type() != ItemType::Fountain {
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "You can't fill something from $p.",
@@ -1999,7 +2378,8 @@ pub fn do_pour(
     let from_obj = from_obj.unwrap();
 
     if from_obj.get_obj_val(1) == 0 {
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "The $p is empty.",
@@ -2014,11 +2394,16 @@ pub fn do_pour(
     if subcmd == SCMD_POUR {
         /* pour */
         if arg2.is_empty() {
-            send_to_char(&mut game.descriptors, ch, "Where do you want it?  Out or in what?\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Where do you want it?  Out or in what?\r\n",
+            );
             return;
         }
         if arg2 == "out" {
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "$n empties $p.",
@@ -2028,7 +2413,8 @@ pub fn do_pour(
                 None,
                 TO_ROOM,
             );
-            act(&mut game.descriptors, 
+            act(
+                &mut game.descriptors,
                 chars,
                 db,
                 "You empty $p.",
@@ -2039,7 +2425,7 @@ pub fn do_pour(
                 TO_CHAR,
             );
             let from_obj_id = from_obj.id();
-            weight_change_object( chars, objs, from_obj_id, -from_obj.get_obj_val(1)); /* Empty */
+            weight_change_object(chars, objs, from_obj_id, -from_obj.get_obj_val(1)); /* Empty */
 
             name_from_drinkcon(objs, Some(from_obj_id));
             let from_obj = objs.get_mut(from_obj_id);
@@ -2049,16 +2435,32 @@ pub fn do_pour(
 
             return;
         }
-        if {
-            to_obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg2, None, &ch.carrying);
+        let res = {
+            to_obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg2,
+                None,
+                &ch.carrying,
+            );
             to_obj.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
         }
         let to_obj = to_obj.unwrap();
-        if (to_obj.get_obj_type() != ItemType::Drinkcon) && (to_obj.get_obj_type() != ItemType::Fountain) {
-            send_to_char(&mut game.descriptors, ch, "You can't pour anything into that.\r\n");
+        if (to_obj.get_obj_type() != ItemType::Drinkcon)
+            && (to_obj.get_obj_type() != ItemType::Fountain)
+        {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You can't pour anything into that.\r\n",
+            );
             return;
         }
     }
@@ -2070,15 +2472,20 @@ pub fn do_pour(
     }
 
     if (to_obj.get_obj_val(1) != 0) && (to_obj.get_obj_val(2) != to_obj.get_obj_val(2)) {
-        send_to_char(&mut game.descriptors, ch, "There is already another liquid in it!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "There is already another liquid in it!\r\n",
+        );
         return;
     }
-    if !(to_obj.get_obj_val(1) < to_obj.get_obj_val(0)) {
+    if to_obj.get_obj_val(1) >= to_obj.get_obj_val(0) {
         send_to_char(&mut game.descriptors, ch, "There is no room for more.\r\n");
         return;
     }
     if subcmd == SCMD_POUR {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "You pour the {} into the {}.",
@@ -2090,7 +2497,8 @@ pub fn do_pour(
     }
 
     if subcmd == SCMD_FILL {
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "You gently fill $p from $P.",
@@ -2100,7 +2508,8 @@ pub fn do_pour(
             Some(VictimRef::Obj(from_obj)),
             TO_CHAR,
         );
-        act(&mut game.descriptors, 
+        act(
+            &mut game.descriptors,
             chars,
             db,
             "$n gently fills $p from $P.",
@@ -2151,8 +2560,8 @@ pub fn do_pour(
     objs.get_mut(to_obj_id).set_obj_val(3, v);
 
     /* And the weight boogie */
-    weight_change_object( chars, objs, from_obj_id, -amount);
-    weight_change_object( chars, objs, to_obj_id, amount); /* Add weight */
+    weight_change_object(chars, objs, from_obj_id, -amount);
+    weight_change_object(chars, objs, to_obj_id, amount); /* Add weight */
 }
 
 fn wear_message(
@@ -2214,7 +2623,8 @@ fn wear_message(
         ["$n grabs $p.", "You grab $p."],
     ];
 
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         WEAR_MESSAGES[_where][0],
@@ -2224,7 +2634,8 @@ fn wear_message(
         None,
         TO_ROOM,
     );
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         WEAR_MESSAGES[_where][1],
@@ -2296,8 +2707,9 @@ fn perform_wear(
     ];
 
     /* first, make sure that the wear position is valid. */
-    if !obj.can_wear(WEAR_BITVECTORS[_where as usize]) {
-        act(descs, 
+    if !obj.can_wear(WEAR_BITVECTORS[_where]) {
+        act(
+            descs,
             chars,
             db,
             "You can't wear $p there.",
@@ -2310,17 +2722,13 @@ fn perform_wear(
         return;
     }
     /* for neck, finger, and wrist, try pos 2 if pos 1 is already full */
-    if (_where == WEAR_FINGER_R)
-        || (_where == WEAR_NECK_1)
-        || (_where == WEAR_WRIST_R)
-    {
-        if ch.get_eq(_where).is_some() {
+    if ((_where == WEAR_FINGER_R) || (_where == WEAR_NECK_1) || (_where == WEAR_WRIST_R))
+        && ch.get_eq(_where).is_some() {
             _where += 1;
         }
-    }
 
     if ch.get_eq(_where).is_some() {
-        send_to_char(descs, ch, ALREADY_WEARING[_where as usize]);
+        send_to_char(descs, ch, ALREADY_WEARING[_where]);
         return;
     }
     wear_message(descs, db, chars, objs, chid, oid, _where);
@@ -2329,7 +2737,12 @@ fn perform_wear(
     equip_char(descs, chars, db, objs, chid, oid, _where);
 }
 
-pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjData, arg: &str) -> i16 {
+pub fn find_eq_pos(
+    descs: &mut Depot<DescriptorData>,
+    ch: &CharData,
+    obj: &ObjData,
+    arg: &str,
+) -> i16 {
     let mut _where: i16 = -1;
 
     const KEYWORDS: [&str; 19] = [
@@ -2354,6 +2767,7 @@ pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjD
         "\n",
     ];
     let _where_o;
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         if obj.can_wear(WearFlags::FINGER) {
             _where = WEAR_FINGER_R as i16;
@@ -2395,7 +2809,8 @@ pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjD
         _where_o = search_block(arg, &KEYWORDS, false);
         _where_o.is_none()
     } {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!("'{}'?  What part of your body is THAT?\r\n", arg).as_str(),
         );
@@ -2406,6 +2821,7 @@ pub fn find_eq_pos( descs: &mut Depot<DescriptorData>, ch: &CharData, obj: &ObjD
     _where
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wear(
     game: &mut Game,
     db: &mut DB,
@@ -2430,7 +2846,8 @@ pub fn do_wear(
     let dotmode = find_all_dots(&arg1);
 
     if !arg2.is_empty() && dotmode != FIND_INDIV {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "You can't specify the same body location for more than one item!\r\n",
         );
@@ -2447,12 +2864,24 @@ pub fn do_wear(
                 _where >= 0
             } {
                 items_worn += 1;
-                perform_wear(&mut game.descriptors, db, chars, objs, chid, oid, _where as usize);
+                perform_wear(
+                    &mut game.descriptors,
+                    db,
+                    chars,
+                    objs,
+                    chid,
+                    oid,
+                    _where as usize,
+                );
             }
         }
         if items_worn == 0 {
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "You don't seem to have anything wearable.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You don't seem to have anything wearable.\r\n",
+            );
         }
     } else if dotmode == FIND_ALLDOT {
         if arg1.is_empty() {
@@ -2460,21 +2889,33 @@ pub fn do_wear(
             return;
         }
         let mut obj;
-        if {
-            obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg1, None, &ch.carrying);
+        let res = {
+            obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg1,
+                None,
+                &ch.carrying,
+            );
             obj.is_none()
-        } {
-            send_to_char(&mut game.descriptors, 
+        }; 
+        if res {
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("You don't seem to have any {}s.\r\n", arg1).as_str(),
             );
         } else {
             while obj.is_some() {
                 let ch = chars.get(chid);
-                if {
+                let res = {
                     _where = find_eq_pos(&mut game.descriptors, ch, obj.unwrap(), "");
                     _where >= 0
-                } {
+                }; 
+                if res {
                     perform_wear(
                         &mut game.descriptors,
                         db,
@@ -2485,7 +2926,8 @@ pub fn do_wear(
                         _where as usize,
                     );
                 } else {
-                    act(&mut game.descriptors, 
+                    act(
+                        &mut game.descriptors,
                         chars,
                         db,
                         "You can't wear $p.",
@@ -2497,49 +2939,69 @@ pub fn do_wear(
                     );
                 }
                 let ch = chars.get(chid);
-                obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg1, None, &ch.carrying);
+                obj = get_obj_in_list_vis(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    objs,
+                    ch,
+                    &arg1,
+                    None,
+                    &ch.carrying,
+                );
             }
         }
     } else {
         let obj;
+        #[allow(clippy::blocks_in_conditions)]
         if {
-            obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg1, None, &ch.carrying);
+            obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &arg1,
+                None,
+                &ch.carrying,
+            );
             obj.is_none()
         } {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!("You don't seem to have {} {}.\r\n", an!(arg1), arg1).as_str(),
             );
-        } else {
-            if {
-                _where = find_eq_pos(&mut game.descriptors, ch, obj.unwrap(), &arg2);
-                _where >= 0
-            } {
-                perform_wear(
-                    &mut game.descriptors,
-                    db,
-                    chars,
-                    objs,
-                    chid,
-                    obj.unwrap().id(),
-                    _where as usize,
-                );
-            } else if arg2.is_empty() {
-                act(&mut game.descriptors, 
-                    chars,
-                    db,
-                    "You can't wear $p.",
-                    false,
-                    Some(ch),
-                    obj,
-                    None,
-                    TO_CHAR,
-                );
-            }
+        } else if {
+            _where = find_eq_pos(&mut game.descriptors, ch, obj.unwrap(), &arg2);
+            _where >= 0
+        } {
+            perform_wear(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                obj.unwrap().id(),
+                _where as usize,
+            );
+        } else if arg2.is_empty() {
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "You can't wear $p.",
+                false,
+                Some(ch),
+                obj,
+                None,
+                TO_CHAR,
+            );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wield(
     game: &mut Game,
     db: &mut DB,
@@ -2557,13 +3019,24 @@ pub fn do_wield(
     let obj;
     one_argument(argument, &mut arg);
 
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Wield what?\r\n");
     } else if {
-        obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+        obj = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &arg,
+            None,
+            &ch.carrying,
+        );
         obj.is_none()
     } {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
@@ -2572,13 +3045,26 @@ pub fn do_wield(
         if !obj.can_wear(WearFlags::WIELD) {
             send_to_char(&mut game.descriptors, ch, "You can't wield that.\r\n");
         } else if obj.get_obj_weight() > STR_APP[ch.strength_apply_index()].wield_w as i32 {
-            send_to_char(&mut game.descriptors, ch, "It's too heavy for you to use.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "It's too heavy for you to use.\r\n",
+            );
         } else {
-            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_WIELD);
+            perform_wear(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                obj.id(),
+                WEAR_WIELD,
+            );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_grab(
     game: &mut Game,
     db: &mut DB,
@@ -2595,13 +3081,24 @@ pub fn do_grab(
     let obj;
     one_argument(argument, &mut arg);
 
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Hold what?\r\n");
     } else if {
-        obj = get_obj_in_list_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.carrying);
+        obj = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &arg,
+            None,
+            &ch.carrying,
+        );
         obj.is_none()
     } {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
         );
@@ -2609,18 +3106,32 @@ pub fn do_grab(
         let obj = obj.unwrap();
 
         if obj.get_obj_type() == ItemType::Light {
-            perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_LIGHT);
+            perform_wear(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                obj.id(),
+                WEAR_LIGHT,
+            );
+        } else if !obj.can_wear(WearFlags::HOLD)
+            && obj.get_obj_type() != ItemType::Wand
+            && obj.get_obj_type() != ItemType::Staff
+            && obj.get_obj_type() != ItemType::Scroll
+            && obj.get_obj_type() != ItemType::Potion
+        {
+            send_to_char(&mut game.descriptors, ch, "You can't hold that.\r\n");
         } else {
-            if !obj.can_wear(WearFlags::HOLD)
-                && obj.get_obj_type() != ItemType::Wand
-                && obj.get_obj_type() != ItemType::Staff
-                && obj.get_obj_type() != ItemType::Scroll
-                && obj.get_obj_type() != ItemType::Potion
-            {
-                send_to_char(&mut game.descriptors, ch, "You can't hold that.\r\n");
-            } else {
-                perform_wear(&mut game.descriptors, db, chars, objs, chid, obj.id(), WEAR_HOLD);
-            }
+            perform_wear(
+                &mut game.descriptors,
+                db,
+                chars,
+                objs,
+                chid,
+                obj.id(),
+                WEAR_HOLD,
+            );
         }
     }
 }
@@ -2636,15 +3147,17 @@ fn perform_remove(
     let ch = chars.get(chid);
     let oid;
 
-    if {
+    let res = {
         oid = ch.get_eq(pos);
         oid.is_none()
-    } {
+    }; 
+        if res {
         error!("SYSERR: perform_remove: bad pos {} passed.", pos);
     } else if objs.get(oid.unwrap()).obj_flagged(ExtraFlags::NODROP) {
         let oid = oid.unwrap();
         let obj = objs.get(oid);
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "You can't remove $p, it must be CURSED!",
@@ -2657,7 +3170,8 @@ fn perform_remove(
     } else if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
         let oid = oid.unwrap();
         let obj = objs.get(oid);
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$p: you can't carry that many items!",
@@ -2675,7 +3189,8 @@ fn perform_remove(
         obj_to_char(eq, ch);
         let ch = chars.get(chid);
         let obj = objs.get(oid);
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "You stop using $p.",
@@ -2685,7 +3200,8 @@ fn perform_remove(
             None,
             TO_CHAR,
         );
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$n stops using $p.",
@@ -2698,6 +3214,7 @@ fn perform_remove(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_remove(
     game: &mut Game,
     db: &mut DB,
@@ -2721,6 +3238,7 @@ pub fn do_remove(
 
     let mut found = false;
     let i;
+    #[allow(clippy::blocks_in_conditions)]
     if dotmode == FIND_ALL {
         for i in 0..NUM_WEARS {
             let ch = chars.get(chid);
@@ -2741,7 +3259,13 @@ pub fn do_remove(
             for i in 0..NUM_WEARS {
                 let ch = chars.get(chid);
                 if ch.get_eq(i).is_some()
-                    && can_see_obj(&game.descriptors, chars, db, ch, objs.get(ch.get_eq(i).unwrap()))
+                    && can_see_obj(
+                        &game.descriptors,
+                        chars,
+                        db,
+                        ch,
+                        objs.get(ch.get_eq(i).unwrap()),
+                    )
                     && isname(&arg, objs.get(ch.get_eq(i).unwrap()).name.as_ref())
                 {
                     perform_remove(&mut game.descriptors, db, chars, objs, chid, i);
@@ -2750,23 +3274,32 @@ pub fn do_remove(
             }
             if !found {
                 let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("You don't seem to be using any {}s.\r\n", arg).as_str(),
                 );
             }
         }
+    } else if {
+        i = get_obj_pos_in_equip_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &arg,
+            None,
+            &ch.equipment,
+        );
+        i.is_none()
+    } {
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("You don't seem to be using {} {}.\r\n", an!(arg), arg).as_str(),
+        );
     } else {
-        if {
-            i = get_obj_pos_in_equip_vis(&game.descriptors, chars, db, objs, ch, &arg, None, &ch.equipment);
-            i.is_none()
-        } {
-            send_to_char(&mut game.descriptors, 
-                ch,
-                format!("You don't seem to be using {} {}.\r\n", an!(arg), arg).as_str(),
-            );
-        } else {
-            perform_remove(&mut game.descriptors, db, chars, objs, chid, i.unwrap());
-        }
+        perform_remove(&mut game.descriptors, db, chars, objs, chid, i.unwrap());
     }
 }

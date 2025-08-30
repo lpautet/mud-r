@@ -1,16 +1,12 @@
 //use std::marker::PhantomData;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Default)]
 pub struct DepotId {
     index: u32,
     seq: u32,
 }
 
-impl Default for DepotId {
-    fn default() -> Self {
-        Self { index: Default::default(), seq: Default::default() }
-    }
-}
 
 pub trait HasId {
     fn id(&self) -> DepotId;
@@ -36,7 +32,7 @@ impl<T> Depot<T>
 where
     T: Default + HasId
 {
-    pub fn new() -> Depot<T> {
+    pub fn default() -> Depot<T> {
         Depot {
             slots: vec![],
             size: 0,
@@ -64,7 +60,12 @@ where
         self.seq += 1;
         let idx: u32;
         let insert_pos = self.slots.iter().position(|s| s.free);
-        if insert_pos.is_none() {
+        if let Some(insert_pos) = insert_pos {
+            idx = insert_pos as u32;
+            self.slots[idx as usize].free = false;
+            self.slots[idx as usize].seq = self.seq;
+            self.slots[idx as usize].value = item;
+        } else {
             let slot = Slot {
                 seq: self.seq,
                 free: false,
@@ -72,11 +73,6 @@ where
             };
             idx = self.slots.len() as u32;
             self.slots.push(slot);
-        } else {
-            idx = insert_pos.unwrap() as u32;
-            self.slots[idx as usize].free = false;
-            self.slots[idx as usize].seq = self.seq;
-            self.slots[idx as usize].value = item;
         }
         self.size += 1;
         let ret = DepotId {
@@ -98,7 +94,7 @@ where
         self.slots[id.index as usize].free = true;
         self.slots[id.index as usize].seq = 0; // so that old DepotId are now invalid
         self.size -= 1;
-        return std::mem::take(&mut self.slots[id.index as usize].value);
+        std::mem::take(&mut self.slots[id.index as usize].value)
     }
 
     pub fn get(&self, id: DepotId) -> &T {
@@ -261,14 +257,14 @@ mod depot_tests {
 
     #[test]
     fn test_depot_new() {
-        let depot: Depot<TestItem> = Depot::new();
+        let depot: Depot<TestItem> = Depot::default();
         assert!(depot.is_empty());
         assert_eq!(depot.len(), 0);
     }
 
     #[test]
     fn test_depot_push_and_get() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let item = TestItem { id: DepotId::default(), value: 42 };
         
         let id = depot.push(item);
@@ -282,7 +278,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_multiple_items() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         
         let id1 = depot.push(TestItem { id: DepotId::default(), value: 10 });
         let id2 = depot.push(TestItem { id: DepotId::default(), value: 20 });
@@ -296,7 +292,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_take() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id = depot.push(TestItem { id: DepotId::default(), value: 100 });
         
         assert_eq!(depot.len(), 1);
@@ -308,7 +304,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_get_mut() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id = depot.push(TestItem { id: DepotId::default(), value: 50 });
         
         {
@@ -321,7 +317,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_ids() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id1 = depot.push(TestItem { id: DepotId::default(), value: 1 });
         let id2 = depot.push(TestItem { id: DepotId::default(), value: 2 });
         
@@ -333,7 +329,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_iterator() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         depot.push(TestItem { id: DepotId::default(), value: 10 });
         depot.push(TestItem { id: DepotId::default(), value: 20 });
         depot.push(TestItem { id: DepotId::default(), value: 30 });
@@ -347,7 +343,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_reuse_slots() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id1 = depot.push(TestItem { id: DepotId::default(), value: 1 });
         let id2 = depot.push(TestItem { id: DepotId::default(), value: 2 });
         
@@ -366,7 +362,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_clear() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         depot.push(TestItem { id: DepotId::default(), value: 1 });
         depot.push(TestItem { id: DepotId::default(), value: 2 });
         
@@ -378,7 +374,7 @@ mod depot_tests {
 
     #[test]
     fn test_depot_sequence_increment() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id1 = depot.push(TestItem { id: DepotId::default(), value: 1 });
         let id2 = depot.push(TestItem { id: DepotId::default(), value: 2 });
         
@@ -394,7 +390,7 @@ mod depot_tests {
     #[test]
     #[should_panic(expected = "GURU MEDITATION invalid seq")]
     fn test_depot_panic_on_invalid_seq() {
-        let mut depot: Depot<TestItem> = Depot::new();
+        let mut depot: Depot<TestItem> = Depot::default();
         let id = depot.push(TestItem { id: DepotId::default(), value: 1 });
         depot.take(id);
         

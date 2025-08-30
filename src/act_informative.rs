@@ -22,7 +22,7 @@ use crate::db::DB;
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::compute_armor_class;
 use crate::handler::{
-    affected_by_spell, fname, generic_find, get_char_vis, get_number, isname, FindFlags
+    affected_by_spell, fname, generic_find, get_char_vis, get_number, isname, FindFlags,
 };
 use crate::interpreter::{
     half_chop, is_abbrev, one_argument, search_block, CMD_INFO, SCMD_CLEAR, SCMD_CREDITS,
@@ -33,91 +33,102 @@ use crate::modify::page_string;
 use crate::screen::{C_NRM, C_OFF, C_SPR, KCYN, KGRN, KNRM, KNUL, KRED, KYEL};
 use crate::spells::SPELL_ARMOR;
 use crate::structs::ConState::ConPlaying;
+use crate::structs::RoomFlags;
 use crate::structs::{
-    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, Position, PrefFlags, Sex, CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, NUM_OF_DIRS, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING,
+    AffectFlags, ExitFlags, ExtraDescrData, ExtraFlags, ItemType, Position, PrefFlags, Sex,
+    CONT_CLOSED, LVL_GOD, LVL_IMPL, NOWHERE, PLR_KILLER, PLR_MAILING, PLR_THIEF, PLR_WRITING,
 };
-use crate::structs::{ RoomFlags};
-use crate::structs::{
-  DRUNK, FULL, LVL_IMMORT, NUM_WEARS, THIRST,
-};
+use crate::structs::{DRUNK, FULL, LVL_IMMORT, NUM_WEARS, THIRST};
 use crate::util::{
-    age, can_see, can_see_obj, pers, rand_number, real_time_passed, sprintbit, sprinttype, time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN
+    age, can_see, can_see_obj, pers, rand_number, real_time_passed, sprintbit, sprinttype,
+    time_now, SECS_PER_MUD_HOUR, SECS_PER_REAL_MIN,
 };
-use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef};
 use crate::{_clrlevel, an, clr, Game, CCCYN, CCGRN, CCRED, CCYEL, COLOR_LEV, TO_NOTVICT};
+use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef};
 use crate::{CCNRM, TO_VICT};
-use log::{error};
+use log::error;
 use regex::Regex;
 
 pub const SHOW_OBJ_LONG: i32 = 0;
 pub const SHOW_OBJ_SHORT: i32 = 1;
 pub const SHOW_OBJ_ACTION: i32 = 2;
 
-    fn show_obj_to_char(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, texts: &Depot<TextData>, obj: &ObjData, ch: &CharData, mode: i32) {
-        match mode {
-            SHOW_OBJ_LONG => {
-                send_to_char(descs, ch, format!("{}", obj.description).as_str());
-            }
+fn show_obj_to_char(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    texts: &Depot<TextData>,
+    obj: &ObjData,
+    ch: &CharData,
+    mode: i32,
+) {
+    match mode {
+        SHOW_OBJ_LONG => {
+            send_to_char(descs, ch, format!("{}", obj.description).as_str());
+        }
 
-            SHOW_OBJ_SHORT => {
-                send_to_char(descs, ch, format!("{}", obj.short_description).as_str());
-            }
+        SHOW_OBJ_SHORT => {
+            send_to_char(descs, ch, format!("{}", obj.short_description).as_str());
+        }
 
-            SHOW_OBJ_ACTION => match obj.get_obj_type() {
-                ItemType::Note => {
-                    let description = texts.get(obj.action_description);
-                    if !description.text.is_empty() {
-                        let notebuf = format!(
-                            "There is something written on it:\r\n\r\n{}",
-                            description.text
-                        );
-                        let desc_id = ch.desc.unwrap();
-                        page_string(descs, chars, desc_id, notebuf.as_str(), true);
-                    } else {
-                        send_to_char(descs, ch, "It's blank.\r\n");
-                    }
-                    return;
+        SHOW_OBJ_ACTION => match obj.get_obj_type() {
+            ItemType::Note => {
+                let description = texts.get(obj.action_description);
+                if !description.text.is_empty() {
+                    let notebuf = format!(
+                        "There is something written on it:\r\n\r\n{}",
+                        description.text
+                    );
+                    let desc_id = ch.desc.unwrap();
+                    page_string(descs, chars, desc_id, notebuf.as_str(), true);
+                } else {
+                    send_to_char(descs, ch, "It's blank.\r\n");
                 }
-                ItemType::Drinkcon => {
-                    send_to_char(descs, ch, "It looks like a drink container.");
-                }
-
-                _ => {
-                    send_to_char(descs, ch, "You see nothing special..");
-                }
-            },
-
-            _ => {
-                error!("SYSERR: Bad display mode ({}) in show_obj_to_char().", mode);
                 return;
             }
-        }
+            ItemType::Drinkcon => {
+                send_to_char(descs, ch, "It looks like a drink container.");
+            }
 
-        show_obj_modifiers(descs, obj, ch);
-        send_to_char(descs, ch, "\r\n");
-    }
+            _ => {
+                send_to_char(descs, ch, "You see nothing special..");
+            }
+        },
 
-    fn show_obj_modifiers(descs: &mut Depot<DescriptorData>, obj: &ObjData, ch: &CharData) {
-        if obj.obj_flagged(ExtraFlags::INVISIBLE) {
-            send_to_char(descs, ch, " (invisible)");
-        }
-        if obj.obj_flagged(ExtraFlags::BLESS) && ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
-            send_to_char(descs, ch, " ..It glows blue!");
-        }
-        if obj.obj_flagged(ExtraFlags::MAGIC) && ch.aff_flagged(AffectFlags::DETECT_MAGIC) {
-            send_to_char(descs, ch, " ..It glows yellow!");
-        }
-        if obj.obj_flagged(ExtraFlags::GLOW) {
-            send_to_char(descs, ch, " ..It has a soft glowing aura!");
-        }
-        if obj.obj_flagged(ExtraFlags::HUM) {
-            send_to_char(descs, ch, " ..It emits a faint humming sound!");
+        _ => {
+            error!("SYSERR: Bad display mode ({}) in show_obj_to_char().", mode);
+            return;
         }
     }
 
+    show_obj_modifiers(descs, obj, ch);
+    send_to_char(descs, ch, "\r\n");
+}
+
+fn show_obj_modifiers(descs: &mut Depot<DescriptorData>, obj: &ObjData, ch: &CharData) {
+    if obj.obj_flagged(ExtraFlags::INVISIBLE) {
+        send_to_char(descs, ch, " (invisible)");
+    }
+    if obj.obj_flagged(ExtraFlags::BLESS) && ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
+        send_to_char(descs, ch, " ..It glows blue!");
+    }
+    if obj.obj_flagged(ExtraFlags::MAGIC) && ch.aff_flagged(AffectFlags::DETECT_MAGIC) {
+        send_to_char(descs, ch, " ..It glows yellow!");
+    }
+    if obj.obj_flagged(ExtraFlags::GLOW) {
+        send_to_char(descs, ch, " ..It has a soft glowing aura!");
+    }
+    if obj.obj_flagged(ExtraFlags::HUM) {
+        send_to_char(descs, ch, " ..It emits a faint humming sound!");
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn list_obj_to_char(
     descs: &mut Depot<DescriptorData>,
-    db: &DB,chars: &Depot<CharData>, texts: &Depot<TextData>,objs: & Depot<ObjData>, 
+    db: &DB,
+    chars: &Depot<CharData>,
+    texts: &Depot<TextData>,
+    objs: &Depot<ObjData>,
     list: &Vec<DepotId>,
     ch: &CharData,
     mode: i32,
@@ -137,7 +148,13 @@ fn list_obj_to_char(
     }
 }
 
-fn diag_char_to_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, i: &CharData, ch: &CharData) {
+fn diag_char_to_char(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    i: &CharData,
+    ch: &CharData,
+) {
     struct Item {
         percent: i8,
         text: &'static str,
@@ -179,34 +196,41 @@ fn diag_char_to_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
 
     let pers = pers(descs, chars, db, i, ch);
 
-    let percent;
-    if i.get_max_hit() > 0 {
-        percent = (100 * i.get_hit() as i32) / i.get_max_hit() as i32;
+    let percent = if i.get_max_hit() > 0 {
+        (100 * i.get_hit() as i32) / i.get_max_hit() as i32
     } else {
-        percent = -1; /* How could MAX_HIT be < 1?? */
-    }
+        -1 /* How could MAX_HIT be < 1?? */
+    };
     let mut ar_index: usize = 0;
     loop {
-        if DIAGNOSIS[ar_index].percent < 0 || percent >= DIAGNOSIS[ar_index as usize].percent as i32
-        {
+        if DIAGNOSIS[ar_index].percent < 0 || percent >= DIAGNOSIS[ar_index].percent as i32 {
             break;
         }
         ar_index += 1;
     }
 
-    send_to_char(descs, 
+    send_to_char(
+        descs,
         ch,
         format!(
             "{}{} {}\r\n",
             pers.chars().next().unwrap().to_uppercase(),
             &pers[1..],
-            DIAGNOSIS[ar_index as usize].text
+            DIAGNOSIS[ar_index].text
         )
         .as_str(),
     );
 }
 
-fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, texts: &Depot<TextData>, objs: & Depot<ObjData>, i: &CharData, ch: &CharData) {
+fn look_at_char(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    texts: &Depot<TextData>,
+    objs: &Depot<ObjData>,
+    i: &CharData,
+    ch: &CharData,
+) {
     let mut found;
 
     if ch.desc.is_none() {
@@ -216,7 +240,9 @@ fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDat
     if !description.text.is_empty() {
         send_to_char(descs, ch, &description.text);
     } else {
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "You see nothing special about $m.",
             false,
@@ -227,18 +253,22 @@ fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDat
         );
     }
 
-    diag_char_to_char(descs, db,chars, i, ch);
+    diag_char_to_char(descs, db, chars, i, ch);
 
     found = false;
     for j in 0..NUM_WEARS {
-        if i.get_eq(j).is_some() && can_see_obj(descs, chars, db, ch, objs.get(i.get_eq(j).unwrap())) {
+        if i.get_eq(j).is_some()
+            && can_see_obj(descs, chars, db, ch, objs.get(i.get_eq(j).unwrap()))
+        {
             found = true;
         }
     }
 
     if found {
         send_to_char(descs, ch, "\r\n"); /* act() does capitalization. */
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "$n is using:",
             false,
@@ -247,16 +277,27 @@ fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDat
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        for j in 0..NUM_WEARS {
-            if i.get_eq(j).is_some() && can_see_obj(descs, chars, db, ch, objs.get(i.get_eq(j).unwrap())) {
-                send_to_char(descs, ch, WEAR_WHERE[j as usize]);
-                show_obj_to_char(descs, chars, texts, objs.get(i.get_eq(j).unwrap()), ch, SHOW_OBJ_SHORT);
+        for (j, wear_where) in WEAR_WHERE.iter().enumerate() {
+            if i.get_eq(j).is_some()
+                && can_see_obj(descs, chars, db, ch, objs.get(i.get_eq(j).unwrap()))
+            {
+                send_to_char(descs, ch, wear_where);
+                show_obj_to_char(
+                    descs,
+                    chars,
+                    texts,
+                    objs.get(i.get_eq(j).unwrap()),
+                    ch,
+                    SHOW_OBJ_SHORT,
+                );
             }
         }
     }
     if i.id() != ch.id() && (ch.is_thief() || ch.get_level() >= LVL_IMMORT as u8) {
         found = false;
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "\r\nYou attempt to peek at $s inventory:",
             false,
@@ -267,7 +308,9 @@ fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDat
         );
         for &tmp_obj_id in &i.carrying {
             let tmp_obj = objs.get(tmp_obj_id);
-            if can_see_obj(descs, chars, db, ch, tmp_obj) && rand_number(0, 20) < ch.get_level() as u32 {
+            if can_see_obj(descs, chars, db, ch, tmp_obj)
+                && rand_number(0, 20) < ch.get_level() as u32
+            {
                 show_obj_to_char(descs, chars, texts, tmp_obj, ch, SHOW_OBJ_SHORT);
                 found = true;
             }
@@ -279,7 +322,13 @@ fn look_at_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDat
     }
 }
 
-fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, i: &CharData, ch: &CharData) {
+fn list_one_char(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    i: &CharData,
+    ch: &CharData,
+) {
     const POSITIONS: [&str; 9] = [
         " is lying here, dead.",
         " is lying here, mortally wounded.",
@@ -292,8 +341,7 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
         " is standing here.",
     ];
 
-
-    if  i.is_npc() && !i.player.long_descr.is_empty() && i.get_pos() == i.get_default_pos() {
+    if i.is_npc() && !i.player.long_descr.is_empty() && i.get_pos() == i.get_default_pos() {
         if i.aff_flagged(AffectFlags::INVISIBLE) {
             send_to_char(descs, ch, "*");
         }
@@ -308,7 +356,9 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
         send_to_char(descs, ch, &i.player.long_descr);
 
         if i.aff_flagged(AffectFlags::SANCTUARY) {
-            act(descs, chars, 
+            act(
+                descs,
+                chars,
                 db,
                 "...$e glows with a bright light!",
                 false,
@@ -319,7 +369,9 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
             );
         }
         if i.aff_flagged(AffectFlags::BLIND) {
-            act(descs, chars, 
+            act(
+                descs,
+                chars,
                 db,
                 "...$e is groping around blindly!",
                 false,
@@ -333,7 +385,8 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     }
 
     if i.is_npc() {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!(
                 "{}{}",
@@ -343,7 +396,11 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
             .as_str(),
         );
     } else {
-        send_to_char(descs, ch, format!("{} {}", i.player.name, i.get_title()).as_str());
+        send_to_char(
+            descs,
+            ch,
+            format!("{} {}", i.player.name, i.get_title()).as_str(),
+        );
     }
 
     if i.aff_flagged(AffectFlags::INVISIBLE) {
@@ -360,26 +417,22 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     }
     if i.get_pos() != Position::Fighting {
         send_to_char(descs, ch, POSITIONS[i.get_pos() as usize]);
-    } else {
-        if i.fighting_id().is_some() {
-            send_to_char(descs, ch, " is here, fighting ");
-            if chars.get(i.fighting_id().unwrap()).id() == ch.id() {
-                send_to_char(descs, ch, "YOU!");
-            } else {
-                if i.in_room() == chars.get(i.fighting_id().unwrap()).in_room() {
-                    let msg = format!(
-                        "{}!",
-                        pers(descs, chars, db, chars.get(i.fighting_id().unwrap()), ch)
-                    );
-                    send_to_char(descs, ch,msg.as_str());
-                } else {
-                    send_to_char(descs, ch, "someone who has already left!");
-                }
-            }
+    } else if i.fighting_id().is_some() {
+        send_to_char(descs, ch, " is here, fighting ");
+        if chars.get(i.fighting_id().unwrap()).id() == ch.id() {
+            send_to_char(descs, ch, "YOU!");
+        } else if i.in_room() == chars.get(i.fighting_id().unwrap()).in_room() {
+            let msg = format!(
+                "{}!",
+                pers(descs, chars, db, chars.get(i.fighting_id().unwrap()), ch)
+            );
+            send_to_char(descs, ch, msg.as_str());
         } else {
-            /* NIL fighting pointer */
-            send_to_char(descs, ch, " is here struggling with thin air.");
+            send_to_char(descs, ch, "someone who has already left!");
         }
+    } else {
+        /* NIL fighting pointer */
+        send_to_char(descs, ch, " is here struggling with thin air.");
     }
 
     if ch.aff_flagged(AffectFlags::DETECT_ALIGN) {
@@ -392,7 +445,9 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     send_to_char(descs, ch, "\r\n");
 
     if i.aff_flagged(AffectFlags::SANCTUARY) {
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "...$e glows with a bright light!",
             false,
@@ -404,18 +459,24 @@ fn list_one_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharDa
     }
 }
 
-fn list_char_to_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, list: &Vec<DepotId>, ch: &CharData) {
-
+fn list_char_to_char(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    list: &Vec<DepotId>,
+    ch: &CharData,
+) {
     for id in list {
         if *id != ch.id() {
             let obj = chars.get(*id);
             if can_see(descs, chars, db, ch, obj) {
-                list_one_char(descs, db,chars, obj, ch);
+                list_one_char(descs, db, chars, obj, ch);
             } else if db.is_dark(ch.in_room())
                 && !ch.can_see_in_dark()
                 && obj.aff_flagged(AffectFlags::INFRAVISION)
             {
-                send_to_char(descs, 
+                send_to_char(
+                    descs,
                     ch,
                     "You see a pair of glowing red eyes looking your way.\r\n",
                 );
@@ -426,18 +487,28 @@ fn list_char_to_char(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
 
 fn do_auto_exits(descs: &mut Depot<DescriptorData>, db: &DB, ch: &CharData) {
     let mut slen = 0;
-    send_to_char(descs, ch, format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str());
-    for door in 0..NUM_OF_DIRS {
+    send_to_char(
+        descs,
+        ch,
+        format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str(),
+    );
+    for (door, dir) in DIRS.iter().enumerate() {
         if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
             continue;
         }
-        if db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED) {
+        if db
+            .exit(ch, door)
+            .as_ref()
+            .unwrap()
+            .exit_flagged(ExitFlags::CLOSED)
+        {
             continue;
         }
-        send_to_char(descs, ch, format!("{} ", DIRS[door].to_lowercase()).as_str());
+        send_to_char(descs, ch, format!("{} ", dir.to_lowercase()).as_str());
         slen += 1;
     }
-    send_to_char(descs, 
+    send_to_char(
+        descs,
         ch,
         format!(
             "{}]{}\r\n",
@@ -448,9 +519,13 @@ fn do_auto_exits(descs: &mut Depot<DescriptorData>, db: &DB, ch: &CharData) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_exits(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -458,17 +533,26 @@ pub fn do_exits(
 ) {
     let ch = chars.get(chid);
     if ch.aff_flagged(AffectFlags::BLIND) {
-        send_to_char(&mut game.descriptors, ch, "You can't see a damned thing, you're blind!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can't see a damned thing, you're blind!\r\n",
+        );
         return;
     }
     send_to_char(&mut game.descriptors, ch, "Obvious exits:\r\n");
     let mut len = 0;
-    for door in 0..NUM_OF_DIRS {
+    for (door, dir) in DIRS.iter().enumerate() {
         let ch = chars.get(chid);
         if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
             continue;
         }
-        if db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED) {
+        if db
+            .exit(ch, door)
+            .as_ref()
+            .unwrap()
+            .exit_flagged(ExitFlags::CLOSED)
+        {
             continue;
         }
         len += 1;
@@ -476,22 +560,24 @@ pub fn do_exits(
         let oexit = db.exit(ch, door);
         let exit = oexit.as_ref().unwrap();
         if ch.get_level() >= LVL_IMMORT as u8 {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "{} - [{:5}] {}\r\n",
-                    DIRS[door as usize],
+                    dir,
                     db.get_room_vnum(exit.to_room),
                     db.world[exit.to_room as usize].name
                 )
                 .as_str(),
             );
         } else {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "{} - {}\r\n",
-                    DIRS[door as usize],
+                    dir,
                     if db.is_dark(exit.to_room) && !ch.can_see_in_dark() {
                         "Too dark to tell."
                     } else {
@@ -508,7 +594,15 @@ pub fn do_exits(
     }
 }
 
-pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, texts: &Depot<TextData>, objs: & Depot<ObjData>, ch: &CharData, ignore_brief: bool) {
+pub fn look_at_room(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    texts: &Depot<TextData>,
+    objs: &Depot<ObjData>,
+    ch: &CharData,
+    ignore_brief: bool,
+) {
     if ch.desc.is_none() {
         return;
     }
@@ -520,12 +614,13 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         send_to_char(descs, ch, "You see nothing but infinite darkness...\r\n");
         return;
     }
-    send_to_char(descs, ch, format!("{}", CCCYN!(ch, C_NRM)).as_str());
+    send_to_char(descs, ch, CCCYN!(ch, C_NRM));
 
     if !ch.is_npc() && ch.prf_flagged(PrefFlags::ROOMFLAGS) {
         let mut buf = String::new();
         sprintbit(db.room_flags(ch.in_room()).bits(), &ROOM_BITS, &mut buf);
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!(
                 "[{}] {} [{}]",
@@ -536,10 +631,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
             .as_str(),
         );
     } else {
-        send_to_char(descs, 
-            ch,
-            format!("{}", db.world[ch.in_room() as usize].name).as_str(),
-        );
+        send_to_char(descs, ch, &db.world[ch.in_room() as usize].name);
     }
 
     send_to_char(descs, ch, format!("{}\r\n", CCNRM!(ch, C_NRM)).as_str());
@@ -548,10 +640,7 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
         || ignore_brief
         || db.room_flagged(ch.in_room(), RoomFlags::DEATH)
     {
-        send_to_char(descs, 
-            ch,
-            format!("{}", db.world[ch.in_room() as usize].description).as_str(),
-        );
+        send_to_char(descs, ch, &db.world[ch.in_room() as usize].description);
     }
 
     /* autoexits */
@@ -560,21 +649,36 @@ pub fn look_at_room(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Cha
     }
 
     /* now list characters & objects */
-    send_to_char(descs, ch, format!("{}", CCGRN!(ch, C_NRM)).as_str());
+    send_to_char(descs, ch, CCGRN!(ch, C_NRM));
     list_obj_to_char(
         descs,
-        db,chars,texts,objs,
+        db,
+        chars,
+        texts,
+        objs,
         &db.world[ch.in_room() as usize].contents,
         ch,
         SHOW_OBJ_LONG,
         false,
     );
-    send_to_char(descs, ch, format!("{}", CCYEL!(ch, C_NRM)).as_str());
-    list_char_to_char(descs, db,chars, &db.world[ch.in_room() as usize].peoples, ch);
-    send_to_char(descs, ch, format!("{}", CCNRM!(ch, C_NRM)).as_str());
+    send_to_char(descs, ch, CCYEL!(ch, C_NRM));
+    list_char_to_char(
+        descs,
+        db,
+        chars,
+        &db.world[ch.in_room() as usize].peoples,
+        ch,
+    );
+    send_to_char(descs, ch, CCNRM!(ch, C_NRM));
 }
 
-fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, chid: DepotId, dir: i32) {
+fn look_in_direction(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    chid: DepotId,
+    dir: i32,
+) {
     let ch = chars.get(chid);
     if db.exit(ch, dir as usize).is_some() {
         if !db
@@ -584,7 +688,8 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
             .general_description
             .is_empty()
         {
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 ch,
                 format!(
                     "{}",
@@ -610,7 +715,8 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
                 .keyword
                 .is_empty()
         {
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 ch,
                 format!(
                     "The {} is closed.\r\n",
@@ -630,7 +736,8 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
                 .keyword
                 .is_empty()
         {
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 ch,
                 format!(
                     "The {} is open.\r\n",
@@ -644,17 +751,27 @@ fn look_in_direction(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<Ch
     }
 }
 
-fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, texts: &mut Depot<TextData>, objs: & Depot<ObjData>, ch: &CharData, arg: &str) {
+fn look_in_obj(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &Depot<ObjData>,
+    ch: &CharData,
+    arg: &str,
+) {
     let mut dummy = None;
     let mut obj = None;
-    let bits;
 
     if arg.is_empty() {
         send_to_char(descs, ch, "Look in what?\r\n");
         return;
     }
-    bits = generic_find(descs, chars,
-        db,objs,
+    let bits = generic_find(
+        descs,
+        chars,
+        db,
+        objs,
         arg,
         FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP,
         ch,
@@ -662,7 +779,8 @@ fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData
         &mut obj,
     );
     if bits.is_empty() {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!("There doesn't seem to be {} {} here.\r\n", an!(arg), arg).as_str(),
         );
@@ -671,51 +789,58 @@ fn look_in_obj(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData
         && obj.unwrap().get_obj_type() != ItemType::Container
     {
         send_to_char(descs, ch, "There's nothing inside that!\r\n");
-    } else {
-        if obj.unwrap().get_obj_type() == ItemType::Container {
-            if obj.unwrap().objval_flagged(CONT_CLOSED) {
-                send_to_char(descs, ch, "It is closed.\r\n");
-            } else {
-                send_to_char(descs, ch, fname(obj.unwrap().name.as_ref()).as_ref());
-                match bits {
-                    FindFlags::OBJ_INV => {
-                        send_to_char(descs, ch, " (carried): \r\n");
-                    }
-                    FindFlags::OBJ_ROOM => {
-                        send_to_char(descs, ch, " (here): \r\n");
-                    }
-                    FindFlags::OBJ_EQUIP => {
-                        send_to_char(descs, ch, " (used): \r\n");
-                    }
-                    _ => {}
-                }
-
-                list_obj_to_char(descs, db,chars,texts,  objs,&obj.unwrap().contains, ch, SHOW_OBJ_SHORT, true);
-            }
+    } else if obj.unwrap().get_obj_type() == ItemType::Container {
+        if obj.unwrap().objval_flagged(CONT_CLOSED) {
+            send_to_char(descs, ch, "It is closed.\r\n");
         } else {
-            /* item must be a fountain or drink container */
-            if obj.unwrap().get_obj_val(1) <= 0 {
-                send_to_char(descs, ch, "It is empty.\r\n");
-            } else {
-                if obj.unwrap().get_obj_val(0) <= 0
-                    || obj.unwrap().get_obj_val(1) > obj.unwrap().get_obj_val(0)
-                {
-                    send_to_char(descs, ch, "Its contents seem somewhat murky.\r\n");
-                    /* BUG */
-                } else {
-                    let mut buf2 = String::new();
-                    let amt = obj.unwrap().get_obj_val(1) * 3 / obj.unwrap().get_obj_val(0);
-                    sprinttype(obj.unwrap().get_obj_val(2), &COLOR_LIQUID, &mut buf2);
-                    send_to_char(descs, 
-                        ch,
-                        format!(
-                            "It's {}full of a {} liquid.\r\n",
-                            FULLNESS[amt as usize], buf2
-                        )
-                        .as_str(),
-                    );
+            send_to_char(descs, ch, fname(obj.unwrap().name.as_ref()).as_ref());
+            match bits {
+                FindFlags::OBJ_INV => {
+                    send_to_char(descs, ch, " (carried): \r\n");
                 }
+                FindFlags::OBJ_ROOM => {
+                    send_to_char(descs, ch, " (here): \r\n");
+                }
+                FindFlags::OBJ_EQUIP => {
+                    send_to_char(descs, ch, " (used): \r\n");
+                }
+                _ => {}
             }
+
+            list_obj_to_char(
+                descs,
+                db,
+                chars,
+                texts,
+                objs,
+                &obj.unwrap().contains,
+                ch,
+                SHOW_OBJ_SHORT,
+                true,
+            );
+        }
+    } else {
+        /* item must be a fountain or drink container */
+        if obj.unwrap().get_obj_val(1) <= 0 {
+            send_to_char(descs, ch, "It is empty.\r\n");
+        } else if obj.unwrap().get_obj_val(0) <= 0
+            || obj.unwrap().get_obj_val(1) > obj.unwrap().get_obj_val(0)
+        {
+            send_to_char(descs, ch, "Its contents seem somewhat murky.\r\n");
+            /* BUG */
+        } else {
+            let mut buf2 = String::new();
+            let amt = obj.unwrap().get_obj_val(1) * 3 / obj.unwrap().get_obj_val(0);
+            sprinttype(obj.unwrap().get_obj_val(2), &COLOR_LIQUID, &mut buf2);
+            send_to_char(
+                descs,
+                ch,
+                format!(
+                    "It's {}full of a {} liquid.\r\n",
+                    FULLNESS[amt as usize], buf2
+                )
+                .as_str(),
+            );
         }
     }
 }
@@ -737,7 +862,15 @@ fn find_exdesc<'a>(word: &str, list: &'a Vec<ExtraDescrData>) -> Option<&'a Rc<s
  * Thanks to Angus Mezick <angus@EDGIL.CCMAIL.COMPUSERVE.COM> for the
  * suggested fix to this problem.
  */
-fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharData>, texts: &mut Depot<TextData>,objs: & Depot<ObjData>,  ch: &CharData, arg: &str) {
+fn look_at_target(
+    descs: &mut Depot<DescriptorData>,
+    db: &DB,
+    chars: &Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &Depot<ObjData>,
+    ch: &CharData,
+    arg: &str,
+) {
     let mut i = 0;
     let mut found = false;
     let mut found_char = None;
@@ -752,8 +885,11 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
         return;
     }
 
-    let bits = generic_find(descs, chars,
-        db,objs,
+    let bits = generic_find(
+        descs,
+        chars,
+        db,
+        objs,
         arg,
         FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP | FindFlags::CHAR_ROOM,
         ch,
@@ -762,12 +898,13 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     );
 
     /* Is the target a character? */
-    if found_char.is_some() {
-        let found_char = found_char.unwrap();
-        look_at_char(descs, db,chars, texts,objs, found_char, ch);
+    if let Some(found_char) = found_char {
+        look_at_char(descs, db, chars, texts, objs, found_char, ch);
         if ch.id() != found_char.id() {
             if can_see(descs, chars, db, found_char, ch) {
-                act(descs, chars, 
+                act(
+                    descs,
+                    chars,
                     db,
                     "$n looks at you.",
                     true,
@@ -777,7 +914,9 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
                     TO_VICT,
                 );
             }
-            act(descs, chars, 
+            act(
+                descs,
+                chars,
                 db,
                 "$n looks at $N.",
                 true,
@@ -799,23 +938,25 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
 
     /* Does the argument match an extra desc in the room? */
     let desc = find_exdesc(&arg, &db.world[ch.in_room() as usize].ex_descriptions);
-    if desc.is_some() {
+    if let Some(desc) = desc {
         i += 1;
         if i == fnum {
             let d_id = ch.desc.unwrap();
-            page_string(descs, chars,  d_id, desc.as_ref().unwrap(), false);
+            page_string(descs, chars, d_id, desc, false);
             return;
         }
     }
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some() && can_see_obj(descs, chars, db, ch, objs.get(ch.get_eq(j).unwrap())) {
+        if ch.get_eq(j).is_some()
+            && can_see_obj(descs, chars, db, ch, objs.get(ch.get_eq(j).unwrap()))
+        {
             let desc = find_exdesc(&arg, &objs.get(ch.get_eq(j).unwrap()).ex_descriptions);
-            if desc.is_some() {
+            if let Some(desc) = desc {
                 i += 1;
                 if i == fnum {
-                    send_to_char(descs, ch, desc.as_ref().unwrap());
+                    send_to_char(descs, ch, desc);
                     found = true;
                 }
             }
@@ -826,10 +967,10 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     for &oid in ch.carrying.iter() {
         if can_see_obj(descs, chars, db, ch, objs.get(oid)) {
             let desc = find_exdesc(&arg, &objs.get(oid).ex_descriptions);
-            if desc.is_some() {
+            if let Some(desc) = desc {
                 i += 1;
                 if i == fnum {
-                    send_to_char(descs, ch, desc.as_ref().unwrap());
+                    send_to_char(descs, ch, desc);
                     found = true;
                 }
             }
@@ -854,7 +995,7 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
         if !found {
             show_obj_to_char(descs, chars, texts, found_obj.unwrap(), ch, SHOW_OBJ_ACTION);
         } else {
-            show_obj_modifiers( descs, found_obj.unwrap(), ch);
+            show_obj_modifiers(descs, found_obj.unwrap(), ch);
             send_to_char(descs, ch, "\r\n");
         }
     } else if !found {
@@ -862,9 +1003,13 @@ fn look_at_target(descs: &mut Depot<DescriptorData>, db: &DB,chars: &Depot<CharD
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_look(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -875,12 +1020,26 @@ pub fn do_look(
         return;
     }
     if ch.get_pos() < Position::Sleeping {
-        send_to_char(&mut game.descriptors, ch, "You can't see anything but stars!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can't see anything but stars!\r\n",
+        );
     } else if ch.aff_flagged(AffectFlags::BLIND) {
-        send_to_char(&mut game.descriptors, ch, "You can't see a damned thing, you're blind!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can't see a damned thing, you're blind!\r\n",
+        );
     } else if db.is_dark(ch.in_room()) && !ch.can_see_in_dark() {
         send_to_char(&mut game.descriptors, ch, "It is pitch black...\r\n");
-        list_char_to_char(&mut game.descriptors, db,chars, &db.world[ch.in_room() as usize].peoples, ch);
+        list_char_to_char(
+            &mut game.descriptors,
+            db,
+            chars,
+            &db.world[ch.in_room() as usize].peoples,
+            ch,
+        );
         /* glowing red eyes */
     } else {
         let mut argument = argument.to_string();
@@ -893,34 +1052,69 @@ pub fn do_look(
             if arg.is_empty() {
                 send_to_char(&mut game.descriptors, ch, "Read what?\r\n");
             } else {
-                look_at_target(&mut game.descriptors, db,chars, texts, objs,ch, &mut arg);
+                look_at_target(&mut game.descriptors, db, chars, texts, objs, ch, &arg);
             }
             return;
         }
         let look_type;
         if arg.is_empty() {
             /* "look" alone, without an argument at all */
-            look_at_room(&mut game.descriptors, db,chars, texts,objs, ch, true);
+            look_at_room(&mut game.descriptors, db, chars, texts, objs, ch, true);
         } else if is_abbrev(arg.as_ref(), "in") {
-            look_in_obj(&mut game.descriptors, db,chars, texts, objs,ch, arg2.as_str());
+            look_in_obj(
+                &mut game.descriptors,
+                db,
+                chars,
+                texts,
+                objs,
+                ch,
+                arg2.as_str(),
+            );
             /* did the char type 'look <direction>?' */
         } else if {
             look_type = search_block(arg.as_str(), &DIRS, false);
             look_type
-        } != None
+        }
+        .is_some()
         {
-            look_in_direction(&mut game.descriptors, db,chars, chid, look_type.unwrap() as i32);
+            look_in_direction(
+                &mut game.descriptors,
+                db,
+                chars,
+                chid,
+                look_type.unwrap() as i32,
+            );
         } else if is_abbrev(arg.as_ref(), "at") {
-            look_at_target(&mut game.descriptors, db,chars, texts, objs,ch, arg2.as_ref());
+            look_at_target(
+                &mut game.descriptors,
+                db,
+                chars,
+                texts,
+                objs,
+                ch,
+                arg2.as_ref(),
+            );
         } else {
-            look_at_target(&mut game.descriptors, db,chars, texts, objs,ch, arg.as_ref());
+            look_at_target(
+                &mut game.descriptors,
+                db,
+                chars,
+                texts,
+                objs,
+                ch,
+                arg.as_ref(),
+            );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_examine(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -936,11 +1130,14 @@ pub fn do_examine(
     }
 
     /* look_at_target() eats the number. */
-    look_at_target(&mut game.descriptors, db,chars, texts, objs,ch, &arg);
+    look_at_target(&mut game.descriptors, db, chars, texts, objs, ch, &arg);
     let mut tmp_char = None;
     let mut tmp_object = None;
-    generic_find(&game.descriptors, chars,
-        db,objs,
+    generic_find(
+        &game.descriptors,
+        chars,
+        db,
+        objs,
         &arg,
         FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::CHAR_ROOM | FindFlags::OBJ_EQUIP,
         ch,
@@ -948,21 +1145,28 @@ pub fn do_examine(
         &mut tmp_object,
     );
 
-    if tmp_object.is_some() {
-        let tmp_object = tmp_object.unwrap();
+    if let Some(tmp_object) = tmp_object {
         if tmp_object.get_obj_type() == ItemType::Drinkcon
             || tmp_object.get_obj_type() == ItemType::Fountain
             || tmp_object.get_obj_type() == ItemType::Container
         {
-            send_to_char(&mut game.descriptors, ch, "When you look inside, you see:\r\n");
-            look_in_obj(&mut game.descriptors, db,chars, texts, objs,ch, &arg);
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "When you look inside, you see:\r\n",
+            );
+            look_in_obj(&mut game.descriptors, db, chars, texts, objs, ch, &arg);
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_gold(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -972,18 +1176,27 @@ pub fn do_gold(
     if ch.get_gold() == 0 {
         send_to_char(&mut game.descriptors, ch, "You're broke!\r\n");
     } else if ch.get_gold() == 1 {
-        send_to_char(&mut game.descriptors, ch, "You have one miserable little gold coin.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have one miserable little gold coin.\r\n",
+        );
     } else {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("You have {} gold coins.\r\n", ch.get_gold()).as_str(),
         );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_score(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -994,7 +1207,8 @@ pub fn do_score(
         return;
     }
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!("You are {} years old.\r\n", ch.get_age()).as_str(),
     );
@@ -1005,7 +1219,8 @@ pub fn do_score(
         send_to_char(&mut game.descriptors, ch, "\r\n");
     }
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "You have {}({}) hit, {}({}) mana and {}({}) movement points.\r\n",
@@ -1018,7 +1233,8 @@ pub fn do_score(
         )
         .as_str(),
     );
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "Your armor class is {}/10, and your alignment is {}.\r\n",
@@ -1027,7 +1243,8 @@ pub fn do_score(
         )
         .as_str(),
     );
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "You have scored {} exp, and have {} gold coins.\r\n",
@@ -1037,7 +1254,8 @@ pub fn do_score(
         .as_str(),
     );
     if ch.get_level() < LVL_IMMORT as u8 {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "You need {} exp to reach your next level.\r\n",
@@ -1050,7 +1268,8 @@ pub fn do_score(
         (time_now() - ch.player.time.logon) + ch.player.time.played as u64,
         0,
     );
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "You have been playing for {} day{} and {} hour{}.\r\n",
@@ -1061,7 +1280,8 @@ pub fn do_score(
         )
         .as_str(),
     );
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "This ranks you as {} {} (level {}).\r\n",
@@ -1076,13 +1296,25 @@ pub fn do_score(
             send_to_char(&mut game.descriptors, ch, "You are DEAD!\r\n");
         }
         Position::MortallyWounded => {
-            send_to_char(&mut game.descriptors, ch, "You are mortally wounded!  You should seek help!\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You are mortally wounded!  You should seek help!\r\n",
+            );
         }
         Position::Incapacitated => {
-            send_to_char(&mut game.descriptors, ch, "You are incapacitated, slowly fading away...\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You are incapacitated, slowly fading away...\r\n",
+            );
         }
         Position::Stunned => {
-            send_to_char(&mut game.descriptors, ch, "You are stunned!  You can't move!\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You are stunned!  You can't move!\r\n",
+            );
         }
         Position::Sleeping => {
             send_to_char(&mut game.descriptors, ch, "You are sleeping.\r\n");
@@ -1094,8 +1326,15 @@ pub fn do_score(
             send_to_char(&mut game.descriptors, ch, "You are sitting.\r\n");
         }
         Position::Fighting => {
-            let v = pers(&game.descriptors, chars, db, chars.get(ch.fighting_id().unwrap()), ch);
-            send_to_char(&mut game.descriptors, 
+            let v = pers(
+                &game.descriptors,
+                chars,
+                db,
+                chars.get(ch.fighting_id().unwrap()),
+                ch,
+            );
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "You are fighting {}.\r\n",
@@ -1128,13 +1367,18 @@ pub fn do_score(
         send_to_char(&mut game.descriptors, ch, "You are invisible.\r\n");
     }
     if ch.aff_flagged(AffectFlags::DETECT_INVIS) {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "You are sensitive to the presence of invisible things.\r\n",
         );
     }
     if ch.aff_flagged(AffectFlags::SANCTUARY) {
-        send_to_char(&mut game.descriptors, ch, "You are protected by Sanctuary.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You are protected by Sanctuary.\r\n",
+        );
     }
     if ch.aff_flagged(AffectFlags::POISON) {
         send_to_char(&mut game.descriptors, ch, "You are poisoned!\r\n");
@@ -1149,13 +1393,21 @@ pub fn do_score(
         send_to_char(&mut game.descriptors, ch, "Your eyes are glowing red.\r\n");
     }
     if ch.prf_flagged(PrefFlags::SUMMONABLE) {
-        send_to_char(&mut game.descriptors, ch, "You are summonable by other players.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You are summonable by other players.\r\n",
+        );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_inventory(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1163,12 +1415,26 @@ pub fn do_inventory(
 ) {
     let ch = chars.get(chid);
     send_to_char(&mut game.descriptors, ch, "You are carrying:\r\n");
-    list_obj_to_char(&mut game.descriptors, db,chars, texts, objs,&ch.carrying, ch, SHOW_OBJ_SHORT, true);
+    list_obj_to_char(
+        &mut game.descriptors,
+        db,
+        chars,
+        texts,
+        objs,
+        &ch.carrying,
+        ch,
+        SHOW_OBJ_SHORT,
+        true,
+    );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_equipment(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1177,16 +1443,22 @@ pub fn do_equipment(
     let ch = chars.get(chid);
     let mut found = false;
     send_to_char(&mut game.descriptors, ch, "You are using:\r\n");
-    for i in 0..NUM_WEARS {
+    for (i, wear_where) in WEAR_WHERE.iter().enumerate() {
         if ch.get_eq(i).is_some() {
-            if can_see_obj(&game.descriptors, chars, db, ch, objs.get(ch.get_eq(i).unwrap())) {
+            if can_see_obj(
+                &game.descriptors,
+                chars,
+                db,
+                ch,
+                objs.get(ch.get_eq(i).unwrap()),
+            ) {
                 let oid = ch.get_eq(i).unwrap();
                 let obj = objs.get(oid);
-                send_to_char(&mut game.descriptors, ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                send_to_char(&mut game.descriptors, ch, wear_where);
                 show_obj_to_char(&mut game.descriptors, chars, texts, obj, ch, SHOW_OBJ_SHORT);
                 found = true;
             } else {
-                send_to_char(&mut game.descriptors, ch, format!("{}", WEAR_WHERE[i as usize]).as_str());
+                send_to_char(&mut game.descriptors, ch, wear_where);
                 send_to_char(&mut game.descriptors, ch, "Something.\r\n");
                 found = true;
             }
@@ -1197,9 +1469,13 @@ pub fn do_equipment(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_time(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1212,7 +1488,8 @@ pub fn do_time(
     /* 35 days in a month, 7 days a week */
     let weekday = ((35 * db.time_info.month) + day) % 7;
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "It is {} o'clock {}, on {}.\r\n",
@@ -1252,7 +1529,8 @@ pub fn do_time(
         }
     }
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "The {}{} Day of the {}, Year {}.\r\n",
@@ -1262,9 +1540,13 @@ pub fn do_time(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_weather(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1290,7 +1572,8 @@ pub fn do_weather(
         send_to_char(&mut game.descriptors, ch, messg.as_str());
         let ch = chars.get(chid);
         if ch.get_level() >= LVL_GOD as u8 {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "Pressure: {} (change: {}), Sky: {} ({})\r\n",
@@ -1303,13 +1586,21 @@ pub fn do_weather(
             );
         }
     } else {
-        send_to_char(&mut game.descriptors, ch, "You have no feeling about the weather at all.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have no feeling about the weather at all.\r\n",
+        );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_help(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1323,11 +1614,11 @@ pub fn do_help(
     let argument = argument.trim_start();
     let d_id = ch.desc.unwrap();
 
-    if argument.len() == 0 {
-        page_string(&mut game.descriptors, chars,  d_id, &db.help, false);
+    if argument.is_empty() {
+        page_string(&mut game.descriptors, chars, d_id, &db.help, false);
         return;
     }
-    if db.help_table.len() == 0 {
+    if db.help_table.is_empty() {
         send_to_char(&mut game.descriptors, ch, "No help available.\r\n");
         return;
     }
@@ -1338,21 +1629,29 @@ pub fn do_help(
     loop {
         let mut mid = (bot + top) / 2;
         if bot > top {
-            send_to_char(&mut game.descriptors, ch, "There is no help on that word.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "There is no help on that word.\r\n",
+            );
             return;
         } else if db.help_table[mid].keyword.starts_with(argument) {
             /* trace backwards to find first matching entry. Thanks Jeff Fink! */
             while mid > 0 && db.help_table[mid - 1].keyword.starts_with(argument) {
                 mid -= 1;
             }
-            page_string(&mut game.descriptors, chars,  d_id, &db.help_table[mid].entry, false);
+            page_string(
+                &mut game.descriptors,
+                chars,
+                d_id,
+                &db.help_table[mid].entry,
+                false,
+            );
             return;
+        } else if db.help_table[mid].keyword.as_ref() < argument {
+            bot = mid + 1;
         } else {
-            if db.help_table[mid].keyword.as_ref() < argument {
-                bot = mid + 1;
-            } else {
-                top = mid - 1;
-            }
+            top = mid - 1;
         }
     }
 }
@@ -1361,9 +1660,13 @@ const WHO_FORMAT: &str =
     "format: who [minlev[-maxlev]] [-n name] [-c classlist] [-s] [-o] [-q] [-r] [-z]\r\n";
 
 /* FIXME: This whole thing just needs rewritten. */
+#[allow(clippy::too_many_arguments)]
 pub fn do_who(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1372,7 +1675,7 @@ pub fn do_who(
     let ch = chars.get(chid);
     let argument = argument.trim_start();
     let mut buf = argument.to_string();
-    let mut low = 0 as i16;
+    let mut low = 0_i16;
     let mut high = LVL_IMPL;
     let mut outlaws = false;
     let mut localwho = false;
@@ -1382,16 +1685,15 @@ pub fn do_who(
     let mut who_room = false;
     let mut showclass = 0;
 
+    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
     while !buf.is_empty() {
         let mut arg = String::new();
         let mut buf1 = String::new();
 
         half_chop(&mut buf, &mut arg, &mut buf1);
-        if arg.chars().next().unwrap().is_digit(10) {
-            let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
+        if arg.chars().next().unwrap().is_ascii_digit() {
             let f = regex.captures(&arg);
-            if f.is_some() {
-                let f = f.unwrap();
+            if let Some(f) = f {
                 low = f[1].parse::<i16>().unwrap();
                 high = f[2].parse::<i16>().unwrap();
             }
@@ -1417,10 +1719,8 @@ pub fn do_who(
                 }
                 'l' => {
                     half_chop(&mut buf1, &mut arg, &mut buf);
-                    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
                     let f = regex.captures(&arg);
-                    if f.is_some() {
-                        let f = f.unwrap();
+                    if let Some(f) = f {
                         low = f[1].parse::<i16>().unwrap();
                         high = f[2].parse::<i16>().unwrap();
                     }
@@ -1458,6 +1758,7 @@ pub fn do_who(
         }
 
         let tch_id;
+        #[allow(clippy::blocks_in_conditions)]
         if d.original.is_some() {
             tch_id = d.original;
         } else if {
@@ -1470,13 +1771,13 @@ pub fn do_who(
         let tch = chars.get(tch_id);
 
         if !name_search.is_empty()
-            && tch.get_name().as_ref() != &name_search
+            && tch.get_name().as_ref() != name_search
             && !tch.get_title().contains(&name_search)
         {
             continue;
         }
         let ch = chars.get(chid);
-        if !can_see(&mut game.descriptors, chars, db, ch, &tch)
+        if !can_see(&game.descriptors, chars, db, ch, tch)
             || tch.get_level() < low as u8
             || tch.get_level() > high as u8
         {
@@ -1499,6 +1800,7 @@ pub fn do_who(
             continue;
         }
         if short_list {
+            #[allow(clippy::blocks_in_conditions)]
             let messg = format!(
                 "{}[{:2} {}] {:12}{}{}",
                 if tch.get_level() >= LVL_IMMORT as u8 {
@@ -1541,7 +1843,11 @@ pub fn do_who(
             send_to_char(&mut game.descriptors, ch, messg.as_str());
 
             if tch.get_invis_lev() != 0 {
-                send_to_char(&mut game.descriptors, ch, format!(" (i{})", tch.get_invis_lev()).as_str());
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!(" (i{})", tch.get_invis_lev()).as_str(),
+                );
             } else if tch.aff_flagged(AffectFlags::INVISIBLE) {
                 send_to_char(&mut game.descriptors, ch, " (invis)");
             }
@@ -1578,9 +1884,14 @@ pub fn do_who(
     if num_can_see == 0 {
         send_to_char(&mut game.descriptors, ch, "\r\nNobody at all!\r\n");
     } else if num_can_see == 1 {
-        send_to_char(&mut game.descriptors, ch, "\r\nOne lonely character displayed.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "\r\nOne lonely character displayed.\r\n",
+        );
     } else {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("\r\n{} characters displayed.\r\n", num_can_see).as_str(),
         );
@@ -1591,9 +1902,13 @@ const USERS_FORMAT: &str =
     "format: users [-l minlevel[-maxlevel]] [-n name] [-h host] [-c classlist] [-o] [-p]\r\n";
 
 /* BIG OL' FIXME: Rewrite it all. Similar to do_who(). */
+#[allow(clippy::too_many_arguments)]
 pub fn do_users(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1613,6 +1928,7 @@ pub fn do_users(
     let mut num_can_see = 0;
     let mut classname;
 
+    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
     while !buf.is_empty() {
         let mut buf1 = String::new();
 
@@ -1637,10 +1953,8 @@ pub fn do_users(
                 'l' => {
                     playing = true;
                     half_chop(&mut buf1, &mut arg, &mut buf);
-                    let regex = Regex::new(r"^(\d{1,9})-(\d{1,9})").unwrap();
                     let f = regex.captures(&arg);
-                    if f.is_some() {
-                        let f = f.unwrap();
+                    if let Some(f) = f {
                         low = f[1].parse::<i16>().unwrap();
                         high = f[2].parse::<i16>().unwrap();
                     }
@@ -1669,7 +1983,8 @@ pub fn do_users(
             return;
         }
     } /* end while (parser) */
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         "Num Class   Name         State          Idl Login@   Site\r\n\
 --- ------- ------------ -------------- --- -------- ------------------------\r\n",
@@ -1684,6 +1999,7 @@ pub fn do_users(
         if d.state() == ConPlaying && deadweight {
             continue;
         }
+        #[allow(clippy::blocks_in_conditions)]
         if d.state() == ConPlaying {
             let character;
             if d.original.is_some() {
@@ -1700,7 +2016,7 @@ pub fn do_users(
             if !host_search.is_empty() && !d.host.contains(&host_search) {
                 continue;
             }
-            if !name_search.is_empty() && tch.get_name().as_ref() != &name_search {
+            if !name_search.is_empty() && tch.get_name().as_ref() != name_search {
                 continue;
             }
             let ch = chars.get(chid);
@@ -1739,46 +2055,35 @@ pub fn do_users(
 
         let timeptr = d.login_time.elapsed().as_secs().to_string();
 
-        let state;
-        if d.state() == ConPlaying && d.original.is_some() {
-            state = "Switched";
+        let state = if d.state() == ConPlaying && d.original.is_some() {
+            "Switched"
         } else {
-            state = CONNECTED_TYPES[d.state() as usize];
-        }
+            CONNECTED_TYPES[d.state() as usize]
+        };
 
-        let idletime;
-        if d.character.is_some()
+        let idletime = if d.character.is_some()
             && d.state() == ConPlaying
             && chars.get(d.character.unwrap()).get_level() < LVL_GOD as u8
         {
-            idletime = format!(
+            format!(
                 "{:3}",
-                chars.get(d.character.unwrap())
-                    .char_specials
-                    .timer
-                    * SECS_PER_MUD_HOUR as i32
+                chars.get(d.character.unwrap()).char_specials.timer * SECS_PER_MUD_HOUR as i32
                     / SECS_PER_REAL_MIN as i32
-            );
+            )
         } else {
-            idletime = "".to_string();
-        }
+            "".to_string()
+        };
 
         let mut line = format!(
             "{:3} {:7} {:12} {:14} {:3} {:8} ",
             d.desc_num,
             classname,
             if game.desc(d_id).original.is_some()
-                && !chars.get(d.original.unwrap())
-                    .player
-                    .name
-                    .is_empty()
+                && !chars.get(d.original.unwrap()).player.name.is_empty()
             {
                 &chars.get(d.original.unwrap()).player.name
             } else if d.character.is_some()
-                && !chars.get(d.character.unwrap())
-                    .player
-                    .name
-                    .is_empty()
+                && !chars.get(d.character.unwrap()).player.name.is_empty()
             {
                 &chars.get(d.character.unwrap()).player.name
             } else {
@@ -1807,23 +2112,34 @@ pub fn do_users(
         let ch = chars.get(chid);
         if d.state() != ConPlaying
             || (d.state() == ConPlaying
-                && can_see(&game.descriptors, chars, db, ch, chars.get(d.character.unwrap())))
+                && can_see(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    ch,
+                    chars.get(d.character.unwrap()),
+                ))
         {
             send_to_char(&mut game.descriptors, ch, &line);
             num_can_see += 1;
         }
     }
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!("\r\n{} visible sockets connected.\r\n", num_can_see).as_str(),
     );
 }
 
 /* Generic page_string function for displaying text */
+#[allow(clippy::too_many_arguments)]
 pub fn do_gen_ps(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1833,74 +2149,89 @@ pub fn do_gen_ps(
     let d_id = ch.desc.unwrap();
     match subcmd {
         SCMD_CREDITS => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.credits, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.credits, false);
         }
         SCMD_NEWS => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.news, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.news, false);
         }
         SCMD_INFO => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.info, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.info, false);
         }
         SCMD_WIZLIST => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.wizlist, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.wizlist, false);
         }
         SCMD_IMMLIST => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.immlist, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.immlist, false);
         }
         SCMD_HANDBOOK => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.handbook, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.handbook, false);
         }
         SCMD_POLICIES => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.policies, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.policies, false);
         }
         SCMD_MOTD => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.motd, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.motd, false);
         }
         SCMD_IMOTD => {
-            page_string(&mut game.descriptors, chars,  d_id, &db.imotd, false);
+            page_string(&mut game.descriptors, chars, d_id, &db.imotd, false);
         }
         SCMD_CLEAR => {
             send_to_char(&mut game.descriptors, ch, "\x1b[H\x1b[J");
         }
         SCMD_VERSION => {
-            send_to_char(&mut game.descriptors, ch, format!("{}\r\n", CIRCLEMUD_VERSION).as_str());
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!("{}\r\n", CIRCLEMUD_VERSION).as_str(),
+            );
         }
         SCMD_WHOAMI => {
-            send_to_char(&mut game.descriptors, ch, format!("{}\r\n", ch.get_name()).as_str());
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!("{}\r\n", ch.get_name()).as_str(),
+            );
         }
         _ => {
             error!("SYSERR: Unhandled case in do_gen_ps. ({})", subcmd);
-            return;
         }
     }
 }
 
-fn perform_mortal_where(game: &mut Game, db: &DB,chars: &Depot<CharData>, chid: DepotId, arg: &str) {
+fn perform_mortal_where(
+    game: &mut Game,
+    db: &DB,
+    chars: &Depot<CharData>,
+    chid: DepotId,
+    arg: &str,
+) {
     let ch = chars.get(chid);
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, "Players in your Zone\r\n--------------------\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Players in your Zone\r\n--------------------\r\n",
+        );
         for d_id in game.descriptor_list.clone() {
             let d = game.desc(d_id);
-            if d.state() != ConPlaying
-                || (d.character.is_some()
-                    && d.character.unwrap() == chid)
-            {
+            if d.state() != ConPlaying || (d.character.is_some() && d.character.unwrap() == chid) {
                 continue;
             }
             let i;
-            if {
+            let res = {
                 i = if d.original.is_some() {
                     d.original
                 } else {
-                   d.character
+                    d.character
                 };
                 i.is_none()
-            } {
+            };
+            if res {
                 continue;
             }
             let i_id = i.unwrap();
             let i = chars.get(i_id);
-            if i.in_room() == NOWHERE || !can_see(&mut game.descriptors, chars, db, ch, i) {
+            if i.in_room() == NOWHERE || !can_see(&game.descriptors, chars, db, ch, i) {
                 continue;
             }
             if db.world[ch.in_room() as usize].zone != db.world[i.in_room() as usize].zone {
@@ -1920,7 +2251,7 @@ fn perform_mortal_where(game: &mut Game, db: &DB,chars: &Depot<CharData>, chid: 
             if i.in_room() == NOWHERE || i.id() == chid {
                 continue;
             }
-            if !can_see(&mut game.descriptors, chars, db, ch, i)
+            if !can_see(&game.descriptors, chars, db, ch, i)
                 || db.world[i.in_room() as usize].zone != db.world[ch.in_room() as usize].zone
             {
                 continue;
@@ -1928,7 +2259,8 @@ fn perform_mortal_where(game: &mut Game, db: &DB,chars: &Depot<CharData>, chid: 
             if !isname(arg, &i.player.name) {
                 continue;
             }
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "{:25} - {}\r\n",
@@ -1943,9 +2275,12 @@ fn perform_mortal_where(game: &mut Game, db: &DB,chars: &Depot<CharData>, chid: 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn print_object_location(
-    descs: &mut Depot<DescriptorData>,objs: & Depot<ObjData>, 
-    db: &DB,chars: &Depot<CharData>,
+    descs: &mut Depot<DescriptorData>,
+    objs: &Depot<ObjData>,
+    db: &DB,
+    chars: &Depot<CharData>,
     num: i32,
     oid: DepotId,
     chid: DepotId,
@@ -1954,7 +2289,8 @@ fn print_object_location(
     let ch = chars.get(chid);
     let obj = objs.get(oid);
     if num > 0 {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!("O{:3}. {:25} - ", num, obj.short_description).as_ref(),
         );
@@ -1963,7 +2299,8 @@ fn print_object_location(
     }
 
     if obj.in_room != NOWHERE {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!(
                 "[{:5}] {}\r\n",
@@ -1978,22 +2315,17 @@ fn print_object_location(
             "carried by {}\r\n",
             pers(descs, chars, db, chars.get(obj.carried_by.unwrap()), ch)
         );
-        send_to_char(descs, 
-            ch,
-            msg.as_str(),
-        );
+        send_to_char(descs, ch, msg.as_str());
     } else if obj.worn_by.is_some() {
         let ch = chars.get(chid);
         let msg = format!(
             "worn by {}\r\n",
             pers(descs, chars, db, chars.get(obj.worn_by.unwrap()), ch)
         );
-        send_to_char(descs, 
-            ch,  
-            msg.as_str(),
-        );
+        send_to_char(descs, ch, msg.as_str());
     } else if obj.in_obj.is_some() {
-        send_to_char(descs, 
+        send_to_char(
+            descs,
             ch,
             format!(
                 "inside {}{}\r\n",
@@ -2003,14 +2335,21 @@ fn print_object_location(
             .as_str(),
         );
         if recur {
-            print_object_location(descs, objs,db,chars, 0, obj.in_obj.unwrap(), chid, recur);
+            print_object_location(descs, objs, db, chars, 0, obj.in_obj.unwrap(), chid, recur);
         }
     } else {
         send_to_char(descs, ch, "in an unknown location\r\n");
     }
 }
 
-fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: & Depot<ObjData>,  chid: DepotId, arg: &str) {
+fn perform_immort_where(
+    game: &mut Game,
+    db: &DB,
+    chars: &Depot<CharData>,
+    objs: &Depot<ObjData>,
+    chid: DepotId,
+    arg: &str,
+) {
     let ch = chars.get(chid);
 
     if arg.is_empty() {
@@ -2035,8 +2374,7 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
                             "{:20} - [{:5}] {} (in {})\r\n",
                             i.get_name(),
                             db.get_room_vnum(chars.get(d.character.unwrap()).in_room),
-                            db.world[chars.get(d.character.unwrap()).in_room as usize]
-                                .name,
+                            db.world[chars.get(d.character.unwrap()).in_room as usize].name,
                             chars.get(d.character.unwrap()).get_name()
                         );
                         send_to_char(&mut game.descriptors, ch, messg.as_str());
@@ -2057,7 +2395,10 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
         let mut num = 0;
         for &id in &db.character_list {
             let i = chars.get(id);
-            if can_see(&mut game.descriptors, chars, db, ch, i) && i.in_room() != NOWHERE && isname(arg, &i.player.name) {
+            if can_see(&game.descriptors, chars, db, ch, i)
+                && i.in_room() != NOWHERE
+                && isname(arg, &i.player.name)
+            {
                 found = true;
                 let messg = format!(
                     "M{:3}. {:25} - [{:5}] {}\r\n",
@@ -2074,11 +2415,15 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
         }
         num = 0;
         for &k in &db.object_list {
-            if can_see_obj(&game.descriptors, chars, db, ch, objs.get(k)) && isname(arg, objs.get(k).name.as_ref()) {
+            if can_see_obj(&game.descriptors, chars, db, ch, objs.get(k))
+                && isname(arg, objs.get(k).name.as_ref())
+            {
                 found = true;
                 print_object_location(
-                    &mut game.descriptors,objs,
-                    db,chars,
+                    &mut game.descriptors,
+                    objs,
+                    db,
+                    chars,
                     {
                         num += 1;
                         num
@@ -2090,14 +2435,22 @@ fn perform_immort_where(game: &mut Game, db: &DB,chars: &Depot<CharData>,objs: &
             }
         }
         if !found {
-            send_to_char(&mut game.descriptors, ch, "Couldn't find any such thing.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Couldn't find any such thing.\r\n",
+            );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_where(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2108,15 +2461,19 @@ pub fn do_where(
     one_argument(argument, &mut arg);
 
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_where(game, db, chars,objs,chid, &arg);
+        perform_immort_where(game, db, chars, objs, chid, &arg);
     } else {
-        perform_mortal_where(game, db, chars,chid, &arg);
+        perform_mortal_where(game, db, chars, chid, &arg);
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_levels(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2124,7 +2481,11 @@ pub fn do_levels(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "You ain't nothin' but a hound-dog.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You ain't nothin' but a hound-dog.\r\n",
+        );
         return;
     }
     let mut buf = String::new();
@@ -2138,14 +2499,10 @@ pub fn do_levels(
 
         match ch.get_sex() {
             Sex::Male | Sex::Neutral => {
-                buf.push_str(
-                    format!("{}\r\n", title_male(ch.get_class(), i as i32)).as_str(),
-                );
+                buf.push_str(format!("{}\r\n", title_male(ch.get_class(), i as i32)).as_str());
             }
             Sex::Female => {
-                buf.push_str(
-                    format!("{}\r\n", title_female(ch.get_class(), i as i32)).as_str(),
-                );
+                buf.push_str(format!("{}\r\n", title_female(ch.get_class(), i as i32)).as_str());
             }
         }
     }
@@ -2158,12 +2515,16 @@ pub fn do_levels(
         .as_str(),
     );
     let d_id = ch.desc.unwrap();
-    page_string(&mut game.descriptors, chars,  d_id, buf.as_str(), true);
+    page_string(&mut game.descriptors, chars, d_id, buf.as_str(), true);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_consider(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2173,7 +2534,15 @@ pub fn do_consider(
     let mut buf = String::new();
     one_argument(argument, &mut buf);
 
-    let victim = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
+    let victim = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    );
     if victim.is_none() {
         send_to_char(&mut game.descriptors, ch, "Consider killing who?\r\n");
         return;
@@ -2184,15 +2553,27 @@ pub fn do_consider(
         return;
     }
     if !victim.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "Would you like to borrow a cross and a shovel?\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Would you like to borrow a cross and a shovel?\r\n",
+        );
         return;
     }
     let diff = victim.get_level() as i32 - ch.get_level() as i32;
 
     if diff <= -10 {
-        send_to_char(&mut game.descriptors, ch, "Now where did that chicken go?\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Now where did that chicken go?\r\n",
+        );
     } else if diff <= -5 {
-        send_to_char(&mut game.descriptors, ch, "You could do it with a needle!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You could do it with a needle!\r\n",
+        );
     } else if diff <= -2 {
         send_to_char(&mut game.descriptors, ch, "Easy.\r\n");
     } else if diff <= -1 {
@@ -2202,9 +2583,17 @@ pub fn do_consider(
     } else if diff <= 1 {
         send_to_char(&mut game.descriptors, ch, "You would need some luck!\r\n");
     } else if diff <= 2 {
-        send_to_char(&mut game.descriptors, ch, "You would need a lot of luck!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You would need a lot of luck!\r\n",
+        );
     } else if diff <= 3 {
-        send_to_char(&mut game.descriptors, ch, "You would need a lot of luck and great equipment!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You would need a lot of luck and great equipment!\r\n",
+        );
     } else if diff <= 5 {
         send_to_char(&mut game.descriptors, ch, "Do you feel lucky, punk?\r\n");
     } else if diff <= 10 {
@@ -2214,9 +2603,13 @@ pub fn do_consider(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_diagnose(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2228,30 +2621,41 @@ pub fn do_diagnose(
     one_argument(argument, &mut buf);
     let vict;
     if !buf.is_empty() {
-        if {
-            vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
+        let res = {
+            vict = get_char_vis(
+                &game.descriptors,
+                chars,
+                db,
+                ch,
+                &mut buf,
+                None,
+                FindFlags::CHAR_ROOM,
+            );
             vict.is_none()
-        } {
+        };
+        if res {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
         } else {
-            diag_char_to_char(&mut game.descriptors, db,chars, vict.unwrap(), ch);
+            diag_char_to_char(&mut game.descriptors, db, chars, vict.unwrap(), ch);
         }
+    } else if ch.fighting_id().is_some() {
+        let fighting_id = ch.fighting_id().unwrap();
+        let fighting = chars.get(fighting_id);
+        diag_char_to_char(&mut game.descriptors, db, chars, fighting, ch);
     } else {
-        if ch.fighting_id().is_some() {
-            let fighting_id = ch.fighting_id().unwrap();
-            let fighting = chars.get(fighting_id);
-            diag_char_to_char(&mut game.descriptors, db,chars, fighting, ch);
-        } else {
-            send_to_char(&mut game.descriptors, ch, "Diagnose who?\r\n");
-        }
+        send_to_char(&mut game.descriptors, ch, "Diagnose who?\r\n");
     }
 }
 
 const CTYPES: [&str; 5] = ["off", "sparse", "normal", "complete", "\n"];
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_color(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2266,7 +2670,8 @@ pub fn do_color(
     one_argument(argument, &mut arg);
 
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "Your current color level is {}.\r\n",
@@ -2277,11 +2682,16 @@ pub fn do_color(
         return;
     }
     let tp;
-    if {
+    let res = {
         tp = search_block(&arg, &CTYPES, false);
         tp.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "Usage: color { Off | Sparse | Normal | Complete }\r\n");
+    };
+    if res {
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Usage: color { Off | Sparse | Normal | Complete }\r\n",
+        );
         return;
     }
     let tp = tp.unwrap() as i64;
@@ -2294,7 +2704,8 @@ pub fn do_color(
         ch.set_prf_flags_bits(PrefFlags::COLOR_2);
     }
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "Your {}color{} is now {}.\r\n",
@@ -2328,9 +2739,13 @@ macro_rules! yesno {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_toggle(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -2349,7 +2764,8 @@ pub fn do_toggle(
     }
 
     if ch.get_level() >= LVL_IMMORT as u8 {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "      No Hassle: {:3}    Holylight: {:3}    Room Flags:{:3}\r\n",
@@ -2361,7 +2777,8 @@ pub fn do_toggle(
         );
     }
 
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "Hit Pnt Display: {:3}    Brief Mode: {:3}    Summon Protect: {:3}\r\n\
@@ -2402,9 +2819,13 @@ pub fn sort_commands(db: &mut DB) {
         .sort_by(|a, b| str::cmp(CMD_INFO[*a].command, CMD_INFO[*b].command));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_commands(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -2416,14 +2837,23 @@ pub fn do_commands(
     let vict;
     let victo;
     if !arg.is_empty() {
-        victo = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
+        victo = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut arg,
+            None,
+            FindFlags::CHAR_WORLD,
+        );
         if victo.is_none() || victo.unwrap().is_npc() {
             send_to_char(&mut game.descriptors, ch, "Who is that?\r\n");
             return;
         }
         vict = victo.unwrap();
         if ch.get_level() < vict.get_level() {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 "You can't see the commands of people above your level.\r\n",
             );
@@ -2442,7 +2872,8 @@ pub fn do_commands(
     }
 
     let vic_name = vict.get_name();
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "The following {}{} are available to {}:\r\n",
@@ -2475,7 +2906,8 @@ pub fn do_commands(
         {
             continue;
         }
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "{:11}{}",

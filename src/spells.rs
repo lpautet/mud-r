@@ -185,7 +185,7 @@ pub struct SpellInfoType {
     /* Max amount of mana used by a spell (lowest lev) */
     pub mana_change: i32,
     /* Change in mana used by spell from lev to lev */
-    pub min_level: [i32; NUM_CLASSES as usize],
+    pub min_level: [i32; NUM_CLASSES],
     pub routines: i32,
     pub violent: bool,
     pub targets: i32,
@@ -203,7 +203,7 @@ impl Default for SpellInfoType {
             mana_min: 0,
             mana_max: 0,
             mana_change: 0,
-            min_level: [(LVL_IMPL + 1) as i32; NUM_CLASSES as usize],
+            min_level: [(LVL_IMPL + 1) as i32; NUM_CLASSES],
             routines: 0,
             violent: false,
             targets: 0,
@@ -216,20 +216,7 @@ impl Default for SpellInfoType {
 impl Copy for SpellInfoType {}
 
 impl Clone for SpellInfoType {
-    fn clone(&self) -> Self {
-        SpellInfoType {
-            min_position: self.min_position,
-            mana_min: self.mana_min,
-            mana_max: self.mana_max,
-            mana_change: self.mana_change,
-            min_level: self.min_level,
-            routines: self.routines,
-            violent: self.violent,
-            targets: self.targets,
-            name: self.name,
-            wear_off_msg: self.wear_off_msg.clone(),
-        }
-    }
+    fn clone(&self) -> Self { *self }
 }
 
 // /* Possible Targets:
@@ -263,6 +250,7 @@ pub struct AttackHitType {
 /*
  * Special spells appear below.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn spell_create_water(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
@@ -301,6 +289,7 @@ pub fn spell_create_water(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_recall(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
@@ -331,6 +320,7 @@ pub fn spell_recall(
     look_at_room(&mut game.descriptors, db, chars, texts,objs,victim, false);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_teleport(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     _level: i32,
@@ -380,6 +370,7 @@ pub fn spell_teleport(
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_summon(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     level: i32,
@@ -479,6 +470,7 @@ pub fn spell_summon(
     look_at_room(&mut game.descriptors, db,chars,texts,objs,victim, false);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_locate_object(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
@@ -556,6 +548,7 @@ pub fn spell_locate_object(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_charm(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
@@ -630,6 +623,7 @@ pub fn spell_charm(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_identify(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
@@ -639,10 +633,8 @@ pub fn spell_identify(
 ) {
     let ch = chars.get(chid.unwrap());
 
-    if oid.is_some() {
-        let oid = oid.unwrap();
+    if let Some(oid) = oid {        
         let mut bitbuf = String::new();
-
         sprinttype(objs.get(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
         send_to_char(&mut game.descriptors, ch,
             format!(
@@ -653,7 +645,7 @@ pub fn spell_identify(
         );
 
         if !objs.get(oid).get_obj_affect().is_empty() {
-            sprintbit(objs.get(oid).get_obj_affect().bits() as i64, &AFFECTED_BITS, &mut bitbuf);
+            sprintbit(objs.get(oid).get_obj_affect().bits(), &AFFECTED_BITS, &mut bitbuf);
             send_to_char(&mut game.descriptors, ch,
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
@@ -675,15 +667,15 @@ pub fn spell_identify(
         match objs.get(oid).get_obj_type() {
             ItemType::Scroll | ItemType::Potion => {
                 if objs.get(oid).get_obj_val(1) >= 1 {
-                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(1)));
+                    bitbuf.push_str(skill_name(db, objs.get(oid).get_obj_val(1)));
                 }
 
                 if objs.get(oid).get_obj_val(2) >= 1 {
-                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(2)));
+                    bitbuf.push_str(skill_name(db, objs.get(oid).get_obj_val(2)));
                 }
 
                 if objs.get(oid).get_obj_val(3) >= 1 {
-                    bitbuf.push_str(skill_name(&db, objs.get(oid).get_obj_val(3)));
+                    bitbuf.push_str(skill_name(db, objs.get(oid).get_obj_val(3)));
                 }
 
                 send_to_char(&mut game.descriptors, ch,
@@ -700,7 +692,7 @@ pub fn spell_identify(
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
                         ITEM_TYPES[objs.get(oid).get_obj_type() as usize],
-                        skill_name(&db, objs.get(oid).get_obj_val(3)),
+                        skill_name(db, objs.get(oid).get_obj_val(3)),
                         objs.get(oid).get_obj_val(1),
                         if objs.get(oid).get_obj_val(1) == 1 { "" } else { "s" },
                         objs.get(oid).get_obj_val(2)
@@ -750,9 +742,8 @@ pub fn spell_identify(
                 );
             }
         }
-    } else if victim_id.is_some() {
-        /* victim */
-        let victim_id = victim_id.unwrap();
+    } else if let Some(victim_id) = victim_id {
+        /* victim */        
         let victim = chars.get(victim_id);
         send_to_char(&mut game.descriptors, ch,
             format!("Name: {}\r\n", victim.get_name()).as_str(),
@@ -821,6 +812,7 @@ pub fn spell_identify(
  * Cannot use this spell on an equipped object or it will mess up the
  * wielding character's hit/dam totals.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn spell_enchant_weapon(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     level: i32,
@@ -884,6 +876,7 @@ pub fn spell_enchant_weapon(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spell_detect_poison(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
     _level: i32,
@@ -891,8 +884,7 @@ pub fn spell_detect_poison(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    if victim_id.is_some() {
-        let victim_id = victim_id.unwrap();
+    if let Some(victim_id) = victim_id    {
         let victim = chars.get(victim_id);
         let chid = chid.unwrap();
         let ch = chars.get(chid);
@@ -902,30 +894,27 @@ pub fn spell_detect_poison(
             } else {
                 send_to_char(&mut game.descriptors, ch, "You feel healthy.\r\n");
             }
+        } else if victim.aff_flagged(AffectFlags::POISON) {
+            act(&mut game.descriptors, chars, db,
+                "You sense that $E is poisoned.",
+                false,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(victim)),
+                TO_CHAR,
+            );
         } else {
-            if victim.aff_flagged(AffectFlags::POISON) {
-                act(&mut game.descriptors, chars, db,
-                    "You sense that $E is poisoned.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(victim)),
-                    TO_CHAR,
-                );
-            } else {
-                act(&mut game.descriptors, chars, db,
-                    "You sense that $E is healthy.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(victim)),
-                    TO_CHAR,
-                );
-            }
+            act(&mut game.descriptors, chars, db,
+                "You sense that $E is healthy.",
+                false,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(victim)),
+                TO_CHAR,
+            );
         }
 
-        if oid.is_some() {
-            let oid = oid.unwrap();
+        if let Some(oid) = oid  {
             let obj = objs.get(oid);
             match obj.get_obj_type() {
                 ItemType::Drinkcon | ItemType::Fountain | ItemType::Food => {

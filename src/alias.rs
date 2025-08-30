@@ -23,7 +23,7 @@ use crate::util::{get_filename, FileType};
 
 pub fn write_aliases(ch: &CharData) {
     let mut fname = String::new();
-    get_filename(&mut fname, FileType::Alias, &ch.get_name());
+    get_filename(&mut fname, FileType::Alias, ch.get_name());
     let res = fs::remove_file(&fname);
     match res  {
         Err(e) if e.kind() != ErrorKind::NotFound => { 
@@ -33,11 +33,11 @@ pub fn write_aliases(ch: &CharData) {
         _ => (),
     }
 
-    if ch.player_specials.aliases.len() == 0 {
+    if ch.player_specials.aliases.is_empty() {
         return;
     }
 
-    let file = OpenOptions::new().write(true).create(true).open(&fname);
+    let file = OpenOptions::new().write(true).create(true).truncate(true).open(&fname);
 
     if file.is_err() {
         error!(
@@ -69,7 +69,7 @@ pub fn write_aliases(ch: &CharData) {
 
 pub fn read_aliases(ch: &mut CharData) {
     let mut xbuf = String::new();
-    get_filename(&mut xbuf, FileType::Alias, &ch.get_name());
+    get_filename(&mut xbuf, FileType::Alias, ch.get_name());
 
     let r = OpenOptions::new().read(true).open(&xbuf);
 
@@ -99,7 +99,7 @@ pub fn read_aliases(ch: &mut CharData) {
         if line.is_err() {
             break;
         }
-        if buf.len() == 0 {
+        if buf.is_empty() {
             // empty line must mean end of file
             break;
         }

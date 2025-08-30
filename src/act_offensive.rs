@@ -27,6 +27,7 @@ use crate::structs::{
 use crate::util::{can_see, rand_number};
 use crate::{ Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
 
@@ -40,6 +41,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts
     }
     one_argument(argument, &mut arg);
     let helpee;
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to assist?\r\n");
     } else if {
@@ -73,6 +75,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts
             }
         }
 
+        #[allow(clippy::unnecessary_unwrap)]
         if opponent_id.is_none() {
             act(&mut game.descriptors, chars, db,
                 "But nobody is fighting $M!",
@@ -125,6 +128,7 @@ pub fn do_assist(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
     let ch = chars.get(chid);
 
@@ -132,6 +136,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
     let vict;
 
     one_argument(argument, &mut arg);
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Hit who?\r\n");
     } else if {
@@ -197,6 +202,7 @@ pub fn do_hit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &m
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_kill(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, cmd: usize, subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -207,47 +213,47 @@ pub fn do_kill(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     }
     one_argument(argument, &mut arg);
     let vict;
+    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Kill who?\r\n");
+    } else if {
+        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
+        vict.is_none()
+    } {
+        send_to_char(&mut game.descriptors, ch, "They aren't here.\r\n");
+    } else if chid ==  vict.unwrap().id() {
+        send_to_char(&mut game.descriptors, ch, "Your mother would be so sad.. :(\r\n");
     } else {
-        if {
-            vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
-            vict.is_none()
-        } {
-            send_to_char(&mut game.descriptors, ch, "They aren't here.\r\n");
-        } else if chid ==  vict.unwrap().id() {
-            send_to_char(&mut game.descriptors, ch, "Your mother would be so sad.. :(\r\n");
-        } else {
-            let vict = vict.unwrap();
-            act(&mut game.descriptors, chars, db,
-                "You chop $M to pieces!  Ah!  The blood!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_CHAR,
-            );
-            act(&mut game.descriptors, chars, db,
-                "$N chops you to pieces!",
-                false,
-                Some(vict),
-                None,
-                Some(VictimRef::Char(ch)),
-                TO_CHAR,
-            );
-            act(&mut game.descriptors, chars, db,
-                "$n brutally slays $N!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_NOTVICT,
-            );
-            raw_kill(&mut game.descriptors, chars,db,objs, vict.id());
-        }
+        let vict = vict.unwrap();
+        act(&mut game.descriptors, chars, db,
+            "You chop $M to pieces!  Ah!  The blood!",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(vict)),
+            TO_CHAR,
+        );
+        act(&mut game.descriptors, chars, db,
+            "$N chops you to pieces!",
+            false,
+            Some(vict),
+            None,
+            Some(VictimRef::Char(ch)),
+            TO_CHAR,
+        );
+        act(&mut game.descriptors, chars, db,
+            "$n brutally slays $N!",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(vict)),
+            TO_NOTVICT,
+        );
+        raw_kill(&mut game.descriptors, chars,db,objs, vict.id());
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut buf = String::new();
@@ -259,10 +265,11 @@ pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, tex
 
     one_argument(argument, &mut buf);
     let vict;
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "Backstab who?\r\n");
         return;
     }
@@ -329,6 +336,7 @@ pub fn do_backstab(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, tex
     ch.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut name = String::new();
@@ -338,6 +346,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
 
     half_chop(&mut argument, &mut name, &mut message);
     let vict;
+    #[allow(clippy::blocks_in_conditions)]
     if name.is_empty() || message.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Order who to do what?\r\n");
     } else if {
@@ -354,8 +363,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
             );
             return;
         }
-        if vict.is_some() {
-            let vict = vict.unwrap();
+        if let Some(vict) = vict {
             let buf = format!("$N orders you to '{}'", message);
             act(&mut game.descriptors, chars, db,&buf, false, Some(vict), None, Some(VictimRef::Char(ch)), TO_CHAR);
             act(&mut game.descriptors, chars, db,
@@ -391,12 +399,11 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
             for k_id in ch.followers.clone() {
                 let follower = chars.get(k_id.follower);
                 let ch = chars.get(chid);
-                if ch.in_room() == follower.in_room() {
-                    if follower.aff_flagged(AffectFlags::CHARM) {
+                if ch.in_room() == follower.in_room()
+                    && follower.aff_flagged(AffectFlags::CHARM) {
                         found = true;
                         command_interpreter(game,db, chars, texts, objs,k_id.follower, &message);
                     }
-                }
             }
             let ch = chars.get(chid);
             if found {
@@ -408,6 +415,7 @@ pub fn do_order(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     if ch.get_pos() < Position::Fighting {
@@ -442,6 +450,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
             if r {
                 send_to_char(&mut game.descriptors, ch, "You flee head over heels.\r\n");
                 let ch = chars.get(chid);
+                #[allow(clippy::unnecessary_unwrap)]
                 if was_fighting.is_some() && !ch.is_npc() {
                     let was_fighting = chars.get(was_fighting.unwrap());
                     let mut loss = was_fighting.get_max_hit()
@@ -465,6 +474,7 @@ pub fn do_flee(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     send_to_char(&mut game.descriptors, ch, "PANIC!  You couldn't escape!\r\n");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -486,10 +496,11 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         return;
     }
     let mut victo;
-    if {
+    let res = {
         victo = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         victo.is_some()
-    } {
+    }; 
+    if res {
         if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {
             victo = ch.fighting_id().map(|i| chars.get(i));
         } else {
@@ -536,6 +547,7 @@ pub fn do_bash(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     ch.set_wait_state((PULSE_VIOLENCE * 2) as i32);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -547,10 +559,11 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts
 
     one_argument(argument, &mut arg);
     let vict;
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "Whom do you want to rescue?\r\n");
         return;
     }
@@ -630,6 +643,7 @@ pub fn do_rescue(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts
     vict.set_wait_state((2 * PULSE_VIOLENCE) as i32);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_kick(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -640,10 +654,11 @@ pub fn do_kick(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &
     }
     one_argument(argument, &mut arg);
     let mut vict;
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         if ch.fighting_id().is_some() && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room() {
             vict = ch.fighting_id().map(|i| chars.get(i));
         } else {

@@ -69,13 +69,13 @@ pub const CLASS_MENU: &str = "\r\n\
 pub fn parse_class(arg: char) -> Class {
     let arg = arg.to_lowercase().last().unwrap();
 
-    return match arg {
+    match arg {
         'm' => Class::MagicUser,
         'c' => Class::Cleric,
         'w' => Class::Warrior,
         't' => Class::Thief,
         _ => Class::Undefined,
-    };
+    }
 }
 
 /*
@@ -119,7 +119,7 @@ pub fn find_class_bitvector(arg: &str) -> i32 {
 const SPELL: i32 = 0;
 const SKILL: i32 = 1;
 
-pub const PRAC_PARAMS: [[i32; 4]; NUM_CLASSES as usize] = [
+pub const PRAC_PARAMS: [[i32; 4]; NUM_CLASSES] = [
     /* MAG	CLE	THE	WAR */
     [95, 95, 85, 80],             /* learned level */
     [100, 100, 12, 12],           /* max per practice */
@@ -2990,7 +2990,7 @@ pub fn saving_throws(class_num: Class, type_: i32, level: u8) -> u8 {
     }
 
     /* Should not get here unless something is wrong. */
-    return 100;
+    100
 }
 
 /* THAC0 for classes and levels.  (To Hit Armor Class 0) */
@@ -3454,18 +3454,16 @@ pub fn roll_real_abils(ch: &mut CharData) {
     let mut rolls: [u8; 4] = [0; 4];
 
     for _ in 0..6 {
-        for j in 0..4 {
-            rolls[j] = rand_number(1, 6) as u8;
+        for roll in rolls.iter_mut() {
+            *roll = rand_number(1, 6) as u8;
         }
 
         let mut temp = rolls[0] + rolls[1] + rolls[2] + rolls[3]
             - min(rolls[0], min(rolls[1], min(rolls[2], rolls[3])));
 
-        for k in 0..6 {
-            if table[k] < temp {
-                temp ^= table[k];
-                table[k] ^= temp;
-                temp ^= table[k];
+        for row in table.iter_mut() {
+            if *row < temp {
+                std::mem::swap(&mut temp,  row);
             }
         }
     }
@@ -3615,7 +3613,7 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
     if ch.is_magic_user() || ch.is_cleric() {
         ch.incr_practices(max(2, WIS_APP[ch.get_wis() as usize].bonus) as i32);
     } else {
-        ch.incr_practices(min(2, max(1, WIS_APP[ch.get_wis() as usize].bonus)) as i32);
+        ch.incr_practices(WIS_APP[ch.get_wis() as usize].bonus.clamp(1, 2) as i32);
     }
 
     if ch.get_level() >= LVL_IMMORT as u8 {
@@ -3636,20 +3634,20 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
  * really create a big performance hit because it's not used very often.
  */
 pub fn backstab_mult(level: u8) -> i32 {
-    if level <= 0 {
-        return 1; /* level 0 */
+    if level == 0 {
+        1/* level 0 */
     } else if level <= 7 {
-        return 2; /* level 1 - 7 */
+        2/* level 1 - 7 */
     } else if level <= 13 {
-        return 3; /* level 8 - 13 */
+        3/* level 8 - 13 */
     } else if level <= 20 {
-        return 4; /* level 14 - 20 */
+        4/* level 14 - 20 */
     } else if level <= 28 {
-        return 5; /* level 21 - 28 */
+        5/* level 21 - 28 */
     } else if level < LVL_IMMORT as u8 {
-        return 6; /* all remaining mortal levels */
+        6/* all remaining mortal levels */
     } else {
-        return 20; /* immortals */
+        20/* immortals */
     }
 }
 
@@ -3761,7 +3759,7 @@ pub const EXP_MAX: i32 = 10000000;
 
 /* Function to return the exp required for each class/level */
 pub fn level_exp(chclass: Class, level: i16) -> i32 {
-    if level > LVL_IMPL || level < 0 {
+    if !(0..=LVL_IMPL).contains(&level) {
         info!("SYSERR: Requesting exp for invalid level {}!", level);
         return 0;
     }
@@ -4195,7 +4193,7 @@ pub fn level_exp(chclass: Class, level: i16) -> i32 {
      * incomplete -- so, complete them!
      */
     error!("SYSERR: XP tables not set up correctly in class.c!");
-    return 123456;
+    123456
 }
 
 /*
@@ -4209,7 +4207,7 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
         return "the Implementor";
     }
 
-    return match chclass {
+    match chclass {
         Class::MagicUser => match level as i16 {
             1 => "the Apprentice of Magic",
             2 => "the Spell Student",
@@ -4339,7 +4337,7 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
             /* Default title for classes which do not have titles defined */
             "the Classless"
         }
-    };
+    }
 }
 
 /*
@@ -4356,260 +4354,260 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
     match chclass {
         Class::MagicUser => match level as i16 {
             1 => {
-                return "the Apprentice of Magic";
+                "the Apprentice of Magic"
             }
             2 => {
-                return "the Spell Student";
+                "the Spell Student"
             }
             3 => {
-                return "the Scholar of Magic";
+                "the Scholar of Magic"
             }
             4 => {
-                return "the Delveress in Spells";
+                "the Delveress in Spells"
             }
             5 => {
-                return "the Medium of Magic";
+                "the Medium of Magic"
             }
             6 => {
-                return "the Scribess of Magic";
+                "the Scribess of Magic"
             }
             7 => {
-                return "the Seeress";
+                "the Seeress"
             }
             8 => {
-                return "the Sage";
+                "the Sage"
             }
             9 => {
-                return "the Illusionist";
+                "the Illusionist"
             }
             10 => {
-                return "the Abjuress";
+                "the Abjuress"
             }
             11 => {
-                return "the Invoker";
+                "the Invoker"
             }
             12 => {
-                return "the Enchantress";
+                "the Enchantress"
             }
             13 => {
-                return "the Conjuress";
+                "the Conjuress"
             }
             14 => {
-                return "the Witch";
+                "the Witch"
             }
             15 => {
-                return "the Creator";
+                "the Creator"
             }
             16 => {
-                return "the Savant";
+                "the Savant"
             }
             17 => {
-                return "the Craftess";
+                "the Craftess"
             }
             18 => {
-                return "the Wizard";
+                "the Wizard"
             }
             19 => {
-                return "the War Witch";
+                "the War Witch"
             }
             20 => {
-                return "the Sorceress";
+                "the Sorceress"
             }
             21 => {
-                return "the Necromancress";
+                "the Necromancress"
             }
             22 => {
-                return "the Thaumaturgess";
+                "the Thaumaturgess"
             }
             23 => {
-                return "the Student of the Occult";
+                "the Student of the Occult"
             }
             24 => {
-                return "the Disciple of the Uncanny";
+                "the Disciple of the Uncanny"
             }
             25 => {
-                return "the minor Elementress";
+                "the minor Elementress"
             }
             26 => {
-                return "the Greater Elementress";
+                "the Greater Elementress"
             }
             27 => {
-                return "the Crafter of Magics";
+                "the Crafter of Magics"
             }
             28 => {
-                return "Shaman";
+                "Shaman"
             }
             29 => {
-                return "the Keeper of Talismans";
+                "the Keeper of Talismans"
             }
             30 => {
-                return "Archwitch";
+                "Archwitch"
             }
             LVL_IMMORT => {
-                return "the Immortal Enchantress";
+                "the Immortal Enchantress"
             }
             LVL_GOD => {
-                return "the Empress of Magic";
+                "the Empress of Magic"
             }
             LVL_GRGOD => {
-                return "the Goddess of Magic";
+                "the Goddess of Magic"
             }
             _ => {
-                return "the Witch";
+                "the Witch"
             }
         },
 
         Class::Cleric => {
             match level as i16 {
                 1 => {
-                    return "the Believer";
+                    "the Believer"
                 }
                 2 => {
-                    return "the Attendant";
+                    "the Attendant"
                 }
                 3 => {
-                    return "the Acolyte";
+                    "the Acolyte"
                 }
                 4 => {
-                    return "the Novice";
+                    "the Novice"
                 }
                 5 => {
-                    return "the Missionary";
+                    "the Missionary"
                 }
                 6 => {
-                    return "the Adept";
+                    "the Adept"
                 }
                 7 => {
-                    return "the Deaconess";
+                    "the Deaconess"
                 }
                 8 => {
-                    return "the Vicaress";
+                    "the Vicaress"
                 }
                 9 => {
-                    return "the Priestess";
+                    "the Priestess"
                 }
                 10 => {
-                    return "the Lady minister";
+                    "the Lady minister"
                 }
                 11 => {
-                    return "the Canon";
+                    "the Canon"
                 }
                 12 => {
-                    return "the Levitess";
+                    "the Levitess"
                 }
                 13 => {
-                    return "the Curess";
+                    "the Curess"
                 }
                 14 => {
-                    return "the Nunne";
+                    "the Nunne"
                 }
                 15 => {
-                    return "the Healess";
+                    "the Healess"
                 }
                 16 => {
-                    return "the Chaplain";
+                    "the Chaplain"
                 }
                 17 => {
-                    return "the Expositress";
+                    "the Expositress"
                 }
                 18 => {
-                    return "the Bishop";
+                    "the Bishop"
                 }
                 19 => {
-                    return "the Arch Lady of the Church";
+                    "the Arch Lady of the Church"
                 }
                 20 => {
-                    return "the Matriarch";
+                    "the Matriarch"
                 }
                 /* no one ever thought up these titles 21-30 */
                 LVL_IMMORT => {
-                    return "the Immortal Priestess";
+                    "the Immortal Priestess"
                 }
                 LVL_GOD => {
-                    return "the Inquisitress";
+                    "the Inquisitress"
                 }
                 LVL_GRGOD => {
-                    return "the Goddess of good and evil";
+                    "the Goddess of good and evil"
                 }
                 _ => {
-                    return "the Cleric";
+                    "the Cleric"
                 }
             }
         }
         Class::Thief => {
             match level as i16 {
                 1 => {
-                    return "the Pilferess";
+                    "the Pilferess"
                 }
                 2 => {
-                    return "the Footpad";
+                    "the Footpad"
                 }
                 3 => {
-                    return "the Filcheress";
+                    "the Filcheress"
                 }
                 4 => {
-                    return "the Pick-Pocket";
+                    "the Pick-Pocket"
                 }
                 5 => {
-                    return "the Sneak";
+                    "the Sneak"
                 }
                 6 => {
-                    return "the Pincheress";
+                    "the Pincheress"
                 }
                 7 => {
-                    return "the Cut-Purse";
+                    "the Cut-Purse"
                 }
                 8 => {
-                    return "the Snatcheress";
+                    "the Snatcheress"
                 }
                 9 => {
-                    return "the Sharpress";
+                    "the Sharpress"
                 }
                 10 => {
-                    return "the Rogue";
+                    "the Rogue"
                 }
                 11 => {
-                    return "the Robber";
+                    "the Robber"
                 }
                 12 => {
-                    return "the Magswoman";
+                    "the Magswoman"
                 }
                 13 => {
-                    return "the Highwaywoman";
+                    "the Highwaywoman"
                 }
                 14 => {
-                    return "the Burglaress";
+                    "the Burglaress"
                 }
                 15 => {
-                    return "the Thief";
+                    "the Thief"
                 }
                 16 => {
-                    return "the Knifer";
+                    "the Knifer"
                 }
                 17 => {
-                    return "the Quick-Blade";
+                    "the Quick-Blade"
                 }
                 18 => {
-                    return "the Murderess";
+                    "the Murderess"
                 }
                 19 => {
-                    return "the Brigand";
+                    "the Brigand"
                 }
                 20 => {
-                    return "the Cut-Throat";
+                    "the Cut-Throat"
                 }
                 /* no one ever thought up these titles 21-30 */
                 LVL_IMMORT => {
-                    return "the Immortal Assasin";
+                    "the Immortal Assasin"
                 }
                 LVL_GOD => {
-                    return "the Demi Goddess of thieves";
+                    "the Demi Goddess of thieves"
                 }
                 LVL_GRGOD => {
-                    return "the Goddess of thieves and tradesmen";
+                    "the Goddess of thieves and tradesmen"
                 }
                 _ => {
-                    return "the Thief";
+                    "the Thief"
                 }
             }
         }
@@ -4617,83 +4615,83 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
         Class::Warrior => {
             match level as i16 {
                 1 => {
-                    return "the Swordpupil";
+                    "the Swordpupil"
                 }
                 2 => {
-                    return "the Recruit";
+                    "the Recruit"
                 }
                 3 => {
-                    return "the Sentress";
+                    "the Sentress"
                 }
                 4 => {
-                    return "the Fighter";
+                    "the Fighter"
                 }
                 5 => {
-                    return "the Soldier";
+                    "the Soldier"
                 }
                 6 => {
-                    return "the Warrior";
+                    "the Warrior"
                 }
                 7 => {
-                    return "the Veteran";
+                    "the Veteran"
                 }
                 8 => {
-                    return "the Swordswoman";
+                    "the Swordswoman"
                 }
                 9 => {
-                    return "the Fenceress";
+                    "the Fenceress"
                 }
                 10 => {
-                    return "the Combatess";
+                    "the Combatess"
                 }
                 11 => {
-                    return "the Heroine";
+                    "the Heroine"
                 }
                 12 => {
-                    return "the Myrmidon";
+                    "the Myrmidon"
                 }
                 13 => {
-                    return "the Swashbuckleress";
+                    "the Swashbuckleress"
                 }
                 14 => {
-                    return "the Mercenaress";
+                    "the Mercenaress"
                 }
                 15 => {
-                    return "the Swordmistress";
+                    "the Swordmistress"
                 }
                 16 => {
-                    return "the Lieutenant";
+                    "the Lieutenant"
                 }
                 17 => {
-                    return "the Lady Champion";
+                    "the Lady Champion"
                 }
                 18 => {
-                    return "the Lady Dragoon";
+                    "the Lady Dragoon"
                 }
                 19 => {
-                    return "the Cavalier";
+                    "the Cavalier"
                 }
                 20 => {
-                    return "the Lady Knight";
+                    "the Lady Knight"
                 }
                 /* no one ever thought up these titles 21-30 */
                 LVL_IMMORT => {
-                    return "the Immortal Lady of War";
+                    "the Immortal Lady of War"
                 }
                 LVL_GOD => {
-                    return "the Queen of Destruction";
+                    "the Queen of Destruction"
                 }
                 LVL_GRGOD => {
-                    return "the Goddess of war";
+                    "the Goddess of war"
                 }
                 _ => {
-                    return "the Warrior";
+                    "the Warrior"
                 }
             }
         }
         _ => {
             /* Default title for classes which do not have titles defined */
-            return "the Classless";
+            "the Classless"
         }
     }
 }

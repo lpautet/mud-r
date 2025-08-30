@@ -488,7 +488,7 @@ pub struct CharData {
     /* NPC specials		  */
     pub affected: Vec<AffectedType>,
     /* affected by what spells       */
-    pub equipment: [Option<DepotId>; NUM_WEARS as usize],
+    pub equipment: [Option<DepotId>; NUM_WEARS],
     /* Equipment array               */
     pub carrying: Vec<DepotId>,
     /* Head of list                  */
@@ -935,20 +935,20 @@ pub struct RentInfo {
     pub spare7: i32,
 }
 
-pub type IDXTYPE = i16;
+pub type IdxType = i16;
 
 /* Various virtual (human-reference) number types. */
-pub type RoomVnum = IDXTYPE;
-pub type ObjVnum = IDXTYPE;
-pub type MobVnum = IDXTYPE;
-pub type ZoneVnum = IDXTYPE;
+pub type RoomVnum = IdxType;
+pub type ObjVnum = IdxType;
+pub type MobVnum = IdxType;
+pub type ZoneVnum = IdxType;
 // pub type ShopVnum = IDXTYPE;
 
 /* Various real (array-reference) number types. */
-pub type RoomRnum = IDXTYPE;
-pub type ObjRnum = IDXTYPE;
-pub type MobRnum = IDXTYPE;
-pub type ZoneRnum = IDXTYPE;
+pub type RoomRnum = IdxType;
+pub type ObjRnum = IdxType;
+pub type MobRnum = IdxType;
+pub type ZoneRnum = IdxType;
 // pub type ShopRnum = IDXTYPE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1215,7 +1215,7 @@ pub struct IndexData {
 }
 
 impl ExtraDescrData {
-    pub fn new() -> ExtraDescrData {
+    pub fn default() -> ExtraDescrData {
         ExtraDescrData {
             keyword: Rc::from(""),
             description: Rc::from(""),

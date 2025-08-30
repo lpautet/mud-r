@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use log::error;
@@ -17,9 +17,7 @@ use crate::depot::{Depot, DepotId, HasId};
 use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
-use crate::structs::{
-     AffectFlags, ExitFlags, RoomFlags, RoomRnum, NOWHERE, NUM_OF_DIRS
-};
+use crate::structs::{AffectFlags, ExitFlags, RoomFlags, RoomRnum, NOWHERE, NUM_OF_DIRS};
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
 use crate::{send_to_char, CharData, Game, ObjData, TextData};
 
@@ -42,10 +40,7 @@ fn is_marked(db: &DB, room: RoomRnum) -> bool {
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
-    db.world[x as usize].dir_option[y]
-        .as_ref()
-        .unwrap()
-        .to_room
+    db.world[x as usize].dir_option[y].as_ref().unwrap().to_room
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
@@ -57,8 +52,7 @@ fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
 }
 
 fn valid_edge(game: &Game, db: &DB, x: RoomRnum, y: usize) -> bool {
-    if db.world[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE
-    {
+    if db.world[x as usize].dir_option[y].is_none() || toroom(db, x, y) == NOWHERE {
         return false;
     }
     if !game.config.track_through_doors && is_closed(db, x, y) {
@@ -111,10 +105,10 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
 
     /* clear marks first, some OLC systems will save the mark. */
     for curr_room in 0..db.world.len() {
-        unmark( db, curr_room as RoomRnum);
+        unmark(db, curr_room as RoomRnum);
     }
 
-    mark( db, src);
+    mark(db, src);
 
     /* first, enqueue the first steps, saving which direction we're going. */
 
@@ -122,9 +116,9 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
 
     for curr_dir in 0..NUM_OF_DIRS {
         if valid_edge(game, db, src, curr_dir) {
-            let room_nr = toroom(&db, src, curr_dir);
+            let room_nr = toroom(db, src, curr_dir);
             mark(db, room_nr);
-            tracker.bfs_enqueue(toroom(&db, src, curr_dir), curr_dir);
+            tracker.bfs_enqueue(toroom(db, src, curr_dir), curr_dir);
         }
     }
 
@@ -136,10 +130,10 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
         } else {
             for curr_dir in 0..NUM_OF_DIRS {
                 if valid_edge(game, db, tracker.queue[0].room, curr_dir) {
-                    let room_nr = toroom(&db, tracker.queue[0].room, curr_dir);
+                    let room_nr = toroom(db, tracker.queue[0].room, curr_dir);
                     mark(db, room_nr);
                     tracker.bfs_enqueue(
-                        toroom(&db, tracker.queue[0].room, curr_dir),
+                        toroom(db, tracker.queue[0].room, curr_dir),
                         tracker.queue[0].dir,
                     );
                 }
@@ -148,14 +142,25 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
         }
     }
 
-    return BFS_NO_PATH;
+    BFS_NO_PATH
 }
 
 /********************************************************
 * Functions and Commands which use the above functions. *
 ********************************************************/
 
-pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+#[allow(clippy::too_many_arguments)]
+pub fn do_track(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     /* The character must have the track skill. */
     if ch.is_npc() || ch.get_skill(SKILL_TRACK) == 0 {
@@ -165,16 +170,33 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let mut arg = String::new();
     one_argument(argument, &mut arg);
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, "Whom are you trying to track?\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Whom are you trying to track?\r\n",
+        );
         return;
     }
     let vict;
     /* The person can't see the victim. */
-    if {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut arg, None, FindFlags::CHAR_WORLD);
+    let res = {
+        vict = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut arg,
+            None,
+            FindFlags::CHAR_WORLD,
+        );
         vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "No one is around by that name.\r\n");
+    };
+    if res {
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "No one is around by that name.\r\n",
+        );
         return;
     }
     let vict = vict.unwrap();
@@ -197,7 +219,9 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
                 break;
             }
         }
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!("You sense a trail {} from here!\r\n", DIRS[dir]).as_ref(),
         );
         return;
@@ -208,22 +232,34 @@ pub fn do_track(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     let ch = chars.get(chid);
     match dir {
         BFS_ERROR => {
-            send_to_char(&mut game.descriptors, ch, "Hmm.. something seems to be wrong.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Hmm.. something seems to be wrong.\r\n",
+            );
         }
 
         BFS_ALREADY_THERE => {
-            send_to_char(&mut game.descriptors, ch, "You're already in the same room!!\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You're already in the same room!!\r\n",
+            );
         }
 
         BFS_NO_PATH => {
             let vict = chars.get(vict_id);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!("You can't sense a trail to {} from here.\r\n", hmhr(vict)).as_str(),
             );
         }
         _ => {
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!("You sense a trail {} from here!\r\n", DIRS[dir as usize]).as_str(),
             );
         }

@@ -71,6 +71,7 @@ fn has_boat(descs: &mut Depot<DescriptorData>, objs: & Depot<ObjData>, ch: &Char
  *   1 : If succes.
  *   0 : If fail
  */
+#[allow(clippy::too_many_arguments)]
 pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
     let ch = chars.get(chid);
     if dir < 0 || dir >= NUM_OF_DIRS as i32 || ch.fighting_id().is_some() {
@@ -139,13 +140,11 @@ pub fn perform_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, te
         }
         return true;
     }
-    return false;
+    false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, dir: i32, need_specials_check: bool) -> bool {
-    let was_in;
-    let need_movement;
-
     /*
      * Check for special routines (North is 1 in command list, but 0 here) Note
      * -- only check if following; this avoids 'double spec-proc' bug
@@ -175,21 +174,19 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
     }
 
     /* if this room or the one we're going to needs a boat, check for one */
-    if (db.sect(ch.in_room()) == SectorType::WaterNoSwim)
+    if ((db.sect(ch.in_room()) == SectorType::WaterNoSwim)
         || (
             db
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
-            == SectorType::WaterNoSwim)
-    {
-        if !has_boat(&mut game.descriptors, objs,ch) {
+            == SectorType::WaterNoSwim))
+        && !has_boat(&mut game.descriptors, objs,ch) {
             send_to_char(&mut game.descriptors, ch, "You need a boat to go there.\r\n");
             return false;
         }
-    }
 
     /* move points needed is avg. move loss for src and destination sect type */
     let ch = chars.get(chid);
-    need_movement = (MOVEMENT_LOSS[db.sect(ch.in_room()) as usize]
+    let need_movement = (MOVEMENT_LOSS[db.sect(ch.in_room()) as usize]
         + MOVEMENT_LOSS[
             db
             .sect(db.exit(ch, dir as usize).as_ref().unwrap().to_room)
@@ -206,8 +203,8 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         return false;
     }
 
-    if db.room_flagged(ch.in_room(), RoomFlags::ATRIUM) {
-        if !house_can_enter(
+    if db.room_flagged(ch.in_room(), RoomFlags::ATRIUM)
+        && !house_can_enter(
             db,
             ch,
             db
@@ -216,7 +213,6 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
             send_to_char(&mut game.descriptors, ch, "That's private property -- no trespassing!\r\n");
             return false;
         }
-    }
     if db.room_flagged(
         db.exit(ch, dir as usize).as_ref().unwrap().to_room,
         RoomFlags::TUNNEL,
@@ -254,7 +250,7 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         act(&mut game.descriptors, chars, db,buf2.as_str(), true, Some(ch), None, None, TO_ROOM);
     }
     let ch = chars.get(chid);
-    was_in = ch.in_room();
+    let was_in = ch.in_room();
     let ch = chars.get_mut(chid);
     db.char_from_room( objs,ch);
     let room_dir = db.world[was_in as usize].dir_option[dir as usize]
@@ -280,9 +276,10 @@ pub fn do_simple_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, 
         db.extract_char(chars, chid);
         return false;
     }
-    return true;
+    true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_move(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, _argument: &str, _cmd: usize, subcmd: i32) {
     /*
      * This is basically a mapping of cmd numbers to perform_move indices.
@@ -297,10 +294,11 @@ fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: 
 
     if !dir.is_empty() {
         /* a direction was specified */
-        if {
+        let res = {
             dooro = search_block(dir, &DIRS, false);
             dooro.is_none()
-        } {
+        }; 
+        if res {
             /* Partial Match */
             send_to_char(descs, ch, "That's not a direction.\r\n");
             return None;
@@ -320,13 +318,13 @@ fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: 
                         .unwrap()
                         .keyword,
                 ) {
-                    return Some(door as i32);
+                    Some(door as i32)
                 } else {
                     send_to_char(descs, ch, format!("I see no {} there.\r\n", type_).as_str());
-                    return None;
+                    None
                 }
             } else {
-                return Some(door as i32);
+                Some(door as i32)
             }
         } else {
             send_to_char(descs, ch,
@@ -336,7 +334,7 @@ fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: 
                 )
                 .as_str(),
             );
-            return None;
+            None
         }
     } else {
         /* try to locate the keyword */
@@ -347,13 +345,11 @@ fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: 
             return None;
         }
         for door in 0..NUM_OF_DIRS {
-            if db.exit(ch, door).is_some() {
-                if !db.exit(ch, door).as_ref().unwrap().keyword.is_empty() {
-                    if isname(type_, &db.exit(ch, door).as_ref().unwrap().keyword) {
+            if db.exit(ch, door).is_some()
+                && !db.exit(ch, door).as_ref().unwrap().keyword.is_empty()
+                    && isname(type_, &db.exit(ch, door).as_ref().unwrap().keyword) {
                         return Some(door as i32);
                     }
-                }
-            }
         }
 
         send_to_char(descs, ch,
@@ -364,7 +360,7 @@ fn find_door(descs: &mut Depot<DescriptorData>, db:  &DB, ch: &CharData, type_: 
             )
             .as_str(),
         );
-        return None;
+        None
     }
 }
 
@@ -375,11 +371,10 @@ fn has_key(db: &DB,objs: & Depot<ObjData>,  ch: &CharData, key: ObjVnum) -> bool
         }
     }
 
-    if ch.get_eq(WEAR_HOLD).is_some() {
-        if db.get_obj_vnum(objs.get(ch.get_eq(WEAR_HOLD).unwrap())) == key {
+    if ch.get_eq(WEAR_HOLD).is_some()
+        && db.get_obj_vnum(objs.get(ch.get_eq(WEAR_HOLD).unwrap())) == key {
             return true;
         }
-    }
     false
 }
 
@@ -399,8 +394,8 @@ const FLAGS_DOOR: [i32; 5] = [
 ];
 
 fn open_door(db: &mut DB, objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
-    if oid.is_some() {
-        objs.get_mut(oid.unwrap()).remove_objval_bit(1, CONT_CLOSED);
+    if let Some(oid) = oid  {
+        objs.get_mut(oid).remove_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -410,8 +405,8 @@ fn open_door(db: &mut DB, objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Optio
 }
 
 fn close_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
-    if oid.is_some() {
-        objs.get_mut(oid.unwrap()).set_objval_bit(1, CONT_CLOSED);
+    if let Some(oid) = oid {
+        objs.get_mut(oid).set_objval_bit(1, CONT_CLOSED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -421,8 +416,8 @@ fn close_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Optio
 }
 
 fn lock_door(db: &mut DB,objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
-    if oid.is_some() {
-        objs.get_mut(oid.unwrap()).set_objval_bit(1, CONT_LOCKED);
+    if let Some(oid) = oid {
+        objs.get_mut(oid).set_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -432,8 +427,8 @@ fn lock_door(db: &mut DB,objs: &mut Depot<ObjData>,  room: RoomRnum, oid: Option
 }
 
 fn unlock_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
-    if oid.is_some() {
-        objs.get_mut(oid.unwrap()).remove_objval_bit(1, CONT_LOCKED);
+    if let Some(oid) = oid {
+        objs.get_mut(oid).remove_objval_bit(1, CONT_LOCKED);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -443,9 +438,9 @@ fn unlock_door(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Opti
 }
 
 fn togle_lock(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Option<DepotId>, door: Option<usize>) {
-    if oid.is_some() {
-        let v = objs.get(oid.unwrap()).get_obj_val(1) ^ CONT_LOCKED;
-        objs.get_mut(oid.unwrap()).set_obj_val(1, v);
+    if let Some(oid) = oid {
+        let v = objs.get(oid).get_obj_val(1) ^ CONT_LOCKED;
+        objs.get_mut(oid).set_obj_val(1, v);
     } else {
         db.world[room as usize].dir_option[door.unwrap()]
             .as_mut()
@@ -454,6 +449,7 @@ fn togle_lock(db: &mut DB, objs: &mut Depot<ObjData>, room: RoomRnum, oid: Optio
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn do_doorcmd(
     descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -473,8 +469,8 @@ fn do_doorcmd(
     if oid.is_none() && {
         other_room = db.exit(ch, door.unwrap()).as_ref().unwrap().to_room;
         other_room != NOWHERE
-    } {
-        if {
+    }
+        && {
             back_to_room = db.world[other_room as usize].dir_option
                 [REV_DIR[door.unwrap()] as usize]
                 .as_ref()
@@ -489,7 +485,6 @@ fn do_doorcmd(
                 .as_ref()
                 .map(|e: &RoomDirectionData| e.keyword.clone());
         }
-    }
 
     match scmd {
         SCMD_OPEN => {
@@ -500,7 +495,7 @@ fn do_doorcmd(
                      db,objs,
                     other_room,
                     oid,
-                    Some(REV_DIR[door.unwrap() as usize] as usize),
+                    Some(REV_DIR[door.unwrap()] as usize),
                 );
             }
             let ch = chars.get(chid);
@@ -514,7 +509,7 @@ fn do_doorcmd(
                      db,objs,
                     other_room,
                     oid,
-                    Some(REV_DIR[door.unwrap() as usize] as usize),
+                    Some(REV_DIR[door.unwrap()] as usize),
                 );
             }
             let ch = chars.get(chid);
@@ -528,7 +523,7 @@ fn do_doorcmd(
                      db,objs,
                     other_room,
                     oid,
-                    Some(REV_DIR[door.unwrap() as usize] as usize),
+                    Some(REV_DIR[door.unwrap()] as usize),
                 );
             }
             let ch = chars.get(chid);
@@ -542,7 +537,7 @@ fn do_doorcmd(
                     db,objs,
                     other_room,
                     oid,
-                    Some(REV_DIR[door.unwrap() as usize] as usize),
+                    Some(REV_DIR[door.unwrap()] as usize),
                 );
             }
             let ch = chars.get(chid);
@@ -557,7 +552,7 @@ fn do_doorcmd(
                      db,objs,
                     other_room,
                     oid,
-                    Some(REV_DIR[door.unwrap() as usize] as usize),
+                    Some(REV_DIR[door.unwrap()] as usize),
                 );
             }
             let ch = chars.get(chid);
@@ -606,10 +601,10 @@ fn do_doorcmd(
             &buf,
             false,
             Some(ch),
-            if oid.is_none() {
-                None
+            if let Some(oid) = oid {
+                Some(objs.get(oid))
             } else {
-                Some(objs.get(oid.unwrap()))
+                None
             },
             vict_obj,
             TO_ROOM,
@@ -656,13 +651,13 @@ fn ok_pick(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, chid:
     } else {
         return true;
     }
-    return false;
+    false
 }
 
 fn door_is_openable(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
-    if obj.is_some() {
-        obj.as_ref().unwrap().get_obj_type() == ItemType::Container
-            && obj.as_ref().unwrap().objval_flagged(CONT_CLOSEABLE)
+    if let Some(obj) = obj {
+        obj.get_obj_type() == ItemType::Container
+            && obj.objval_flagged(CONT_CLOSEABLE)
     } else {
         db.exit(ch, door.unwrap())
             .as_ref()
@@ -672,8 +667,8 @@ fn door_is_openable(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option
 }
 
 fn door_is_open(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
-    if obj.is_some() {
-        !obj.as_ref().unwrap().objval_flagged(CONT_CLOSED)
+    if let Some(obj) = obj {
+        !obj.objval_flagged(CONT_CLOSED)
     } else {
         !db.exit(ch, door.unwrap())
             .as_ref()
@@ -683,8 +678,8 @@ fn door_is_open(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<usi
 }
 
 fn door_is_unlocked(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
-    if obj.is_some() {
-        !obj.as_ref().unwrap().objval_flagged(CONT_LOCKED)
+    if let Some(obj) = obj {
+        !obj.objval_flagged(CONT_LOCKED)
     } else {
         !db.exit(ch, door.unwrap())
             .as_ref()
@@ -694,8 +689,8 @@ fn door_is_unlocked(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<
 }
 
 fn door_is_pickproof(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> bool {
-    if obj.is_some() {
-        !obj.as_ref().unwrap().objval_flagged(CONT_PICKPROOF)
+    if let Some(obj) = obj {
+        !obj.objval_flagged(CONT_PICKPROOF)
     } else {
         !db.exit(ch, door.unwrap())
             .as_ref()
@@ -713,13 +708,14 @@ fn door_is_locked(db: &DB,  ch: &CharData, obj: Option<&ObjData>, door: Option<u
 }
 
 fn door_key(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) -> ObjVnum {
-    if obj.is_some() {
-        obj.as_ref().unwrap().get_obj_val(2) as ObjVnum
+    if let Some(obj) = obj {
+        obj.get_obj_val(2) as ObjVnum
     } else {
         db.exit(ch, door.unwrap()).as_ref().unwrap().key
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, subcmd: i32) {
     let ch = chars.get(chid);
     let mut dooro: Option<usize> = None;
@@ -749,18 +745,15 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
     ).is_empty()
     {
         let dooroi = find_door(&mut game.descriptors,db, ch, &type_, &dir, CMD_DOOR[subcmd as usize]);
-        dooro = if dooroi.is_some() {
-            Some(dooroi.unwrap() as usize)
-        } else {
-            None
-        };
+        dooro = dooroi.map(|dooroi| dooroi as usize);
     }
 
     if obj.is_some() || dooro.is_some() {
         let obj_id = obj.map(|o| o.id());
         let ch = chars.get(chid);
-        let keynum = door_key(&db, ch, obj, dooro);
-        if !door_is_openable(&db, ch, obj, dooro) {
+        let keynum = door_key(db, ch, obj, dooro);
+        #[allow(clippy::blocks_in_conditions)]
+        if !door_is_openable(db, ch, obj, dooro) {
             act(&mut game.descriptors, chars, db,
                 "You can't $F that!",
                 false,
@@ -769,37 +762,37 @@ pub fn do_gen_door(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,text
                 Some(VictimRef::Str(CMD_DOOR[subcmd as usize])),
                 TO_CHAR,
             );
-        } else if !door_is_open(&db,ch, obj, dooro)
+        } else if !door_is_open(db,ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_OPEN)
         {
             send_to_char(&mut game.descriptors, ch, "But it's already closed!\r\n");
-        } else if !door_is_closed(&db, ch, obj, dooro)
+        } else if !door_is_closed(db, ch, obj, dooro)
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_CLOSED)
         {
             send_to_char(&mut game.descriptors, ch, "But it's currently open!\r\n");
-        } else if !(door_is_locked(&db, ch, obj, dooro))
+        } else if !(door_is_locked(db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_LOCKED)
         {
             send_to_char(&mut game.descriptors, ch, "Oh.. it wasn't locked, after all..\r\n");
-        } else if !(door_is_unlocked(&db, ch, obj, dooro))
+        } else if !(door_is_unlocked(db, ch, obj, dooro))
             && is_set!(FLAGS_DOOR[subcmd as usize], NEED_UNLOCKED)
         {
             send_to_char(&mut game.descriptors, ch, "It seems to be locked.\r\n");
-        } else if !has_key(&db, objs,ch, keynum)
+        } else if !has_key(db, objs,ch, keynum)
             && (ch.get_level() < LVL_GOD as u8)
             && ((subcmd == SCMD_LOCK) || (subcmd == SCMD_UNLOCK))
         {
             send_to_char(&mut game.descriptors, ch, "You don't seem to have the proper key.\r\n");
         } else if {
-            let pickproof = door_is_pickproof(&db, ch, obj, dooro);
+            let pickproof = door_is_pickproof(db, ch, obj, dooro);
             ok_pick(&mut game.descriptors, chars, chid, keynum, pickproof, subcmd)
         } {
             do_doorcmd(&mut game.descriptors, db, chars,texts,objs,chid, obj_id, dooro, subcmd);
         }
     }
-    return;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut buf = String::new();
@@ -808,14 +801,12 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
     if !buf.is_empty() {
         /* an argument was supplied, search for door keyword */
         for door in 0..NUM_OF_DIRS {
-            if db.exit(ch, door).is_some() {
-                if !db.exit(ch, door).as_ref().unwrap().keyword.is_empty() {
-                    if db.exit(ch, door).as_ref().unwrap().keyword.as_ref() == buf {
+            if db.exit(ch, door).is_some()
+                && !db.exit(ch, door).as_ref().unwrap().keyword.is_empty()
+                    && db.exit(ch, door).as_ref().unwrap().keyword.as_ref() == buf {
                         perform_move(game,db, chars,texts,objs, chid, door as i32, true);
                         return;
                     }
-                }
-            }
         }
         send_to_char(&mut game.descriptors, ch, format!("There is no {} here.\r\n", buf).as_str());
     } else if db.room_flagged(ch.in_room(), RoomFlags::INDOORS) {
@@ -823,44 +814,42 @@ pub fn do_enter(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts:
     } else {
         /* try to locate an entrance */
         for door in 0..NUM_OF_DIRS {
-            if db.exit(ch, door).is_some() {
-                if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
-                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
+            if db.exit(ch, door).is_some()
+                && db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
+                    && !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
                         && db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {
                         perform_move(game,db, chars,texts, objs,chid, door as i32, true);
                         return;
                     }
-                }
-            }
         }
         send_to_char(&mut game.descriptors, ch, "You can't seem to find anything to enter.\r\n");
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_leave(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut  Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     if db.outside(ch) {
         send_to_char(&mut game.descriptors, ch, "You are outside.. where do you want to go?\r\n");
     } else {
         for door in 0..NUM_OF_DIRS {
-            if db.exit(ch, door).is_some() {
-                if db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE {
-                    if !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
+            if db.exit(ch, door).is_some()
+                && db.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
+                    && !db.exit(ch, door).as_ref().unwrap().exit_flagged(ExitFlags::CLOSED)
                         && !db
                             .room_flagged(db.exit(ch, door).as_ref().unwrap().to_room, RoomFlags::INDOORS)
                     {
                         perform_move(game, db,chars, texts, objs, chid, door as i32, true);
                         return;
                     }
-                }
-            }
         }
         send_to_char(&mut game.descriptors, ch, "I see no obvious exits to the outside.\r\n");
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
@@ -922,6 +911,7 @@ pub fn do_stand(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>, _objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
@@ -969,6 +959,7 @@ pub fn do_sit(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
@@ -1018,6 +1009,7 @@ pub fn do_rest(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, _argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     match ch.get_pos() {
@@ -1058,6 +1050,7 @@ pub fn do_sleep(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -1066,6 +1059,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
 
     one_argument(argument, &mut arg);
     if !arg.is_empty() {
+        #[allow(clippy::blocks_in_conditions)]
         if ch.get_pos() == Position::Sleeping {
             send_to_char(&mut game.descriptors, ch, "Maybe you should wake yourself up first.\r\n");
         } else if {
@@ -1142,6 +1136,7 @@ pub fn do_wake(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts:
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut buf = String::new();
@@ -1149,10 +1144,11 @@ pub fn do_follow(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     one_argument(argument, &mut buf);
     let leader;
     if !buf.is_empty() {
-        if {
+        let res = {
             leader = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
             leader.is_none()
-        } {
+        };
+        if res {
             send_to_char(&mut game.descriptors, ch, NOPERSON);
             return;
         }

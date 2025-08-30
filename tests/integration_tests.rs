@@ -6,7 +6,7 @@ use std::process::Command;
 #[test]
 fn test_help_output() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "--help"])
+        .args(["run", "--", "--help"])
         .output()
         .expect("Failed to execute command");
 
@@ -25,7 +25,7 @@ fn test_help_output() {
 #[test]
 fn test_syntax_check_mode() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "--check"])
+        .args(["run", "--", "--check"])
         .output()
         .expect("Failed to execute command");
 
@@ -41,7 +41,7 @@ fn test_syntax_check_mode() {
 #[test]
 fn test_invalid_port_handling() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "100"]) // Port < 1024 should be rejected
+        .args(["run", "--", "100"]) // Port < 1024 should be rejected
         .output()
         .expect("Failed to execute command");
 
@@ -54,7 +54,7 @@ fn test_invalid_port_handling() {
 #[test]
 fn test_directory_flag() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "--directory", "/tmp", "--check"])
+        .args(["run", "--", "--directory", "/tmp", "--check"])
         .output()
         .expect("Failed to execute command");
 

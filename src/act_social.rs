@@ -54,14 +54,16 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
+#[allow(clippy::too_many_arguments)]           
 pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let act_nr;
 
-    if {
+    let res = {
         act_nr = find_action(db, cmd);
         act_nr.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "That action is not supported.\r\n");
         return;
     }
@@ -87,7 +89,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, format!("{}\r\n", action_char_no_arg).as_str());
         act(&mut game.descriptors, chars, db,
-            &action_others_no_arg,
+            action_others_no_arg,
             action_hide,
             Some(ch),
             None,
@@ -97,15 +99,16 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         return;
     }
     let vict;
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_not_found).as_str());
     } else if vict.unwrap().id() == chid {
         send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_char_auto).as_str());
         act(&mut game.descriptors, chars, db,
-            &action_others_auto,
+            action_others_auto,
             action_hide,
             Some(ch),
             None,
@@ -125,7 +128,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
             );
         } else {
             act(&mut game.descriptors, chars, db,
-                &action_char_found,
+                action_char_found,
                 false,
                 Some(ch),
                 None,
@@ -133,7 +136,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 TO_CHAR | TO_SLEEP,
             );
             act(&mut game.descriptors, chars, db,
-                &action_others_found,
+                action_others_found,
                 action_hide,
                 Some(ch),
                 None,
@@ -141,7 +144,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 TO_NOTVICT,
             );
             act(&mut game.descriptors, chars, db,
-                &action_vict_found,
+                action_vict_found,
                 action_hide,
                 Some(ch),
                 None,
@@ -152,6 +155,7 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
 }
 
+#[allow(clippy::too_many_arguments)]           
 pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut arg = String::new();
@@ -159,10 +163,11 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
 
     if !arg.is_empty() {
         let victim;
-        if {
+        let res = {
             victim = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
             victim.is_none()
-        } {
+        }; 
+        if res {
             send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");
         } else {
             let victim = victim.unwrap();
@@ -256,7 +261,7 @@ pub fn fread_action(reader: &mut BufReader<File>, nr: i32) -> Rc<str> {
 
     let r = reader
         .read_line(&mut buf)
-        .expect(format!("SYSERR: fread_action: error while reading action #{}", nr).as_str());
+        .unwrap_or_else(|_| panic!("SYSERR: fread_action: error while reading action #{}", nr));
 
     if r == 0 {
         error!("SYSERR: fread_action: unexpected EOF near action #{}", nr);
@@ -275,10 +280,11 @@ pub fn free_social_messages(db: &mut DB) {
 pub fn boot_social_messages(db: &mut DB) {
     /* open social file */
     let fl;
-    if {
+    let res = {
         fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
         fl.is_err()
-    } {
+    }; 
+    if res {
         error!(
             "SYSERR: can't open socials file '{}': {}",
             SOCMESS_FILE,
@@ -289,8 +295,8 @@ pub fn boot_social_messages(db: &mut DB) {
     let fl = fl.unwrap();
     let mut list_top = 0;
     /* count socials & allocate space */
-    for nr in 0..CMD_INFO.len() - 1 {
-        if CMD_INFO[nr].command_pointer as usize == do_action as usize {
+    for cmd_info in CMD_INFO.iter() {
+        if cmd_info.command_pointer as usize == do_action as usize {
             list_top += 1;
         }
     }
@@ -299,6 +305,7 @@ pub fn boot_social_messages(db: &mut DB) {
     let mut cur_soc = 0;
     let mut reader = BufReader::new(fl);
     /* now read 'em */
+    let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
     loop {
         let mut line = String::new();
         reader.read_line(&mut line).expect("Reading socials file");
@@ -306,7 +313,6 @@ pub fn boot_social_messages(db: &mut DB) {
             break;
         }
 
-        let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
         let f = regex.captures(line.as_str());
         if f.is_none() {
             error!("SYSERR: format error in social file near social '{}'", line);
@@ -317,17 +323,18 @@ pub fn boot_social_messages(db: &mut DB) {
         let hide = f[2].parse::<i32>().unwrap();
         let min_victim_position = Position::from(f[2].parse::<u8>().unwrap());
 
-        if {
+        let res = {
             cur_soc += 1;
             cur_soc > list_top
-        } {
+        }; 
+        if res {
             error!(
                 "SYSERR: Ran out of slots in social array. ({} > {})",
                 cur_soc, list_top
             );
             break;
         }
-        let hide = if hide == 0 { false } else { true };
+        let hide = hide != 0;
         let mut sm = SocialMessg {
             act_nr: 0,
             hide,
@@ -344,7 +351,7 @@ pub fn boot_social_messages(db: &mut DB) {
 
         /* read the stuff */
         sm.act_nr =
-            find_command(next_soc).expect(format!("Cannot find command {next_soc}").as_str());
+            find_command(next_soc).unwrap_or_else(|| panic!("Cannot find command {next_soc}"));
         let nr = sm.act_nr as i32;
         sm.char_no_arg = fread_action(&mut reader, nr);
         sm.others_no_arg = fread_action(&mut reader, nr);

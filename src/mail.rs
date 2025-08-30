@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 /******* MUD MAIL SYSTEM HEADER FILE **********************
@@ -31,8 +31,7 @@ use log::{error, info};
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
 use crate::interpreter::{cmd_is, one_argument};
 use crate::structs::{
-    CharData, CharFileU, MeRef, ItemType, WearFlags, NOTHING, PLR_DELETED,
-    PLR_MAILING,
+    CharData, CharFileU, ItemType, MeRef, WearFlags, NOTHING, PLR_DELETED, PLR_MAILING,
 };
 use crate::util::{ctime, time_now, touch};
 use crate::{Game, TO_ROOM, TO_VICT};
@@ -123,7 +122,7 @@ pub struct MailSystem {
 }
 
 impl MailSystem {
-    pub fn new() -> MailSystem {
+    pub fn default() -> MailSystem {
         MailSystem {
             mail_index: vec![],
             free_list: vec![],
@@ -134,7 +133,14 @@ impl MailSystem {
 
 /* -------------------------------------------------------------------------- */
 
-fn mail_recip_ok(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  name: &str) -> bool {
+fn mail_recip_ok(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    name: &str,
+) -> bool {
     let mut ret = false;
     let mut tmp_store = CharFileU::default();
     let mut victim = CharData::default();
@@ -142,11 +148,11 @@ fn mail_recip_ok(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, text
     if db.load_char(name, &mut tmp_store).is_some() {
         store_to_char(texts, &tmp_store, &mut victim);
         let victim = &Rc::from(victim);
-        db.char_to_room(chars, objs,victim.id(), 0);
+        db.char_to_room(chars, objs, victim.id(), 0);
         if !victim.plr_flagged(PLR_DELETED) {
             ret = true;
         }
-        game.extract_char_final(chars, db,texts,objs,victim.id());
+        game.extract_char_final(chars, db, texts, objs, victim.id());
     }
     ret
 }
@@ -178,7 +184,7 @@ impl MailSystem {
         if self.free_list.is_empty() {
             return self.file_end_pos;
         }
-        return self.free_list.remove(0);
+        self.free_list.remove(0)
     }
 
     pub(crate) fn clear_free_list(&mut self) {
@@ -227,6 +233,7 @@ impl DB {
         }
         let mail_file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .read(true)
             .open(MAIL_FILE);
@@ -252,7 +259,6 @@ impl DB {
         self.mails.file_end_pos = mail_file
             .stream_position()
             .expect("getting stream position of mail file");
-        return;
     }
 
     /*
@@ -322,7 +328,7 @@ impl MailSystem {
      */
     pub fn scan_file(&mut self) -> bool {
         let mut total_messages = 0;
-        let mut block_num = 0 as u64;
+        let mut block_num = 0_u64;
 
         let mail_file = OpenOptions::new().read(true).open(MAIL_FILE);
         if mail_file.is_err() {
@@ -555,7 +561,7 @@ impl DB {
         }
         let mail_idx = mail_idx.unwrap();
         let mail_pointer = &mut self.mails.mail_index[mail_idx];
-        let position_pointer = mail_pointer.position_list.get(0);
+        let position_pointer = mail_pointer.position_list.first();
         if position_pointer.is_none() {
             error!("SYSERR: Mail system -- non-fatal error #8. (invalid position pointer)");
             return None;
@@ -614,11 +620,7 @@ From: {}\r\n\
 \r\n\
 {}",
             tmstr,
-            if to.is_some() {
-                to.unwrap()
-            } else {
-                "Unknown"
-            },
+            if to.is_some() { to.unwrap() } else { "Unknown" },
             if from.is_some() {
                 from.unwrap()
             } else {
@@ -679,7 +681,18 @@ From: {}\r\n\
 * routines.  Written by Jeremy Elson (jelson@circlemud.org) *
 ****************************************************************/
 
-pub fn postmaster(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool {
+#[allow(clippy::too_many_arguments)]
+pub fn postmaster(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    me: MeRef,
+    cmd: i32,
+    argument: &str,
+) -> bool {
     let ch = chars.get(chid);
     if ch.desc.is_none() || ch.is_npc() {
         return false; /* so mobs don't get caught here */
@@ -689,37 +702,50 @@ pub fn postmaster(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         return false;
     }
     if db.no_mail {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             "Sorry, the mail system is having technical difficulties.\r\n",
         );
         return false;
     }
 
-    return if cmd_is(cmd, "mail") {
+    if cmd_is(cmd, "mail") {
         match me {
-            MeRef::Char(mailman) => postmaster_send_mail(game, chars, db,texts,objs,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => {
+                postmaster_send_mail(game, chars, db, texts, objs, chid, mailman, cmd, argument)
+            }
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
     } else if cmd_is(cmd, "check") {
         match me {
-            MeRef::Char(mailman) => postmaster_check_mail(game,chars, db, chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => {
+                postmaster_check_mail(game, chars, db, chid, mailman, cmd, argument)
+            }
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
     } else if cmd_is(cmd, "receive") {
         match me {
-            MeRef::Char(mailman) => postmaster_receive_mail(game, chars, db,texts,objs,chid, mailman, cmd, argument),
+            MeRef::Char(mailman) => {
+                postmaster_receive_mail(game, chars, db, texts, objs, chid, mailman, cmd, argument)
+            }
             _ => panic!("Unexpected MeRef type in postmaster"),
         }
         true
     } else {
         false
-    };
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn postmaster_send_mail(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
@@ -732,7 +758,10 @@ fn postmaster_send_mail(
             "$n tells you, 'Sorry, you have to be level {} to send mail!'",
             MIN_MAIL_LEVEL
         );
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             &buf,
             false,
             Some(mailman),
@@ -747,7 +776,10 @@ fn postmaster_send_mail(
 
     if buf.is_empty() {
         /* you'll get no argument from me! */
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n tells you, 'You need to specify an addressee!'",
             false,
             Some(mailman),
@@ -764,7 +796,10 @@ $n tells you, '...which I see you can't afford.'",
             STAMP_PRICE,
             if STAMP_PRICE == 1 { "" } else { "s" }
         );
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             &buf,
             false,
             Some(mailman),
@@ -775,10 +810,13 @@ $n tells you, '...which I see you can't afford.'",
         return;
     }
     let recipient = db.get_id_by_name(&buf);
-    if recipient < 0 || !mail_recip_ok(game, chars, db,texts, objs,&buf) {
+    if recipient < 0 || !mail_recip_ok(game, chars, db, texts, objs, &buf) {
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n tells you, 'No one by that name is registered here!'",
             false,
             Some(mailman),
@@ -789,7 +827,10 @@ $n tells you, '...which I see you can't afford.'",
         return;
     }
     let ch = chars.get(chid);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n starts to write some mail.",
         true,
         Some(ch),
@@ -803,7 +844,10 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
         STAMP_PRICE
     );
     let mailman = chars.get(mailman_id);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         &buf,
         false,
         Some(mailman),
@@ -819,7 +863,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     let desc_id = ch.desc.unwrap();
     let desc = game.desc_mut(desc_id);
     desc.string_write(
-        chars, 
+        chars,
         texts.add_text(String::new()),
         MAX_MAIL_SIZE,
         recipient,
@@ -827,7 +871,9 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 }
 
 fn postmaster_check_mail(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
@@ -837,7 +883,10 @@ fn postmaster_check_mail(
     if db.mails.has_mail(ch.get_idnum()) {
         let ch = chars.get(chid);
         let mailman = chars.get(mailman_id);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n tells you, 'You have mail waiting.'",
             false,
             Some(mailman),
@@ -848,7 +897,10 @@ fn postmaster_check_mail(
     } else {
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n tells you, 'Sorry, you don't have any mail waiting.'",
             false,
             Some(mailman),
@@ -859,8 +911,13 @@ fn postmaster_check_mail(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn postmaster_receive_mail(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     mailman_id: DepotId,
     _cmd: i32,
@@ -871,7 +928,10 @@ fn postmaster_receive_mail(
         let buf = "$n tells you, 'Sorry, you don't have any mail waiting.'";
         let ch = chars.get(chid);
         let mailman = chars.get(mailman_id);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             buf,
             false,
             Some(mailman),
@@ -881,8 +941,12 @@ fn postmaster_receive_mail(
         );
         return;
     }
-    while { let ch = chars.get(chid); db.mails.has_mail(ch.get_idnum()) } {
-        let oid = db.create_obj(objs,
+    while {
+        let ch = chars.get(chid);
+        db.mails.has_mail(ch.get_idnum())
+    } {
+        let oid = db.create_obj(
+            objs,
             NOTHING,
             "mail paper letter",
             "a piece of mail",
@@ -895,17 +959,17 @@ fn postmaster_receive_mail(
         );
         let ch = chars.get(chid);
         let mail_content = db.read_delete(ch.get_idnum());
-        let mail_content = if mail_content.is_some() {
-            mail_content.unwrap()
-        } else {
-            "Mail system error - please report.  Error #11.\r\n".to_string()
-        };
-        let obj =  objs.get_mut(oid);
-       obj.action_description = texts.add_text(mail_content);
+        let mail_content = mail_content
+            .unwrap_or("Mail system error - please report.  Error #11.\r\n".to_string());
+        let obj = objs.get_mut(oid);
+        obj.action_description = texts.add_text(mail_content);
         obj_to_char(obj, chars.get_mut(chid));
         let mailman = chars.get(mailman_id);
         let ch = chars.get(chid);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n gives you a piece of mail.",
             false,
             Some(mailman),
@@ -913,7 +977,10 @@ fn postmaster_receive_mail(
             Some(VictimRef::Char(ch)),
             TO_VICT,
         );
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$N gives $n a piece of mail.",
             false,
             Some(ch),

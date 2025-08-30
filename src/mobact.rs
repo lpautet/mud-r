@@ -43,17 +43,15 @@ impl Game {
                         ch.get_name(),
                         db.get_mob_vnum(ch)
                     );
-                } else {
-                    if db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
-                        self,chars,
-                        db,texts,objs,
-                        chid,
-                        MeRef::Char(chid),
-                        0,
-                        "",
-                    ) {
-                        continue; /* go to next char */
-                    }
+                } else if db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
+                    self,chars,
+                    db,texts,objs,
+                    chid,
+                    MeRef::Char(chid),
+                    0,
+                    "",
+                ) {
+                    continue; /* go to next char */
                 }
             }
 
@@ -64,8 +62,8 @@ impl Game {
             }
 
             /* Scavenger (picking up objects) */
-            if ch.mob_flagged(MOB_SCAVENGER) {
-                if db.world[ch.in_room() as usize].contents.len() != 0 && rand_number(0, 10) == 0 {
+            if ch.mob_flagged(MOB_SCAVENGER)
+                && !db.world[ch.in_room() as usize].contents.is_empty() && rand_number(0, 10) == 0 {
                     let mut max = 1;
                     let mut best_obj_id = None;
                     {
@@ -77,12 +75,12 @@ impl Game {
                             }
                         }
                     }
-                    if best_obj_id.is_some() {
-                        let best_obj = objs.get_mut(best_obj_id.unwrap());
-                        db.obj_from_room(&best_obj);
+                    if let Some(best_obj_id) = best_obj_id {
+                        let best_obj = objs.get_mut(best_obj_id);
+                        db.obj_from_room(best_obj);
                         obj_to_char(best_obj, chars.get_mut(chid));
                         let ch = chars.get(chid);
-                        let best_obj = objs.get(best_obj_id.unwrap());
+                        let best_obj = objs.get(best_obj_id);
                         act(&mut self.descriptors, chars, 
                             db,
                             "$n gets $p.",
@@ -94,7 +92,6 @@ impl Game {
                         );
                     }
                 }
-            }
 
             /* Mob Movement */
             let door = rand_number(0, 18);
@@ -141,7 +138,7 @@ impl Game {
                         || (ch.mob_flagged(MOB_AGGR_GOOD) && vict.is_good())
                     {
                         /* Can a master successfully control the charmed monster? */
-                        let master_id = ch.master.clone();
+                        let master_id = ch.master;
                         if self.aggressive_mob_on_a_leash(chars, db, texts, objs,chid, master_id, vict_id) {
                             continue;
                         }
@@ -153,7 +150,7 @@ impl Game {
 
             /* Mob Memory */
             let ch = chars.get(chid);
-            if ch.mob_flagged(MOB_MEMORY) && ch.memory().len() != 0 {
+            if ch.mob_flagged(MOB_MEMORY) && !ch.memory().is_empty() {
                 let mut found = false;
                 for vict_id in db.world[ch.in_room() as usize].peoples.clone() {
                     let vict = chars.get(vict_id);
@@ -175,7 +172,7 @@ impl Game {
 
                         /* Can a master successfully control the charmed monster? */
                         let ch = chars.get(chid);
-                        let master_id = ch.master.clone();
+                        let master_id = ch.master;
                         if self.aggressive_mob_on_a_leash(chars, db, texts, objs,chid, master_id, vict_id) {
                             continue;
                         }
@@ -301,8 +298,8 @@ impl CharData {
  * see if their master can talk them out of it, eye them
  * down, or otherwise intimidate the slave.
  */
-const SNARL_CMD: AtomicUsize = AtomicUsize::new(0);
 impl Game {
+    #[allow(clippy::too_many_arguments)]
     fn aggressive_mob_on_a_leash(
         &mut self,
         chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -310,6 +307,7 @@ impl Game {
         master_id: Option<DepotId>,
         attack_id: DepotId,
     ) -> bool {
+        let snarl_cmd: AtomicUsize = AtomicUsize::new(0);
         let slave = chars.get(slave_id);
         if master_id.is_none() || slave.aff_flagged(AffectFlags::CHARM) {
             return false;
@@ -318,8 +316,8 @@ impl Game {
         let master = chars.get(master_id);
         let attack = chars.get(attack_id);
 
-        if SNARL_CMD.load(Ordering::Acquire) == 0 {
-            SNARL_CMD.store(find_command("snarl").unwrap(), Ordering::Release)
+        if snarl_cmd.load(Ordering::Acquire) == 0 {
+            snarl_cmd.store(find_command("snarl").unwrap(), Ordering::Release)
         }
 
         /* Sit. Down boy! HEEEEeeeel! */
@@ -335,7 +333,7 @@ impl Game {
                     db,chars, texts,objs,
                     slave_id,
                     &victbuf.clone(),
-                    SNARL_CMD.load(Ordering::Relaxed),
+                    snarl_cmd.load(Ordering::Relaxed),
                     0,
                 );
             }
@@ -345,6 +343,6 @@ impl Game {
         }
 
         /* So sorry, now you're a player killer... Tsk tsk. */
-        return false;
+        false
     }
 }

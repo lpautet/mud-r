@@ -52,7 +52,7 @@ use crate::spells::{
 use crate::structs::{
     AffectFlags, CharData, Class, ItemType, Position, RoomFlags, LVL_IMMORT, LVL_IMPL, NUM_WEARS, PULSE_VIOLENCE
 };
-use crate::structs::{NUM_CLASSES};
+use crate::structs::NUM_CLASSES;
 use crate::util::{ has_spell_routine, rand_number};
 use crate::{is_set,  Game, TO_CHAR, TO_ROOM, TO_VICT};
 
@@ -291,15 +291,16 @@ const SYLS: [Syllable; 55] = [
 pub const UNUSED_SPELLNAME: &str = "!UNUSED!"; /* So we can get &UNUSED_SPELLNAME */
 
 fn mag_manacost(ch: &CharData, sinfo: &SpellInfoType) -> i16 {
-    return max(
+    max(
         (sinfo.mana_max
             - (sinfo.mana_change
                 * (ch.get_level() as i32 - sinfo.min_level[ch.get_class() as usize])))
             as i16,
         sinfo.mana_min as i16,
-    );
+    )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn say_spell(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: & Depot<ObjData>, 
     chid: DepotId,
@@ -310,14 +311,14 @@ fn say_spell(
     let ch = chars.get(chid);
     let mut lbuf = String::new();
     let mut buf = String::new();
-    lbuf.push_str(skill_name(&db, spellnum));
+    lbuf.push_str(skill_name(db, spellnum));
     let mut ofs = 0;
     while ofs < lbuf.len() {
         let mut found = false;
-        for j in 0..(SYLS.len() - 1) {
-            if SYLS[j].org == &lbuf[ofs..] {
-                buf.push_str(SYLS[j].news); /* strcat: BAD */
-                ofs += SYLS[j].org.len();
+        for syl in SYLS.iter() {
+            if syl.org == &lbuf[ofs..] {
+                buf.push_str(syl.news); /* strcat: BAD */
+                ofs += syl.org.len();
                 found = true;
                 break;
             }
@@ -330,6 +331,7 @@ fn say_spell(
     }
     let mut buf1 = String::new();
     let mut buf2 = String::new();
+    #[allow(clippy::unnecessary_unwrap)]
     if tch_id.is_some() && chars.get(tch_id.unwrap()).in_room() == ch.in_room() {
         if tch_id.unwrap() == chid {
             buf1.push_str(
@@ -376,6 +378,7 @@ fn say_spell(
         {
             continue;
         }
+        #[allow(clippy::unnecessary_unwrap)]
         let tch2_id = if tch_id.is_some() {
             Some(tch_id.unwrap())
         } else {
@@ -400,13 +403,14 @@ fn say_spell(
             format!(
                 "$n stares at you and utters the words, '{}'.",
                 if ch.get_class() == chars.get(tch_id.unwrap()).get_class() {
-                    skill_name(&db, spellnum)
+                    skill_name(db, spellnum)
                 } else {
                     &buf
                 }
             )
             .as_str(),
         );
+        #[allow(clippy::unnecessary_unwrap)]
         let tch2_id = tch_id.unwrap();
         let tch2 = chars.get(tch2_id);
         act(&mut game.descriptors, chars, db,&buf1, false, Some(ch), None, Some(VictimRef::Char(tch2)), TO_VICT);
@@ -419,24 +423,24 @@ fn say_spell(
  * this because you can guarantee > 0 and <= TOP_SPELL_DEFINE.
  */
 pub fn skill_name(db: &DB, num: i32) -> &'static str {
-    return if num > 0 && num <= TOP_SPELL_DEFINE as i32 {
+    if num > 0 && num <= TOP_SPELL_DEFINE as i32 {
         db.spell_info[num as usize].name
     } else if num == -1 {
         "UNUSED"
     } else {
         "UNDEFINED"
-    };
+    }
 }
 
 pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
     let mut ok;
     for skindex in 1..(TOP_SPELL_DEFINE + 1) {
-        if is_abbrev(name, &db.spell_info[skindex].name) {
+        if is_abbrev(name, db.spell_info[skindex].name) {
             return Some(skindex as i32);
         }
 
         ok = true;
-        let tempbuf = db.spell_info[skindex].name.as_ref();
+        let tempbuf = db.spell_info[skindex].name;
         let mut first = String::new();
         let mut first2 = String::new();
         let mut temp = any_one_arg(tempbuf, &mut first);
@@ -465,6 +469,7 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  * This is also the entry point for non-spoken or unrestricted spells.
  * Spellnum 0 is legal but silently ignored here, to make callers simpler.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn call_magic(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     caster_id: DepotId,
@@ -514,22 +519,22 @@ pub fn call_magic(
         );
         return 0;
     }
-    let savetype;
+    let savetype =
     /* determine the type of saving throw */
     match casttype {
         CAST_STAFF | CAST_SCROLL | CAST_POTION | CAST_WAND => {
-            savetype = SAVING_ROD;
+           SAVING_ROD
         }
         CAST_SPELL => {
-            savetype = SAVING_SPELL;
+           SAVING_SPELL
         }
         _ => {
-            savetype = SAVING_BREATH;
+           SAVING_BREATH
         }
-    }
+    };
 
-    if is_set!(sinfo_routines, MAG_DAMAGE) {
-        if mag_damage(
+    if is_set!(sinfo_routines, MAG_DAMAGE)
+        && mag_damage(
             game,chars, db,texts,objs,
             level,
             caster_id,
@@ -540,7 +545,6 @@ pub fn call_magic(
         {
             return -1; /* Successful and target died, don't cast again. */
         }
-    }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
         mag_affects(game, chars, db,objs,level, caster_id, cvict_id, spellnum, savetype);
     }
@@ -604,7 +608,7 @@ pub fn call_magic(
         }
     }
 
-    return 1;
+    1
 }
 
 /*
@@ -621,6 +625,7 @@ pub fn call_magic(
  * the DikuMUD format did not specify staff and wand levels in the world
  * files (this is a CircleMUD enhancement).
  */
+#[allow(clippy::too_many_arguments)]
 pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, oid: DepotId, argument: &str) {
     let ch = chars.get(chid);
     let obj = objs.get(oid);
@@ -697,7 +702,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                  * Solution: We special case the area/mass spells here.
                  */
                 let ch = chars.get(chid);
-                if has_spell_routine(&db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
+                if has_spell_routine(db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
                     let mut i = db.world[ch.in_room() as usize]
                         .peoples
                         .len();
@@ -991,6 +996,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
  * Entry point for NPC casts.  Recommended entry point for spells cast
  * by NPCs via specprocs.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn cast_spell(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -1051,7 +1057,7 @@ pub fn cast_spell(
     send_to_char(&mut game.descriptors, ch, OK);
     say_spell(game, chars,db,objs,chid, spellnum, tch_id, tobj_id);
     let ch = chars.get(chid);
-    return call_magic(
+    call_magic(
         game,chars,db,texts,objs,
         chid,
         tch_id,
@@ -1059,7 +1065,7 @@ pub fn cast_spell(
         spellnum,
         ch.get_level() as i32,
         CAST_SPELL,
-    );
+    )
 }
 
 /*
@@ -1068,6 +1074,7 @@ pub fn cast_spell(
  * the spell can be cast, checks for sufficient mana and subtracts it, and
  * passes control to cast_spell().
  */
+#[allow(clippy::too_many_arguments)]
 pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     if ch.is_npc() {
@@ -1123,31 +1130,28 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     if is_set!(sinfo.targets, TAR_IGNORE) {
         target = true;
     } else if !t.is_empty() {
-        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) {
-            if {
+        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM)
+            && {
                 tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_ROOM);
                 tch.is_some()
             } {
                 target = true;
             }
-        }
-        if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) {
-            if {
+        if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD)
+            && {
                 tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_WORLD);
                 tch.is_some()
             } {
                 target = true;
             }
-        }
 
-        if !target && is_set!(sinfo.targets, TAR_OBJ_INV) {
-            if {
+        if !target && is_set!(sinfo.targets, TAR_OBJ_INV)
+            && {
                 tobj = get_obj_in_list_vis(&game.descriptors, chars,db,objs,ch, &t, None, &ch.carrying);
                 tobj.is_some()
             } {
                 target = true;
             }
-        }
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
@@ -1157,8 +1161,8 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
                 }
             }
         }
-        if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) {
-            if {
+        if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM)
+            && {
                 tobj = get_obj_in_list_vis2(&game.descriptors, chars,db,objs,
                     ch,
                     &t,
@@ -1170,29 +1174,25 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
             } {
                 target = true;
             }
-        }
-        if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) {
-            if {
+        if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD)
+            && {
                 tobj = get_obj_vis(&game.descriptors, chars,db,objs,ch, &t, None);
                 tobj.is_some()
             } {
                 target = true;
             }
-        }
     } else {
         /* if target string is empty */
-        if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) {
-            if ch.fighting_id().is_some() {
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF)
+            && ch.fighting_id().is_some() {
                 tch = Some(ch);
                 target = true;
             }
-        }
-        if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) {
-            if ch.fighting_id().is_some() {
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT)
+            && ch.fighting_id().is_some() {
                 tch = Some(chars.get(ch.fighting_id().unwrap()));
                 target = true;
             }
-        }
         /* if no target specified, and the spell isn't violent, default to self */
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && !sinfo.violent {
             tch = Some(ch);
@@ -1302,6 +1302,7 @@ pub fn spell_level(db: &mut DB, spell: i32, chclass: Class, level: i32) {
 }
 
 /* Assign the spells on boot up */
+#[allow(clippy::too_many_arguments)]
 fn spello(
     db: &mut DB,
     spl: i32,
@@ -1316,7 +1317,7 @@ fn spello(
     wearoff: &'static str,
 ) {
     let spl = spl as usize;
-    for i in 0..NUM_CLASSES as usize {
+    for i in 0..NUM_CLASSES {
         db.spell_info[spl].min_level[i] = LVL_IMMORT as i32;
     }
 

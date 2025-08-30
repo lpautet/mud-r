@@ -44,6 +44,7 @@ pub fn load_banned(db: &mut DB) {
 
     let mut reader = BufReader::new(fl.unwrap());
 
+    let regex: Regex = Regex::new(r"(\S+)\s(\S+)\s#(\d{1,9})\s(\S+)").unwrap();
     loop {
         let mut line = String::new();
         let r = reader
@@ -53,7 +54,6 @@ pub fn load_banned(db: &mut DB) {
             break;
         }
 
-        let regex = Regex::new(r"(\S+)\s(\S+)\s#(\d{1,9})\s(\S+)").unwrap();
         let f = regex.captures(line.as_str());
         if f.is_none() {
             error!("SYSERR: Format error in ban file");
@@ -69,7 +69,7 @@ pub fn load_banned(db: &mut DB) {
         };
 
         let bt = BAN_TYPES.iter().position(|e| *e == ban_type);
-        ble.type_ = if bt.is_some() { BAN_TYPES_VALUES[bt.unwrap()] } else { BanType::None };
+        ble.type_ = if let Some(bt) = bt { BAN_TYPES_VALUES[bt] } else { BanType::None };
         db.ban_list.push(ble);
     }
 }
@@ -98,7 +98,7 @@ fn _write_one_node(writer: &mut BufWriter<File>, node: &BanListElement) {
 }
 
 fn write_ban_list(db: &DB) {
-    let fl = OpenOptions::new().write(true).create(true).open(BAN_FILE);
+    let fl = OpenOptions::new().write(true).create(true).truncate(true).open(BAN_FILE);
 
     if fl.is_err() {
         let err = fl.err().unwrap();
@@ -109,8 +109,6 @@ fn write_ban_list(db: &DB) {
     for ban_node in db.ban_list.iter() {
         _write_one_node(&mut writer, ban_node); /* recursively write from end to start */
     }
-
-    return;
 }
 
 macro_rules! ban_list_format {
@@ -119,6 +117,7 @@ macro_rules! ban_list_format {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     if argument.is_empty() {
@@ -145,12 +144,12 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
         );
 
         for idx in 0..db.ban_list.len() {
-            let timestr;
+            let timestr=
             if db.ban_list[idx].date != 0 {
-                timestr = ctime(db.ban_list[idx].date as u64);
+                ctime(db.ban_list[idx].date)
             } else {
-                timestr = "Unknown".to_string();
-            }
+                "Unknown".to_string()
+            };
             send_to_char(&mut game.descriptors, ch,
                 format!(
                     ban_list_format!(),
@@ -189,8 +188,8 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
 
     let p = BAN_TYPES.iter().position(|t| *t == flag);
     let mut ban_node_type = BanType::None;
-    if p.is_some() {
-        ban_node_type = BAN_TYPES_VALUES[p.unwrap()];
+    if let Some(p) = p {
+        ban_node_type = BAN_TYPES_VALUES[p];
         ban_node.type_ = ban_node_type;
     }
 
@@ -210,9 +209,10 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
         .as_str(),
     );
     send_to_char(&mut game.descriptors, ch, "Site banned.\r\n");
-    write_ban_list(&db);
+    write_ban_list(db);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
     let ch = chars.get(chid);
     let mut site = String::new();
@@ -248,7 +248,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
         .as_str(),
     );
 
-    write_ban_list(&db);
+    write_ban_list(db);
 }
 
 /**************************************************************************
@@ -280,7 +280,7 @@ pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db:&DB,  newname: &s
     }
 
     /* return valid if list doesn't exist */
-    if db.invalid_list.len() == 0 {
+    if db.invalid_list.is_empty() {
         return true;
     }
 
@@ -294,7 +294,7 @@ pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db:&DB,  newname: &s
         }
     }
 
-    return true;
+    true
 }
 
 /* What's with the wacky capitalization in here? */

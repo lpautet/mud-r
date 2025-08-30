@@ -96,7 +96,7 @@ macro_rules! toggle_bit {
 
 impl CharData {
     pub fn is_npc(&self) -> bool {
-        return is_set!(self.char_specials.saved.act, MOB_ISNPC);
+        is_set!(self.char_specials.saved.act, MOB_ISNPC)
     }
     pub fn memory(&self) -> &Vec<i64> {
         &self.mob_specials.memory
@@ -232,7 +232,7 @@ impl DB {
 
 impl CharData {
     pub fn get_pc_name(&self) -> &Rc<str> {
-        return &self.player.name;
+        &self.player.name
     }
     pub fn get_name(&self) -> &Rc<str> {
         if self.is_npc() {
@@ -292,7 +292,7 @@ impl DescriptorData {
 
 impl CharData {
     pub(crate) fn get_wait_state(&self) -> i32 {
-        return self.wait;
+        self.wait
     }
     pub(crate) fn decr_wait_state(&mut self, val: i32) {
         self.wait -= val;
@@ -706,7 +706,7 @@ impl CharData {
         self.is_npc() && self.get_class() == Class::Warrior
     }
     pub fn get_eq(&self, pos: usize) -> Option<DepotId> {
-        self.equipment[pos].clone()
+        self.equipment[pos]
     }
     pub fn set_eq(&mut self, pos: usize, val: Option<DepotId>) {
         self.equipment[pos] = val;
@@ -874,7 +874,7 @@ impl CharData {
         STR_APP[self.strength_apply_index()].carry_w
     }
     pub fn can_carry_n(&self) -> i32 {
-        (5 + self.get_dex() as i32 >> 1) + (self.get_level() as i32 >> 1)
+        ((5 + self.get_dex() as i32) >> 1) + (self.get_level() as i32 >> 1)
     }
     pub fn strength_apply_index(&self) -> usize {
         (if self.get_add() == 0 || self.get_str() != 18 {
@@ -1184,10 +1184,10 @@ pub fn ctime(t: u64) -> String {
 }
 
 pub fn time_now() -> u64 {
-    return SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs();
+        .as_secs()
 }
 
 /* creates a random number in interval [from;to] */
@@ -1196,9 +1196,7 @@ pub fn rand_number(from: u32, to: u32) -> u32 {
     let mut from = from;
     let mut to = to;
     if from > to {
-        let tmp = from;
-        from = to;
-        to = tmp;
+        std::mem::swap(&mut from, &mut to);
         error!("SYSERR: rand_number() should be called with lowest, then highest. ({}, {}), not ({}, {}).", from, to, to, from);
     }
 
@@ -1229,7 +1227,7 @@ pub fn dice(num: i32, size: i32) -> i32 {
         sum += rand_number(1, size as u32) as i32;
     }
 
-    return sum;
+    sum
 }
 
 /*
@@ -1293,7 +1291,7 @@ pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: D
 
 /* the "touch" command, essentially. */
 pub fn touch(path: &Path) -> io::Result<()> {
-    match OpenOptions::new().create(true).write(true).open(path) {
+    match OpenOptions::new().create(true).truncate(true).write(true).open(path) {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
     }
@@ -1312,7 +1310,7 @@ impl Game {
         file: bool,
         msg: &str,
     ) {
-        if msg == "" {
+        if msg.is_empty() {
             return;
         }
         if file {
@@ -1395,11 +1393,11 @@ pub fn sprintbit(bitvector: i64, names: &[&str], result: &mut String) -> usize {
         nr += 1;
         bitvector >>= 1;
     }
-    if result.len() == 0 {
+    if result.is_empty() {
         result.push_str("NOBITS");
     }
 
-    return result.len();
+    result.len()
 }
 
 pub fn sprinttype(_type: i32, names: &[&str], result: &mut String) {
@@ -1711,7 +1709,7 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
     loop {
         temp.clear();
         let r = reader.read_line(&mut temp);
-        if !r.is_ok() {
+        if r.is_err() {
             return 0;
         }
         temp = temp.trim_end().to_string();
@@ -1725,7 +1723,7 @@ pub fn get_line(reader: &mut BufReader<File>, buf: &mut String) -> i32 {
     /* Last line of file doesn't always have a \n, but it should. */
     buf.clear();
     buf.push_str(temp.trim_end());
-    return lines;
+    lines
 }
 
 pub fn get_filename(filename: &mut String, mode: FileType, orig_name: &str) -> bool {
@@ -1755,30 +1753,30 @@ pub fn get_filename(filename: &mut String, mode: FileType, orig_name: &str) -> b
     }
 
     let name = orig_name.to_lowercase();
-    let middle;
+    let middle=
 
     match name.chars().next().unwrap() {
         'a' | 'b' | 'c' | 'd' | 'e' => {
-            middle = "A-E";
+             "A-E"
         }
 
         'f' | 'g' | 'h' | 'i' | 'j' => {
-            middle = "F-J";
+            "F-J"
         }
 
         'k' | 'l' | 'm' | 'n' | 'o' => {
-            middle = "K-O";
+            "K-O"
         }
         'p' | 'q' | 'r' | 's' | 't' => {
-            middle = "P-T";
+           "P-T"
         }
         'u' | 'v' | 'w' | 'X' | 'y' | 'z' => {
-            middle = "U-Z";
+            "U-Z"
         }
         _ => {
-            middle = "ZZZ";
+            "ZZZ"
         }
-    }
+    };
 
     *filename = format!("{}{}/{}.{}", prefix, middle, name, suffix);
     true
@@ -1862,6 +1860,6 @@ impl DB {
             return true;
         }
 
-        return false;
+        false
     }
 }

@@ -26,7 +26,10 @@ use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
 use crate::structs::ConState::{ConClose, ConMenu};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, CharData, ExtraDescrData, ExtraFlags, ItemType, MobRnum, ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET, NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS, WEAR_LIGHT
+    AffectFlags, AffectedType, ApplyType, CharData, ExtraDescrData, ExtraFlags, ItemType, MobRnum,
+    ObjData, ObjRnum, RoomFlags, RoomRnum, WearFlags, LVL_GRGOD, MAX_OBJ_AFFECT, MOB_NOTDEADYET,
+    NOTHING, NOWHERE, NUM_WEARS, PLR_CRASH, PLR_NOTDEADYET, WEAR_BODY, WEAR_HEAD, WEAR_LEGS,
+    WEAR_LIGHT,
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
 use crate::{act, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
@@ -51,7 +54,7 @@ pub fn fname(namelist: &str) -> Rc<str> {
         }
         holder.push(c);
     }
-    return Rc::from(holder.as_str());
+    Rc::from(holder.as_str())
 }
 
 pub fn isname(txt: &str, namelist: &str) -> bool {
@@ -70,7 +73,7 @@ pub fn isname(txt: &str, namelist: &str) -> bool {
                 skip = true;
                 break;
             }
-            if p.to_ascii_lowercase() != c.to_ascii_lowercase() {
+            if !p.eq_ignore_ascii_case(&c) {
                 skip = true;
                 break;
             }
@@ -85,7 +88,7 @@ pub fn isname(txt: &str, namelist: &str) -> bool {
             }
         }
 
-        while curname.len() > 0 && p.is_alphanumeric() {
+        while !curname.is_empty() && p.is_alphanumeric() {
             p = curname.remove(0);
         }
     }
@@ -140,20 +143,20 @@ fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags
             ch.set_weight(ch.get_weight() + _mod as u8);
         }
 
-        ApplyType::CharHeight=> {
+        ApplyType::CharHeight => {
             ch.set_height(ch.get_height() + _mod as u8);
         }
 
         ApplyType::Mana => {
-            ch.incr_max_mana(_mod as i16);
+            ch.incr_max_mana(_mod);
         }
 
         ApplyType::Hit => {
-            ch.incr_max_hit(_mod as i16);
+            ch.incr_max_hit(_mod);
         }
 
         ApplyType::Move => {
-            ch.incr_max_move(_mod as i16);
+            ch.incr_max_move(_mod);
         }
 
         ApplyType::Gold => {}
@@ -161,7 +164,7 @@ fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags
         ApplyType::Exp => {}
 
         ApplyType::Ac => {
-            ch.set_ac(ch.get_ac() + _mod as i16);
+            ch.set_ac(ch.get_ac() + _mod);
         }
 
         ApplyType::Hitroll => {
@@ -173,23 +176,17 @@ fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags
         }
 
         ApplyType::SavingPara => {
-            ch.set_save(SAVING_PARA as usize, ch.get_save(SAVING_PARA) + _mod as i16);
+            ch.set_save(SAVING_PARA as usize, ch.get_save(SAVING_PARA) + _mod);
         }
         ApplyType::SavingRod => {
-            ch.set_save(SAVING_ROD as usize, ch.get_save(SAVING_ROD) + _mod as i16);
+            ch.set_save(SAVING_ROD as usize, ch.get_save(SAVING_ROD) + _mod);
         }
         ApplyType::SavingPetri => {
-            ch.set_save(
-                SAVING_PETRI as usize,
-                ch.get_save(SAVING_PETRI) + _mod as i16,
-            );
+            ch.set_save(SAVING_PETRI as usize, ch.get_save(SAVING_PETRI) + _mod);
         }
 
         ApplyType::SavingBreath => {
-            ch.set_save(
-                SAVING_BREATH as usize,
-                ch.get_save(SAVING_BREATH) + _mod as i16,
-            );
+            ch.set_save(SAVING_BREATH as usize, ch.get_save(SAVING_BREATH) + _mod);
         }
 
         ApplyType::SavingSpell => {
@@ -213,13 +210,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
         }
     }
     for af in ch.affected.clone() {
-        affect_modify(
-            ch,
-            af.location,
-            af.modifier as i16,
-            af.bitvector,
-            false,
-        );
+        affect_modify(ch, af.location, af.modifier as i16, af.bitvector, false);
     }
 
     ch.aff_abils = ch.real_abils;
@@ -236,13 +227,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
         }
     }
     for af in ch.affected.clone() {
-        affect_modify(
-            ch,
-            af.location,
-            af.modifier as i16,
-            af.bitvector,
-            true,
-        );
+        affect_modify(ch, af.location, af.modifier as i16, af.bitvector, true);
     }
 
     /* Make certain values are between 0..25, not < 0 and not > 25! */
@@ -262,12 +247,10 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
 
     if ch.is_npc() {
         ch.set_str(min(ch.get_str(), i));
-    } else {
-        if ch.get_str() > 18 {
-            let i = ch.get_add() as i16 + ((ch.get_str() as i16 - 18) * 10);
-            ch.set_add(min(i, 100) as i8);
-            ch.set_str(18);
-        }
+    } else if ch.get_str() > 18 {
+        let i = ch.get_add() as i16 + ((ch.get_str() as i16 - 18) * 10);
+        ch.set_add(min(i, 100) as i8);
+        ch.set_str(18);
     }
 }
 
@@ -276,13 +259,7 @@ Automatically sets apropriate bits and apply's */
 pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType) {
     ch.affected.push(af);
 
-    affect_modify(
-        ch,
-        af.location,
-        af.modifier as i16,
-        af.bitvector,
-        true,
-    );
+    affect_modify(ch, af.location, af.modifier as i16, af.bitvector, true);
     affect_total(objs, ch);
 }
 
@@ -292,13 +269,7 @@ pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType
  * affect_location_apply
  */
 pub fn affect_remove(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType) {
-    affect_modify(
-        ch,
-        af.location,
-        af.modifier as i16,
-        af.bitvector,
-        false,
-    );
+    affect_modify(ch, af.location, af.modifier as i16, af.bitvector, false);
     affect_total(objs, ch);
 }
 
@@ -379,11 +350,9 @@ impl DB {
         }
         if ch.get_eq(WEAR_LIGHT).is_some() {
             let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
-            if light.get_obj_type() == ItemType::Light {
-                if light.get_obj_val(2) != 0 {
-                    let in_room = ch.in_room();
-                    self.world[in_room as usize].light -= 1;
-                }
+            if light.get_obj_type() == ItemType::Light && light.get_obj_val(2) != 0 {
+                let in_room = ch.in_room();
+                self.world[in_room as usize].light -= 1;
             }
         }
         let in_room = ch.in_room();
@@ -415,11 +384,9 @@ impl DB {
 
         if ch.get_eq(WEAR_LIGHT).is_some() {
             let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
-            if light.get_obj_type() == ItemType::Light {
-                if light.get_obj_val(2) != 0 {
-                    let in_room = ch.in_room();
-                    self.world[in_room as usize].light += 1; /* Light ON */
-                }
+            if light.get_obj_type() == ItemType::Light && light.get_obj_val(2) != 0 {
+                let in_room = ch.in_room();
+                self.world[in_room as usize].light += 1; /* Light ON */
             }
         }
 
@@ -483,22 +450,12 @@ fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: usize) -> i32 {
         return 0;
     }
 
-    let factor;
-
-    match eq_pos {
-        WEAR_BODY => {
-            factor = 3;
-        } /* 30% */
-        WEAR_HEAD => {
-            factor = 2;
-        } /* 20% */
-        WEAR_LEGS => {
-            factor = 2;
-        } /* 20% */
-        _ => {
-            factor = 1;
-        } /* all others 10% */
-    }
+    let factor = match eq_pos {
+        WEAR_BODY => 3, /* 30% */
+        WEAR_HEAD => 2, /* 20% */
+        WEAR_LEGS => 2, /* 20% */
+        _ => 1,         /* all others 10% */
+    };
     factor * eq.get_obj_val(0)
 }
 
@@ -515,100 +472,100 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
     false
 }
 
-    pub(crate) fn equip_char(
-        descs: &mut Depot<DescriptorData>,
-        chars: &mut Depot<CharData>,
-        db: &mut DB,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-        oid: DepotId,
-        pos: usize,
-    ) {
-        let ch = chars.get_mut(chid);
+pub(crate) fn equip_char(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    oid: DepotId,
+    pos: usize,
+) {
+    let ch = chars.get_mut(chid);
 
-        if pos >= NUM_WEARS {
-            panic!("Invalid position in equip_char: {}", pos);
-        }
-
-        let obj = objs.get_mut(oid);
-
-        if ch.get_eq(pos).is_some() {
-            error!(
-                "SYSERR: Char is already equipped: {}, {}",
-                ch.get_name(),
-                obj.short_description
-            );
-            return;
-        }
-        if obj.carried_by.borrow().is_some() {
-            error!("SYSERR: EQUIP: Obj is carried_by when equip.");
-            return;
-        }
-        if obj.in_room() != NOWHERE {
-            error!("SYSERR: EQUIP: Obj is in_room when equip.");
-            return;
-        }
-
-        if invalid_align(ch, obj) || invalid_class(ch, obj) {
-            let ch = chars.get(chid);
-            act(descs, 
-                chars,
-                db,
-                "You are zapped by $p and instantly let go of it.",
-                false,
-                Some(ch),
-                Some(obj),
-                None,
-                TO_CHAR,
-            );
-            act(descs, 
-                chars,
-                db,
-                "$n is zapped by $p and instantly lets go of it.",
-                false,
-                Some(ch),
-                Some(obj),
-                None,
-                TO_ROOM,
-            );
-            /* Changed to drop in inventory instead of the ground. */
-            let ch = chars.get_mut(chid);
-            obj_to_char(obj, ch);
-            return;
-        }
-
-        ch.set_eq(pos, Some(oid));
-        obj.worn_by = Some(chid);
-        obj.worn_on = pos as i16;
-
-        if obj.get_obj_type() == ItemType::Armor {
-            let armor = apply_ac(objs, ch, pos);
-            ch.set_ac(ch.get_ac() - armor as i16);
-        }
-        let obj = objs.get_mut(oid);
-        if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light {
-                if obj.get_obj_val(2) != 0 {
-                    /* if light is ON */
-                    db.world[ch.in_room() as usize].light += 1;
-                }
-            }
-        } else {
-            error!(
-                "SYSERR: IN_ROOM(ch) = NOWHERE when equipping char {}.",
-                ch.get_name()
-            );
-        }
-
-        for j in 0..MAX_OBJ_AFFECT {
-            let loc = obj.affected[j as usize].location;
-            let mod_ = obj.affected[j as usize].modifier as i16;
-            let bitv = obj.get_obj_affect();
-            affect_modify(ch, loc, mod_, bitv, true);
-        }
-
-        affect_total(objs, ch);
+    if pos >= NUM_WEARS {
+        panic!("Invalid position in equip_char: {}", pos);
     }
+
+    let obj = objs.get_mut(oid);
+
+    if ch.get_eq(pos).is_some() {
+        error!(
+            "SYSERR: Char is already equipped: {}, {}",
+            ch.get_name(),
+            obj.short_description
+        );
+        return;
+    }
+    if obj.carried_by.borrow().is_some() {
+        error!("SYSERR: EQUIP: Obj is carried_by when equip.");
+        return;
+    }
+    if obj.in_room() != NOWHERE {
+        error!("SYSERR: EQUIP: Obj is in_room when equip.");
+        return;
+    }
+
+    if invalid_align(ch, obj) || invalid_class(ch, obj) {
+        let ch = chars.get(chid);
+        act(
+            descs,
+            chars,
+            db,
+            "You are zapped by $p and instantly let go of it.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
+        act(
+            descs,
+            chars,
+            db,
+            "$n is zapped by $p and instantly lets go of it.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_ROOM,
+        );
+        /* Changed to drop in inventory instead of the ground. */
+        let ch = chars.get_mut(chid);
+        obj_to_char(obj, ch);
+        return;
+    }
+
+    ch.set_eq(pos, Some(oid));
+    obj.worn_by = Some(chid);
+    obj.worn_on = pos as i16;
+
+    if obj.get_obj_type() == ItemType::Armor {
+        let armor = apply_ac(objs, ch, pos);
+        ch.set_ac(ch.get_ac() - armor as i16);
+    }
+    let obj = objs.get_mut(oid);
+    if ch.in_room() != NOWHERE {
+        if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light && obj.get_obj_val(2) != 0 {
+            /* if light is ON */
+            db.world[ch.in_room() as usize].light += 1;
+        }
+    } else {
+        error!(
+            "SYSERR: IN_ROOM(ch) = NOWHERE when equipping char {}.",
+            ch.get_name()
+        );
+    }
+
+    for j in 0..MAX_OBJ_AFFECT {
+        let loc = obj.affected[j as usize].location;
+        let mod_ = obj.affected[j as usize].modifier as i16;
+        let bitv = obj.get_obj_affect();
+        affect_modify(ch, loc, mod_, bitv, true);
+    }
+
+    affect_total(objs, ch);
+}
 
 impl DB {
     pub fn unequip_char(
@@ -633,11 +590,10 @@ impl DB {
         }
         let obj = objs.get_mut(oid);
         if ch.in_room() != NOWHERE {
-            if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light {
-                if obj.get_obj_val(2) != 0 {
-                    let ch_in_room = ch.in_room();
-                    self.world[ch_in_room as usize].light -= 1;
-                }
+            if pos == WEAR_LIGHT && obj.get_obj_type() == ItemType::Light && obj.get_obj_val(2) != 0
+            {
+                let ch_in_room = ch.in_room();
+                self.world[ch_in_room as usize].light -= 1;
             }
         } else {
             error!(
@@ -872,13 +828,12 @@ pub(crate) fn obj_from_obj(chars: &mut Depot<CharData>, objs: &mut Depot<ObjData
 
 /* Set all carried_by to point to new owner */
 pub fn object_list_new_owner(
-    chars: &mut Depot<CharData>,
     objs: &mut Depot<ObjData>,
     oid: DepotId,
     chid: Option<DepotId>,
 ) {
     for o in objs.get(oid).contains.clone() {
-        object_list_new_owner(chars, objs, o, chid);
+        object_list_new_owner( objs, o, chid);
         objs.get_mut(oid).carried_by = chid;
     }
 }
@@ -891,14 +846,13 @@ impl DB {
         oid: DepotId,
     ) {
         let tch_id = &objs.get(oid).worn_by;
-        if tch_id.is_some() {
-            if self
+        if tch_id.is_some()
+            && self
                 .unequip_char(chars, objs, tch_id.unwrap(), objs.get(oid).worn_on as usize)
                 .unwrap()
                 != oid
-            {
-                error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
-            }
+        {
+            error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
         }
 
         let obj = objs.get_mut(oid);
@@ -941,66 +895,67 @@ fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
     update_object_list(objs, objs.get(oid).contains.clone(), _use);
 }
 
-    pub(crate) fn update_char_objects(
-        descs: &mut Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        objs: &mut Depot<ObjData>,
-        db: &mut DB,
-        chid: DepotId,
-    ) {
-        let ch = chars.get(chid);
-        let i;
-        let light_oid = ch.get_eq(WEAR_LIGHT);
+pub(crate) fn update_char_objects(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    objs: &mut Depot<ObjData>,
+    db: &mut DB,
+    chid: DepotId,
+) {
+    let ch = chars.get(chid);
+    let i;
+    let light_oid = ch.get_eq(WEAR_LIGHT);
 
-        if light_oid.is_some() {
-            let light_oid = light_oid.unwrap();
-            if objs.get(light_oid).get_obj_type() == ItemType::Light {
-                if objs.get(light_oid).get_obj_val(2) > 0 {
-                    objs.get_mut(light_oid).decr_obj_val(2);
-                    i = objs.get(light_oid).get_obj_val(2);
-                    let ch = chars.get(chid);
-                    if i == 1 {
-                        send_to_char(descs, ch, "Your light begins to flicker and fade.\r\n");
-                        act(descs, 
-                            chars,
-                            db,
-                            "$n's light begins to flicker and fade.",
-                            false,
-                            Some(ch),
-                            None,
-                            None,
-                            TO_ROOM,
-                        );
-                    } else if i == 0 {
-                        send_to_char(descs, ch, "Your light sputters out and dies.\r\n");
-                        act(descs, 
-                            chars,
-                            db,
-                            "$n's light sputters out and dies.",
-                            false,
-                            Some(ch),
-                            None,
-                            None,
-                            TO_ROOM,
-                        );
-                        let ch = chars.get(chid);
-                        let in_room = ch.in_room();
-                        db.world[in_room as usize].light -= 1;
-                    }
-                }
-            }
-        }
-        for i in 0..NUM_WEARS {
+    if let Some(light_oid) = light_oid {
+        if objs.get(light_oid).get_obj_type() == ItemType::Light
+            && objs.get(light_oid).get_obj_val(2) > 0
+        {
+            objs.get_mut(light_oid).decr_obj_val(2);
+            i = objs.get(light_oid).get_obj_val(2);
             let ch = chars.get(chid);
-            if ch.get_eq(i).is_some() {
-                update_object(objs, ch.get_eq(i).unwrap(), 2);
+            if i == 1 {
+                send_to_char(descs, ch, "Your light begins to flicker and fade.\r\n");
+                act(
+                    descs,
+                    chars,
+                    db,
+                    "$n's light begins to flicker and fade.",
+                    false,
+                    Some(ch),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+            } else if i == 0 {
+                send_to_char(descs, ch, "Your light sputters out and dies.\r\n");
+                act(
+                    descs,
+                    chars,
+                    db,
+                    "$n's light sputters out and dies.",
+                    false,
+                    Some(ch),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                let ch = chars.get(chid);
+                let in_room = ch.in_room();
+                db.world[in_room as usize].light -= 1;
             }
-        }
-        let ch = chars.get(chid);
-        if !ch.carrying.is_empty() {
-            update_object_list(objs, ch.carrying.clone(), 2);
         }
     }
+    for i in 0..NUM_WEARS {
+        let ch = chars.get(chid);
+        if ch.get_eq(i).is_some() {
+            update_object(objs, ch.get_eq(i).unwrap(), 2);
+        }
+    }
+    let ch = chars.get(chid);
+    if !ch.carrying.is_empty() {
+        update_object_list(objs, ch.carrying.clone(), 2);
+    }
+}
 impl Game {
     /* Extract a ch completely from the world, and leave his stuff behind */
     pub fn extract_char_final(
@@ -1061,10 +1016,7 @@ impl Game {
                     }
                     let d = self.desc(d_id);
                     if d.character.is_some()
-                        && ch.get_idnum()
-                            == chars
-                                .get(d.character.unwrap())
-                                .get_idnum()
+                        && ch.get_idnum() == chars.get(d.character.unwrap()).get_idnum()
                     {
                         self.desc_mut(d_id).set_state(ConClose);
                     }
@@ -1079,7 +1031,7 @@ impl Game {
 
         /* On with the character's assets... */
         let ch = chars.get(chid);
-        if ch.followers.len() != 0 || ch.master.is_some() {
+        if !ch.followers.is_empty() || ch.master.is_some() {
             die_follower(&mut self.descriptors, chars, db, objs, chid);
         }
 
@@ -1231,376 +1183,382 @@ impl Game {
 * Here follows high-level versions of some earlier routines, ie functions*
 * which incorporate the actual player-data                               *.
 *********************************************************************** */
-    pub fn get_player_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &'a Depot<CharData>,
-        db: &'a DB,
-        ch: &CharData,
-        name: &mut String,
-        number: Option<&mut i32>,
-        inroom: FindFlags,
-    ) -> Option<&'a CharData> {
-        //let ch = chars.get(chid);
-        let mut num;
-        let t: &mut i32;
-        if number.is_none() {
-            num = get_number(name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number = t;
+pub fn get_player_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &'a Depot<CharData>,
+    db: &'a DB,
+    ch: &CharData,
+    name: &mut String,
+    number: Option<&mut i32>,
+    inroom: FindFlags,
+) -> Option<&'a CharData> {
+    //let ch = chars.get(chid);
+    let mut num;
+    let t: &mut i32;
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(name);
+        t = &mut num;
+    }
+    let number = t;
 
-        for &i_id in &db.character_list {
-            let i = chars.get(i_id);
-            if i.is_npc() {
-                continue;
-            }
-            if inroom == FindFlags::CHAR_ROOM && ch.in_room() != i.in_room() {
-                continue;
-            }
-            if i.player.name.as_ref() != name {
-                continue;
-            }
-            if !can_see(descs, chars, db, ch, i) {
-                continue;
-            }
+    for &i_id in &db.character_list {
+        let i = chars.get(i_id);
+        if i.is_npc() {
+            continue;
+        }
+        if inroom == FindFlags::CHAR_ROOM && ch.in_room() != i.in_room() {
+            continue;
+        }
+        if i.player.name.as_ref() != name {
+            continue;
+        }
+        if !can_see(descs, chars, db, ch, i) {
+            continue;
+        }
+        *number -= 1;
+        if *number != 0 {
+            continue;
+        }
+        return Some(i);
+    }
+    None
+}
+
+pub fn get_char_room_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &'a Depot<CharData>,
+    db: &'a DB,
+    ch: &'a CharData,
+    name: &mut String,
+    number: Option<&mut i32>,
+) -> Option<&'a CharData> {
+    //let ch = chars.get(chid);
+    let mut num;
+    let t: &mut i32;
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(name);
+        t = &mut num;
+    }
+    let number = t;
+
+    /* JE 7/18/94 :-) :-) */
+    if name == "self" || name == "me" {
+        return Some(ch);
+    }
+
+    /* 0.<name> means PC with name */
+    if *number == 0 {
+        return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
+    }
+
+    for i_id in db.world[ch.in_room() as usize].peoples.clone() {
+        let i = chars.get(i_id);
+        if isname(name, i.player.name.as_ref()) && can_see(descs, chars, db, ch, i) {
             *number -= 1;
-            if *number != 0 {
-                continue;
+            if *number == 0 {
+                return Some(i);
             }
-            return Some(i);
         }
+    }
+    None
+}
+
+pub fn get_char_world_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &'a Depot<CharData>,
+    db: &'a DB,
+    ch: &'a CharData,
+    name: &mut String,
+    number: Option<&mut i32>,
+) -> Option<&'a CharData> {
+    let mut num;
+    let t: &mut i32;
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+
+    let i = get_char_room_vis(descs, chars, db, ch, name, Some(number));
+    if i.is_some() {
+        return i;
+    }
+
+    /* 0.<name> means PC with name */
+    if *number == 0 {
+        return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
+    }
+
+    for &i_id in &db.character_list {
+        let i = chars.get(i_id);
+        if ch.in_room() == i.in_room() {
+            continue;
+        }
+        if !isname(name, i.player.name.as_ref()) {
+            continue;
+        }
+        if !can_see(descs, chars, db, ch, i) {
+            continue;
+        }
+        *number -= 1;
+        if *number != 0 {
+            continue;
+        }
+        return Some(i);
+    }
+    None
+}
+
+pub fn get_char_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &'a Depot<CharData>,
+    db: &'a DB,
+    ch: &'a CharData,
+    name: &mut String,
+    number: Option<&mut i32>,
+    _where: FindFlags,
+) -> Option<&'a CharData> {
+    if _where == FindFlags::CHAR_ROOM {
+        get_char_room_vis(descs, chars, db, ch, name, number)
+    } else if _where == FindFlags::CHAR_WORLD {
+        get_char_world_vis(descs, chars, db, ch, name, number)
+    } else {
+        None
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn get_obj_in_list_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &'a DB,
+    objs: &'a Depot<ObjData>,
+    ch: &'a CharData,
+    name: &str,
+    number: Option<&mut i32>,
+    list: &[DepotId],
+) -> Option<&'a ObjData> {
+    let mut num;
+    let t: &mut i32;
+    let mut name = name.to_string();
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(&mut name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+    if *number == 0 {
         return None;
     }
 
-    pub fn get_char_room_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &'a Depot<CharData>,
-        db: &'a DB,
-        ch: &'a CharData,
-        name: &mut String,
-        number: Option<&mut i32>,
-    ) -> Option<&'a CharData> {
-        //let ch = chars.get(chid);
-        let mut num;
-        let t: &mut i32;
-        if number.is_none() {
-            num = get_number(name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number = t;
-
-        /* JE 7/18/94 :-) :-) */
-        if name == "self" || name == "me" {
-            return Some(ch);
-        }
-
-        /* 0.<name> means PC with name */
-        if *number == 0 {
-            return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
-        }
-
-        for i_id in db.world[ch.in_room() as usize].peoples.clone() {
-            let i = chars.get(i_id);
-            if isname(name, i.player.name.as_ref()) {
-                if can_see(descs, chars, db, ch, i) {
-                    *number -= 1;
-                    if *number == 0 {
-                        return Some(i);
-                    }
-                }
-            }
-        }
-        return None;
-    }
-
-    pub fn get_char_world_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &'a Depot<CharData>,
-        db: &'a DB,
-        ch: &'a CharData,
-        name: &mut String,
-        number: Option<&mut i32>,
-    ) -> Option<&'a CharData> {
-        let mut num;
-        let t: &mut i32;
-        if number.is_none() {
-            num = get_number(name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-
-        let i = get_char_room_vis(descs, chars, db, ch, name, Some(number));
-        if i.is_some() {
-            return i;
-        }
-
-        /* 0.<name> means PC with name */
-        if *number == 0 {
-            return get_player_vis(descs, chars, db, ch, name, None, FindFlags::CHAR_ROOM);
-        }
-
-        for &i_id in &db.character_list {
-            let i = chars.get(i_id);
-            if ch.in_room() == i.in_room() {
-                continue;
-            }
-            if !isname(name, i.player.name.as_ref()) {
-                continue;
-            }
-            if !can_see(descs, chars, db, ch, i) {
-                continue;
-            }
-            *number -= 1;
-            if *number != 0 {
-                continue;
-            }
-            return Some(i);
-        }
-        return None;
-    }
-
-    pub fn get_char_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &'a Depot<CharData>,
-        db: &'a DB,
-        ch: &'a CharData,
-        name: &mut String,
-        number: Option<&mut i32>,
-        _where: FindFlags,
-    ) -> Option<&'a CharData> {
-        return if _where == FindFlags::CHAR_ROOM {
-            get_char_room_vis(descs, chars, db, ch, name, number)
-        } else if _where == FindFlags::CHAR_WORLD {
-            get_char_world_vis(descs, chars, db, ch, name, number)
-        } else {
-            None
-        };
-    }
-
-    pub fn get_obj_in_list_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        db: &'a DB,
-        objs: &'a Depot<ObjData>,
-        ch: &'a CharData,
-        name: &str,
-        number: Option<&mut i32>,
-        list: &Vec<DepotId>,
-    ) -> Option<&'a ObjData> {
-        let mut num;
-        let t: &mut i32;
-        let mut name = name.to_string();
-        if number.is_none() {
-            num = get_number(&mut name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-        if *number == 0 {
-            return None;
-        }
-
-        for i in list.iter() {
-            if isname(&name, objs.get(*i).name.as_ref()) {
-                let obj = objs.get(*i);
-                if can_see_obj(descs, chars, db, ch, obj) {
-                    *number -= 1;
-                    if *number == 0 {
-                        return Some(obj);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    pub fn get_obj_in_list_vis2<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        db: &'a DB,
-        objs: &'a Depot<ObjData>,
-        ch: &'a CharData,
-        name: &str,
-        number: Option<&mut i32>,
-        list: &Vec<DepotId>,
-    ) -> Option<&'a ObjData> {
-        let mut num;
-        let t: &mut i32;
-        let mut name = name.to_string();
-        if number.is_none() {
-            num = get_number(&mut name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-        if *number == 0 {
-            return None;
-        }
-
-        for i in list.iter() {
-            if isname(&name, objs.get(*i).name.as_ref()) {
-                let obj = objs.get(*i);
-                if can_see_obj(descs, chars, db, ch, obj) {
-                    *number -= 1;
-                    if *number == 0 {
-                        return Some(obj);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    /* search the entire world for an object, and return a pointer  */
-    pub fn get_obj_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        db: &'a DB,
-        objs: &'a Depot<ObjData>,
-        ch: &'a CharData,
-        name: &str,
-        number: Option<&mut i32>,
-    ) -> Option<&'a ObjData> {
-        let mut num;
-        let t: &mut i32;
-        let mut name = name.to_string();
-        if number.is_none() {
-            num = get_number(&mut name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-        if *number == 0 {
-            return None;
-        }
-
-        /* scan items carried */
-        let i = get_obj_in_list_vis(descs, chars, db, objs, ch, &name, Some(number), &ch.carrying);
-        if i.is_some() {
-            return i;
-        }
-
-        /* scan room */
-        let i = get_obj_in_list_vis2(descs, 
-            chars,
-            db,
-            objs,
-            ch,
-            &name,
-            Some(number),
-            &db.world[ch.in_room() as usize].contents,
-        );
-        if i.is_some() {
-            return i;
-        }
-
-        /* ok.. no luck yet. scan the entire obj list   */
-        for &oid in db.object_list.iter() {
-            let i = objs.get(oid);
-            if isname(&name, &i.name.borrow()) {
-                if can_see_obj(descs, chars, db, ch, i) {
-                    *number -= 1;
-                    if *number == 0 {
-                        return Some(i);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_obj_in_equip_vis<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        db: &'a DB,
-        objs: &'a Depot<ObjData>,
-        ch: &'a CharData,
-        arg: &str,
-        number: Option<&mut i32>,
-        equipment: &[Option<DepotId>],
-    ) -> Option<&'a ObjData> {
-        let mut num;
-        let t: &mut i32;
-        let mut name = arg.to_string();
-        if number.is_none() {
-            num = get_number(&mut name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-        if *number == 0 {
-            return None;
-        }
-        let equipment = equipment;
-        for j in 0..NUM_WEARS as usize {
-            if equipment[j].is_some()
-                && can_see_obj(descs, chars, db, ch, objs.get(equipment[j].unwrap()))
-                && isname(&arg, objs.get(equipment[j].unwrap()).name.as_ref())
-            {
+    for i in list.iter() {
+        if isname(&name, objs.get(*i).name.as_ref()) {
+            let obj = objs.get(*i);
+            if can_see_obj(descs, chars, db, ch, obj) {
                 *number -= 1;
                 if *number == 0 {
-                    return equipment[j].map(|i| objs.get(i));
+                    return Some(obj);
                 }
             }
         }
-
-        None
     }
 
-    pub fn get_obj_pos_in_equip_vis(
-        descs: &Depot<DescriptorData>,
-        chars: &Depot<CharData>,
-        db: &DB,
-        objs: &Depot<ObjData>,
-        ch: &CharData,
-        arg: &str,
-        number: Option<&mut i32>,
-        equipment: &[Option<DepotId>],
-    ) -> Option<usize> {
-        let equipment = equipment;
-        let mut num;
-        let t: &mut i32;
-        let mut name = arg.to_string();
-        if number.is_none() {
-            num = get_number(&mut name);
-            t = &mut num;
-        } else {
-            t = number.unwrap();
-        }
-        let number: &mut i32 = t;
-        if *number == 0 {
-            return None;
-        }
+    None
+}
 
-        for j in 0..NUM_WEARS as usize {
-            if equipment[j].is_some()
-                && can_see_obj(descs, chars, db, ch, objs.get(equipment[j].unwrap()))
-                && isname(arg, objs.get(equipment[j].unwrap()).name.as_ref())
-            {
-                if {
-                    *number -= 1;
-                    *number == 0
-                } {
-                    return Some(j);
-                }
-            }
-        }
-
+#[allow(clippy::too_many_arguments)]
+pub fn get_obj_in_list_vis2<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &'a DB,
+    objs: &'a Depot<ObjData>,
+    ch: &'a CharData,
+    name: &str,
+    number: Option<&mut i32>,
+    list: &[DepotId],
+) -> Option<&'a ObjData> {
+    let mut num;
+    let t: &mut i32;
+    let mut name = name.to_string();
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(&mut name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+    if *number == 0 {
         return None;
     }
 
+    for i in list.iter() {
+        if isname(&name, objs.get(*i).name.as_ref()) {
+            let obj = objs.get(*i);
+            if can_see_obj(descs, chars, db, ch, obj) {
+                *number -= 1;
+                if *number == 0 {
+                    return Some(obj);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/* search the entire world for an object, and return a pointer  */
+pub fn get_obj_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &'a DB,
+    objs: &'a Depot<ObjData>,
+    ch: &'a CharData,
+    name: &str,
+    number: Option<&mut i32>,
+) -> Option<&'a ObjData> {
+    let mut num;
+    let t: &mut i32;
+    let mut name = name.to_string();
+    if let Some(number) = number {
+        t = number
+    } else {
+        num = get_number(&mut name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+    if *number == 0 {
+        return None;
+    }
+
+    /* scan items carried */
+    let i = get_obj_in_list_vis(
+        descs,
+        chars,
+        db,
+        objs,
+        ch,
+        &name,
+        Some(number),
+        &ch.carrying,
+    );
+    if i.is_some() {
+        return i;
+    }
+
+    /* scan room */
+    let i = get_obj_in_list_vis2(
+        descs,
+        chars,
+        db,
+        objs,
+        ch,
+        &name,
+        Some(number),
+        &db.world[ch.in_room() as usize].contents,
+    );
+    if i.is_some() {
+        return i;
+    }
+
+    /* ok.. no luck yet. scan the entire obj list   */
+    for &oid in db.object_list.iter() {
+        let i = objs.get(oid);
+        if isname(&name, i.name.borrow()) && can_see_obj(descs, chars, db, ch, i) {
+            *number -= 1;
+            if *number == 0 {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn get_obj_in_equip_vis<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &'a DB,
+    objs: &'a Depot<ObjData>,
+    ch: &'a CharData,
+    arg: &str,
+    number: Option<&mut i32>,
+    equipment: &[Option<DepotId>],
+) -> Option<&'a ObjData> {
+    let mut num;
+    let t: &mut i32;
+    let mut name = arg.to_string();
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(&mut name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+    if *number == 0 {
+        return None;
+    }
+    for equip in equipment.iter() {
+        if equip.is_some()
+            && can_see_obj(descs, chars, db, ch, objs.get(equip.unwrap()))
+            && isname(arg, objs.get(equip.unwrap()).name.as_ref())
+        {
+            *number -= 1;
+            if *number == 0 {
+                return equip.map(|i| objs.get(i));
+            }
+        }
+    }
+
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn get_obj_pos_in_equip_vis(
+    descs: &Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    objs: &Depot<ObjData>,
+    ch: &CharData,
+    arg: &str,
+    number: Option<&mut i32>,
+    equipment: &[Option<DepotId>],
+) -> Option<usize> {
+    let mut num;
+    let t: &mut i32;
+    let mut name = arg.to_string();
+    if let Some(number) = number {
+        t = number;
+    } else {
+        num = get_number(&mut name);
+        t = &mut num;
+    }
+    let number: &mut i32 = t;
+    if *number == 0 {
+        return None;
+    }
+
+    for (j, equip) in equipment.iter().enumerate() {
+        if equip.is_some()
+            && can_see_obj(descs, chars, db, ch, objs.get(equip.unwrap()))
+            && isname(arg, objs.get(equip.unwrap()).name.as_ref())
+            && {
+                *number -= 1;
+                *number == 0
+            }
+        {
+            return Some(j);
+        }
+    }
+
+    None
+}
 
 pub fn money_desc(amount: i32) -> &'static str {
     struct MyItem {
@@ -1678,7 +1636,7 @@ pub fn money_desc(amount: i32) -> &'static str {
         }
     }
 
-    return "an absolutely colossal mountain of gold coins";
+    "an absolutely colossal mountain of gold coins"
 }
 
 impl DB {
@@ -1688,7 +1646,7 @@ impl DB {
             return None;
         }
         let mut obj = ObjData::default();
-        let mut new_descr = ExtraDescrData::new();
+        let mut new_descr = ExtraDescrData::default();
 
         if amount == 1 {
             obj.name = Rc::from("coin gold");
@@ -1715,7 +1673,7 @@ impl DB {
                     1000 * ((amount / 1000) + rand_number(0, (amount / 1000) as u32) as i32)
                 );
             } else {
-                buf = format!("There are a LOT of coins."); /* strcpy: OK (is < 200) */
+                buf = "There are a LOT of coins.".to_string(); /* strcpy: OK (is < 200) */
             }
             new_descr.description = Rc::from(buf.as_str());
         }
@@ -1732,122 +1690,124 @@ impl DB {
         Some(oid)
     }
 }
-    /* Generic Find, designed to find any object/character
-     *
-     * Calling:
-     *  *arg     is the pointer containing the string to be searched for.
-     *           This string doesn't have to be a single word, the routine
-     *           extracts the next word itself.
-     *  bitv..   All those bits that you want to "search through".
-     *           Bit found will be result of the function
-     *  *ch      This is the person that is trying to "find"
-     *  **tar_ch Will be NULL if no character was found, otherwise points
-     * **tar_obj Will be NULL if no object was found, otherwise points
-     *
-     * The routine used to return a pointer to the next word in *arg (just
-     * like the one_argument routine), but now it returns an integer that
-     * describes what it filled in.
-     */
-    pub fn generic_find<'a>(
-        descs: &Depot<DescriptorData>,
-        chars: &'a Depot<CharData>,
-        db: &'a DB,
-        objs: &'a Depot<ObjData>,
-        arg: &str,
-        bitvector: FindFlags,
-        ch: &'a CharData,
-        tar_ch: &mut Option<&'a CharData>,
-        tar_obj: &mut Option<&'a ObjData>,
-    ) -> FindFlags {
-        let mut name = String::new();
-        let mut found = false;
+/* Generic Find, designed to find any object/character
+ *
+ * Calling:
+ *  *arg     is the pointer containing the string to be searched for.
+ *           This string doesn't have to be a single word, the routine
+ *           extracts the next word itself.
+ *  bitv..   All those bits that you want to "search through".
+ *           Bit found will be result of the function
+ *  *ch      This is the person that is trying to "find"
+ *  **tar_ch Will be NULL if no character was found, otherwise points
+ * **tar_obj Will be NULL if no object was found, otherwise points
+ *
+ * The routine used to return a pointer to the next word in *arg (just
+ * like the one_argument routine), but now it returns an integer that
+ * describes what it filled in.
+ */
+#[allow(clippy::too_many_arguments)]
+pub fn generic_find<'a>(
+    descs: &Depot<DescriptorData>,
+    chars: &'a Depot<CharData>,
+    db: &'a DB,
+    objs: &'a Depot<ObjData>,
+    arg: &str,
+    bitvector: FindFlags,
+    ch: &'a CharData,
+    tar_ch: &mut Option<&'a CharData>,
+    tar_obj: &mut Option<&'a ObjData>,
+) -> FindFlags {
+    let mut name = String::new();
+    let mut found = false;
 
-        one_argument(arg, &mut name);
+    one_argument(arg, &mut name);
 
-        if name.is_empty() {
-            return FindFlags::empty();
-        }
-        let mut number = get_number(&mut name);
-        if number == 0 {
-            return FindFlags::empty();
-        }
-
-        if bitvector.contains(FindFlags::CHAR_ROOM) {
-            /* Find person in room */
-            *tar_ch = get_char_room_vis(descs, chars, db, ch, &mut name, Some(&mut number));
-
-            if tar_ch.is_some() {
-                return FindFlags::CHAR_ROOM;
-            }
-        }
-
-        if bitvector.contains(FindFlags::CHAR_WORLD) {
-            *tar_ch = get_char_world_vis(descs, chars, db, ch, &mut name, Some(&mut number));
-            if tar_ch.is_some() {
-                return FindFlags::CHAR_WORLD;
-            }
-        }
-
-        if bitvector.contains(FindFlags::OBJ_EQUIP) {
-            for i in 0..NUM_WEARS {
-                if found {
-                    break;
-                }
-
-                if ch.get_eq(i).is_some()
-                    && isname(name.as_str(), objs.get(ch.get_eq(i).unwrap()).name.as_ref())
-                {
-                    number -= 1;
-                    if number == 0 {
-                        *tar_obj = Some(objs.get(ch.get_eq(i).unwrap()));
-                        found = true;
-                    }
-                }
-            }
-            if found {
-                return FindFlags::OBJ_EQUIP;
-            }
-        }
-
-        if bitvector.contains(FindFlags::OBJ_INV) {
-            *tar_obj = get_obj_in_list_vis(descs,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-                &ch.carrying,
-            );
-            if tar_obj.is_some() {
-                return FindFlags::OBJ_INV;
-            }
-        }
-
-        if bitvector.contains(FindFlags::OBJ_ROOM) {
-            *tar_obj = get_obj_in_list_vis2(descs,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-                &db.world[ch.in_room() as usize].contents,
-            );
-            if tar_obj.is_some() {
-                return FindFlags::OBJ_ROOM;
-            }
-        }
-
-        if bitvector.contains(FindFlags::OBJ_WORLD) {
-            *tar_obj = get_obj_vis(descs, chars, db, objs, ch, &name, Some(&mut number));
-            if tar_obj.is_some() {
-                return FindFlags::OBJ_WORLD;
-            }
-        }
-        FindFlags::empty()
+    if name.is_empty() {
+        return FindFlags::empty();
+    }
+    let mut number = get_number(&mut name);
+    if number == 0 {
+        return FindFlags::empty();
     }
 
+    if bitvector.contains(FindFlags::CHAR_ROOM) {
+        /* Find person in room */
+        *tar_ch = get_char_room_vis(descs, chars, db, ch, &mut name, Some(&mut number));
+
+        if tar_ch.is_some() {
+            return FindFlags::CHAR_ROOM;
+        }
+    }
+
+    if bitvector.contains(FindFlags::CHAR_WORLD) {
+        *tar_ch = get_char_world_vis(descs, chars, db, ch, &mut name, Some(&mut number));
+        if tar_ch.is_some() {
+            return FindFlags::CHAR_WORLD;
+        }
+    }
+
+    if bitvector.contains(FindFlags::OBJ_EQUIP) {
+        for i in 0..NUM_WEARS {
+            if found {
+                break;
+            }
+
+            if ch.get_eq(i).is_some()
+                && isname(name.as_str(), objs.get(ch.get_eq(i).unwrap()).name.as_ref())
+            {
+                number -= 1;
+                if number == 0 {
+                    *tar_obj = Some(objs.get(ch.get_eq(i).unwrap()));
+                    found = true;
+                }
+            }
+        }
+        if found {
+            return FindFlags::OBJ_EQUIP;
+        }
+    }
+
+    if bitvector.contains(FindFlags::OBJ_INV) {
+        *tar_obj = get_obj_in_list_vis(
+            descs,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+            &ch.carrying,
+        );
+        if tar_obj.is_some() {
+            return FindFlags::OBJ_INV;
+        }
+    }
+
+    if bitvector.contains(FindFlags::OBJ_ROOM) {
+        *tar_obj = get_obj_in_list_vis2(
+            descs,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+            &db.world[ch.in_room() as usize].contents,
+        );
+        if tar_obj.is_some() {
+            return FindFlags::OBJ_ROOM;
+        }
+    }
+
+    if bitvector.contains(FindFlags::OBJ_WORLD) {
+        *tar_obj = get_obj_vis(descs, chars, db, objs, ch, &name, Some(&mut number));
+        if tar_obj.is_some() {
+            return FindFlags::OBJ_WORLD;
+        }
+    }
+    FindFlags::empty()
+}
 
 pub const FIND_INDIV: u8 = 0;
 pub const FIND_ALL: u8 = 1;
@@ -1856,10 +1816,10 @@ pub const FIND_ALLDOT: u8 = 2;
 /* a function to scan for "all" or "all.x" */
 pub fn find_all_dots(arg: &str) -> u8 {
     if arg == "all" {
-        return FIND_ALL;
+        FIND_ALL
     } else if arg.starts_with("all.") {
-        return FIND_ALLDOT;
+        FIND_ALLDOT
     } else {
-        return FIND_INDIV;
+        FIND_INDIV
     }
 }

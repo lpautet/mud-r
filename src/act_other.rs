@@ -45,6 +45,7 @@ use crate::structs::{
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, DisplayMode};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_quit(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -91,7 +92,7 @@ pub fn do_quit(
          */
 
         if FREE_RENT {
-            crash_rentsave(game, chars, db, objs,chid, 0);
+            crash_rentsave( chars, db, objs,chid, 0);
         }
 
         /* If someone is quitting in their house, let them load back here. */
@@ -106,6 +107,7 @@ pub fn do_quit(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_save(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -146,12 +148,13 @@ pub fn do_save(
     let ch = chars.get(chid);
     if db.room_flagged(ch.in_room(), RoomFlags::HOUSE_CRASH) {
         let in_room = db.get_room_vnum(ch.in_room());
-        house_crashsave(chars, db, objs, in_room);
+        house_crashsave( db, objs, in_room);
     }
 }
 
 /* generic function for commands which are normally overridden by
 special procedures - i.e., shop commands, mail commands, etc. */
+#[allow(clippy::too_many_arguments)]
 pub fn do_not_here(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -164,6 +167,7 @@ pub fn do_not_here(
     send_to_char(&mut game.descriptors, ch, "Sorry, but you cannot do that here!\r\n");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_sneak(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -200,9 +204,10 @@ pub fn do_sneak(
     affect_to_char( objs, ch, af);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_hide(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db:    &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -230,6 +235,7 @@ pub fn do_hide(
     ch.set_aff_flags_bits(AffectFlags::HIDE);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_steal(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -254,10 +260,11 @@ pub fn do_steal(
     let mut vict_name = String::new();
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db, ch, &mut vict_name, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "Steal what from who?\r\n");
         return;
     } else if vict.unwrap().id() == chid {
@@ -297,10 +304,11 @@ pub fn do_steal(
     let mut the_eq_pos:i16 = -1;
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
-        if {
-            obj = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &mut obj_name, None, &vict.carrying);
+        let res = {
+            obj = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &obj_name, None, &vict.carrying);
             obj.is_none()
-        } {
+        }; 
+        if res {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
                     && isname(
@@ -313,6 +321,7 @@ pub fn do_steal(
                     the_eq_pos = eq_pos as i16;
                 }
             }
+            #[allow(clippy::unnecessary_unwrap)]
             if obj.is_none() {
                 act(&mut game.descriptors, chars, 
                     db,
@@ -449,6 +458,7 @@ pub fn do_steal(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_practice(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -471,6 +481,7 @@ pub fn do_practice(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_visible(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -494,6 +505,7 @@ pub fn do_visible(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_title(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -575,7 +587,7 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
         Some(VictimRef::Char(vict)),
         TO_NOTVICT,
     );
-    return 1;
+    1
 }
 
 fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
@@ -638,6 +650,7 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_group(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -684,10 +697,11 @@ pub fn do_group(
     }
     let vict;
 
-    if {
+    let res = {
         vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
         vict.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
     } else if (vict.unwrap().master.is_none()
         ||vict.unwrap().master.unwrap() != chid)
@@ -745,6 +759,7 @@ pub fn do_group(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_ungroup(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -792,10 +807,11 @@ pub fn do_ungroup(
         return;
     }
     let tch;
-    if {
+    let res = {
         tch = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
         tch.is_none()
-    } {
+    }; 
+    if res {
         send_to_char(&mut game.descriptors, ch, "There is no such person!\r\n");
         return;
     }
@@ -847,6 +863,7 @@ pub fn do_ungroup(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_report(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -906,6 +923,7 @@ pub fn do_report(
     send_to_char(&mut game.descriptors, ch, "You report to the group.\r\n");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_split(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1035,10 +1053,10 @@ pub fn do_split(
             ch,
             "How many coins do you wish to split with your group?\r\n",
         );
-        return;
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_use(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
@@ -1065,10 +1083,11 @@ pub fn do_use(
     if mag_item.is_none() || !isname(&arg, mag_item.unwrap().name.as_ref()) {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
-                if {
+                let res = {
                     mag_item = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &arg, None, &ch.carrying);
                     mag_item.is_none()
-                } {
+                }; 
+                if res {
                     send_to_char(&mut game.descriptors, 
                         ch,
                         format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
@@ -1117,6 +1136,7 @@ pub fn do_use(
     mag_objectmagic(game, chars, db, texts,objs, chid, mag_item.id(), &buf);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_wimpy(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1152,11 +1172,12 @@ pub fn do_wimpy(
         }
     }
     let wimp_lev;
-    if arg.chars().next().unwrap().is_digit(10) {
-        if {
+    if arg.chars().next().unwrap().is_ascii_digit() {
+        let res = {
             wimp_lev = arg.parse::<i32>().unwrap();
             wimp_lev != 0
-        } {
+        }; 
+        if res {
             if wimp_lev < 0 {
                 send_to_char(&mut game.descriptors, ch, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
             } else if wimp_lev > ch.get_max_hit() as i32 {
@@ -1194,6 +1215,7 @@ pub fn do_wimpy(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_display(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1209,7 +1231,7 @@ pub fn do_display(
     }
     let argument = argument.trim_start();
 
-    if argument.len() == 0 {
+    if argument.is_empty() {
         send_to_char(&mut game.descriptors, 
             ch,
             "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
@@ -1269,6 +1291,7 @@ pub fn do_display(
     send_to_char(&mut game.descriptors, ch, OK);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_gen_write(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1278,21 +1301,21 @@ pub fn do_gen_write(
     subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    let filename;
+    let filename=
     match subcmd {
         SCMD_BUG => {
-            filename = BUG_FILE;
+           BUG_FILE
         }
         SCMD_TYPO => {
-            filename = TYPO_FILE;
+            TYPO_FILE
         }
         SCMD_IDEA => {
-            filename = IDEA_FILE;
+             IDEA_FILE
         }
         _ => {
             return;
         }
-    }
+    };
 
     let dt = Utc::now();
 
@@ -1315,7 +1338,7 @@ pub fn do_gen_write(
         format!(
             "{} {}: {}",
             ch.get_name(),
-            CMD_INFO[cmd as usize].command,
+            CMD_INFO[cmd].command,
             argument
         )
         .as_str(),
@@ -1339,7 +1362,7 @@ pub fn do_gen_write(
         );
         return;
     }
-    let fl = OpenOptions::new().write(true).append(true).open(filename);
+    let fl = OpenOptions::new().append(true).open(filename);
     if fl.is_err() {
         error!(
             "SYSERR: do_gen_write, opening {} {}",
@@ -1380,6 +1403,7 @@ macro_rules! prf_tog_chk {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn do_gen_tog(
     game: &mut Game,
     _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -1448,62 +1472,62 @@ pub fn do_gen_tog(
     if ch.is_npc() {
         return;
     }
-    let result;
     let ch = chars.get_mut(chid);
+    let result=
     match subcmd {
         SCMD_NOSUMMON => {
-            result = prf_tog_chk!(ch, PrefFlags::SUMMONABLE);
+           prf_tog_chk!(ch, PrefFlags::SUMMONABLE)  
         }
         SCMD_NOHASSLE => {
-            result = prf_tog_chk!(ch, PrefFlags::NOHASSLE);
+            prf_tog_chk!(ch, PrefFlags::NOHASSLE)
         }
         SCMD_BRIEF => {
-            result = prf_tog_chk!(ch, PrefFlags::BRIEF);
+            prf_tog_chk!(ch, PrefFlags::BRIEF)
         }
         SCMD_COMPACT => {
-            result = prf_tog_chk!(ch, PrefFlags::COMPACT);
+            prf_tog_chk!(ch, PrefFlags::COMPACT)
         }
         SCMD_NOTELL => {
-            result = prf_tog_chk!(ch, PrefFlags::NOTELL);
+           prf_tog_chk!(ch, PrefFlags::NOTELL)
         }
         SCMD_NOAUCTION => {
-            result = prf_tog_chk!(ch, PrefFlags::NOAUCT);
+           prf_tog_chk!(ch, PrefFlags::NOAUCT)
         }
         SCMD_DEAF => {
-            result = prf_tog_chk!(ch, PrefFlags::DEAF);
+            prf_tog_chk!(ch, PrefFlags::DEAF)
         }
         SCMD_NOGOSSIP => {
-            result = prf_tog_chk!(ch, PrefFlags::NOGOSS);
+            prf_tog_chk!(ch, PrefFlags::NOGOSS)
         }
         SCMD_NOGRATZ => {
-            result = prf_tog_chk!(ch, PrefFlags::NOGRATZ);
+             prf_tog_chk!(ch, PrefFlags::NOGRATZ)
         }
         SCMD_NOWIZ => {
-            result = prf_tog_chk!(ch, PrefFlags::NOWIZ);
+            prf_tog_chk!(ch, PrefFlags::NOWIZ)
         }
         SCMD_QUEST => {
-            result = prf_tog_chk!(ch, PrefFlags::QUEST);
+            prf_tog_chk!(ch, PrefFlags::QUEST)
         }
         SCMD_ROOMFLAGS => {
-            result = prf_tog_chk!(ch, PrefFlags::ROOMFLAGS);
+            prf_tog_chk!(ch, PrefFlags::ROOMFLAGS)
         }
         SCMD_NOREPEAT => {
-            result = prf_tog_chk!(ch, PrefFlags::NOREPEAT);
+            prf_tog_chk!(ch, PrefFlags::NOREPEAT)
         }
         SCMD_HOLYLIGHT => {
-            result = prf_tog_chk!(ch, PrefFlags::HOLYLIGHT);
+            prf_tog_chk!(ch, PrefFlags::HOLYLIGHT)
         }
         SCMD_SLOWNS => {
-            result = {
+            {
                 game.config.nameserver_is_slow = !game.config.nameserver_is_slow;
                 game.config.nameserver_is_slow
             }
         }
         SCMD_AUTOEXIT => {
-            result = prf_tog_chk!(ch, PrefFlags::AUTOEXIT);
+            prf_tog_chk!(ch, PrefFlags::AUTOEXIT)
         }
         SCMD_TRACK => {
-            result = {
+          {
                 game.config.track_through_doors = !game.config.track_through_doors;
                 game.config.track_through_doors
             }
@@ -1512,13 +1536,11 @@ pub fn do_gen_tog(
             error!("SYSERR: Unknown subcmd {} in do_gen_toggle.", subcmd);
             return;
         }
-    }
+    };
 
     if result {
         send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_ON]);
     } else {
         send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
     }
-
-    return;
 }

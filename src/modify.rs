@@ -79,7 +79,7 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     let mut str_ = str_.to_string();
     delete_doubledollar(&mut str_);
     let t = str_.chars().next();
-    let t = if t.is_some() { t.unwrap() } else { '\0' };
+    let t = t.unwrap_or(  '\0' );
     let mut terminator = false;
     if t == '@' {
         terminator = true;
@@ -87,7 +87,7 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     }
 
     // smash_tilde(str_);
-    let the_str_id = game.desc_mut(d_id).str.as_ref().unwrap().clone();
+    let the_str_id = *game.desc_mut(d_id).str.as_ref().unwrap();
     let text = &mut texts.get_mut(the_str_id).text;
     if text.is_empty() {
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
@@ -101,15 +101,13 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         } else {
             *text = str_;
         }
+    } else if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
+        let chid = game.desc_mut(d_id).character.unwrap();
+        let ch = chars.get(chid);
+        send_to_char(&mut game.descriptors, ch, "String too long.  Last line skipped.\r\n");
+        terminator = true;
     } else {
-        if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
-            let chid = game.desc_mut(d_id).character.unwrap();
-            let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "String too long.  Last line skipped.\r\n");
-            terminator = true;
-        } else {
-            text.push_str(str_.as_str());
-        }
+        text.push_str(str_.as_str());
     }
 
     let desc = game.desc_mut(d_id);
@@ -157,6 +155,7 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
 // /* **********************************************************************
 // *  Modification of character skills                                     *
 // ********************************************************************** */
+#[allow(clippy::too_many_arguments)]
 pub fn do_skillset(
     game: &mut Game,
     db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
@@ -350,7 +349,7 @@ fn next_page(str: &str) -> Option<&str> {
             }
         }
     }
-    return None;
+    None
 }
 
 /* Function that returns the number of pages in the string. */
@@ -380,16 +379,16 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
     let mut s = msg;
     for _ in 1..d.showstr_count {
         let r = next_page(s);
-        if r.is_some() {
-            d.showstr_vector.push(Rc::from(r.unwrap()));
-            s = r.unwrap();
+        if let Some(r) = r  {
+            d.showstr_vector.push(Rc::from(r));
+            s = r;
         } else {
             break;
         }
     }
 
     d.showstr_page = 0;
-    return s;
+    s
 }
 
 /* The call that gets the paging ball rolling... */
@@ -443,7 +442,7 @@ pub fn show_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, d
         /* Feature to 'goto' a page.  Just type the number of the page and you
          * are there!
          */
-        else if cmd.is_digit(10) {
+        else if cmd.is_ascii_digit() {
             let nr = buf.parse::<i32>();
             if nr.is_err() {
                 let chid = descs.get_mut(d_id).character.unwrap();
@@ -485,7 +484,7 @@ pub fn show_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, d
     else {
         let showstr_page = descs.get_mut(d_id).showstr_page as usize;
         let diff = descs.get_mut(d_id).showstr_vector[showstr_page].len()
-            - descs.get_mut(d_id).showstr_vector[(showstr_page + 1) as usize].len();
+            - descs.get_mut(d_id).showstr_vector[showstr_page + 1].len();
         let buffer = &descs.get_mut(d_id).showstr_vector[showstr_page].as_ref()[..diff].to_string();
         let chid = descs.get_mut(d_id).character.unwrap();
         let ch = chars.get(chid);

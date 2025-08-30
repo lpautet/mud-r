@@ -605,7 +605,7 @@ impl DB {
             boards: BoardSystem::new(texts),
             house_control: [HouseControlRec::new(); MAX_HOUSES],
             num_of_houses: 0,
-            mails: MailSystem::new(),
+            mails: MailSystem::default(),
             mayor: Mayor::new(),
             king_welmar: KingWelmar::new(),
             scheck: false,

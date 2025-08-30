@@ -140,6 +140,7 @@ pub fn list_skills(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, ch
     page_string(&mut game.descriptors, chars,  d_id , &buf, true);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn guild(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, _objs: &mut Depot<ObjData>, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = chars.get(chid);
     if ch.is_npc() || !cmd_is(cmd, "practice") {
@@ -192,6 +193,7 @@ pub fn guild(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn dump(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,  chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = chars.get(chid);
 
@@ -225,7 +227,7 @@ pub fn dump(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mu
             None,
             TO_ROOM,
         );
-        value += max(1, min(50, k.get_obj_cost() / 10));
+        value += (k.get_obj_cost() / 10).clamp(1, 50);
         db.extract_obj(chars, objs,k_id);
     }
     let ch = chars.get(chid);
@@ -269,6 +271,7 @@ impl Mayor {
 const OPEN_PATH: &str = "W3a3003b33000c111d0d111Oe333333Oe22c222112212111a1S.";
 const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 
+#[allow(clippy::too_many_arguments)]
 pub fn mayor(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>,  chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if !db.mayor.move_ {
         if db.time_info.hours == 6 {
@@ -416,7 +419,7 @@ pub fn mayor(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &m
     }
 
     db.mayor.path_index += 1;
-    return false;
+    false
 }
 
 /* ********************************************************************
@@ -434,7 +437,7 @@ fn npc_steal(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: De
     if victim.get_level() >= LVL_IMMORT as u8 {
         return;
     }
-    if !can_see(&mut game.descriptors, chars, db,ch, victim) {
+    if !can_see(&game.descriptors, chars, db,ch, victim) {
         return;
     }
 
@@ -470,6 +473,7 @@ fn npc_steal(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: De
 /*
  * Quite lethal to low-level characters.
  */
+#[allow(clippy::too_many_arguments)]
 pub fn snake(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     let ch = chars.get(chid);
 
@@ -508,9 +512,10 @@ pub fn snake(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &
         ch.get_level() as i32,
         CAST_SPELL,
     );
-    return true;
+    true
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn thief(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     let ch = chars.get(chid);
 
@@ -524,9 +529,10 @@ pub fn thief(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: 
             return true;
         }
     }
-    return false;
+    false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn magic_user(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -604,19 +610,20 @@ pub fn magic_user(
         12 | 13 => {
             cast_spell(game,chars,db, texts,objs,chid, vict_id, None, SPELL_LIGHTNING_BOLT);
         }
-        14 | 15 | 16 | 17 => {
+        14..=17 => {
             cast_spell(game,chars,db, texts,objs,chid, vict_id, None, SPELL_COLOR_SPRAY);
         }
         _ => {
             cast_spell(game,chars,db, texts,objs,chid, vict_id, None, SPELL_FIREBALL);
         }
     }
-    return true;
+    true
 }
 
 /* ********************************************************************
 *  Special procedures for mobiles                                      *
 ******************************************************************** */
+#[allow(clippy::too_many_arguments)]
 pub fn guild_guard(
     game: &mut Game,chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -626,11 +633,10 @@ pub fn guild_guard(
 ) -> bool {
     let ch = chars.get(chid);
 
-    let guard_id;
-    match me {
-        MeRef::Char(me_chid) => { guard_id = me_chid },
+    let guard_id = match me {
+        MeRef::Char(me_chid) => { me_chid },
         _ => panic!("Unexpected MeRef type in guild_guard"),
-    }
+    };
     let guard = chars.get(guard_id);
     let buf = "The guard humiliates you, and blocks your way.\r\n";
     let buf2 = "The guard humiliates $n, and blocks $s way.";
@@ -663,12 +669,13 @@ pub fn guild_guard(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn puff(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     if cmd != 0 {
         return false;
     }
 
-    return match rand_number(0, 60) {
+    match rand_number(0, 60) {
         0 => {
             do_say(game, db, chars, texts,objs,chid, "My god!  It's full of stars!", 0, 0);
             true
@@ -686,9 +693,10 @@ pub fn puff(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &m
             true
         }
         _ => false,
-    };
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn fido(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, _me: MeRef, cmd: i32, _argument: &str) -> bool {
     let ch = chars.get(chid);
 
@@ -718,9 +726,10 @@ pub fn fido(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, _texts: &
         return true;
     }
 
-    return false;
+    false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn janitor(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -754,9 +763,10 @@ pub fn janitor(
         return true;
     }
 
-    return false;
+    false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn cityguard(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -776,7 +786,7 @@ pub fn cityguard(
     let mut evil_id = None;
     for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
         let tch = chars.get(tch_id);
-        if !can_see(&mut game.descriptors, chars, db,ch, tch) {
+        if !can_see(&game.descriptors, chars, db,ch, tch) {
             continue;
         }
 
@@ -820,6 +830,7 @@ pub fn cityguard(
         }
     }
 
+    #[allow(clippy::unnecessary_unwrap)]
     if evil_id.is_some()
         && chars.get(chars.get(evil_id.unwrap())
             .fighting_id()
@@ -843,9 +854,8 @@ pub fn cityguard(
     if spittle.is_some() && rand_number(0, 9) == 0 {
         let spit_social = find_command("spit");
 
-        if spit_social.is_some() {
-            let spit_social = spit_social.unwrap();
-
+        if let Some(spit_social) = spit_social {
+            #[allow(clippy::unnecessary_unwrap)]
             do_action(
                 game,db,chars, texts,objs,
                 chid,
@@ -857,13 +867,14 @@ pub fn cityguard(
         }
     }
 
-    return false;
+    false
 }
 
 fn pet_price(pet: &CharData) -> i32 {
     pet.get_level() as i32 * 300
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn pet_shops(
     game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
     chid: DepotId,
@@ -951,17 +962,17 @@ pub fn pet_shops(
     }
 
     /* All commands except list and buy */
-    return false;
+    false
 }
 
 /* ********************************************************************
 *  Special procedures for objects                                     *
 ******************************************************************** */
-
+#[allow(clippy::too_many_arguments)]
 pub fn bank(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, _objs: &mut Depot<ObjData>, chid: DepotId, _me: MeRef, cmd: i32, argument: &str) -> bool {
     let ch = chars.get(chid);
 
-    return if cmd_is(cmd, "balance") {
+    if cmd_is(cmd, "balance") {
         if ch.get_bank_gold() > 0 {
             send_to_char(&mut game.descriptors, ch,
                 format!("Your current balance is {} coins.\r\n", ch.get_bank_gold()).as_str(),
@@ -972,7 +983,7 @@ pub fn bank(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &m
         true
     } else if cmd_is(cmd, "deposit") {
         let amount = argument.trim_start().parse::<i32>();
-        let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
+        let amount = amount.unwrap_or(-1);
         if amount <= 0 {
             send_to_char(&mut game.descriptors, ch, "How much do you want to deposit?\r\n");
             return true;
@@ -997,7 +1008,7 @@ pub fn bank(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,_texts: &m
         true
     } else if cmd_is(cmd, "withdraw") {
         let amount = argument.trim_start().parse::<i32>();
-        let amount = if amount.is_ok() { amount.unwrap() } else { -1 };
+        let amount = amount.unwrap_or(-1);
         if amount <= 0 {
             send_to_char(&mut game.descriptors, ch, "How much do you want to withdraw?\r\n");
             return true;
