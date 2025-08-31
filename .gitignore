@@ -3,3 +3,6 @@
 /lib/plrobjs/*/*.objs
 /lib/plralias/*/*.alias
 syslog*
+pause
+.fastboot
+.killscript

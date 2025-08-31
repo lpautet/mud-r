@@ -93,7 +93,6 @@ pub const KILLSCRIPT_FILE: &str = "../.killscript";
 pub const FASTBOOT_FILE: &str = "../.fastboot";
 pub const PAUSE_FILE: &str = "../pause";
 
-
 pub const PLAYER_FILE: &str = "etc/players";
 pub const MAIL_FILE: &str = "etc/plrmail"; /* for the mudmail system	*/
 pub const BAN_FILE: &str = "etc/badsites"; /* for the siteban system	*/
