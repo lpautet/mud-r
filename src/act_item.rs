@@ -1970,7 +1970,7 @@ pub fn do_drink(
     /* You can't subtract more than the object weighs */
     let weight = min(amount, to_obj.get_obj_weight());
     let toid = to_obj.id();
-    weight_change_object(chars, objs, toid, -weight as i32); /* Subtract amount */
+    weight_change_object(chars, objs, toid, -weight); /* Subtract amount */
     let to_obj = objs.get(toid);
     let ch = chars.get_mut(chid);
     gain_condition(
