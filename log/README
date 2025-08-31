@@ -11,3 +11,4 @@ newplayers: new player
 errors: SYSERR
 godcmds: (GC)
 badpws: Bad PW
+syslog.<x>: All logs from previous run

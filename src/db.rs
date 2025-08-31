@@ -89,9 +89,10 @@ pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 //pub const LIB_PLRTEXT: &str = "plrtext/";
 pub const LIB_PLROBJS: &str = "plrobjs/";
 
-pub const KILLSCRIPT_FILE: &str = "./.killscript";
-pub const FASTBOOT_FILE: &str = "./.fastboot";
-pub const PAUSE_FILE: &str = "./pause";
+pub const KILLSCRIPT_FILE: &str = "../.killscript";
+pub const FASTBOOT_FILE: &str = "../.fastboot";
+pub const PAUSE_FILE: &str = "../pause";
+
 
 pub const PLAYER_FILE: &str = "etc/players";
 pub const MAIL_FILE: &str = "etc/plrmail"; /* for the mudmail system	*/
