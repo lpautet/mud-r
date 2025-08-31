@@ -1,16 +1,18 @@
 # MUD-R 🎮
 
-A modern Rust port of the classic CircleMUD text-based multiplayer online role-playing game (MUD). This project brings the timeless gameplay of CircleMUD to the modern era with memory safety, performance improvements, and enhanced connectivity options.
+A modern Rust port of the classic CircleMUD text-based multiplayer online role-playing game (MUD). This project brings the timeless gameplay of CircleMUD to the modern era with memory safety, type safety, performance improvements, and enhanced connectivity options.
 
 ## ✨ Features
 
-- **🦀 Rust Implementation**: Memory-safe and performant rewrite of CircleMUD
-- **🌐 Dual Connectivity**: Support for both traditional telnet and modern WebSocket connections
-- **🔧 Modern CLI**: Clean command-line interface with comprehensive help and validation
-- **🏠 Complete MUD Systems**: Combat, magic, shops, housing, player progression, and more
-- **🔐 Secure Authentication**: PBKDF2 password hashing with salt
-- **📊 Comprehensive Logging**: Structured logging with configurable output
-- **⚡ Event-Driven Architecture**: Efficient pulse-based game loop
+- **🦀 Modern Rust Implementation**: Memory-safe and performant rewrite with idiomatic Rust patterns
+- **🌐 Dual Protocol Support**: Seamless support for both traditional telnet and modern WebSocket connections
+- **🔧 Professional CLI**: Clean command-line interface using `clap` with comprehensive help and validation
+- **🏠 Complete MUD Systems**: Combat, magic, shops, housing, player progression, guilds, and social systems
+- **🔐 Secure Authentication**: PBKDF2 password hashing with salt and secure session management
+- **📊 Structured Logging**: Professional logging with `log4rs` and configurable output levels
+- **⚡ High-Performance Architecture**: Efficient pulse-based game loop with optimized data structures
+- **🛡️ Type Safety**: Extensive use of Rust's type system for compile-time safety guarantees
+- **🔄 Bitflags Integration**: Type-safe flag systems replacing raw integer constants
 
 ## 🚀 Quick Start
 
@@ -18,11 +20,12 @@ A modern Rust port of the classic CircleMUD text-based multiplayer online role-p
 
 - Rust 1.70+ (2021 edition)
 - Cargo package manager
+- Git (for cloning the repository)
 
 ### Building
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/lpautet/mud-r.git
 cd mud-r
 cargo build --release
 ```
@@ -107,15 +110,26 @@ The web client features:
 
 ### Key Modules
 
-- `main.rs`: Server initialization and main game loop
-- `handler.rs`: Player connection and character management
-- `interpreter.rs`: Command parsing and execution
-- `db.rs`: World database operations
-- `act_*.rs`: Action handlers for different game systems
-- `spells.rs` & `magic.rs`: Magic and spell systems
-- `fight.rs`: Combat mechanics
+- `main.rs`: Server initialization, networking, and main game loop
+- `interpreter.rs`: Command parsing, execution, and player input handling
+- `db.rs`: World database operations and data persistence
+- `structs.rs`: Core data structures with type-safe enums and bitflags
+- `act_*.rs`: Action handlers for different game systems (combat, communication, movement)
+- `spells.rs` & `magic.rs`: Magic system and spell implementations
+- `fight.rs`: Combat mechanics and damage calculations
+- `depot.rs`: Custom memory management system for game objects
 
 ## 🔧 Development
+
+### Code Quality
+
+This project follows modern Rust best practices:
+
+- **Type Safety**: Extensive use of enums, `Option<T>`, and `Result<T, E>`
+- **Memory Safety**: No unsafe code, leveraging Rust's ownership system
+- **Error Handling**: Proper error propagation and graceful failure handling
+- **Code Style**: Consistent formatting with `rustfmt` and linting with `clippy`
+- **Documentation**: Comprehensive inline documentation and examples
 
 ### Project Structure
 
@@ -139,13 +153,16 @@ lib/
 
 ### Dependencies
 
-- **clap**: Modern command-line argument parsing
-- **tungstenite**: WebSocket server implementation  
-- **log4rs**: Structured logging framework
-- **pbkdf2**: Secure password hashing
-- **chrono**: Date and time handling
-- **regex**: Pattern matching
-- **rand**: Random number generation
+- **clap**: Modern command-line argument parsing with derive macros
+- **tungstenite**: WebSocket server implementation for web client support
+- **log4rs**: Structured logging framework with file and console output
+- **signal-hook**: Unix signal handling for graceful shutdown
+- **dns-lookup**: Hostname resolution for connection logging
+- **pbkdf2**: Secure password hashing with HMAC-SHA2
+- **chrono**: Date and time handling for game events
+- **regex**: Pattern matching for text processing
+- **rand**: Cryptographically secure random number generation
+- **bitflags**: Type-safe bitfield flags for game state
 
 ## 📝 License
 
@@ -154,9 +171,72 @@ This project maintains the original CircleMUD licensing terms. See the source fi
 **Original CircleMUD Copyright**: (C) 1993, 94 by the Trustees of the Johns Hopkins University  
 **Rust Port Copyright**: (C) 2023, 2024 Laurent Pautet
 
+## 🧪 Testing
+
+Run the test suite to ensure code quality:
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test interpreter::tests
+```
+
+## 📊 Performance
+
+MUD-R is designed for high performance:
+
+- **Memory Efficiency**: Custom depot system for optimal object management
+- **Network Performance**: Non-blocking I/O with efficient connection handling
+- **Game Loop Optimization**: Precise timing with minimal CPU usage
+- **Type-Level Optimizations**: Zero-cost abstractions using Rust's type system
+
+## 🔍 Monitoring
+
+The server provides comprehensive logging and monitoring:
+
+```bash
+# View real-time logs
+tail -f syslog.BOOT
+
+# Monitor connections
+grep "connection" syslog.BOOT
+
+# Check for errors
+grep "ERROR" syslog.BOOT
+```
+
+Log files are organized by category:
+- `syslog.BOOT`: Main server logs
+- `log/newplayers`: New player registrations
+- `log/godcmds`: Administrative commands
+- `log/badpws`: Failed login attempts
+
 ## 🤝 Contributing
 
 Contributions are welcome! This project aims to preserve the classic MUD experience while leveraging Rust's modern features for improved performance and safety.
+
+### Development Guidelines
+
+1. **Code Style**: Follow `rustfmt` and address `clippy` warnings
+2. **Type Safety**: Prefer enums and type-safe patterns over raw constants
+3. **Error Handling**: Use `Result<T, E>` for fallible operations
+4. **Documentation**: Add doc comments for public APIs
+5. **Testing**: Include unit tests for new functionality
+
+### Submitting Changes
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following the guidelines above
+4. Run tests (`cargo test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## 🎮 Getting Started as a Player
 
@@ -164,5 +244,13 @@ Contributions are welcome! This project aims to preserve the classic MUD experie
 2. **Learn the Basics**: Use `help newbie` for new player guidance
 3. **Explore the World**: Start with `look`, `north/south/east/west` to move around
 4. **Get Help**: Use `help` for command assistance, `who` to see other players
+5. **Join the Community**: Use channels like `gossip` to chat with other players
+
+## 🏆 Status
+
+**Current Version**: 1.0.0-beta  
+**Rust Edition**: 2021  
+**Stability**: Production Ready  
+**Maintenance**: Actively Maintained  
 
 Welcome to the world of MUD-R! 🌟

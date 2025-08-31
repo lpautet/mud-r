@@ -11,7 +11,7 @@
 use std::borrow::Borrow;
 use std::cmp::max;
 use std::collections::LinkedList;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::ExitCode;
@@ -621,7 +621,7 @@ impl Game {
                 };
 
                 if has_input {
-                    process_input(&mut self.descriptors, d_id);
+                    _ = process_input(&mut self.descriptors, d_id);
                 }
             }
 
@@ -710,7 +710,7 @@ impl Game {
             for d_id in self.descriptor_list.clone() {
                 let desc = self.desc_mut(d_id);
                 if !desc.output.is_empty() {
-                    process_output(&mut self.descriptors, chars, d_id);
+                    _ = process_output(&mut self.descriptors, chars, d_id);
                     let desc = self.desc_mut(d_id);
                     if desc.output.is_empty() {
                         desc.has_prompt = true;
@@ -725,7 +725,7 @@ impl Game {
                     let text = &d.make_prompt(chars);
                     let d = self.desc_mut(d_id);
                     if let Some(ConnectionType::Telnet(ref mut stream)) = d.connection {
-                        write_to_descriptor(stream, text.as_bytes());
+                        _ = write_to_descriptor(stream, text.as_bytes());
                     }
                     d.has_prompt = true;
                 }
@@ -1062,7 +1062,7 @@ impl Game {
 
         /* make sure we have room for it */
         if self.descriptor_list.len() >= self.max_players as usize {
-            write_to_descriptor(
+            _ = write_to_descriptor(
                 &mut stream,
                 "Sorry, CircleMUD is full right now... please try again later!\r\n".as_bytes(),
             );
@@ -1250,7 +1250,7 @@ fn process_output(
     descs: &mut Depot<DescriptorData>,
     chars: &Depot<CharData>,
     desc_id: DepotId,
-) -> i32 {
+) -> Result<usize, Error> {
     /* we may need this \r\n for later -- see below */
     let mut i = "\r\n".as_bytes().to_vec();
     let mut result;
@@ -1284,14 +1284,16 @@ fn process_output(
             Some(ConnectionType::WebSocket(ref mut ws)) => {
                 // Send WebSocket text message
                 match ws.send(Message::Text(String::from_utf8_lossy(&i).to_string())) {
-                    Ok(_) => i.len() as i32,
-                    Err(_) => -1,
+                    Ok(_) => Ok(i.len()),
+                    Err(_) => Err(Error::other("WebSocket write error")),
                 }
             }
-            None => -1,
+            None => Err(Error::new(ErrorKind::NotConnected, "No connection")),
         };
-        if result >= 2 {
-            result -= 2;
+        if let Ok(result_value) = result {
+            if result_value >= 2 {
+                result = Ok(result_value - 2);
+            }
         }
     } else {
         result = match &mut desc.connection {
@@ -1299,43 +1301,49 @@ fn process_output(
             Some(ConnectionType::WebSocket(ref mut ws)) => {
                 // Send WebSocket text message (skip the first 2 bytes)
                 match ws.send(Message::Text(String::from_utf8_lossy(&i[2..]).to_string())) {
-                    Ok(_) => (i.len() - 2) as i32,
-                    Err(_) => -1,
+                    Ok(_) => Ok(i.len() - 2),
+                    Err(_) => Err(Error::other("WebSocket write error")),
                 }
             }
-            None => -1,
+            None => Err(Error::new(ErrorKind::NotConnected, "No connection")),
         };
     }
 
-    if result < 0 {
-        /* Oops, fatal error. Bye! */
-        if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
-            let _ = stream.shutdown(Shutdown::Both);
+    match result {
+        Err(_) => {
+            /* Oops, fatal error. Bye! */
+            if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
+            return result;
         }
-        return -1;
-    } else if result == 0 {
-        /* Socket buffer full. Try later. */
-        return 0;
+        Ok(0) => {
+            /* Socket buffer full. Try later. */
+            return result;
+        }
+        _ => {}
     }
 
+    let result_len = result.unwrap();
     /* Handle snooping: prepend "% " and send to snooper. */
     if desc.snoop_by.is_some() {
         let snooper_id = descs.get_mut(desc_id).snoop_by.unwrap();
         let snooper = descs.get_mut(snooper_id);
-        snooper.write_to_output(format!("% {}%%", result).as_str());
+        snooper.write_to_output(format!("% {}%%", result_len).as_str());
     }
     let desc = descs.get_mut(desc_id);
 
     /* The common case: all saved output was handed off to the kernel buffer. */
-    let exp_len = (i.len() - 2) as i32;
-    if result >= exp_len {
+    let exp_len = i.len() - 2;
+
+    if result_len >= exp_len {
         // already cleared by append ...
         // descs.get_mut(desc_id).output.clear();
     } else {
         /* Not all data in buffer sent.  result < output buffersize. */
-        desc.output = i.split_off(result as usize);
+        desc.output = i.split_off(result_len);
     }
-    result
+    Ok(result_len)
 }
 
 /*
@@ -1348,7 +1356,7 @@ fn process_output(
  * >=0  If all is well and good.
  *  -1  If an error was encountered, so that the player should be cut off.
  */
-fn write_to_descriptor(stream: &mut TcpStream, txt: &[u8]) -> i32 {
+fn write_to_descriptor(stream: &mut TcpStream, txt: &[u8]) -> Result<usize, Error> {
     let mut txt = txt;
     let mut total = txt.len();
     let mut write_total = 0;
@@ -1358,17 +1366,17 @@ fn write_to_descriptor(stream: &mut TcpStream, txt: &[u8]) -> i32 {
             Err(err) => {
                 /* Fatal error.  Disconnect the player. */
                 error!("SYSERR: Write to socket {}", err);
-                return -1;
+                return Err(err);
             }
-            Ok(0) => return write_total, /* Temporary failure -- socket buffer full. */
+            Ok(0) => return Ok(write_total), /* Temporary failure -- socket buffer full. */
             Ok(bytes_written) => {
                 txt = &txt[bytes_written..];
                 total -= bytes_written;
-                write_total += bytes_written as i32;
+                write_total += bytes_written;
             }
         }
     }
-    write_total
+    Ok(write_total)
 }
 
 /*
@@ -1440,7 +1448,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
+fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<bool, Error> {
     let mut failed_subst;
     let mut bytes_read;
     let mut read_point = 0;
@@ -1455,12 +1463,12 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
     loop {
         if space_left <= 0 {
             warn!("WARNING: process_input: about to close connection: input overflow");
-            return -1;
+            return Err(Error::new(ErrorKind::OutOfMemory, "Input overflow"));
         }
 
         match perform_socket_read(desc) {
-            Err(_) => return -1, /* Error, disconnect them. */
-            Ok(0) => return 0,   /* Just blocking, no problems. */
+            Err(e) => return Err(e), /* Error, disconnect them. */
+            Ok(0) => return Ok(false),   /* Just blocking, no problems. */
             Ok(size) => bytes_read = size,
         }
 
@@ -1533,15 +1541,13 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
                 }
                 Some(ConnectionType::WebSocket(ref mut ws)) => {
                     match ws.send(Message::Text(tmp.clone())) {
-                        Ok(_) => tmp.len() as i32,
-                        Err(_) => -1,
+                        Ok(_) => Ok(tmp.len()),
+                        Err(_) => Err(Error::other("WebSocket send error")),
                     }
                 }
-                None => -1,
+                None => Err(Error::other("No connection")),
             };
-            if write_result < 0 {
-                return -1;
-            }
+            write_result?;
         }
 
         if desc.snoop_by.is_some() {
@@ -1620,7 +1626,7 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> i32 {
 
     desc.inbuf.drain(..read_point);
 
-    1
+    Ok(true)
 }
 
 /* perform substitution for the '^..^' csh-esque syntax orig is the
