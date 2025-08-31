@@ -90,7 +90,7 @@ pub const XNAME_FILE: &str = "./misc/xnames"; /* invalid name substrings	*/
 pub const LIB_PLROBJS: &str = "plrobjs/";
 
 pub const KILLSCRIPT_FILE: &str = "./.killscript";
-pub const FASTBOOT_FILE: &str = "./fastboot";
+pub const FASTBOOT_FILE: &str = "./.fastboot";
 pub const PAUSE_FILE: &str = "./pause";
 
 pub const PLAYER_FILE: &str = "etc/players";
