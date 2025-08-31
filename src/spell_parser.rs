@@ -6,20 +6,21 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::cmp::{max, min};
 
-use log::error;
 use crate::depot::{Depot, DepotId, HasId};
 use crate::fight::skill_message;
 use crate::{act, perform_act, send_to_char, ObjData, TextData, VictimRef};
+use log::error;
 
 use crate::config::OK;
 use crate::db::DB;
 use crate::handler::{
-    generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, isname, FindFlags,
+    generic_find, get_char_vis, get_obj_in_list_vis, get_obj_in_list_vis2, get_obj_vis, isname,
+    FindFlags,
 };
 use crate::interpreter::{any_one_arg, is_abbrev, one_argument};
 use crate::magic::{
@@ -49,12 +50,13 @@ use crate::spells::{
     TAR_OBJ_EQUIP, TAR_OBJ_INV, TAR_OBJ_ROOM, TAR_OBJ_WORLD, TAR_SELF_ONLY, TOP_SPELL_DEFINE,
     TYPE_UNDEFINED,
 };
-use crate::structs::{
-    AffectFlags, CharData, Class, ItemType, Position, RoomFlags, LVL_IMMORT, LVL_IMPL, NUM_WEARS, PULSE_VIOLENCE
-};
 use crate::structs::NUM_CLASSES;
-use crate::util::{ has_spell_routine, rand_number};
-use crate::{is_set,  Game, TO_CHAR, TO_ROOM, TO_VICT};
+use crate::structs::{
+    AffectFlags, CharData, Class, ItemType, Position, RoomFlags, LVL_IMMORT, LVL_IMPL, NUM_WEARS,
+    PULSE_VIOLENCE,
+};
+use crate::util::{has_spell_routine, rand_number};
+use crate::{is_set, Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 /*
  * This arrangement is pretty stupid, but the number of skills is limited by
@@ -302,7 +304,10 @@ fn mag_manacost(ch: &CharData, sinfo: &SpellInfoType) -> i16 {
 
 #[allow(clippy::too_many_arguments)]
 fn say_spell(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: & Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &Depot<ObjData>,
     chid: DepotId,
     spellnum: i32,
     tch_id: Option<DepotId>,
@@ -353,9 +358,7 @@ fn say_spell(
             buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
         }
     } else if tobj_id.is_some() && objs.get(tobj_id.unwrap()).in_room() == ch.in_room()
-        || 
-            objs.get(tobj_id.unwrap()).carried_by.unwrap() ==
-            chid
+        || objs.get(tobj_id.unwrap()).carried_by.unwrap() == chid
     {
         buf1.push_str(
             format!(
@@ -389,9 +392,27 @@ fn say_spell(
         let toobj = tobj_id.map(|id| objs.get(id));
         let tch2 = chars.get(tch2_id.unwrap());
         if ch.get_class() == chars.get(i_id).get_class() {
-            perform_act(&mut game.descriptors, chars, db,&buf1, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
+            perform_act(
+                &mut game.descriptors,
+                chars,
+                db,
+                &buf1,
+                Some(ch),
+                toobj,
+                Some(VictimRef::Char(tch2)),
+                i,
+            );
         } else {
-            perform_act(&mut game.descriptors, chars, db,&buf2, Some(ch), toobj, Some(VictimRef::Char(tch2)), i);
+            perform_act(
+                &mut game.descriptors,
+                chars,
+                db,
+                &buf2,
+                Some(ch),
+                toobj,
+                Some(VictimRef::Char(tch2)),
+                i,
+            );
         }
     }
     let ch = chars.get(chid);
@@ -413,7 +434,17 @@ fn say_spell(
         #[allow(clippy::unnecessary_unwrap)]
         let tch2_id = tch_id.unwrap();
         let tch2 = chars.get(tch2_id);
-        act(&mut game.descriptors, chars, db,&buf1, false, Some(ch), None, Some(VictimRef::Char(tch2)), TO_VICT);
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
+            &buf1,
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(tch2)),
+            TO_VICT,
+        );
     }
 }
 
@@ -471,7 +502,11 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
  */
 #[allow(clippy::too_many_arguments)]
 pub fn call_magic(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     caster_id: DepotId,
     cvict_id: Option<DepotId>,
     ovict: Option<DepotId>,
@@ -491,8 +526,15 @@ pub fn call_magic(
         sinfo_violent = sinfo.violent;
     }
     if db.room_flagged(chars.get(caster_id).in_room(), RoomFlags::NOMAGIC) {
-        send_to_char(&mut game.descriptors, chars.get(caster_id), "Your magic fizzles out and dies.\r\n");
-        act(&mut game.descriptors, chars, db,
+        send_to_char(
+            &mut game.descriptors,
+            chars.get(caster_id),
+            "Your magic fizzles out and dies.\r\n",
+        );
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$n's magic fizzles out and dies.",
             false,
             Some(caster),
@@ -505,11 +547,15 @@ pub fn call_magic(
     if db.room_flagged(chars.get(caster_id).in_room(), RoomFlags::PEACEFUL)
         && (sinfo_violent || is_set!(sinfo_routines, MAG_DAMAGE))
     {
-        send_to_char(&mut game.descriptors, chars.get(
-            caster_id),
+        send_to_char(
+            &mut game.descriptors,
+            chars.get(caster_id),
             "A flash of white light fills the room, dispelling your violent magic!\r\n",
         );
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "White light from no particular source suddenly fills the room, then vanishes.",
             false,
             Some(caster),
@@ -535,23 +581,32 @@ pub fn call_magic(
 
     if is_set!(sinfo_routines, MAG_DAMAGE)
         && mag_damage(
-            game,chars, db,texts,objs,
+            game,
+            chars,
+            db,
+            texts,
+            objs,
             level,
             caster_id,
             cvict_id.unwrap(),
             spellnum,
             savetype,
         ) == -1
-        {
-            return -1; /* Successful and target died, don't cast again. */
-        }
+    {
+        return -1; /* Successful and target died, don't cast again. */
+    }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
-        mag_affects(game, chars, db,objs,level, caster_id, cvict_id, spellnum, savetype);
+        mag_affects(
+            game, chars, db, objs, level, caster_id, cvict_id, spellnum, savetype,
+        );
     }
 
     if is_set!(sinfo_routines, MAG_UNAFFECTS) {
         mag_unaffects(
-            game,chars,db,objs,
+            game,
+            chars,
+            db,
+            objs,
             level,
             caster_id,
             cvict_id.unwrap(),
@@ -565,44 +620,158 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_ALTER_OBJS) {
-        mag_alter_objs(game, chars,db,objs,level, caster_id, ovict, spellnum, savetype);
+        mag_alter_objs(
+            game, chars, db, objs, level, caster_id, ovict, spellnum, savetype,
+        );
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
-        mag_groups(game,chars,db, texts,objs, level, Some(caster_id), spellnum, savetype);
+        mag_groups(
+            game,
+            chars,
+            db,
+            texts,
+            objs,
+            level,
+            Some(caster_id),
+            spellnum,
+            savetype,
+        );
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
         mag_masses(chars, db, level, caster_id, spellnum, savetype);
     }
 
     if is_set!(sinfo_routines, MAG_AREAS) {
-        mag_areas(game, chars,db, texts, objs,level, Some(caster_id), spellnum, savetype);
+        mag_areas(
+            game,
+            chars,
+            db,
+            texts,
+            objs,
+            level,
+            Some(caster_id),
+            spellnum,
+            savetype,
+        );
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
-        mag_summons(game, chars,db,objs,level, Some(caster_id), ovict, spellnum, savetype);
+        mag_summons(
+            game,
+            chars,
+            db,
+            objs,
+            level,
+            Some(caster_id),
+            ovict,
+            spellnum,
+            savetype,
+        );
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {
-        mag_creations(game, chars,db,objs,level, Some(caster_id), spellnum);
+        mag_creations(game, chars, db, objs, level, Some(caster_id), spellnum);
     }
 
     if is_set!(sinfo_routines, MAG_MANUAL) {
         match spellnum {
-            SPELL_CHARM => spell_charm(game, chars, db,objs,level, Some(caster_id), cvict_id, ovict),
-            SPELL_CREATE_WATER => spell_create_water(game, chars,db, objs,level, Some(caster_id), cvict_id, ovict),
-            SPELL_DETECT_POISON => spell_detect_poison(game, chars,db,objs, level, Some(caster_id), cvict_id, ovict),
-            SPELL_ENCHANT_WEAPON => {
-                spell_enchant_weapon(game, chars,db, objs,level, Some(caster_id), cvict_id, ovict)
-            }
-            SPELL_IDENTIFY => spell_identify(game, chars,db,objs, level, Some(caster_id), cvict_id, ovict),
-            SPELL_LOCATE_OBJECT => spell_locate_object(game, chars,db,objs,level, Some(caster_id), cvict_id, ovict),
-            SPELL_SUMMON => spell_summon(game, chars,db,texts, objs,level, Some(caster_id), cvict_id, ovict),
+            SPELL_CHARM => spell_charm(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_CREATE_WATER => spell_create_water(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_DETECT_POISON => spell_detect_poison(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_ENCHANT_WEAPON => spell_enchant_weapon(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_IDENTIFY => spell_identify(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_LOCATE_OBJECT => spell_locate_object(
+                game,
+                chars,
+                db,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
+            SPELL_SUMMON => spell_summon(
+                game,
+                chars,
+                db,
+                texts,
+                objs,
+                level,
+                Some(caster_id),
+                cvict_id,
+                ovict,
+            ),
             SPELL_WORD_OF_RECALL => {
-                spell_recall(game, chars,db, texts,objs,level, Some(caster_id), cvict_id, ovict);
+                spell_recall(
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    level,
+                    Some(caster_id),
+                    cvict_id,
+                    ovict,
+                );
             }
             SPELL_TELEPORT => {
-                spell_teleport(game, chars,db, texts,objs,level, Some(caster_id), cvict_id, ovict);
+                spell_teleport(
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    level,
+                    Some(caster_id),
+                    cvict_id,
+                    ovict,
+                );
             }
             _ => {}
         }
@@ -626,7 +795,16 @@ pub fn call_magic(
  * files (this is a CircleMUD enhancement).
  */
 #[allow(clippy::too_many_arguments)]
-pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, oid: DepotId, argument: &str) {
+pub fn mag_objectmagic(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    oid: DepotId,
+    argument: &str,
+) {
     let ch = chars.get(chid);
     let obj = objs.get(oid);
     let mut arg = String::new();
@@ -634,7 +812,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
     one_argument(argument, &mut arg);
     let mut tch = None;
     let mut tobj = None;
-    let k = generic_find(&game.descriptors, chars,db,objs,
+    let k = generic_find(
+        &game.descriptors,
+        chars,
+        db,
+        objs,
         &arg,
         FindFlags::CHAR_ROOM | FindFlags::OBJ_INV | FindFlags::OBJ_ROOM | FindFlags::OBJ_EQUIP,
         ch,
@@ -644,7 +826,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
 
     match obj.get_obj_type() {
         ItemType::Staff => {
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 "You tap $p three times on the ground.",
                 false,
                 Some(ch),
@@ -653,7 +838,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 TO_CHAR,
             );
             if !texts.get(obj.action_description).text.is_empty() {
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -662,7 +850,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "$n taps $p three times on the ground.",
                     false,
                     Some(ch),
@@ -674,7 +865,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
 
             if obj.get_obj_val(2) <= 0 {
                 send_to_char(&mut game.descriptors, ch, "It seems powerless.\r\n");
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -703,14 +897,14 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                  */
                 let ch = chars.get(chid);
                 if has_spell_routine(db, obj.get_obj_val(3), MAG_MASSES | MAG_AREAS) {
-                    let mut i = db.world[ch.in_room() as usize]
-                        .peoples
-                        .len();
+                    let mut i = db.world[ch.in_room() as usize].peoples.len();
                     while i > 0 {
                         i -= 1;
                         let obj = objs.get(oid);
                         let spellnum = obj.get_obj_val(i);
-                        call_magic(game, chars, db,texts, objs,chid, None, None, spellnum, k, CAST_STAFF);
+                        call_magic(
+                            game, chars, db, texts, objs, chid, None, None, spellnum, k, CAST_STAFF,
+                        );
                     }
                 } else {
                     for tch_id in db.world[ch.in_room() as usize].peoples.clone() {
@@ -718,7 +912,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                             let obj = objs.get(oid);
                             let spellnum = obj.get_obj_val(3);
                             call_magic(
-                                game,chars, db,texts,objs,
+                                game,
+                                chars,
+                                db,
+                                texts,
+                                objs,
                                 chid,
                                 Some(tch_id),
                                 None,
@@ -734,7 +932,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         ItemType::Wand => {
             if k == FindFlags::CHAR_ROOM {
                 if tch.unwrap().id() == chid {
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         "You point $p at yourself.",
                         false,
                         Some(ch),
@@ -742,7 +943,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         None,
                         TO_CHAR,
                     );
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         "$n points $p at $mself.",
                         false,
                         Some(ch),
@@ -752,7 +956,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     );
                 } else {
                     let tch = tch.unwrap();
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         "You point $p at $N.",
                         false,
                         Some(ch),
@@ -761,7 +968,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         TO_CHAR,
                     );
                     if !texts.get(obj.action_description).text.is_empty() {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             &texts.get(obj.action_description).text,
                             false,
                             Some(ch),
@@ -770,7 +980,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                             TO_ROOM,
                         );
                     } else {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             "$n points $p at $N.",
                             true,
                             Some(ch),
@@ -782,7 +995,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 }
             } else if tobj.is_some() {
                 let tobj = tobj.unwrap();
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "You point $p at $P.",
                     false,
                     Some(ch),
@@ -791,7 +1007,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_CHAR,
                 );
                 if !texts.get(obj.action_description).text.is_empty() {
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         &texts.get(obj.action_description).text,
                         false,
                         Some(ch),
@@ -800,7 +1019,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                         TO_ROOM,
                     );
                 } else {
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         "$n points $p at $P.",
                         true,
                         Some(ch),
@@ -814,7 +1036,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 MAG_AREAS | MAG_MASSES
             ) {
                 /* Wands with area spells don't need to be pointed. */
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "You point $p outward.",
                     false,
                     Some(ch),
@@ -822,7 +1047,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     None,
                     TO_CHAR,
                 );
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "$n points $p outward.",
                     true,
                     Some(ch),
@@ -831,7 +1059,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "At what should $p be pointed?",
                     false,
                     Some(ch),
@@ -844,7 +1075,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
 
             if obj.get_obj_val(2) <= 0 {
                 send_to_char(&mut game.descriptors, ch, "It seems powerless.\r\n");
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "Nothing seems to happen.",
                     false,
                     Some(ch),
@@ -863,7 +1097,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
             let obj = objs.get(oid);
             if obj.get_obj_val(0) != 0 {
                 call_magic(
-                    game,chars,db,texts,objs,
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
                     chid,
                     tch_id,
                     tobj_id,
@@ -873,7 +1111,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 );
             } else {
                 call_magic(
-                    game,chars,db,texts,objs,
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
                     chid,
                     tch_id,
                     tobj_id,
@@ -886,7 +1128,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
         ItemType::Scroll => {
             if !arg.is_empty() {
                 if k.is_empty() {
-                    act(&mut game.descriptors, chars, db,
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
                         "There is nothing to here to affect with $p.",
                         false,
                         Some(ch),
@@ -900,7 +1145,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 tch = Some(ch);
             }
 
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 "You recite $p which dissolves.",
                 true,
                 Some(ch),
@@ -909,7 +1157,10 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 TO_CHAR,
             );
             if !texts.get(obj.action_description).text.is_empty() {
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -918,7 +1169,17 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                act(&mut game.descriptors, chars, db,"$n recites $p.", false, Some(ch), Some(obj), None, TO_ROOM);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n recites $p.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
             }
             let tch_id = tch.map(|c| c.id());
             let tobj_id = tobj.map(|o| o.id());
@@ -929,8 +1190,13 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,chars, db,texts,objs,
-                    chid,tch_id,
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    chid,
+                    tch_id,
                     tobj_id,
                     spellnum,
                     level,
@@ -941,12 +1207,25 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 }
             }
 
-            db.extract_obj(chars, objs,oid);
+            db.extract_obj(chars, objs, oid);
         }
         ItemType::Potion => {
-            act(&mut game.descriptors, chars, db,"You quaff $p.", false, Some(ch), Some(obj), None, TO_CHAR);
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "You quaff $p.",
+                false,
+                Some(ch),
+                Some(obj),
+                None,
+                TO_CHAR,
+            );
             if !texts.get(obj.action_description).text.is_empty() {
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     &texts.get(obj.action_description).text,
                     false,
                     Some(ch),
@@ -955,7 +1234,17 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                     TO_ROOM,
                 );
             } else {
-                act(&mut game.descriptors, chars, db,"$n quaffs $p.", true, Some(ch), Some(obj), None, TO_ROOM);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n quaffs $p.",
+                    true,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_ROOM,
+                );
             }
             let ch = chars.get_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
@@ -964,7 +1253,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 let spellnum = obj.get_obj_val(i);
                 let level = obj.get_obj_val(0);
                 if call_magic(
-                    game,chars, db,texts,objs,
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
                     chid,
                     Some(chid),
                     None,
@@ -977,7 +1270,7 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
                 }
             }
 
-            db.extract_obj(chars, objs,oid);
+            db.extract_obj(chars, objs, oid);
         }
         _ => {
             error!(
@@ -998,7 +1291,11 @@ pub fn mag_objectmagic(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB
  */
 #[allow(clippy::too_many_arguments)]
 pub fn cast_spell(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     tch_id: Option<DepotId>,
     tobj_id: Option<DepotId>,
@@ -1016,19 +1313,35 @@ pub fn cast_spell(
     if ch.get_pos() < sinfo.min_position {
         match ch.get_pos() {
             Position::Sleeping => {
-                send_to_char(&mut game.descriptors, ch, "You dream about great magical powers.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You dream about great magical powers.\r\n",
+                );
             }
             Position::Resting => {
-                send_to_char(&mut game.descriptors, ch, "You cannot concentrate while resting.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You cannot concentrate while resting.\r\n",
+                );
             }
             Position::Sitting => {
                 send_to_char(&mut game.descriptors, ch, "You can't do this sitting!\r\n");
             }
             Position::Fighting => {
-                send_to_char(&mut game.descriptors, ch, "Impossible!  You can't concentrate enough!\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Impossible!  You can't concentrate enough!\r\n",
+                );
             }
             _ => {
-                send_to_char(&mut game.descriptors, ch, "You can't do much of anything like this!\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You can't do much of anything like this!\r\n",
+                );
             }
         }
         return 0;
@@ -1037,28 +1350,46 @@ pub fn cast_spell(
         && tch_id.is_some()
         && ch.master.unwrap() == tch_id.unwrap()
     {
-        send_to_char(&mut game.descriptors, ch, "You are afraid you might hurt your master!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You are afraid you might hurt your master!\r\n",
+        );
         return 0;
     }
     if (tch_id.is_none() || chid != tch_id.unwrap()) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
-        send_to_char(&mut game.descriptors, ch, "You can only cast this spell upon yourself!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can only cast this spell upon yourself!\r\n",
+        );
         return 0;
     }
     if tch_id.is_some() && chid == tch_id.unwrap() && is_set!(sinfo.targets, TAR_NOT_SELF) {
-        send_to_char(&mut game.descriptors, ch, "You cannot cast this spell upon yourself!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You cannot cast this spell upon yourself!\r\n",
+        );
         return 0;
     }
     if is_set!(sinfo.routines, MAG_GROUPS) && !ch.aff_flagged(AffectFlags::GROUP) {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             "You can't cast this spell if you're not in a group!\r\n",
         );
         return 0;
     }
     send_to_char(&mut game.descriptors, ch, OK);
-    say_spell(game, chars,db,objs,chid, spellnum, tch_id, tobj_id);
+    say_spell(game, chars, db, objs, chid, spellnum, tch_id, tobj_id);
     let ch = chars.get(chid);
     call_magic(
-        game,chars,db,texts,objs,
+        game,
+        chars,
+        db,
+        texts,
+        objs,
         chid,
         tch_id,
         tobj_id,
@@ -1075,7 +1406,17 @@ pub fn cast_spell(
  * passes control to cast_spell().
  */
 #[allow(clippy::too_many_arguments)]
-pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_cast(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     if ch.is_npc() {
         return;
@@ -1090,7 +1431,9 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     }
     let s = i.next();
     if s.is_none() {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
         );
         return;
@@ -1111,7 +1454,11 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         return;
     }
     if ch.get_skill(spellnum) == 0 {
-        send_to_char(&mut game.descriptors, ch, "You are unfamiliar with that spell.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You are unfamiliar with that spell.\r\n",
+        );
         return;
     }
     let arg;
@@ -1125,81 +1472,106 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
     }
     let mut t = t.unwrap().to_string();
     let mut target = false;
-    let mut tch= None;
-    let mut tobj= None;
+    let mut tch = None;
+    let mut tobj = None;
     if is_set!(sinfo.targets, TAR_IGNORE) {
         target = true;
     } else if !t.is_empty() {
-        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM)
-            && {
-                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_ROOM);
-                tch.is_some()
-            } {
-                target = true;
-            }
-        if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD)
-            && {
-                tch = get_char_vis(&game.descriptors, chars,db,ch, &mut t, None, FindFlags::CHAR_WORLD);
-                tch.is_some()
-            } {
-                target = true;
-            }
+        if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && {
+            tch = get_char_vis(
+                &game.descriptors,
+                chars,
+                db,
+                ch,
+                &mut t,
+                None,
+                FindFlags::CHAR_ROOM,
+            );
+            tch.is_some()
+        } {
+            target = true;
+        }
+        if !target && is_set!(sinfo.targets, TAR_CHAR_WORLD) && {
+            tch = get_char_vis(
+                &game.descriptors,
+                chars,
+                db,
+                ch,
+                &mut t,
+                None,
+                FindFlags::CHAR_WORLD,
+            );
+            tch.is_some()
+        } {
+            target = true;
+        }
 
-        if !target && is_set!(sinfo.targets, TAR_OBJ_INV)
-            && {
-                tobj = get_obj_in_list_vis(&game.descriptors, chars,db,objs,ch, &t, None, &ch.carrying);
-                tobj.is_some()
-            } {
-                target = true;
-            }
+        if !target && is_set!(sinfo.targets, TAR_OBJ_INV) && {
+            tobj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &t,
+                None,
+                &ch.carrying,
+            );
+            tobj.is_some()
+        } {
+            target = true;
+        }
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
-                if ch.get_eq(i).is_some() && isname(&t, objs.get(ch.get_eq(i).unwrap()).name.as_ref()) {
+                if ch.get_eq(i).is_some()
+                    && isname(&t, objs.get(ch.get_eq(i).unwrap()).name.as_ref())
+                {
                     tobj = Some(objs.get(ch.get_eq(i).unwrap()));
                     target = true;
                 }
             }
         }
-        if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM)
-            && {
-                tobj = get_obj_in_list_vis2(&game.descriptors, chars,db,objs,
-                    ch,
-                    &t,
-                    None,
-                    &db.world[ch.in_room as usize]
-                        .contents
-                );
-                tobj.is_some()
-            } {
-                target = true;
-            }
-        if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD)
-            && {
-                tobj = get_obj_vis(&game.descriptors, chars,db,objs,ch, &t, None);
-                tobj.is_some()
-            } {
-                target = true;
-            }
+        if !target && is_set!(sinfo.targets, TAR_OBJ_ROOM) && {
+            tobj = get_obj_in_list_vis2(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &t,
+                None,
+                &db.world[ch.in_room as usize].contents,
+            );
+            tobj.is_some()
+        } {
+            target = true;
+        }
+        if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) && {
+            tobj = get_obj_vis(&game.descriptors, chars, db, objs, ch, &t, None);
+            tobj.is_some()
+        } {
+            target = true;
+        }
     } else {
         /* if target string is empty */
-        if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF)
-            && ch.fighting_id().is_some() {
-                tch = Some(ch);
-                target = true;
-            }
-        if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT)
-            && ch.fighting_id().is_some() {
-                tch = Some(chars.get(ch.fighting_id().unwrap()));
-                target = true;
-            }
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_SELF) && ch.fighting_id().is_some() {
+            tch = Some(ch);
+            target = true;
+        }
+        if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) && ch.fighting_id().is_some() {
+            tch = Some(chars.get(ch.fighting_id().unwrap()));
+            target = true;
+        }
         /* if no target specified, and the spell isn't violent, default to self */
         if !target && is_set!(sinfo.targets, TAR_CHAR_ROOM) && !sinfo.violent {
             tch = Some(ch);
             target = true;
         }
         if !target {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "Upon {} should the spell be cast?\r\n",
                     if is_set!(
@@ -1219,18 +1591,28 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
 
     let tch_id = tch.map(|c| c.id());
     if target && tch.unwrap().id() == chid && sinfo.violent {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             "You shouldn't cast that on yourself -- could be bad for your health!\r\n",
         );
         return;
     }
     if !target {
-        send_to_char(&mut game.descriptors, ch, "Cannot find the target of your spell!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Cannot find the target of your spell!\r\n",
+        );
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
     if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
-        send_to_char(&mut game.descriptors, ch, "You haven't the energy to cast that spell!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You haven't the energy to cast that spell!\r\n",
+        );
         return;
     }
 
@@ -1240,8 +1622,23 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         let ch = chars.get(chid);
         let tch = tch_id.map(|i| chars.get(i));
-        if tch.is_none() || skill_message(&mut game.descriptors, chars, db, objs,0, ch, tch.unwrap(), spellnum) == 0 {
-            send_to_char(&mut game.descriptors, ch, "You lost your concentration!\r\n");
+        if tch.is_none()
+            || skill_message(
+                &mut game.descriptors,
+                chars,
+                db,
+                objs,
+                0,
+                ch,
+                tch.unwrap(),
+                spellnum,
+            ) == 0
+        {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You lost your concentration!\r\n",
+            );
         }
         if mana > 0 {
             let ch = chars.get_mut(chid);
@@ -1249,13 +1646,24 @@ pub fn do_cast(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, texts: 
         }
         let tch = tch_id.map(|i| chars.get(i));
         if sinfo.violent && tch.is_some() && tch.unwrap().is_npc() {
-            game.hit(chars, db, texts, objs,tch_id.unwrap(), chid, TYPE_UNDEFINED);
+            game.hit(
+                chars,
+                db,
+                texts,
+                objs,
+                tch_id.unwrap(),
+                chid,
+                TYPE_UNDEFINED,
+            );
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */
         let tch_id = tch.map(|c| c.id());
         let tobj_id = tobj.map(|o| o.id());
-        if cast_spell(game, chars, db, texts, objs,chid, tch_id, tobj_id, spellnum) != 0 {
+        if cast_spell(
+            game, chars, db, texts, objs, chid, tch_id, tobj_id, spellnum,
+        ) != 0
+        {
             let ch = chars.get_mut(chid);
             ch.set_wait_state(PULSE_VIOLENCE as i32);
             if mana > 0 {
@@ -2188,13 +2596,13 @@ pub fn mag_assign_spells(db: &mut DB) {
      * min level to use the skill for other classes is set up in class.c.
      */
 
-    skillo( db, SKILL_BACKSTAB, "backstab");
-    skillo( db, SKILL_BASH, "bash");
-    skillo( db, SKILL_HIDE, "hide");
-    skillo( db, SKILL_KICK, "kick");
-    skillo( db, SKILL_PICK_LOCK, "pick lock");
-    skillo( db, SKILL_RESCUE, "rescue");
-    skillo( db, SKILL_SNEAK, "sneak");
-    skillo( db, SKILL_STEAL, "steal");
-    skillo( db, SKILL_TRACK, "track");
+    skillo(db, SKILL_BACKSTAB, "backstab");
+    skillo(db, SKILL_BASH, "bash");
+    skillo(db, SKILL_HIDE, "hide");
+    skillo(db, SKILL_KICK, "kick");
+    skillo(db, SKILL_PICK_LOCK, "pick lock");
+    skillo(db, SKILL_RESCUE, "rescue");
+    skillo(db, SKILL_SNEAK, "sneak");
+    skillo(db, SKILL_STEAL, "steal");
+    skillo(db, SKILL_TRACK, "track");
 }

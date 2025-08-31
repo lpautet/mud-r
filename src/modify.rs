@@ -51,17 +51,21 @@ use crate::spells::TOP_SPELL_DEFINE;
 use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::DisplayMode;
-use crate::{send_to_char, CharData, DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH};
+use crate::{
+    send_to_char, CharData, DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH,
+};
 
 impl DescriptorData {
     pub fn string_write(
-        &mut self, chars: &mut Depot<CharData>,
+        &mut self,
+        chars: &mut Depot<CharData>,
         writeto: DepotId,
         len: usize,
         mailto: i64,
     ) {
         if self.character.is_some() && !chars.get(self.character.unwrap()).is_npc() {
-            chars.get_mut(self.character.unwrap())
+            chars
+                .get_mut(self.character.unwrap())
                 .set_plr_flag_bit(PLR_WRITING);
         }
 
@@ -72,14 +76,21 @@ impl DescriptorData {
 }
 
 /* Add user input to the 'current' string (as defined by d->str) */
-pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, d_id: DepotId, str_: &str) {
+pub fn string_add(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    d_id: DepotId,
+    str_: &str,
+) {
     /* determine if this is the terminal string, and truncate if so */
     /* changed to only accept '@' at the beginning of line - J. Elson 1/17/94 */
 
     let mut str_ = str_.to_string();
     delete_doubledollar(&mut str_);
     let t = str_.chars().next();
-    let t = t.unwrap_or(  '\0' );
+    let t = t.unwrap_or('\0');
     let mut terminator = false;
     if t == '@' {
         terminator = true;
@@ -93,7 +104,11 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
             let chid = game.desc_mut(d_id).character.unwrap();
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "String too long - Truncated.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "String too long - Truncated.\r\n",
+            );
             str_.truncate(game.desc_mut(d_id).max_str - 3);
             str_.push_str("\r\n");
             *text = str_;
@@ -104,7 +119,11 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
     } else if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
         let chid = game.desc_mut(d_id).character.unwrap();
         let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, ch, "String too long.  Last line skipped.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "String too long.  Last line skipped.\r\n",
+        );
         terminator = true;
     } else {
         text.push_str(str_.as_str());
@@ -112,19 +131,17 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
 
     let desc = game.desc_mut(d_id);
     if terminator {
-        if desc.state() == ConPlaying && chars.get(desc.character.unwrap()).plr_flagged(PLR_MAILING) {
+        if desc.state() == ConPlaying && chars.get(desc.character.unwrap()).plr_flagged(PLR_MAILING)
+        {
             let mail_to = desc.mail_to;
             let from = chars.get(desc.character.unwrap()).get_idnum();
-            db.store_mail(
-                mail_to,
-                from,
-                text,
-            );
+            db.store_mail(mail_to, from, text);
             desc.mail_to = 0;
             desc.str = None;
             desc.write_to_output("Message sent!\r\n");
             if !chars.get(desc.character.unwrap()).is_npc() {
-                chars.get_mut(desc.character.unwrap())
+                chars
+                    .get_mut(desc.character.unwrap())
                     .remove_plr_flag(PLR_MAILING | PLR_WRITING);
             }
         }
@@ -144,7 +161,8 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
             && game.desc(d_id).character.is_some()
             && !chars.get(game.desc(d_id).character.unwrap()).is_npc()
         {
-            chars.get_mut(game.desc(d_id).character.unwrap())
+            chars
+                .get_mut(game.desc(d_id).character.unwrap())
                 .remove_plr_flag(PLR_WRITING);
         }
     } else {
@@ -158,7 +176,10 @@ pub fn string_add(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, tex
 #[allow(clippy::too_many_arguments)]
 pub fn do_skillset(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -172,7 +193,8 @@ pub fn do_skillset(
 
     if name.is_empty() {
         /* no arguments. print an informative text */
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "Syntax: skillset <name> '<skill>' <value>\r\n\
 Skill being one of the following:\r\n",
@@ -183,7 +205,11 @@ Skill being one of the following:\r\n",
                 /* This is valid. */
                 continue;
             }
-            send_to_char(&mut game.descriptors, ch, format!("{:18}", db.spell_info[i].name).as_str());
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!("{:18}", db.spell_info[i].name).as_str(),
+            );
             qend += 1;
             if qend % 4 == 3 {
                 send_to_char(&mut game.descriptors, ch, "\r\n");
@@ -195,7 +221,15 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict = get_char_vis(&game.descriptors, chars,db, ch, &mut name, None, FindFlags::CHAR_WORLD);
+    let vict = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut name,
+        None,
+        FindFlags::CHAR_WORLD,
+    );
     if vict.is_none() {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
         return;
@@ -210,7 +244,11 @@ Skill being one of the following:\r\n",
         return;
     }
     if !argument.starts_with('\'') {
-        send_to_char(&mut game.descriptors, ch, "Skill must be enclosed in: ''\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Skill must be enclosed in: ''\r\n",
+        );
         return;
     }
     /* Locate the last quote and lowercase the magic words (if any) */
@@ -227,7 +265,11 @@ Skill being one of the following:\r\n",
     }
 
     if &argument[qend..qend] != "\'" {
-        send_to_char(&mut game.descriptors, ch, "Skill must be enclosed in: ''\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Skill must be enclosed in: ''\r\n",
+        );
         return;
     }
     let help = argument.to_lowercase();
@@ -253,11 +295,19 @@ Skill being one of the following:\r\n",
 
     let value = value.unwrap();
     if value < 0 {
-        send_to_char(&mut game.descriptors, ch, "Minimum value for learned is 0.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Minimum value for learned is 0.\r\n",
+        );
         return;
     }
     if value > 100 {
-        send_to_char(&mut game.descriptors, ch, "Max value for learned is 100.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Max value for learned is 100.\r\n",
+        );
         return;
     }
     if vict.is_npc() {
@@ -272,7 +322,8 @@ Skill being one of the following:\r\n",
     let vict = chars.get_mut(vict_id);
     vict.set_skill(skill, value);
     let vict = chars.get(vict_id);
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Brief,
         LVL_IMMORT as i32,
         true,
@@ -287,7 +338,8 @@ Skill being one of the following:\r\n",
     );
     let vict = chars.get(vict_id);
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, 
+    send_to_char(
+        &mut game.descriptors,
         ch,
         format!(
             "You change {}'s {} to {}.\r\n",
@@ -379,7 +431,7 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
     let mut s = msg;
     for _ in 1..d.showstr_count {
         let r = next_page(s);
-        if let Some(r) = r  {
+        if let Some(r) = r {
             d.showstr_vector.push(Rc::from(r));
             s = r;
         } else {
@@ -392,7 +444,13 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
 }
 
 /* The call that gets the paging ball rolling... */
-pub fn page_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>,d_id: DepotId, msg: &str, keep_internal: bool) {
+pub fn page_string(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    d_id: DepotId,
+    msg: &str,
+    keep_internal: bool,
+) {
     if msg.is_empty() {
         return;
     }
@@ -411,11 +469,16 @@ pub fn page_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>,d_
     }
 
     let actbuf = "";
-    show_string(descs,  chars, d_id, actbuf);
+    show_string(descs, chars, d_id, actbuf);
 }
 
 /* The call that displays the next page. */
-pub fn show_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, d_id: DepotId, input: &str) {
+pub fn show_string(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    d_id: DepotId,
+    input: &str,
+) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
 
@@ -447,7 +510,8 @@ pub fn show_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, d
             if nr.is_err() {
                 let chid = descs.get_mut(d_id).character.unwrap();
                 let ch = chars.get(chid);
-                send_to_char(descs, 
+                send_to_char(
+                    descs,
                     ch,
                     "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
                 );
@@ -458,7 +522,8 @@ pub fn show_string(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, d
             );
         } else if !buf.is_empty() {
             let to_char_id = descs.get_mut(d_id).character.unwrap();
-            send_to_char(descs, 
+            send_to_char(
+                descs,
                 chars.get(to_char_id),
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );

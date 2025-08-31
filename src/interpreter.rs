@@ -3267,7 +3267,7 @@ pub fn two_arguments<'a>(
     first_arg: &mut String,
     second_arg: &mut String,
 ) -> &'a str {
-    one_argument(one_argument(argument, first_arg), second_arg)/* :-) */
+    one_argument(one_argument(argument, first_arg), second_arg) /* :-) */
 }
 
 /*
@@ -3365,20 +3365,20 @@ pub fn special(
         let k = chars.get(k_id);
         if !k.mob_flagged(MOB_NOTDEADYET)
             && db.get_mob_spec(k).is_some()
-                && db.get_mob_spec(k).as_ref().unwrap()(
-                    game,
-                    chars,
-                    db,
-                    texts,
-                    objs,
-                    chid,
-                    MeRef::Char(k_id),
-                    cmd,
-                    arg,
-                )
-            {
-                return true;
-            }
+            && db.get_mob_spec(k).as_ref().unwrap()(
+                game,
+                chars,
+                db,
+                texts,
+                objs,
+                chid,
+                MeRef::Char(k_id),
+                cmd,
+                arg,
+            )
+        {
+            return true;
+        }
     }
     let ch = chars.get(chid);
     for i in db.world[ch.in_room() as usize].contents.clone() {
@@ -3428,7 +3428,7 @@ fn perform_dupe_check(
 ) -> bool {
     let mut target_id = None;
     let mut mode = 0;
-    
+
     let id: i64 = chars.get(game.desc(d_id).character.unwrap()).get_idnum();
 
     /*
@@ -4332,8 +4332,7 @@ pub fn nanny(
         ConClose => {}
 
         _ => {
-            let char_name=
-            if desc.character.is_some() {
+            let char_name = if desc.character.is_some() {
                 let character_id = desc.character.unwrap();
                 let character = chars.get(character_id);
                 String::from(character.get_name().as_ref())

@@ -95,10 +95,9 @@ impl Game {
             SkyCondition::Cloudless => {
                 if db.weather_info.pressure < 990 {
                     change = 1;
-                } else if db.weather_info.pressure < 1010
-                    && dice(1, 4) == 1 {
-                        change = 1;
-                    }
+                } else if db.weather_info.pressure < 1010 && dice(1, 4) == 1 {
+                    change = 1;
+                }
             }
             SkyCondition::Cloudy => {
                 if db.weather_info.pressure < 970 {
@@ -109,10 +108,9 @@ impl Game {
                     } else {
                         change = 0;
                     }
-                } else if db.weather_info.pressure > 1030
-                    && dice(1, 4) == 1 {
-                        change = 3;
-                    }
+                } else if db.weather_info.pressure > 1030 && dice(1, 4) == 1 {
+                    change = 3;
+                }
             }
             SkyCondition::Raining => {
                 if db.weather_info.pressure < 970 {
@@ -123,18 +121,16 @@ impl Game {
                     }
                 } else if db.weather_info.pressure > 1030 {
                     change = 5;
-                } else if db.weather_info.pressure > 1010
-                    && dice(1, 4) == 1 {
-                        change = 5;
-                    }
+                } else if db.weather_info.pressure > 1010 && dice(1, 4) == 1 {
+                    change = 5;
+                }
             }
             SkyCondition::Lightning => {
                 if db.weather_info.pressure > 1010 {
                     change = 6;
-                } else if db.weather_info.pressure > 990
-                    && dice(1, 4) == 1 {
-                        change = 6;
-                    }
+                } else if db.weather_info.pressure > 990 && dice(1, 4) == 1 {
+                    change = 6;
+                }
             }
         }
 

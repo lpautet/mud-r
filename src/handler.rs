@@ -827,13 +827,9 @@ pub(crate) fn obj_from_obj(chars: &mut Depot<CharData>, objs: &mut Depot<ObjData
 }
 
 /* Set all carried_by to point to new owner */
-pub fn object_list_new_owner(
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-    chid: Option<DepotId>,
-) {
+pub fn object_list_new_owner(objs: &mut Depot<ObjData>, oid: DepotId, chid: Option<DepotId>) {
     for o in objs.get(oid).contains.clone() {
-        object_list_new_owner( objs, o, chid);
+        object_list_new_owner(objs, o, chid);
         objs.get_mut(oid).carried_by = chid;
     }
 }

@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 /*
@@ -44,7 +44,8 @@ use crate::spells::{
     SPELL_STRENGTH, SPELL_SUMMON, SPELL_WORD_OF_RECALL,
 };
 use crate::structs::{
-    CharData, Class, ExtraFlags, GuildInfoType, ObjData, PrefFlags, DRUNK, FULL, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST
+    CharData, Class, ExtraFlags, GuildInfoType, ObjData, PrefFlags, DRUNK, FULL, LVL_GOD,
+    LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST,
 };
 use crate::util::{rand_number, DisplayMode};
 use crate::{check_player_special, save_char, set_skill, Game, TextData};
@@ -3463,7 +3464,7 @@ pub fn roll_real_abils(ch: &mut CharData) {
 
         for row in table.iter_mut() {
             if *row < temp {
-                std::mem::swap(&mut temp,  row);
+                std::mem::swap(&mut temp, row);
             }
         }
     }
@@ -3512,7 +3513,14 @@ pub fn roll_real_abils(ch: &mut CharData) {
 }
 
 /* Some initializations for characters, including initial skills */
-pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId) {
+pub fn do_start(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
     let ch = chars.get_mut(chid);
     ch.set_level(1);
     ch.set_exp(1);
@@ -3544,7 +3552,8 @@ pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts
 
     advance_level(chid, game, chars, db, texts, objs);
     let ch = chars.get(chid);
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Brief,
         max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
         true,
@@ -3568,7 +3577,14 @@ pub fn do_start(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts
  * This function controls the change to maxmove, maxmana, and maxhp for
  * each class every time they gain a level.
  */
-pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>) {
+pub fn advance_level(
+    chid: DepotId,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
     let ch = chars.get_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;
     let mut add_mana = 0;
@@ -3635,19 +3651,19 @@ pub fn advance_level(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>
  */
 pub fn backstab_mult(level: u8) -> i32 {
     if level == 0 {
-        1/* level 0 */
+        1 /* level 0 */
     } else if level <= 7 {
-        2/* level 1 - 7 */
+        2 /* level 1 - 7 */
     } else if level <= 13 {
-        3/* level 8 - 13 */
+        3 /* level 8 - 13 */
     } else if level <= 20 {
-        4/* level 14 - 20 */
+        4 /* level 14 - 20 */
     } else if level <= 28 {
-        5/* level 21 - 28 */
+        5 /* level 21 - 28 */
     } else if level < LVL_IMMORT as u8 {
-        6/* all remaining mortal levels */
+        6 /* all remaining mortal levels */
     } else {
-        20/* immortals */
+        20 /* immortals */
     }
 }
 
@@ -3681,74 +3697,74 @@ pub fn invalid_class(ch: &CharData, obj: &ObjData) -> bool {
  */
 pub fn init_spell_levels(db: &mut DB) {
     /* MAGES */
-    spell_level( db, SPELL_MAGIC_MISSILE, Class::MagicUser, 1);
-    spell_level( db, SPELL_DETECT_INVIS, Class::MagicUser, 2);
-    spell_level( db, SPELL_DETECT_MAGIC, Class::MagicUser, 2);
-    spell_level( db, SPELL_CHILL_TOUCH, Class::MagicUser, 3);
-    spell_level( db, SPELL_INFRAVISION, Class::MagicUser, 3);
-    spell_level( db, SPELL_INVISIBLE, Class::MagicUser, 4);
-    spell_level( db, SPELL_ARMOR, Class::MagicUser, 4);
-    spell_level( db, SPELL_BURNING_HANDS, Class::MagicUser, 5);
-    spell_level( db, SPELL_LOCATE_OBJECT, Class::MagicUser, 6);
-    spell_level( db, SPELL_STRENGTH, Class::MagicUser, 6);
-    spell_level( db, SPELL_SHOCKING_GRASP, Class::MagicUser, 7);
-    spell_level( db, SPELL_SLEEP, Class::MagicUser, 8);
-    spell_level( db, SPELL_LIGHTNING_BOLT, Class::MagicUser, 9);
-    spell_level( db, SPELL_BLINDNESS, Class::MagicUser, 9);
-    spell_level( db, SPELL_DETECT_POISON, Class::MagicUser, 10);
-    spell_level( db, SPELL_COLOR_SPRAY, Class::MagicUser, 11);
-    spell_level( db, SPELL_ENERGY_DRAIN, Class::MagicUser, 13);
-    spell_level( db, SPELL_CURSE, Class::MagicUser, 14);
-    spell_level( db, SPELL_POISON, Class::MagicUser, 14);
-    spell_level( db, SPELL_FIREBALL, Class::MagicUser, 15);
-    spell_level( db, SPELL_CHARM, Class::MagicUser, 16);
-    spell_level( db, SPELL_ENCHANT_WEAPON, Class::MagicUser, 26);
-    spell_level( db, SPELL_CLONE, Class::MagicUser, 30);
+    spell_level(db, SPELL_MAGIC_MISSILE, Class::MagicUser, 1);
+    spell_level(db, SPELL_DETECT_INVIS, Class::MagicUser, 2);
+    spell_level(db, SPELL_DETECT_MAGIC, Class::MagicUser, 2);
+    spell_level(db, SPELL_CHILL_TOUCH, Class::MagicUser, 3);
+    spell_level(db, SPELL_INFRAVISION, Class::MagicUser, 3);
+    spell_level(db, SPELL_INVISIBLE, Class::MagicUser, 4);
+    spell_level(db, SPELL_ARMOR, Class::MagicUser, 4);
+    spell_level(db, SPELL_BURNING_HANDS, Class::MagicUser, 5);
+    spell_level(db, SPELL_LOCATE_OBJECT, Class::MagicUser, 6);
+    spell_level(db, SPELL_STRENGTH, Class::MagicUser, 6);
+    spell_level(db, SPELL_SHOCKING_GRASP, Class::MagicUser, 7);
+    spell_level(db, SPELL_SLEEP, Class::MagicUser, 8);
+    spell_level(db, SPELL_LIGHTNING_BOLT, Class::MagicUser, 9);
+    spell_level(db, SPELL_BLINDNESS, Class::MagicUser, 9);
+    spell_level(db, SPELL_DETECT_POISON, Class::MagicUser, 10);
+    spell_level(db, SPELL_COLOR_SPRAY, Class::MagicUser, 11);
+    spell_level(db, SPELL_ENERGY_DRAIN, Class::MagicUser, 13);
+    spell_level(db, SPELL_CURSE, Class::MagicUser, 14);
+    spell_level(db, SPELL_POISON, Class::MagicUser, 14);
+    spell_level(db, SPELL_FIREBALL, Class::MagicUser, 15);
+    spell_level(db, SPELL_CHARM, Class::MagicUser, 16);
+    spell_level(db, SPELL_ENCHANT_WEAPON, Class::MagicUser, 26);
+    spell_level(db, SPELL_CLONE, Class::MagicUser, 30);
 
     /* CLERICS */
-    spell_level( db, SPELL_CURE_LIGHT, Class::Cleric, 1);
-    spell_level( db, SPELL_ARMOR, Class::Cleric, 1);
-    spell_level( db, SPELL_CREATE_FOOD, Class::Cleric, 2);
-    spell_level( db, SPELL_CREATE_WATER, Class::Cleric, 2);
-    spell_level( db, SPELL_DETECT_POISON, Class::Cleric, 3);
-    spell_level( db, SPELL_DETECT_ALIGN, Class::Cleric, 4);
-    spell_level( db, SPELL_CURE_BLIND, Class::Cleric, 4);
-    spell_level( db, SPELL_BLESS, Class::Cleric, 5);
-    spell_level( db, SPELL_DETECT_INVIS, Class::Cleric, 6);
-    spell_level( db, SPELL_BLINDNESS, Class::Cleric, 6);
-    spell_level( db, SPELL_INFRAVISION, Class::Cleric, 7);
-    spell_level( db, SPELL_PROT_FROM_EVIL, Class::Cleric, 8);
-    spell_level( db, SPELL_POISON, Class::Cleric, 8);
-    spell_level( db, SPELL_GROUP_ARMOR, Class::Cleric, 9);
-    spell_level( db, SPELL_CURE_CRITIC, Class::Cleric, 9);
-    spell_level( db, SPELL_SUMMON, Class::Cleric, 10);
-    spell_level( db, SPELL_REMOVE_POISON, Class::Cleric, 10);
-    spell_level( db, SPELL_WORD_OF_RECALL, Class::Cleric, 12);
-    spell_level( db, SPELL_EARTHQUAKE, Class::Cleric, 12);
-    spell_level( db, SPELL_DISPEL_EVIL, Class::Cleric, 14);
-    spell_level( db, SPELL_DISPEL_GOOD, Class::Cleric, 14);
-    spell_level( db, SPELL_SANCTUARY, Class::Cleric, 15);
-    spell_level( db, SPELL_CALL_LIGHTNING, Class::Cleric, 15);
-    spell_level( db, SPELL_HEAL, Class::Cleric, 16);
-    spell_level( db, SPELL_CONTROL_WEATHER, Class::Cleric, 17);
-    spell_level( db, SPELL_SENSE_LIFE, Class::Cleric, 18);
-    spell_level( db, SPELL_HARM, Class::Cleric, 19);
-    spell_level( db, SPELL_GROUP_HEAL, Class::Cleric, 22);
-    spell_level( db, SPELL_REMOVE_CURSE, Class::Cleric, 26);
+    spell_level(db, SPELL_CURE_LIGHT, Class::Cleric, 1);
+    spell_level(db, SPELL_ARMOR, Class::Cleric, 1);
+    spell_level(db, SPELL_CREATE_FOOD, Class::Cleric, 2);
+    spell_level(db, SPELL_CREATE_WATER, Class::Cleric, 2);
+    spell_level(db, SPELL_DETECT_POISON, Class::Cleric, 3);
+    spell_level(db, SPELL_DETECT_ALIGN, Class::Cleric, 4);
+    spell_level(db, SPELL_CURE_BLIND, Class::Cleric, 4);
+    spell_level(db, SPELL_BLESS, Class::Cleric, 5);
+    spell_level(db, SPELL_DETECT_INVIS, Class::Cleric, 6);
+    spell_level(db, SPELL_BLINDNESS, Class::Cleric, 6);
+    spell_level(db, SPELL_INFRAVISION, Class::Cleric, 7);
+    spell_level(db, SPELL_PROT_FROM_EVIL, Class::Cleric, 8);
+    spell_level(db, SPELL_POISON, Class::Cleric, 8);
+    spell_level(db, SPELL_GROUP_ARMOR, Class::Cleric, 9);
+    spell_level(db, SPELL_CURE_CRITIC, Class::Cleric, 9);
+    spell_level(db, SPELL_SUMMON, Class::Cleric, 10);
+    spell_level(db, SPELL_REMOVE_POISON, Class::Cleric, 10);
+    spell_level(db, SPELL_WORD_OF_RECALL, Class::Cleric, 12);
+    spell_level(db, SPELL_EARTHQUAKE, Class::Cleric, 12);
+    spell_level(db, SPELL_DISPEL_EVIL, Class::Cleric, 14);
+    spell_level(db, SPELL_DISPEL_GOOD, Class::Cleric, 14);
+    spell_level(db, SPELL_SANCTUARY, Class::Cleric, 15);
+    spell_level(db, SPELL_CALL_LIGHTNING, Class::Cleric, 15);
+    spell_level(db, SPELL_HEAL, Class::Cleric, 16);
+    spell_level(db, SPELL_CONTROL_WEATHER, Class::Cleric, 17);
+    spell_level(db, SPELL_SENSE_LIFE, Class::Cleric, 18);
+    spell_level(db, SPELL_HARM, Class::Cleric, 19);
+    spell_level(db, SPELL_GROUP_HEAL, Class::Cleric, 22);
+    spell_level(db, SPELL_REMOVE_CURSE, Class::Cleric, 26);
 
     /* THIEVES */
-    spell_level( db, SKILL_SNEAK, Class::Thief, 1);
-    spell_level( db, SKILL_PICK_LOCK, Class::Thief, 2);
-    spell_level( db, SKILL_BACKSTAB, Class::Thief, 3);
-    spell_level( db, SKILL_STEAL, Class::Thief, 4);
-    spell_level( db, SKILL_HIDE, Class::Thief, 5);
-    spell_level( db, SKILL_TRACK, Class::Thief, 6);
+    spell_level(db, SKILL_SNEAK, Class::Thief, 1);
+    spell_level(db, SKILL_PICK_LOCK, Class::Thief, 2);
+    spell_level(db, SKILL_BACKSTAB, Class::Thief, 3);
+    spell_level(db, SKILL_STEAL, Class::Thief, 4);
+    spell_level(db, SKILL_HIDE, Class::Thief, 5);
+    spell_level(db, SKILL_TRACK, Class::Thief, 6);
 
     /* WARRIORS */
-    spell_level( db, SKILL_KICK, Class::Warrior, 1);
-    spell_level( db, SKILL_RESCUE, Class::Warrior, 3);
-    spell_level( db, SKILL_TRACK, Class::Warrior, 9);
-    spell_level( db, SKILL_BASH, Class::Warrior, 12);
+    spell_level(db, SKILL_KICK, Class::Warrior, 1);
+    spell_level(db, SKILL_RESCUE, Class::Warrior, 3);
+    spell_level(db, SKILL_TRACK, Class::Warrior, 9);
+    spell_level(db, SKILL_BASH, Class::Warrior, 12);
 }
 
 /*
@@ -4353,340 +4369,128 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
 
     match chclass {
         Class::MagicUser => match level as i16 {
-            1 => {
-                "the Apprentice of Magic"
-            }
-            2 => {
-                "the Spell Student"
-            }
-            3 => {
-                "the Scholar of Magic"
-            }
-            4 => {
-                "the Delveress in Spells"
-            }
-            5 => {
-                "the Medium of Magic"
-            }
-            6 => {
-                "the Scribess of Magic"
-            }
-            7 => {
-                "the Seeress"
-            }
-            8 => {
-                "the Sage"
-            }
-            9 => {
-                "the Illusionist"
-            }
-            10 => {
-                "the Abjuress"
-            }
-            11 => {
-                "the Invoker"
-            }
-            12 => {
-                "the Enchantress"
-            }
-            13 => {
-                "the Conjuress"
-            }
-            14 => {
-                "the Witch"
-            }
-            15 => {
-                "the Creator"
-            }
-            16 => {
-                "the Savant"
-            }
-            17 => {
-                "the Craftess"
-            }
-            18 => {
-                "the Wizard"
-            }
-            19 => {
-                "the War Witch"
-            }
-            20 => {
-                "the Sorceress"
-            }
-            21 => {
-                "the Necromancress"
-            }
-            22 => {
-                "the Thaumaturgess"
-            }
-            23 => {
-                "the Student of the Occult"
-            }
-            24 => {
-                "the Disciple of the Uncanny"
-            }
-            25 => {
-                "the minor Elementress"
-            }
-            26 => {
-                "the Greater Elementress"
-            }
-            27 => {
-                "the Crafter of Magics"
-            }
-            28 => {
-                "Shaman"
-            }
-            29 => {
-                "the Keeper of Talismans"
-            }
-            30 => {
-                "Archwitch"
-            }
-            LVL_IMMORT => {
-                "the Immortal Enchantress"
-            }
-            LVL_GOD => {
-                "the Empress of Magic"
-            }
-            LVL_GRGOD => {
-                "the Goddess of Magic"
-            }
-            _ => {
-                "the Witch"
-            }
+            1 => "the Apprentice of Magic",
+            2 => "the Spell Student",
+            3 => "the Scholar of Magic",
+            4 => "the Delveress in Spells",
+            5 => "the Medium of Magic",
+            6 => "the Scribess of Magic",
+            7 => "the Seeress",
+            8 => "the Sage",
+            9 => "the Illusionist",
+            10 => "the Abjuress",
+            11 => "the Invoker",
+            12 => "the Enchantress",
+            13 => "the Conjuress",
+            14 => "the Witch",
+            15 => "the Creator",
+            16 => "the Savant",
+            17 => "the Craftess",
+            18 => "the Wizard",
+            19 => "the War Witch",
+            20 => "the Sorceress",
+            21 => "the Necromancress",
+            22 => "the Thaumaturgess",
+            23 => "the Student of the Occult",
+            24 => "the Disciple of the Uncanny",
+            25 => "the minor Elementress",
+            26 => "the Greater Elementress",
+            27 => "the Crafter of Magics",
+            28 => "Shaman",
+            29 => "the Keeper of Talismans",
+            30 => "Archwitch",
+            LVL_IMMORT => "the Immortal Enchantress",
+            LVL_GOD => "the Empress of Magic",
+            LVL_GRGOD => "the Goddess of Magic",
+            _ => "the Witch",
         },
 
         Class::Cleric => {
             match level as i16 {
-                1 => {
-                    "the Believer"
-                }
-                2 => {
-                    "the Attendant"
-                }
-                3 => {
-                    "the Acolyte"
-                }
-                4 => {
-                    "the Novice"
-                }
-                5 => {
-                    "the Missionary"
-                }
-                6 => {
-                    "the Adept"
-                }
-                7 => {
-                    "the Deaconess"
-                }
-                8 => {
-                    "the Vicaress"
-                }
-                9 => {
-                    "the Priestess"
-                }
-                10 => {
-                    "the Lady minister"
-                }
-                11 => {
-                    "the Canon"
-                }
-                12 => {
-                    "the Levitess"
-                }
-                13 => {
-                    "the Curess"
-                }
-                14 => {
-                    "the Nunne"
-                }
-                15 => {
-                    "the Healess"
-                }
-                16 => {
-                    "the Chaplain"
-                }
-                17 => {
-                    "the Expositress"
-                }
-                18 => {
-                    "the Bishop"
-                }
-                19 => {
-                    "the Arch Lady of the Church"
-                }
-                20 => {
-                    "the Matriarch"
-                }
+                1 => "the Believer",
+                2 => "the Attendant",
+                3 => "the Acolyte",
+                4 => "the Novice",
+                5 => "the Missionary",
+                6 => "the Adept",
+                7 => "the Deaconess",
+                8 => "the Vicaress",
+                9 => "the Priestess",
+                10 => "the Lady minister",
+                11 => "the Canon",
+                12 => "the Levitess",
+                13 => "the Curess",
+                14 => "the Nunne",
+                15 => "the Healess",
+                16 => "the Chaplain",
+                17 => "the Expositress",
+                18 => "the Bishop",
+                19 => "the Arch Lady of the Church",
+                20 => "the Matriarch",
                 /* no one ever thought up these titles 21-30 */
-                LVL_IMMORT => {
-                    "the Immortal Priestess"
-                }
-                LVL_GOD => {
-                    "the Inquisitress"
-                }
-                LVL_GRGOD => {
-                    "the Goddess of good and evil"
-                }
-                _ => {
-                    "the Cleric"
-                }
+                LVL_IMMORT => "the Immortal Priestess",
+                LVL_GOD => "the Inquisitress",
+                LVL_GRGOD => "the Goddess of good and evil",
+                _ => "the Cleric",
             }
         }
         Class::Thief => {
             match level as i16 {
-                1 => {
-                    "the Pilferess"
-                }
-                2 => {
-                    "the Footpad"
-                }
-                3 => {
-                    "the Filcheress"
-                }
-                4 => {
-                    "the Pick-Pocket"
-                }
-                5 => {
-                    "the Sneak"
-                }
-                6 => {
-                    "the Pincheress"
-                }
-                7 => {
-                    "the Cut-Purse"
-                }
-                8 => {
-                    "the Snatcheress"
-                }
-                9 => {
-                    "the Sharpress"
-                }
-                10 => {
-                    "the Rogue"
-                }
-                11 => {
-                    "the Robber"
-                }
-                12 => {
-                    "the Magswoman"
-                }
-                13 => {
-                    "the Highwaywoman"
-                }
-                14 => {
-                    "the Burglaress"
-                }
-                15 => {
-                    "the Thief"
-                }
-                16 => {
-                    "the Knifer"
-                }
-                17 => {
-                    "the Quick-Blade"
-                }
-                18 => {
-                    "the Murderess"
-                }
-                19 => {
-                    "the Brigand"
-                }
-                20 => {
-                    "the Cut-Throat"
-                }
+                1 => "the Pilferess",
+                2 => "the Footpad",
+                3 => "the Filcheress",
+                4 => "the Pick-Pocket",
+                5 => "the Sneak",
+                6 => "the Pincheress",
+                7 => "the Cut-Purse",
+                8 => "the Snatcheress",
+                9 => "the Sharpress",
+                10 => "the Rogue",
+                11 => "the Robber",
+                12 => "the Magswoman",
+                13 => "the Highwaywoman",
+                14 => "the Burglaress",
+                15 => "the Thief",
+                16 => "the Knifer",
+                17 => "the Quick-Blade",
+                18 => "the Murderess",
+                19 => "the Brigand",
+                20 => "the Cut-Throat",
                 /* no one ever thought up these titles 21-30 */
-                LVL_IMMORT => {
-                    "the Immortal Assasin"
-                }
-                LVL_GOD => {
-                    "the Demi Goddess of thieves"
-                }
-                LVL_GRGOD => {
-                    "the Goddess of thieves and tradesmen"
-                }
-                _ => {
-                    "the Thief"
-                }
+                LVL_IMMORT => "the Immortal Assasin",
+                LVL_GOD => "the Demi Goddess of thieves",
+                LVL_GRGOD => "the Goddess of thieves and tradesmen",
+                _ => "the Thief",
             }
         }
 
         Class::Warrior => {
             match level as i16 {
-                1 => {
-                    "the Swordpupil"
-                }
-                2 => {
-                    "the Recruit"
-                }
-                3 => {
-                    "the Sentress"
-                }
-                4 => {
-                    "the Fighter"
-                }
-                5 => {
-                    "the Soldier"
-                }
-                6 => {
-                    "the Warrior"
-                }
-                7 => {
-                    "the Veteran"
-                }
-                8 => {
-                    "the Swordswoman"
-                }
-                9 => {
-                    "the Fenceress"
-                }
-                10 => {
-                    "the Combatess"
-                }
-                11 => {
-                    "the Heroine"
-                }
-                12 => {
-                    "the Myrmidon"
-                }
-                13 => {
-                    "the Swashbuckleress"
-                }
-                14 => {
-                    "the Mercenaress"
-                }
-                15 => {
-                    "the Swordmistress"
-                }
-                16 => {
-                    "the Lieutenant"
-                }
-                17 => {
-                    "the Lady Champion"
-                }
-                18 => {
-                    "the Lady Dragoon"
-                }
-                19 => {
-                    "the Cavalier"
-                }
-                20 => {
-                    "the Lady Knight"
-                }
+                1 => "the Swordpupil",
+                2 => "the Recruit",
+                3 => "the Sentress",
+                4 => "the Fighter",
+                5 => "the Soldier",
+                6 => "the Warrior",
+                7 => "the Veteran",
+                8 => "the Swordswoman",
+                9 => "the Fenceress",
+                10 => "the Combatess",
+                11 => "the Heroine",
+                12 => "the Myrmidon",
+                13 => "the Swashbuckleress",
+                14 => "the Mercenaress",
+                15 => "the Swordmistress",
+                16 => "the Lieutenant",
+                17 => "the Lady Champion",
+                18 => "the Lady Dragoon",
+                19 => "the Cavalier",
+                20 => "the Lady Knight",
                 /* no one ever thought up these titles 21-30 */
-                LVL_IMMORT => {
-                    "the Immortal Lady of War"
-                }
-                LVL_GOD => {
-                    "the Queen of Destruction"
-                }
-                LVL_GRGOD => {
-                    "the Goddess of war"
-                }
-                _ => {
-                    "the Warrior"
-                }
+                LVL_IMMORT => "the Immortal Lady of War",
+                LVL_GOD => "the Queen of Destruction",
+                LVL_GRGOD => "the Goddess of war",
+                _ => "the Warrior",
             }
         }
         _ => {

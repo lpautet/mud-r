@@ -1389,17 +1389,15 @@ impl DB {
             process::exit(1);
         }
         self.r_immort_start_room = self.real_room(IMMORT_START_ROOM);
-        if self.r_immort_start_room == NOWHERE
-            && !self.mini_mud {
-                error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
-                self.r_immort_start_room = self.r_mortal_start_room;
-            }
+        if self.r_immort_start_room == NOWHERE && !self.mini_mud {
+            error!("SYSERR:  Warning: Immort start room does not exist.  Change in config.c.");
+            self.r_immort_start_room = self.r_mortal_start_room;
+        }
         self.r_frozen_start_room = self.real_room(FROZEN_START_ROOM);
-        if self.r_frozen_start_room == NOWHERE
-            && !self.mini_mud {
-                error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
-                self.r_frozen_start_room = self.r_mortal_start_room;
-            }
+        if self.r_frozen_start_room == NOWHERE && !self.mini_mud {
+            error!("SYSERR:  Warning: Frozen start room does not exist.  Change in config.c.");
+            self.r_frozen_start_room = self.r_mortal_start_room;
+        }
     }
 
     /* resolve all vnums into rnums in the world */
@@ -1691,7 +1689,7 @@ fn parse_espec(buf: &str, mobch: &mut CharData, nr: i32) {
     let mut buf = buf;
     let mut ptr = "";
     let p = buf.find(':');
-    if let Some(p) =p {
+    if let Some(p) = p {
         ptr = &buf[p + 1..];
         buf = &buf[0..p];
         ptr = ptr.trim_start();
@@ -1999,9 +1997,10 @@ impl DB {
 
         /* check to make sure that weight of containers exceeds curr. quantity */
         if (obj.get_obj_type() == ItemType::Drinkcon || obj.get_obj_type() == ItemType::Fountain)
-            && obj.get_obj_weight() < obj.get_obj_val(1) {
-                obj.set_obj_weight(obj.get_obj_val(1) + 5);
-            }
+            && obj.get_obj_weight() < obj.get_obj_val(1)
+        {
+            obj.set_obj_weight(obj.get_obj_val(1) + 5);
+        }
 
         /* *** extra descriptions and affect fields *** */
         for j in 0..MAX_OBJ_AFFECT {
@@ -2209,7 +2208,7 @@ impl DB {
                     zcmd.arg2 = f[3].parse::<i32>().unwrap();
                     zcmd.arg3 = f[4].parse::<i32>().unwrap();
                 } else {
-                    error = 1;                 
+                    error = 1;
                 }
             }
 
@@ -2888,8 +2887,7 @@ fn is_empty(game: &Game, db: &DB, chars: &Depot<CharData>, zone_nr: ZoneRnum) ->
 
 impl DB {
     fn get_ptable_by_name(&self, name: &str) -> Option<usize> {
-        self
-            .player_table
+        self.player_table
             .iter()
             .position(|pie| pie.name.as_ref() == name)
     }
@@ -3218,15 +3216,7 @@ pub fn char_to_store(
 
     for (i, char_eq) in char_eq.iter().enumerate() {
         if char_eq.is_some() {
-            equip_char(
-                descs,
-                chars,
-                db,
-                objs,
-                chid,
-                char_eq.unwrap(),
-                i,
-            );
+            equip_char(descs, chars, db, objs, chid, char_eq.unwrap(), i);
         }
     }
     /*   affect_total(ch); unnecessary, I think !?! */
@@ -3251,7 +3241,7 @@ impl DB {
     pub(crate) fn create_entry(&mut self, name: &str) -> usize {
         let i: usize;
         let pos = self.get_ptable_by_name(name);
-        if let Some(pos) = pos  {
+        if let Some(pos) = pos {
             let mut pie = self.player_table.get_mut(pos);
             pie.as_mut().unwrap().name = Rc::from(name.to_lowercase().as_str());
             pos
@@ -3263,7 +3253,7 @@ impl DB {
                 id: i as i64,
             });
             i
-        } 
+        }
     }
 }
 
@@ -3293,7 +3283,7 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
         if let Some(point) = point {
             tmp.truncate(point);
             done = true;
-        } 
+        }
 
         buf.push_str(tmp.as_str());
         if done {

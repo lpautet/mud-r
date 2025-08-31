@@ -23,13 +23,13 @@ use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
 use crate::spells::{SPELL_POISON, TYPE_SUFFERING};
 use crate::structs::ConState::ConDisconnect;
 use crate::structs::{
-    AffectFlags, CharData, Position, Sex, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, THIRST
+    AffectFlags, CharData, Position, Sex, FULL, LVL_GOD, LVL_IMMORT, LVL_IMPL, NOWHERE, THIRST,
 };
-use crate::structs::{
-    DRUNK, PLR_WRITING, 
-};
+use crate::structs::{DRUNK, PLR_WRITING};
 use crate::util::{age, DisplayMode};
-use crate::{act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM};
+use crate::{
+    act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM,
+};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -280,7 +280,11 @@ pub fn gain_exp(
             if num_levels == 1 {
                 send_to_char(&mut game.descriptors, ch, "You rise a level!\r\n");
             } else {
-                send_to_char(&mut game.descriptors, ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("You rise {} levels!\r\n", num_levels).as_str(),
+                );
                 let ch = chars.get_mut(chid);
                 set_title(ch, None);
                 let ch = chars.get(chid);
@@ -350,7 +354,11 @@ pub fn gain_exp_regardless(
             if num_levels == 1 {
                 send_to_char(&mut game.descriptors, ch, "You rise a level!\r\n");
             } else {
-                send_to_char(&mut game.descriptors, ch, format!("You rise {} levels!\r\n", num_levels).as_str());
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("You rise {} levels!\r\n", num_levels).as_str(),
+                );
             }
             let ch = chars.get_mut(chid);
             set_title(ch, None);
@@ -361,44 +369,44 @@ pub fn gain_exp_regardless(
     }
 }
 
-    pub(crate) fn gain_condition(
-        descs: &mut Depot<DescriptorData>,
-        ch: &mut CharData,
-        condition: usize,
-        value: i32,
-    ) {
-        if ch.is_npc() || ch.get_cond(condition) == -1 {
-            /* No change */
-            return;
-        }
-
-        let intoxicated = ch.get_cond(DRUNK) > 0;
-
-        ch.incr_cond(condition, value as i16);
-        let mut v = ch.get_cond(condition);
-        v = max(0, v);
-        v = min(24, v);
-        ch.set_cond(condition, v);
-
-        if ch.get_cond(condition) == 0 || ch.plr_flagged(PLR_WRITING) {
-            return;
-        }
-
-        match condition {
-            FULL => {
-                send_to_char(descs, ch, "You are hungry.\r\n");
-            }
-            THIRST => {
-                send_to_char(descs, ch, "You are thirsty.\r\n");
-            }
-            DRUNK => {
-                if intoxicated {
-                    send_to_char(descs, ch, "You are now sober.\r\n");
-                }
-            }
-            _ => {}
-        }
+pub(crate) fn gain_condition(
+    descs: &mut Depot<DescriptorData>,
+    ch: &mut CharData,
+    condition: usize,
+    value: i32,
+) {
+    if ch.is_npc() || ch.get_cond(condition) == -1 {
+        /* No change */
+        return;
     }
+
+    let intoxicated = ch.get_cond(DRUNK) > 0;
+
+    ch.incr_cond(condition, value as i16);
+    let mut v = ch.get_cond(condition);
+    v = max(0, v);
+    v = min(24, v);
+    ch.set_cond(condition, v);
+
+    if ch.get_cond(condition) == 0 || ch.plr_flagged(PLR_WRITING) {
+        return;
+    }
+
+    match condition {
+        FULL => {
+            send_to_char(descs, ch, "You are hungry.\r\n");
+        }
+        THIRST => {
+            send_to_char(descs, ch, "You are thirsty.\r\n");
+        }
+        DRUNK => {
+            if intoxicated {
+                send_to_char(descs, ch, "You are now sober.\r\n");
+            }
+        }
+        _ => {}
+    }
+}
 impl Game {
     fn check_idling(
         &mut self,
@@ -420,7 +428,8 @@ impl Game {
                     db.stop_fighting(chars.get_mut(chid));
                 }
                 let ch = chars.get(chid);
-                act(&mut self.descriptors, 
+                act(
+                    &mut self.descriptors,
                     chars,
                     db,
                     "$n disappears into the void.",
@@ -431,7 +440,11 @@ impl Game {
                     TO_ROOM,
                 );
                 let ch = chars.get(chid);
-                send_to_char(&mut self.descriptors, ch, "You have been idle, and are pulled into a void.\r\n");
+                send_to_char(
+                    &mut self.descriptors,
+                    ch,
+                    "You have been idle, and are pulled into a void.\r\n",
+                );
                 save_char(&mut self.descriptors, db, chars, texts, objs, chid);
                 crash_crashsave(chars, db, objs, chid);
                 db.char_from_room(objs, chars.get_mut(chid));
@@ -457,9 +470,9 @@ impl Game {
                     ch.desc = None;
                 }
                 if FREE_RENT {
-                    crash_rentsave( chars, db, objs, chid, 0);
+                    crash_rentsave(chars, db, objs, chid, 0);
                 } else {
-                    crash_idlesave( chars, db, objs, chid);
+                    crash_idlesave(chars, db, objs, chid);
                 }
                 let ch = chars.get(chid);
                 self.mudlog(
@@ -487,16 +500,17 @@ impl Game {
             let i = chars.get_mut(i_id);
             let descs = &mut self.descriptors;
             gain_condition(descs, i, FULL, -1);
-        gain_condition(descs, i, DRUNK, -1);
+            gain_condition(descs, i, DRUNK, -1);
             gain_condition(descs, i, THIRST, -1);
             if i.get_pos() >= Position::Stunned {
                 i.set_hit(min(i.get_hit() + hit_gain(i) as i16, i.get_max_hit()));
                 i.set_mana(min(i.get_mana() + mana_gain(i) as i16, i.get_max_mana()));
                 i.set_move(min(i.get_move() + move_gain(i) as i16, i.get_max_move()));
                 if i.aff_flagged(AffectFlags::POISON)
-                    && self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1 {
-                        continue; /* Oops, they died. -gg 6/24/98 */
-                    }
+                    && self.damage(chars, db, texts, objs, i_id, i_id, 2, SPELL_POISON) == -1
+                {
+                    continue; /* Oops, they died. -gg 6/24/98 */
+                }
                 let i = chars.get_mut(i_id);
                 if i.get_pos() <= Position::Stunned {
                     update_pos(i);
@@ -506,9 +520,10 @@ impl Game {
                     continue;
                 }
             } else if i.get_pos() == Position::MortallyWounded
-                && self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1 {
-                    continue;
-                }
+                && self.damage(chars, db, texts, objs, i_id, i_id, 2, TYPE_SUFFERING) == -1
+            {
+                continue;
+            }
             let i = chars.get(i_id);
             if !i.is_npc() {
                 update_char_objects(&mut self.descriptors, chars, objs, db, i_id);
@@ -537,7 +552,8 @@ impl Game {
                     if j_obj.carried_by.is_some() {
                         let chid = j_obj.carried_by.unwrap();
                         let ch = chars.get(chid);
-                        act(&mut self.descriptors, 
+                        act(
+                            &mut self.descriptors,
                             chars,
                             db,
                             "$p decays in your hands.",
@@ -552,7 +568,8 @@ impl Game {
                     {
                         let chid = db.world[j_obj.in_room() as usize].peoples[0];
                         let ch = chars.get(chid);
-                        act(&mut self.descriptors, 
+                        act(
+                            &mut self.descriptors,
                             chars,
                             db,
                             "A quivering horde of maggots consumes $p.",
@@ -562,7 +579,8 @@ impl Game {
                             None,
                             TO_ROOM,
                         );
-                        act(&mut self.descriptors, 
+                        act(
+                            &mut self.descriptors,
                             chars,
                             db,
                             "A quivering horde of maggots consumes $p.",
@@ -586,10 +604,7 @@ impl Game {
                             obj_to_obj(chars, objs, contained_id, to_obj_id);
                         } else if j.carried_by.is_some() {
                             let to_room = chars.get(j.carried_by.unwrap()).in_room();
-                            db.obj_to_room(
-                                j,
-                                to_room,
-                            );
+                            db.obj_to_room(j, to_room);
                         } else if j.in_room() != NOWHERE {
                             db.obj_to_room(j, j.in_room());
                         } else {

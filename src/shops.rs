@@ -2388,7 +2388,6 @@ fn list_detailed_shop(
     while db.shop_index[shop_nr as usize].type_[sindex as usize].type_ != NOTHING as i32 {
         count += 1;
 
-        
         if sindex != 0 {
             send_to_char(&mut game.descriptors, ch, ", ");
             column += 2;

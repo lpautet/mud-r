@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::rc::Rc;
@@ -21,8 +21,17 @@ pub enum MeRef {
     Obj(DepotId),
 }
 
-pub type Special =
-    fn(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, me: MeRef, cmd: i32, argument: &str) -> bool;
+pub type Special = fn(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    me: MeRef,
+    cmd: i32,
+    argument: &str,
+) -> bool;
 
 pub const OPT_USEC: u128 = 100000;
 pub const PASSES_PER_SEC: u128 = 1000000 / OPT_USEC;
@@ -78,14 +87,14 @@ bitflags! {
 #[repr(i32)]
 pub enum SectorType {
     #[default]
-    Inside = 0,         /* Indoors */
-    City = 1,           /* In a city */
-    Field = 2,          /* In a field */
+    Inside = 0, /* Indoors */
+    City = 1,        /* In a city */
+    Field = 2,       /* In a field */
     Forest = 3,      /* In a forest */
     Hills = 4,       /* In the hills */
     Mountain = 5,    /* On a mountain */
     WaterSwim = 6,   /* Swimmable water */
-    WaterNoSwim = 7,    /* Water - need a boat */
+    WaterNoSwim = 7, /* Water - need a boat */
     Flying = 8,      /* Wheee! */
     Underwater = 9,  /* Underwater */
 }
@@ -151,11 +160,11 @@ pub enum RentCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum ItemType {
-    Light = 1,      /* Item is a light source */
-    Scroll = 2,     /* Item is a scroll */
-    Wand = 3,       /* Item is a wand */
-    Staff = 4,      /* Item is a staff */
-    Weapon = 5,     /* Item is a weapon */
+    Light = 1,  /* Item is a light source */
+    Scroll = 2, /* Item is a scroll */
+    Wand = 3,   /* Item is a wand */
+    Staff = 4,  /* Item is a staff */
+    Weapon = 5, /* Item is a weapon */
     // Fireweapon = 6, /* Unimplemented */
     // Missile = 7,    /* Unimplemented */
     Treasure = 8,   /* Item is a treasure, not gold */
@@ -279,31 +288,31 @@ bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(i8)]
 pub enum ApplyType {
-    None = 0,           /* No effect */
-    Str = 1,            /* Apply to strength */
-    Dex = 2,            /* Apply to dexterity */
-    Int = 3,            /* Apply to intelligence */
-    Wis = 4,            /* Apply to wisdom */
-    Con = 5,            /* Apply to constitution */
-    Cha = 6,            /* Apply to charisma */
-    Class = 7,          /* Reserved */
-    Level = 8,          /* Reserved */
-    Age = 9,            /* Apply to age */
-    CharWeight = 10,    /* Apply to weight */
-    CharHeight = 11,    /* Apply to height */
-    Mana = 12,          /* Apply to max mana */
-    Hit = 13,           /* Apply to max hit points */
-    Move = 14,          /* Apply to max move points */
-    Gold = 15,          /* Reserved */
-    Exp = 16,           /* Reserved */
-    Ac = 17,            /* Apply to Armor Class */
-    Hitroll = 18,       /* Apply to hitroll */
-    Damroll = 19,       /* Apply to damage roll */
-    SavingPara = 20,    /* Apply to save throw: paralz */
-    SavingRod = 21,     /* Apply to save throw: rods */
-    SavingPetri = 22,   /* Apply to save throw: petrif */
-    SavingBreath = 23,  /* Apply to save throw: breath */
-    SavingSpell = 24,   /* Apply to save throw: spells */
+    None = 0,          /* No effect */
+    Str = 1,           /* Apply to strength */
+    Dex = 2,           /* Apply to dexterity */
+    Int = 3,           /* Apply to intelligence */
+    Wis = 4,           /* Apply to wisdom */
+    Con = 5,           /* Apply to constitution */
+    Cha = 6,           /* Apply to charisma */
+    Class = 7,         /* Reserved */
+    Level = 8,         /* Reserved */
+    Age = 9,           /* Apply to age */
+    CharWeight = 10,   /* Apply to weight */
+    CharHeight = 11,   /* Apply to height */
+    Mana = 12,         /* Apply to max mana */
+    Hit = 13,          /* Apply to max hit points */
+    Move = 14,         /* Apply to max move points */
+    Gold = 15,         /* Reserved */
+    Exp = 16,          /* Reserved */
+    Ac = 17,           /* Apply to Armor Class */
+    Hitroll = 18,      /* Apply to hitroll */
+    Damroll = 19,      /* Apply to damage roll */
+    SavingPara = 20,   /* Apply to save throw: paralz */
+    SavingRod = 21,    /* Apply to save throw: rods */
+    SavingPetri = 22,  /* Apply to save throw: petrif */
+    SavingBreath = 23, /* Apply to save throw: breath */
+    SavingSpell = 24,  /* Apply to save throw: spells */
 }
 
 impl ApplyType {
@@ -493,7 +502,7 @@ pub struct CharData {
     pub carrying: Vec<DepotId>,
     /* Head of list                  */
     pub desc: Option<DepotId>,
-    /* NULL for mobiles              */          
+    /* NULL for mobiles              */
     pub followers: Vec<FollowType>,
     /* List of chars followers       */
     pub master: Option<DepotId>,
@@ -1152,14 +1161,14 @@ pub struct MessageList {
 pub struct DexSkillType {
     pub p_pocket: i16,
     pub p_locks: i16,
- //   pub traps: i16,
+    //   pub traps: i16,
     pub sneak: i16,
     pub hide: i16,
 }
 
 pub struct DexAppType {
-//    pub reaction: i16,
-//    pub miss_att: i16,
+    //    pub reaction: i16,
+    //    pub miss_att: i16,
     pub defensive: i16,
 }
 
@@ -1188,7 +1197,6 @@ pub struct ConAppType {
     pub hitp: i16,
     //pub shock: i16,
 }
-
 
 pub struct WeatherData {
     pub pressure: i32,

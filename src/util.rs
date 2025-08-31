@@ -35,11 +35,13 @@ use crate::screen::{C_NRM, KGRN, KNRM, KNUL};
 use crate::spells::SPELL_CHARM;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
-    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, Position, PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Sex, Special, SunState, LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING 
+    AffectFlags, CharData, Class, ConState, FollowType, ItemType, MobVnum, ObjData, Position,
+    PrefFlags, RoomData, RoomDirectionData, RoomFlags, SectorType, Sex, Special, SunState,
+    LVL_IMMORT, MOB_ISNPC, NOWHERE, PLR_WRITING,
 };
 use crate::structs::{
-    MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, ExitFlags,
-    ExtraFlags, WearFlags, NOBODY, NOTHING,
+    ExitFlags, ExtraFlags, MobRnum, ObjVnum, RoomRnum, RoomVnum, TimeInfoData, WearFlags, NOBODY,
+    NOTHING,
 };
 use crate::{_clrlevel, clr, DescriptorData, Game, CCGRN, CCNRM, TO_CHAR, TO_NOTVICT, TO_VICT};
 
@@ -57,7 +59,7 @@ pub enum DisplayMode {
 #[repr(i32)]
 pub enum FileType {
     Crash = 0,
- //   Etext = 1,
+    //   Etext = 1,
     Alias = 2,
 }
 
@@ -228,7 +230,6 @@ impl DB {
         }
     }
 }
-
 
 impl CharData {
     pub fn get_pc_name(&self) -> &Rc<str> {
@@ -417,7 +418,6 @@ macro_rules! get_age {
     };
 }
 
-
 impl CharData {
     pub fn get_talk_mut(&self, i: usize) -> bool {
         check_player_special!(self, self.player_specials.saved.talks[i])
@@ -465,7 +465,6 @@ impl CharData {
         self.player_specials.saved.bad_pws += 1;
     }
 }
-
 
 #[macro_export]
 macro_rules! get_last_tell_mut {
@@ -664,7 +663,8 @@ impl CharData {
         self.get_pos() > Position::Sleeping
     }
     pub fn can_see_in_dark(&self) -> bool {
-        self.aff_flagged(AffectFlags::INFRAVISION) || (!self.is_npc() && self.prf_flagged(PrefFlags::HOLYLIGHT))
+        self.aff_flagged(AffectFlags::INFRAVISION)
+            || (!self.is_npc() && self.prf_flagged(PrefFlags::HOLYLIGHT))
     }
 }
 
@@ -911,7 +911,12 @@ impl DB {
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
         self.exit(ch, door).is_some()
             && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
-            && !self.exit(ch, door).as_ref().unwrap().exit_info.intersects(ExitFlags::CLOSED)
+            && !self
+                .exit(ch, door)
+                .as_ref()
+                .unwrap()
+                .exit_info
+                .intersects(ExitFlags::CLOSED)
     }
 
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
@@ -1054,7 +1059,8 @@ pub fn can_see_obj(
     sub: &CharData,
     obj: &ObjData,
 ) -> bool {
-    mort_can_see_obj(descs, chars, db, sub, obj) || !sub.is_npc() && sub.prf_flagged(PrefFlags::HOLYLIGHT)
+    mort_can_see_obj(descs, chars, db, sub, obj)
+        || !sub.is_npc() && sub.prf_flagged(PrefFlags::HOLYLIGHT)
 }
 
 pub fn self_(sub: &CharData, obj: &CharData) -> bool {
@@ -1078,7 +1084,7 @@ impl DB {
 }
 
 pub fn hmhr(ch: &CharData) -> &str {
-    if ch.get_sex() != Sex::Neutral  {
+    if ch.get_sex() != Sex::Neutral {
         if ch.get_sex() == Sex::Male {
             "him"
         } else {
@@ -1090,7 +1096,7 @@ pub fn hmhr(ch: &CharData) -> &str {
 }
 
 pub fn hshr(ch: &CharData) -> &str {
-    if ch.get_sex() != Sex::Neutral  {
+    if ch.get_sex() != Sex::Neutral {
         if ch.get_sex() == Sex::Male {
             "his"
         } else {
@@ -1250,7 +1256,13 @@ pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: D
         db.get_room_vnum(ch.in_room()),
         db.world[ch.in_room() as usize].name
     );
-    game.mudlog(chars, DisplayMode::Brief, LVL_IMMORT as i32, true, mesg.as_str());
+    game.mudlog(
+        chars,
+        DisplayMode::Brief,
+        LVL_IMMORT as i32,
+        true,
+        mesg.as_str(),
+    );
 }
 
 /*
@@ -1291,7 +1303,12 @@ pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: D
 
 /* the "touch" command, essentially. */
 pub fn touch(path: &Path) -> io::Result<()> {
-    match OpenOptions::new().create(true).truncate(true).write(true).open(path) {
+    match OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(path)
+    {
         Ok(_) => Ok(()),
         Err(e) => Err(e),
     }
@@ -1356,7 +1373,8 @@ impl Game {
             } {
                 continue;
             }
-            send_to_char(&mut self.descriptors, 
+            send_to_char(
+                &mut self.descriptors,
                 character,
                 format!(
                     "{}{}{}",
@@ -1511,130 +1529,135 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
 
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
-    pub fn stop_follower(
-        descs: &mut Depot<DescriptorData>,
-        chars: &mut Depot<CharData>,
-        db: &mut DB,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-    ) {
-        let ch = chars.get(chid);
-        if ch.master.is_none() {
-            return;
-        }
-
-        if ch.aff_flagged(AffectFlags::CHARM) {
-            let master_id = ch.master.unwrap();
-            let master = chars.get(master_id);
-            act(descs, 
-                chars,
-                db,
-                "You realize that $N is a jerk!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_CHAR,
-            );
-            act(descs, 
-                chars,
-                db,
-                "$n realizes that $N is a jerk!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_NOTVICT,
-            );
-            act(descs, 
-                chars,
-                db,
-                "$n hates your guts!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_VICT,
-            );
-            if affected_by_spell(ch, SPELL_CHARM as i16) {
-                affect_from_char(objs, chars.get_mut(chid), SPELL_CHARM as i16);
-            }
-        } else {
-            let master_id: DepotId = ch.master.unwrap();
-            let master = chars.get(master_id);
-            act(descs, 
-                chars,
-                db,
-                "You stop following $N.",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_CHAR,
-            );
-            act(descs, 
-                chars,
-                db,
-                "$n stops following $N.",
-                true,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_NOTVICT,
-            );
-            act(descs, 
-                chars,
-                db,
-                "$n stops following you.",
-                true,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(master)),
-                TO_VICT,
-            );
-        }
-        let ch = chars.get(chid);
-        chars
-            .get_mut(ch.master.unwrap())
-            .followers
-            .retain(|c| c.follower == chid);
-        let ch = chars.get_mut(chid);
-        ch.master = None;
-        ch.remove_aff_flags(AffectFlags::CHARM | AffectFlags::GROUP);
+pub fn stop_follower(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
+    let ch = chars.get(chid);
+    if ch.master.is_none() {
+        return;
     }
 
-    pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
-        let ch = chars.get(chid);
-        let mut total = 0;
-
-        for lackey in ch.followers.iter() {
-            if chars.get(lackey.follower).aff_flagged(AffectFlags::CHARM)
-                && chars.get(lackey.follower).master.unwrap() == chid
-            {
-                total += 1;
-            }
+    if ch.aff_flagged(AffectFlags::CHARM) {
+        let master_id = ch.master.unwrap();
+        let master = chars.get(master_id);
+        act(
+            descs,
+            chars,
+            db,
+            "You realize that $N is a jerk!",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_CHAR,
+        );
+        act(
+            descs,
+            chars,
+            db,
+            "$n realizes that $N is a jerk!",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_NOTVICT,
+        );
+        act(
+            descs,
+            chars,
+            db,
+            "$n hates your guts!",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_VICT,
+        );
+        if affected_by_spell(ch, SPELL_CHARM as i16) {
+            affect_from_char(objs, chars.get_mut(chid), SPELL_CHARM as i16);
         }
-        total
+    } else {
+        let master_id: DepotId = ch.master.unwrap();
+        let master = chars.get(master_id);
+        act(
+            descs,
+            chars,
+            db,
+            "You stop following $N.",
+            false,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_CHAR,
+        );
+        act(
+            descs,
+            chars,
+            db,
+            "$n stops following $N.",
+            true,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_NOTVICT,
+        );
+        act(
+            descs,
+            chars,
+            db,
+            "$n stops following you.",
+            true,
+            Some(ch),
+            None,
+            Some(VictimRef::Char(master)),
+            TO_VICT,
+        );
     }
+    let ch = chars.get(chid);
+    chars
+        .get_mut(ch.master.unwrap())
+        .followers
+        .retain(|c| c.follower == chid);
+    let ch = chars.get_mut(chid);
+    ch.master = None;
+    ch.remove_aff_flags(AffectFlags::CHARM | AffectFlags::GROUP);
+}
 
-    /* Called when a character that follows/is followed dies */
-    pub fn die_follower(
-        descs: &mut Depot<DescriptorData>,
-        chars: &mut Depot<CharData>,
-        db: &mut DB,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-    ) {
-        let ch = chars.get(chid);
-        if ch.master.is_some() {
-            stop_follower(descs, chars, db, objs, chid);
-        }
-        let ch = chars.get(chid);
-        for k in ch.followers.clone() {
-            stop_follower(descs, chars, db, objs, k.follower);
+pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
+    let ch = chars.get(chid);
+    let mut total = 0;
+
+    for lackey in ch.followers.iter() {
+        if chars.get(lackey.follower).aff_flagged(AffectFlags::CHARM)
+            && chars.get(lackey.follower).master.unwrap() == chid
+        {
+            total += 1;
         }
     }
+    total
+}
 
+/* Called when a character that follows/is followed dies */
+pub fn die_follower(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
+    let ch = chars.get(chid);
+    if ch.master.is_some() {
+        stop_follower(descs, chars, db, objs, chid);
+    }
+    let ch = chars.get(chid);
+    for k in ch.followers.clone() {
+        stop_follower(descs, chars, db, objs, k.follower);
+    }
+}
 
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
@@ -1658,7 +1681,8 @@ pub fn add_follower(
     leader.followers.push(k);
     let ch = chars.get(chid);
     let leader = chars.get(leader_id);
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         "You now follow $N.",
@@ -1671,7 +1695,8 @@ pub fn add_follower(
     let ch = chars.get(chid);
     let leader = chars.get(leader_id);
     if can_see(descs, chars, db, leader, ch) {
-        act(descs, 
+        act(
+            descs,
             chars,
             db,
             "$n starts following you.",
@@ -1682,7 +1707,8 @@ pub fn add_follower(
             TO_VICT,
         );
     }
-    act(descs, 
+    act(
+        descs,
         chars,
         db,
         "$n starts to follow $N.",
@@ -1745,37 +1771,22 @@ pub fn get_filename(filename: &mut String, mode: FileType, orig_name: &str) -> b
         FileType::Alias => {
             prefix = LIB_PLRALIAS;
             suffix = SUF_ALIAS;
-        }
-        // FileType::Etext => {
-        //     prefix = LIB_PLRTEXT;
-        //     suffix = SUF_TEXT;
-        // }
+        } // FileType::Etext => {
+          //     prefix = LIB_PLRTEXT;
+          //     suffix = SUF_TEXT;
+          // }
     }
 
     let name = orig_name.to_lowercase();
-    let middle=
+    let middle = match name.chars().next().unwrap() {
+        'a' | 'b' | 'c' | 'd' | 'e' => "A-E",
 
-    match name.chars().next().unwrap() {
-        'a' | 'b' | 'c' | 'd' | 'e' => {
-             "A-E"
-        }
+        'f' | 'g' | 'h' | 'i' | 'j' => "F-J",
 
-        'f' | 'g' | 'h' | 'i' | 'j' => {
-            "F-J"
-        }
-
-        'k' | 'l' | 'm' | 'n' | 'o' => {
-            "K-O"
-        }
-        'p' | 'q' | 'r' | 's' | 't' => {
-           "P-T"
-        }
-        'u' | 'v' | 'w' | 'X' | 'y' | 'z' => {
-            "U-Z"
-        }
-        _ => {
-            "ZZZ"
-        }
+        'k' | 'l' | 'm' | 'n' | 'o' => "K-O",
+        'p' | 'q' | 'r' | 's' | 't' => "P-T",
+        'u' | 'v' | 'w' | 'X' | 'y' | 'z' => "U-Z",
+        _ => "ZZZ",
     };
 
     *filename = format!("{}{}/{}.{}", prefix, middle, name, suffix);
@@ -1856,7 +1867,9 @@ impl DB {
             return false;
         }
 
-        if self.weather_info.sunlight == SunState::Set || self.weather_info.sunlight == SunState::Dark {
+        if self.weather_info.sunlight == SunState::Set
+            || self.weather_info.sunlight == SunState::Dark
+        {
             return true;
         }
 

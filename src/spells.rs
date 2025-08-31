@@ -6,11 +6,11 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
-use std::cmp::{max, min};
 use crate::depot::{Depot, DepotId};
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
+use std::cmp::{max, min};
 
 use crate::act_informative::look_at_room;
 use crate::act_item::{name_from_drinkcon, name_to_drinkcon, weight_change_object};
@@ -21,10 +21,15 @@ use crate::handler::{affect_to_char, isname};
 use crate::magic::mag_savingthrow;
 use crate::spell_parser::{skill_name, UNUSED_SPELLNAME};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Position, PrefFlags, RoomFlags, RoomRnum, Sex, Liquid, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM, MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER
+    AffectFlags, AffectedType, ApplyType, ExtraFlags, ItemType, Liquid, Position, PrefFlags,
+    RoomFlags, RoomRnum, Sex, LVL_IMMORT, LVL_IMPL, MAX_OBJ_AFFECT, MOB_AGGRESSIVE, MOB_NOCHARM,
+    MOB_NOSUMMON, MOB_SPEC, NOWHERE, NUM_CLASSES, PLR_KILLER,
 };
-use crate::util::{add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower, DisplayMode};
-use crate::{ Game, TO_CHAR, TO_ROOM, TO_VICT};
+use crate::util::{
+    add_follower, age, circle_follow, pers, rand_number, sprintbit, sprinttype, stop_follower,
+    DisplayMode,
+};
+use crate::{Game, TO_CHAR, TO_ROOM, TO_VICT};
 
 pub const DEFAULT_STAFF_LVL: i32 = 12;
 pub const DEFAULT_WAND_LVL: i32 = 12;
@@ -216,7 +221,9 @@ impl Default for SpellInfoType {
 impl Copy for SpellInfoType {}
 
 impl Clone for SpellInfoType {
-    fn clone(&self) -> Self { *self }
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 // /* Possible Targets:
@@ -252,7 +259,10 @@ pub struct AttackHitType {
  */
 #[allow(clippy::too_many_arguments)]
 pub fn spell_create_water(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     _level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -265,25 +275,40 @@ pub fn spell_create_water(
     let obj_id = obj_id.unwrap();
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
-    if  objs.get(obj_id).get_obj_type() == ItemType::Drinkcon {
-        if  objs.get(obj_id).get_obj_val(2) != Liquid::Water as i32 &&  objs.get(obj_id).get_obj_val(1) != 0 {
-            name_from_drinkcon(objs,Some(obj_id));
-             objs.get_mut(obj_id).set_obj_val(2, Liquid::Slime as i32);
-            name_to_drinkcon(objs,Some(obj_id), Liquid::Slime as i32);
+    if objs.get(obj_id).get_obj_type() == ItemType::Drinkcon {
+        if objs.get(obj_id).get_obj_val(2) != Liquid::Water as i32
+            && objs.get(obj_id).get_obj_val(1) != 0
+        {
+            name_from_drinkcon(objs, Some(obj_id));
+            objs.get_mut(obj_id).set_obj_val(2, Liquid::Slime as i32);
+            name_to_drinkcon(objs, Some(obj_id), Liquid::Slime as i32);
         } else {
-            let water = max( objs.get(obj_id).get_obj_val(0) -  objs.get(obj_id).get_obj_val(1), 0);
+            let water = max(
+                objs.get(obj_id).get_obj_val(0) - objs.get(obj_id).get_obj_val(1),
+                0,
+            );
             if water > 0 {
-                if  objs.get(obj_id).get_obj_val(1) >= 0 {
-                    name_from_drinkcon( objs,Some(obj_id));
+                if objs.get(obj_id).get_obj_val(1) >= 0 {
+                    name_from_drinkcon(objs, Some(obj_id));
                 }
-                 objs.get_mut(obj_id).set_obj_val(2, Liquid::Water as i32);
-                 let v = objs.get(obj_id).get_obj_val(1) + water;
-                 objs.get_mut(obj_id).set_obj_val(1,v  );
-                name_to_drinkcon( objs, Some(obj_id), Liquid::Water as i32);
-                weight_change_object(chars, objs,obj_id, water);
+                objs.get_mut(obj_id).set_obj_val(2, Liquid::Water as i32);
+                let v = objs.get(obj_id).get_obj_val(1) + water;
+                objs.get_mut(obj_id).set_obj_val(1, v);
+                name_to_drinkcon(objs, Some(obj_id), Liquid::Water as i32);
+                weight_change_object(chars, objs, obj_id, water);
                 let ch = chars.get(chid);
                 let obj = objs.get(obj_id);
-                act(&mut game.descriptors, chars, db,"$p is filled.", false, Some(ch), Some(obj), None, TO_CHAR);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$p is filled.",
+                    false,
+                    Some(ch),
+                    Some(obj),
+                    None,
+                    TO_CHAR,
+                );
             }
         }
     }
@@ -291,7 +316,11 @@ pub fn spell_create_water(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_recall(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -304,12 +333,25 @@ pub fn spell_recall(
     let victim_id = victim_id.unwrap();
     let victim = chars.get(victim_id);
 
-    act(&mut game.descriptors, chars, db,"$n disappears.", true, Some(victim), None, None, TO_ROOM);
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
+        "$n disappears.",
+        true,
+        Some(victim),
+        None,
+        None,
+        TO_ROOM,
+    );
     let victim = chars.get_mut(victim_id);
-    db.char_from_room( objs,victim);
-    db.char_to_room(chars, objs,victim_id, db.r_mortal_start_room);
+    db.char_from_room(objs, victim);
+    db.char_to_room(chars, objs, victim_id, db.r_mortal_start_room);
     let victim = chars.get(victim_id);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n appears in the middle of the room.",
         true,
         Some(victim),
@@ -317,12 +359,16 @@ pub fn spell_recall(
         None,
         TO_ROOM,
     );
-    look_at_room(&mut game.descriptors, db, chars, texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_teleport(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     _level: i32,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -345,7 +391,10 @@ pub fn spell_teleport(
         }
     }
 
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n slowly fades out of existence and is gone.",
         false,
         Some(victim),
@@ -354,10 +403,13 @@ pub fn spell_teleport(
         TO_ROOM,
     );
     let victim = chars.get_mut(victim_id);
-    db.char_from_room( objs,victim);
-    db.char_to_room(chars, objs,victim_id, to_room as RoomRnum);
+    db.char_from_room(objs, victim);
+    db.char_to_room(chars, objs, victim_id, to_room as RoomRnum);
     let victim = chars.get(victim_id);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n slowly fades into existence.",
         false,
         Some(victim),
@@ -365,14 +417,18 @@ pub fn spell_teleport(
         None,
         TO_ROOM,
     );
-    look_at_room(&mut game.descriptors, db, chars, texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
 }
 
 const SUMMON_FAIL: &str = "You failed.\r\n";
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_summon(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -386,7 +442,7 @@ pub fn spell_summon(
 
     let chid = chid.unwrap();
     let ch = chars.get(chid);
-        if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
+    if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
         send_to_char(&mut game.descriptors, ch, SUMMON_FAIL);
         return;
     }
@@ -404,8 +460,10 @@ pub fn spell_summon(
             send_to_char(&mut game.descriptors, victim, format!("{} just tried to summon you to: {}.\r\n{} failed because you have summon protection on.\r\nType NOSUMMON to allow other players to summon you.\r\n",
                                          ch.get_name(), db.world[ch.in_room() as usize].name,
                                          if ch.player.sex == Sex::Male { "He" } else { "She" }).as_str());
-                                         let victim = chars.get(victim_id);
-            send_to_char(&mut game.descriptors, ch,
+            let victim = chars.get(victim_id);
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "You failed because {} has summon protection on.\r\n",
                     victim.get_name()
@@ -414,7 +472,8 @@ pub fn spell_summon(
             );
             let victim = chars.get(victim_id);
             let ch = chars.get(chid);
-            game.mudlog(chars,
+            game.mudlog(
+                chars,
                 DisplayMode::Brief,
                 LVL_IMMORT as i32,
                 true,
@@ -437,7 +496,10 @@ pub fn spell_summon(
         return;
     }
 
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n disappears suddenly.",
         true,
         Some(victim),
@@ -446,11 +508,14 @@ pub fn spell_summon(
         TO_ROOM,
     );
     let victim = chars.get_mut(victim_id);
-    db.char_from_room(objs,victim);
+    db.char_from_room(objs, victim);
     let ch = chars.get(chid);
-    db.char_to_room(chars, objs,victim_id, ch.in_room());
+    db.char_to_room(chars, objs, victim_id, ch.in_room());
     let victim = chars.get(victim_id);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n arrives suddenly.",
         true,
         Some(victim),
@@ -459,7 +524,10 @@ pub fn spell_summon(
         TO_ROOM,
     );
     let ch = chars.get(chid);
-    act(&mut game.descriptors, chars, db,
+    act(
+        &mut game.descriptors,
+        chars,
+        db,
         "$n has summoned you!",
         false,
         Some(ch),
@@ -467,12 +535,15 @@ pub fn spell_summon(
         Some(VictimRef::Char(victim)),
         TO_VICT,
     );
-    look_at_room(&mut game.descriptors, db,chars,texts,objs,victim, false);
+    look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_locate_object(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -487,7 +558,7 @@ pub fn spell_locate_object(
     let ch = chars.get(chid.unwrap());
     let oid = oid.unwrap();
     let mut name = String::new();
-    name.push_str(& objs.get(oid).name);
+    name.push_str(&objs.get(oid).name);
     let mut j = level / 2;
 
     for &i in &db.object_list {
@@ -495,7 +566,9 @@ pub fn spell_locate_object(
             continue;
         }
 
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!(
                 "{}{}",
                 &objs.get(i).short_description[0..0].to_uppercase(),
@@ -507,13 +580,19 @@ pub fn spell_locate_object(
         if objs.get(i).carried_by.is_some() {
             let msg = format!(
                 " is being carried by {}.\r\n",
-                pers(&game.descriptors, chars, db,chars.get(objs.get(i).carried_by.unwrap()), chars.get(chid.unwrap()))
+                pers(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    chars.get(objs.get(i).carried_by.unwrap()),
+                    chars.get(chid.unwrap())
+                )
             );
-            send_to_char(&mut game.descriptors, ch,
-                msg.as_str(),
-            );
+            send_to_char(&mut game.descriptors, ch, msg.as_str());
         } else if objs.get(i).in_room() != NOWHERE {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     " is in {}.\r\n",
                     db.world[objs.get(i).in_room() as usize].name
@@ -521,7 +600,9 @@ pub fn spell_locate_object(
                 .as_str(),
             );
         } else if objs.get(i).in_obj.is_some() {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     " is in {}.\r\n",
                     objs.get(objs.get(i).in_obj.unwrap()).short_description
@@ -531,11 +612,15 @@ pub fn spell_locate_object(
         } else if objs.get(i).worn_by.is_some() {
             let msg = format!(
                 " is being worn by {}.\r\n",
-                pers(&game.descriptors, chars, db,chars.get(objs.get(i).worn_by.unwrap()), chars.get(chid.unwrap()))
+                pers(
+                    &game.descriptors,
+                    chars,
+                    db,
+                    chars.get(objs.get(i).worn_by.unwrap()),
+                    chars.get(chid.unwrap())
+                )
             );
-            send_to_char(&mut game.descriptors, ch,
-                msg.as_str(),
-            );
+            send_to_char(&mut game.descriptors, ch, msg.as_str());
         } else {
             send_to_char(&mut game.descriptors, ch, "'s location is uncertain.\r\n");
         }
@@ -550,7 +635,10 @@ pub fn spell_locate_object(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_charm(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -565,28 +653,52 @@ pub fn spell_charm(
     let chid = chid.unwrap();
     let ch = chars.get(chid);
 
-    if victim_id ==  chid {
-        send_to_char(&mut game.descriptors, ch, "You like yourself even better!\r\n");
+    if victim_id == chid {
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You like yourself even better!\r\n",
+        );
     } else if !victim.is_npc() && !victim.prf_flagged(PrefFlags::SUMMONABLE) {
-        send_to_char(&mut game.descriptors, ch, "You fail because SUMMON protection is on!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You fail because SUMMON protection is on!\r\n",
+        );
     } else if victim.aff_flagged(AffectFlags::SANCTUARY) {
-        send_to_char(&mut game.descriptors, ch, "Your victim is protected by sanctuary!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Your victim is protected by sanctuary!\r\n",
+        );
     } else if victim.mob_flagged(MOB_NOCHARM) {
         send_to_char(&mut game.descriptors, ch, "Your victim resists!\r\n");
     } else if ch.aff_flagged(AffectFlags::CHARM) {
-        send_to_char(&mut game.descriptors, ch, "You can't have any followers of your own!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can't have any followers of your own!\r\n",
+        );
     } else if victim.aff_flagged(AffectFlags::CHARM) || level < victim.get_level() as i32 {
         send_to_char(&mut game.descriptors, ch, "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "You fail - shouldn't be doing it anyway.\r\n");
-    } else if circle_follow(chars,  victim, Some(ch)) {
-        send_to_char(&mut game.descriptors, ch, "Sorry, following in circles can not be allowed.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You fail - shouldn't be doing it anyway.\r\n",
+        );
+    } else if circle_follow(chars, victim, Some(ch)) {
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Sorry, following in circles can not be allowed.\r\n",
+        );
     } else if mag_savingthrow(victim, SAVING_PARA, 0) {
         send_to_char(&mut game.descriptors, ch, "Your victim resists!\r\n");
     } else {
         if victim.master.is_some() {
-            stop_follower(&mut game.descriptors, chars, db, objs,victim_id);
+            stop_follower(&mut game.descriptors, chars, db, objs, victim_id);
         }
 
         add_follower(&mut game.descriptors, chars, db, victim_id, chid);
@@ -605,10 +717,13 @@ pub fn spell_charm(
         if victim.get_int() != 0 {
             af.duration /= victim.get_int() as i16;
         }
-        affect_to_char( objs,victim, af);
+        affect_to_char(objs, victim, af);
         let victim = chars.get(victim_id);
         let ch = chars.get(chid);
-        act(&mut game.descriptors, chars, db,
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "Isn't $n just such a nice fellow?",
             false,
             Some(ch),
@@ -625,7 +740,10 @@ pub fn spell_charm(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_identify(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
@@ -633,28 +751,51 @@ pub fn spell_identify(
 ) {
     let ch = chars.get(chid.unwrap());
 
-    if let Some(oid) = oid {        
+    if let Some(oid) = oid {
         let mut bitbuf = String::new();
-        sprinttype(objs.get(oid).get_obj_type() as i32, &ITEM_TYPES, &mut bitbuf);
-        send_to_char(&mut game.descriptors, ch,
+        sprinttype(
+            objs.get(oid).get_obj_type() as i32,
+            &ITEM_TYPES,
+            &mut bitbuf,
+        );
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!(
                 "You feel informed:\r\nObject '{}', Item type: {}\r\n",
-                objs.get(oid).short_description, bitbuf
+                objs.get(oid).short_description,
+                bitbuf
             )
             .as_str(),
         );
 
         if !objs.get(oid).get_obj_affect().is_empty() {
-            sprintbit(objs.get(oid).get_obj_affect().bits(), &AFFECTED_BITS, &mut bitbuf);
-            send_to_char(&mut game.descriptors, ch,
+            sprintbit(
+                objs.get(oid).get_obj_affect().bits(),
+                &AFFECTED_BITS,
+                &mut bitbuf,
+            );
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!("Item will give you following abilities:  %{}\r\n", bitbuf).as_str(),
             );
         }
 
-        sprintbit(objs.get(oid).get_obj_extra().bits() as i64, &EXTRA_BITS, &mut bitbuf);
-        send_to_char(&mut game.descriptors, ch, format!("Item is: {}\r\n", bitbuf).as_str());
+        sprintbit(
+            objs.get(oid).get_obj_extra().bits() as i64,
+            &EXTRA_BITS,
+            &mut bitbuf,
+        );
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("Item is: {}\r\n", bitbuf).as_str(),
+        );
 
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!(
                 "Weight: {}, Value: {}, Rent: {}\r\n",
                 objs.get(oid).get_obj_weight(),
@@ -678,7 +819,9 @@ pub fn spell_identify(
                     bitbuf.push_str(skill_name(db, objs.get(oid).get_obj_val(3)));
                 }
 
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!(
                         "This {} casts: {}\r\n",
                         ITEM_TYPES[objs.get(oid).get_obj_type() as usize],
@@ -688,20 +831,28 @@ pub fn spell_identify(
                 );
             }
             ItemType::Wand | ItemType::Staff => {
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!(
                         "This {} casts: {}\r\nIt has {} maximum charge{} and {} remaining.\r\n",
                         ITEM_TYPES[objs.get(oid).get_obj_type() as usize],
                         skill_name(db, objs.get(oid).get_obj_val(3)),
                         objs.get(oid).get_obj_val(1),
-                        if objs.get(oid).get_obj_val(1) == 1 { "" } else { "s" },
+                        if objs.get(oid).get_obj_val(1) == 1 {
+                            ""
+                        } else {
+                            "s"
+                        },
                         objs.get(oid).get_obj_val(2)
                     )
                     .as_str(),
                 );
             }
             ItemType::Weapon => {
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!(
                         "Damage Dice is '{}D{}' for an average per-round damage of {}.\r\n",
                         objs.get(oid).get_obj_val(1),
@@ -712,7 +863,9 @@ pub fn spell_identify(
                 );
             }
             ItemType::Armor => {
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!("AC-apply is {}\r\n", objs.get(oid).get_obj_val(0)).as_str(),
                 );
             }
@@ -732,7 +885,9 @@ pub fn spell_identify(
                     &APPLY_TYPES,
                     &mut bitbuf,
                 );
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!(
                         "   Affects: {} By {}\r\n",
                         bitbuf,
@@ -743,14 +898,18 @@ pub fn spell_identify(
             }
         }
     } else if let Some(victim_id) = victim_id {
-        /* victim */        
+        /* victim */
         let victim = chars.get(victim_id);
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!("Name: {}\r\n", victim.get_name()).as_str(),
         );
         let victim = chars.get(victim_id);
         if !victim.is_npc() {
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "{} is {} years, {} months, {} days and {} hours old.\r\n",
                     victim.get_name(),
@@ -762,7 +921,9 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = chars.get(victim_id);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "Height {} cm, Weight {} pounds\r\n",
                     victim.get_height(),
@@ -771,7 +932,9 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = chars.get(victim_id);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "Level: {}, Hits: {}, Mana: {}\r\n",
                     victim.get_level(),
@@ -781,7 +944,9 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = chars.get(victim_id);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "AC: {}, Hitroll: {}, Damroll: {}\r\n",
                     compute_armor_class(victim),
@@ -791,7 +956,9 @@ pub fn spell_identify(
                 .as_str(),
             );
             let victim = chars.get(victim_id);
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     "Str: {}/{}, Int: {}, Wis: {}, Dex: {}, Con: {}, Cha: {}\r\n",
                     victim.get_str(),
@@ -814,7 +981,10 @@ pub fn spell_identify(
  */
 #[allow(clippy::too_many_arguments)]
 pub fn spell_enchant_weapon(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     level: i32,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
@@ -823,8 +993,8 @@ pub fn spell_enchant_weapon(
     if chid.is_none() || oid.is_none() {
         return;
     }
- let chid = chid.unwrap();
-        let oid = oid.unwrap();
+    let chid = chid.unwrap();
+    let oid = oid.unwrap();
 
     /* Either already enchanted or not a weapon. */
     let obj = objs.get_mut(oid);
@@ -855,17 +1025,40 @@ pub fn spell_enchant_weapon(
         let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ExtraFlags::ANTI_EVIL);
         let ch = chars.get(chid);
-        let obj=objs.get(oid);
-        act(&mut game.descriptors, chars, db,"$p glows blue.", false, Some(ch), Some(obj), None, TO_CHAR);
+        let obj = objs.get(oid);
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
+            "$p glows blue.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
     } else if ch.is_evil() {
         let obj = objs.get_mut(oid);
         obj.set_obj_extra_bit(ExtraFlags::ANTI_GOOD);
         let ch = chars.get(chid);
-        let obj=objs.get(oid);
-        act(&mut game.descriptors, chars, db,"$p glows red.", false, Some(ch), Some(obj), None, TO_CHAR);
+        let obj = objs.get(oid);
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
+            "$p glows red.",
+            false,
+            Some(ch),
+            Some(obj),
+            None,
+            TO_CHAR,
+        );
     } else {
-        let obj=objs.get(oid);
-        act(&mut game.descriptors, chars, db,
+        let obj = objs.get(oid);
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             "$p glows yellow.",
             false,
             Some(ch),
@@ -878,24 +1071,34 @@ pub fn spell_enchant_weapon(
 
 #[allow(clippy::too_many_arguments)]
 pub fn spell_detect_poison(
-    game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     _level: i32,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    if let Some(victim_id) = victim_id    {
+    if let Some(victim_id) = victim_id {
         let victim = chars.get(victim_id);
         let chid = chid.unwrap();
         let ch = chars.get(chid);
         if chid == victim_id {
             if victim.aff_flagged(AffectFlags::POISON) {
-                send_to_char(&mut game.descriptors, ch, "You can sense poison in your blood.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You can sense poison in your blood.\r\n",
+                );
             } else {
                 send_to_char(&mut game.descriptors, ch, "You feel healthy.\r\n");
             }
         } else if victim.aff_flagged(AffectFlags::POISON) {
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 "You sense that $E is poisoned.",
                 false,
                 Some(ch),
@@ -904,7 +1107,10 @@ pub fn spell_detect_poison(
                 TO_CHAR,
             );
         } else {
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 "You sense that $E is healthy.",
                 false,
                 Some(ch),
@@ -914,12 +1120,15 @@ pub fn spell_detect_poison(
             );
         }
 
-        if let Some(oid) = oid  {
+        if let Some(oid) = oid {
             let obj = objs.get(oid);
             match obj.get_obj_type() {
                 ItemType::Drinkcon | ItemType::Fountain | ItemType::Food => {
                     if obj.get_obj_val(3) != 0 {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             "You sense that $p has been contaminated.",
                             false,
                             Some(ch),
@@ -928,7 +1137,10 @@ pub fn spell_detect_poison(
                             TO_CHAR,
                         );
                     } else {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             "You sense that $p is safe for consumption.",
                             false,
                             Some(ch),
@@ -939,7 +1151,11 @@ pub fn spell_detect_poison(
                     }
                 }
                 _ => {
-                    send_to_char(&mut game.descriptors, ch, "You sense that it should not be consumed.\r\n");
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "You sense that it should not be consumed.\r\n",
+                    );
                 }
             }
         }

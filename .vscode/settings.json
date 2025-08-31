@@ -1,8 +1,12 @@
 {
+    "[rust]": {
+        "editor.defaultFormatter": "rust-analyzer",
+        "editor.formatOnSave": true
+    },
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.check.allTargets": true,
     "rust-analyzer.check.allFeatures": true,
     "rust-analyzer.check.extraArgs": [],
     "rust-analyzer.diagnostics.enable": true,
-    "rust-analyzer.diagnostics.enableExperimental": true
+    "rust-analyzer.diagnostics.enableExperimental": false
 }

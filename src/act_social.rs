@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::fs::{File, OpenOptions};
@@ -14,11 +14,11 @@ use std::io::{BufRead, BufReader};
 use std::process;
 use std::rc::Rc;
 
-use log::error;
-use regex::Regex;
 use crate::depot::{Depot, DepotId, HasId};
 use crate::structs::{Position, Sex};
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
+use log::error;
+use regex::Regex;
 
 use crate::db::{DB, SOCMESS_FILE};
 use crate::handler::{get_char_vis, FindFlags};
@@ -54,17 +54,31 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
     db.soc_mess_list.iter().position(|e| e.act_nr == cmd)
 }
 
-#[allow(clippy::too_many_arguments)]           
-pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, cmd: usize, _subcmd: i32) {
+#[allow(clippy::too_many_arguments)]
+pub fn do_action(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     let act_nr;
 
     let res = {
         act_nr = find_action(db, cmd);
         act_nr.is_none()
-    }; 
+    };
     if res {
-        send_to_char(&mut game.descriptors, ch, "That action is not supported.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "That action is not supported.\r\n",
+        );
         return;
     }
     let act_nr = act_nr.unwrap();
@@ -79,16 +93,21 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     let action_char_no_arg = &db.soc_mess_list[act_nr].char_no_arg;
     let action_hide = db.soc_mess_list[act_nr].hide;
 
-
-
     let mut buf = String::new();
     if !action_char_found.is_empty() && !argument.is_empty() {
         one_argument(argument, &mut buf);
     }
 
     if buf.is_empty() {
-        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", action_char_no_arg).as_str());
-        act(&mut game.descriptors, chars, db,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("{}\r\n", action_char_no_arg).as_str(),
+        );
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             action_others_no_arg,
             action_hide,
             Some(ch),
@@ -100,14 +119,33 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
     let vict;
     let res = {
-        vict = get_char_vis(&game.descriptors, chars,db,ch, &mut buf, None, FindFlags::CHAR_ROOM);
+        vict = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf,
+            None,
+            FindFlags::CHAR_ROOM,
+        );
         vict.is_none()
-    }; 
+    };
     if res {
-        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_not_found).as_str());
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("{}\r\n", &action_not_found).as_str(),
+        );
     } else if vict.unwrap().id() == chid {
-        send_to_char(&mut game.descriptors, ch, format!("{}\r\n", &action_char_auto).as_str());
-        act(&mut game.descriptors, chars, db,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            format!("{}\r\n", &action_char_auto).as_str(),
+        );
+        act(
+            &mut game.descriptors,
+            chars,
+            db,
             action_others_auto,
             action_hide,
             Some(ch),
@@ -117,8 +155,11 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
         );
     } else {
         let vict = vict.unwrap();
-        if vict.get_pos() < action_min_victim_position  {
-            act(&mut game.descriptors, chars, db,
+        if vict.get_pos() < action_min_victim_position {
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 "$N is not in a proper position for that.",
                 false,
                 Some(ch),
@@ -127,7 +168,10 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 TO_CHAR | TO_SLEEP,
             );
         } else {
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 action_char_found,
                 false,
                 Some(ch),
@@ -135,7 +179,10 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 Some(VictimRef::Char(vict)),
                 TO_CHAR | TO_SLEEP,
             );
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 action_others_found,
                 action_hide,
                 Some(ch),
@@ -143,7 +190,10 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                 Some(VictimRef::Char(vict)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, db,
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
                 action_vict_found,
                 action_hide,
                 Some(ch),
@@ -155,8 +205,18 @@ pub fn do_action(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     }
 }
 
-#[allow(clippy::too_many_arguments)]           
-pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+#[allow(clippy::too_many_arguments)]
+pub fn do_insult(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     let mut arg = String::new();
     one_argument(argument, &mut arg);
@@ -164,15 +224,25 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
     if !arg.is_empty() {
         let victim;
         let res = {
-            victim = get_char_vis(&game.descriptors, chars,db,ch, &mut arg, None, FindFlags::CHAR_ROOM);
+            victim = get_char_vis(
+                &game.descriptors,
+                chars,
+                db,
+                ch,
+                &mut arg,
+                None,
+                FindFlags::CHAR_ROOM,
+            );
             victim.is_none()
-        }; 
+        };
         if res {
             send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");
         } else {
             let victim = victim.unwrap();
             if victim.id() != chid {
-                send_to_char(&mut game.descriptors, ch,
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
                     format!("You insult {}.\r\n", victim.get_name()).as_str(),
                 );
 
@@ -181,7 +251,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         let ch = chars.get(chid);
                         if ch.get_sex() == Sex::Male {
                             if victim.get_sex() == Sex::Male {
-                                act(&mut game.descriptors, chars, db,
+                                act(
+                                    &mut game.descriptors,
+                                    chars,
+                                    db,
                                     "$n accuses you of fighting like a woman!",
                                     false,
                                     Some(ch),
@@ -190,7 +263,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                                     TO_VICT,
                                 );
                             } else {
-                                act(&mut game.descriptors, chars, db,
+                                act(
+                                    &mut game.descriptors,
+                                    chars,
+                                    db,
                                     "$n says that women can't fight.",
                                     false,
                                     Some(ch),
@@ -202,7 +278,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         } else {
                             /* Ch == Woman */
                             if victim.get_sex() == Sex::Male {
-                                act(&mut game.descriptors, chars, db,
+                                act(
+                                    &mut game.descriptors,
+                                    chars,
+                                    db,
                                     "$n accuses you of having the smallest... (brain?)",
                                     false,
                                     Some(ch),
@@ -217,7 +296,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         }
                     }
                     1 => {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             "$n calls your mother a bitch!",
                             false,
                             Some(ch),
@@ -227,7 +309,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                         );
                     }
                     _ => {
-                        act(&mut game.descriptors, chars, db,
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
                             "$n tells you to get lost!",
                             false,
                             Some(ch),
@@ -238,7 +323,10 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
                     }
                 } /* end switch */
 
-                act(&mut game.descriptors, chars, db,
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
                     "$n insults $N.",
                     true,
                     Some(ch),
@@ -252,7 +340,11 @@ pub fn do_insult(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _text
             }
         }
     } else {
-        send_to_char(&mut game.descriptors, ch, "I'm sure you don't want to insult *everybody*...\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "I'm sure you don't want to insult *everybody*...\r\n",
+        );
     }
 }
 
@@ -283,7 +375,7 @@ pub fn boot_social_messages(db: &mut DB) {
     let res = {
         fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
         fl.is_err()
-    }; 
+    };
     if res {
         error!(
             "SYSERR: can't open socials file '{}': {}",
@@ -326,7 +418,7 @@ pub fn boot_social_messages(db: &mut DB) {
         let res = {
             cur_soc += 1;
             cur_soc > list_top
-        }; 
+        };
         if res {
             error!(
                 "SYSERR: Ran out of slots in social array. ({} > {})",

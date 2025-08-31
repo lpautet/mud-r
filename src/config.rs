@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 /*
@@ -186,7 +186,8 @@ pub const DFLT_IP: Option<&str> = None; /* bind to all interfaces */
 /* pub const DFLT_IP :Option<&str> = Some("192.168.1.1");  -- bind only to one interface */
 
 /* default directory to use as data directory */
-/* pub const DFLT_DIR: &str = "lib"; */ /* Now handled by clap argument parsing */
+/* pub const DFLT_DIR: &str = "lib"; */
+/* Now handled by clap argument parsing */
 
 /*
 * What file to log messages to (ex: "log/syslog").  Setting this to NULL

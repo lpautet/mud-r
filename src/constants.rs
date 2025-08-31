@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use crate::structs::{ConAppType, DexAppType, DexSkillType, IntAppType, StrAppType, WisAppType};
@@ -916,25 +916,63 @@ pub const CON_APP: [ConAppType; 26] = [
         hitp: -1,
         /*shock: 50*/
     },
-    ConAppType { hitp: 0, /*shock: 55*/ },
-    ConAppType { hitp: 0, /*shock: 60*/ },
-    ConAppType { hitp: 0, /*shock: 65*/ },
-    ConAppType { hitp: 0, /*shock: 70*/ }, /* con = 10 */
-    ConAppType { hitp: 0, /*shock: 75*/ },
-    ConAppType { hitp: 0, /*shock: 80*/ },
-    ConAppType { hitp: 0, /*shock: 85*/ },
-    ConAppType { hitp: 0, /*shock: 88*/ },
-    ConAppType { hitp: 1, /*shock: 90*/ }, /* con = 15 */
-    ConAppType { hitp: 2, /*shock: 95*/ },
-    ConAppType { hitp: 2, /*shock: 97*/ },
-    ConAppType { hitp: 3, /*shock: 99*/ }, /* con = 18 */
-    ConAppType { hitp: 3, /*shock: 99*/ },
-    ConAppType { hitp: 4, /*shock: 99*/ }, /* con = 20 */
-    ConAppType { hitp: 5, /*shock: 99*/ },
-    ConAppType { hitp: 5, /*shock: 99*/ },
-    ConAppType { hitp: 5, /*shock: 99*/ },
-    ConAppType { hitp: 6, /*shock: 99*/ },
-    ConAppType { hitp: 6, /*shock: 99*/ }, /* con = 25 */
+    ConAppType {
+        hitp: 0, /*shock: 55*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 60*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 65*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 70*/
+    }, /* con = 10 */
+    ConAppType {
+        hitp: 0, /*shock: 75*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 80*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 85*/
+    },
+    ConAppType {
+        hitp: 0, /*shock: 88*/
+    },
+    ConAppType {
+        hitp: 1, /*shock: 90*/
+    }, /* con = 15 */
+    ConAppType {
+        hitp: 2, /*shock: 95*/
+    },
+    ConAppType {
+        hitp: 2, /*shock: 97*/
+    },
+    ConAppType {
+        hitp: 3, /*shock: 99*/
+    }, /* con = 18 */
+    ConAppType {
+        hitp: 3, /*shock: 99*/
+    },
+    ConAppType {
+        hitp: 4, /*shock: 99*/
+    }, /* con = 20 */
+    ConAppType {
+        hitp: 5, /*shock: 99*/
+    },
+    ConAppType {
+        hitp: 5, /*shock: 99*/
+    },
+    ConAppType {
+        hitp: 5, /*shock: 99*/
+    },
+    ConAppType {
+        hitp: 6, /*shock: 99*/
+    },
+    ConAppType {
+        hitp: 6, /*shock: 99*/
+    }, /* con = 25 */
 ];
 
 /* [int] apply (all) */

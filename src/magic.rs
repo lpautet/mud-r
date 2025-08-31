@@ -1289,7 +1289,7 @@ pub fn mag_alter_objs(
     //         None,
     //         TO_ROOM,
     //     );
-    // } else 
+    // } else
     if !to_char.is_empty() {
         act(
             &mut game.descriptors,
@@ -1320,11 +1320,8 @@ pub fn mag_creations(
     let chid = chid.unwrap();
     let ch = chars.get(chid);
     /* level = MAX(MIN(level, LVL_IMPL), 1); - Hm, not used. */
-    let z =
-    match spellnum {
-        SPELL_CREATE_FOOD => {
-            10
-        }
+    let z = match spellnum {
+        SPELL_CREATE_FOOD => 10,
         _ => {
             send_to_char(
                 &mut game.descriptors,

@@ -25,8 +25,8 @@ pub fn write_aliases(ch: &CharData) {
     let mut fname = String::new();
     get_filename(&mut fname, FileType::Alias, ch.get_name());
     let res = fs::remove_file(&fname);
-    match res  {
-        Err(e) if e.kind() != ErrorKind::NotFound => { 
+    match res {
+        Err(e) if e.kind() != ErrorKind::NotFound => {
             error!("Cannot remove alias file {}\n", e);
             return;
         }
@@ -37,7 +37,11 @@ pub fn write_aliases(ch: &CharData) {
         return;
     }
 
-    let file = OpenOptions::new().write(true).create(true).truncate(true).open(&fname);
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&fname);
 
     if file.is_err() {
         error!(
@@ -132,7 +136,12 @@ pub fn read_aliases(ch: &mut CharData) {
         }
         let r = buf.trim_end().parse::<i32>();
         if r.is_err() {
-            error!("Error with alias '{}' type: '{}' ({})", t2.alias, buf.trim_end(), t2.replacement);
+            error!(
+                "Error with alias '{}' type: '{}' ({})",
+                t2.alias,
+                buf.trim_end(),
+                t2.replacement
+            );
             break;
         }
         t2.type_ = r.unwrap();

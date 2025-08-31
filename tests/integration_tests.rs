@@ -12,7 +12,7 @@ fn test_help_output() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Verify help contains expected flags
     assert!(stdout.contains("--check"));
     assert!(stdout.contains("--dir"));
@@ -32,7 +32,7 @@ fn test_syntax_check_mode() {
     // In check mode, the program should exit early
     // We expect it to either succeed or fail gracefully
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should not crash with panic
     assert!(!stderr.contains("panic"));
     assert!(!stderr.contains("GURU MEDITATION"));
@@ -46,7 +46,7 @@ fn test_invalid_port_handling() {
         .expect("Failed to execute command");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should handle invalid port gracefully
     assert!(!stderr.contains("panic"));
 }
@@ -59,7 +59,7 @@ fn test_directory_flag() {
         .expect("Failed to execute command");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should handle directory flag without crashing
     assert!(!stderr.contains("panic"));
 }

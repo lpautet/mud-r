@@ -204,10 +204,10 @@ fn auto_equip(
                 }
             }
             WEAR_HOLD => {
-                if obj.can_wear(WearFlags::HOLD) ||
-                 ch.is_warrior()
-                    && obj.can_wear(WearFlags::WIELD)
-                    && obj.get_obj_type() == ItemType::Weapon
+                if obj.can_wear(WearFlags::HOLD)
+                    || ch.is_warrior()
+                        && obj.can_wear(WearFlags::WIELD)
+                        && obj.get_obj_type() == ItemType::Weapon
                 {
                 } else {
                     location = LOC_INVENTORY;
@@ -368,31 +368,23 @@ fn crash_clean_file(name: &str) -> bool {
     {
         if rent.time < time_now() as i64 - (CRASH_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64) {
             crash_delete_file(name);
-            let filetype=
-            match rentcode {
-                RentCode::Crash => {
-                     "crash"
-                }
-                RentCode::Forced => {
-                   "forced rent"
-                }
-                RentCode::Timedout => {
-                   "idlesave"
-                }
-                _ => {
-                   "UNKNOWN!"
-                }
+            let filetype = match rentcode {
+                RentCode::Crash => "crash",
+                RentCode::Forced => "forced rent",
+                RentCode::Timedout => "idlesave",
+                _ => "UNKNOWN!",
             };
             info!("    Deleting {}'s {} file.", name, filetype);
             return true;
         }
         /* Must retrieve rented items w/in 30 days */
     } else if rentcode == RentCode::Rented
-        && rent.time < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64)) {
-            crash_delete_file(name);
-            info!("    Deleting {}'s rent file.", name);
-            return true;
-        }
+        && rent.time < (time_now() as i64 - (RENT_FILE_TIMEOUT as i64 * SECS_PER_REAL_DAY as i64))
+    {
+        crash_delete_file(name);
+        info!("    Deleting {}'s rent file.", name);
+        return true;
+    }
     false
 }
 
@@ -933,12 +925,9 @@ fn crash_save(
     true
 }
 
-fn crash_restore_weight(
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-) {
+fn crash_restore_weight(objs: &mut Depot<ObjData>, oid: DepotId) {
     for o in objs.get(oid).contains.clone() {
-        crash_restore_weight( objs, o);
+        crash_restore_weight(objs, o);
     }
     if objs.get(oid).in_obj.is_some() {
         let obj_weight = objs.get(oid).get_obj_weight();
@@ -966,7 +955,7 @@ fn crash_extract_norent_eq(
             let eqid = db.unequip_char(chars, objs, chid, j).unwrap();
             obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
         } else {
-            crash_extract_norents( chars, db, objs, ch.get_eq(j).unwrap());
+            crash_extract_norents(chars, db, objs, ch.get_eq(j).unwrap());
         }
     }
 }
@@ -979,7 +968,7 @@ fn crash_extract_objs(
 ) {
     let oid = oid.unwrap();
     for o in objs.get(oid).contains.clone() {
-        crash_extract_objs( chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, Some(o));
     }
     db.extract_obj(chars, objs, oid);
 }
@@ -1002,7 +991,7 @@ fn crash_extract_norents(
     oid: DepotId,
 ) {
     for o in objs.get(oid).contains.clone() {
-        crash_extract_norents( chars, db, objs, o);
+        crash_extract_norents(chars, db, objs, o);
     }
 
     if crash_is_unrentable(objs.get(oid)) {
@@ -1034,7 +1023,7 @@ fn crash_calculate_rent(objs: &Depot<ObjData>, oid: Option<DepotId>, cost: &mut 
     if let Some(oid) = oid {
         *cost += max(0, objs.get(oid).get_obj_rent());
         for o in objs.get(oid).contains.iter() {
-            crash_calculate_rent( objs, Some(*o), cost);
+            crash_calculate_rent(objs, Some(*o), cost);
         }
     }
 }
@@ -1056,7 +1045,8 @@ pub fn crash_crashsave(
     }
     let mut fp = OpenOptions::new()
         .write(true)
-        .create(true).truncate(true)
+        .create(true)
+        .truncate(true)
         .open(&buf)
         .expect("Cannot open rent crash file");
 
@@ -1088,18 +1078,18 @@ pub fn crash_crashsave(
                 return;
             }
             let ch = chars.get(chid);
-            crash_restore_weight( objs, ch.get_eq(j).unwrap());
+            crash_restore_weight(objs, ch.get_eq(j).unwrap());
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        if !crash_save( db, objs, Some(o), &mut fp, 0) {
+        if !crash_save(db, objs, Some(o), &mut fp, 0) {
             return;
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_restore_weight(  objs, o);
+        crash_restore_weight(objs, o);
     }
     let ch = chars.get_mut(chid);
     ch.remove_plr_flag(PLR_CRASH);
@@ -1121,26 +1111,30 @@ pub fn crash_idlesave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
-    let fp = OpenOptions::new().create(true).truncate(true).write(true).open(buf);
+    let fp = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(buf);
     if fp.is_err() {
         return;
     }
 
-    crash_extract_norent_eq( chars, db, objs, chid);
+    crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents( chars, db, objs, o);
+        crash_extract_norents(chars, db, objs, o);
     }
 
     let mut cost = 0;
     let ch = chars.get(chid);
     for o in ch.carrying.iter() {
-        crash_calculate_rent( objs, Some(*o), &mut cost);
+        crash_calculate_rent(objs, Some(*o), &mut cost);
     }
 
     let mut cost_eq = 0;
     for j in 0..NUM_WEARS {
-        crash_calculate_rent( objs, ch.get_eq(j), &mut cost_eq);
+        crash_calculate_rent(objs, ch.get_eq(j), &mut cost_eq);
     }
 
     cost += cost_eq;
@@ -1202,26 +1196,26 @@ pub fn crash_idlesave(
         if ch.get_eq(j).is_some() {
             let ch = chars.get(chid);
             let oid = ch.get_eq(j);
-            if !crash_save( db, objs, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = chars.get(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(  objs, oid);
+            crash_restore_weight(objs, oid);
             let ch = chars.get(chid);
             let oid = ch.get_eq(j);
-            crash_extract_objs( chars, db, objs, oid);
+            crash_extract_objs(chars, db, objs, oid);
         }
     }
     let ch = chars.get(chid);
     for (location, o) in ch.carrying.clone().into_iter().enumerate() {
-        if !crash_save( db, objs, Some(o), &mut fp, location as i32) {
+        if !crash_save(db, objs, Some(o), &mut fp, location as i32) {
             return;
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs( chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, Some(o));
     }
 }
 
@@ -1240,13 +1234,17 @@ pub fn crash_rentsave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name()) {
         return;
     }
-    let fpo = OpenOptions::new().write(true).create(true).truncate(true).open(buf);
+    let fpo = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(buf);
     if fpo.is_err() {
         return;
     }
     let mut fp = fpo.unwrap();
 
-    crash_extract_norent_eq( chars, db, objs, chid);
+    crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
         crash_extract_norents(chars, db, objs, o);
@@ -1277,25 +1275,25 @@ pub fn crash_rentsave(
         let ch = chars.get(chid);
         if ch.get_eq(j).is_some() {
             let oid = ch.get_eq(j);
-            if !crash_save( db, objs, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = chars.get(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight( objs, oid);
+            crash_restore_weight(objs, oid);
             let ch = chars.get(chid);
             crash_extract_objs(chars, db, objs, ch.get_eq(j));
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        if !crash_save( db, objs, Some(o), &mut fp, 0) {
+        if !crash_save(db, objs, Some(o), &mut fp, 0) {
             return;
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs( chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, Some(o));
     }
 }
 
@@ -1318,16 +1316,20 @@ fn crash_cryosave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
-    let fp = OpenOptions::new().create(true).truncate(true).write(true).open(buf);
+    let fp = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(buf);
     if fp.is_err() {
         return;
     }
     let mut fp = fp.unwrap();
 
-    crash_extract_norent_eq( chars, db, objs, chid);
+    crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_norents( chars, db, objs, o);
+        crash_extract_norents(chars, db, objs, o);
     }
     let ch = chars.get_mut(chid);
     ch.set_gold(max(0, ch.get_gold() - cost));
@@ -1344,25 +1346,25 @@ fn crash_cryosave(
         let ch = chars.get(chid);
         if ch.get_eq(j).is_some() {
             let oid = ch.get_eq(j);
-            if !crash_save( db, objs, oid, &mut fp, (j + 1) as i32) {
+            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
                 return;
             }
             let ch = chars.get(chid);
             let oid = ch.get_eq(j).unwrap();
-            crash_restore_weight(  objs, oid);
+            crash_restore_weight(objs, oid);
             let ch = chars.get(chid);
             crash_extract_objs(chars, db, objs, ch.get_eq(j));
         }
     }
     let ch = chars.get(chid);
     for (j, o) in ch.carrying.clone().into_iter().enumerate() {
-        if !crash_save( db, objs, Some(o), &mut fp, j as i32) {
+        if !crash_save(db, objs, Some(o), &mut fp, j as i32) {
             return;
         }
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs( chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, Some(o));
     }
     let ch = chars.get_mut(chid);
     ch.set_plr_flag_bit(PLR_CRYO);
@@ -1825,7 +1827,7 @@ You begin to lose consciousness...",
                 Some(VictimRef::Char(ch)),
                 TO_VICT,
             );
-            crash_cryosave( chars, db, objs, chid, cost);
+            crash_cryosave(chars, db, objs, chid, cost);
             let ch = chars.get(chid);
             game.mudlog(
                 chars,
@@ -1940,12 +1942,14 @@ pub fn crash_save_all(
 ) {
     for &d in &game.descriptor_list {
         let d = game.desc(d);
-        if d.state() == ConPlaying && !chars.get(d.character.unwrap()).is_npc()
-            && chars.get(d.character.unwrap()).plr_flagged(PLR_CRASH) {
-                crash_crashsave(chars, db, objs, d.character.unwrap());
-                chars
-                    .get_mut(d.character.unwrap())
-                    .remove_plr_flag(PLR_CRASH);
-            }
+        if d.state() == ConPlaying
+            && !chars.get(d.character.unwrap()).is_npc()
+            && chars.get(d.character.unwrap()).plr_flagged(PLR_CRASH)
+        {
+            crash_crashsave(chars, db, objs, d.character.unwrap());
+            chars
+                .get_mut(d.character.unwrap())
+                .remove_plr_flag(PLR_CRASH);
+        }
     }
 }

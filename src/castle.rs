@@ -28,7 +28,8 @@ use crate::interpreter::{SCMD_CLOSE, SCMD_LOCK, SCMD_OPEN, SCMD_UNLOCK};
 use crate::spell_parser::cast_spell;
 use crate::spells::{SPELL_COLOR_SPRAY, SPELL_FIREBALL, SPELL_HARM, SPELL_HEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    CharData, ItemType, MeRef, MobVnum, ObjData, Position, RoomRnum, RoomVnum, Special, WearFlags, NOBODY, NOWHERE
+    CharData, ItemType, MeRef, MobVnum, ObjData, Position, RoomRnum, RoomVnum, Special, WearFlags,
+    NOBODY, NOWHERE,
 };
 use crate::util::rand_number;
 use crate::{Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -90,31 +91,31 @@ fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
  * Called from spec_assign.c.
  */
 pub fn assign_kings_castle(db: &mut DB) {
-    castle_mob_spec( db, 0, castle_guard); /* Gwydion */
+    castle_mob_spec(db, 0, castle_guard); /* Gwydion */
     /* Added the previous line -- Furry */
-    castle_mob_spec( db, 1, king_welmar); /* Our dear friend, the King */
-    castle_mob_spec( db, 3, castle_guard); /* Jim */
-    castle_mob_spec( db, 4, castle_guard); /* Brian */
-    castle_mob_spec( db, 5, castle_guard); /* Mick */
-    castle_mob_spec( db, 6, castle_guard); /* Matt */
-    castle_mob_spec( db, 7, castle_guard); /* Jochem */
-    castle_mob_spec( db, 8, castle_guard); /* Anne */
-    castle_mob_spec( db, 9, castle_guard); /* Andrew */
-    castle_mob_spec( db, 10, castle_guard); /* Bertram */
-    castle_mob_spec( db, 11, castle_guard); /* Jeanette */
-    castle_mob_spec( db, 12, peter); /* Peter */
-    castle_mob_spec( db, 13, training_master); /* The training master */
-    castle_mob_spec( db, 16, james); /* James the Butler */
-    castle_mob_spec( db, 17, cleaning); /* Ze Cleaning Fomen */
-    castle_mob_spec( db, 20, tim); /* Tim, Tom's twin */
-    castle_mob_spec( db, 21, tom); /* Tom, Tim's twin */
-    castle_mob_spec( db, 24, dick_n_david); /* Dick, guard of the
+    castle_mob_spec(db, 1, king_welmar); /* Our dear friend, the King */
+    castle_mob_spec(db, 3, castle_guard); /* Jim */
+    castle_mob_spec(db, 4, castle_guard); /* Brian */
+    castle_mob_spec(db, 5, castle_guard); /* Mick */
+    castle_mob_spec(db, 6, castle_guard); /* Matt */
+    castle_mob_spec(db, 7, castle_guard); /* Jochem */
+    castle_mob_spec(db, 8, castle_guard); /* Anne */
+    castle_mob_spec(db, 9, castle_guard); /* Andrew */
+    castle_mob_spec(db, 10, castle_guard); /* Bertram */
+    castle_mob_spec(db, 11, castle_guard); /* Jeanette */
+    castle_mob_spec(db, 12, peter); /* Peter */
+    castle_mob_spec(db, 13, training_master); /* The training master */
+    castle_mob_spec(db, 16, james); /* James the Butler */
+    castle_mob_spec(db, 17, cleaning); /* Ze Cleaning Fomen */
+    castle_mob_spec(db, 20, tim); /* Tim, Tom's twin */
+    castle_mob_spec(db, 21, tom); /* Tom, Tim's twin */
+    castle_mob_spec(db, 24, dick_n_david); /* Dick, guard of the
                                             * Treasury */
-    castle_mob_spec( db, 25, dick_n_david); /* David, Dicks brother */
-    castle_mob_spec( db, 26, jerry); /* Jerry, the Gambler */
-    castle_mob_spec( db, 27, castle_guard); /* Michael */
-    castle_mob_spec( db, 28, castle_guard); /* Hans */
-    castle_mob_spec( db, 29, castle_guard); /* Boris */
+    castle_mob_spec(db, 25, dick_n_david); /* David, Dicks brother */
+    castle_mob_spec(db, 26, jerry); /* Jerry, the Gambler */
+    castle_mob_spec(db, 27, castle_guard); /* Michael */
+    castle_mob_spec(db, 28, castle_guard); /* Hans */
+    castle_mob_spec(db, 29, castle_guard); /* Boris */
 }
 
 /*
@@ -183,11 +184,17 @@ fn member_of_royal_guard(db: &DB, ch: &CharData) -> bool {
  * Returns a pointer to an npc by the given name.
  * Used by Tim and Tom
  */
-fn find_npc_by_name(chars: &Depot<CharData>, db: &DB, ch_at: &CharData, name: &str) -> Option<DepotId> {
+fn find_npc_by_name(
+    chars: &Depot<CharData>,
+    db: &DB,
+    ch_at: &CharData,
+    name: &str,
+) -> Option<DepotId> {
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
-        .find(|e| chars.get(**e).is_npc() && chars.get(**e).player.short_descr.starts_with(name)).copied()
+        .find(|e| chars.get(**e).is_npc() && chars.get(**e).player.short_descr.starts_with(name))
+        .copied()
 }
 
 /*
@@ -200,7 +207,10 @@ fn find_guard(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
-        .find(|e| chars.get(**e).fighting_id().is_none() && member_of_royal_guard(db, chars.get(**e))).copied()
+        .find(|e| {
+            chars.get(**e).fighting_id().is_none() && member_of_royal_guard(db, chars.get(**e))
+        })
+        .copied()
 }
 
 /*
@@ -258,14 +268,23 @@ fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
  * Makes a character banzaii on attackers of the castle staff.
  * Used by Guards, Tim, Tom, Dick, David, Peter, Master, King and Guards.
  */
-fn banzaii(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>,  chid: DepotId) -> bool {
+fn banzaii(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) -> bool {
     let ch = chars.get(chid);
-    let opponent_id = get_victim(chars,db, ch);
+    let opponent_id = get_victim(chars, db, ch);
     if !ch.awake() || ch.get_pos() == Position::Fighting || opponent_id.is_none() {
         return false;
     }
 
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "$n roars: 'Protect the Kingdom of Great King Welmar!  BANZAIIII!!!'",
         false,
@@ -274,7 +293,15 @@ fn banzaii(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mu
         None,
         TO_ROOM,
     );
-    game.hit(chars, db, texts, objs,chid, opponent_id.unwrap(), TYPE_UNDEFINED);
+    game.hit(
+        chars,
+        db,
+        texts,
+        objs,
+        chid,
+        opponent_id.unwrap(),
+        TYPE_UNDEFINED,
+    );
     true
 }
 
@@ -286,7 +313,9 @@ fn banzaii(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mu
  */
 fn do_npc_rescue(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
     chid_hero_id: DepotId,
     ch_victim_id: DepotId,
 ) -> bool {
@@ -301,7 +330,9 @@ fn do_npc_rescue(
     }
     let ch_hero = chars.get(chid_hero_id);
     let ch_victim = chars.get(ch_victim_id);
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "You bravely rescue $N.\r\n",
         false,
@@ -310,7 +341,9 @@ fn do_npc_rescue(
         Some(VictimRef::Char(ch_victim)),
         TO_CHAR,
     );
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "You are rescued by $N, your loyal friend!\r\n",
         false,
@@ -319,7 +352,9 @@ fn do_npc_rescue(
         Some(VictimRef::Char(ch_hero)),
         TO_CHAR,
     );
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "$n heroically rescues $N.",
         false,
@@ -335,8 +370,8 @@ fn do_npc_rescue(
         db.stop_fighting(chars.get_mut(chid_hero_id));
     }
 
-    game.set_fighting(chars, db, objs,chid_hero_id, chid_bad_guy.unwrap());
-    game.set_fighting(chars, db, objs,chid_bad_guy.unwrap(), chid_hero_id);
+    game.set_fighting(chars, db, objs, chid_hero_id, chid_bad_guy.unwrap());
+    game.set_fighting(chars, db, objs, chid_bad_guy.unwrap(), chid_hero_id);
     true
 }
 
@@ -347,7 +382,8 @@ fn do_npc_rescue(
 #[allow(clippy::too_many_arguments)]
 fn block_way(
     descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>, db: &DB,
+    chars: &Depot<CharData>,
+    db: &DB,
     chid: DepotId,
     cmd: i32,
     _arg: &str,
@@ -369,7 +405,9 @@ fn block_way(
     }
 
     if !member_of_staff(db, ch) {
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "The guard roars at $n and pushes $m back.",
             false,
@@ -380,7 +418,8 @@ fn block_way(
         );
     }
 
-    send_to_char(descs, 
+    send_to_char(
+        descs,
         ch,
         "The guard roars: 'Entrance is Prohibited!', and pushes you back.\r\n",
     );
@@ -409,12 +448,19 @@ fn is_trash(i: &ObjData) -> bool {
  * Finds a suitabe victim, and cast some _NASTY_ spell on him.
  * Used by King Welmar
  */
-fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, chid: DepotId) {
+fn fry_victim(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
     let ch = chars.get(chid);
     if ch.points.mana < 10 {
         return;
     }
-    let tchid = get_victim(chars,db, ch);
+    let tchid = get_victim(chars, db, ch);
     /* Find someone suitable to fry ! */
     if tchid.is_none() {
         return;
@@ -424,8 +470,14 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
 
     match rand_number(0, 8) {
         1..=3 => {
-            send_to_char(&mut game.descriptors, ch, "You raise your hand in a dramatical gesture.\r\n");
-            act(&mut game.descriptors, chars, 
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You raise your hand in a dramatical gesture.\r\n",
+            );
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n raises $s hand in a dramatical gesture.",
                 true,
@@ -434,11 +486,27 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
                 None,
                 TO_ROOM,
             );
-            cast_spell(game, chars, db, texts,objs, chid, Some(tchid), None, SPELL_COLOR_SPRAY);
+            cast_spell(
+                game,
+                chars,
+                db,
+                texts,
+                objs,
+                chid,
+                Some(tchid),
+                None,
+                SPELL_COLOR_SPRAY,
+            );
         }
         4 | 5 => {
-            send_to_char(&mut game.descriptors, ch, "You concentrate and mumble to yourself.\r\n");
-            act(&mut game.descriptors, chars, 
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You concentrate and mumble to yourself.\r\n",
+            );
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n concentrates, and mumbles to $mself.",
                 true,
@@ -447,10 +515,22 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
                 None,
                 TO_ROOM,
             );
-            cast_spell(game, chars, db, texts, objs,chid, Some(tchid), None, SPELL_HARM);
+            cast_spell(
+                game,
+                chars,
+                db,
+                texts,
+                objs,
+                chid,
+                Some(tchid),
+                None,
+                SPELL_HARM,
+            );
         }
         6 | 7 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You look deeply into the eyes of $N.",
                 true,
@@ -459,7 +539,9 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
                 Some(VictimRef::Char(tch)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n looks deeply into the eyes of $N.",
                 true,
@@ -468,7 +550,9 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
                 Some(VictimRef::Char(tch)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You see an ill-boding flame in the eye of $n.",
                 true,
@@ -477,11 +561,31 @@ fn fry_victim(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: 
                 Some(VictimRef::Char(tch)),
                 TO_VICT,
             );
-            cast_spell(game, chars, db, texts, objs,chid, Some(tchid), None, SPELL_FIREBALL);
+            cast_spell(
+                game,
+                chars,
+                db,
+                texts,
+                objs,
+                chid,
+                Some(tchid),
+                None,
+                SPELL_FIREBALL,
+            );
         }
         _ => {
             if !rand_number(0, 1) == 0 {
-                cast_spell(game, chars, db, texts,objs, chid, Some(chid), None, SPELL_HEAL);
+                cast_spell(
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    chid,
+                    Some(chid),
+                    None,
+                    SPELL_HEAL,
+                );
             }
         }
     }
@@ -525,7 +629,10 @@ const MONOLOG: [&str; 4] = [
 #[allow(clippy::too_many_arguments)]
 pub fn king_welmar(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -556,9 +663,9 @@ pub fn king_welmar(
     }
 
     if ch.get_pos() == Position::Fighting {
-        fry_victim(game, chars, db, texts, objs,chid);
+        fry_victim(game, chars, db, texts, objs, chid);
         return false;
-    } else if banzaii(game, chars, db, texts, objs,chid) {
+    } else if banzaii(game, chars, db, texts, objs, chid) {
         return false;
     }
 
@@ -570,7 +677,10 @@ pub fn king_welmar(
         '0' | '1' | '2' | '3' | '4' | '5' => {
             perform_move(
                 game,
-                db,chars, texts,objs,
+                db,
+                chars,
+                texts,
+                objs,
                 chid,
                 (db.king_welmar.path[db.king_welmar.path_index] - b'0') as i32,
                 true,
@@ -578,7 +688,9 @@ pub fn king_welmar(
         }
 
         'A' | 'B' | 'C' | 'D' => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 MONOLOG[(db.king_welmar.path[db.king_welmar.path_index] - b'A') as usize],
                 false,
@@ -595,7 +707,9 @@ pub fn king_welmar(
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n awakens and stands up.",
                 false,
@@ -610,7 +724,9 @@ pub fn king_welmar(
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Sleeping);
             let ch = chars.get(chid);
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n lies down on $s beautiful bed and instantly falls asleep.",
                 false,
@@ -625,7 +741,9 @@ pub fn king_welmar(
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Sitting);
             let ch = chars.get(chid);
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n sits down on $s great throne.",
                 false,
@@ -640,11 +758,23 @@ pub fn king_welmar(
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
-            act(&mut game.descriptors, chars, db, "$n stands up.", false, Some(ch), None, None, TO_ROOM);
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "$n stands up.",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
         }
 
         'G' => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n says 'Good morning, trusted friends.'",
                 false,
@@ -656,7 +786,9 @@ pub fn king_welmar(
         }
 
         'g' => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n says 'Good morning, dear subjects.'",
                 false,
@@ -668,13 +800,15 @@ pub fn king_welmar(
         }
 
         'o' => {
-            do_gen_door(game, db,chars, texts, objs,chid, "door", 0, SCMD_UNLOCK); /* strcpy: OK */
-            do_gen_door(game, db, chars, texts,objs,chid, "door", 0, SCMD_OPEN); /* strcpy: OK */
+            do_gen_door(game, db, chars, texts, objs, chid, "door", 0, SCMD_UNLOCK); /* strcpy: OK */
+            do_gen_door(game, db, chars, texts, objs, chid, "door", 0, SCMD_OPEN);
+            /* strcpy: OK */
         }
 
         'c' => {
-            do_gen_door(game, db, chars, texts,objs,chid, "door", 0, SCMD_CLOSE); /* strcpy: OK */
-            do_gen_door(game, db, chars, texts,objs,chid, "door", 0, SCMD_LOCK); /* strcpy: OK */
+            do_gen_door(game, db, chars, texts, objs, chid, "door", 0, SCMD_CLOSE); /* strcpy: OK */
+            do_gen_door(game, db, chars, texts, objs, chid, "door", 0, SCMD_LOCK);
+            /* strcpy: OK */
         }
 
         '.' => {
@@ -697,7 +831,10 @@ pub fn king_welmar(
 #[allow(clippy::too_many_arguments)]
 pub fn training_master(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -712,7 +849,7 @@ pub fn training_master(
         return false;
     }
 
-    if banzaii(game, chars, db, texts, objs,chid) || rand_number(0, 2) != 0 {
+    if banzaii(game, chars, db, texts, objs, chid) || rand_number(0, 2) != 0 {
         return false;
     }
 
@@ -728,7 +865,8 @@ pub fn training_master(
         return false;
     }
     let mut pupil2_id = pupil2.unwrap();
-    if chars.get(pupil1_id).fighting_id().is_some() || chars.get(pupil2_id).fighting_id().is_some() {
+    if chars.get(pupil1_id).fighting_id().is_some() || chars.get(pupil2_id).fighting_id().is_some()
+    {
         return false;
     }
     if rand_number(0, 1) != 0 {
@@ -740,7 +878,9 @@ pub fn training_master(
 
     match rand_number(0, 7) {
         0 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n hits $N on $s head with a powerful blow.",
                 false,
@@ -749,7 +889,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You hit $N on $s head with a powerful blow.",
                 false,
@@ -758,7 +900,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n hits you on your head with a powerful blow.",
                 false,
@@ -770,7 +914,9 @@ pub fn training_master(
         }
 
         1 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n hits $N in $s chest with a thrust.",
                 false,
@@ -779,7 +925,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You manage to thrust $N in the chest.",
                 false,
@@ -788,7 +936,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n manages to thrust you in your chest.",
                 false,
@@ -800,8 +950,14 @@ pub fn training_master(
         }
 
         2 => {
-            send_to_char(&mut game.descriptors, ch, "You command your pupils to bow.\r\n");
-            act(&mut game.descriptors, chars, 
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You command your pupils to bow.\r\n",
+            );
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n commands $s pupils to bow.",
                 false,
@@ -810,7 +966,9 @@ pub fn training_master(
                 None,
                 TO_ROOM,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n bows before $N.",
                 false,
@@ -819,7 +977,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N bows before $n.",
                 false,
@@ -828,7 +988,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You bow before $N, who returns your gesture.",
                 false,
@@ -837,7 +999,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You bow before $n, who returns your gesture.",
                 false,
@@ -849,7 +1013,9 @@ pub fn training_master(
         }
 
         3 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N yells at $n, as he fumbles and drops $s sword.",
                 false,
@@ -858,7 +1024,9 @@ pub fn training_master(
                 Some(VictimRef::Char(ch)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n quickly picks up $s weapon.",
                 false,
@@ -867,7 +1035,9 @@ pub fn training_master(
                 None,
                 TO_ROOM,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N yells at you, as you fumble, losing your weapon.",
                 false,
@@ -876,11 +1046,14 @@ pub fn training_master(
                 Some(VictimRef::Char(ch)),
                 TO_CHAR,
             );
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 chars.get(pupil1_id),
                 "You quickly pick up your weapon again.\r\n",
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You yell at $n, as he fumbles, losing $s weapon.",
                 false,
@@ -892,7 +1065,9 @@ pub fn training_master(
         }
 
         4 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N tricks $n, and slashes him across the back.",
                 false,
@@ -901,7 +1076,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N tricks you, and slashes you across your back.",
                 false,
@@ -910,7 +1087,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You trick $n, and quickly slash him across $s back.",
                 false,
@@ -922,7 +1101,9 @@ pub fn training_master(
         }
 
         5 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n lunges a blow at $N but $N parries skillfully.",
                 false,
@@ -931,7 +1112,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You lunge a blow at $N but $E parries skillfully.",
                 false,
@@ -940,7 +1123,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n lunges a blow at you, but you skillfully parry it.",
                 false,
@@ -952,7 +1137,9 @@ pub fn training_master(
         }
 
         6 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n clumsily tries to kick $N, but misses.",
                 false,
@@ -961,7 +1148,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You clumsily miss $N with your poor excuse for a kick.",
                 false,
@@ -970,7 +1159,9 @@ pub fn training_master(
                 Some(VictimRef::Char(pupil2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n fails an unusually clumsy attempt at kicking you.",
                 false,
@@ -982,8 +1173,14 @@ pub fn training_master(
         }
 
         _ => {
-            send_to_char(&mut game.descriptors, ch, "You show your pupils an advanced technique.\r\n");
-            act(&mut game.descriptors, chars, 
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You show your pupils an advanced technique.\r\n",
+            );
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n shows $s pupils an advanced technique.",
                 false,
@@ -1001,19 +1198,25 @@ pub fn training_master(
 #[allow(clippy::too_many_arguments)]
 pub fn tom(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     argument: &str,
 ) -> bool {
-    castle_twin_proc(game, chars, db, texts, objs,chid, cmd, argument, 48, "Tim")
+    castle_twin_proc(game, chars, db, texts, objs, chid, cmd, argument, 48, "Tim")
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn tim(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1028,7 +1231,10 @@ pub fn tim(
 #[allow(clippy::too_many_arguments)]
 fn castle_twin_proc(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     cmd: i32,
     arg: &str,
@@ -1041,14 +1247,23 @@ fn castle_twin_proc(
     }
 
     if cmd != 0 {
-        return block_way(&mut game.descriptors, chars, db, chid, cmd, arg, castle_virtual(db, ctlnum), 1);
+        return block_way(
+            &mut game.descriptors,
+            chars,
+            db,
+            chid,
+            cmd,
+            arg,
+            castle_virtual(db, ctlnum),
+            1,
+        );
     }
 
     let king_id = find_npc_by_name(chars, db, ch, "King Welmar");
 
     if let Some(king_id) = king_id {
         if ch.master.is_none() {
-            do_follow(game, db, chars, texts,objs,chid, "King Welmar", 0, 0); /* strcpy: OK */
+            do_follow(game, db, chars, texts, objs, chid, "King Welmar", 0, 0); /* strcpy: OK */
             if chars.get(king_id).fighting_id().is_some() {
                 do_npc_rescue(game, chars, db, objs, chid, king_id);
             }
@@ -1059,12 +1274,12 @@ fn castle_twin_proc(
     if let Some(twin_id) = twin_id {
         let twin = chars.get(twin_id);
         if twin.fighting_id().is_some() && 2 & twin.get_hit() < ch.get_hit() {
-            do_npc_rescue(game, chars,db, objs,chid, twin_id);
+            do_npc_rescue(game, chars, db, objs, chid, twin_id);
         }
     }
     let ch = chars.get(chid);
     if ch.get_pos() != Position::Fighting {
-        banzaii(game, chars, db, texts, objs,chid);
+        banzaii(game, chars, db, texts, objs, chid);
     }
 
     false
@@ -1079,19 +1294,30 @@ fn castle_twin_proc(
 #[allow(clippy::too_many_arguments)]
 fn james(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    castle_cleaner(game, chars, db, objs,chid, cmd, true)
+    castle_cleaner(game, chars, db, objs, chid, cmd, true)
 }
 
 /*
  * Common code for James and the Cleaning Woman.
  */
-fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, cmd: i32, gripe: bool) -> bool {
+fn castle_cleaner(
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    cmd: i32,
+    gripe: bool,
+) -> bool {
     let ch = chars.get(chid);
 
     if cmd != 0 || !ch.awake() || ch.get_pos() == Position::Fighting {
@@ -1104,7 +1330,9 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
         }
 
         if gripe {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n says: 'My oh my!  I ought to fire that lazy cleaning woman!'",
                 false,
@@ -1113,7 +1341,9 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
                 None,
                 TO_ROOM,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n picks up a piece of trash.",
                 false,
@@ -1126,7 +1356,7 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
         let i = objs.get_mut(i_id);
         let ch = chars.get_mut(chid);
         db.obj_from_room(i);
-        obj_to_char(i,  ch);
+        obj_to_char(i, ch);
         return true;
     }
 
@@ -1140,13 +1370,16 @@ fn castle_cleaner(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB,objs
 #[allow(clippy::too_many_arguments)]
 fn cleaning(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,_texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
     _argument: &str,
 ) -> bool {
-    castle_cleaner(game, chars,db, objs,chid, cmd, false)
+    castle_cleaner(game, chars, db, objs, chid, cmd, false)
 }
 
 /*
@@ -1157,7 +1390,10 @@ fn cleaning(
 #[allow(clippy::too_many_arguments)]
 fn castle_guard(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1169,7 +1405,7 @@ fn castle_guard(
         return false;
     }
 
-    banzaii(game, chars, db, texts,objs, chid)
+    banzaii(game, chars, db, texts, objs, chid)
 }
 
 /*
@@ -1180,7 +1416,10 @@ fn castle_guard(
 #[allow(clippy::too_many_arguments)]
 fn dick_n_david(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1193,10 +1432,19 @@ fn dick_n_david(
     }
 
     if cmd == 0 && ch.get_pos() != Position::Fighting {
-        banzaii(game, chars, db, texts, objs,chid);
+        banzaii(game, chars, db, texts, objs, chid);
     }
 
-    block_way(&mut game.descriptors, chars, db, chid, cmd, argument, castle_virtual(db, 36), 1)
+    block_way(
+        &mut game.descriptors,
+        chars,
+        db,
+        chid,
+        cmd,
+        argument,
+        castle_virtual(db, 36),
+        1,
+    )
 }
 
 /*
@@ -1206,7 +1454,10 @@ fn dick_n_david(
 #[allow(clippy::too_many_arguments)]
 fn peter(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB,texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1218,7 +1469,7 @@ fn peter(
         return false;
     }
 
-    if banzaii(game, chars, db, texts, objs,chid) {
+    if banzaii(game, chars, db, texts, objs, chid) {
         return false;
     }
     let db = &db;
@@ -1230,7 +1481,9 @@ fn peter(
         let ch_guard = chars.get(chid_guard);
         match rand_number(0, 5) {
             0 => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N comes sharply into attention as $n inspects $M.",
                     false,
@@ -1239,7 +1492,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N comes sharply into attention as you inspect $M.",
                     false,
@@ -1248,7 +1503,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You go sharply into attention as $n inspects you.",
                     false,
@@ -1259,7 +1516,9 @@ fn peter(
                 );
             }
             1 => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N looks very small, as $n roars at $M.",
                     false,
@@ -1268,7 +1527,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N looks very small as you roar at $M.",
                     false,
@@ -1277,7 +1538,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You feel very small as $N roars at you.",
                     false,
@@ -1288,7 +1551,9 @@ fn peter(
                 );
             }
             2 => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n gives $N some Royal directions.",
                     false,
@@ -1297,7 +1562,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You give $N some Royal directions.",
                     false,
@@ -1306,7 +1573,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_CHAR,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n gives you some Royal directions.",
                     false,
@@ -1317,7 +1586,9 @@ fn peter(
                 );
             }
             3 => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at you.",
                     false,
@@ -1326,7 +1597,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at $N.",
                     false,
@@ -1335,7 +1608,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n growls: 'Those boots need polishing!'",
                     false,
@@ -1344,7 +1619,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You growl at $N.",
                     false,
@@ -1355,7 +1632,9 @@ fn peter(
                 );
             }
             4 => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at you.",
                     false,
@@ -1364,7 +1643,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at $N.",
                     false,
@@ -1373,7 +1654,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n growls: 'Straighten that collar!'",
                     false,
@@ -1382,7 +1665,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You growl at $N.",
                     false,
@@ -1393,7 +1678,9 @@ fn peter(
                 );
             }
             _ => {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at you.",
                     false,
@@ -1402,7 +1689,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_VICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n looks at $N.",
                     false,
@@ -1411,7 +1700,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_NOTVICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n growls: 'That chain mail looks rusty!  CLEAN IT !!!'",
                     false,
@@ -1420,7 +1711,9 @@ fn peter(
                     Some(VictimRef::Char(ch_guard)),
                     TO_ROOM,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "You growl at $N.",
                     false,
@@ -1443,7 +1736,10 @@ fn peter(
 #[allow(clippy::too_many_arguments)]
 fn jerry(
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
     cmd: i32,
@@ -1485,7 +1781,9 @@ fn jerry(
 
     match rand_number(0, 5) {
         0 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n rolls the dice and cheers loudly at the result.",
                 false,
@@ -1494,7 +1792,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You roll the dice and cheer. GREAT!",
                 false,
@@ -1503,7 +1803,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n cheers loudly as $e rolls the dice.",
                 false,
@@ -1514,7 +1816,9 @@ fn jerry(
             );
         }
         1 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n curses the Goddess of Luck roundly as he sees $N's roll.",
                 false,
@@ -1523,7 +1827,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You curse the Goddess of Luck as $N rolls.",
                 false,
@@ -1532,7 +1838,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n swears angrily. You are in luck!",
                 false,
@@ -1543,7 +1851,9 @@ fn jerry(
             );
         }
         2 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n sighs loudly and gives $N some gold.",
                 false,
@@ -1552,7 +1862,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You sigh loudly at the pain of having to give $N some gold.",
                 false,
@@ -1561,7 +1873,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n sighs loudly as $e gives you your rightful win.",
                 false,
@@ -1572,7 +1886,9 @@ fn jerry(
             );
         }
         3 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n smiles remorsefully as $N's roll tops $s.",
                 false,
@@ -1581,7 +1897,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You smile sadly as you see that $N beats you. Again.",
                 false,
@@ -1590,7 +1908,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n smiles remorsefully as your roll tops $s.",
                 false,
@@ -1601,7 +1921,9 @@ fn jerry(
             );
         }
         4 => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n excitedly follows the dice with $s eyes.",
                 false,
@@ -1610,7 +1932,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You excitedly follow the dice with your eyes.",
                 false,
@@ -1619,7 +1943,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n excitedly follows the dice with $s eyes.",
                 false,
@@ -1630,7 +1956,9 @@ fn jerry(
             );
         }
         _ => {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n says 'Well, my luck has to change soon', as he shakes the dice.",
                 false,
@@ -1639,7 +1967,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_NOTVICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You say 'Well, my luck has to change soon' and shake the dice.",
                 false,
@@ -1648,7 +1978,9 @@ fn jerry(
                 Some(VictimRef::Char(gambler2)),
                 TO_CHAR,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n says 'Well, my luck has to change soon', as he shakes the dice.",
                 false,

@@ -24,7 +24,9 @@ use crate::config::{
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
 use crate::depot::{Depot, DepotId, HasId};
-use crate::handler::{affect_from_char, affect_remove, affected_by_spell, obj_to_obj, object_list_new_owner};
+use crate::handler::{
+    affect_from_char, affect_remove, affected_by_spell, obj_to_obj, object_list_new_owner,
+};
 use crate::limits::gain_exp;
 use crate::mobact::{forget, remember};
 use crate::screen::{C_CMP, C_SPR, KNRM, KNUL, KRED, KYEL};
@@ -34,13 +36,16 @@ use crate::spells::{
     TYPE_UNDEFINED,
 };
 use crate::structs::{
-    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData, Position, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY, NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF, PULSE_VIOLENCE, WEAR_WIELD
+    AffectFlags, CharData, ExtraFlags, ItemType, MeRef, MessageList, MessageType, MsgType, ObjData,
+    Position, RoomFlags, WearFlags, LVL_IMMORT, MOB_MEMORY, MOB_NOTDEADYET, MOB_SPEC, MOB_WIMPY,
+    NOTHING, NOWHERE, NUM_OF_DIRS, NUM_WEARS, PLR_KILLER, PLR_NOTDEADYET, PLR_THIEF,
+    PULSE_VIOLENCE, WEAR_WIELD,
 };
 use crate::util::{dice, rand_number, stop_follower, DisplayMode};
-use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
 use crate::{
     _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT,
 };
+use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
 
 /* Weapon attack texts */
 pub const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
@@ -113,36 +118,45 @@ macro_rules! is_weapon {
 }
 
 /* The Fight related routines */
-    pub fn appear(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
-        let ch = chars.get_mut(chid);
-        if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
-            affect_from_char( objs,ch, SPELL_INVISIBLE as i16);
-        }
-        ch.remove_aff_flags(AffectFlags::INVISIBLE | AffectFlags::HIDE);
-        let ch = chars.get(chid);
-        if ch.get_level() < LVL_IMMORT as u8 {
-            act(descs, chars, 
-                db,
-                "$n slowly fades into existence.",
-                false,
-                Some(ch),
-                None,
-                None,
-                TO_ROOM,
-            );
-        } else {
-            act(descs, chars, 
-                db,
-                "You feel a strange presence as $n appears, seemingly from nowhere.",
-                false,
-                Some(ch),
-                None,
-                None,
-                TO_ROOM,
-            );
-        }
+pub fn appear(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
+    let ch = chars.get_mut(chid);
+    if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
+        affect_from_char(objs, ch, SPELL_INVISIBLE as i16);
     }
-
+    ch.remove_aff_flags(AffectFlags::INVISIBLE | AffectFlags::HIDE);
+    let ch = chars.get(chid);
+    if ch.get_level() < LVL_IMMORT as u8 {
+        act(
+            descs,
+            chars,
+            db,
+            "$n slowly fades into existence.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+    } else {
+        act(
+            descs,
+            chars,
+            db,
+            "You feel a strange presence as $n appears, seemingly from nowhere.",
+            false,
+            Some(ch),
+            None,
+            None,
+            TO_ROOM,
+        );
+    }
+}
 
 pub fn compute_armor_class(ch: &CharData) -> i16 {
     let mut armorclass = ch.get_ac();
@@ -151,7 +165,7 @@ pub fn compute_armor_class(ch: &CharData) -> i16 {
         armorclass += DEX_APP[ch.get_dex() as usize].defensive * 10;
     }
 
-    max(-100, armorclass)/* -100 is lowest */
+    max(-100, armorclass) /* -100 is lowest */
 }
 
 pub fn free_messages(db: &mut DB) {
@@ -163,28 +177,36 @@ impl DB {
         let fl = OpenOptions::new()
             .read(true)
             .open(MESS_FILE)
-            .unwrap_or_else(|_| panic!("SYSERR: Error #1 reading combat message file{}", MESS_FILE));
+            .unwrap_or_else(|_| {
+                panic!("SYSERR: Error #1 reading combat message file{}", MESS_FILE)
+            });
         let mut reader = BufReader::new(fl);
         let mut buf = String::new();
-        let mut r = reader
-            .read_line(&mut buf)
-            .unwrap_or_else(|_| panic!("SYSERR: Error #2 reading combat message file{}", MESS_FILE));
+        let mut r = reader.read_line(&mut buf).unwrap_or_else(|_| {
+            panic!("SYSERR: Error #2 reading combat message file{}", MESS_FILE)
+        });
 
         while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
-            r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #3 reading combat message file{}", MESS_FILE));
+            r = reader.read_line(&mut buf).unwrap_or_else(|_| {
+                panic!("SYSERR: Error #3 reading combat message file{}", MESS_FILE)
+            });
         }
 
         let mut a_type;
         while buf.starts_with('M') {
             buf.clear();
-            reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #4 reading combat message file{}", MESS_FILE));
-            a_type = buf.trim().parse::<i32>().unwrap_or_else(|_| panic!("SYSERR: Error #5 reading combat message file{}", MESS_FILE));
+            reader.read_line(&mut buf).unwrap_or_else(|_| {
+                panic!("SYSERR: Error #4 reading combat message file{}", MESS_FILE)
+            });
+            a_type = buf.trim().parse::<i32>().unwrap_or_else(|_| {
+                panic!("SYSERR: Error #5 reading combat message file{}", MESS_FILE)
+            });
 
             let fml = self
                 .fight_messages
                 .iter()
                 .position(|fm| fm.a_type == a_type);
-            
+
             let i;
             if let Some(fml) = fml {
                 i = fml;
@@ -222,10 +244,14 @@ impl DB {
             };
             ml.messages.push(msg);
 
-            let mut r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #6 reading combat message file{}", MESS_FILE));
+            let mut r = reader.read_line(&mut buf).unwrap_or_else(|_| {
+                panic!("SYSERR: Error #6 reading combat message file{}", MESS_FILE)
+            });
 
             while r != 0 && (buf.starts_with('\n') || buf.starts_with('*')) {
-                r = reader.read_line(&mut buf).unwrap_or_else(|_| panic!("SYSERR: Error #7 reading combat message file{}", MESS_FILE));
+                r = reader.read_line(&mut buf).unwrap_or_else(|_| {
+                    panic!("SYSERR: Error #7 reading combat message file{}", MESS_FILE)
+                });
             }
         }
     }
@@ -246,7 +272,13 @@ pub fn update_pos(victim: &mut CharData) {
     }
 }
 
-pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &DB) {
+pub fn check_killer(
+    chid: DepotId,
+    vict_id: DepotId,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &DB,
+) {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if vict.plr_flagged(PLR_KILLER) || vict.plr_flagged(PLR_THIEF) {
@@ -258,10 +290,15 @@ pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mu
     let ch = chars.get_mut(chid);
     ch.set_plr_flag_bit(PLR_KILLER);
 
-    send_to_char(&mut game.descriptors, ch, "If you want to be a PLAYER KILLER, so be it...\r\n");
+    send_to_char(
+        &mut game.descriptors,
+        ch,
+        "If you want to be a PLAYER KILLER, so be it...\r\n",
+    );
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Brief,
         LVL_IMMORT as i32,
         true,
@@ -277,7 +314,14 @@ pub fn check_killer(chid: DepotId, vict_id: DepotId, game: &mut Game, chars: &mu
 
 /* start one char fighting another (yes, it is horrible, I know... )  */
 impl Game {
-    pub(crate) fn set_fighting(&mut self, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId, victid: DepotId) {
+    pub(crate) fn set_fighting(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        objs: &mut Depot<ObjData>,
+        chid: DepotId,
+        victid: DepotId,
+    ) {
         if chid == victid {
             return;
         }
@@ -292,9 +336,9 @@ impl Game {
         let ch = chars.get_mut(chid);
 
         if ch.aff_flagged(AffectFlags::SLEEP) {
-            affect_from_char( objs,ch, SPELL_SLEEP as i16);
+            affect_from_char(objs, ch, SPELL_SLEEP as i16);
         }
-        let ch= chars.get_mut(chid);
+        let ch = chars.get_mut(chid);
 
         ch.set_fighting(Some(victid));
         ch.set_pos(Position::Fighting);
@@ -314,77 +358,83 @@ impl DB {
         update_pos(ch);
     }
 }
-    pub fn make_corpse( chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
-        let ch = chars.get(chid);
-        let mut corpse = ObjData { item_number: NOTHING, ..Default::default() };
-        corpse.set_in_room(NOWHERE);
-        corpse.name = Rc::from("corpse");
+pub fn make_corpse(
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
+    let ch = chars.get(chid);
+    let mut corpse = ObjData {
+        item_number: NOTHING,
+        ..Default::default()
+    };
+    corpse.set_in_room(NOWHERE);
+    corpse.name = Rc::from("corpse");
 
-        let buf2 = format!("The corpse of {} is lying here.", ch.get_name());
-        corpse.description = Rc::from(buf2.as_str());
+    let buf2 = format!("The corpse of {} is lying here.", ch.get_name());
+    corpse.description = Rc::from(buf2.as_str());
 
-        let buf2 = format!("the corpse of {}", ch.get_name());
-        corpse.short_description = Rc::from(buf2.as_str());
+    let buf2 = format!("the corpse of {}", ch.get_name());
+    corpse.short_description = Rc::from(buf2.as_str());
 
-        corpse.set_obj_type(ItemType::Container);
-        corpse.set_obj_wear(WearFlags::TAKE);
-        corpse.set_obj_extra(ExtraFlags::NODONATE);
-        corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
-        corpse.set_obj_val(3, 1); /* corpse identifier */
-        corpse.set_obj_weight(ch.get_weight() as i32 + ch.is_carrying_w());
-        corpse.set_obj_rent(100000);
-        if ch.is_npc() {
-            corpse.set_obj_timer(MAX_NPC_CORPSE_TIME);
-        } else {
-            corpse.set_obj_timer(MAX_PC_CORPSE_TIME);
-        }
-
-
-        let corpse_id = objs.push(corpse);
-        db.object_list.push(corpse_id);
-
-        /* transfer character's inventory to the corpse */
-        let ch = chars.get(chid);
-        for o in ch.carrying.clone() {
-            objs.get_mut(corpse_id).contains.push(o);
-        }
-        for oid in objs.get(corpse_id).contains.clone() {
-            objs.get_mut(oid).in_obj = Some(corpse_id);
-            object_list_new_owner(objs,oid, None);
-        }
-        /* transfer character's equipment to the corpse */
-        for i in 0..NUM_WEARS {
-            let ch = chars.get(chid);
-            if ch.get_eq(i).is_some() {
-                let oid = db.unequip_char(chars, objs,chid, i).unwrap();
-                obj_to_obj(chars, objs,oid, corpse_id);
-            }
-        }
-        let ch = chars.get(chid);
-        /* transfer gold */
-        if ch.get_gold() > 0 {
-            /*
-             * following 'if' clause added to fix gold duplication loophole
-             * The above line apparently refers to the old "partially log in,
-             * kill the game character, then finish login sequence" duping
-             * bug. The duplication has been fixed (knock on wood) but the
-             * test below shall live on, for a while. -gg 3/3/2002
-             */
-            if ch.is_npc() || ch.desc.is_some() {
-                let money_id = db.create_money(objs,ch.get_gold());
-                obj_to_obj(chars, objs,money_id.unwrap(), corpse_id);
-            }
-            let ch = chars.get_mut(chid);
-            ch.set_gold(0);
-        }
-        let ch = chars.get_mut(chid);
-        ch.carrying.clear();
-        ch.set_is_carrying_w(0);
-        ch.set_is_carrying_n(0);
-        let ch_in_room = ch.in_room();
-        db.obj_to_room(objs.get_mut(corpse_id), ch_in_room);
+    corpse.set_obj_type(ItemType::Container);
+    corpse.set_obj_wear(WearFlags::TAKE);
+    corpse.set_obj_extra(ExtraFlags::NODONATE);
+    corpse.set_obj_val(0, 0); /* You can't store stuff in a corpse */
+    corpse.set_obj_val(3, 1); /* corpse identifier */
+    corpse.set_obj_weight(ch.get_weight() as i32 + ch.is_carrying_w());
+    corpse.set_obj_rent(100000);
+    if ch.is_npc() {
+        corpse.set_obj_timer(MAX_NPC_CORPSE_TIME);
+    } else {
+        corpse.set_obj_timer(MAX_PC_CORPSE_TIME);
     }
 
+    let corpse_id = objs.push(corpse);
+    db.object_list.push(corpse_id);
+
+    /* transfer character's inventory to the corpse */
+    let ch = chars.get(chid);
+    for o in ch.carrying.clone() {
+        objs.get_mut(corpse_id).contains.push(o);
+    }
+    for oid in objs.get(corpse_id).contains.clone() {
+        objs.get_mut(oid).in_obj = Some(corpse_id);
+        object_list_new_owner(objs, oid, None);
+    }
+    /* transfer character's equipment to the corpse */
+    for i in 0..NUM_WEARS {
+        let ch = chars.get(chid);
+        if ch.get_eq(i).is_some() {
+            let oid = db.unequip_char(chars, objs, chid, i).unwrap();
+            obj_to_obj(chars, objs, oid, corpse_id);
+        }
+    }
+    let ch = chars.get(chid);
+    /* transfer gold */
+    if ch.get_gold() > 0 {
+        /*
+         * following 'if' clause added to fix gold duplication loophole
+         * The above line apparently refers to the old "partially log in,
+         * kill the game character, then finish login sequence" duping
+         * bug. The duplication has been fixed (knock on wood) but the
+         * test below shall live on, for a while. -gg 3/3/2002
+         */
+        if ch.is_npc() || ch.desc.is_some() {
+            let money_id = db.create_money(objs, ch.get_gold());
+            obj_to_obj(chars, objs, money_id.unwrap(), corpse_id);
+        }
+        let ch = chars.get_mut(chid);
+        ch.set_gold(0);
+    }
+    let ch = chars.get_mut(chid);
+    ch.carrying.clear();
+    ch.set_is_carrying_w(0);
+    ch.set_is_carrying_n(0);
+    let ch_in_room = ch.in_room();
+    db.obj_to_room(objs.get_mut(corpse_id), ch_in_room);
+}
 
 /* When ch kills victim */
 pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
@@ -398,60 +448,80 @@ pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: D
     chars.get_mut(chid).set_alignment(alignment);
 }
 
-    pub fn death_cry(descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, db: &DB, ch: &CharData) {
-        act(descs, chars, 
-            db,
-            "Your blood freezes as you hear $n's death cry.",
-            false,
-            Some(ch),
-            None,
-            None,
-            TO_ROOM,
-        );
-        let ch_in_room = ch.in_room();
-        for door in 0..NUM_OF_DIRS {
-            if db.can_go(ch, door) {
-                send_to_room(
-                    descs,
-                    chars, db,
-                    db.world[ch_in_room as usize].dir_option[door]
-                        .as_ref()
-                        .unwrap()
-                        .to_room,
-                    "Your blood freezes as you hear someone's death cry.\r\n",
-                );
-            }
+pub fn death_cry(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    ch: &CharData,
+) {
+    act(
+        descs,
+        chars,
+        db,
+        "Your blood freezes as you hear $n's death cry.",
+        false,
+        Some(ch),
+        None,
+        None,
+        TO_ROOM,
+    );
+    let ch_in_room = ch.in_room();
+    for door in 0..NUM_OF_DIRS {
+        if db.can_go(ch, door) {
+            send_to_room(
+                descs,
+                chars,
+                db,
+                db.world[ch_in_room as usize].dir_option[door]
+                    .as_ref()
+                    .unwrap()
+                    .to_room,
+                "Your blood freezes as you hear someone's death cry.\r\n",
+            );
         }
     }
+}
 
-    pub fn raw_kill(descs: &mut Depot<DescriptorData>, chars: &mut Depot<CharData>, db: &mut DB,objs: &mut Depot<ObjData>,  chid: DepotId) {
-        let ch = chars.get_mut(chid);
-        if ch.fighting_id().is_some() {
-            db.stop_fighting(ch);
-        }
-        let ch = chars.get_mut(chid);
-        let mut list = ch.affected.clone();
-        list.retain(|af| {
-            affect_remove(objs,ch, *af);
-            false
-        });
-        let ch = chars.get_mut(chid);
-        ch.affected = list;
-        let ch = chars.get(chid);
-        death_cry(descs, chars, db, ch);
-        make_corpse(chars, db, objs,chid);
-        db.extract_char(chars, chid);
+pub fn raw_kill(
+    descs: &mut Depot<DescriptorData>,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    objs: &mut Depot<ObjData>,
+    chid: DepotId,
+) {
+    let ch = chars.get_mut(chid);
+    if ch.fighting_id().is_some() {
+        db.stop_fighting(ch);
     }
-
-
-pub fn die(chid: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+    let ch = chars.get_mut(chid);
+    let mut list = ch.affected.clone();
+    list.retain(|af| {
+        affect_remove(objs, ch, *af);
+        false
+    });
+    let ch = chars.get_mut(chid);
+    ch.affected = list;
     let ch = chars.get(chid);
-    gain_exp(chid, -(ch.get_exp() / 2), game, chars, db, texts,objs);
+    death_cry(descs, chars, db, ch);
+    make_corpse(chars, db, objs, chid);
+    db.extract_char(chars, chid);
+}
+
+pub fn die(
+    chid: DepotId,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
+    let ch = chars.get(chid);
+    gain_exp(chid, -(ch.get_exp() / 2), game, chars, db, texts, objs);
     let ch = chars.get_mut(chid);
     if !ch.is_npc() {
         ch.remove_plr_flag(PLR_KILLER | PLR_THIEF);
     }
-    raw_kill(&mut game.descriptors, chars,db, objs,chid);
+    raw_kill(&mut game.descriptors, chars, db, objs, chid);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -460,13 +530,17 @@ pub fn perform_group_gain(
     base: i32,
     victim_id: DepotId,
     game: &mut Game,
-    chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
 ) {
     let ch = chars.get(chid);
     let share = base.clamp(1, MAX_EXP_GAIN);
 
     if share > 1 {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "You receive your share of experience -- {} points.\r\n",
@@ -475,20 +549,28 @@ pub fn perform_group_gain(
             .as_str(),
         );
     } else {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "You receive your share of experience -- one measly little point!\r\n",
         );
     }
-    gain_exp(chid, share, game, chars, db, texts,objs);
-    change_alignment(chars,  chid, victim_id);
+    gain_exp(chid, share, game, chars, db, texts, objs);
+    change_alignment(chars, chid, victim_id);
 }
 
-pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+pub fn group_gain(
+    chid: DepotId,
+    victim_id: DepotId,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
-    let k_id =
-    if ch.master.is_none() {
+    let k_id = if ch.master.is_none() {
         chid
     } else {
         ch.master.unwrap()
@@ -516,27 +598,34 @@ pub fn group_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mu
         tot_gain = min(MAX_EXP_LOSS * 2 / 3, tot_gain);
     }
 
-    let base=
-    if tot_members >= 1 {
+    let base = if tot_members >= 1 {
         max(1, tot_gain / tot_members)
     } else {
         0
     };
 
     if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
-        perform_group_gain(k_id, base, victim_id, game, chars, db, texts,objs);
+        perform_group_gain(k_id, base, victim_id, game, chars, db, texts, objs);
     }
     let k = chars.get(k_id);
     for f in k.followers.clone() {
         let follower = chars.get(f.follower);
         let ch = chars.get(chid);
         if follower.aff_flagged(AffectFlags::GROUP) && follower.in_room() == ch.in_room() {
-            perform_group_gain(f.follower, base, victim_id, game, chars, db, texts,objs);
+            perform_group_gain(f.follower, base, victim_id, game, chars, db, texts, objs);
         }
     }
 }
 
-pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+pub fn solo_gain(
+    chid: DepotId,
+    victim_id: DepotId,
+    game: &mut Game,
+    chars: &mut Depot<CharData>,
+    db: &mut DB,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
+) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
     let mut exp = min(MAX_EXP_GAIN, victim.get_exp() / 3);
@@ -556,15 +645,20 @@ pub fn solo_gain(chid: DepotId, victim_id: DepotId, game: &mut Game, chars: &mut
     exp = max(exp, 1);
 
     if exp > 1 {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("You receive {} experience points.\r\n", exp).as_str(),
         );
     } else {
-        send_to_char(&mut game.descriptors, ch, "You receive one lousy experience point.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You receive one lousy experience point.\r\n",
+        );
     }
-    gain_exp(chid, exp, game, chars, db, texts,objs);
-    change_alignment(chars,  chid, victim_id);
+    gain_exp(chid, exp, game, chars, db, texts, objs);
+    change_alignment(chars, chid, victim_id);
 }
 
 pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> String {
@@ -597,303 +691,228 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
     buf
 }
 
-    /* message for doing damage with a weapon */
-    pub fn dam_message(
-        descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
-        db: &DB,
-        dam: i32,
-        ch: &CharData,
-        victim: &CharData,
-        mut w_type: i32,
-    ) {
-        struct DamWeaponType {
-            to_room: &'static str,
-            to_char: &'static str,
-            to_victim: &'static str,
-        }
-        const DAM_WEAPONS: [DamWeaponType; 9] = [
-            /* use #w for singular (i.e. "slash") and #W for plural (i.e. "slashes") */
-            DamWeaponType {
-                to_room: "$n tries to #w $N, but misses.",
-                to_char: "You try to #w $N, but miss.",
-                to_victim: "$n tries to #w you, but misses.",
-            }, /* 0: 0     */
-            DamWeaponType {
-                to_room: "$n tickles $N as $e #W $M.",
-                to_char: "You tickle $N as you #w $M.",
-                to_victim: "$n tickles you as $e #W you.",
-            }, /* 1: 1..2  */
-            DamWeaponType {
-                to_room: "$n barely #W $N.",
-                to_char: "You barely #w $N.",
-                to_victim: "$n barely #W you.",
-            }, /* 2: 3..4  */
-            DamWeaponType {
-                to_room: "$n #W $N.",
-                to_char: "You #w $N.",
-                to_victim: "$n #W you.",
-            }, /* 3: 5..6  */
-            DamWeaponType {
-                to_room: "$n #W $N hard.",
-                to_char: "You #w $N hard.",
-                to_victim: "$n #W you hard.",
-            }, /* 4: 7..10  */
-            DamWeaponType {
-                to_room: "$n #W $N very hard.",
-                to_char: "You #w $N very hard.",
-                to_victim: "$n #W you very hard.",
-            }, /* 5: 11..14  */
-            DamWeaponType {
-                to_room: "$n #W $N extremely hard.",
-                to_char: "You #w $N extremely hard.",
-                to_victim: "$n #W you extremely hard.",
-            }, /* 6: 15..19  */
-            DamWeaponType {
-                to_room: "$n massacres $N to small fragments with $s #w.",
-                to_char: "You massacre $N to small fragments with your #w.",
-                to_victim: "$n massacres you to small fragments with $s #w.",
-            }, /* 7: 19..23 */
-            DamWeaponType {
-                to_room: "$n OBLITERATES $N with $s deadly #w!!",
-                to_char: "You OBLITERATE $N with your deadly #w!!",
-                to_victim: "$n OBLITERATES you with $s deadly #w!!",
-            }, /* 8: > 23   */
-        ];
-
-        w_type -= TYPE_HIT; /* Change to base of table with text */
-        let w_type = w_type as usize;
-        let msgnum;
-        if dam == 0 {
-            msgnum = 0;
-        } else if dam <= 2 {
-            msgnum = 1;
-        } else if dam <= 4 {
-            msgnum = 2;
-        } else if dam <= 6 {
-            msgnum = 3;
-        } else if dam <= 10 {
-            msgnum = 4;
-        } else if dam <= 14 {
-            msgnum = 5;
-        } else if dam <= 19 {
-            msgnum = 6;
-        } else if dam <= 23 {
-            msgnum = 7;
-        } else {
-            msgnum = 8
-        };
-
-        /* damage message to onlookers */
-        let buf = replace_string(
-            DAM_WEAPONS[msgnum].to_room,
-            ATTACK_HIT_TEXT[w_type].singular,
-            ATTACK_HIT_TEXT[w_type].plural,
-        );
-        act(descs, chars, 
-            db,
-            &buf,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(victim)),
-            TO_NOTVICT,
-        );
-
-        /* damage message to damager */
-        send_to_char(descs, ch, CCYEL!(ch, C_CMP));
-        let buf = replace_string(
-            DAM_WEAPONS[msgnum].to_char,
-            ATTACK_HIT_TEXT[w_type].singular,
-            ATTACK_HIT_TEXT[w_type].plural,
-        );
-        act(descs, chars, 
-            db,
-            &buf,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(victim)),
-            TO_CHAR,
-        );
-        send_to_char(descs, ch, CCNRM!(ch, C_CMP));
-
-        /* damage message to damagee */
-        send_to_char(descs, victim, CCRED!(victim, C_CMP));
-        let buf = replace_string(
-            DAM_WEAPONS[msgnum].to_victim,
-            ATTACK_HIT_TEXT[w_type].singular,
-            ATTACK_HIT_TEXT[w_type].plural,
-        );
-        act(descs, chars, 
-            db,
-            &buf,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(victim)),
-            TO_VICT | TO_SLEEP,
-        );
-        send_to_char(descs, victim, CCNRM!(victim, C_CMP));
+/* message for doing damage with a weapon */
+pub fn dam_message(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    dam: i32,
+    ch: &CharData,
+    victim: &CharData,
+    mut w_type: i32,
+) {
+    struct DamWeaponType {
+        to_room: &'static str,
+        to_char: &'static str,
+        to_victim: &'static str,
     }
+    const DAM_WEAPONS: [DamWeaponType; 9] = [
+        /* use #w for singular (i.e. "slash") and #W for plural (i.e. "slashes") */
+        DamWeaponType {
+            to_room: "$n tries to #w $N, but misses.",
+            to_char: "You try to #w $N, but miss.",
+            to_victim: "$n tries to #w you, but misses.",
+        }, /* 0: 0     */
+        DamWeaponType {
+            to_room: "$n tickles $N as $e #W $M.",
+            to_char: "You tickle $N as you #w $M.",
+            to_victim: "$n tickles you as $e #W you.",
+        }, /* 1: 1..2  */
+        DamWeaponType {
+            to_room: "$n barely #W $N.",
+            to_char: "You barely #w $N.",
+            to_victim: "$n barely #W you.",
+        }, /* 2: 3..4  */
+        DamWeaponType {
+            to_room: "$n #W $N.",
+            to_char: "You #w $N.",
+            to_victim: "$n #W you.",
+        }, /* 3: 5..6  */
+        DamWeaponType {
+            to_room: "$n #W $N hard.",
+            to_char: "You #w $N hard.",
+            to_victim: "$n #W you hard.",
+        }, /* 4: 7..10  */
+        DamWeaponType {
+            to_room: "$n #W $N very hard.",
+            to_char: "You #w $N very hard.",
+            to_victim: "$n #W you very hard.",
+        }, /* 5: 11..14  */
+        DamWeaponType {
+            to_room: "$n #W $N extremely hard.",
+            to_char: "You #w $N extremely hard.",
+            to_victim: "$n #W you extremely hard.",
+        }, /* 6: 15..19  */
+        DamWeaponType {
+            to_room: "$n massacres $N to small fragments with $s #w.",
+            to_char: "You massacre $N to small fragments with your #w.",
+            to_victim: "$n massacres you to small fragments with $s #w.",
+        }, /* 7: 19..23 */
+        DamWeaponType {
+            to_room: "$n OBLITERATES $N with $s deadly #w!!",
+            to_char: "You OBLITERATE $N with your deadly #w!!",
+            to_victim: "$n OBLITERATES you with $s deadly #w!!",
+        }, /* 8: > 23   */
+    ];
 
-    /*
-     *  message for doing damage with a spell or skill
-     *  C3.0: Also used for weapon damage on miss and death blows
-     */
-    #[allow(clippy::too_many_arguments)]
-    pub fn skill_message(
-        descs: &mut Depot<DescriptorData>, chars: &Depot<CharData>, 
-        db: &DB,objs: & Depot<ObjData>, 
-        dam: i32,
-        ch: &CharData,
-        vict: &CharData,
-        attacktype: i32,
-    ) -> i32 {
-        let weap_id = ch.get_eq(WEAR_WIELD);
-        let weap = weap_id.map(|id| objs.get(id));
+    w_type -= TYPE_HIT; /* Change to base of table with text */
+    let w_type = w_type as usize;
+    let msgnum;
+    if dam == 0 {
+        msgnum = 0;
+    } else if dam <= 2 {
+        msgnum = 1;
+    } else if dam <= 4 {
+        msgnum = 2;
+    } else if dam <= 6 {
+        msgnum = 3;
+    } else if dam <= 10 {
+        msgnum = 4;
+    } else if dam <= 14 {
+        msgnum = 5;
+    } else if dam <= 19 {
+        msgnum = 6;
+    } else if dam <= 23 {
+        msgnum = 7;
+    } else {
+        msgnum = 8
+    };
 
-        for i in 0..db.fight_messages.len() {
-            if db.fight_messages[i].a_type == attacktype {
-                let nr = dice(1, db.fight_messages[i].messages.len() as i32) as usize;
+    /* damage message to onlookers */
+    let buf = replace_string(
+        DAM_WEAPONS[msgnum].to_room,
+        ATTACK_HIT_TEXT[w_type].singular,
+        ATTACK_HIT_TEXT[w_type].plural,
+    );
+    act(
+        descs,
+        chars,
+        db,
+        &buf,
+        false,
+        Some(ch),
+        None,
+        Some(VictimRef::Char(victim)),
+        TO_NOTVICT,
+    );
 
-                if !vict.is_npc() && vict.get_level() >= LVL_IMMORT as u8 {
-                    let attacker_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
-                        .god_msg
-                        .attacker_msg;
+    /* damage message to damager */
+    send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+    let buf = replace_string(
+        DAM_WEAPONS[msgnum].to_char,
+        ATTACK_HIT_TEXT[w_type].singular,
+        ATTACK_HIT_TEXT[w_type].plural,
+    );
+    act(
+        descs,
+        chars,
+        db,
+        &buf,
+        false,
+        Some(ch),
+        None,
+        Some(VictimRef::Char(victim)),
+        TO_CHAR,
+    );
+    send_to_char(descs, ch, CCNRM!(ch, C_CMP));
+
+    /* damage message to damagee */
+    send_to_char(descs, victim, CCRED!(victim, C_CMP));
+    let buf = replace_string(
+        DAM_WEAPONS[msgnum].to_victim,
+        ATTACK_HIT_TEXT[w_type].singular,
+        ATTACK_HIT_TEXT[w_type].plural,
+    );
+    act(
+        descs,
+        chars,
+        db,
+        &buf,
+        false,
+        Some(ch),
+        None,
+        Some(VictimRef::Char(victim)),
+        TO_VICT | TO_SLEEP,
+    );
+    send_to_char(descs, victim, CCNRM!(victim, C_CMP));
+}
+
+/*
+ *  message for doing damage with a spell or skill
+ *  C3.0: Also used for weapon damage on miss and death blows
+ */
+#[allow(clippy::too_many_arguments)]
+pub fn skill_message(
+    descs: &mut Depot<DescriptorData>,
+    chars: &Depot<CharData>,
+    db: &DB,
+    objs: &Depot<ObjData>,
+    dam: i32,
+    ch: &CharData,
+    vict: &CharData,
+    attacktype: i32,
+) -> i32 {
+    let weap_id = ch.get_eq(WEAR_WIELD);
+    let weap = weap_id.map(|id| objs.get(id));
+
+    for i in 0..db.fight_messages.len() {
+        if db.fight_messages[i].a_type == attacktype {
+            let nr = dice(1, db.fight_messages[i].messages.len() as i32) as usize;
+
+            if !vict.is_npc() && vict.get_level() >= LVL_IMMORT as u8 {
+                let attacker_msg: &Rc<str> =
+                    &db.fight_messages[i].messages[nr].god_msg.attacker_msg;
+                let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr].god_msg.victim_msg;
+                let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].god_msg.room_msg;
+                act(
+                    descs,
+                    chars,
+                    db,
+                    attacker_msg,
+                    false,
+                    Some(ch),
+                    weap,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR,
+                );
+                act(
+                    descs,
+                    chars,
+                    db,
+                    victim_msg,
+                    false,
+                    Some(ch),
+                    weap,
+                    Some(VictimRef::Char(vict)),
+                    TO_VICT,
+                );
+                act(
+                    descs,
+                    chars,
+                    db,
+                    room_msg,
+                    false,
+                    Some(ch),
+                    weap,
+                    Some(VictimRef::Char(vict)),
+                    TO_NOTVICT,
+                );
+            } else if dam != 0 {
+                /*
+                 * Don't send redundant color codes for TYPE_SUFFERING & other types
+                 * of damage without attacker_msg.
+                 */
+                if vict.get_pos() == Position::Dead {
+                    let attacker_msg: &Rc<str> =
+                        &db.fight_messages[i].messages[nr].die_msg.attacker_msg;
                     let victim_msg: &Rc<str> =
-                        &db.fight_messages[i].messages[nr].god_msg.victim_msg;
-                    let room_msg: &Rc<str> =
-                        &db.fight_messages[i].messages[nr].god_msg.room_msg;
-                    act(descs, chars, 
-                        db,
-                        attacker_msg,
-                        false,
-                        Some(ch),
-                        weap,
-                        Some(VictimRef::Char(vict)),
-                        TO_CHAR,
-                    );
-                    act(descs, chars, 
-                        db,
-                        victim_msg,
-                        false,
-                        Some(ch),
-                        weap,
-                        Some(VictimRef::Char(vict)),
-                        TO_VICT,
-                    );
-                    act(descs, chars, 
-                        db,
-                        room_msg,
-                        false,
-                        Some(ch),
-                        weap,
-                        Some(VictimRef::Char(vict)),
-                        TO_NOTVICT,
-                    );
-                } else if dam != 0 {
-                    /*
-                     * Don't send redundant color codes for TYPE_SUFFERING & other types
-                     * of damage without attacker_msg.
-                     */
-                    if vict.get_pos() == Position::Dead {
-                        let attacker_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
-                            .die_msg
-                            .attacker_msg;
-                        let victim_msg: &Rc<str> =
-                            &db.fight_messages[i].messages[nr].die_msg.victim_msg;
-                        let room_msg: &Rc<str> =
-                            &db.fight_messages[i].messages[nr].die_msg.room_msg;
-                        if !attacker_msg.is_empty() {
-                            send_to_char(descs, ch, CCYEL!(ch, C_CMP));
-                            act(descs, chars, 
-                                db,
-                                attacker_msg,
-                                false,
-                                Some(ch),
-                                weap,
-                                Some(VictimRef::Char(vict)),
-                                TO_CHAR,
-                            );
-                            send_to_char(descs, ch, CCNRM!(ch, C_CMP));
-                        }
-                        send_to_char(descs, vict, CCRED!(vict, C_CMP));
-                        act(descs, chars, 
-                            db,
-                            victim_msg,
-                            false,
-                            Some(ch),
-                            weap,
-                            Some(VictimRef::Char(vict)),
-                            TO_VICT | TO_SLEEP,
-                        );
-                        send_to_char(descs, vict, CCNRM!(vict, C_CMP));
-
-                        act(descs, chars, 
-                            db,
-                            room_msg,
-                            false,
-                            Some(ch),
-                            weap,
-                            Some(VictimRef::Char(vict)),
-                            TO_NOTVICT,
-                        );
-                    } else {
-                        let attacker_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
-                            .hit_msg
-                            .attacker_msg;
-                        let victim_msg: &Rc<str> =
-                            &db.fight_messages[i].messages[nr].hit_msg.victim_msg;
-                        let room_msg: &Rc<str> =
-                            &db.fight_messages[i].messages[nr].hit_msg.room_msg;
-                        if !attacker_msg.is_empty() {
-                            send_to_char(descs, ch, CCYEL!(ch, C_CMP));
-                            act(descs, chars, 
-                                db,
-                                attacker_msg,
-                                false,
-                                Some(ch),
-                                weap,
-                                Some(VictimRef::Char(vict)),
-                                TO_CHAR,
-                            );
-                            send_to_char(descs, ch, CCNRM!(ch, C_CMP));
-                        }
-                        send_to_char(descs, vict, CCRED!(vict, C_CMP));
-                        act(descs, chars, 
-                            db,
-                            victim_msg,
-                            false,
-                            Some(ch),
-                            weap,
-                            Some(VictimRef::Char(vict)),
-                            TO_VICT | TO_SLEEP,
-                        );
-                        send_to_char(descs, vict, CCNRM!(vict, C_CMP));
-
-                        act(descs, chars, 
-                            db,
-                            room_msg,
-                            false,
-                            Some(ch),
-                            weap,
-                            Some(VictimRef::Char(vict)),
-                            TO_NOTVICT,
-                        );
-                    }
-                } else if !std::ptr::eq(ch, vict) {
-                    let attacker_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
-                        .miss_msg
-                        .attacker_msg;
-                    let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr]
-                        .miss_msg
-                        .victim_msg;
-                    let room_msg: &Rc<str> =
-                        &db.fight_messages[i].messages[nr].miss_msg.room_msg;
-                    /* Dam == 0 */
+                        &db.fight_messages[i].messages[nr].die_msg.victim_msg;
+                    let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].die_msg.room_msg;
                     if !attacker_msg.is_empty() {
                         send_to_char(descs, ch, CCYEL!(ch, C_CMP));
-                        act(descs, chars, 
+                        act(
+                            descs,
+                            chars,
                             db,
                             attacker_msg,
                             false,
@@ -905,7 +924,9 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
                         send_to_char(descs, ch, CCNRM!(ch, C_CMP));
                     }
                     send_to_char(descs, vict, CCRED!(vict, C_CMP));
-                    act(descs, chars, 
+                    act(
+                        descs,
+                        chars,
                         db,
                         victim_msg,
                         false,
@@ -916,7 +937,55 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
                     );
                     send_to_char(descs, vict, CCNRM!(vict, C_CMP));
 
-                    act(descs, chars, 
+                    act(
+                        descs,
+                        chars,
+                        db,
+                        room_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
+                        TO_NOTVICT,
+                    );
+                } else {
+                    let attacker_msg: &Rc<str> =
+                        &db.fight_messages[i].messages[nr].hit_msg.attacker_msg;
+                    let victim_msg: &Rc<str> =
+                        &db.fight_messages[i].messages[nr].hit_msg.victim_msg;
+                    let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].hit_msg.room_msg;
+                    if !attacker_msg.is_empty() {
+                        send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+                        act(
+                            descs,
+                            chars,
+                            db,
+                            attacker_msg,
+                            false,
+                            Some(ch),
+                            weap,
+                            Some(VictimRef::Char(vict)),
+                            TO_CHAR,
+                        );
+                        send_to_char(descs, ch, CCNRM!(ch, C_CMP));
+                    }
+                    send_to_char(descs, vict, CCRED!(vict, C_CMP));
+                    act(
+                        descs,
+                        chars,
+                        db,
+                        victim_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
+                        TO_VICT | TO_SLEEP,
+                    );
+                    send_to_char(descs, vict, CCNRM!(vict, C_CMP));
+
+                    act(
+                        descs,
+                        chars,
                         db,
                         room_msg,
                         false,
@@ -926,11 +995,58 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
                         TO_NOTVICT,
                     );
                 }
-                return 1;
+            } else if !std::ptr::eq(ch, vict) {
+                let attacker_msg: &Rc<str> =
+                    &db.fight_messages[i].messages[nr].miss_msg.attacker_msg;
+                let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr].miss_msg.victim_msg;
+                let room_msg: &Rc<str> = &db.fight_messages[i].messages[nr].miss_msg.room_msg;
+                /* Dam == 0 */
+                if !attacker_msg.is_empty() {
+                    send_to_char(descs, ch, CCYEL!(ch, C_CMP));
+                    act(
+                        descs,
+                        chars,
+                        db,
+                        attacker_msg,
+                        false,
+                        Some(ch),
+                        weap,
+                        Some(VictimRef::Char(vict)),
+                        TO_CHAR,
+                    );
+                    send_to_char(descs, ch, CCNRM!(ch, C_CMP));
+                }
+                send_to_char(descs, vict, CCRED!(vict, C_CMP));
+                act(
+                    descs,
+                    chars,
+                    db,
+                    victim_msg,
+                    false,
+                    Some(ch),
+                    weap,
+                    Some(VictimRef::Char(vict)),
+                    TO_VICT | TO_SLEEP,
+                );
+                send_to_char(descs, vict, CCNRM!(vict, C_CMP));
+
+                act(
+                    descs,
+                    chars,
+                    db,
+                    room_msg,
+                    false,
+                    Some(ch),
+                    weap,
+                    Some(VictimRef::Char(vict)),
+                    TO_NOTVICT,
+                );
             }
+            return 1;
         }
-         0
     }
+    0
+}
 impl Game {
     /*
      * Alert: As of bpl14, this function returns the following codes:
@@ -941,7 +1057,10 @@ impl Game {
     #[allow(clippy::too_many_arguments)]
     pub fn damage(
         &mut self,
-        chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
         chid: DepotId,
         victim_id: DepotId,
         dam: i32,
@@ -963,13 +1082,14 @@ impl Game {
                 db.get_room_vnum(victim.in_room()),
                 ch.get_name()
             );
-            die(victim_id, self,chars, db, texts,objs);
+            die(victim_id, self, chars, db, texts, objs);
             return -1; /* -je, 7/7/92 */
         }
 
         /* peaceful rooms */
         if chid != victim_id && db.room_flagged(ch.in_room(), RoomFlags::PEACEFUL) {
-            send_to_char(&mut self.descriptors, 
+            send_to_char(
+                &mut self.descriptors,
                 ch,
                 "This room just has such a peaceful, easy feeling...\r\n",
             );
@@ -977,7 +1097,7 @@ impl Game {
         }
 
         /* shopkeeper protection */
-        if !ok_damage_shopkeeper(self, chars, db, texts,objs,chid, victim_id) {
+        if !ok_damage_shopkeeper(self, chars, db, texts, objs, chid, victim_id) {
             return 0;
         }
 
@@ -991,17 +1111,17 @@ impl Game {
             /* Start the attacker fighting the victim */
             let ch = chars.get(chid);
             if ch.get_pos() > Position::Stunned && ch.fighting_id().is_none() {
-                self.set_fighting(chars, db, objs,chid, victim_id);
+                self.set_fighting(chars, db, objs, chid, victim_id);
             }
 
             /* Start the victim fighting the attacker */
             let victim = chars.get(victim_id);
             if victim.get_pos() > Position::Stunned && victim.fighting_id().is_none() {
-                self.set_fighting(chars, db, objs,victim_id, chid);
+                self.set_fighting(chars, db, objs, victim_id, chid);
                 let ch = chars.get(chid);
                 let victim = chars.get(victim_id);
                 if victim.mob_flagged(MOB_MEMORY) && !ch.is_npc() {
-                    remember(chars,   victim_id, chid);
+                    remember(chars, victim_id, chid);
                 }
             }
         }
@@ -1009,13 +1129,13 @@ impl Game {
         /* If you attack a pet, it hates your guts */
         let victim = chars.get(victim_id);
         if victim.master.is_some() && victim.master.unwrap() == chid {
-            stop_follower(&mut self.descriptors, chars, db, objs,victim_id);
+            stop_follower(&mut self.descriptors, chars, db, objs, victim_id);
         }
 
         /* If the attacker is invisible, he becomes visible */
         let ch = chars.get(chid);
         if ch.aff_flagged(AffectFlags::INVISIBLE | AffectFlags::HIDE) {
-            appear(&mut self.descriptors, chars, db, objs,chid);
+            appear(&mut self.descriptors, chars, db, objs, chid);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
@@ -1040,7 +1160,15 @@ impl Game {
 
         /* Gain exp for the hit */
         if chid != victim_id {
-            gain_exp(chid, victim.get_level() as i32 * dam, self, chars, db, texts,objs);
+            gain_exp(
+                chid,
+                victim.get_level() as i32 * dam,
+                self,
+                chars,
+                db,
+                texts,
+                objs,
+            );
         }
         let victim = chars.get_mut(victim_id);
         update_pos(victim);
@@ -1059,20 +1187,57 @@ impl Game {
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
         if !is_weapon!(&attacktype) {
-            skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype);
+            skill_message(
+                &mut self.descriptors,
+                chars,
+                db,
+                objs,
+                dam,
+                ch,
+                victim,
+                attacktype,
+            );
         } else if victim.get_pos() == Position::Dead || dam == 0 {
-            if skill_message(&mut self.descriptors, chars, db, objs,dam, ch, victim, attacktype) == 0 {
-                dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
+            if skill_message(
+                &mut self.descriptors,
+                chars,
+                db,
+                objs,
+                dam,
+                ch,
+                victim,
+                attacktype,
+            ) == 0
+            {
+                dam_message(
+                    &mut self.descriptors,
+                    chars,
+                    db,
+                    dam,
+                    ch,
+                    victim,
+                    attacktype,
+                );
             }
         } else {
-            dam_message(&mut self.descriptors, chars, db, dam, ch, victim, attacktype);
+            dam_message(
+                &mut self.descriptors,
+                chars,
+                db,
+                dam,
+                ch,
+                victim,
+                attacktype,
+            );
         }
 
         /* Use game.send_to_char -- act() doesn't send message if you are DEAD. */
         let victim = chars.get(victim_id);
         match victim.get_pos() {
             Position::MortallyWounded => {
-                act(&mut self.descriptors, chars, 
+                act(
+                    &mut self.descriptors,
+                    chars,
                     db,
                     "$n is mortally wounded, and will die soon, if not aided.",
                     true,
@@ -1081,14 +1246,17 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(&mut self.descriptors, 
+                send_to_char(
+                    &mut self.descriptors,
                     victim,
                     "You are mortally wounded, and will die soon, if not aided.\r\n",
                 );
             }
 
             Position::Incapacitated => {
-                act(&mut self.descriptors, chars, 
+                act(
+                    &mut self.descriptors,
+                    chars,
                     db,
                     "$n is incapacitated and will slowly die, if not aided.",
                     true,
@@ -1097,13 +1265,16 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(&mut self.descriptors, 
+                send_to_char(
+                    &mut self.descriptors,
                     victim,
                     "You are incapacitated an will slowly die, if not aided.\r\n",
                 );
             }
             Position::Stunned => {
-                act(&mut self.descriptors, chars, 
+                act(
+                    &mut self.descriptors,
+                    chars,
                     db,
                     "$n is stunned, but will probably regain consciousness again.",
                     true,
@@ -1112,13 +1283,16 @@ impl Game {
                     None,
                     TO_ROOM,
                 );
-                send_to_char(&mut self.descriptors, 
+                send_to_char(
+                    &mut self.descriptors,
                     victim,
                     "You're stunned, but will probably regain consciousness again.\r\n",
                 );
             }
             Position::Dead => {
-                act(&mut self.descriptors, chars, 
+                act(
+                    &mut self.descriptors,
+                    chars,
                     db,
                     "$n is dead!  R.I.P.",
                     false,
@@ -1137,7 +1311,8 @@ impl Game {
                 }
                 let victim = chars.get(victim_id);
                 if victim.get_hit() < victim.get_max_hit() / 4 {
-                    send_to_char(&mut self.descriptors, 
+                    send_to_char(
+                        &mut self.descriptors,
                         victim,
                         format!(
                             "{}You wish that your wounds would stop BLEEDING so much!{}\r\n",
@@ -1148,7 +1323,7 @@ impl Game {
                     );
                     let victim = chars.get(victim_id);
                     if chid != victim_id && victim.mob_flagged(MOB_WIMPY) {
-                        do_flee(self, db, chars, texts, objs,victim_id, "", 0, 0);
+                        do_flee(self, db, chars, texts, objs, victim_id, "", 0, 0);
                     }
                 }
                 let victim = chars.get(victim_id);
@@ -1158,8 +1333,12 @@ impl Game {
                     && victim.get_hit() < victim.get_wimp_lev() as i16
                     && victim.get_hit() > 0
                 {
-                    send_to_char(&mut self.descriptors, victim, "You wimp out, and attempt to flee!\r\n");
-                    do_flee(self, db,chars,  texts, objs,victim_id, "", 0, 0);
+                    send_to_char(
+                        &mut self.descriptors,
+                        victim,
+                        "You wimp out, and attempt to flee!\r\n",
+                    );
+                    do_flee(self, db, chars, texts, objs, victim_id, "", 0, 0);
                 }
             }
         }
@@ -1167,10 +1346,12 @@ impl Game {
         /* Help out poor linkless people who are attacked */
         let victim = chars.get(victim_id);
         if !victim.is_npc() && victim.desc.is_none() && victim.get_pos() > Position::Stunned {
-            do_flee(self, db, chars, texts,objs, victim_id, "", 0, 0);
+            do_flee(self, db, chars, texts, objs, victim_id, "", 0, 0);
             let victim = chars.get(victim_id);
             if victim.fighting_id().is_none() {
-                act(&mut self.descriptors, chars, 
+                act(
+                    &mut self.descriptors,
+                    chars,
                     db,
                     "$n is rescued by divine forces.",
                     false,
@@ -1182,49 +1363,52 @@ impl Game {
                 let victim = chars.get_mut(victim_id);
                 victim.set_was_in(victim.in_room());
                 db.char_from_room(objs, victim);
-                db.char_to_room(chars, objs,victim_id, 0);
+                db.char_to_room(chars, objs, victim_id, 0);
             }
         }
 
         /* stop someone from fighting if they're stunned or worse */
         let victim = chars.get_mut(victim_id);
         if victim.get_pos() <= Position::Stunned && victim.fighting_id().is_some() {
-            db.stop_fighting( victim);
+            db.stop_fighting(victim);
         }
 
         /* Uh oh.  Victim died. */
         let victim = chars.get(victim_id);
         if victim.get_pos() == Position::Dead
-            && chid != victim_id && (victim.is_npc() || victim.desc.is_some()) {
-                let ch = chars.get(chid);
-                if ch.aff_flagged(AffectFlags::GROUP) {
-                    group_gain(chid, victim_id, self, chars, db, texts,objs);
-                } else {
-                    solo_gain(chid, victim_id, self, chars, db, texts,objs);
-                }
-                let victim = chars.get(victim_id);
-                if !victim.is_npc() {
-                    let ch = chars.get(chid);
-                    self.mudlog(chars,
-                        DisplayMode::Brief,
-                        LVL_IMMORT as i32,
-                        true,
-                        format!(
-                            "{} killed by {} at {}",
-                            victim.get_name(),
-                            ch.get_name(),
-                            db.world[victim.in_room() as usize].name
-                        )
-                        .as_str(),
-                    );
-                    let ch = chars.get(chid);
-                    if ch.mob_flagged(MOB_MEMORY) {
-                        forget(chars,  chid, victim_id);
-                    }
-                }
-                die(victim_id, self,chars, db, texts,objs);
-                return -1;
+            && chid != victim_id
+            && (victim.is_npc() || victim.desc.is_some())
+        {
+            let ch = chars.get(chid);
+            if ch.aff_flagged(AffectFlags::GROUP) {
+                group_gain(chid, victim_id, self, chars, db, texts, objs);
+            } else {
+                solo_gain(chid, victim_id, self, chars, db, texts, objs);
             }
+            let victim = chars.get(victim_id);
+            if !victim.is_npc() {
+                let ch = chars.get(chid);
+                self.mudlog(
+                    chars,
+                    DisplayMode::Brief,
+                    LVL_IMMORT as i32,
+                    true,
+                    format!(
+                        "{} killed by {} at {}",
+                        victim.get_name(),
+                        ch.get_name(),
+                        db.world[victim.in_room() as usize].name
+                    )
+                    .as_str(),
+                );
+                let ch = chars.get(chid);
+                if ch.mob_flagged(MOB_MEMORY) {
+                    forget(chars, chid, victim_id);
+                }
+            }
+            die(victim_id, self, chars, db, texts, objs);
+            return -1;
+        }
         dam
     }
 }
@@ -1254,17 +1438,28 @@ pub fn compute_thaco(ch: &CharData, _victim: &CharData) -> i32 {
 
 impl Game {
     #[allow(clippy::too_many_arguments)]
-    pub fn hit(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>, objs: &mut Depot<ObjData>, chid: DepotId, victim_id: DepotId, _type: i32) {
+    pub fn hit(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+        chid: DepotId,
+        victim_id: DepotId,
+        _type: i32,
+    ) {
         let ch = chars.get(chid);
         let victim = chars.get(victim_id);
         let wielded = ch.get_eq(WEAR_WIELD);
 
         /* Do some sanity checking, in case someone flees, etc. */
         if ch.in_room() != victim.in_room()
-            && ch.fighting_id().is_some() && ch.fighting_id().unwrap() == victim_id {
-                db.stop_fighting(chars.get_mut(chid));
-                return;
-            }
+            && ch.fighting_id().is_some()
+            && ch.fighting_id().unwrap() == victim_id
+        {
+            db.stop_fighting(chars.get_mut(chid));
+            return;
+        }
 
         let w_type;
         /* Find the weapon type (for display purposes only) */
@@ -1309,8 +1504,11 @@ impl Game {
 
         if dam == 0 {
             /* the attacker missed the victim */
-            self.damage(chars,
-                db, texts,objs,
+            self.damage(
+                chars,
+                db,
+                texts,
+                objs,
                 chid,
                 victim_id,
                 0,
@@ -1368,21 +1566,30 @@ impl Game {
             dam = max(1, dam);
 
             if _type == SKILL_BACKSTAB {
-                self.damage(chars,
-                    db,texts,objs,
+                self.damage(
+                    chars,
+                    db,
+                    texts,
+                    objs,
                     chid,
                     victim_id,
                     dam * backstab_mult(ch.get_level()),
                     SKILL_BACKSTAB,
                 );
             } else {
-                self.damage(chars, db, texts,objs,chid, victim_id, dam, w_type);
+                self.damage(chars, db, texts, objs, chid, victim_id, dam, w_type);
             }
         }
     }
 
     /* control the fights going on.  Called every 2 seconds from comm.c. */
-    pub fn perform_violence(&mut self, chars: &mut Depot<CharData>, db: &mut DB, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, ) {
+    pub fn perform_violence(
+        &mut self,
+        chars: &mut Depot<CharData>,
+        db: &mut DB,
+        texts: &mut Depot<TextData>,
+        objs: &mut Depot<ObjData>,
+    ) {
         let mut old_combat_list = vec![];
         for c in db.combat_list.iter() {
             old_combat_list.push(*c);
@@ -1409,7 +1616,9 @@ impl Game {
                 if ch.get_pos() < Position::Fighting {
                     ch.set_pos(Position::Fighting);
                     let ch = chars.get(chid);
-                    act(&mut self.descriptors, chars, 
+                    act(
+                        &mut self.descriptors,
+                        chars,
                         db,
                         "$n scrambles to $s feet!",
                         true,
@@ -1422,11 +1631,23 @@ impl Game {
             }
             let ch = chars.get(chid);
             if ch.get_pos() < Position::Fighting {
-                send_to_char(&mut self.descriptors, ch, "You can't fight while sitting!!\r\n");
+                send_to_char(
+                    &mut self.descriptors,
+                    ch,
+                    "You can't fight while sitting!!\r\n",
+                );
                 continue;
             }
 
-            self.hit(chars, db, texts, objs,chid, ch.fighting_id().unwrap(), TYPE_UNDEFINED);
+            self.hit(
+                chars,
+                db,
+                texts,
+                objs,
+                chid,
+                ch.fighting_id().unwrap(),
+                TYPE_UNDEFINED,
+            );
             let ch = chars.get(chid);
             if ch.mob_flagged(MOB_SPEC)
                 && db.get_mob_spec(ch).is_some()
@@ -1434,8 +1655,11 @@ impl Game {
             {
                 let actbuf = String::new();
                 db.get_mob_spec(ch).as_ref().unwrap()(
-                    self,chars,
-                    db,texts,objs,
+                    self,
+                    chars,
+                    db,
+                    texts,
+                    objs,
                     chid,
                     MeRef::Char(chid),
                     0,

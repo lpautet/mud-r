@@ -1762,7 +1762,7 @@ pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
             cur_name = &cur_name[1..];
         }
         let i = cur_name.find(' ');
-        let cpylen= i.unwrap_or(cur_name.len());
+        let cpylen = i.unwrap_or(cur_name.len());
 
         if cur_name.starts_with(liqname) {
             cur_name = next;
@@ -1840,7 +1840,7 @@ pub fn do_drink(
             &ch.carrying,
         );
         tobj.is_none()
-    }; 
+    };
     if res {
         let res = {
             tobj = get_obj_in_list_vis2(
@@ -1854,7 +1854,7 @@ pub fn do_drink(
                 &db.world[ch.in_room() as usize].contents,
             );
             tobj.is_none()
-        }; 
+        };
         if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
@@ -2094,7 +2094,7 @@ pub fn do_eat(
             &ch.carrying,
         );
         food.is_none()
-    }; 
+    };
     if res {
         send_to_char(
             &mut game.descriptors,
@@ -2270,7 +2270,7 @@ pub fn do_pour(
                 &ch.carrying,
             );
             from_obj.is_none()
-        }; 
+        };
         if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
@@ -2303,7 +2303,7 @@ pub fn do_pour(
                 &ch.carrying,
             );
             to_obj.is_none()
-        }; 
+        };
         if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
@@ -2350,7 +2350,7 @@ pub fn do_pour(
                 &db.world[ch.in_room() as usize].contents,
             );
             from_obj.is_none()
-        }; 
+        };
         if res {
             send_to_char(
                 &mut game.descriptors,
@@ -2447,7 +2447,7 @@ pub fn do_pour(
                 &ch.carrying,
             );
             to_obj.is_none()
-        }; 
+        };
         if res {
             send_to_char(&mut game.descriptors, ch, "You can't find it!\r\n");
             return;
@@ -2723,9 +2723,10 @@ fn perform_wear(
     }
     /* for neck, finger, and wrist, try pos 2 if pos 1 is already full */
     if ((_where == WEAR_FINGER_R) || (_where == WEAR_NECK_1) || (_where == WEAR_WRIST_R))
-        && ch.get_eq(_where).is_some() {
-            _where += 1;
-        }
+        && ch.get_eq(_where).is_some()
+    {
+        _where += 1;
+    }
 
     if ch.get_eq(_where).is_some() {
         send_to_char(descs, ch, ALREADY_WEARING[_where]);
@@ -2901,7 +2902,7 @@ pub fn do_wear(
                 &ch.carrying,
             );
             obj.is_none()
-        }; 
+        };
         if res {
             send_to_char(
                 &mut game.descriptors,
@@ -2914,7 +2915,7 @@ pub fn do_wear(
                 let res = {
                     _where = find_eq_pos(&mut game.descriptors, ch, obj.unwrap(), "");
                     _where >= 0
-                }; 
+                };
                 if res {
                     perform_wear(
                         &mut game.descriptors,
@@ -3150,8 +3151,8 @@ fn perform_remove(
     let res = {
         oid = ch.get_eq(pos);
         oid.is_none()
-    }; 
-        if res {
+    };
+    if res {
         error!("SYSERR: perform_remove: bad pos {} passed.", pos);
     } else if objs.get(oid.unwrap()).obj_flagged(ExtraFlags::NODROP) {
         let oid = oid.unwrap();

@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      * 
+*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -69,7 +69,11 @@ pub fn load_banned(db: &mut DB) {
         };
 
         let bt = BAN_TYPES.iter().position(|e| *e == ban_type);
-        ble.type_ = if let Some(bt) = bt { BAN_TYPES_VALUES[bt] } else { BanType::None };
+        ble.type_ = if let Some(bt) = bt {
+            BAN_TYPES_VALUES[bt]
+        } else {
+            BanType::None
+        };
         db.ban_list.push(ble);
     }
 }
@@ -98,7 +102,11 @@ fn _write_one_node(writer: &mut BufWriter<File>, node: &BanListElement) {
 }
 
 fn write_ban_list(db: &DB) {
-    let fl = OpenOptions::new().write(true).create(true).truncate(true).open(BAN_FILE);
+    let fl = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(BAN_FILE);
 
     if fl.is_err() {
         let err = fl.err().unwrap();
@@ -118,21 +126,35 @@ macro_rules! ban_list_format {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_ban(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     if argument.is_empty() {
         if db.ban_list.is_empty() {
             send_to_char(&mut game.descriptors, ch, "No sites are banned.\r\n");
             return;
         }
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!(
                 ban_list_format!(),
                 "Banned Site Name", "Ban Type", "Banned On", "Banned By"
             )
             .as_str(),
         );
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             format!(
                 ban_list_format!(),
                 "---------------------------------",
@@ -144,16 +166,20 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
         );
 
         for idx in 0..db.ban_list.len() {
-            let timestr=
-            if db.ban_list[idx].date != 0 {
+            let timestr = if db.ban_list[idx].date != 0 {
                 ctime(db.ban_list[idx].date)
             } else {
                 "Unknown".to_string()
             };
-            send_to_char(&mut game.descriptors, ch,
+            send_to_char(
+                &mut game.descriptors,
+                ch,
                 format!(
                     ban_list_format!(),
-                    db.ban_list[idx].site, BAN_TYPES[db.ban_list[idx].type_ as usize], timestr, db.ban_list[idx].name
+                    db.ban_list[idx].site,
+                    BAN_TYPES[db.ban_list[idx].type_ as usize],
+                    timestr,
+                    db.ban_list[idx].name
                 )
                 .as_str(),
             );
@@ -164,16 +190,26 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
     let mut site = String::new();
     two_arguments(argument, &mut flag, &mut site);
     if site.is_empty() || flag.is_empty() {
-        send_to_char(&mut game.descriptors, ch, "Usage: ban {all | select | new} site_name\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Usage: ban {all | select | new} site_name\r\n",
+        );
         return;
     }
     if !(flag == "select" || flag == "all" || flag == "new") {
-        send_to_char(&mut game.descriptors, ch, "Flag must be ALL, SELECT, or NEW.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Flag must be ALL, SELECT, or NEW.\r\n",
+        );
         return;
     }
     let ban_node = db.ban_list.iter().find(|b| b.site.as_ref() == site);
     if ban_node.is_some() {
-        send_to_char(&mut game.descriptors, ch,
+        send_to_char(
+            &mut game.descriptors,
+            ch,
             "That site has already been banned -- unban it to change the ban type.\r\n",
         );
         return;
@@ -196,7 +232,8 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
     db.ban_list.push(ban_node);
 
     let ch = chars.get(chid);
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Normal,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -213,7 +250,17 @@ pub fn do_ban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>, _texts: 
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>,  chid: DepotId, argument: &str, _cmd: usize, _subcmd: i32) {
+pub fn do_unban(
+    game: &mut Game,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
+    chid: DepotId,
+    argument: &str,
+    _cmd: usize,
+    _subcmd: i32,
+) {
     let ch = chars.get(chid);
     let mut site = String::new();
     one_argument(argument, &mut site);
@@ -221,13 +268,14 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
         send_to_char(&mut game.descriptors, ch, "A site to unban might help.\r\n");
         return;
     }
-    let p = db
-        .ban_list
-        .iter()
-        .position(|b| b.site.as_ref() == site);
+    let p = db.ban_list.iter().position(|b| b.site.as_ref() == site);
 
     if p.is_none() {
-        send_to_char(&mut game.descriptors, ch, "That site is not currently banned.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "That site is not currently banned.\r\n",
+        );
         return;
     }
 
@@ -235,7 +283,8 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
     let ch = chars.get(chid);
     send_to_char(&mut game.descriptors, ch, "Site unbanned.\r\n");
     let ch = chars.get(chid);
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Normal,
         max(LVL_GOD as i32, ch.get_invis_lev() as i32),
         true,
@@ -256,7 +305,7 @@ pub fn do_unban(game: &mut Game, db: &mut DB,chars: &mut Depot<CharData>,_texts:
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db:&DB,  newname: &str) -> bool {
+pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db: &DB, newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login

@@ -16,7 +16,9 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::depot::{Depot, DepotId, HasId};
-use crate::{act, save_char, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
+use crate::{
+    act, save_char, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB,
+};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -25,7 +27,10 @@ use crate::config::{AUTO_SAVE, FREE_RENT, MAX_FILESIZE, NOPERSON, OK, PT_ALLOWED
 use crate::constants::DEX_APP_SKILL;
 use crate::db::{BUG_FILE, IDEA_FILE, TYPO_FILE};
 use crate::fight::{appear, die};
-use crate::handler::{affect_from_char, affect_to_char, get_char_vis, get_obj_in_list_vis, isname, obj_from_char, obj_to_char, FindFlags};
+use crate::handler::{
+    affect_from_char, affect_to_char, get_char_vis, get_obj_in_list_vis, isname, obj_from_char,
+    obj_to_char, FindFlags,
+};
 use crate::house::house_crashsave;
 use crate::interpreter::{
     delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
@@ -40,7 +45,8 @@ use crate::spec_procs::list_skills;
 use crate::spell_parser::mag_objectmagic;
 use crate::spells::{SKILL_HIDE, SKILL_SNEAK, SKILL_STEAL, TYPE_UNDEFINED};
 use crate::structs::{
-    AffectFlags, AffectedType, ApplyType, ItemType, PrefFlags, RoomFlags, LVL_IMMORT, MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, Position, WEAR_HOLD
+    AffectFlags, AffectedType, ApplyType, ItemType, Position, PrefFlags, RoomFlags, LVL_IMMORT,
+    MAX_TITLE_LENGTH, NUM_WEARS, PLR_LOADROOM, PLR_NOTITLE, WEAR_HOLD,
 };
 use crate::util::{can_see, can_see_obj, rand_number, stop_follower, DisplayMode};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
@@ -48,7 +54,10 @@ use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 #[allow(clippy::too_many_arguments)]
 pub fn do_quit(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -60,14 +69,24 @@ pub fn do_quit(
     }
 
     if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT as u8 {
-        send_to_char(&mut game.descriptors, ch, "You have to type quit--no less, to quit!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have to type quit--no less, to quit!\r\n",
+        );
     } else if ch.get_pos() == Position::Fighting {
-        send_to_char(&mut game.descriptors, ch, "No way!  You're fighting for your life!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "No way!  You're fighting for your life!\r\n",
+        );
     } else if ch.get_pos() < Position::Stunned {
         send_to_char(&mut game.descriptors, ch, "You die before your time...\r\n");
-        die(chid, game,chars, db, texts,objs);
+        die(chid, game, chars, db, texts, objs);
     } else {
-        act(&mut game.descriptors, chars, 
+        act(
+            &mut game.descriptors,
+            chars,
             db,
             "$n has left the game.",
             true,
@@ -77,13 +96,18 @@ pub fn do_quit(
             TO_ROOM,
         );
         let ch = chars.get(chid);
-        game.mudlog(chars,
+        game.mudlog(
+            chars,
             DisplayMode::Normal,
             max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
             true,
             format!("{} has quit the game.", ch.get_name()).as_str(),
         );
-        send_to_char(&mut game.descriptors, ch, "Goodbye, friend.. Come back soon!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Goodbye, friend.. Come back soon!\r\n",
+        );
 
         /*  We used to check here for duping attempts, but we may as well
          *  do it right in extract_char(), since there is no check if a
@@ -92,7 +116,7 @@ pub fn do_quit(
          */
 
         if FREE_RENT {
-            crash_rentsave( chars, db, objs,chid, 0);
+            crash_rentsave(chars, db, objs, chid, 0);
         }
 
         /* If someone is quitting in their house, let them load back here. */
@@ -110,7 +134,10 @@ pub fn do_quit(
 #[allow(clippy::too_many_arguments)]
 pub fn do_save(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     cmd: usize,
@@ -136,19 +163,20 @@ pub fn do_save(
             write_aliases(ch);
             return;
         }
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("Saving {} and aliases.\r\n", ch.get_name()).as_str(),
         );
     }
     let ch = chars.get(chid);
     write_aliases(ch);
-    save_char(&mut game.descriptors, db, chars,texts, objs,chid);
-    crash_crashsave(chars, db,objs, chid);
+    save_char(&mut game.descriptors, db, chars, texts, objs, chid);
+    crash_crashsave(chars, db, objs, chid);
     let ch = chars.get(chid);
     if db.room_flagged(ch.in_room(), RoomFlags::HOUSE_CRASH) {
         let in_room = db.get_room_vnum(ch.in_room());
-        house_crashsave( db, objs, in_room);
+        house_crashsave(db, objs, in_room);
     }
 }
 
@@ -157,20 +185,30 @@ special procedures - i.e., shop commands, mail commands, etc. */
 #[allow(clippy::too_many_arguments)]
 pub fn do_not_here(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    send_to_char(&mut game.descriptors, ch, "Sorry, but you cannot do that here!\r\n");
+    send_to_char(
+        &mut game.descriptors,
+        ch,
+        "Sorry, but you cannot do that here!\r\n",
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_sneak(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -178,12 +216,20 @@ pub fn do_sneak(
 ) {
     let ch = chars.get_mut(chid);
     if ch.is_npc() || ch.get_skill(SKILL_SNEAK) == 0 {
-        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have no idea how to do that.\r\n",
+        );
         return;
     }
-    send_to_char(&mut game.descriptors, ch, "Okay, you'll try to move silently for a while.\r\n");
+    send_to_char(
+        &mut game.descriptors,
+        ch,
+        "Okay, you'll try to move silently for a while.\r\n",
+    );
     if ch.aff_flagged(AffectFlags::SNEAK) {
-        affect_from_char( objs,ch, SKILL_SNEAK as i16);
+        affect_from_char(objs, ch, SKILL_SNEAK as i16);
     }
 
     let percent = rand_number(1, 101); /* 101% is a complete failure */
@@ -201,13 +247,16 @@ pub fn do_sneak(
         bitvector: AffectFlags::SNEAK,
     };
 
-    affect_to_char( objs, ch, af);
+    affect_to_char(objs, ch, af);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_hide(
     game: &mut Game,
-    _db:    &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -215,11 +264,19 @@ pub fn do_hide(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() || ch.get_skill(SKILL_HIDE) == 0 {
-        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have no idea how to do that.\r\n",
+        );
         return;
     }
 
-    send_to_char(&mut game.descriptors, ch, "You attempt to hide yourself.\r\n");
+    send_to_char(
+        &mut game.descriptors,
+        ch,
+        "You attempt to hide yourself.\r\n",
+    );
     let ch = chars.get_mut(chid);
     if ch.aff_flagged(AffectFlags::HIDE) {
         ch.remove_aff_flags(AffectFlags::HIDE);
@@ -238,7 +295,10 @@ pub fn do_hide(
 #[allow(clippy::too_many_arguments)]
 pub fn do_steal(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>, texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -246,11 +306,16 @@ pub fn do_steal(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() || ch.get_skill(SKILL_STEAL) == 0 {
-        send_to_char(&mut game.descriptors, ch, "You have no idea how to do that.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You have no idea how to do that.\r\n",
+        );
         return;
     }
     if db.room_flagged(ch.in_room(), RoomFlags::PEACEFUL) {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "This room just has such a peaceful, easy feeling...\r\n",
         );
@@ -261,14 +326,26 @@ pub fn do_steal(
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
     let res = {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut vict_name, None, FindFlags::CHAR_ROOM);
+        vict = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut vict_name,
+            None,
+            FindFlags::CHAR_ROOM,
+        );
         vict.is_none()
-    }; 
+    };
     if res {
         send_to_char(&mut game.descriptors, ch, "Steal what from who?\r\n");
         return;
     } else if vict.unwrap().id() == chid {
-        send_to_char(&mut game.descriptors, ch, "Come on now, that's rather stupid!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Come on now, that's rather stupid!\r\n",
+        );
         return;
     }
     let mut ohoh = false;
@@ -301,13 +378,22 @@ pub fn do_steal(
         percent = 101; /* Failure */
     }
     let mut obj;
-    let mut the_eq_pos:i16 = -1;
+    let mut the_eq_pos: i16 = -1;
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
         let res = {
-            obj = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &obj_name, None, &vict.carrying);
+            obj = get_obj_in_list_vis(
+                &game.descriptors,
+                chars,
+                db,
+                objs,
+                ch,
+                &obj_name,
+                None,
+                &vict.carrying,
+            );
             obj.is_none()
-        }; 
+        };
         if res {
             for eq_pos in 0..NUM_WEARS {
                 if vict.get_eq(eq_pos).is_some()
@@ -315,7 +401,13 @@ pub fn do_steal(
                         &obj_name,
                         objs.get(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
                     )
-                    && can_see_obj(&game.descriptors, chars, db, ch, objs.get(vict.get_eq(eq_pos).unwrap()))
+                    && can_see_obj(
+                        &game.descriptors,
+                        chars,
+                        db,
+                        ch,
+                        objs.get(vict.get_eq(eq_pos).unwrap()),
+                    )
                 {
                     obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
                     the_eq_pos = eq_pos as i16;
@@ -323,7 +415,9 @@ pub fn do_steal(
             }
             #[allow(clippy::unnecessary_unwrap)]
             if obj.is_none() {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$E hasn't got that item.",
                     false,
@@ -336,11 +430,17 @@ pub fn do_steal(
             } else {
                 /* It is equipment */
                 if vict.get_pos() > Position::Stunned {
-                    send_to_char(&mut game.descriptors, ch, "Steal the equipment now?  Impossible!\r\n");
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "Steal the equipment now?  Impossible!\r\n",
+                    );
                     return;
                 } else {
                     let obj = obj.unwrap();
-                    act(&mut game.descriptors, chars, 
+                    act(
+                        &mut game.descriptors,
+                        chars,
                         db,
                         "You unequip $p and steal it.",
                         false,
@@ -349,7 +449,9 @@ pub fn do_steal(
                         None,
                         TO_CHAR,
                     );
-                    act(&mut game.descriptors, chars, 
+                    act(
+                        &mut game.descriptors,
+                        chars,
                         db,
                         "$n steals $p from $N.",
                         false,
@@ -358,7 +460,9 @@ pub fn do_steal(
                         Some(VictimRef::Char(vict)),
                         TO_NOTVICT,
                     );
-                    let eqid = db.unequip_char(chars, objs,vict.id(), the_eq_pos as usize).unwrap();
+                    let eqid = db
+                        .unequip_char(chars, objs, vict.id(), the_eq_pos as usize)
+                        .unwrap();
                     let eq = objs.get_mut(eqid);
                     let ch = chars.get_mut(chid);
                     obj_to_char(eq, ch);
@@ -372,7 +476,9 @@ pub fn do_steal(
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
                 send_to_char(&mut game.descriptors, ch, "Oops..\r\n");
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n tried to steal something from you!",
                     false,
@@ -381,7 +487,9 @@ pub fn do_steal(
                     Some(VictimRef::Char(vict)),
                     TO_VICT,
                 );
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$n tries to steal something from $N.",
                     true,
@@ -411,7 +519,9 @@ pub fn do_steal(
         if vict.awake() && percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
             ohoh = true;
             send_to_char(&mut game.descriptors, ch, "Oops..\r\n");
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You discover that $n has $s hands in your wallet.",
                 false,
@@ -420,7 +530,9 @@ pub fn do_steal(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$n tries to steal gold from $N.",
                 true,
@@ -440,28 +552,40 @@ pub fn do_steal(
                 vict.set_gold(vict.get_gold() - gold);
                 let ch = chars.get(chid);
                 if gold > 1 {
-                    send_to_char(&mut game.descriptors, 
+                    send_to_char(
+                        &mut game.descriptors,
                         ch,
                         format!("Bingo!  You got {} gold coins.\r\n", gold).as_str(),
                     );
                 } else {
-                    send_to_char(&mut game.descriptors, ch, "You manage to swipe a solitary gold coin.\r\n");
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "You manage to swipe a solitary gold coin.\r\n",
+                    );
                 }
             } else {
-                send_to_char(&mut game.descriptors, ch, "You couldn't get any gold...\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You couldn't get any gold...\r\n",
+                );
             }
         }
     }
     let vict = chars.get(vict_id);
     if ohoh && vict.is_npc() && vict.awake() {
-        game.hit(chars, db, texts, objs,vict_id, chid, TYPE_UNDEFINED);
+        game.hit(chars, db, texts, objs, vict_id, chid, TYPE_UNDEFINED);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_practice(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -475,7 +599,11 @@ pub fn do_practice(
     one_argument(argument, &mut arg);
 
     if !arg.is_empty() {
-        send_to_char(&mut game.descriptors, ch, "You can only practice skills in your guild.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You can only practice skills in your guild.\r\n",
+        );
     } else {
         list_skills(game, chars, db, chid);
     }
@@ -484,7 +612,10 @@ pub fn do_practice(
 #[allow(clippy::too_many_arguments)]
 pub fn do_visible(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -492,14 +623,18 @@ pub fn do_visible(
 ) {
     let ch = chars.get(chid);
     if ch.get_level() >= LVL_IMMORT as u8 {
-        perform_immort_vis(&mut game.descriptors, db, chars, objs,chid);
+        perform_immort_vis(&mut game.descriptors, db, chars, objs, chid);
         return;
     }
     let ch = chars.get(chid);
     if ch.aff_flagged(AffectFlags::INVISIBLE) {
-        appear(&mut game.descriptors, chars, db, objs,chid);
+        appear(&mut game.descriptors, chars, db, objs, chid);
         let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, ch, "You break the spell of invisibility.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "You break the spell of invisibility.\r\n",
+        );
     } else {
         send_to_char(&mut game.descriptors, ch, "You are already visible.\r\n");
     }
@@ -508,7 +643,10 @@ pub fn do_visible(
 #[allow(clippy::too_many_arguments)]
 pub fn do_title(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -519,16 +657,26 @@ pub fn do_title(
     delete_doubledollar(&mut argument);
 
     if ch.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "Your title is fine... go away.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Your title is fine... go away.\r\n",
+        );
     } else if ch.plr_flagged(PLR_NOTITLE) {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "You can't title yourself -- you shouldn't have abused it!\r\n",
         );
     } else if argument.contains('(') || argument.contains('(') {
-        send_to_char(&mut game.descriptors, ch, "Titles can't contain the ( or ) characters.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Titles can't contain the ( or ) characters.\r\n",
+        );
     } else if argument.len() > MAX_TITLE_LENGTH {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "Sorry, titles can't be longer than {} characters.\r\n",
@@ -541,14 +689,21 @@ pub fn do_title(
         ch.set_title(Some(argument.into()));
         let ch = chars.get(chid);
 
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("Okay, you're now {} {}.\r\n", ch.get_name(), ch.get_title()).as_str(),
         );
     }
 }
 
-fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId, vict_id: DepotId) -> i32 {
+fn perform_group(
+    descs: &mut Depot<DescriptorData>,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    chid: DepotId,
+    vict_id: DepotId,
+) -> i32 {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if vict.aff_flagged(AffectFlags::GROUP) || !can_see(descs, chars, db, ch, vict) {
@@ -559,7 +714,9 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
     if chid != vict_id {
-        act(descs, chars, 
+        act(
+            descs,
+            chars,
             db,
             "$N is now a member of your group.",
             false,
@@ -569,7 +726,9 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
             TO_CHAR,
         );
     }
-    act(descs, chars, 
+    act(
+        descs,
+        chars,
         db,
         "You are now a member of $n's group.",
         false,
@@ -578,7 +737,9 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
         Some(VictimRef::Char(vict)),
         TO_VICT,
     );
-    act(descs, chars, 
+    act(
+        descs,
+        chars,
         db,
         "$N is now a member of $n's group.",
         false,
@@ -590,7 +751,12 @@ fn perform_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depo
     1
 }
 
-fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<CharData>, chid: DepotId) {
+fn print_group(
+    descs: &mut Depot<DescriptorData>,
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    chid: DepotId,
+) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(descs, ch, "But you are not the member of a group!\r\n");
@@ -613,7 +779,9 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
                 k.get_level(),
                 k.class_abbr()
             );
-            act(descs, chars, 
+            act(
+                descs,
+                chars,
                 db,
                 &buf,
                 false,
@@ -637,7 +805,9 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
                 follower.get_level(),
                 follower.class_abbr()
             );
-            act(descs, chars, 
+            act(
+                descs,
+                chars,
                 db,
                 &buf,
                 false,
@@ -653,7 +823,10 @@ fn print_group(descs: &mut Depot<DescriptorData>, db: &mut DB,chars: &mut Depot<
 #[allow(clippy::too_many_arguments)]
 pub fn do_group(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -665,12 +838,14 @@ pub fn do_group(
     one_argument(argument, &mut buf);
 
     if buf.is_empty() {
-        print_group(&mut game.descriptors, db,chars, chid);
+        print_group(&mut game.descriptors, db, chars, chid);
         return;
     }
 
     if ch.master.is_some() {
-        act(&mut game.descriptors, chars, 
+        act(
+            &mut game.descriptors,
+            chars,
             db,
             "You can not enroll group members without being head of a group.",
             false,
@@ -683,32 +858,45 @@ pub fn do_group(
     }
 
     if buf == "all" {
-        perform_group(&mut game.descriptors, db, chars,chid, chid);
+        perform_group(&mut game.descriptors, db, chars, chid, chid);
         let mut found = 0;
         let ch = chars.get(chid);
         for f in ch.followers.clone() {
-            found += perform_group(&mut game.descriptors, db, chars,chid, f.follower);
+            found += perform_group(&mut game.descriptors, db, chars, chid, f.follower);
         }
         if found == 0 {
             let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "Everyone following you is already in your group.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Everyone following you is already in your group.\r\n",
+            );
         }
         return;
     }
     let vict;
 
     let res = {
-        vict = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
+        vict = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf,
+            None,
+            FindFlags::CHAR_ROOM,
+        );
         vict.is_none()
-    }; 
+    };
     if res {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if (vict.unwrap().master.is_none()
-        ||vict.unwrap().master.unwrap() != chid)
+    } else if (vict.unwrap().master.is_none() || vict.unwrap().master.unwrap() != chid)
         && vict.unwrap().id() != chid
     {
         let vict = vict.unwrap();
-        act(&mut game.descriptors, chars, 
+        act(
+            &mut game.descriptors,
+            chars,
             db,
             "$N must follow you to enter your group.",
             false,
@@ -722,10 +910,12 @@ pub fn do_group(
         let ch = chars.get(chid);
 
         if !vict.aff_flagged(AffectFlags::GROUP) {
-            perform_group(&mut game.descriptors, db, chars,chid, vict.id());
+            perform_group(&mut game.descriptors, db, chars, chid, vict.id());
         } else {
             if chid != vict.id() {
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N is no longer a member of your group.",
                     false,
@@ -735,7 +925,9 @@ pub fn do_group(
                     TO_CHAR,
                 );
             }
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "You have been kicked out of $n's group!",
                 false,
@@ -744,7 +936,9 @@ pub fn do_group(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 "$N has been kicked out of $n's group!",
                 false,
@@ -762,7 +956,10 @@ pub fn do_group(
 #[allow(clippy::too_many_arguments)]
 pub fn do_ungroup(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -785,7 +982,9 @@ pub fn do_ungroup(
                 follower.remove_aff_flags(AffectFlags::GROUP);
                 let follower = chars.get(f.follower);
                 let ch = chars.get(chid);
-                act(&mut game.descriptors, chars, 
+                act(
+                    &mut game.descriptors,
+                    chars,
                     db,
                     "$N has disbanded the group.",
                     true,
@@ -796,7 +995,7 @@ pub fn do_ungroup(
                 );
                 let follower = chars.get(f.follower);
                 if !follower.aff_flagged(AffectFlags::CHARM) {
-                    stop_follower(&mut game.descriptors, chars, db, objs,f.follower);
+                    stop_follower(&mut game.descriptors, chars, db, objs, f.follower);
                 }
             }
         }
@@ -808,21 +1007,37 @@ pub fn do_ungroup(
     }
     let tch;
     let res = {
-        tch = get_char_vis(&game.descriptors, chars,db, ch, &mut buf, None, FindFlags::CHAR_ROOM);
+        tch = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf,
+            None,
+            FindFlags::CHAR_ROOM,
+        );
         tch.is_none()
-    }; 
+    };
     if res {
         send_to_char(&mut game.descriptors, ch, "There is no such person!\r\n");
         return;
     }
     let tch = tch.unwrap();
     if tch.master.is_none() || tch.master.unwrap() != chid {
-        send_to_char(&mut game.descriptors, ch, "That person is not following you!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "That person is not following you!\r\n",
+        );
         return;
     }
 
     if !tch.aff_flagged(AffectFlags::GROUP) {
-        send_to_char(&mut game.descriptors, ch, "That person isn't in your group.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "That person isn't in your group.\r\n",
+        );
         return;
     }
     let tchid = tch.id();
@@ -830,7 +1045,9 @@ pub fn do_ungroup(
     tch.remove_aff_flags(AffectFlags::GROUP);
     let ch = chars.get(chid);
     let tch = chars.get(tchid);
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "$N is no longer a member of your group.",
         false,
@@ -839,7 +1056,9 @@ pub fn do_ungroup(
         Some(VictimRef::Char(tch)),
         TO_CHAR,
     );
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "You have been kicked out of $n's group!",
         false,
@@ -848,7 +1067,9 @@ pub fn do_ungroup(
         Some(VictimRef::Char(tch)),
         TO_VICT,
     );
-    act(&mut game.descriptors, chars, 
+    act(
+        &mut game.descriptors,
+        chars,
         db,
         "$N has been kicked out of $n's group!",
         false,
@@ -859,14 +1080,17 @@ pub fn do_ungroup(
     );
     let tch = chars.get(tchid);
     if !tch.aff_flagged(AffectFlags::CHARM) {
-        stop_follower(&mut game.descriptors, chars, db,objs, tchid);
+        stop_follower(&mut game.descriptors, chars, db, objs, tchid);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_report(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -874,7 +1098,11 @@ pub fn do_report(
 ) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AffectFlags::GROUP) {
-        send_to_char(&mut game.descriptors, ch, "But you are not a member of any group!\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "But you are not a member of any group!\r\n",
+        );
         return;
     }
 
@@ -897,7 +1125,9 @@ pub fn do_report(
     for f in &k.followers {
         let follower = chars.get(f.follower);
         if follower.aff_flagged(AffectFlags::GROUP) && f.follower != chid {
-            act(&mut game.descriptors, chars, 
+            act(
+                &mut game.descriptors,
+                chars,
                 db,
                 &buf,
                 true,
@@ -909,7 +1139,9 @@ pub fn do_report(
         }
     }
     if k_id != chid {
-        act(&mut game.descriptors, chars, 
+        act(
+            &mut game.descriptors,
+            chars,
             db,
             &buf,
             true,
@@ -926,7 +1158,10 @@ pub fn do_report(
 #[allow(clippy::too_many_arguments)]
 pub fn do_split(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -946,7 +1181,11 @@ pub fn do_split(
             return;
         }
         if amount > ch.get_gold() {
-            send_to_char(&mut game.descriptors, ch, "You don't seem to have that much gold to split.\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You don't seem to have that much gold to split.\r\n",
+            );
             return;
         }
         let k_id = if ch.master.is_some() {
@@ -977,7 +1216,11 @@ pub fn do_split(
             share = amount / num;
             rest = amount % num;
         } else {
-            send_to_char(&mut game.descriptors, ch, "With whom do you wish to share your gold?\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "With whom do you wish to share your gold?\r\n",
+            );
             return;
         }
         let ch = chars.get_mut(chid);
@@ -1004,13 +1247,17 @@ pub fn do_split(
         }
         let k = chars.get(k_id);
         let ch = chars.get(chid);
-        if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() && !k.is_npc() && k_id != chid {
+        if k.aff_flagged(AffectFlags::GROUP)
+            && k.in_room() == ch.in_room()
+            && !k.is_npc()
+            && k_id != chid
+        {
             let k = chars.get_mut(k_id);
             k.set_gold(k.get_gold() + share);
             send_to_char(&mut game.descriptors, k, &buf);
         }
         let k = chars.get(k_id);
-        for f in  k.followers.clone() {
+        for f in k.followers.clone() {
             let follower = chars.get(f.follower);
             let ch = chars.get(chid);
             if follower.aff_flagged(AffectFlags::GROUP)
@@ -1025,7 +1272,8 @@ pub fn do_split(
             }
         }
         let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "You split {} coins among {} members -- {} coins each.\r\n",
@@ -1035,7 +1283,8 @@ pub fn do_split(
         );
 
         if rest != 0 {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "{} coin{} {} not splitable, so you keep the money.\r\n",
@@ -1049,7 +1298,8 @@ pub fn do_split(
             ch.set_gold(ch.get_gold() + rest);
         }
     } else {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "How many coins do you wish to split with your group?\r\n",
         );
@@ -1059,7 +1309,10 @@ pub fn do_split(
 #[allow(clippy::too_many_arguments)]
 pub fn do_use(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,texts: &mut Depot<TextData>,objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    texts: &mut Depot<TextData>,
+    objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,
@@ -1072,7 +1325,8 @@ pub fn do_use(
 
     half_chop(&mut argument, &mut arg, &mut buf);
     if arg.is_empty() {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!("What do you want to {}?\r\n", CMD_INFO[cmd].command).as_str(),
         );
@@ -1084,11 +1338,21 @@ pub fn do_use(
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 let res = {
-                    mag_item = get_obj_in_list_vis(&game.descriptors, chars,db, objs,ch, &arg, None, &ch.carrying);
+                    mag_item = get_obj_in_list_vis(
+                        &game.descriptors,
+                        chars,
+                        db,
+                        objs,
+                        ch,
+                        &arg,
+                        None,
+                        &ch.carrying,
+                    );
                     mag_item.is_none()
-                }; 
+                };
                 if res {
-                    send_to_char(&mut game.descriptors, 
+                    send_to_char(
+                        &mut game.descriptors,
                         ch,
                         format!("You don't seem to have {} {}.\r\n", an!(arg), arg).as_str(),
                     );
@@ -1096,7 +1360,8 @@ pub fn do_use(
                 }
             }
             SCMD_USE => {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!("You don't seem to be holding {} {}.\r\n", an!(arg), arg).as_str(),
                 );
@@ -1118,7 +1383,11 @@ pub fn do_use(
         }
         SCMD_RECITE => {
             if mag_item.get_obj_type() != ItemType::Scroll {
-                send_to_char(&mut game.descriptors, ch, "You can only recite scrolls.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You can only recite scrolls.\r\n",
+                );
                 return;
             }
         }
@@ -1126,20 +1395,27 @@ pub fn do_use(
             if mag_item.get_obj_type() != ItemType::Wand
                 && mag_item.get_obj_type() != ItemType::Staff
             {
-                send_to_char(&mut game.descriptors, ch, "You can't seem to figure out how to use it.\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You can't seem to figure out how to use it.\r\n",
+                );
                 return;
             }
         }
         _ => {}
     }
 
-    mag_objectmagic(game, chars, db, texts,objs, chid, mag_item.id(), &buf);
+    mag_objectmagic(game, chars, db, texts, objs, chid, mag_item.id(), &buf);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_wimpy(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1157,7 +1433,8 @@ pub fn do_wimpy(
 
     if arg.is_empty() {
         if ch.get_wimp_lev() != 0 {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 format!(
                     "Your current wimp level is {} hit points.\r\n",
@@ -1167,7 +1444,11 @@ pub fn do_wimpy(
             );
             return;
         } else {
-            send_to_char(&mut game.descriptors, ch, "At the moment, you're not a wimp.  (sure, sure...)\r\n");
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "At the moment, you're not a wimp.  (sure, sure...)\r\n",
+            );
             return;
         }
     }
@@ -1176,19 +1457,29 @@ pub fn do_wimpy(
         let res = {
             wimp_lev = arg.parse::<i32>().unwrap();
             wimp_lev != 0
-        }; 
+        };
         if res {
             if wimp_lev < 0 {
-                send_to_char(&mut game.descriptors, ch, "Heh, heh, heh.. we are jolly funny today, eh?\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Heh, heh, heh.. we are jolly funny today, eh?\r\n",
+                );
             } else if wimp_lev > ch.get_max_hit() as i32 {
-                send_to_char(&mut game.descriptors, ch, "That doesn't make much sense, now does it?\r\n");
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "That doesn't make much sense, now does it?\r\n",
+                );
             } else if wimp_lev > (ch.get_max_hit() / 2) as i32 {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     "You can't set your wimp level above half your hit points.\r\n",
                 );
             } else {
-                send_to_char(&mut game.descriptors, 
+                send_to_char(
+                    &mut game.descriptors,
                     ch,
                     format!(
                         "Okay, you'll wimp out if you drop below {} hit points.\r\n",
@@ -1200,7 +1491,8 @@ pub fn do_wimpy(
                 ch.set_wimp_lev(wimp_lev);
             }
         } else {
-            send_to_char(&mut game.descriptors, 
+            send_to_char(
+                &mut game.descriptors,
                 ch,
                 "Okay, you'll now tough out fights to the bitter end.\r\n",
             );
@@ -1208,7 +1500,8 @@ pub fn do_wimpy(
             ch.set_wimp_lev(0);
         }
     } else {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "Specify at how many hit points you want to wimp out at.  (0 to disable)\r\n",
         );
@@ -1218,7 +1511,10 @@ pub fn do_wimpy(
 #[allow(clippy::too_many_arguments)]
 pub fn do_display(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     _cmd: usize,
@@ -1226,13 +1522,18 @@ pub fn do_display(
 ) {
     let ch = chars.get(chid);
     if ch.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "Monsters don't need displays.  Go away.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Monsters don't need displays.  Go away.\r\n",
+        );
         return;
     }
     let argument = argument.trim_start();
 
     if argument.is_empty() {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
         );
@@ -1243,7 +1544,8 @@ pub fn do_display(
         let ch = chars.get_mut(chid);
         ch.toggle_prf_flag_bits(PrefFlags::DISPAUTO);
         let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             format!(
                 "Auto prompt {}abled.\r\n",
@@ -1278,7 +1580,8 @@ pub fn do_display(
                     ch.set_prf_flags_bits(PrefFlags::DISPMOVE);
                 }
                 _ => {
-                    send_to_char(&mut game.descriptors, 
+                    send_to_char(
+                        &mut game.descriptors,
                         ch,
                         "Usage: prompt { { H | M | V } | all | auto | none }\r\n",
                     );
@@ -1294,24 +1597,20 @@ pub fn do_display(
 #[allow(clippy::too_many_arguments)]
 pub fn do_gen_write(
     game: &mut Game,
-    db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     argument: &str,
     cmd: usize,
     subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    let filename=
-    match subcmd {
-        SCMD_BUG => {
-           BUG_FILE
-        }
-        SCMD_TYPO => {
-            TYPO_FILE
-        }
-        SCMD_IDEA => {
-             IDEA_FILE
-        }
+    let filename = match subcmd {
+        SCMD_BUG => BUG_FILE,
+        SCMD_TYPO => TYPO_FILE,
+        SCMD_IDEA => IDEA_FILE,
         _ => {
             return;
         }
@@ -1320,7 +1619,11 @@ pub fn do_gen_write(
     let dt = Utc::now();
 
     if ch.is_npc() {
-        send_to_char(&mut game.descriptors, ch, "Monsters can't have ideas - Go away.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Monsters can't have ideas - Go away.\r\n",
+        );
         return;
     }
 
@@ -1331,17 +1634,12 @@ pub fn do_gen_write(
         send_to_char(&mut game.descriptors, ch, "That must be a mistake...\r\n");
         return;
     }
-    game.mudlog(chars,
+    game.mudlog(
+        chars,
         DisplayMode::Complete,
         LVL_IMMORT as i32,
         false,
-        format!(
-            "{} {}: {}",
-            ch.get_name(),
-            CMD_INFO[cmd].command,
-            argument
-        )
-        .as_str(),
+        format!("{} {}: {}", ch.get_name(), CMD_INFO[cmd].command, argument).as_str(),
     );
 
     let r = fs::metadata(filename);
@@ -1356,7 +1654,8 @@ pub fn do_gen_write(
     let fm = r.unwrap();
 
     if fm.len() >= MAX_FILESIZE as u64 {
-        send_to_char(&mut game.descriptors, 
+        send_to_char(
+            &mut game.descriptors,
             ch,
             "Sorry, the file is full right now.. try again later.\r\n",
         );
@@ -1369,7 +1668,11 @@ pub fn do_gen_write(
             filename,
             fl.err().unwrap()
         );
-        send_to_char(&mut game.descriptors, ch, "Could not open the file.  Sorry.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Could not open the file.  Sorry.\r\n",
+        );
         return;
     }
     let ch = chars.get(chid);
@@ -1387,7 +1690,11 @@ pub fn do_gen_write(
             filename,
             r.err().unwrap()
         );
-        send_to_char(&mut game.descriptors, ch, "Could not write to the file.  Sorry.\r\n");
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            "Could not write to the file.  Sorry.\r\n",
+        );
         return;
     }
 
@@ -1406,7 +1713,10 @@ macro_rules! prf_tog_chk {
 #[allow(clippy::too_many_arguments)]
 pub fn do_gen_tog(
     game: &mut Game,
-    _db: &mut DB,chars: &mut Depot<CharData>,_texts: &mut Depot<TextData>,_objs: &mut Depot<ObjData>, 
+    _db: &mut DB,
+    chars: &mut Depot<CharData>,
+    _texts: &mut Depot<TextData>,
+    _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _argument: &str,
     _cmd: usize,
@@ -1473,10 +1783,9 @@ pub fn do_gen_tog(
         return;
     }
     let ch = chars.get_mut(chid);
-    let result=
-    match subcmd {
+    let result = match subcmd {
         SCMD_NOSUMMON => {
-           prf_tog_chk!(ch, PrefFlags::SUMMONABLE)  
+            prf_tog_chk!(ch, PrefFlags::SUMMONABLE)
         }
         SCMD_NOHASSLE => {
             prf_tog_chk!(ch, PrefFlags::NOHASSLE)
@@ -1488,10 +1797,10 @@ pub fn do_gen_tog(
             prf_tog_chk!(ch, PrefFlags::COMPACT)
         }
         SCMD_NOTELL => {
-           prf_tog_chk!(ch, PrefFlags::NOTELL)
+            prf_tog_chk!(ch, PrefFlags::NOTELL)
         }
         SCMD_NOAUCTION => {
-           prf_tog_chk!(ch, PrefFlags::NOAUCT)
+            prf_tog_chk!(ch, PrefFlags::NOAUCT)
         }
         SCMD_DEAF => {
             prf_tog_chk!(ch, PrefFlags::DEAF)
@@ -1500,7 +1809,7 @@ pub fn do_gen_tog(
             prf_tog_chk!(ch, PrefFlags::NOGOSS)
         }
         SCMD_NOGRATZ => {
-             prf_tog_chk!(ch, PrefFlags::NOGRATZ)
+            prf_tog_chk!(ch, PrefFlags::NOGRATZ)
         }
         SCMD_NOWIZ => {
             prf_tog_chk!(ch, PrefFlags::NOWIZ)
@@ -1518,19 +1827,15 @@ pub fn do_gen_tog(
             prf_tog_chk!(ch, PrefFlags::HOLYLIGHT)
         }
         SCMD_SLOWNS => {
-            {
-                game.config.nameserver_is_slow = !game.config.nameserver_is_slow;
-                game.config.nameserver_is_slow
-            }
+            game.config.nameserver_is_slow = !game.config.nameserver_is_slow;
+            game.config.nameserver_is_slow
         }
         SCMD_AUTOEXIT => {
             prf_tog_chk!(ch, PrefFlags::AUTOEXIT)
         }
         SCMD_TRACK => {
-          {
-                game.config.track_through_doors = !game.config.track_through_doors;
-                game.config.track_through_doors
-            }
+            game.config.track_through_doors = !game.config.track_through_doors;
+            game.config.track_through_doors
         }
         _ => {
             error!("SYSERR: Unknown subcmd {} in do_gen_toggle.", subcmd);
@@ -1539,8 +1844,16 @@ pub fn do_gen_tog(
     };
 
     if result {
-        send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_ON]);
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            TOG_MESSAGES[subcmd as usize][TOG_ON],
+        );
     } else {
-        send_to_char(&mut game.descriptors, ch, TOG_MESSAGES[subcmd as usize][TOG_OFF]);
+        send_to_char(
+            &mut game.descriptors,
+            ch,
+            TOG_MESSAGES[subcmd as usize][TOG_OFF],
+        );
     }
 }
