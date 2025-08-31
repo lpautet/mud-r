@@ -4969,10 +4969,16 @@ fn perform_set(
     }
 
     /* Make sure the PC/NPC is correct */
-    if vict.is_npc() && SET_FIELDS[mode].pcnpc != CharacterType::Npc && SET_FIELDS[mode].pcnpc != CharacterType::Both {
+    if vict.is_npc()
+        && SET_FIELDS[mode].pcnpc != CharacterType::Npc
+        && SET_FIELDS[mode].pcnpc != CharacterType::Both
+    {
         send_to_char(descs, ch, "You can't do that to a beast!\r\n");
         return false;
-    } else if !vict.is_npc() && SET_FIELDS[mode].pcnpc != CharacterType::PC && SET_FIELDS[mode].pcnpc != CharacterType::Both {
+    } else if !vict.is_npc()
+        && SET_FIELDS[mode].pcnpc != CharacterType::PC
+        && SET_FIELDS[mode].pcnpc != CharacterType::Both
+    {
         send_to_char(descs, ch, "That can only be done to a beast!\r\n");
         return false;
     }
