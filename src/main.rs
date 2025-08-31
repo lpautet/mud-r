@@ -1467,8 +1467,8 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
         }
 
         match perform_socket_read(desc) {
-            Err(e) => return Err(e), /* Error, disconnect them. */
-            Ok(0) => return Ok(false),   /* Just blocking, no problems. */
+            Err(e) => return Err(e),   /* Error, disconnect them. */
+            Ok(0) => return Ok(false), /* Just blocking, no problems. */
             Ok(size) => bytes_read = size,
         }
 
