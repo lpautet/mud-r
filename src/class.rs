@@ -3632,7 +3632,7 @@ pub fn advance_level(
         ch.incr_practices(WIS_APP[ch.get_wis() as usize].bonus.clamp(1, 2) as i32);
     }
 
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         for i in 0..3 {
             ch.set_cond(i, -1);
         }
@@ -3660,7 +3660,7 @@ pub fn backstab_mult(level: u8) -> i32 {
         4 /* level 14 - 20 */
     } else if level <= 28 {
         5 /* level 21 - 28 */
-    } else if level < LVL_IMMORT as u8 {
+    } else if level < LVL_IMMORT {
         6 /* all remaining mortal levels */
     } else {
         20 /* immortals */
@@ -3774,7 +3774,7 @@ pub fn init_spell_levels(db: &mut DB) {
 pub const EXP_MAX: i32 = 10000000;
 
 /* Function to return the exp required for each class/level */
-pub fn level_exp(chclass: Class, level: i16) -> i32 {
+pub fn level_exp(chclass: Class, level: u8) -> i32 {
     if !(0..=LVL_IMPL).contains(&level) {
         info!("SYSERR: Requesting exp for invalid level {}!", level);
         return 0;
@@ -3785,7 +3785,7 @@ pub fn level_exp(chclass: Class, level: i16) -> i32 {
      * changed, regardless of how many mortal or immortal levels exist.
      */
     if level > LVL_IMMORT {
-        return EXP_MAX - ((LVL_IMPL - level) * 1000) as i32;
+        return EXP_MAX - (LVL_IMPL - level) as i32 * 1000;
     }
 
     /* Exp required for normal mortals is below */
@@ -4215,16 +4215,16 @@ pub fn level_exp(chclass: Class, level: i16) -> i32 {
 /*
  * Default titles of male characters.
  */
-pub fn title_male(chclass: Class, level: i32) -> &'static str {
-    if level <= 0 || level > LVL_IMPL as i32 {
+pub fn title_male(chclass: Class, level: u8) -> &'static str {
+    if level == 0 || level > LVL_IMPL {
         return "the Man";
     }
-    if level == LVL_IMPL as i32 {
+    if level == LVL_IMPL {
         return "the Implementor";
     }
 
     match chclass {
-        Class::MagicUser => match level as i16 {
+        Class::MagicUser => match level {
             1 => "the Apprentice of Magic",
             2 => "the Spell Student",
             3 => "the Scholar of Magic",
@@ -4261,7 +4261,7 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
             _ => "the Mage",
         },
         Class::Cleric => {
-            match level as i16 {
+            match level {
                 1 => "the Believer",
                 2 => "the Attendant",
                 3 => "the Acolyte",
@@ -4291,7 +4291,7 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
         }
 
         Class::Thief => {
-            match level as i16 {
+            match level {
                 1 => "the Pilferer",
                 2 => "the Footpad",
                 3 => "the Filcher",
@@ -4321,7 +4321,7 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
         }
 
         Class::Warrior => {
-            match level as i16 {
+            match level {
                 1 => "the Swordpupil",
                 2 => "the Recruit",
                 3 => "the Sentry",
@@ -4359,16 +4359,16 @@ pub fn title_male(chclass: Class, level: i32) -> &'static str {
 /*
  * Default titles of female characters.
  */
-pub fn title_female(chclass: Class, level: i32) -> &'static str {
-    if level <= 0 || level > LVL_IMPL as i32 {
+pub fn title_female(chclass: Class, level: u8) -> &'static str {
+    if level == 0 || level > LVL_IMPL {
         return "the Woman";
     }
-    if level == LVL_IMPL as i32 {
+    if level == LVL_IMPL {
         return "the Implementress";
     }
 
     match chclass {
-        Class::MagicUser => match level as i16 {
+        Class::MagicUser => match level {
             1 => "the Apprentice of Magic",
             2 => "the Spell Student",
             3 => "the Scholar of Magic",
@@ -4406,7 +4406,7 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
         },
 
         Class::Cleric => {
-            match level as i16 {
+            match level {
                 1 => "the Believer",
                 2 => "the Attendant",
                 3 => "the Acolyte",
@@ -4435,7 +4435,7 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
             }
         }
         Class::Thief => {
-            match level as i16 {
+            match level {
                 1 => "the Pilferess",
                 2 => "the Footpad",
                 3 => "the Filcheress",
@@ -4465,7 +4465,7 @@ pub fn title_female(chclass: Class, level: i32) -> &'static str {
         }
 
         Class::Warrior => {
-            match level as i16 {
+            match level {
                 1 => "the Swordpupil",
                 2 => "the Recruit",
                 3 => "the Sentress",

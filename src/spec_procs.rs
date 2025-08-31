@@ -544,7 +544,7 @@ fn npc_steal(
         return;
     }
 
-    if victim.get_level() >= LVL_IMMORT as u8 {
+    if victim.get_level() >= LVL_IMMORT {
         return;
     }
     if !can_see(&game.descriptors, chars, db, ch, victim) {
@@ -645,7 +645,7 @@ pub fn snake(
         ch.fighting_id(),
         None,
         SPELL_POISON,
-        ch.get_level() as i32,
+        ch.get_level(),
         CAST_SPELL,
     );
     true
@@ -670,7 +670,7 @@ pub fn thief(
     }
     for cons_id in db.world[ch.in_room() as usize].peoples.clone() {
         let cons = chars.get(cons_id);
-        if !cons.is_npc() && cons.get_level() < LVL_IMMORT as u8 && rand_number(0, 4) == 0 {
+        if !cons.is_npc() && cons.get_level() < LVL_IMMORT && rand_number(0, 4) == 0 {
             npc_steal(game, chars, db, chid, cons_id);
             return true;
         }
@@ -909,7 +909,7 @@ pub fn guild_guard(
         return false;
     }
 
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         return false;
     }
 

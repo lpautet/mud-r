@@ -109,7 +109,7 @@ const OBJECT_NOVAL: i32 = 3;
 
 impl CharData {
     pub fn is_god(&self) -> bool {
-        !self.is_npc() && self.get_level() >= LVL_GOD as u8
+        !self.is_npc() && self.get_level() >= LVL_GOD
     }
 }
 

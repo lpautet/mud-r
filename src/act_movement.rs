@@ -38,7 +38,7 @@ use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
 fn has_boat(descs: &mut Depot<DescriptorData>, objs: &Depot<ObjData>, ch: &CharData) -> bool {
-    if ch.get_level() > LVL_IMMORT as u8 {
+    if ch.get_level() > LVL_IMMORT {
         return true;
     }
 
@@ -274,7 +274,7 @@ pub fn do_simple_move(
     if db.room_flagged(
         db.exit(ch, dir as usize).as_ref().unwrap().to_room,
         RoomFlags::GODROOM,
-    ) && ch.get_level() < LVL_GRGOD as u8
+    ) && ch.get_level() < LVL_GRGOD
     {
         send_to_char(
             &mut game.descriptors,
@@ -285,7 +285,7 @@ pub fn do_simple_move(
     }
 
     /* Now we know we're allow to go into the room. */
-    if ch.get_level() < LVL_IMMORT as u8 && !ch.is_npc() {
+    if ch.get_level() < LVL_IMMORT && !ch.is_npc() {
         let ch = chars.get_mut(chid);
         ch.incr_move(-need_movement as i16);
     }
@@ -335,7 +335,7 @@ pub fn do_simple_move(
     }
 
     let ch = chars.get(chid);
-    if db.room_flagged(ch.in_room(), RoomFlags::DEATH) && ch.get_level() < LVL_IMMORT as u8 {
+    if db.room_flagged(ch.in_room(), RoomFlags::DEATH) && ch.get_level() < LVL_IMMORT {
         log_death_trap(game, chars, db, chid);
         death_cry(&mut game.descriptors, chars, db, ch);
         db.extract_char(chars, chid);
@@ -951,7 +951,7 @@ pub fn do_gen_door(
         {
             send_to_char(&mut game.descriptors, ch, "It seems to be locked.\r\n");
         } else if !has_key(db, objs, ch, keynum)
-            && (ch.get_level() < LVL_GOD as u8)
+            && (ch.get_level() < LVL_GOD)
             && ((subcmd == SCMD_LOCK) || (subcmd == SCMD_UNLOCK))
         {
             send_to_char(

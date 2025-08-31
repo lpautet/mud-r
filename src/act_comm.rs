@@ -296,7 +296,7 @@ pub fn do_tell(
             ch,
             "Who do you wish to tell what??\r\n",
         );
-    } else if ch.get_level() < LVL_IMMORT as u8 && {
+    } else if ch.get_level() < LVL_IMMORT && {
         vict = get_player_vis(
             &game.descriptors,
             chars,
@@ -309,7 +309,7 @@ pub fn do_tell(
         vict.is_none()
     } {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if ch.get_level() >= LVL_IMMORT as u8 && {
+    } else if ch.get_level() >= LVL_IMMORT && {
         vict = get_char_vis(
             &game.descriptors,
             chars,
@@ -738,7 +738,7 @@ pub fn do_page(
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to page?\r\n");
     } else {
         let buf = format!("\x07\x07*$n* {}", buf2);
-        if arg == "all" && ch.get_level() > LVL_GOD as u8 {
+        if arg == "all" && ch.get_level() > LVL_GOD {
             for d_id in game.descriptor_list.clone() {
                 let d = game.desc(d_id);
                 if d.state() == ConPlaying && d.character.is_some() {

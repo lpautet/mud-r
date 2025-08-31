@@ -68,7 +68,7 @@ pub fn do_quit(
         return;
     }
 
-    if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT as u8 {
+    if subcmd != SCMD_QUIT && ch.get_level() < LVL_IMMORT {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -157,7 +157,7 @@ pub fn do_save(
          * that guest immortals aren't trustworthy. If you've disabled guest
          * immortal advances from mortality, you may want < instead of <=.
          */
-        if AUTO_SAVE && ch.get_level() <= LVL_IMMORT as u8 {
+        if AUTO_SAVE && ch.get_level() <= LVL_IMMORT {
             send_to_char(&mut game.descriptors, ch, "Saving aliases.\r\n");
             let ch = chars.get(chid);
             write_aliases(ch);
@@ -370,7 +370,7 @@ pub fn do_steal(
     }
 
     /* NO NO With Imp's and Shopkeepers, and if player thieving is not allowed */
-    if vict.get_level() >= LVL_IMMORT as u8
+    if vict.get_level() >= LVL_IMMORT
         || pcsteal
         || (db.get_mob_spec(vict).is_some()
             && db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
@@ -622,7 +622,7 @@ pub fn do_visible(
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         perform_immort_vis(&mut game.descriptors, db, chars, objs, chid);
         return;
     }

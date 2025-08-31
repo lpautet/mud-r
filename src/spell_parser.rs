@@ -511,7 +511,7 @@ pub fn call_magic(
     cvict_id: Option<DepotId>,
     ovict: Option<DepotId>,
     spellnum: i32,
-    level: i32,
+    level: u8,
     casttype: i32,
 ) -> i32 {
     let caster = chars.get(caster_id);
@@ -884,7 +884,7 @@ pub fn mag_objectmagic(
                 /* Level to cast spell at. */
                 let obj = objs.get(oid);
                 let k = if obj.get_obj_val(0) != 0 {
-                    obj.get_obj_val(0)
+                    obj.get_obj_val(0) as u8
                 } else {
                     DEFAULT_STAFF_LVL
                 };
@@ -1106,7 +1106,7 @@ pub fn mag_objectmagic(
                     tch_id,
                     tobj_id,
                     obj.get_obj_val(3),
-                    obj.get_obj_val(0),
+                    obj.get_obj_val(0) as u8,
                     CAST_WAND,
                 );
             } else {
@@ -1188,7 +1188,7 @@ pub fn mag_objectmagic(
             for i in 1..3 {
                 let obj = objs.get(oid);
                 let spellnum = obj.get_obj_val(i);
-                let level = obj.get_obj_val(0);
+                let level = obj.get_obj_val(0) as u8;
                 if call_magic(
                     game,
                     chars,
@@ -1251,7 +1251,7 @@ pub fn mag_objectmagic(
             for i in 1..3 {
                 let obj = objs.get(oid);
                 let spellnum = obj.get_obj_val(i);
-                let level = obj.get_obj_val(0);
+                let level = obj.get_obj_val(0) as u8;
                 if call_magic(
                     game,
                     chars,
@@ -1394,7 +1394,7 @@ pub fn cast_spell(
         tch_id,
         tobj_id,
         spellnum,
-        ch.get_level() as i32,
+        ch.get_level(),
         CAST_SPELL,
     )
 }
@@ -1607,7 +1607,7 @@ pub fn do_cast(
         return;
     }
     let mana = mag_manacost(ch, &sinfo);
-    if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT as u8 {
+    if mana > 0 && ch.get_mana() < mana && ch.get_level() < LVL_IMMORT {
         send_to_char(
             &mut game.descriptors,
             ch,

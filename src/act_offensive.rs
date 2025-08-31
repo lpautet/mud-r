@@ -291,7 +291,7 @@ pub fn do_kill(
     let ch = chars.get(chid);
     let mut arg = String::new();
 
-    if ch.get_level() < LVL_IMPL as u8 || ch.is_npc() {
+    if ch.get_level() < LVL_IMPL || ch.is_npc() {
         do_hit(game, db, chars, texts, objs, chid, argument, cmd, subcmd);
         return;
     }

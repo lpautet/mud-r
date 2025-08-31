@@ -2870,7 +2870,7 @@ fn is_empty(game: &Game, db: &DB, chars: &Depot<CharData>, zone_nr: ZoneRnum) ->
         if chars.get(i.character.unwrap()).in_room() == NOWHERE {
             continue;
         }
-        if chars.get(i.character.unwrap()).get_level() >= LVL_IMMORT as u8 {
+        if chars.get(i.character.unwrap()).get_level() >= LVL_IMMORT {
             continue;
         }
         if db.world[chars.get(i.character.unwrap()).in_room() as usize].zone != zone_nr {
@@ -3446,7 +3446,7 @@ impl DB {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
             let ch = chars.get_mut(chid);
-            ch.set_level(LVL_IMPL as u8);
+            ch.set_level(LVL_IMPL);
             ch.set_exp(7000000);
 
             /* The implementor never goes through do_start(). */
@@ -3505,7 +3505,7 @@ impl DB {
         }
         let ch = chars.get_mut(chid);
         for i in 1..MAX_SKILLS {
-            if ch.get_level() < LVL_IMPL as u8 {
+            if ch.get_level() < LVL_IMPL {
                 ch.player_specials.saved.skills[i] = 0;
             } else {
                 ch.player_specials.saved.skills[i] = 100;
@@ -3526,11 +3526,7 @@ impl DB {
         ch.real_abils.con = 25;
         ch.real_abils.cha = 25;
 
-        let cond_value = if ch.get_level() == LVL_IMPL as u8 {
-            -1
-        } else {
-            24
-        };
+        let cond_value = if ch.get_level() == LVL_IMPL { -1 } else { 24 };
         for i in 0..3 {
             ch.set_cond(i, cond_value);
         }

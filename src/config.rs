@@ -68,7 +68,7 @@ pub const IDLE_VOID: i32 = 8;
 pub const IDLE_RENT_TIME: i32 = 48;
 
 /* This level and up is immune to idling, LVL_IMPL+1 will disable it. */
-pub const IDLE_MAX_LEVEL: i16 = LVL_GOD;
+pub const IDLE_MAX_LEVEL: u8 = LVL_GOD;
 
 /* should items in death traps automatically be junked? */
 pub const DTS_ARE_DUMPS: bool = true;
@@ -96,7 +96,7 @@ pub const NOEFFECT: &str = "Nothing seems to happen.\r\n";
 * For example, to stop people from advancing to LVL_IMMORT, simply set
 * IMMORT_LEVEL_OK to 1.
 */
-pub const IMMORT_LEVEL_OK: i16 = 0;
+pub const IMMORT_LEVEL_OK: u8 = 0;
 
 /****************************************************************************/
 /****************************************************************************/

@@ -891,7 +891,7 @@ pub fn house_save_all(db: &mut DB, objs: &mut Depot<ObjData>) {
 pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
     let mut i = None;
 
-    if ch.get_level() >= LVL_GRGOD as u8 || {
+    if ch.get_level() >= LVL_GRGOD || {
         i = find_house(db, house);
         i.is_none()
     } {

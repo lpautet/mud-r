@@ -95,11 +95,11 @@ struct BoardMsginfo {
 struct BoardInfoType {
     vnum: ObjVnum,
     /* vnum of this board */
-    read_lvl: i16,
+    read_lvl: u8,
     /* min level to read messages on this board */
-    write_lvl: i16,
+    write_lvl: u8,
     /* min level to write messages on this board */
-    remove_lvl: i16,
+    remove_lvl: u8,
     /* min level to remove messages from this board */
     filename: &'static str,
     /* file to save this board to */
@@ -165,7 +165,7 @@ impl BoardSystem {
                 BoardInfoType {
                     vnum: 3097,
                     read_lvl: LVL_IMMORT,
-                    write_lvl: LVL_FREEZE as i16,
+                    write_lvl: LVL_FREEZE,
                     remove_lvl: LVL_IMPL,
                     filename: "./etc/board.freeze",
                     rnum: 0,
@@ -210,7 +210,7 @@ fn find_board(
         }
     }
 
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         for oid in ch.carrying.iter() {
             for i in 0..NUM_OF_BOARDS {
                 if db.boards.boardinfo[i].rnum == objs.get(*oid).get_obj_rnum() {
@@ -350,7 +350,7 @@ fn board_write_message(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if ch.get_level() < db.boards.boardinfo[board_type].write_lvl as u8 {
+    if ch.get_level() < db.boards.boardinfo[board_type].write_lvl {
         send_to_char(
             descs,
             ch,
@@ -453,7 +453,7 @@ fn board_show_board(
         return false;
     }
 
-    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl as u8 {
+    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl {
         send_to_char(
             descs,
             ch,
@@ -556,7 +556,7 @@ fn board_display_msg(
         return false;
     }
 
-    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl as u8 {
+    if ch.get_level() < db.boards.boardinfo[board_type].read_lvl {
         send_to_char(
             descs,
             ch,
@@ -670,7 +670,7 @@ fn board_remove_msg(
         return true;
     }
     let buf = format!("({})", ch.get_name());
-    if ch.get_level() < db.boards.boardinfo[board_type].remove_lvl as u8
+    if ch.get_level() < db.boards.boardinfo[board_type].remove_lvl
         && !db.boards.msg_index[board_type][ind]
             .heading
             .as_ref()

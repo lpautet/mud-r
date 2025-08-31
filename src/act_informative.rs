@@ -293,7 +293,7 @@ fn look_at_char(
             }
         }
     }
-    if i.id() != ch.id() && (ch.is_thief() || ch.get_level() >= LVL_IMMORT as u8) {
+    if i.id() != ch.id() && (ch.is_thief() || ch.get_level() >= LVL_IMMORT) {
         found = false;
         act(
             descs,
@@ -559,7 +559,7 @@ pub fn do_exits(
 
         let oexit = db.exit(ch, door);
         let exit = oexit.as_ref().unwrap();
-        if ch.get_level() >= LVL_IMMORT as u8 {
+        if ch.get_level() >= LVL_IMMORT {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -1253,13 +1253,13 @@ pub fn do_score(
         )
         .as_str(),
     );
-    if ch.get_level() < LVL_IMMORT as u8 {
+    if ch.get_level() < LVL_IMMORT {
         send_to_char(
             &mut game.descriptors,
             ch,
             format!(
                 "You need {} exp to reach your next level.\r\n",
-                level_exp(ch.get_class(), (ch.get_level() + 1) as i16) - ch.get_exp()
+                level_exp(ch.get_class(), ch.get_level() + 1) - ch.get_exp()
             )
             .as_str(),
         );
@@ -1571,7 +1571,7 @@ pub fn do_weather(
         );
         send_to_char(&mut game.descriptors, ch, messg.as_str());
         let ch = chars.get(chid);
-        if ch.get_level() >= LVL_GOD as u8 {
+        if ch.get_level() >= LVL_GOD {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -1675,7 +1675,7 @@ pub fn do_who(
     let ch = chars.get(chid);
     let argument = argument.trim_start();
     let mut buf = argument.to_string();
-    let mut low = 0_i16;
+    let mut low = 0_u8;
     let mut high = LVL_IMPL;
     let mut outlaws = false;
     let mut localwho = false;
@@ -1694,8 +1694,8 @@ pub fn do_who(
         if arg.chars().next().unwrap().is_ascii_digit() {
             let f = regex.captures(&arg);
             if let Some(f) = f {
-                low = f[1].parse::<i16>().unwrap();
-                high = f[2].parse::<i16>().unwrap();
+                low = f[1].parse::<u8>().unwrap();
+                high = f[2].parse::<u8>().unwrap();
             }
         } else if arg.starts_with('-') {
             arg.remove(0);
@@ -1721,8 +1721,8 @@ pub fn do_who(
                     half_chop(&mut buf1, &mut arg, &mut buf);
                     let f = regex.captures(&arg);
                     if let Some(f) = f {
-                        low = f[1].parse::<i16>().unwrap();
-                        high = f[2].parse::<i16>().unwrap();
+                        low = f[1].parse::<u8>().unwrap();
+                        high = f[2].parse::<u8>().unwrap();
                     }
                 }
                 'n' => {
@@ -1778,8 +1778,8 @@ pub fn do_who(
         }
         let ch = chars.get(chid);
         if !can_see(&game.descriptors, chars, db, ch, tch)
-            || tch.get_level() < low as u8
-            || tch.get_level() > high as u8
+            || tch.get_level() < low
+            || tch.get_level() > high
         {
             continue;
         }
@@ -1803,7 +1803,7 @@ pub fn do_who(
             #[allow(clippy::blocks_in_conditions)]
             let messg = format!(
                 "{}[{:2} {}] {:12}{}{}",
-                if tch.get_level() >= LVL_IMMORT as u8 {
+                if tch.get_level() >= LVL_IMMORT {
                     CCYEL!(ch, C_SPR)
                 } else {
                     ""
@@ -1811,7 +1811,7 @@ pub fn do_who(
                 tch.get_level(),
                 tch.class_abbr(),
                 tch.get_name(),
-                if tch.get_level() >= LVL_IMMORT as u8 {
+                if tch.get_level() >= LVL_IMMORT {
                     CCNRM!(ch, C_SPR)
                 } else {
                     ""
@@ -1830,7 +1830,7 @@ pub fn do_who(
             num_can_see += 1;
             let messg = format!(
                 "{}[{:2} {}] {} {}",
-                if tch.get_level() >= LVL_IMMORT as u8 {
+                if tch.get_level() >= LVL_IMMORT {
                     CCYEL!(ch, C_SPR)
                 } else {
                     ""
@@ -1871,7 +1871,7 @@ pub fn do_who(
             if tch.plr_flagged(PLR_KILLER) {
                 send_to_char(&mut game.descriptors, ch, " (KILLER)");
             }
-            if tch.get_level() >= LVL_IMMORT as u8 {
+            if tch.get_level() >= LVL_IMMORT {
                 let ch = chars.get(chid);
                 send_to_char(&mut game.descriptors, ch, CCNRM!(ch, C_SPR));
             }
@@ -1920,7 +1920,7 @@ pub fn do_users(
     let mut outlaws = false;
     let mut playing = false;
     let mut deadweight = false;
-    let mut low = 0;
+    let mut low = 0_u8;
     let mut high = LVL_IMPL;
     let mut name_search = String::new();
     let mut host_search = String::new();
@@ -1955,8 +1955,8 @@ pub fn do_users(
                     half_chop(&mut buf1, &mut arg, &mut buf);
                     let f = regex.captures(&arg);
                     if let Some(f) = f {
-                        low = f[1].parse::<i16>().unwrap();
-                        high = f[2].parse::<i16>().unwrap();
+                        low = f[1].parse::<u8>().unwrap();
+                        high = f[2].parse::<u8>().unwrap();
                     }
                 }
                 'n' => {
@@ -2021,8 +2021,8 @@ pub fn do_users(
             }
             let ch = chars.get(chid);
             if !can_see(&game.descriptors, chars, db, ch, tch)
-                || tch.get_level() < low as u8
-                || tch.get_level() > high as u8
+                || tch.get_level() < low
+                || tch.get_level() > high
             {
                 continue;
             }
@@ -2063,7 +2063,7 @@ pub fn do_users(
 
         let idletime = if d.character.is_some()
             && d.state() == ConPlaying
-            && chars.get(d.character.unwrap()).get_level() < LVL_GOD as u8
+            && chars.get(d.character.unwrap()).get_level() < LVL_GOD
         {
             format!(
                 "{:3}",
@@ -2460,7 +2460,7 @@ pub fn do_where(
     let mut arg = String::new();
     one_argument(argument, &mut arg);
 
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         perform_immort_where(game, db, chars, objs, chid, &arg);
     } else {
         perform_mortal_where(game, db, chars, chid, &arg);
@@ -2499,10 +2499,10 @@ pub fn do_levels(
 
         match ch.get_sex() {
             Sex::Male | Sex::Neutral => {
-                buf.push_str(format!("{}\r\n", title_male(ch.get_class(), i as i32)).as_str());
+                buf.push_str(format!("{}\r\n", title_male(ch.get_class(), i)).as_str());
             }
             Sex::Female => {
-                buf.push_str(format!("{}\r\n", title_female(ch.get_class(), i as i32)).as_str());
+                buf.push_str(format!("{}\r\n", title_female(ch.get_class(), i)).as_str());
             }
         }
     }
@@ -2763,7 +2763,7 @@ pub fn do_toggle(
         buf2.push_str(format!("{:3}", ch.get_wimp_lev()).as_str());
     }
 
-    if ch.get_level() >= LVL_IMMORT as u8 {
+    if ch.get_level() >= LVL_IMMORT {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2893,7 +2893,7 @@ pub fn do_commands(
     let vict_level = vict.get_level();
     for cmd_num in 1..CMD_INFO.len() {
         let i: usize = db.cmd_sort_info[cmd_num];
-        if CMD_INFO[i].minimum_level < 0 || vict_level < CMD_INFO[i].minimum_level as u8 {
+        if vict_level < CMD_INFO[i].minimum_level {
             continue;
         }
         if (CMD_INFO[i].minimum_level >= LVL_IMMORT) != wizhelp {

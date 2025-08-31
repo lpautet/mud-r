@@ -188,7 +188,7 @@ pub fn mag_damage(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: DepotId,
     victim_id: DepotId,
     spellnum: i32,
@@ -305,7 +305,7 @@ pub fn mag_damage(
 
         /* Area spells */
         SPELL_EARTHQUAKE => {
-            dam = dice(2, 8) + level;
+            dam = dice(2, 8) + level as i32;
         }
         _ => {}
     } /* switch(spellnum) */
@@ -335,7 +335,7 @@ pub fn mag_affects(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: DepotId,
     victim_id: Option<DepotId>,
     spellnum: i32,
@@ -641,7 +641,7 @@ fn perform_mag_groups(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: DepotId,
     tch_id: DepotId,
     spellnum: i32,
@@ -699,7 +699,7 @@ pub fn mag_groups(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     spellnum: i32,
     savetype: i32,
@@ -755,7 +755,7 @@ pub fn mag_groups(
 pub fn mag_masses(
     chars: &Depot<CharData>,
     db: &DB,
-    _level: i32,
+    _level: u8,
     chid: DepotId,
     _spellnum: i32,
     _savetype: i32,
@@ -785,7 +785,7 @@ pub fn mag_areas(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     spellnum: i32,
     _savetype: i32,
@@ -846,7 +846,7 @@ pub fn mag_areas(
         if chid == tch_id {
             continue;
         }
-        if !tch.is_npc() && tch.get_level() >= LVL_IMMORT as u8 {
+        if !tch.is_npc() && tch.get_level() >= LVL_IMMORT {
             continue;
         }
         let ch = chars.get(chid);
@@ -917,7 +917,7 @@ pub fn mag_summons(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: Option<DepotId>,
     oid: Option<DepotId>,
     spellnum: i32,
@@ -1047,7 +1047,7 @@ pub fn mag_summons(
 pub fn mag_points(
     game: &mut Game,
     chars: &mut Depot<CharData>,
-    level: i32,
+    level: u8,
     _chid: DepotId,
     victim_id: Option<DepotId>,
     spellnum: i32,
@@ -1063,11 +1063,11 @@ pub fn mag_points(
     let victim = chars.get_mut(victim_id);
     match spellnum {
         SPELL_CURE_LIGHT => {
-            healing = dice(1, 8) + 1 + (level / 4);
+            healing = dice(1, 8) + 1 + (level as i32 / 4);
             send_to_char(&mut game.descriptors, victim, "You feel better.\r\n");
         }
         SPELL_CURE_CRITIC => {
-            healing = dice(3, 8) + 3 + (level / 4);
+            healing = dice(3, 8) + 3 + (level as i32 / 4);
             send_to_char(&mut game.descriptors, victim, "You feel a lot better!\r\n");
         }
         SPELL_HEAL => {
@@ -1093,7 +1093,7 @@ pub fn mag_unaffects(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: DepotId,
     victim_id: DepotId,
     spellnum: i32,
@@ -1185,7 +1185,7 @@ pub fn mag_alter_objs(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: DepotId,
     oid: Option<DepotId>,
     spellnum: i32,
@@ -1310,7 +1310,7 @@ pub fn mag_creations(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: Option<DepotId>,
     spellnum: i32,
 ) {

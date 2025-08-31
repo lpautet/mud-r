@@ -989,13 +989,13 @@ impl From<u8> for Sex {
  * LVL_IMMORT should always be the LOWEST immortal level.  The number of
  * mortal levels will always be LVL_IMMORT - 1.
  */
-pub const LVL_IMPL: i16 = 34;
-pub const LVL_GRGOD: i16 = 33;
-pub const LVL_GOD: i16 = 32;
-pub const LVL_IMMORT: i16 = 31;
+pub const LVL_IMPL: u8 = 34;
+pub const LVL_GRGOD: u8 = 33;
+pub const LVL_GOD: u8 = 32;
+pub const LVL_IMMORT: u8 = 31;
 
 /* Level of the 'freeze' command */
-pub const LVL_FREEZE: u8 = LVL_GRGOD as u8;
+pub const LVL_FREEZE: u8 = LVL_GRGOD;
 
 pub const NUM_OF_DIRS: usize = 6; /* number of directions in a room (nsewud) */
 // pub const MAGIC_NUMBER: u8 = 0x06; /* Arbitrary number that won't be in a string */

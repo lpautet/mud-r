@@ -187,9 +187,9 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
     let mut title = title;
     if title.is_none() || title.unwrap().is_empty() {
         if ch.get_sex() == Sex::Female {
-            title = Some(title_female(ch.get_class(), ch.get_level() as i32));
+            title = Some(title_female(ch.get_class(), ch.get_level()));
         } else {
-            title = Some(title_male(ch.get_class(), ch.get_level() as i32));
+            title = Some(title_male(ch.get_class(), ch.get_level()));
         }
     }
 
@@ -235,7 +235,7 @@ pub fn gain_exp(
     let mut is_altered = false;
     let mut num_levels = 0;
 
-    if !ch.is_npc() && (ch.get_level() < 1 || ch.get_level() > LVL_IMMORT as u8) {
+    if !ch.is_npc() && (ch.get_level() < 1 || ch.get_level() > LVL_IMMORT) {
         return;
     }
 
@@ -250,8 +250,8 @@ pub fn gain_exp(
         ch.set_exp(ch.get_exp() + gain);
         while {
             let ch = chars.get(chid);
-            ch.get_level() < (LVL_IMMORT - IMMORT_LEVEL_OK) as u8
-                && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
+            ch.get_level() < (LVL_IMMORT - IMMORT_LEVEL_OK)
+                && ch.get_exp() >= level_exp(ch.get_class(), ch.get_level() + 1)
         } {
             let ch = chars.get_mut(chid);
             ch.set_level(ch.get_level() + 1);
@@ -288,7 +288,7 @@ pub fn gain_exp(
                 let ch = chars.get_mut(chid);
                 set_title(ch, None);
                 let ch = chars.get(chid);
-                if ch.get_level() >= LVL_IMMORT as u8 {
+                if ch.get_level() >= LVL_IMMORT {
                     // TODO implement autowiz
                     //run_autowiz();
                 }
@@ -325,8 +325,8 @@ pub fn gain_exp_regardless(
     if !ch.is_npc() {
         while {
             let ch = chars.get(chid);
-            ch.get_level() < LVL_IMPL as u8
-                && ch.get_exp() >= level_exp(ch.get_class(), (ch.get_level() + 1) as i16)
+            ch.get_level() < LVL_IMPL
+                && ch.get_exp() >= level_exp(ch.get_class(), ch.get_level() + 1)
         } {
             let ch = chars.get_mut(chid);
             ch.set_level(ch.get_level() + 1);
@@ -362,7 +362,7 @@ pub fn gain_exp_regardless(
             }
             let ch = chars.get_mut(chid);
             set_title(ch, None);
-            if ch.get_level() >= LVL_IMMORT as u8 {
+            if ch.get_level() >= LVL_IMMORT {
                 // TODO run_autowiz();
             }
         }
@@ -528,7 +528,7 @@ impl Game {
             if !i.is_npc() {
                 update_char_objects(&mut self.descriptors, chars, objs, db, i_id);
                 let i = chars.get(i_id);
-                if i.get_level() < IDLE_MAX_LEVEL as u8 {
+                if i.get_level() < IDLE_MAX_LEVEL {
                     self.check_idling(chars, db, texts, objs, i_id);
                 }
             }

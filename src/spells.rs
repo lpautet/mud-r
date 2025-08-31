@@ -31,8 +31,8 @@ use crate::util::{
 };
 use crate::{Game, TO_CHAR, TO_ROOM, TO_VICT};
 
-pub const DEFAULT_STAFF_LVL: i32 = 12;
-pub const DEFAULT_WAND_LVL: i32 = 12;
+pub const DEFAULT_STAFF_LVL: u8 = 12;
+pub const DEFAULT_WAND_LVL: u8 = 12;
 
 // pub const CAST_UNDEFINED: i32 = -1;
 pub const CAST_SPELL: i32 = 0;
@@ -263,7 +263,7 @@ pub fn spell_create_water(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
     obj_id: Option<DepotId>,
@@ -321,7 +321,7 @@ pub fn spell_recall(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
@@ -369,7 +369,7 @@ pub fn spell_teleport(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     _chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
@@ -429,7 +429,7 @@ pub fn spell_summon(
     db: &mut DB,
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
@@ -442,7 +442,7 @@ pub fn spell_summon(
 
     let chid = chid.unwrap();
     let ch = chars.get(chid);
-    if victim.get_level() > min((LVL_IMMORT - 1) as u8, (level + 3) as u8) {
+    if victim.get_level() > min(LVL_IMMORT - 1, level + 3) {
         send_to_char(&mut game.descriptors, ch, SUMMON_FAIL);
         return;
     }
@@ -544,7 +544,7 @@ pub fn spell_locate_object(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
     oid: Option<DepotId>,
@@ -639,7 +639,7 @@ pub fn spell_charm(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     _oid: Option<DepotId>,
@@ -679,7 +679,7 @@ pub fn spell_charm(
             ch,
             "You can't have any followers of your own!\r\n",
         );
-    } else if victim.aff_flagged(AffectFlags::CHARM) || level < victim.get_level() as i32 {
+    } else if victim.aff_flagged(AffectFlags::CHARM) || level < victim.get_level() {
         send_to_char(&mut game.descriptors, ch, "You fail.\r\n");
         /* player charming another player - no legal reason for this */
     } else if !PK_ALLOWED && !victim.is_npc() {
@@ -744,7 +744,7 @@ pub fn spell_identify(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
@@ -985,7 +985,7 @@ pub fn spell_enchant_weapon(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    level: i32,
+    level: u8,
     chid: Option<DepotId>,
     _victim_id: Option<DepotId>,
     oid: Option<DepotId>,
@@ -1075,7 +1075,7 @@ pub fn spell_detect_poison(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    _level: i32,
+    _level: u8,
     chid: Option<DepotId>,
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,

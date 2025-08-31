@@ -232,7 +232,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
 
     /* Make certain values are between 0..25, not < 0 and not > 25! */
 
-    let i = if ch.is_npc() || ch.get_level() >= LVL_GRGOD as u8 {
+    let i = if ch.is_npc() || ch.get_level() >= LVL_GRGOD {
         25
     } else {
         18

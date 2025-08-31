@@ -131,7 +131,7 @@ pub fn appear(
     }
     ch.remove_aff_flags(AffectFlags::INVISIBLE | AffectFlags::HIDE);
     let ch = chars.get(chid);
-    if ch.get_level() < LVL_IMMORT as u8 {
+    if ch.get_level() < LVL_IMMORT {
         act(
             descs,
             chars,
@@ -859,7 +859,7 @@ pub fn skill_message(
         if db.fight_messages[i].a_type == attacktype {
             let nr = dice(1, db.fight_messages[i].messages.len() as i32) as usize;
 
-            if !vict.is_npc() && vict.get_level() >= LVL_IMMORT as u8 {
+            if !vict.is_npc() && vict.get_level() >= LVL_IMMORT {
                 let attacker_msg: &Rc<str> =
                     &db.fight_messages[i].messages[nr].god_msg.attacker_msg;
                 let victim_msg: &Rc<str> = &db.fight_messages[i].messages[nr].god_msg.victim_msg;
@@ -1103,7 +1103,7 @@ impl Game {
 
         /* You can't damage an immortal! */
         let victim = chars.get(victim_id);
-        if !victim.is_npc() && victim.get_level() >= LVL_IMMORT as u8 {
+        if !victim.is_npc() && victim.get_level() >= LVL_IMMORT {
             dam = 0;
         }
 

@@ -1481,7 +1481,7 @@ fn perform_give_gold(
         );
         return;
     }
-    if ch.get_gold() < amount && (ch.is_npc() || (ch.get_level() < LVL_GOD as u8)) {
+    if ch.get_gold() < amount && (ch.is_npc() || (ch.get_level() < LVL_GOD)) {
         send_to_char(descs, ch, "You don't have that many coins!\r\n");
         return;
     }
@@ -1518,7 +1518,7 @@ fn perform_give_gold(
     );
     let ch = chars.get(chid);
 
-    if ch.is_npc() || ch.get_level() < LVL_GOD as u8 {
+    if ch.is_npc() || ch.get_level() < LVL_GOD {
         let ch = chars.get_mut(chid);
         ch.set_gold(ch.get_gold() - amount);
     }
@@ -2110,7 +2110,7 @@ pub fn do_eat(
         do_drink(game, db, chars, texts, objs, chid, argument, 0, SCMD_SIP);
         return;
     }
-    if (food.get_obj_type() != ItemType::Food) && (ch.get_level() < LVL_GOD as u8) {
+    if (food.get_obj_type() != ItemType::Food) && (ch.get_level() < LVL_GOD) {
         send_to_char(&mut game.descriptors, ch, "You can't eat THAT!\r\n");
         return;
     }
@@ -2184,7 +2184,7 @@ pub fn do_eat(
     }
     let ch = chars.get(chid);
     let food = objs.get(food_id);
-    if food.get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT as u8) {
+    if food.get_obj_val(3) != 0 && (ch.get_level() < LVL_IMMORT) {
         /* The crap was poisoned ! */
         send_to_char(
             &mut game.descriptors,

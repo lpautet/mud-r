@@ -265,7 +265,7 @@ fn find_target_room(
     }
 
     /* a location has been found -- if you're >= GRGOD, no restrictions. */
-    if ch.get_level() >= LVL_GRGOD as u8 {
+    if ch.get_level() >= LVL_GRGOD {
         return location;
     }
 
@@ -526,7 +526,7 @@ pub fn do_trans(
         }
     } else {
         /* Trans All */
-        if ch.get_level() < LVL_GRGOD as u8 {
+        if ch.get_level() < LVL_GRGOD {
             send_to_char(&mut game.descriptors, ch, "I think not.\r\n");
             return;
         }
@@ -2179,13 +2179,13 @@ pub fn do_switch(
             ch,
             "You can't do that, the body is already in use!\r\n",
         );
-    } else if ch.get_level() < LVL_IMPL as u8 && !victim.as_ref().unwrap().is_npc() {
+    } else if ch.get_level() < LVL_IMPL && !victim.as_ref().unwrap().is_npc() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You aren't holy enough to use a mortal's body.\r\n",
         );
-    } else if ch.get_level() < LVL_GRGOD as u8
+    } else if ch.get_level() < LVL_GRGOD
         && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::GODROOM)
     {
         send_to_char(
@@ -2193,7 +2193,7 @@ pub fn do_switch(
             ch,
             "You are not godly enough to use that room!\r\n",
         );
-    } else if ch.get_level() < LVL_GRGOD as u8
+    } else if ch.get_level() < LVL_GRGOD
         && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::HOUSE)
         && !house_can_enter(db, ch, db.get_room_vnum(victim.as_ref().unwrap().in_room()))
     {
@@ -2818,7 +2818,7 @@ pub fn do_advance(
         return;
     }
 
-    if newlevel > LVL_IMPL as u8 {
+    if newlevel > LVL_IMPL {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2896,7 +2896,7 @@ You feel slightly different.",
             oldlevel
         );
     }
-    if oldlevel >= LVL_IMMORT as u8 && newlevel < LVL_IMMORT as u8 {
+    if oldlevel >= LVL_IMMORT && newlevel < LVL_IMMORT {
         /* If they are no longer an immortal, let's remove some of the
          * nice immortal only flags, shall we?
          */
@@ -2912,7 +2912,7 @@ You feel slightly different.",
         chars,
         db,
         victim_id,
-        level_exp(victim.get_class(), newlevel as i16) - victim.get_exp(),
+        level_exp(victim.get_class(), newlevel) - victim.get_exp(),
         texts,
         objs,
     );
@@ -2970,8 +2970,8 @@ pub fn do_restore(
         vict.set_move(vict.get_move());
         let ch = chars.get(chid);
         let vict = chars.get(vict_id);
-        if !vict.is_npc() && ch.get_level() >= LVL_GRGOD as u8 {
-            if vict.get_level() >= LVL_IMMORT as u8 {
+        if !vict.is_npc() && ch.get_level() >= LVL_GRGOD {
+            if vict.get_level() >= LVL_IMMORT {
                 for i in 1..MAX_SKILLS + 1 {
                     let vict = chars.get_mut(vict_id);
                     vict.set_skill(i as i32, 100);
@@ -2979,7 +2979,7 @@ pub fn do_restore(
             }
 
             let vict = chars.get(vict_id);
-            if vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.get_level() >= LVL_GRGOD {
                 let vict = chars.get_mut(vict_id);
                 vict.real_abils.str_add = 100;
                 vict.real_abils.intel = 25;
@@ -3454,7 +3454,7 @@ pub fn do_last(
         return;
     }
     let ch = chars.get(chid);
-    if chdata.level > ch.get_level() && ch.get_level() < LVL_IMPL as u8 {
+    if chdata.level > ch.get_level() && ch.get_level() < LVL_IMPL {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -3507,7 +3507,7 @@ pub fn do_force(
             ch,
             "Whom do you wish to force do what?\r\n",
         );
-    } else if ch.get_level() < LVL_GRGOD as u8 || "all" != arg && "room" != arg {
+    } else if ch.get_level() < LVL_GRGOD || "all" != arg && "room" != arg {
         let res = {
             vict = get_char_vis(
                 &game.descriptors,
@@ -3665,8 +3665,8 @@ pub fn do_wiznet(
             if is_number(&buf1) {
                 let mut arg_left = argument.clone();
                 half_chop(&mut arg_left, &mut buf1, &mut argument);
-                level = max(buf1.parse::<i16>().unwrap(), LVL_IMMORT);
-                if level > ch.get_level() as i16 {
+                level = max(buf1.parse::<u8>().unwrap(), LVL_IMMORT);
+                if level > ch.get_level() {
                     send_to_char(
                         &mut game.descriptors,
                         ch,
@@ -3683,7 +3683,7 @@ pub fn do_wiznet(
             for d_id in game.descriptor_list.clone() {
                 let d = game.desc(d_id);
                 if d.state() != ConPlaying
-                    || chars.get(d.character.unwrap()).get_level() < LVL_IMMORT as u8
+                    || chars.get(d.character.unwrap()).get_level() < LVL_IMMORT
                 {
                     continue;
                 }
@@ -3782,7 +3782,7 @@ pub fn do_wiznet(
             let ch = chars.get(chid);
             let d = game.desc(d_id);
             d.state() == ConPlaying
-                && chars.get(d.character.unwrap()).get_level() >= level as u8
+                && chars.get(d.character.unwrap()).get_level() >= level
                 && !chars
                     .get(d.character.unwrap())
                     .prf_flagged(PrefFlags::NOWIZ)
@@ -4214,7 +4214,7 @@ pub fn do_show(
 
     struct ShowStruct {
         cmd: &'static str,
-        level: i16,
+        level: u8,
     }
 
     const FIELDS: [ShowStruct; 12] = [
@@ -4275,7 +4275,7 @@ pub fn do_show(
         let mut j = 0;
         for field in FIELDS.iter() {
             let ch = chars.get(chid);
-            if field.level <= ch.get_level() as i16 {
+            if field.level <= ch.get_level() {
                 #[allow(clippy::blocks_in_conditions)]
                 send_to_char(
                     &mut game.descriptors,
@@ -4307,7 +4307,7 @@ pub fn do_show(
     let l = FIELDS.iter().position(|f| f.cmd == field);
     let l = l.unwrap_or_default();
 
-    if ch.get_level() < FIELDS[l].level as u8 {
+    if ch.get_level() < FIELDS[l].level {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -4609,7 +4609,7 @@ macro_rules! range {
 /* The set options available */
 struct SetStruct {
     cmd: &'static str,
-    level: i16,
+    level: u8,
     pcnpc: u8,
     type_: u8,
 }
@@ -4773,7 +4773,7 @@ const SET_FIELDS: [SetStruct; 52] = [
     }, /* 25 */
     SetStruct {
         cmd: "frozen",
-        level: LVL_FREEZE as i16,
+        level: LVL_FREEZE,
         pcnpc: PC,
         type_: BINARY,
     },
@@ -4949,7 +4949,7 @@ fn perform_set(
     let mode = mode as usize;
 
     /* Check to make sure all the levels are correct */
-    if ch.get_level() != LVL_IMPL as u8
+    if ch.get_level() != LVL_IMPL
         && !vict.is_npc()
         && ch.get_level() <= vict.get_level()
         && vict_id != chid
@@ -4957,7 +4957,7 @@ fn perform_set(
         send_to_char(descs, ch, "Maybe that's not such a great idea...\r\n");
         return false;
     }
-    if ch.get_level() < SET_FIELDS[mode].level as u8 {
+    if ch.get_level() < SET_FIELDS[mode].level {
         send_to_char(descs, ch, "You are not godly enough for that!\r\n");
         return false;
     }
@@ -5076,7 +5076,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         11 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5093,7 +5093,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         13 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5102,7 +5102,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         14 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5111,7 +5111,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         15 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5120,7 +5120,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         16 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5129,7 +5129,7 @@ fn perform_set(
             affect_total(objs, vict);
         }
         17 => {
-            if vict.is_npc() || vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.is_npc() || vict.get_level() >= LVL_GRGOD {
                 value = range!(value, 3, 25);
             } else {
                 value = range!(value, 3, 18);
@@ -5160,7 +5160,7 @@ fn perform_set(
         }
         24 => {
             let ch = chars.get(chid);
-            if ch.get_level() < LVL_IMPL as u8 && chid != vict_id {
+            if ch.get_level() < LVL_IMPL && chid != vict_id {
                 send_to_char(descs, ch, "You aren't godly enough for that!\r\n");
                 return false;
             }
@@ -5169,7 +5169,7 @@ fn perform_set(
         }
         25 => {
             let ch = chars.get(chid);
-            if ch.get_level() < LVL_IMPL as u8 && chid != vict_id {
+            if ch.get_level() < LVL_IMPL && chid != vict_id {
                 send_to_char(descs, ch, "You aren't godly enough for that!\r\n");
                 return false;
             }
@@ -5376,7 +5376,7 @@ fn perform_set(
                 return false;
             }
             let vict = chars.get(vict_id);
-            if vict.get_level() >= LVL_GRGOD as u8 {
+            if vict.get_level() >= LVL_GRGOD {
                 send_to_char(descs, ch, "You cannot change that.\r\n");
                 return false;
             }

@@ -268,7 +268,7 @@ pub struct CommandInfo {
     pub(crate) command: &'static str,
     minimum_position: Position,
     pub(crate) command_pointer: Command,
-    pub(crate) minimum_level: i16,
+    pub(crate) minimum_level: u8,
     subcmd: i32,
 }
 
@@ -924,7 +924,7 @@ pub const CMD_INFO: [CommandInfo; 308] = [
         command: "freeze",
         minimum_position: Position::Dead,
         command_pointer: do_wizutil,
-        minimum_level: LVL_FREEZE as i16,
+        minimum_level: LVL_FREEZE,
         subcmd: SCMD_FREEZE,
     },
     // { "french"   , Position::Resting , do_action   , 0, 0 },
@@ -2388,7 +2388,7 @@ pub const CMD_INFO: [CommandInfo; 308] = [
         command: "thaw",
         minimum_position: Position::Dead,
         command_pointer: do_wizutil,
-        minimum_level: LVL_FREEZE as i16,
+        minimum_level: LVL_FREEZE,
         subcmd: SCMD_THAW,
     },
     // { "title"    , Position::Dead    , do_title    , 0, 0 },
@@ -2829,7 +2829,7 @@ pub fn command_interpreter(
     let mut cmd_idx = CMD_INFO.len() - 1;
     let mut cmd = &CMD_INFO[cmd_idx];
     for (i, cmd_info) in CMD_INFO.iter().enumerate() {
-        if cmd_info.command == arg && ch.get_level() >= cmd_info.minimum_level as u8 {
+        if cmd_info.command == arg && ch.get_level() >= cmd_info.minimum_level {
             cmd = cmd_info;
             cmd_idx = i;
             break;
@@ -2838,7 +2838,7 @@ pub fn command_interpreter(
 
     if cmd.command == "\n" {
         send_to_char(&mut game.descriptors, ch, "Huh?!?\r\n");
-    } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL as u8 {
+    } else if !ch.is_npc() && ch.plr_flagged(PLR_FROZEN) && ch.get_level() < LVL_IMPL {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -3916,7 +3916,7 @@ pub fn nanny(
                 {
                     level = character.get_level();
                 }
-                if level >= LVL_IMMORT as u8 {
+                if level >= LVL_IMMORT {
                     desc.write_to_output(db.imotd.as_ref());
                 } else {
                     desc.write_to_output(db.motd.as_ref());
@@ -4111,7 +4111,7 @@ pub fn nanny(
                         /* If char was saved with NOWHERE, or real_room above failed... */
                         let character = chars.get(character_id);
                         if load_room == NOWHERE {
-                            if character.get_level() >= LVL_IMMORT as u8 {
+                            if character.get_level() >= LVL_IMMORT {
                                 load_room = db.r_immort_start_room;
                             } else {
                                 load_room = db.r_mortal_start_room;
@@ -4289,7 +4289,7 @@ pub fn nanny(
                     return;
                 }
                 let d_ch = chars.get_mut(d_chid);
-                if d_ch.get_level() < LVL_GRGOD as u8 {
+                if d_ch.get_level() < LVL_GRGOD {
                     d_ch.set_plr_flag_bit(PLR_DELETED);
                 }
                 save_char(&mut game.descriptors, db, chars, texts, objs, d_chid);
