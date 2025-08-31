@@ -3293,8 +3293,7 @@ pub fn is_abbrev(arg1: &str, arg2: &str) -> bool {
  * NOTE: Requires sizeof(arg2) >= sizeof(string)
  */
 pub fn half_chop(string: &mut str, arg1: &mut String, arg2: &mut String) {
-    let temp = any_one_arg(string, arg1);
-    arg2.push_str(temp.trim_start());
+    *arg2 = any_one_arg(string, arg1).trim_start().to_string();
 }
 
 /* Used in specprocs, mostly.  (Exactly) matches "command" to cmd number */

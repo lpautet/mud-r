@@ -4592,13 +4592,19 @@ pub fn do_show(
 
 /***************** The do_set function ***********************************/
 
-const PC: u8 = 1;
-const NPC: u8 = 2;
-const BOTH: u8 = 3;
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CharacterType {
+    PC = 1,
+    Npc = 2,
+    Both = 3,
+}
 
-const MISC: u8 = 0;
-const BINARY: u8 = 1;
-const NUMBER: u8 = 2;
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum FieldType {
+    Misc = 0,
+    Binary = 1,
+    Number = 2,
+}
 
 macro_rules! range {
     ($value:expr, $low:expr, $high:expr) => {
@@ -4610,322 +4616,322 @@ macro_rules! range {
 struct SetStruct {
     cmd: &'static str,
     level: u8,
-    pcnpc: u8,
-    type_: u8,
+    pcnpc: CharacterType,
+    type_: FieldType,
 }
 
 const SET_FIELDS: [SetStruct; 52] = [
     SetStruct {
         cmd: "brief",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     }, /* 0 */
     SetStruct {
         cmd: "invstart",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     }, /* 1 */
     SetStruct {
         cmd: "title",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: MISC,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "nosummon",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "maxhit",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "maxmana",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     }, /* 5 */
     SetStruct {
         cmd: "maxmove",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "hit",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "mana",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "move",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "align",
         level: LVL_GOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     }, /* 10 */
     SetStruct {
         cmd: "str",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "stradd",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "int",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "wis",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "dex",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     }, /* 15 */
     SetStruct {
         cmd: "con",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "cha",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "ac",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "gold",
         level: LVL_GOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "bank",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: NUMBER,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Number,
     }, /* 20 */
     SetStruct {
         cmd: "exp",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "hitroll",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "damroll",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "invis",
         level: LVL_IMPL,
-        pcnpc: PC,
-        type_: NUMBER,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "nohassle",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     }, /* 25 */
     SetStruct {
         cmd: "frozen",
         level: LVL_FREEZE,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "practices",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: NUMBER,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "lessons",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: NUMBER,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "drunk",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "hunger",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     }, /* 30 */
     SetStruct {
         cmd: "thirst",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "killer",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "thief",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "level",
         level: LVL_IMPL,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "room",
         level: LVL_IMPL,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     }, /* 35 */
     SetStruct {
         cmd: "roomflag",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "siteok",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "deleted",
         level: LVL_IMPL,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "class",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "nowizlist",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     }, /* 40 */
     SetStruct {
         cmd: "quest",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "loadroom",
         level: LVL_GRGOD,
-        pcnpc: PC,
-        type_: MISC,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "color",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "idnum",
         level: LVL_IMPL,
-        pcnpc: PC,
-        type_: NUMBER,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "passwd",
         level: LVL_IMPL,
-        pcnpc: PC,
-        type_: MISC,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Misc,
     }, /* 45 */
     SetStruct {
         cmd: "nodelete",
         level: LVL_GOD,
-        pcnpc: PC,
-        type_: BINARY,
+        pcnpc: CharacterType::PC,
+        type_: FieldType::Binary,
     },
     SetStruct {
         cmd: "sex",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     },
     SetStruct {
         cmd: "age",
         level: LVL_GRGOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "height",
         level: LVL_GOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     },
     SetStruct {
         cmd: "weight",
         level: LVL_GOD,
-        pcnpc: BOTH,
-        type_: NUMBER,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Number,
     }, /* 50 */
     SetStruct {
         cmd: "\n",
         level: 0,
-        pcnpc: BOTH,
-        type_: MISC,
+        pcnpc: CharacterType::Both,
+        type_: FieldType::Misc,
     },
 ];
 
@@ -4963,16 +4969,16 @@ fn perform_set(
     }
 
     /* Make sure the PC/NPC is correct */
-    if vict.is_npc() && SET_FIELDS[mode].pcnpc & NPC == 0 {
+    if vict.is_npc() && SET_FIELDS[mode].pcnpc != CharacterType::Npc && SET_FIELDS[mode].pcnpc != CharacterType::Both {
         send_to_char(descs, ch, "You can't do that to a beast!\r\n");
         return false;
-    } else if !vict.is_npc() && SET_FIELDS[mode].pcnpc & PC == 0 {
+    } else if !vict.is_npc() && SET_FIELDS[mode].pcnpc != CharacterType::PC && SET_FIELDS[mode].pcnpc != CharacterType::Both {
         send_to_char(descs, ch, "That can only be done to a beast!\r\n");
         return false;
     }
 
     /* Find the value of the argument */
-    if SET_FIELDS[mode].type_ == BINARY {
+    if SET_FIELDS[mode].type_ == FieldType::Binary {
         if val_arg == "on" || val_arg == "yes" {
             on = true;
         } else if val_arg == "off" || val_arg == "no" {
@@ -4993,7 +4999,7 @@ fn perform_set(
             )
             .as_str(),
         );
-    } else if SET_FIELDS[mode].type_ == NUMBER {
+    } else if SET_FIELDS[mode].type_ == FieldType::Number {
         let r = val_arg.trim().parse::<i32>();
         value = r.unwrap_or_default();
         send_to_char(
@@ -5492,7 +5498,7 @@ pub fn do_set(
     }
     let mut buf2 = buf.clone();
     half_chop(&mut buf2, &mut field, &mut buf);
-    buf = buf2;
+    //buf = buf2;
 
     if name.is_empty() || field.is_empty() {
         send_to_char(
