@@ -4289,7 +4289,7 @@ fn perform_set(
             .as_str(),
         );
     } else if SET_FIELDS[mode].type_ == NUMBER {
-        let r = val_arg.parse::<i32>();
+        let r = val_arg.trim().parse::<i32>();
         value = r.unwrap_or_default();
         send_to_char(descs, 
             ch,
