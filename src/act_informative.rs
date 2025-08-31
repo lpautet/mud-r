@@ -278,18 +278,12 @@ fn look_at_char(
             TO_VICT,
         );
         for (j, wear_where) in WEAR_WHERE.iter().enumerate() {
-            if i.get_eq(j).is_some()
-                && can_see_obj(descs, chars, db, ch, objs.get(i.get_eq(j).unwrap()))
-            {
-                send_to_char(descs, ch, wear_where);
-                show_obj_to_char(
-                    descs,
-                    chars,
-                    texts,
-                    objs.get(i.get_eq(j).unwrap()),
-                    ch,
-                    SHOW_OBJ_SHORT,
-                );
+            if let Some(eq_j) = i.get_eq(j) {
+                let obj = objs.get(eq_j);
+                if can_see_obj(descs, chars, db, ch, obj) {
+                    send_to_char(descs, ch, wear_where);
+                    show_obj_to_char(descs, chars, texts, obj, ch, SHOW_OBJ_SHORT);
+                }
             }
         }
     }
@@ -417,15 +411,13 @@ fn list_one_char(
     }
     if i.get_pos() != Position::Fighting {
         send_to_char(descs, ch, POSITIONS[i.get_pos() as usize]);
-    } else if i.fighting_id().is_some() {
+    } else if let Some(fighting_id) = i.fighting_id() {
         send_to_char(descs, ch, " is here, fighting ");
-        if chars.get(i.fighting_id().unwrap()).id() == ch.id() {
+        let fighting = chars.get(fighting_id);
+        if fighting.id() == ch.id() {
             send_to_char(descs, ch, "YOU!");
-        } else if i.in_room() == chars.get(i.fighting_id().unwrap()).in_room() {
-            let msg = format!(
-                "{}!",
-                pers(descs, chars, db, chars.get(i.fighting_id().unwrap()), ch)
-            );
+        } else if i.in_room() == fighting.in_room() {
+            let msg = format!("{}!", pers(descs, chars, db, fighting, ch));
             send_to_char(descs, ch, msg.as_str());
         } else {
             send_to_char(descs, ch, "someone who has already left!");
@@ -493,19 +485,15 @@ fn do_auto_exits(descs: &mut Depot<DescriptorData>, db: &DB, ch: &CharData) {
         format!("{}[ Exits: ", CCCYN!(ch, C_NRM)).as_str(),
     );
     for (door, dir) in DIRS.iter().enumerate() {
-        if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
+        if let Some(exit) = db.exit(ch, door) {
+            if exit.to_room == NOWHERE || exit.exit_flagged(ExitFlags::CLOSED) {
+                continue;
+            }
+            send_to_char(descs, ch, format!("{} ", dir.to_lowercase()).as_str());
+            slen += 1;
+        } else {
             continue;
         }
-        if db
-            .exit(ch, door)
-            .as_ref()
-            .unwrap()
-            .exit_flagged(ExitFlags::CLOSED)
-        {
-            continue;
-        }
-        send_to_char(descs, ch, format!("{} ", dir.to_lowercase()).as_str());
-        slen += 1;
     }
     send_to_char(
         descs,
@@ -544,15 +532,11 @@ pub fn do_exits(
     let mut len = 0;
     for (door, dir) in DIRS.iter().enumerate() {
         let ch = chars.get(chid);
-        if db.exit(ch, door).is_none() || db.exit(ch, door).as_ref().unwrap().to_room == NOWHERE {
-            continue;
-        }
-        if db
-            .exit(ch, door)
-            .as_ref()
-            .unwrap()
-            .exit_flagged(ExitFlags::CLOSED)
-        {
+        if let Some(exit) = db.exit(ch, door) {
+            if exit.to_room == NOWHERE || exit.exit_flagged(ExitFlags::CLOSED) {
+                continue;
+            }
+        } else {
             continue;
         }
         len += 1;
@@ -680,70 +664,23 @@ fn look_in_direction(
     dir: i32,
 ) {
     let ch = chars.get(chid);
-    if db.exit(ch, dir as usize).is_some() {
-        if !db
-            .exit(ch, dir as usize)
-            .as_ref()
-            .unwrap()
-            .general_description
-            .is_empty()
-        {
-            send_to_char(
-                descs,
-                ch,
-                format!(
-                    "{}",
-                    db.exit(ch, dir as usize)
-                        .as_ref()
-                        .unwrap()
-                        .general_description
-                )
-                .as_str(),
-            );
+    if let Some(exit) = db.exit(ch, dir as usize) {
+        if !exit.general_description.is_empty() {
+            send_to_char(descs, ch, format!("{}", exit.general_description).as_str());
         } else {
             send_to_char(descs, ch, "You see nothing special.\r\n");
         }
-        if db
-            .exit(ch, dir as usize)
-            .as_ref()
-            .unwrap()
-            .exit_flagged(ExitFlags::CLOSED)
-            && !db
-                .exit(ch, dir as usize)
-                .as_ref()
-                .unwrap()
-                .keyword
-                .is_empty()
-        {
+        if exit.exit_flagged(ExitFlags::CLOSED) && !exit.keyword.is_empty() {
             send_to_char(
                 descs,
                 ch,
-                format!(
-                    "The {} is closed.\r\n",
-                    fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_ref())
-                )
-                .as_str(),
+                format!("The {} is closed.\r\n", fname(exit.keyword.as_ref())).as_str(),
             );
-        } else if db
-            .exit(ch, dir as usize)
-            .as_ref()
-            .unwrap()
-            .exit_flagged(ExitFlags::ISDOOR)
-            && !db
-                .exit(ch, dir as usize)
-                .as_ref()
-                .unwrap()
-                .keyword
-                .is_empty()
-        {
+        } else if exit.exit_flagged(ExitFlags::ISDOOR) && !exit.keyword.is_empty() {
             send_to_char(
                 descs,
                 ch,
-                format!(
-                    "The {} is open.\r\n",
-                    fname(db.exit(ch, dir as usize).as_ref().unwrap().keyword.as_ref())
-                )
-                .as_str(),
+                format!("The {} is open.\r\n", fname(exit.keyword.as_ref())).as_str(),
             );
         } else {
             send_to_char(descs, ch, "Nothing special there...\r\n");
@@ -949,15 +886,15 @@ fn look_at_target(
 
     /* Does the argument match an extra desc in the char's equipment? */
     for j in 0..NUM_WEARS {
-        if ch.get_eq(j).is_some()
-            && can_see_obj(descs, chars, db, ch, objs.get(ch.get_eq(j).unwrap()))
-        {
-            let desc = find_exdesc(&arg, &objs.get(ch.get_eq(j).unwrap()).ex_descriptions);
-            if let Some(desc) = desc {
-                i += 1;
-                if i == fnum {
-                    send_to_char(descs, ch, desc);
-                    found = true;
+        if let Some(eq_j) = ch.get_eq(j) {
+            let eq = objs.get(eq_j);
+            if can_see_obj(descs, chars, db, ch, eq) {
+                if let Some(desc) = find_exdesc(&arg, &eq.ex_descriptions) {
+                    i += 1;
+                    if i == fnum {
+                        send_to_char(descs, ch, desc);
+                        found = true;
+                    }
                 }
             }
         }
@@ -1444,16 +1381,9 @@ pub fn do_equipment(
     let mut found = false;
     send_to_char(&mut game.descriptors, ch, "You are using:\r\n");
     for (i, wear_where) in WEAR_WHERE.iter().enumerate() {
-        if ch.get_eq(i).is_some() {
-            if can_see_obj(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                objs.get(ch.get_eq(i).unwrap()),
-            ) {
-                let oid = ch.get_eq(i).unwrap();
-                let obj = objs.get(oid);
+        if let Some(oid) = ch.get_eq(i) {
+            let obj = objs.get(oid);
+            if can_see_obj(&game.descriptors, chars, db, ch, obj) {
                 send_to_char(&mut game.descriptors, ch, wear_where);
                 show_obj_to_char(&mut game.descriptors, chars, texts, obj, ch, SHOW_OBJ_SHORT);
                 found = true;
@@ -1758,14 +1688,13 @@ pub fn do_who(
         }
 
         let tch_id;
-        #[allow(clippy::blocks_in_conditions)]
         if d.original.is_some() {
             tch_id = d.original;
-        } else if {
+        } else {
             tch_id = d.character;
-            tch_id.is_none()
-        } {
-            continue;
+            if tch_id.is_none() {
+                continue;
+            }
         }
         let tch_id = tch_id.unwrap();
         let tch = chars.get(tch_id);
@@ -1999,16 +1928,15 @@ pub fn do_users(
         if d.state() == ConPlaying && deadweight {
             continue;
         }
-        #[allow(clippy::blocks_in_conditions)]
         if d.state() == ConPlaying {
             let character;
             if d.original.is_some() {
                 character = d.original;
-            } else if {
+            } else {
                 character = d.character;
-                character.is_none()
-            } {
-                continue;
+                if character.is_none() {
+                    continue;
+                }
             }
             let tch_id = character.unwrap();
             let tch = chars.get(tch_id);

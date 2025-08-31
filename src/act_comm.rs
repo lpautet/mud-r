@@ -106,11 +106,7 @@ pub fn do_gsay(
             "Yes, but WHAT do you want to group-say?\r\n",
         );
     } else {
-        let k_id: DepotId = if ch.master.is_some() {
-            ch.master.unwrap()
-        } else {
-            chid
-        };
+        let k_id: DepotId = ch.master.unwrap_or(chid);
 
         let buf = format!("$n tells the group, '{}'", argument);
         let k = chars.get(k_id);
@@ -440,68 +436,67 @@ pub fn do_spec_comm(
     let mut buf2 = String::new();
 
     half_chop(&mut argument, &mut buf, &mut buf2);
-    let vict;
-    #[allow(clippy::blocks_in_conditions)]
     if buf.is_empty() || buf2.is_empty() {
         send_to_char(
             &mut game.descriptors,
             ch,
             format!("Whom do you want to {}.. and what??\r\n", action_sing).as_str(),
         );
-    } else if {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if vict.unwrap().id() == chid {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "You can't get your mouth close enough to your ear...\r\n",
-        );
-    } else {
-        let vict = vict.unwrap();
-        let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            &buf1,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_VICT,
-        );
-
-        if ch.prf_flagged(PrefFlags::NOREPEAT) {
-            send_to_char(&mut game.descriptors, ch, OK);
-        } else {
+        return;
+    }
+    let vict = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    );
+    if let Some(vict) = vict {
+        if vict.id() == chid {
             send_to_char(
                 &mut game.descriptors,
                 ch,
-                format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
+                "You can't get your mouth close enough to your ear...\r\n",
+            );
+        } else {
+            let buf1 = format!("$n {} you, '{}'", action_plur, buf2);
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                &buf1,
+                false,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(vict)),
+                TO_VICT,
+            );
+
+            if ch.prf_flagged(PrefFlags::NOREPEAT) {
+                send_to_char(&mut game.descriptors, ch, OK);
+            } else {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("You {} {}, '{}'\r\n", action_sing, vict.get_name(), buf2).as_str(),
+                );
+            }
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                action_others,
+                false,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(vict)),
+                TO_NOTVICT,
             );
         }
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            action_others,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_NOTVICT,
-        );
+    } else {
+        send_to_char(&mut game.descriptors, ch, NOPERSON);
     }
 }
 
@@ -970,43 +965,39 @@ pub fn do_gen_comm(
     /* now send all the strings out */
     for d_id in game.descriptor_list.clone() {
         let d = game.desc(d_id);
-        if d.state() == ConPlaying
-            && d_id != ch.desc.unwrap()
-            && d.character.is_some()
-            && !chars
-                .get(d.character.unwrap())
-                .prf_flagged(CHANNELS[subcmd as usize])
-            && !chars.get(d.character.unwrap()).plr_flagged(PLR_WRITING)
-            && !db.room_flagged(
-                chars.get(d.character.unwrap()).in_room(),
-                RoomFlags::SOUNDPROOF,
-            )
-        {
-            let ic_id = d.character.unwrap();
+        if let Some(ic_id) = d.character {
             let ic = chars.get(ic_id);
-            if subcmd == SCMD_SHOUT
-                && (db.world[ch.in_room() as usize].zone != db.world[ic.in_room() as usize].zone
-                    || !ic.awake())
+            if d.state() == ConPlaying
+                && d_id != ch.desc.unwrap()
+                && !ic.prf_flagged(CHANNELS[subcmd as usize])
+                && !ic.plr_flagged(PLR_WRITING)
+                && !db.room_flagged(ic.in_room(), RoomFlags::SOUNDPROOF)
             {
-                continue;
-            }
+                if subcmd == SCMD_SHOUT
+                    && (db.world[ch.in_room() as usize].zone
+                        != db.world[ic.in_room() as usize].zone
+                        || !ic.awake())
+                {
+                    continue;
+                }
 
-            if COLOR_LEV!(ic) >= C_NRM {
-                send_to_char(&mut game.descriptors, ic, color_on);
-            }
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                &buf1,
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(ic)),
-                TO_VICT | TO_SLEEP,
-            );
-            if COLOR_LEV!(ic) >= C_NRM {
-                send_to_char(&mut game.descriptors, ic, KNRM);
+                if COLOR_LEV!(ic) >= C_NRM {
+                    send_to_char(&mut game.descriptors, ic, color_on);
+                }
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    &buf1,
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(ic)),
+                    TO_VICT | TO_SLEEP,
+                );
+                if COLOR_LEV!(ic) >= C_NRM {
+                    send_to_char(&mut game.descriptors, ic, KNRM);
+                }
             }
         }
     }
@@ -1087,26 +1078,24 @@ pub fn do_qcomm(
 
         for id in game.descriptor_list.clone() {
             let d = game.desc(id);
-            if d.state() == ConPlaying
-                && id != ch.desc.unwrap()
-                && d.character.is_some()
-                && chars
-                    .get(d.character.unwrap())
-                    .prf_flagged(PrefFlags::QUEST)
-            {
-                let vict_id = d.character.unwrap();
+            if let Some(vict_id) = d.character {
                 let vict = chars.get(vict_id);
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    &buf,
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(vict)),
-                    TO_VICT | TO_SLEEP,
-                );
+                if d.state() == ConPlaying
+                    && id != ch.desc.unwrap()
+                    && vict.prf_flagged(PrefFlags::QUEST)
+                {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        &buf,
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(vict)),
+                        TO_VICT | TO_SLEEP,
+                    );
+                }
             }
         }
     }

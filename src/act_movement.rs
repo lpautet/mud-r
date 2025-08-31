@@ -171,7 +171,7 @@ pub fn do_simple_move(
      * Check for special routines (North is 1 in command list, but 0 here) Note
      * -- only check if following; this avoids 'double spec-proc' bug
      */
-    if need_specials_check && special(game, db, chars, texts, objs, chid, dir + 1, "") {
+    if need_specials_check && special(game, db, chars, texts, objs, chid, (dir + 1) as usize, "") {
         return false;
     }
 

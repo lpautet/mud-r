@@ -634,15 +634,12 @@ impl Game {
                  * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
                  */
                 {
-                    if self.desc(d_id).character.is_some() {
-                        let character_id = self.desc(d_id).character.unwrap();
-                        let character = chars.get(character_id);
+                    if let Some(character_id) = self.desc(d_id).character {
+                        let character = chars.get_mut(character_id);
                         let wait_state = character.get_wait_state();
                         if wait_state > 0 {
-                            let character = chars.get_mut(character_id);
                             character.decr_wait_state(1);
                         }
-                        let character = chars.get(character_id);
                         if character.get_wait_state() != 0 {
                             continue;
                         }
@@ -652,9 +649,8 @@ impl Game {
                         continue;
                     }
 
-                    if self.desc(d_id).character.borrow().is_some() {
+                    if let Some(character_id) = self.desc(d_id).character {
                         /* Reset the idle timer & pull char back from void if necessary */
-                        let character_id = self.desc(d_id).character.unwrap();
                         let character = chars.get_mut(character_id);
                         character.char_specials.timer = 0;
                         if self.desc(d_id).state() == ConPlaying
@@ -663,8 +659,8 @@ impl Game {
                             if character.in_room != NOWHERE {
                                 db.char_from_room(objs, character);
                             }
-                            let character = chars.get(character_id);
-                            db.char_to_room(chars, objs, character_id, character.get_was_in());
+                            let room = character.get_was_in();
+                            db.char_to_room(chars, objs, character_id, room);
                             let character = chars.get_mut(character_id);
                             character.set_was_in(NOWHERE);
                             let character = chars.get(character_id);
@@ -683,7 +679,6 @@ impl Game {
                         let character = chars.get_mut(character_id);
                         character.set_wait_state(1);
                     }
-
                     self.desc_mut(d_id).has_prompt = false;
                 }
 

@@ -385,10 +385,10 @@ fn block_way(
     chars: &Depot<CharData>,
     db: &DB,
     chid: DepotId,
-    cmd: i32,
+    cmd: usize,
     _arg: &str,
     in_room: RoomVnum,
-    prohibited_direction: i32,
+    prohibited_direction: usize,
 ) -> bool {
     let ch = chars.get(chid);
     let prohibited_direction = prohibited_direction + 1;
@@ -635,7 +635,7 @@ pub fn king_welmar(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -837,7 +837,7 @@ pub fn training_master(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1204,7 +1204,7 @@ pub fn tom(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     castle_twin_proc(game, chars, db, texts, objs, chid, cmd, argument, 48, "Tim")
@@ -1219,7 +1219,7 @@ pub fn tim(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     castle_twin_proc(game, chars, db, texts, objs, chid, cmd, argument, 49, "Tom")
@@ -1236,7 +1236,7 @@ fn castle_twin_proc(
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
     chid: DepotId,
-    cmd: i32,
+    cmd: usize,
     arg: &str,
     ctlnum: MobVnum,
     twinname: &str,
@@ -1300,7 +1300,7 @@ fn james(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     castle_cleaner(game, chars, db, objs, chid, cmd, true)
@@ -1315,7 +1315,7 @@ fn castle_cleaner(
     db: &mut DB,
     objs: &mut Depot<ObjData>,
     chid: DepotId,
-    cmd: i32,
+    cmd: usize,
     gripe: bool,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1376,7 +1376,7 @@ fn cleaning(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     castle_cleaner(game, chars, db, objs, chid, cmd, false)
@@ -1396,7 +1396,7 @@ fn castle_guard(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1422,7 +1422,7 @@ fn dick_n_david(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1460,7 +1460,7 @@ fn peter(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1742,7 +1742,7 @@ fn jerry(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);

@@ -690,7 +690,7 @@ pub fn postmaster(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -748,7 +748,7 @@ fn postmaster_send_mail(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     mailman_id: DepotId,
-    _cmd: i32,
+    _cmd: usize,
     arg: &str,
 ) {
     let ch = chars.get(chid);
@@ -876,7 +876,7 @@ fn postmaster_check_mail(
     db: &mut DB,
     chid: DepotId,
     mailman_id: DepotId,
-    _cmd: i32,
+    _cmd: usize,
     _arg: &str,
 ) {
     let ch = chars.get(chid);
@@ -920,7 +920,7 @@ fn postmaster_receive_mail(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     mailman_id: DepotId,
-    _cmd: i32,
+    _cmd: usize,
     _arg: &str,
 ) {
     let ch = chars.get(chid);

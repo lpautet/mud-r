@@ -1665,7 +1665,7 @@ pub fn shop_keeper(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let keeper_id = match me {

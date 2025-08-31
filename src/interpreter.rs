@@ -236,8 +236,8 @@ pub const SCMD_UNLOCK: i32 = 2;
 pub const SCMD_LOCK: i32 = 3;
 pub const SCMD_PICK: i32 = 4;
 
-pub fn cmd_is(cmd: i32, cmd_name: &str) -> bool {
-    CMD_INFO[cmd as usize].command == cmd_name
+pub fn cmd_is(cmd: usize, cmd_name: &str) -> bool {
+    CMD_INFO[cmd].command == cmd_name
 }
 
 /* This is the Master Command List(tm).
@@ -2905,7 +2905,7 @@ pub fn command_interpreter(
             }
             _ => {}
         }
-    } else if db.no_specials || !special(game, db, chars, texts, objs, chid, cmd_idx as i32, line) {
+    } else if db.no_specials || !special(game, db, chars, texts, objs, chid, cmd_idx, line) {
         (cmd.command_pointer)(
             game, db, chars, texts, objs, chid, line, cmd_idx, cmd.subcmd,
         );
@@ -3301,8 +3301,8 @@ pub fn find_command(command: &str) -> Option<usize> {
     CMD_INFO.iter().position(|e| e.command == command)
 }
 
-pub fn is_move(cmdnum: i32) -> bool {
-    CMD_INFO[cmdnum as usize].command_pointer as usize == do_move as usize
+pub fn is_move(cmdnum: usize) -> bool {
+    CMD_INFO[cmdnum].command_pointer as usize == do_move as usize
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3313,13 +3313,12 @@ pub fn special(
     texts: &mut Depot<TextData>,
     objs: &mut Depot<ObjData>,
     chid: DepotId,
-    cmd: i32,
+    cmd: usize,
     arg: &str,
 ) -> bool {
     let ch = chars.get(chid);
     /* special in room? */
-    if db.get_room_spec(ch.in_room()).is_some() {
-        let f = db.get_room_spec(ch.in_room()).unwrap();
+    if let Some(f) = db.get_room_spec(ch.in_room()) {
         if f(game, chars, db, texts, objs, chid, MeRef::None, cmd, arg) {
             return true;
         }
@@ -3328,21 +3327,22 @@ pub fn special(
     /* special in equipment list? */
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_some() && db.get_obj_spec(objs.get(ch.get_eq(j).unwrap())).is_some() {
-            let oid = ch.get_eq(j).unwrap();
+        if let Some(oid) = ch.get_eq(j) {
             let obj = objs.get(oid);
-            if db.get_obj_spec(obj).as_ref().unwrap()(
-                game,
-                chars,
-                db,
-                texts,
-                objs,
-                chid,
-                MeRef::Obj(oid),
-                cmd,
-                arg,
-            ) {
-                return true;
+            if let Some(func) = db.get_obj_spec(obj) {
+                if func(
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    chid,
+                    MeRef::Obj(oid),
+                    cmd,
+                    arg,
+                ) {
+                    return true;
+                }
             }
         }
     }
@@ -3412,9 +3412,12 @@ fn _parse_name(arg: &str) -> Option<&str> {
     Some(arg)
 }
 
-pub const RECON: u8 = 1;
-pub const USURP: u8 = 2;
-pub const UNSWITCH: u8 = 3;
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DupeCheckMode {
+    Recon = 1,
+    Usurp = 2,
+    Unswitch = 3,
+}
 
 /* This function seems a bit over-extended. */
 fn perform_dupe_check(
@@ -3426,7 +3429,7 @@ fn perform_dupe_check(
     d_id: DepotId,
 ) -> bool {
     let mut target_id = None;
-    let mut mode = 0;
+    let mut mode = None::<DupeCheckMode>;
 
     let id: i64 = chars.get(game.desc(d_id).character.unwrap()).get_idnum();
 
@@ -3449,7 +3452,7 @@ fn perform_dupe_check(
             k.set_state(ConClose);
             if target_id.is_none() {
                 target_id = k.original;
-                mode = UNSWITCH;
+                mode = Some(DupeCheckMode::Unswitch);
             }
 
             if k.character.is_some() {
@@ -3474,7 +3477,7 @@ fn perform_dupe_check(
             if target_id.is_none() && k.state() == ConPlaying {
                 k.write_to_output("\r\nThis body has been usurped!\r\n");
                 target_id = Some(k.character.unwrap());
-                mode = USURP;
+                mode = Some(DupeCheckMode::Usurp);
             }
 
             chars.get_mut(k.character.unwrap()).desc = None;
@@ -3515,7 +3518,7 @@ fn perform_dupe_check(
         /* we don't already have a target and found a candidate for switching */
         if target_id.is_none() {
             target_id = Some(chid);
-            mode = RECON;
+            mode = Some(DupeCheckMode::Recon);
             continue;
         }
 
@@ -3552,7 +3555,7 @@ fn perform_dupe_check(
     desc.set_state(ConPlaying);
 
     match mode {
-        RECON => {
+        Some(DupeCheckMode::Recon) => {
             desc.write_to_output("Reconnecting.\r\n");
             let chid = desc.character.unwrap();
             let ch = chars.get(chid);
@@ -3582,7 +3585,7 @@ fn perform_dupe_check(
                 msg.as_str(),
             );
         }
-        USURP => {
+        Some(DupeCheckMode::Usurp) => {
             desc.write_to_output("You take over your own body, already in use!\r\n");
             let chid = desc.character.unwrap();
             let ch = chars.get(chid);
@@ -3603,7 +3606,7 @@ fn perform_dupe_check(
                 msg.as_str(),
             );
         }
-        UNSWITCH => {
+        Some(DupeCheckMode::Unswitch) => {
             desc.write_to_output("Reconnecting to unswitched char.");
             let v2 = chars.get(desc.character.unwrap()).get_invis_lev() as i32;
             let msg = format!(
@@ -4079,11 +4082,7 @@ pub fn nanny(
             /* get selection from main menu  */
             let character_id = desc.character.unwrap();
             let character = chars.get(character_id);
-            match if arg.chars().last().is_some() {
-                arg.chars().last().unwrap()
-            } else {
-                '\0'
-            } {
+            match arg.chars().last().unwrap_or('\0') {
                 '0' => {
                     desc.write_to_output("Goodbye.\r\n");
                     desc.set_state(ConClose);

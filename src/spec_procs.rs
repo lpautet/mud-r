@@ -154,7 +154,7 @@ pub fn guild(
     _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -231,7 +231,7 @@ pub fn dump(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -264,7 +264,7 @@ pub fn dump(
         objs,
         chid,
         argument,
-        cmd as usize,
+        cmd,
         SCMD_DROP as i32,
     );
     let mut value = 0;
@@ -342,7 +342,7 @@ pub fn mayor(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     if !db.mayor.move_ {
@@ -598,7 +598,7 @@ pub fn snake(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -660,7 +660,7 @@ pub fn thief(
     _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -687,7 +687,7 @@ pub fn magic_user(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -892,7 +892,7 @@ pub fn guild_guard(
     _objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -918,7 +918,7 @@ pub fn guild_guard(
             break;
         }
         /* Wrong guild or not trying to enter. */
-        if db.get_room_vnum(ch.in_room()) != gi.guild_room || cmd != gi.direction {
+        if db.get_room_vnum(ch.in_room()) != gi.guild_room || cmd != gi.direction as usize {
             continue;
         }
         /* Allow the people of the guild through. */
@@ -952,7 +952,7 @@ pub fn puff(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     if cmd != 0 {
@@ -1029,7 +1029,7 @@ pub fn fido(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1075,7 +1075,7 @@ pub fn janitor(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1119,7 +1119,7 @@ pub fn cityguard(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1251,7 +1251,7 @@ pub fn pet_shops(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -1353,7 +1353,7 @@ pub fn bank(
     _objs: &mut Depot<ObjData>,
     chid: DepotId,
     _me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     let ch = chars.get(chid);

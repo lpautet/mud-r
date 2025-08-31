@@ -29,7 +29,7 @@ pub type Special = fn(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool;
 

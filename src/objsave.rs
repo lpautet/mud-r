@@ -1660,7 +1660,7 @@ fn gen_receptionist(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     recep_id: DepotId,
-    cmd: i32,
+    cmd: usize,
     _arg: &str,
     mode: i32,
 ) -> bool {
@@ -1885,7 +1885,7 @@ pub fn receptionist(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     match me {
@@ -1914,7 +1914,7 @@ pub fn cryogenicist(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
     match me {

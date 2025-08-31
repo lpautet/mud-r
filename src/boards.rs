@@ -271,10 +271,9 @@ pub fn gen_board(
     objs: &mut Depot<ObjData>,
     chid: DepotId,
     me: MeRef,
-    cmd: i32,
+    cmd: usize,
     argument: &str,
 ) -> bool {
-    let cmd = cmd as usize;
     let board = match me {
         MeRef::Obj(me_obj) => me_obj,
         _ => panic!("Unexpected MeRef type in receptionist"),
