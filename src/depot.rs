@@ -6,6 +6,12 @@ pub struct DepotId {
     seq: u32,
 }
 
+impl std::fmt::Display for DepotId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.index, self.seq)
+    }
+}
+
 pub trait HasId {
     fn id(&self) -> DepotId;
     fn set_id(&mut self, id: DepotId);

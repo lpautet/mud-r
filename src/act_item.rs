@@ -23,7 +23,7 @@ use crate::db::DB;
 use crate::handler::{
     affect_join, equip_char, find_all_dots, generic_find, get_char_vis, get_obj_in_list_vis,
     get_obj_in_list_vis2, get_obj_pos_in_equip_vis, isname, money_desc, obj_from_char,
-    obj_from_obj, obj_to_char, obj_to_obj, FindFlags, FIND_ALL, FIND_ALLDOT, FIND_INDIV,
+    obj_from_obj, obj_to_char, obj_to_obj, FindAllType, FindFlags,
 };
 use crate::interpreter::{
     is_number, one_argument, search_block, two_arguments, SCMD_DONATE, SCMD_DRINK, SCMD_DROP,
@@ -175,7 +175,7 @@ pub fn do_put(
 
     if theobj.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Put what in what?\r\n");
-    } else if cont_dotmode != FIND_INDIV {
+    } else if cont_dotmode != FindAllType::Individual {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -187,7 +187,7 @@ pub fn do_put(
             ch,
             format!(
                 "What do you want to put {} in?\r\n",
-                if obj_dotmode == FIND_INDIV {
+                if obj_dotmode == FindAllType::Individual {
                     "it"
                 } else {
                     "them"
@@ -228,7 +228,7 @@ pub fn do_put(
             );
         } else if c.unwrap().objval_flagged(CONT_CLOSED) {
             send_to_char(&mut game.descriptors, ch, "You'd better open it first!\r\n");
-        } else if obj_dotmode == FIND_INDIV {
+        } else if obj_dotmode == FindAllType::Individual {
             /* put <obj> <container> */
 
             let res = {
@@ -281,7 +281,8 @@ pub fn do_put(
             let c_id = c.unwrap().id();
             for oid in ch.carrying.clone() {
                 if oid != c_id
-                    && (obj_dotmode == FIND_ALL || isname(&theobj, objs.get(oid).name.as_ref()))
+                    && (obj_dotmode == FindAllType::All
+                        || isname(&theobj, objs.get(oid).name.as_ref()))
                 {
                     found = true;
                     perform_put(&mut game.descriptors, db, chars, objs, chid, oid, c_id);
@@ -289,7 +290,7 @@ pub fn do_put(
             }
             let ch = chars.get(chid);
             if !found {
-                if obj_dotmode == FIND_ALL {
+                if obj_dotmode == FindAllType::All {
                     send_to_char(
                         &mut game.descriptors,
                         ch,
@@ -481,7 +482,7 @@ fn get_from_container(
             None,
             TO_CHAR,
         );
-    } else if obj_dotmode == FIND_INDIV {
+    } else if obj_dotmode == FindAllType::Individual {
         let mut obj = get_obj_in_list_vis(descs, chars, db, objs, ch, arg, None, &cobj.contains);
         if obj.is_none() {
             let buf = format!("There doesn't seem to be {} {} in $p.", an!(arg), arg);
@@ -507,14 +508,14 @@ fn get_from_container(
             }
         }
     } else {
-        if obj_dotmode == FIND_ALLDOT && arg.is_empty() {
+        if obj_dotmode == FindAllType::AllDot && arg.is_empty() {
             send_to_char(descs, ch, "Get all of what?\r\n");
             return;
         }
         for oid in cobj.contains.clone() {
             let ch = chars.get(chid);
             if can_see_obj(descs, chars, db, ch, objs.get(oid))
-                && (obj_dotmode == FIND_ALL || isname(arg, &objs.get(oid).name))
+                && (obj_dotmode == FindAllType::All || isname(arg, &objs.get(oid).name))
             {
                 found = true;
                 perform_get_from_container(descs, db, chars, objs, chid, oid, cid, mode);
@@ -523,7 +524,7 @@ fn get_from_container(
         let ch = chars.get(chid);
         let cobj = objs.get(cid);
         if !found {
-            if obj_dotmode == FIND_ALL {
+            if obj_dotmode == FindAllType::All {
                 act(
                     descs,
                     chars,
@@ -609,7 +610,7 @@ fn get_from_room(
     let mut howmany = howmany;
     let dotmode = find_all_dots(arg);
 
-    if dotmode == FIND_INDIV {
+    if dotmode == FindAllType::Individual {
         let mut obj = get_obj_in_list_vis2(
             descs,
             chars,
@@ -648,14 +649,14 @@ fn get_from_room(
             }
         }
     } else {
-        if dotmode == FIND_ALLDOT && arg.is_empty() {
+        if dotmode == FindAllType::AllDot && arg.is_empty() {
             send_to_char(descs, ch, "Get all of what?\r\n");
             return;
         }
         for oid in db.world[ch.in_room() as usize].contents.clone() {
             let ch = chars.get(chid);
             if can_see_obj(descs, chars, db, ch, objs.get(oid))
-                && (dotmode == FIND_ALL || isname(arg, &objs.get(oid).name))
+                && (dotmode == FindAllType::All || isname(arg, &objs.get(oid).name))
             {
                 found = true;
                 perform_get_from_room(descs, db, chars, objs, chid, oid);
@@ -663,7 +664,7 @@ fn get_from_room(
         }
         let ch = chars.get(chid);
         if !found {
-            if dotmode == FIND_ALL {
+            if dotmode == FindAllType::All {
                 send_to_char(descs, ch, "There doesn't seem to be anything here.\r\n");
             } else {
                 send_to_char(
@@ -720,7 +721,7 @@ pub fn do_get(
             arg2 = arg3; /* strcpy: OK (sizeof: arg2 == arg3) */
         }
         let cont_dotmode = find_all_dots(&arg2);
-        if cont_dotmode == FIND_INDIV {
+        if cont_dotmode == FindAllType::Individual {
             let mode = generic_find(
                 &game.descriptors,
                 chars,
@@ -765,7 +766,7 @@ pub fn do_get(
                 );
             }
         } else {
-            if cont_dotmode == FIND_ALLDOT && arg2.is_empty() {
+            if cont_dotmode == FindAllType::AllDot && arg2.is_empty() {
                 send_to_char(&mut game.descriptors, ch, "Get from all of what?\r\n");
                 return;
             }
@@ -774,7 +775,7 @@ pub fn do_get(
                 let ch = chars.get(chid);
                 let contobj = objs.get(contid);
                 if can_see_obj(&game.descriptors, chars, db, ch, contobj)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &contobj.name))
+                    && (cont_dotmode == FindAllType::All || isname(&arg2, &contobj.name))
                 {
                     if contobj.get_obj_type() == ItemType::Container {
                         found = true;
@@ -789,7 +790,7 @@ pub fn do_get(
                             FindFlags::OBJ_INV,
                             amount,
                         );
-                    } else if cont_dotmode == FIND_ALLDOT {
+                    } else if cont_dotmode == FindAllType::AllDot {
                         found = true;
                         act(
                             &mut game.descriptors,
@@ -810,7 +811,7 @@ pub fn do_get(
                 let ch = chars.get(chid);
                 let cont_obj = objs.get(contid);
                 if can_see_obj(&game.descriptors, chars, db, ch, cont_obj)
-                    && (cont_dotmode == FIND_ALL || isname(&arg2, &cont_obj.name))
+                    && (cont_dotmode == FindAllType::All || isname(&arg2, &cont_obj.name))
                 {
                     if cont_obj.get_obj_type() == ItemType::Container {
                         get_from_container(
@@ -825,7 +826,7 @@ pub fn do_get(
                             amount,
                         );
                         found = true;
-                    } else if cont_dotmode == FIND_ALLDOT {
+                    } else if cont_dotmode == FindAllType::AllDot {
                         act(
                             &mut game.descriptors,
                             chars,
@@ -842,7 +843,7 @@ pub fn do_get(
                 }
             }
             if !found {
-                if cont_dotmode == FIND_ALL {
+                if cont_dotmode == FindAllType::All {
                     let ch = chars.get(chid);
                     send_to_char(
                         &mut game.descriptors,
@@ -1187,7 +1188,9 @@ pub fn do_drop(
         dotmode = find_all_dots(&arg);
 
         /* Can't junk or donate all */
-        if (dotmode == FIND_ALL) && (subcmd == SCMD_JUNK as i32 || subcmd == SCMD_DONATE as i32) {
+        if (dotmode == FindAllType::All)
+            && (subcmd == SCMD_JUNK as i32 || subcmd == SCMD_DONATE as i32)
+        {
             if subcmd == SCMD_JUNK as i32 {
                 send_to_char(
                     &mut game.descriptors,
@@ -1203,7 +1206,7 @@ pub fn do_drop(
                 return;
             }
         }
-        if dotmode == FIND_ALL {
+        if dotmode == FindAllType::All {
             let ch = chars.get(chid);
             if ch.carrying.is_empty() {
                 send_to_char(
@@ -1227,7 +1230,7 @@ pub fn do_drop(
                     );
                 }
             }
-        } else if dotmode == FIND_ALLDOT {
+        } else if dotmode == FindAllType::AllDot {
             if arg.is_empty() {
                 send_to_char(
                     &mut game.descriptors,
@@ -1639,7 +1642,7 @@ pub fn do_give(
             return;
         }
         let dotmode = find_all_dots(&arg);
-        if dotmode == FIND_INDIV {
+        if dotmode == FindAllType::Individual {
             let res = {
                 let ch = chars.get(chid);
                 obj = get_obj_in_list_vis(
@@ -1673,7 +1676,7 @@ pub fn do_give(
                 );
             }
         } else {
-            if dotmode == FIND_ALLDOT && arg.is_empty() {
+            if dotmode == FindAllType::AllDot && arg.is_empty() {
                 let ch = chars.get(chid);
                 send_to_char(&mut game.descriptors, ch, "All of what?\r\n");
                 return;
@@ -1692,7 +1695,7 @@ pub fn do_give(
                     let ch = chars.get(chid);
                     let obj = objs.get(oid);
                     if can_see_obj(&game.descriptors, chars, db, ch, obj)
-                        && (dotmode == FIND_ALL || isname(&arg, &obj.name))
+                        && (dotmode == FindAllType::All || isname(&arg, &obj.name))
                     {
                         perform_give(&mut game.descriptors, db, chars, objs, chid, vict_id, oid);
                     }
@@ -2846,7 +2849,7 @@ pub fn do_wear(
     }
     let dotmode = find_all_dots(&arg1);
 
-    if !arg2.is_empty() && dotmode != FIND_INDIV {
+    if !arg2.is_empty() && dotmode != FindAllType::Individual {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2856,7 +2859,7 @@ pub fn do_wear(
     }
     let mut _where = -1;
     let mut items_worn = 0;
-    if dotmode == FIND_ALL {
+    if dotmode == FindAllType::All {
         for oid in ch.carrying.clone() {
             let ch = chars.get(chid);
             let obj = objs.get(oid);
@@ -2884,7 +2887,7 @@ pub fn do_wear(
                 "You don't seem to have anything wearable.\r\n",
             );
         }
-    } else if dotmode == FIND_ALLDOT {
+    } else if dotmode == FindAllType::AllDot {
         if arg1.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Wear all of what?\r\n");
             return;
@@ -3240,7 +3243,7 @@ pub fn do_remove(
     let mut found = false;
     let i;
     #[allow(clippy::blocks_in_conditions)]
-    if dotmode == FIND_ALL {
+    if dotmode == FindAllType::All {
         for i in 0..NUM_WEARS {
             let ch = chars.get(chid);
             if ch.get_eq(i).is_some() {
@@ -3252,7 +3255,7 @@ pub fn do_remove(
             let ch = chars.get(chid);
             send_to_char(&mut game.descriptors, ch, "You're not using anything.\r\n");
         }
-    } else if dotmode == FIND_ALLDOT {
+    } else if dotmode == FindAllType::AllDot {
         if arg.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Remove all of what?\r\n");
         } else {

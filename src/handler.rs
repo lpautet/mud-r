@@ -58,7 +58,6 @@ pub fn fname(namelist: &str) -> Rc<str> {
 }
 
 pub fn isname(txt: &str, namelist: &str) -> bool {
-    //info!("[DEBUG] {} namelist='{}'", txt, namelist);
     let mut curname = namelist.to_string();
     loop {
         let mut skip = false;
@@ -199,9 +198,9 @@ fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags
 /* restoring original abilities, and then affecting all again           */
 pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
     for i in 0..NUM_WEARS {
-        if ch.get_eq(i).is_some() {
+        if let Some(eq_id) = ch.get_eq(i) {
             for j in 0..MAX_OBJ_AFFECT {
-                let eq = objs.get(ch.get_eq(i).unwrap());
+                let eq = objs.get(eq_id);
                 let loc = eq.affected[j as usize].location;
                 let mod_ = eq.affected[j as usize].modifier as i16;
                 let bitv = eq.get_obj_affect();
@@ -216,9 +215,9 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
     ch.aff_abils = ch.real_abils;
 
     for i in 0..NUM_WEARS {
-        if ch.get_eq(i).is_some() {
+        if let Some(eq_id) = ch.get_eq(i) {
             for j in 0..MAX_OBJ_AFFECT {
-                let eq = objs.get(ch.get_eq(i).unwrap());
+                let eq = objs.get(eq_id);
                 let loc = eq.affected[j as usize].location;
                 let mod_ = eq.affected[j as usize].modifier as i16;
                 let bitv = eq.get_obj_affect();
@@ -348,15 +347,13 @@ impl DB {
         if ch.fighting_id().is_some() {
             self.stop_fighting(ch);
         }
-        if ch.get_eq(WEAR_LIGHT).is_some() {
-            let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
+        if let Some(eq_id) = ch.get_eq(WEAR_LIGHT) {
+            let light = objs.get(eq_id);
             if light.get_obj_type() == ItemType::Light && light.get_obj_val(2) != 0 {
-                let in_room = ch.in_room();
-                self.world[in_room as usize].light -= 1;
+                self.world[ch.in_room() as usize].light -= 1;
             }
         }
-        let in_room = ch.in_room();
-        let list = &mut self.world[in_room as usize].peoples;
+        let list = &mut self.world[ch.in_room() as usize].peoples;
         list.retain(|c_rch| *c_rch != ch.id());
     }
 
@@ -382,21 +379,20 @@ impl DB {
         ch.set_in_room(room);
         let ch = chars.get(chid);
 
-        if ch.get_eq(WEAR_LIGHT).is_some() {
-            let light = objs.get(ch.get_eq(WEAR_LIGHT).unwrap());
+        if let Some(eq_id) = ch.get_eq(WEAR_LIGHT) {
+            let light = objs.get(eq_id);
             if light.get_obj_type() == ItemType::Light && light.get_obj_val(2) != 0 {
-                let in_room = ch.in_room();
-                self.world[in_room as usize].light += 1; /* Light ON */
+                self.world[ch.in_room() as usize].light += 1; /* Light ON */
             }
         }
 
         /* Stop fighting now, if we left. */
         let ch = chars.get(chid);
-        if ch.fighting_id().is_some()
-            && ch.in_room() != chars.get(ch.fighting_id().unwrap()).in_room()
-        {
-            self.stop_fighting(chars.get_mut(ch.fighting_id().unwrap()));
-            self.stop_fighting(chars.get_mut(chid));
+        if let Some(fighting_id) = ch.fighting_id() {
+            if ch.in_room() != chars.get(fighting_id).in_room() {
+                self.stop_fighting(chars.get_mut(fighting_id));
+                self.stop_fighting(chars.get_mut(chid));
+            }
         }
     }
 }
@@ -418,7 +414,9 @@ pub fn obj_to_char(obj: &mut ObjData, ch: &mut CharData) {
 /* take an object from a char */
 pub fn obj_from_char(chars: &mut Depot<CharData>, obj: &mut ObjData) {
     let obj_weight = obj.get_obj_weight();
-    let carried_by_id = obj.carried_by.unwrap();
+    let carried_by_id = obj
+        .carried_by
+        .unwrap_or_else(|| panic!("SYSERR: obj_from_char: obj {} has no carried_by", obj.id()));
     let carried_by_ch = chars.get_mut(carried_by_id);
     carried_by_ch.carrying.retain(|x| *x != obj.id());
 
@@ -434,16 +432,13 @@ pub fn obj_from_char(chars: &mut Depot<CharData>, obj: &mut ObjData) {
 
 /* Return the effect of a piece of armor in position eq_pos */
 fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: usize) -> i32 {
-    let eq_id = ch.get_eq(eq_pos);
-    if eq_id.is_none() {
+    let eq_id = ch.get_eq(eq_pos).unwrap_or_else(|| {
         panic!(
             "apply_ac cannot find eq at pos {} for {}",
             eq_pos,
             ch.get_name()
-        );
-    }
-
-    let eq_id = eq_id.unwrap();
+        )
+    });
     let eq = objs.get(eq_id);
 
     if eq.get_obj_type() != ItemType::Armor {
@@ -576,11 +571,13 @@ impl DB {
         pos: usize,
     ) -> Option<DepotId> {
         let ch = chars.get_mut(chid);
-        if pos > NUM_WEARS || ch.get_eq(pos).is_none() {
+        if pos > NUM_WEARS {
             panic!("Invalid position in unequip_char: {}", pos);
         }
 
-        let oid = ch.get_eq(pos).unwrap();
+        let oid = ch
+            .get_eq(pos)
+            .unwrap_or_else(|| panic!("Invalid position in unequip_char: {}", pos));
         let obj = objs.get_mut(oid);
         obj.worn_by = None;
         obj.worn_on = -1;
@@ -617,17 +614,11 @@ impl DB {
 }
 
 pub fn get_number(name: &mut String) -> i32 {
-    let ppos = name.find('.');
-    if ppos.is_none() {
-        return 1;
+    if let Some(ppos) = name.find('.') {
+        name.split_off(ppos).parse::<i32>().unwrap_or_default()
+    } else {
+        1
     }
-    let ppos = ppos.unwrap();
-    let number = name.split_off(ppos);
-    let r = number.parse::<i32>();
-    if r.is_err() {
-        return 0;
-    }
-    r.unwrap()
 }
 
 /* Search a given list for an object number, and return a ptr to that obj */
@@ -669,19 +660,17 @@ impl DB {
         room: RoomRnum,
     ) -> Option<&'a CharData> {
         let mut name = name.to_string();
-        let mut number = number;
 
         let mut num;
 
-        if number.is_none() {
-            num = get_number(&mut name);
-            number = Some(&mut num);
-        }
-
-        let number = number.unwrap();
-        if *number == 0 {
-            return None;
-        }
+        let number = match number {
+            None => {
+                num = get_number(&mut name);
+                &mut num
+            }
+            Some(0) => return None,
+            Some(n) => n,
+        };
 
         for &i_id in &self.world[room as usize].peoples {
             let i = chars.get(i_id);
@@ -769,58 +758,52 @@ pub fn obj_to_obj(
     let mut tmp_oid = oid;
     loop {
         let tmp_obj = objs.get_mut(tmp_oid);
-        if tmp_obj.in_obj.is_none() {
+        if let Some(in_obj) = tmp_obj.in_obj {
+            tmp_obj.set_obj_weight(obj_weight);
+            tmp_oid = in_obj;
+        } else {
             break;
         }
-
-        tmp_obj.set_obj_weight(obj_weight);
-        tmp_oid = tmp_obj.in_obj.unwrap();
     }
 
     let tmp_obj = objs.get_mut(tmp_oid);
     /* top level object.  Subtract weight from inventory if necessary. */
     tmp_obj.incr_obj_weight(obj_weight);
-    if tmp_obj.carried_by.is_some() {
-        let carried_by_id = tmp_obj.carried_by.unwrap();
+    if let Some(carried_by_id) = tmp_obj.carried_by {
         chars.get_mut(carried_by_id).incr_is_carrying_w(obj_weight);
     }
 }
 
 /* remove an object from an object */
 pub(crate) fn obj_from_obj(chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, oid: DepotId) {
-    if objs.get(oid).in_obj.is_none() {
-        error!("SYSERR:  trying to illegally extract obj from obj.");
-        return;
-    }
-    let oid_from = objs.get(oid).in_obj.unwrap();
+    let oid_from = match objs.get(oid).in_obj {
+        None => {
+            error!("SYSERR:  trying to illegally extract obj from obj.");
+            return;
+        }
+        Some(oid_from) => oid_from,
+    };
     let obj_weight = objs.get(oid).get_obj_weight();
+    let obj_from = objs.get_mut(oid_from);
+    obj_from.contains.retain(|i| *i != oid);
 
-    {
-        let obj_from = objs.get_mut(oid_from);
-        obj_from.contains.retain(|i| *i != oid);
-
-        /* Subtract weight from containers container */
-
-        let mut temp_id = objs.get(oid).in_obj.unwrap();
-        loop {
-            let tmp_obj = objs.get_mut(temp_id);
-
-            if tmp_obj.in_obj.is_none() {
-                break;
-            }
-
-            tmp_obj.incr_obj_weight(-obj_weight);
-            temp_id = tmp_obj.in_obj.unwrap();
+    /* Subtract weight from containers container */
+    let mut temp_id = oid_from;
+    loop {
+        let tmp_obj = objs.get_mut(temp_id);
+        match tmp_obj.in_obj {
+            None => break,
+            Some(in_obj) => temp_id = in_obj,
         }
+        tmp_obj.incr_obj_weight(-obj_weight);
+    }
 
-        let temp = objs.get_mut(temp_id);
-        /* Subtract weight from char that carries the object */
-        temp.incr_obj_weight(-obj_weight);
+    let temp = objs.get_mut(temp_id);
+    /* Subtract weight from char that carries the object */
+    temp.incr_obj_weight(-obj_weight);
 
-        if temp.carried_by.is_some() {
-            let carried_by_id = temp.carried_by.unwrap();
-            chars.get_mut(carried_by_id).incr_is_carrying_w(-obj_weight);
-        }
+    if let Some(carried_by_id) = temp.carried_by {
+        chars.get_mut(carried_by_id).incr_is_carrying_w(-obj_weight);
     }
 
     objs.get_mut(oid).in_obj = None;
@@ -841,14 +824,17 @@ impl DB {
         objs: &mut Depot<ObjData>,
         oid: DepotId,
     ) {
-        let tch_id = &objs.get(oid).worn_by;
-        if tch_id.is_some()
-            && self
-                .unequip_char(chars, objs, tch_id.unwrap(), objs.get(oid).worn_on as usize)
-                .unwrap()
-                != oid
-        {
-            error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
+        let tch_id = objs.get(oid).worn_by;
+        if let Some(tch_id) = tch_id {
+            if let Some(eq_oid) =
+                self.unequip_char(chars, objs, tch_id, objs.get(oid).worn_on as usize)
+            {
+                if eq_oid == oid {
+                    error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
+                }
+            } else {
+                error!("SYSERR: Inconsistent worn_by and worn_on pointers!!");
+            }
         }
 
         let obj = objs.get_mut(oid);
@@ -943,8 +929,8 @@ pub(crate) fn update_char_objects(
     }
     for i in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(i).is_some() {
-            update_object(objs, ch.get_eq(i).unwrap(), 2);
+        if let Some(eq_id) = ch.get_eq(i) {
+            update_object(objs, eq_id, 2);
         }
     }
     let ch = chars.get(chid);
@@ -979,15 +965,20 @@ impl Game {
         if !ch.is_npc() && ch.desc.is_none() {
             for d_id in self.descriptor_list.clone() {
                 let d = self.desc(d_id);
-                if d.original.is_some() && d.original.unwrap() == chid {
-                    let chid = d.character.unwrap();
-                    do_return(self, db, chars, texts, objs, chid, "", 0, 0);
-                    break;
+                match d.original {
+                    Some(original_id) if original_id == chid => {
+                        let chid = d.character.unwrap_or_else(|| {
+                            panic!("SYSERR: No character for descriptor {} !", d_id)
+                        });
+                        do_return(self, db, chars, texts, objs, chid, "", 0, 0);
+                        break;
+                    }
+                    _ => {}
                 }
             }
         }
         let ch = chars.get(chid);
-        if ch.desc.is_some() {
+        if let Some(ch_desc_id) = ch.desc {
             /*
              * This time we're extracting the body someone has switched into
              * (not the body of someone switching as above) so we need to put
@@ -996,7 +987,7 @@ impl Game {
              * If this body is not possessed, the owner won't have a
              * body after the removal so dump them to the main menu.
              */
-            if self.desc(ch.desc.unwrap()).original.borrow().is_some() {
+            if self.desc(ch_desc_id).original.borrow().is_some() {
                 do_return(self, db, chars, texts, objs, chid, "", 0, 0);
             } else {
                 /*
@@ -1007,19 +998,20 @@ impl Game {
                  * If we're here, we know it's a player so no IS_NPC check required.
                  */
                 for d_id in self.descriptor_list.clone() {
-                    if d_id == ch.desc.unwrap() {
+                    if d_id == ch_desc_id {
                         continue;
                     }
                     let d = self.desc(d_id);
-                    if d.character.is_some()
-                        && ch.get_idnum() == chars.get(d.character.unwrap()).get_idnum()
-                    {
-                        self.desc_mut(d_id).set_state(ConClose);
+                    match d.character {
+                        Some(d_character)
+                            if ch.get_idnum() == chars.get(d_character).get_idnum() =>
+                        {
+                            self.desc_mut(d_id).set_state(ConClose);
+                        }
+                        _ => {}
                     }
                 }
-                let ch = chars.get(chid);
-                let desc_id = ch.desc.unwrap();
-                let desc = self.desc_mut(desc_id);
+                let desc = self.desc_mut(ch_desc_id);
                 desc.set_state(ConMenu);
                 desc.write_to_output(MENU);
             }
@@ -1044,7 +1036,9 @@ impl Game {
         for i in 0..NUM_WEARS {
             let ch = chars.get(chid);
             if ch.get_eq(i).is_some() {
-                let oid = db.unequip_char(chars, objs, chid, i).unwrap();
+                let oid = db.unequip_char(chars, objs, chid, i).unwrap_or_else(|| {
+                    panic!("SYSERR: No equipment found at pos {i} for character {chid}!")
+                });
                 let ch = chars.get(chid);
                 let obj = objs.get_mut(oid);
                 db.obj_to_room(obj, ch.in_room())
@@ -1061,17 +1055,24 @@ impl Game {
         }
         for k_id in old_combat_list.clone() {
             let k = chars.get_mut(k_id);
-            if k.fighting_id().unwrap() == chid {
+            if k.fighting_id().unwrap_or_else(|| {
+                panic!(
+                    "SYSERR: No fighting id for character in comabat list {} !",
+                    k_id
+                )
+            }) == chid
+            {
                 db.stop_fighting(k);
             }
         }
         /* we can't forget the hunters either... */
         for &temp_id in &db.character_list {
             let temp = chars.get_mut(temp_id);
-            if temp.char_specials.hunting_chid.is_some()
-                && temp.char_specials.hunting_chid.unwrap() == chid
-            {
-                temp.char_specials.hunting_chid = None;
+            match temp.char_specials.hunting_chid {
+                Some(hunting_chid) if hunting_chid == chid => {
+                    temp.char_specials.hunting_chid = None;
+                }
+                _ => {}
             }
         }
         let ch = chars.get_mut(chid);
@@ -1501,14 +1502,17 @@ pub fn get_obj_in_equip_vis<'a>(
         return None;
     }
     for equip in equipment.iter() {
-        if equip.is_some()
-            && can_see_obj(descs, chars, db, ch, objs.get(equip.unwrap()))
-            && isname(arg, objs.get(equip.unwrap()).name.as_ref())
-        {
-            *number -= 1;
-            if *number == 0 {
-                return equip.map(|i| objs.get(i));
+        match *equip {
+            Some(equip_id)
+                if can_see_obj(descs, chars, db, ch, objs.get(equip_id))
+                    && isname(arg, objs.get(equip_id).name.as_ref()) =>
+            {
+                *number -= 1;
+                if *number == 0 {
+                    return Some(objs.get(equip_id));
+                }
             }
+            _ => {}
         }
     }
 
@@ -1541,15 +1545,18 @@ pub fn get_obj_pos_in_equip_vis(
     }
 
     for (j, equip) in equipment.iter().enumerate() {
-        if equip.is_some()
-            && can_see_obj(descs, chars, db, ch, objs.get(equip.unwrap()))
-            && isname(arg, objs.get(equip.unwrap()).name.as_ref())
-            && {
-                *number -= 1;
-                *number == 0
+        match *equip {
+            Some(equip_id)
+                if can_see_obj(descs, chars, db, ch, objs.get(equip_id))
+                    && isname(arg, objs.get(equip_id).name.as_ref())
+                    && {
+                        *number -= 1;
+                        *number == 0
+                    } =>
+            {
+                return Some(j);
             }
-        {
-            return Some(j);
+            _ => {}
         }
     }
 
@@ -1749,14 +1756,15 @@ pub fn generic_find<'a>(
                 break;
             }
 
-            if ch.get_eq(i).is_some()
-                && isname(name.as_str(), objs.get(ch.get_eq(i).unwrap()).name.as_ref())
-            {
-                number -= 1;
-                if number == 0 {
-                    *tar_obj = Some(objs.get(ch.get_eq(i).unwrap()));
-                    found = true;
+            match ch.get_eq(i) {
+                Some(eq_id) if isname(name.as_str(), objs.get(eq_id).name.as_ref()) => {
+                    number -= 1;
+                    if number == 0 {
+                        *tar_obj = Some(objs.get(eq_id));
+                        found = true;
+                    }
                 }
+                _ => {}
             }
         }
         if found {
@@ -1805,17 +1813,20 @@ pub fn generic_find<'a>(
     FindFlags::empty()
 }
 
-pub const FIND_INDIV: u8 = 0;
-pub const FIND_ALL: u8 = 1;
-pub const FIND_ALLDOT: u8 = 2;
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FindAllType {
+    Individual = 0,
+    All = 1,
+    AllDot = 2,
+}
 
 /* a function to scan for "all" or "all.x" */
-pub fn find_all_dots(arg: &str) -> u8 {
+pub fn find_all_dots(arg: &str) -> FindAllType {
     if arg == "all" {
-        FIND_ALL
+        FindAllType::All
     } else if arg.starts_with("all.") {
-        FIND_ALLDOT
+        FindAllType::AllDot
     } else {
-        FIND_INDIV
+        FindAllType::Individual
     }
 }

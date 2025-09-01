@@ -38,6 +38,9 @@ cargo run
 
 # Or use the built binary with custom options
 ./target/release/mudr --help
+
+# For production deployment, use the autorun script
+./autorun
 ```
 
 ## 🎯 Usage
@@ -195,26 +198,69 @@ MUD-R is designed for high performance:
 - **Game Loop Optimization**: Precise timing with minimal CPU usage
 - **Type-Level Optimizations**: Zero-cost abstractions using Rust's type system
 
+## 🤖 Production Deployment
+
+### Autorun Script
+
+For production environments, use the included `autorun` script for automatic server management:
+
+```bash
+# Make the script executable
+chmod +x autorun
+
+# Start the server with automatic restart capability
+./autorun
+```
+
+**Autorun Features:**
+- **Automatic Restart**: Restarts the server if it crashes
+- **Log Management**: Automatically rotates and categorizes log files
+- **Control Files**: Use special files to control server behavior:
+  - `.fastboot`: Quick restart (5 seconds instead of 60)
+  - `.killscript`: Permanently stop the server
+  - `pause`: Temporarily pause restarts
+
+**Control Commands from within the MUD:**
+```
+shutdown reboot    # Quick restart
+shutdown die       # Permanent shutdown
+shutdown pause     # Pause until manual restart
+```
+
+### Configuration
+
+Edit the `autorun` script to customize:
+- `PORT=4000`: Default server port
+- `FLAGS='-q'`: Server startup flags
+- `BACKLOGS=6`: Number of log files to retain
+
 ## 🔍 Monitoring
 
 The server provides comprehensive logging and monitoring:
 
 ```bash
-# View real-time logs
+# View real-time logs (when using autorun)
+tail -f syslog
+
+# View current session logs
 tail -f syslog.BOOT
 
 # Monitor connections
-grep "connection" syslog.BOOT
+grep "connection" syslog
 
 # Check for errors
-grep "ERROR" syslog.BOOT
+grep "ERROR" syslog
 ```
 
 Log files are organized by category:
-- `syslog.BOOT`: Main server logs
+- `syslog`: Current session logs (with autorun)
+- `log/syslog.#`: Rotated system logs
 - `log/newplayers`: New player registrations
 - `log/godcmds`: Administrative commands
 - `log/badpws`: Failed login attempts
+- `log/errors`: System errors
+- `log/levels`: Player level advances
+- `log/usage`: Server usage statistics
 
 ## 🤝 Contributing
 
