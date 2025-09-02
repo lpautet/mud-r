@@ -284,7 +284,7 @@ pub fn do_tell(
     let mut buf2 = String::new();
     let mut argument = argument.to_string();
     half_chop(&mut argument, &mut buf, &mut buf2);
-    let mut vict = None;
+    let vict;
     #[allow(clippy::if_same_then_else)]
     if buf.is_empty() || buf2.is_empty() {
         send_to_char(
@@ -292,8 +292,10 @@ pub fn do_tell(
             ch,
             "Who do you wish to tell what??\r\n",
         );
-    } else if ch.get_level() < LVL_IMMORT && {
-        vict = get_player_vis(
+        return;
+    }
+    if ch.get_level() < LVL_IMMORT {
+        if let Some(player) = get_player_vis(
             &game.descriptors,
             chars,
             db,
@@ -301,32 +303,28 @@ pub fn do_tell(
             &mut buf,
             None,
             FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    } {
+        ) {
+            vict = player;
+        } else {
+            send_to_char(&mut game.descriptors, ch, NOPERSON);
+            return;
+        }
+    } else if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if ch.get_level() >= LVL_IMMORT && {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if is_tell_ok(&mut game.descriptors, chars, db, ch, vict.unwrap()) {
-        perform_tell(
-            &mut game.descriptors,
-            db,
-            chars,
-            chid,
-            vict.unwrap().id(),
-            &buf2,
-        );
+        return;
+    }
+    if is_tell_ok(&mut game.descriptors, chars, db, ch, vict) {
+        perform_tell(&mut game.descriptors, db, chars, chid, vict.id(), &buf2);
     }
 }
 
@@ -513,8 +511,8 @@ pub fn do_write(
     _subcmd: i32,
 ) {
     let ch = chars.get(chid);
-    let mut paper;
-    let mut pen = None;
+    let paper;
+    let pen;
     let mut papername = String::new();
     let mut penname = String::new();
 
@@ -535,20 +533,18 @@ pub fn do_write(
     }
     if !penname.is_empty() {
         /* there were two arguments */
-        let res = {
-            paper = get_obj_in_list_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &papername,
-                None,
-                &ch.carrying,
-            );
-            paper.is_none()
-        };
-        if res {
+        if let Some(obj) = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &papername,
+            None,
+            &ch.carrying,
+        ) {
+            paper = obj;
+        } else {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -556,20 +552,18 @@ pub fn do_write(
             );
             return;
         }
-        let res = {
-            pen = get_obj_in_list_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &penname,
-                None,
-                &ch.carrying,
-            );
-            pen.is_none()
-        };
-        if res {
+        if let Some(obj) = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &penname,
+            None,
+            &ch.carrying,
+        ) {
+            pen = obj;
+        } else {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -579,75 +573,69 @@ pub fn do_write(
         }
     } else {
         /* there was one arg.. let's see what we can find */
-        let res = {
-            paper = get_obj_in_list_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &papername,
-                None,
-                &ch.carrying,
-            );
-            paper.is_none()
-        };
-        if res {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                format!("There is no {} in your inventory.\r\n", papername).as_str(),
-            );
-            return;
-        }
-        if paper.unwrap().get_obj_type() == ItemType::Pen {
-            /* oops, a pen.. */
-            pen = paper;
-            paper = None;
-        } else if paper.unwrap().get_obj_type() != ItemType::Note {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "That thing has nothing to do with writing.\r\n",
-            );
-            return;
-        }
-        /* One object was found.. now for the other one. */
-        if ch.get_eq(WEAR_HOLD).is_none() {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                format!(
-                    "You can't write with {} {} alone.\r\n",
-                    an!(papername),
-                    papername
-                )
-                .as_str(),
-            );
-            return;
-        }
-        if !can_see_obj(
+        let obj1o = get_obj_in_list_vis(
             &game.descriptors,
             chars,
             db,
+            objs,
             ch,
-            objs.get(ch.get_eq(WEAR_HOLD).unwrap()),
-        ) {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "The stuff in your hand is invisible!  Yeech!!\r\n",
-            );
-            return;
-        }
-        if pen.is_some() {
-            paper = Some(objs.get(ch.get_eq(WEAR_HOLD).unwrap()));
-        } else {
-            pen = Some(objs.get(ch.get_eq(WEAR_HOLD).unwrap()));
+            &papername,
+            None,
+            &ch.carrying,
+        );
+        let obj2o = ch.get_eq(WEAR_HOLD);
+        match obj1o {
+            None => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("There is no {} in your inventory.\r\n", papername).as_str(),
+                );
+                return;
+            }
+            Some(obj1) if obj1.get_obj_type() != ItemType::Note => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "That thing has nothing to do with writing.\r\n",
+                );
+                return;
+            }
+            Some(obj1) => match obj2o {
+                None => {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        format!(
+                            "You can't write with {} {} alone.\r\n",
+                            an!(papername),
+                            papername
+                        )
+                        .as_str(),
+                    );
+                    return;
+                }
+                Some(obj2) if !can_see_obj(&game.descriptors, chars, db, ch, objs.get(obj2)) => {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "The stuff in your hand is invisible!  Yeech!!\r\n",
+                    );
+                    return;
+                }
+                /* One object was found.. now for the other one. */
+                Some(obj2) => {
+                    if obj1.get_obj_type() == ItemType::Pen {
+                        pen = obj1;
+                        paper = objs.get(obj2);
+                    } else {
+                        pen = objs.get(obj2);
+                        paper = obj1;
+                    }
+                }
+            },
         }
     }
-    let pen = pen.unwrap();
-    let paper = paper.unwrap();
 
     /* ok.. now let's see what kind of stuff we've found */
     if pen.get_obj_type() != ItemType::Pen {
@@ -698,9 +686,10 @@ pub fn do_write(
             None,
             TO_ROOM,
         );
-        let desc_id = ch.desc.unwrap();
-        let desc = game.desc_mut(desc_id);
-        desc.string_write(chars, paper.action_description, MAX_NOTE_LENGTH as usize, 0);
+        if let Some(desc_id) = ch.desc {
+            let desc = game.desc_mut(desc_id);
+            desc.string_write(chars, paper.action_description, MAX_NOTE_LENGTH, 0);
+        }
     }
 }
 
@@ -736,45 +725,39 @@ pub fn do_page(
         if arg == "all" && ch.get_level() > LVL_GOD {
             for d_id in game.descriptor_list.clone() {
                 let d = game.desc(d_id);
-                if d.state() == ConPlaying && d.character.is_some() {
-                    let vict_id = d.character.unwrap();
-                    let vict = chars.get(vict_id);
-                    act(
-                        &mut game.descriptors,
-                        chars,
-                        db,
-                        &buf,
-                        false,
-                        Some(ch),
-                        None,
-                        Some(VictimRef::Char(vict)),
-                        TO_VICT,
-                    );
-                } else {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "You will never be godly enough to do that!\r\n",
-                    );
+                match d.character {
+                    Some(vict_id) if d.state() == ConPlaying => {
+                        let vict = chars.get(vict_id);
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            &buf,
+                            false,
+                            Some(ch),
+                            None,
+                            Some(VictimRef::Char(vict)),
+                            TO_VICT,
+                        );
+                    }
+                    _ => {
+                        send_to_char(
+                            &mut game.descriptors,
+                            ch,
+                            "You will never be godly enough to do that!\r\n",
+                        );
+                    }
                 }
             }
-            return;
-        }
-        let vict;
-        let res = {
-            vict = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut arg,
-                None,
-                FindFlags::CHAR_WORLD,
-            );
-            vict.is_some()
-        };
-        if res {
-            let vict = vict.unwrap();
+        } else if let Some(vict) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut arg,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
             act(
                 &mut game.descriptors,
                 chars,
@@ -875,128 +858,126 @@ pub fn do_gen_comm(
     ];
 
     /* to keep pets, etc from being ordered to shout */
-    if ch.desc.is_none() {
-        return;
-    }
-
-    if ch.plr_flagged(PLR_NOSHOUT) {
-        send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][0]);
-        return;
-    }
-    if db.room_flagged(ch.in_room(), RoomFlags::SOUNDPROOF) {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "The walls seem to absorb your words.\r\n",
-        );
-        return;
-    }
-    /* level_can_shout defined in config.c */
-    if ch.get_level() < LEVEL_CAN_SHOUT as u8 {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            format!(
-                "You must be at least level {} before you can {}.\r\n",
-                LEVEL_CAN_SHOUT, COM_MSGS[subcmd as usize][1]
-            )
-            .as_str(),
-        );
-        return;
-    }
-    /* make sure the char is on the channel */
-    if ch.prf_flagged(CHANNELS[subcmd as usize]) {
-        send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][2]);
-        return;
-    }
-    /* skip leading spaces */
-    let argument = argument.trim_start();
-
-    /* make sure that there is something there to say! */
-    if argument.is_empty() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            format!(
-                "Yes, {}, fine, {} we must, but WHAT???\r\n",
-                COM_MSGS[subcmd as usize][1], COM_MSGS[subcmd as usize][1]
-            )
-            .as_str(),
-        );
-        return;
-    }
-    if subcmd == SCMD_HOLLER {
-        if ch.get_move() < HOLLER_MOVE_COST as i16 {
+    if let Some(ch_desc) = ch.desc {
+        if ch.plr_flagged(PLR_NOSHOUT) {
+            send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][0]);
+            return;
+        }
+        if db.room_flagged(ch.in_room(), RoomFlags::SOUNDPROOF) {
             send_to_char(
                 &mut game.descriptors,
                 ch,
-                "You're too exhausted to holler.\r\n",
+                "The walls seem to absorb your words.\r\n",
             );
             return;
-        } else {
-            let ch = chars.get_mut(chid);
-            ch.set_move(ch.get_move() - HOLLER_MOVE_COST as i16);
         }
-    }
-    /* set up the color on code */
-    let color_on = COM_MSGS[subcmd as usize][3];
+        /* level_can_shout defined in config.c */
+        if ch.get_level() < LEVEL_CAN_SHOUT as u8 {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!(
+                    "You must be at least level {} before you can {}.\r\n",
+                    LEVEL_CAN_SHOUT, COM_MSGS[subcmd as usize][1]
+                )
+                .as_str(),
+            );
+            return;
+        }
+        /* make sure the char is on the channel */
+        if ch.prf_flagged(CHANNELS[subcmd as usize]) {
+            send_to_char(&mut game.descriptors, ch, COM_MSGS[subcmd as usize][2]);
+            return;
+        }
+        /* skip leading spaces */
+        let argument = argument.trim_start();
 
-    /* first, set up strings to be given to the communicator */
-    let ch = chars.get(chid);
-    if ch.prf_flagged(PrefFlags::NOREPEAT) {
-        send_to_char(&mut game.descriptors, ch, OK);
-    } else {
-        let messg = format!(
-            "{}You {}, '{}'{}\r\n",
-            if COLOR_LEV!(ch) >= C_CMP {
-                color_on
-            } else {
-                ""
-            },
-            COM_MSGS[subcmd as usize][1],
-            argument,
-            CCNRM!(ch, C_CMP)
-        );
-        send_to_char(&mut game.descriptors, ch, messg.as_str());
-    }
-
-    let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
-
-    /* now send all the strings out */
-    for d_id in game.descriptor_list.clone() {
-        let d = game.desc(d_id);
-        if let Some(ic_id) = d.character {
-            let ic = chars.get(ic_id);
-            if d.state() == ConPlaying
-                && d_id != ch.desc.unwrap()
-                && !ic.prf_flagged(CHANNELS[subcmd as usize])
-                && !ic.plr_flagged(PLR_WRITING)
-                && !db.room_flagged(ic.in_room(), RoomFlags::SOUNDPROOF)
-            {
-                if subcmd == SCMD_SHOUT
-                    && (db.world[ch.in_room() as usize].zone
-                        != db.world[ic.in_room() as usize].zone
-                        || !ic.awake())
-                {
-                    continue;
-                }
-
-                if COLOR_LEV!(ic) >= C_NRM {
-                    send_to_char(&mut game.descriptors, ic, color_on);
-                }
-                act(
+        /* make sure that there is something there to say! */
+        if argument.is_empty() {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!(
+                    "Yes, {}, fine, {} we must, but WHAT???\r\n",
+                    COM_MSGS[subcmd as usize][1], COM_MSGS[subcmd as usize][1]
+                )
+                .as_str(),
+            );
+            return;
+        }
+        if subcmd == SCMD_HOLLER {
+            if ch.get_move() < HOLLER_MOVE_COST as i16 {
+                send_to_char(
                     &mut game.descriptors,
-                    chars,
-                    db,
-                    &buf1,
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ic)),
-                    TO_VICT | TO_SLEEP,
+                    ch,
+                    "You're too exhausted to holler.\r\n",
                 );
-                if COLOR_LEV!(ic) >= C_NRM {
-                    send_to_char(&mut game.descriptors, ic, KNRM);
+                return;
+            } else {
+                let ch = chars.get_mut(chid);
+                ch.set_move(ch.get_move() - HOLLER_MOVE_COST as i16);
+            }
+        }
+        /* set up the color on code */
+        let color_on = COM_MSGS[subcmd as usize][3];
+
+        /* first, set up strings to be given to the communicator */
+        let ch = chars.get(chid);
+        if ch.prf_flagged(PrefFlags::NOREPEAT) {
+            send_to_char(&mut game.descriptors, ch, OK);
+        } else {
+            let messg = format!(
+                "{}You {}, '{}'{}\r\n",
+                if COLOR_LEV!(ch) >= C_CMP {
+                    color_on
+                } else {
+                    ""
+                },
+                COM_MSGS[subcmd as usize][1],
+                argument,
+                CCNRM!(ch, C_CMP)
+            );
+            send_to_char(&mut game.descriptors, ch, messg.as_str());
+        }
+
+        let buf1 = format!("$n {}s, '{}'", COM_MSGS[subcmd as usize][1], argument);
+
+        /* now send all the strings out */
+        for d_id in game.descriptor_list.clone() {
+            let d = game.desc(d_id);
+            if let Some(ic_id) = d.character {
+                let ic = chars.get(ic_id);
+                if d.state() == ConPlaying
+                    && d_id != ch_desc
+                    && !ic.prf_flagged(CHANNELS[subcmd as usize])
+                    && !ic.plr_flagged(PLR_WRITING)
+                    && !db.room_flagged(ic.in_room(), RoomFlags::SOUNDPROOF)
+                {
+                    if subcmd == SCMD_SHOUT
+                        && (db.world[ch.in_room() as usize].zone
+                            != db.world[ic.in_room() as usize].zone
+                            || !ic.awake())
+                    {
+                        continue;
+                    }
+
+                    if COLOR_LEV!(ic) >= C_NRM {
+                        send_to_char(&mut game.descriptors, ic, color_on);
+                    }
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        &buf1,
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ic)),
+                        TO_VICT | TO_SLEEP,
+                    );
+                    if COLOR_LEV!(ic) >= C_NRM {
+                        send_to_char(&mut game.descriptors, ic, KNRM);
+                    }
                 }
             }
         }
@@ -1032,7 +1013,7 @@ pub fn do_qcomm(
             ch,
             format!(
                 "{}{}?  Yes, fine, {} we must, but WHAT??\r\n",
-                CMD_INFO[cmd].command.chars().next().unwrap().to_uppercase(),
+                CMD_INFO[cmd].command[0..1].to_uppercase(),
                 &CMD_INFO[cmd].command[11..],
                 CMD_INFO[cmd].command
             )
@@ -1078,12 +1059,14 @@ pub fn do_qcomm(
 
         for id in game.descriptor_list.clone() {
             let d = game.desc(id);
+            if let Some(ch_desc) = ch.desc {
+                if id == ch_desc {
+                    continue;
+                }
+            }
             if let Some(vict_id) = d.character {
                 let vict = chars.get(vict_id);
-                if d.state() == ConPlaying
-                    && id != ch.desc.unwrap()
-                    && vict.prf_flagged(PrefFlags::QUEST)
-                {
+                if d.state() == ConPlaying && vict.prf_flagged(PrefFlags::QUEST) {
                     act(
                         &mut game.descriptors,
                         chars,

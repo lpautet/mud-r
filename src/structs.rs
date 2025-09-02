@@ -466,7 +466,7 @@ pub const MAX_TONGUE: usize = 3; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_SKILLS: usize = 200; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_AFFECT: usize = 32; /* Used in char_file_u *DO*NOT*CHANGE* */
 pub const MAX_OBJ_AFFECT: i32 = 6; /* Used in ObjFileElem *DO*NOT*CHANGE* */
-pub const MAX_NOTE_LENGTH: i32 = 1000; /* arbitrary */
+pub const MAX_NOTE_LENGTH: usize = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData {
