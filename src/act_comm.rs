@@ -1014,7 +1014,7 @@ pub fn do_qcomm(
             format!(
                 "{}{}?  Yes, fine, {} we must, but WHAT??\r\n",
                 CMD_INFO[cmd].command[0..1].to_uppercase(),
-                &CMD_INFO[cmd].command[11..],
+                &CMD_INFO[cmd].command[1..],
                 CMD_INFO[cmd].command
             )
             .as_str(),
