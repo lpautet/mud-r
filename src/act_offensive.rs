@@ -6,8 +6,10 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
+
+use log::error;
 
 use crate::act_movement::do_simple_move;
 use crate::config::{NOPERSON, OK, PK_ALLOWED};
@@ -52,12 +54,10 @@ pub fn do_assist(
         return;
     }
     one_argument(argument, &mut arg);
-    let helpee;
-    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Whom do you wish to assist?\r\n");
-    } else if {
-        helpee = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -65,113 +65,109 @@ pub fn do_assist(
             &mut arg,
             None,
             FindFlags::CHAR_ROOM,
-        );
-        helpee.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if helpee.unwrap().id() == chid {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "You can't help yourself any more than this!\r\n",
-        );
-    } else {
-        /*
-         * Hit the same enemy the person you're helping is.
-         */
-        let helpee = helpee.unwrap();
-        let mut opponent_id = None;
-        if helpee.fighting_id().is_some() {
-            opponent_id = helpee.fighting_id();
-        } else {
-            for p_id in db.world[ch.in_room() as usize].peoples.iter() {
-                opponent_id = Some(*p_id);
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, NOPERSON);
+            }
+            Some(helpee) if helpee.id() == chid => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "You can't help yourself any more than this!\r\n",
+                );
+            }
+            Some(helpee) => {
+                /*
+                 * Hit the same enemy the person you're helping is.
+                 */
+                let mut opponent_id = None;
+                if helpee.fighting_id().is_some() {
+                    opponent_id = helpee.fighting_id();
+                } else {
+                    for p_id in db.world[ch.in_room() as usize].peoples.iter() {
+                        opponent_id = Some(*p_id);
 
-                let fighting_id = chars.get(*p_id).fighting_id();
-                if fighting_id.is_some() && fighting_id.unwrap() == helpee.id() {
-                    break;
+                        if let Some(f_id) = chars.get(*p_id).fighting_id() {
+                            if f_id == helpee.id() {
+                                opponent_id = Some(f_id);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                match opponent_id {
+                    None => {
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "But nobody is fighting $M!",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(VictimRef::Char(helpee)),
+                            TO_CHAR,
+                        );
+                    }
+                    Some(opponent_id)
+                        if can_see(&game.descriptors, chars, db, ch, chars.get(opponent_id)) =>
+                    {
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "You can't see who is fighting $M!",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(VictimRef::Char(helpee)),
+                            TO_CHAR,
+                        );
+                    }
+                    Some(opponent_id) if !PK_ALLOWED && !chars.get(opponent_id).is_npc() => {
+                        /* prevent accidental pkill */
+                        let opponent = chars.get(opponent_id);
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "Use 'murder' if you really want to attack $N.",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(VictimRef::Char(opponent)),
+                            TO_CHAR,
+                        );
+                    }
+                    Some(opponent_id) => {
+                        send_to_char(&mut game.descriptors, ch, "You join the fight!\r\n");
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "$N assists you!",
+                            false,
+                            Some(helpee),
+                            None,
+                            Some(VictimRef::Char(ch)),
+                            TO_CHAR,
+                        );
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "$n assists $N.",
+                            false,
+                            Some(ch),
+                            None,
+                            Some(VictimRef::Char(helpee)),
+                            TO_NOTVICT,
+                        );
+                        game.hit(chars, db, texts, objs, chid, opponent_id, TYPE_UNDEFINED);
+                    }
                 }
             }
-        }
-
-        #[allow(clippy::unnecessary_unwrap)]
-        if opponent_id.is_none() {
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "But nobody is fighting $M!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(helpee)),
-                TO_CHAR,
-            );
-        } else if can_see(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            chars.get(opponent_id.unwrap()),
-        ) {
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "You can't see who is fighting $M!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(helpee)),
-                TO_CHAR,
-            );
-        } else if !PK_ALLOWED && !chars.get(opponent_id.unwrap()).is_npc() {
-            /* prevent accidental pkill */
-            let opponent = chars.get(opponent_id.unwrap());
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "Use 'murder' if you really want to attack $N.",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(opponent)),
-                TO_CHAR,
-            );
-        } else {
-            send_to_char(&mut game.descriptors, ch, "You join the fight!\r\n");
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$N assists you!",
-                false,
-                Some(helpee),
-                None,
-                Some(VictimRef::Char(ch)),
-                TO_CHAR,
-            );
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n assists $N.",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(helpee)),
-                TO_NOTVICT,
-            );
-            game.hit(
-                chars,
-                db,
-                texts,
-                objs,
-                chid,
-                opponent_id.unwrap(),
-                TYPE_UNDEFINED,
-            );
         }
     }
 }
@@ -191,14 +187,13 @@ pub fn do_hit(
     let ch = chars.get(chid);
 
     let mut arg = String::new();
-    let vict;
 
     one_argument(argument, &mut arg);
     #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Hit who?\r\n");
-    } else if {
-        vict = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -206,72 +201,84 @@ pub fn do_hit(
             &mut arg,
             None,
             FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "They don't seem to be here.\r\n");
-    } else if vict.unwrap().id() == chid {
-        let vict = vict.unwrap();
-        send_to_char(&mut game.descriptors, ch, "You hit yourself...OUCH!.\r\n");
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n hits $mself, and says OUCH!",
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_ROOM,
-        );
-    } else if ch.aff_flagged(AffectFlags::CHARM) && ch.master.unwrap() == vict.unwrap().id() {
-        let vict = vict.unwrap();
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$N is just such a good friend, you simply can't hit $M.",
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_CHAR,
-        );
-    } else {
-        let vict = vict.unwrap();
-        let vict_id = vict.id();
-        if !PK_ALLOWED {
-            if !vict.is_npc() && !ch.is_npc() {
-                if subcmd != SCMD_MURDER {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "Use 'murder' to hit another player.\r\n",
-                    );
-                    return;
-                } else {
-                    check_killer(chid, vict_id, game, chars, db);
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, "They don't seem to be here.\r\n");
+            }
+            Some(vict) if vict.id() == chid => {
+                send_to_char(&mut game.descriptors, ch, "You hit yourself...OUCH!.\r\n");
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n hits $mself, and says OUCH!",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_ROOM,
+                );
+            }
+            Some(vict)
+                if ch.aff_flagged(AffectFlags::CHARM)
+                    && ch.master.unwrap_or_else(|| {
+                        panic!("do_hit: ch.master is None for charmed character !")
+                    }) == vict.id() =>
+            {
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$N is just such a good friend, you simply can't hit $M.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR,
+                );
+            }
+            Some(vict) => {
+                let vict_id = vict.id();
+                if !PK_ALLOWED {
+                    if !vict.is_npc() && !ch.is_npc() {
+                        if subcmd != SCMD_MURDER {
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                "Use 'murder' to hit another player.\r\n",
+                            );
+                            return;
+                        } else {
+                            check_killer(chid, vict_id, game, chars, db);
+                        }
+                    }
+                    let ch = chars.get(chid);
+                    let vict = chars.get(vict_id);
+                    if ch.aff_flagged(AffectFlags::CHARM) {
+                        if let Some(master) = ch.master {
+                            if !chars.get(master).is_npc() && !vict.is_npc() {
+                                return; /* you can't order a charmed pet to attack a
+                                         * player */
+                            }
+                        } else {
+                            error!("SYSERR: do_hit: ch.master is None for charmed character !");
+                            return;
+                        }
+                    }
+                }
+                let ch = chars.get(chid);
+                if ch.get_pos() == Position::Standing {
+                    if let Some(fighting_id) = ch.fighting_id() {
+                        if vict_id == fighting_id {
+                            send_to_char(&mut game.descriptors, ch, "You do the best you can!\r\n");
+                        } else {
+                            game.hit(chars, db, texts, objs, chid, vict_id, TYPE_UNDEFINED);
+                            let ch = chars.get_mut(chid);
+                            ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
+                        }
+                    }
                 }
             }
-            let ch = chars.get(chid);
-            let vict = chars.get(vict_id);
-            if ch.aff_flagged(AffectFlags::CHARM)
-                && !chars.get(ch.master.unwrap()).is_npc()
-                && !vict.is_npc()
-            {
-                return; /* you can't order a charmed pet to attack a
-                         * player */
-            }
-        }
-        let ch = chars.get(chid);
-        if ch.get_pos() == Position::Standing
-            && (ch.fighting_id().is_none() || vict_id != ch.fighting_id().unwrap())
-        {
-            game.hit(chars, db, texts, objs, chid, vict_id, TYPE_UNDEFINED);
-            let ch = chars.get_mut(chid);
-            ch.set_wait_state((PULSE_VIOLENCE + 2) as i32);
-        } else {
-            send_to_char(&mut game.descriptors, ch, "You do the best you can!\r\n");
         }
     }
 }
@@ -296,12 +303,11 @@ pub fn do_kill(
         return;
     }
     one_argument(argument, &mut arg);
-    let vict;
     #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Kill who?\r\n");
-    } else if {
-        vict = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -309,52 +315,54 @@ pub fn do_kill(
             &mut arg,
             None,
             FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "They aren't here.\r\n");
-    } else if chid == vict.unwrap().id() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Your mother would be so sad.. :(\r\n",
-        );
-    } else {
-        let vict = vict.unwrap();
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "You chop $M to pieces!  Ah!  The blood!",
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_CHAR,
-        );
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$N chops you to pieces!",
-            false,
-            Some(vict),
-            None,
-            Some(VictimRef::Char(ch)),
-            TO_CHAR,
-        );
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n brutally slays $N!",
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(vict)),
-            TO_NOTVICT,
-        );
-        raw_kill(&mut game.descriptors, chars, db, objs, vict.id());
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, "They aren't here.\r\n");
+            }
+            Some(vict) if chid == vict.id() => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Your mother would be so sad.. :(\r\n",
+                );
+            }
+            Some(vict) => {
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "You chop $M to pieces!  Ah!  The blood!",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR,
+                );
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$N chops you to pieces!",
+                    false,
+                    Some(vict),
+                    None,
+                    Some(VictimRef::Char(ch)),
+                    TO_CHAR,
+                );
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n brutally slays $N!",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_NOTVICT,
+                );
+                raw_kill(&mut game.descriptors, chars, db, objs, vict.id());
+            }
+        }
     }
 }
 
@@ -384,23 +392,20 @@ pub fn do_backstab(
 
     one_argument(argument, &mut buf);
     let vict;
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "Backstab who?\r\n");
         return;
     }
-    let vict = vict.unwrap();
     if vict.id() == chid {
         send_to_char(
             &mut game.descriptors,
@@ -409,19 +414,20 @@ pub fn do_backstab(
         );
         return;
     }
-    if ch.get_eq(WEAR_WIELD).is_none() {
+    if let Some(wield) = ch.get_eq(WEAR_WIELD) {
+        if objs.get(wield).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Only piercing weapons can be used for backstabbing.\r\n",
+            );
+            return;
+        }
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You need to wield a weapon to make it a success.\r\n",
-        );
-        return;
-    }
-    if objs.get(ch.get_eq(WEAR_WIELD).unwrap()).get_obj_val(3) != TYPE_PIERCE - TYPE_HIT {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Only piercing weapons can be used for backstabbing.\r\n",
         );
         return;
     }
@@ -503,12 +509,10 @@ pub fn do_order(
     let mut argument = argument.to_string();
 
     half_chop(&mut argument, &mut name, &mut message);
-    let vict;
-    #[allow(clippy::blocks_in_conditions)]
     if name.is_empty() || message.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Order who to do what?\r\n");
-    } else if {
-        vict = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -516,100 +520,116 @@ pub fn do_order(
             &mut name,
             None,
             FindFlags::CHAR_ROOM,
-        );
-        vict.is_none() && !is_abbrev(&name, "followers")
-    } {
-        send_to_char(&mut game.descriptors, ch, "That person isn't here.\r\n");
-    } else if vict.is_some() && chid == vict.unwrap().id() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "You obviously suffer from skitzofrenia.\r\n",
-        );
-    } else {
-        if ch.aff_flagged(AffectFlags::CHARM) {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "Your superior would not aprove of you giving orders.\r\n",
-            );
-            return;
-        }
-        if let Some(vict) = vict {
-            let buf = format!("$N orders you to '{}'", message);
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                &buf,
-                false,
-                Some(vict),
-                None,
-                Some(VictimRef::Char(ch)),
-                TO_CHAR,
-            );
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n gives $N an order.",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_ROOM,
-            );
-            if vict.master.is_some() && vict.master.unwrap() != chid
-                || !vict.aff_flagged(AffectFlags::CHARM)
-            {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n has an indifferent look.",
-                    false,
-                    Some(vict),
-                    None,
-                    None,
-                    TO_ROOM,
-                );
-            } else {
-                send_to_char(&mut game.descriptors, ch, OK);
-                command_interpreter(game, db, chars, texts, objs, vict.id(), &message);
+        ) {
+            None if !is_abbrev(&name, "followers") => {
+                send_to_char(&mut game.descriptors, ch, "That person isn't here.\r\n");
             }
-        } else {
-            /* This is order "followers" */
-
-            let buf = format!("$n issues the order '{}'.", message);
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                &buf,
-                false,
-                Some(ch),
-                None,
-                None,
-                TO_ROOM,
-            );
-            let ch = chars.get(chid);
-            for k_id in ch.followers.clone() {
-                let follower = chars.get(k_id.follower);
-                let ch = chars.get(chid);
-                if ch.in_room() == follower.in_room() && follower.aff_flagged(AffectFlags::CHARM) {
-                    found = true;
-                    command_interpreter(game, db, chars, texts, objs, k_id.follower, &message);
-                }
-            }
-            let ch = chars.get(chid);
-            if found {
-                send_to_char(&mut game.descriptors, ch, OK);
-            } else {
+            Some(vict) if chid == vict.id() => {
                 send_to_char(
                     &mut game.descriptors,
                     ch,
-                    "Nobody here is a loyal subject of yours!\r\n",
+                    "You obviously suffer from skitzofrenia.\r\n",
                 );
+            }
+            vict => {
+                if ch.aff_flagged(AffectFlags::CHARM) {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "Your superior would not aprove of you giving orders.\r\n",
+                    );
+                    return;
+                }
+                if let Some(vict) = vict {
+                    let buf = format!("$N orders you to '{}'", message);
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        &buf,
+                        false,
+                        Some(vict),
+                        None,
+                        Some(VictimRef::Char(ch)),
+                        TO_CHAR,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n gives $N an order.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(vict)),
+                        TO_ROOM,
+                    );
+                    let res = if let Some(master) = vict.master {
+                        master != chid
+                    } else {
+                        !vict.aff_flagged(AffectFlags::CHARM)
+                    };
+                    if res {
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "$n has an indifferent look.",
+                            false,
+                            Some(vict),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                    } else {
+                        send_to_char(&mut game.descriptors, ch, OK);
+                        command_interpreter(game, db, chars, texts, objs, vict.id(), &message);
+                    }
+                } else {
+                    /* This is order "followers" */
+
+                    let buf = format!("$n issues the order '{}'.", message);
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        &buf,
+                        false,
+                        Some(ch),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                    let ch = chars.get(chid);
+                    for k_id in ch.followers.clone() {
+                        let follower = chars.get(k_id.follower);
+                        let ch = chars.get(chid);
+                        if ch.in_room() == follower.in_room()
+                            && follower.aff_flagged(AffectFlags::CHARM)
+                        {
+                            found = true;
+                            command_interpreter(
+                                game,
+                                db,
+                                chars,
+                                texts,
+                                objs,
+                                k_id.follower,
+                                &message,
+                            );
+                        }
+                    }
+                    let ch = chars.get(chid);
+                    if found {
+                        send_to_char(&mut game.descriptors, ch, OK);
+                    } else {
+                        send_to_char(
+                            &mut game.descriptors,
+                            ch,
+                            "Nobody here is a loyal subject of yours!\r\n",
+                        );
+                    }
+                }
             }
         }
     }
@@ -639,51 +659,54 @@ pub fn do_flee(
     let was_fighting;
     for _ in 0..6 {
         let attempt = rand_number(0, (NUM_OF_DIRS - 1) as u32); /* Select a random direction */
-        if db.can_go(ch, attempt as usize)
-            && !db.room_flagged(
-                db.exit(ch, attempt as usize).as_ref().unwrap().to_room,
-                RoomFlags::DEATH,
-            )
-        {
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n panics, and attempts to flee!",
-                true,
-                Some(ch),
-                None,
-                None,
-                TO_ROOM,
-            );
-            let ch = chars.get(chid);
-            was_fighting = ch.fighting_id();
-            let r = do_simple_move(game, db, chars, texts, objs, chid, attempt as i32, true);
-            let ch = chars.get(chid);
-            if r {
-                send_to_char(&mut game.descriptors, ch, "You flee head over heels.\r\n");
-                let ch = chars.get(chid);
-                #[allow(clippy::unnecessary_unwrap)]
-                if was_fighting.is_some() && !ch.is_npc() {
-                    let was_fighting = chars.get(was_fighting.unwrap());
-                    let mut loss = was_fighting.get_max_hit() - was_fighting.get_hit();
-                    loss *= was_fighting.get_level() as i16;
-                    gain_exp(chid, -loss as i32, game, chars, db, texts, objs);
-                }
-            } else {
+        if let Some(exit) = db.exit(ch, attempt as usize) {
+            if db.can_go(ch, attempt as usize) && !db.room_flagged(exit.to_room, RoomFlags::DEATH) {
                 act(
                     &mut game.descriptors,
                     chars,
                     db,
-                    "$n tries to flee, but can't!",
+                    "$n panics, and attempts to flee!",
                     true,
                     Some(ch),
                     None,
                     None,
                     TO_ROOM,
                 );
+                let ch = chars.get(chid);
+                was_fighting = ch.fighting_id();
+                let r = do_simple_move(game, db, chars, texts, objs, chid, attempt as i32, true);
+                let ch = chars.get(chid);
+                if r {
+                    send_to_char(&mut game.descriptors, ch, "You flee head over heels.\r\n");
+                    let ch = chars.get(chid);
+                    if let Some(was_fighting) = was_fighting {
+                        if !ch.is_npc() {
+                            let was_fighting = chars.get(was_fighting);
+                            let mut loss = was_fighting.get_max_hit() - was_fighting.get_hit();
+                            loss *= was_fighting.get_level() as i16;
+                            gain_exp(chid, -loss as i32, game, chars, db, texts, objs);
+                        }
+                    }
+                } else {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n tries to flee, but can't!",
+                        true,
+                        Some(ch),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                }
+                return;
             }
-            return;
+        } else {
+            error!(
+                "SYSERR: do_flee: ch {} can't flee in direction {}",
+                chid, attempt
+            );
         }
     }
     send_to_char(
@@ -730,30 +753,29 @@ pub fn do_bash(
         );
         return;
     }
-    let mut victo;
-    let res = {
-        victo = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        victo.is_some()
-    };
-    if res {
-        if ch.fighting_id().is_some()
-            && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room()
-        {
-            victo = ch.fighting_id().map(|i| chars.get(i));
+    let vict;
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        vict = char;
+    } else if let Some(fighting) = ch.fighting_id() {
+        if ch.in_room() == chars.get(fighting).in_room() {
+            vict = chars.get(fighting);
         } else {
             send_to_char(&mut game.descriptors, ch, "Bash who?\r\n");
             return;
         }
+    } else {
+        send_to_char(&mut game.descriptors, ch, "Bash who?\r\n");
+        return;
     }
-    let vict = victo.unwrap();
+
     if vict.id() == chid {
         send_to_char(&mut game.descriptors, ch, "Aren't we funny today...\r\n");
         return;
@@ -818,47 +840,51 @@ pub fn do_rescue(
 
     one_argument(argument, &mut arg);
     let vict;
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "Whom do you want to rescue?\r\n");
         return;
     }
-    let vict = vict.unwrap();
     if vict.id() == chid {
         send_to_char(&mut game.descriptors, ch, "What about fleeing instead?\r\n");
         return;
     }
-    if ch.fighting_id().is_some() && ch.fighting_id().unwrap() == vict.id() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "How can you rescue someone you are trying to kill?\r\n",
-        );
-        return;
+    if let Some(fighting) = ch.fighting_id() {
+        if fighting == vict.id() {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "How can you rescue someone you are trying to kill?\r\n",
+            );
+            return;
+        }
     }
-    let mut tmp_ch_id = None;
+    let mut tmp_ch_ido = None;
     {
         for tch_id in db.world[ch.in_room() as usize].peoples.iter() {
             let tch = chars.get(*tch_id);
-            if tch.fighting_id().is_some() && tch.fighting_id().unwrap() == vict.id() {
-                tmp_ch_id = Some(*tch_id);
-                break;
+            if let Some(fighting) = tch.fighting_id() {
+                if fighting == vict.id() {
+                    tmp_ch_ido = Some(*tch_id);
+                    break;
+                }
             }
         }
     }
 
-    if tmp_ch_id.is_none() {
+    let tmp_ch_id;
+    if let Some(char) = tmp_ch_ido {
+        tmp_ch_id = char;
+    } else {
         act(
             &mut game.descriptors,
             chars,
@@ -872,7 +898,6 @@ pub fn do_rescue(
         );
         return;
     }
-    let tmp_ch_id = tmp_ch_id.unwrap();
     let percent = rand_number(1, 101); /* 101% is a complete failure */
     let prob = ch.get_skill(SKILL_RESCUE);
 
@@ -905,8 +930,10 @@ pub fn do_rescue(
     );
     let vict_id = vict.id();
     let vict = chars.get_mut(vict_id);
-    if vict.fighting_id().is_some() && vict.fighting_id().unwrap() == tmp_ch_id {
-        db.stop_fighting(vict);
+    if let Some(fighting) = vict.fighting_id() {
+        if fighting == tmp_ch_id {
+            db.stop_fighting(vict);
+        }
     }
     let tmp_ch = chars.get_mut(tmp_ch_id);
     if tmp_ch.fighting_id().is_some() {
@@ -943,39 +970,37 @@ pub fn do_kick(
         return;
     }
     one_argument(argument, &mut arg);
-    let mut vict;
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
-        if ch.fighting_id().is_some()
-            && ch.in_room() == chars.get(ch.fighting_id().unwrap()).in_room()
-        {
-            vict = ch.fighting_id().map(|i| chars.get(i));
+    let vict;
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        vict = char;
+    } else if let Some(fighting) = ch.fighting_id() {
+        if ch.in_room() == chars.get(fighting).in_room() {
+            vict = chars.get(fighting);
         } else {
             send_to_char(&mut game.descriptors, ch, "Kick who?\r\n");
             return;
         }
+    } else {
+        send_to_char(&mut game.descriptors, ch, "Kick who?\r\n");
+        return;
     }
-    let vict = vict.unwrap();
     if vict.id() == chid {
         send_to_char(&mut game.descriptors, ch, "Aren't we funny today...\r\n");
         return;
     }
     /* 101% is a complete failure */
     let percent = ((10 - (compute_armor_class(vict) / 10)) * 2) + rand_number(1, 101) as i16;
-    let prob = ch.get_skill(SKILL_KICK);
+    let prob = ch.get_skill(SKILL_KICK) as i16;
 
-    if percent > prob as i16 {
+    if percent > prob {
         game.damage(chars, db, texts, objs, chid, vict.id(), 0, SKILL_KICK);
     } else {
         game.damage(
