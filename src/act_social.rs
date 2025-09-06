@@ -69,11 +69,9 @@ pub fn do_action(
     let ch = chars.get(chid);
     let act_nr;
 
-    let res = {
-        act_nr = find_action(db, cmd);
-        act_nr.is_none()
-    };
-    if res {
+    if let Some(number) = find_action(db, cmd) {
+        act_nr = number;
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -81,7 +79,6 @@ pub fn do_action(
         );
         return;
     }
-    let act_nr = act_nr.unwrap();
     let action_char_found = &db.soc_mess_list[act_nr].char_found;
     let action_others_found = &db.soc_mess_list[act_nr].others_found;
     let action_vict_found = &db.soc_mess_list[act_nr].vict_found;
@@ -117,90 +114,88 @@ pub fn do_action(
         );
         return;
     }
-    let vict;
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            format!("{}\r\n", &action_not_found).as_str(),
-        );
-    } else if vict.unwrap().id() == chid {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            format!("{}\r\n", &action_char_auto).as_str(),
-        );
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            action_others_auto,
-            action_hide,
-            Some(ch),
-            None,
-            None,
-            TO_ROOM,
-        );
-    } else {
-        let vict = vict.unwrap();
-        if vict.get_pos() < action_min_victim_position {
-            act(
+    match get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        None => {
+            send_to_char(
                 &mut game.descriptors,
-                chars,
-                db,
-                "$N is not in a proper position for that.",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_CHAR | TO_SLEEP,
+                ch,
+                format!("{}\r\n", &action_not_found).as_str(),
             );
-        } else {
-            act(
+        }
+        Some(vict) if vict.id() == chid => {
+            send_to_char(
                 &mut game.descriptors,
-                chars,
-                db,
-                action_char_found,
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_CHAR | TO_SLEEP,
+                ch,
+                format!("{}\r\n", &action_char_auto).as_str(),
             );
             act(
                 &mut game.descriptors,
                 chars,
                 db,
-                action_others_found,
+                action_others_auto,
                 action_hide,
                 Some(ch),
                 None,
-                Some(VictimRef::Char(vict)),
-                TO_NOTVICT,
-            );
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                action_vict_found,
-                action_hide,
-                Some(ch),
                 None,
-                Some(VictimRef::Char(vict)),
-                TO_VICT,
+                TO_ROOM,
             );
+        }
+        Some(vict) => {
+            if vict.get_pos() < action_min_victim_position {
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$N is not in a proper position for that.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR | TO_SLEEP,
+                );
+            } else {
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    action_char_found,
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR | TO_SLEEP,
+                );
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    action_others_found,
+                    action_hide,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_NOTVICT,
+                );
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    action_vict_found,
+                    action_hide,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_VICT,
+                );
+            }
         }
     }
 }
@@ -223,121 +218,127 @@ pub fn do_insult(
 
     if !arg.is_empty() {
         let victim;
-        let res = {
-            victim = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut arg,
-                None,
-                FindFlags::CHAR_ROOM,
-            );
-            victim.is_none()
-        };
-        if res {
-            send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");
+        if let Some(char) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut arg,
+            None,
+            FindFlags::CHAR_ROOM,
+        ) {
+            victim = char;
         } else {
-            let victim = victim.unwrap();
-            if victim.id() != chid {
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    format!("You insult {}.\r\n", victim.get_name()).as_str(),
-                );
+            send_to_char(&mut game.descriptors, ch, "Can't hear you!\r\n");
+            return;
+        }
+        if victim.id() != chid {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                format!("You insult {}.\r\n", victim.get_name()).as_str(),
+            );
 
-                match rand_number(0, 2) {
-                    0 => {
-                        let ch = chars.get(chid);
-                        if ch.get_sex() == Sex::Male {
-                            if victim.get_sex() == Sex::Male {
-                                act(
-                                    &mut game.descriptors,
-                                    chars,
-                                    db,
-                                    "$n accuses you of fighting like a woman!",
-                                    false,
-                                    Some(ch),
-                                    None,
-                                    Some(VictimRef::Char(victim)),
-                                    TO_VICT,
-                                );
-                            } else {
-                                act(
-                                    &mut game.descriptors,
-                                    chars,
-                                    db,
-                                    "$n says that women can't fight.",
-                                    false,
-                                    Some(ch),
-                                    None,
-                                    Some(VictimRef::Char(victim)),
-                                    TO_VICT,
-                                );
-                            }
+            match rand_number(0, 2) {
+                0 => {
+                    let ch = chars.get(chid);
+                    if ch.get_sex() == Sex::Male {
+                        if victim.get_sex() == Sex::Male {
+                            act(
+                                &mut game.descriptors,
+                                chars,
+                                db,
+                                "$n accuses you of fighting like a woman!",
+                                false,
+                                Some(ch),
+                                None,
+                                Some(VictimRef::Char(victim)),
+                                TO_VICT,
+                            );
                         } else {
-                            /* Ch == Woman */
-                            if victim.get_sex() == Sex::Male {
-                                act(
-                                    &mut game.descriptors,
-                                    chars,
-                                    db,
-                                    "$n accuses you of having the smallest... (brain?)",
-                                    false,
-                                    Some(ch),
-                                    None,
-                                    Some(VictimRef::Char(victim)),
-                                    TO_VICT,
-                                );
-                            } else {
-                                act(&mut game.descriptors, chars, db,"$n tells you that you'd lose a beauty contest against a troll.",
-                                       false, Some(ch), None, Some(VictimRef::Char(victim)), TO_VICT);
-                            }
+                            act(
+                                &mut game.descriptors,
+                                chars,
+                                db,
+                                "$n says that women can't fight.",
+                                false,
+                                Some(ch),
+                                None,
+                                Some(VictimRef::Char(victim)),
+                                TO_VICT,
+                            );
+                        }
+                    } else {
+                        /* Ch == Woman */
+                        if victim.get_sex() == Sex::Male {
+                            act(
+                                &mut game.descriptors,
+                                chars,
+                                db,
+                                "$n accuses you of having the smallest... (brain?)",
+                                false,
+                                Some(ch),
+                                None,
+                                Some(VictimRef::Char(victim)),
+                                TO_VICT,
+                            );
+                        } else {
+                            act(
+                                &mut game.descriptors,
+                                chars,
+                                db,
+                                "$n tells you that you'd lose a beauty contest against a troll.",
+                                false,
+                                Some(ch),
+                                None,
+                                Some(VictimRef::Char(victim)),
+                                TO_VICT,
+                            );
                         }
                     }
-                    1 => {
-                        act(
-                            &mut game.descriptors,
-                            chars,
-                            db,
-                            "$n calls your mother a bitch!",
-                            false,
-                            Some(ch),
-                            None,
-                            Some(VictimRef::Char(victim)),
-                            TO_VICT,
-                        );
-                    }
-                    _ => {
-                        act(
-                            &mut game.descriptors,
-                            chars,
-                            db,
-                            "$n tells you to get lost!",
-                            false,
-                            Some(ch),
-                            None,
-                            Some(VictimRef::Char(victim)),
-                            TO_VICT,
-                        );
-                    }
-                } /* end switch */
+                }
+                1 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n calls your mother a bitch!",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(victim)),
+                        TO_VICT,
+                    );
+                }
+                _ => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n tells you to get lost!",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(victim)),
+                        TO_VICT,
+                    );
+                }
+            } /* end switch */
 
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n insults $N.",
-                    true,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(victim)),
-                    TO_NOTVICT,
-                );
-            } else {
-                /* ch == victim */
-                send_to_char(&mut game.descriptors, ch, "You feel insulted.\r\n");
-            }
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "$n insults $N.",
+                true,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(victim)),
+                TO_NOTVICT,
+            );
+        } else {
+            /* ch == victim */
+            send_to_char(&mut game.descriptors, ch, "You feel insulted.\r\n");
         }
     } else {
         send_to_char(
@@ -371,20 +372,10 @@ pub fn free_social_messages(db: &mut DB) {
 
 pub fn boot_social_messages(db: &mut DB) {
     /* open social file */
-    let fl;
-    let res = {
-        fl = OpenOptions::new().read(true).open(SOCMESS_FILE);
-        fl.is_err()
-    };
-    if res {
-        error!(
-            "SYSERR: can't open socials file '{}': {}",
-            SOCMESS_FILE,
-            fl.err().unwrap()
-        );
-        process::exit(1);
-    }
-    let fl = fl.unwrap();
+    let fl = OpenOptions::new()
+        .read(true)
+        .open(SOCMESS_FILE)
+        .unwrap_or_else(|e| panic!("SYSERR: can't open socials file '{}': {}", SOCMESS_FILE, e));
     let mut list_top = 0;
     /* count socials & allocate space */
     for cmd_info in CMD_INFO.iter() {
@@ -397,7 +388,8 @@ pub fn boot_social_messages(db: &mut DB) {
     let mut cur_soc = 0;
     let mut reader = BufReader::new(fl);
     /* now read 'em */
-    let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})").unwrap();
+    let regex = Regex::new(r"^(\S+)\s(\d{1,9})\s(\d{1,9})")
+        .unwrap_or_else(|e| panic!("SYSERR: boot_social cannot create regex: {}", e));
     loop {
         let mut line = String::new();
         reader.read_line(&mut line).expect("Reading socials file");
@@ -405,21 +397,24 @@ pub fn boot_social_messages(db: &mut DB) {
             break;
         }
 
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: format error in social file near social '{}'", line);
-            process::exit(1);
-        }
-        let f = f.unwrap();
+        let f = regex.captures(line.as_str()).unwrap_or_else(|| {
+            panic!("SYSERR: format error in social file near social '{}'", line)
+        });
         let next_soc = &f[1];
-        let hide = f[2].parse::<i32>().unwrap();
-        let min_victim_position = Position::from(f[2].parse::<u8>().unwrap());
-
-        let res = {
-            cur_soc += 1;
-            cur_soc > list_top
-        };
-        if res {
+        let hide = f[2].parse::<i32>().unwrap_or_else(|e| {
+            panic!(
+                "SYSERR: format error in social file near social [hide]'{}': {}",
+                line, e
+            )
+        });
+        let min_victim_position = Position::from(f[2].parse::<u8>().unwrap_or_else(|e| {
+            panic!(
+                "SYSERR: format error in social file near social [min_victim_position]'{}': {}",
+                line, e
+            )
+        }));
+        cur_soc += 1;
+        if cur_soc > list_top {
             error!(
                 "SYSERR: Ran out of slots in social array. ({} > {})",
                 cur_soc, list_top
