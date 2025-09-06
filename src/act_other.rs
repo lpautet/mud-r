@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2024 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use chrono::Utc;
@@ -33,11 +33,11 @@ use crate::handler::{
 };
 use crate::house::house_crashsave;
 use crate::interpreter::{
-    delete_doubledollar, half_chop, is_number, one_argument, two_arguments, CMD_INFO,
-    SCMD_AUTOEXIT, SCMD_BRIEF, SCMD_BUG, SCMD_COMPACT, SCMD_DEAF, SCMD_HOLYLIGHT, SCMD_IDEA,
-    SCMD_NOAUCTION, SCMD_NOGOSSIP, SCMD_NOGRATZ, SCMD_NOHASSLE, SCMD_NOREPEAT, SCMD_NOSUMMON,
-    SCMD_NOTELL, SCMD_NOWIZ, SCMD_QUAFF, SCMD_QUEST, SCMD_QUIT, SCMD_RECITE, SCMD_ROOMFLAGS,
-    SCMD_SLOWNS, SCMD_TRACK, SCMD_TYPO, SCMD_USE,
+    delete_doubledollar, half_chop, one_argument, two_arguments, CMD_INFO, SCMD_AUTOEXIT,
+    SCMD_BRIEF, SCMD_BUG, SCMD_COMPACT, SCMD_DEAF, SCMD_HOLYLIGHT, SCMD_IDEA, SCMD_NOAUCTION,
+    SCMD_NOGOSSIP, SCMD_NOGRATZ, SCMD_NOHASSLE, SCMD_NOREPEAT, SCMD_NOSUMMON, SCMD_NOTELL,
+    SCMD_NOWIZ, SCMD_QUAFF, SCMD_QUEST, SCMD_QUIT, SCMD_RECITE, SCMD_ROOMFLAGS, SCMD_SLOWNS,
+    SCMD_TRACK, SCMD_TYPO, SCMD_USE,
 };
 use crate::objsave::{crash_crashsave, crash_rentsave};
 use crate::shops::shop_keeper;
@@ -325,32 +325,31 @@ pub fn do_steal(
     let mut vict_name = String::new();
     two_arguments(argument, &mut obj_name, &mut vict_name);
     let vict;
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut vict_name,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut vict_name,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        if char.id() == chid {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Come on now, that's rather stupid!\r\n",
+            );
+            return;
+        }
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "Steal what from who?\r\n");
         return;
-    } else if vict.unwrap().id() == chid {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Come on now, that's rather stupid!\r\n",
-        );
-        return;
     }
+
     let mut ohoh = false;
 
-    let vict = vict.unwrap();
     /* 101% is a complete failure */
     let mut percent =
         rand_number(1, 101) as i32 - DEX_APP_SKILL[ch.get_dex() as usize].p_pocket as i32;
@@ -370,108 +369,28 @@ pub fn do_steal(
     }
 
     /* NO NO With Imp's and Shopkeepers, and if player thieving is not allowed */
-    if vict.get_level() >= LVL_IMMORT
-        || pcsteal
-        || (db.get_mob_spec(vict).is_some()
-            && db.get_mob_spec(vict).unwrap() as usize == shop_keeper as usize)
-    {
+    let is_protected = if let Some(mob) = db.get_mob_spec(vict) {
+        mob as usize == shop_keeper as usize
+    } else {
+        false
+    };
+    if vict.get_level() >= LVL_IMMORT || pcsteal || is_protected {
         percent = 101; /* Failure */
     }
-    let mut obj;
     let mut the_eq_pos: i16 = -1;
     let vict_id = vict.id();
     if obj_name != "coins" && obj_name != "gold" {
-        let res = {
-            obj = get_obj_in_list_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &obj_name,
-                None,
-                &vict.carrying,
-            );
-            obj.is_none()
-        };
-        if res {
-            for eq_pos in 0..NUM_WEARS {
-                if vict.get_eq(eq_pos).is_some()
-                    && isname(
-                        &obj_name,
-                        objs.get(vict.get_eq(eq_pos).unwrap()).name.as_ref(),
-                    )
-                    && can_see_obj(
-                        &game.descriptors,
-                        chars,
-                        db,
-                        ch,
-                        objs.get(vict.get_eq(eq_pos).unwrap()),
-                    )
-                {
-                    obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
-                    the_eq_pos = eq_pos as i16;
-                }
-            }
-            #[allow(clippy::unnecessary_unwrap)]
-            if obj.is_none() {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$E hasn't got that item.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(vict)),
-                    TO_CHAR,
-                );
-                return;
-            } else {
-                /* It is equipment */
-                if vict.get_pos() > Position::Stunned {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "Steal the equipment now?  Impossible!\r\n",
-                    );
-                    return;
-                } else {
-                    let obj = obj.unwrap();
-                    act(
-                        &mut game.descriptors,
-                        chars,
-                        db,
-                        "You unequip $p and steal it.",
-                        false,
-                        Some(ch),
-                        Some(obj),
-                        None,
-                        TO_CHAR,
-                    );
-                    act(
-                        &mut game.descriptors,
-                        chars,
-                        db,
-                        "$n steals $p from $N.",
-                        false,
-                        Some(ch),
-                        Some(obj),
-                        Some(VictimRef::Char(vict)),
-                        TO_NOTVICT,
-                    );
-                    let eqid = db
-                        .unequip_char(chars, objs, vict.id(), the_eq_pos as usize)
-                        .unwrap();
-                    let eq = objs.get_mut(eqid);
-                    let ch = chars.get_mut(chid);
-                    obj_to_char(eq, ch);
-                }
-            }
-        } else {
+        if let Some(obj) = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &obj_name,
+            None,
+            &vict.carrying,
+        ) {
             /* obj found in inventory */
-            let obj = obj.unwrap();
-
             percent += obj.get_obj_weight(); /* Make heavy harder */
             if percent > ch.get_skill(SKILL_STEAL) as u32 as i32 {
                 ohoh = true;
@@ -512,6 +431,73 @@ pub fn do_steal(
                 } else {
                     send_to_char(&mut game.descriptors, ch, "You cannot carry that much.\r\n");
                 }
+            }
+        } else {
+            let mut obj = None;
+            for eq_pos in 0..NUM_WEARS {
+                if let Some(eq_id) = vict.get_eq(eq_pos) {
+                    if isname(&obj_name, objs.get(eq_id).name.as_ref())
+                        && can_see_obj(&game.descriptors, chars, db, ch, objs.get(eq_id))
+                    {
+                        obj = vict.get_eq(eq_pos).map(|i| objs.get(i));
+                        the_eq_pos = eq_pos as i16;
+                    }
+                }
+            }
+            if let Some(obj) = obj {
+                /* It is equipment */
+                if vict.get_pos() > Position::Stunned {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "Steal the equipment now?  Impossible!\r\n",
+                    );
+                    return;
+                } else {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You unequip $p and steal it.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        None,
+                        TO_CHAR,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n steals $p from $N.",
+                        false,
+                        Some(ch),
+                        Some(obj),
+                        Some(VictimRef::Char(vict)),
+                        TO_NOTVICT,
+                    );
+                    if let Some(eqid) = db.unequip_char(chars, objs, vict.id(), the_eq_pos as usize)
+                    {
+                        let eq = objs.get_mut(eqid);
+                        let ch = chars.get_mut(chid);
+                        obj_to_char(eq, ch);
+                    } else {
+                        error!("SYSERR: do_steal: Failed to unequip {}", the_eq_pos)
+                    }
+                }
+            } else {
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$E hasn't got that item.",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_CHAR,
+                );
+                return;
             }
         }
     } else {
@@ -763,11 +749,7 @@ fn print_group(
     } else {
         send_to_char(descs, ch, "Your group consists of:\r\n");
         let ch = chars.get(chid);
-        let k_id = if ch.master.is_some() {
-            ch.master.unwrap()
-        } else {
-            chid
-        };
+        let k_id = ch.master.unwrap_or(chid);
         let k = chars.get(k_id);
 
         if k.aff_flagged(AffectFlags::GROUP) {
@@ -876,24 +858,26 @@ pub fn do_group(
     }
     let vict;
 
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        vict.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if (vict.unwrap().master.is_none() || vict.unwrap().master.unwrap() != chid)
-        && vict.unwrap().id() != chid
-    {
-        let vict = vict.unwrap();
+        return;
+    }
+    let is_not_groupable = if let Some(master_id) = vict.master {
+        master_id != chid
+    } else {
+        true
+    };
+    if vict.master.is_none() || is_not_groupable {
         act(
             &mut game.descriptors,
             chars,
@@ -906,7 +890,6 @@ pub fn do_group(
             TO_CHAR,
         );
     } else {
-        let vict = vict.unwrap();
         let ch = chars.get(chid);
 
         if !vict.aff_flagged(AffectFlags::GROUP) {
@@ -1006,24 +989,26 @@ pub fn do_ungroup(
         return;
     }
     let tch;
-    let res = {
-        tch = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_ROOM,
-        );
-        tch.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_ROOM,
+    ) {
+        tch = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "There is no such person!\r\n");
         return;
     }
-    let tch = tch.unwrap();
-    if tch.master.is_none() || tch.master.unwrap() != chid {
+    let not_follower = if let Some(master_id) = tch.master {
+        master_id != chid
+    } else {
+        true
+    };
+    if not_follower {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -1116,11 +1101,7 @@ pub fn do_report(
         ch.get_max_move()
     );
 
-    let k_id = if ch.master.is_some() {
-        ch.master.unwrap()
-    } else {
-        chid
-    };
+    let k_id = ch.master.unwrap_or(chid);
     let k = chars.get(k_id);
     for f in &k.followers {
         let follower = chars.get(f.follower);
@@ -1173,9 +1154,7 @@ pub fn do_split(
     }
     let mut buf = String::new();
     one_argument(argument, &mut buf);
-    let amount;
-    if is_number(&buf) {
-        amount = buf.parse::<i32>().unwrap();
+    if let Ok(amount) = buf.parse::<i32>() {
         if amount <= 0 {
             send_to_char(&mut game.descriptors, ch, "Sorry, you can't do that.\r\n");
             return;
@@ -1188,11 +1167,7 @@ pub fn do_split(
             );
             return;
         }
-        let k_id = if ch.master.is_some() {
-            ch.master.unwrap()
-        } else {
-            chid
-        };
+        let k_id = ch.master.unwrap_or(chid);
         let k = chars.get(k_id);
         let mut num;
         if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
@@ -1333,8 +1308,12 @@ pub fn do_use(
         return;
     }
     let mut mag_item = ch.get_eq(WEAR_HOLD).map(|i| objs.get(i));
-
-    if mag_item.is_none() || !isname(&arg, mag_item.unwrap().name.as_ref()) {
+    let not_mag_item = if let Some(mag_item) = mag_item {
+        !isname(&arg, mag_item.name.as_ref())
+    } else {
+        true
+    };
+    if not_mag_item {
         match subcmd {
             SCMD_RECITE | SCMD_QUAFF => {
                 let res = {
@@ -1373,40 +1352,42 @@ pub fn do_use(
             }
         }
     }
-    let mag_item = mag_item.unwrap();
-    match subcmd {
-        SCMD_QUAFF => {
-            if mag_item.get_obj_type() != ItemType::Potion {
-                send_to_char(&mut game.descriptors, ch, "You can only quaff potions.\r\n");
-                return;
+    if let Some(mag_item) = mag_item {
+        match subcmd {
+            SCMD_QUAFF => {
+                if mag_item.get_obj_type() != ItemType::Potion {
+                    send_to_char(&mut game.descriptors, ch, "You can only quaff potions.\r\n");
+                    return;
+                }
             }
-        }
-        SCMD_RECITE => {
-            if mag_item.get_obj_type() != ItemType::Scroll {
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    "You can only recite scrolls.\r\n",
-                );
-                return;
+            SCMD_RECITE => {
+                if mag_item.get_obj_type() != ItemType::Scroll {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "You can only recite scrolls.\r\n",
+                    );
+                    return;
+                }
             }
-        }
-        SCMD_USE => {
-            if mag_item.get_obj_type() != ItemType::Wand
-                && mag_item.get_obj_type() != ItemType::Staff
-            {
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    "You can't seem to figure out how to use it.\r\n",
-                );
-                return;
+            SCMD_USE => {
+                if mag_item.get_obj_type() != ItemType::Wand
+                    && mag_item.get_obj_type() != ItemType::Staff
+                {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "You can't seem to figure out how to use it.\r\n",
+                    );
+                    return;
+                }
             }
+            _ => {}
         }
-        _ => {}
+        mag_objectmagic(game, chars, db, texts, objs, chid, mag_item.id(), &buf);
+    } else {
+        error!("SYSERR: no mag item in do_use.");
     }
-
-    mag_objectmagic(game, chars, db, texts, objs, chid, mag_item.id(), &buf);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1452,13 +1433,8 @@ pub fn do_wimpy(
             return;
         }
     }
-    let wimp_lev;
-    if arg.chars().next().unwrap().is_ascii_digit() {
-        let res = {
-            wimp_lev = arg.parse::<i32>().unwrap();
-            wimp_lev != 0
-        };
-        if res {
+    if let Ok(wimp_lev) = arg.parse::<i32>() {
+        if wimp_lev != 0 {
             if wimp_lev < 0 {
                 send_to_char(
                     &mut game.descriptors,
@@ -1642,60 +1618,51 @@ pub fn do_gen_write(
         format!("{} {}: {}", ch.get_name(), CMD_INFO[cmd].command, argument).as_str(),
     );
 
-    let r = fs::metadata(filename);
-    if r.is_err() {
-        error!(
-            "SYSERR: Can't get file metadata ({}): {}",
-            filename,
-            r.err().unwrap()
-        );
-        return;
+    match fs::metadata(filename) {
+        Err(e) => {
+            error!("SYSERR: Can't get file metadata ({}): {}", filename, e);
+            return;
+        }
+        Ok(fm) => {
+            if fm.len() >= MAX_FILESIZE as u64 {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Sorry, the file is full right now.. try again later.\r\n",
+                );
+                return;
+            }
+        }
     }
-    let fm = r.unwrap();
-
-    if fm.len() >= MAX_FILESIZE as u64 {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Sorry, the file is full right now.. try again later.\r\n",
-        );
-        return;
-    }
-    let fl = OpenOptions::new().append(true).open(filename);
-    if fl.is_err() {
-        error!(
-            "SYSERR: do_gen_write, opening {} {}",
-            filename,
-            fl.err().unwrap()
-        );
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Could not open the file.  Sorry.\r\n",
-        );
-        return;
-    }
-    let ch = chars.get(chid);
-    let buf = format!(
-        "{:8} ({:6}) [{:5}] {}\n",
-        ch.get_name(),
-        dt,
-        db.get_room_vnum(ch.in_room()),
-        argument
-    );
-    let r = fl.unwrap().write_all(buf.as_ref());
-    if r.is_err() {
-        error!(
-            "SYSERR: do_gen_write, writing {} {}",
-            filename,
-            r.err().unwrap()
-        );
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Could not write to the file.  Sorry.\r\n",
-        );
-        return;
+    match OpenOptions::new().append(true).open(filename) {
+        Err(e) => {
+            error!("SYSERR: do_gen_write, opening {} {}", filename, e);
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Could not open the file.  Sorry.\r\n",
+            );
+            return;
+        }
+        Ok(mut fl) => {
+            let ch = chars.get(chid);
+            let buf = format!(
+                "{:8} ({:6}) [{:5}] {}\n",
+                ch.get_name(),
+                dt,
+                db.get_room_vnum(ch.in_room()),
+                argument
+            );
+            if let Err(e) = fl.write_all(buf.as_ref()) {
+                error!("SYSERR: do_gen_write, writing {} {}", filename, e);
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Could not write to the file.  Sorry.\r\n",
+                );
+                return;
+            }
+        }
     }
 
     send_to_char(&mut game.descriptors, ch, "Okay.  Thanks!\r\n");
