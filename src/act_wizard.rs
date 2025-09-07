@@ -6,10 +6,9 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2024 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
-use std::borrow::Borrow;
 use std::cmp::{max, min};
 use std::os::unix::fs::FileExt;
 use std::path::Path;
@@ -38,9 +37,9 @@ use crate::handler::{
 };
 use crate::house::{hcontrol_list_houses, house_can_enter};
 use crate::interpreter::{
-    command_interpreter, delete_doubledollar, half_chop, is_abbrev, is_number, one_argument,
-    search_block, two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_FREEZE, SCMD_NOTITLE, SCMD_PARDON,
-    SCMD_POOFIN, SCMD_POOFOUT, SCMD_REROLL, SCMD_SHUTDOWN, SCMD_SQUELCH, SCMD_THAW, SCMD_UNAFFECT,
+    command_interpreter, delete_doubledollar, half_chop, is_abbrev, one_argument, search_block,
+    two_arguments, SCMD_DATE, SCMD_EMOTE, SCMD_FREEZE, SCMD_NOTITLE, SCMD_PARDON, SCMD_POOFIN,
+    SCMD_POOFOUT, SCMD_REROLL, SCMD_SHUTDOWN, SCMD_SQUELCH, SCMD_THAW, SCMD_UNAFFECT,
 };
 use crate::limits::{gain_exp_regardless, hit_gain, mana_gain, move_gain, set_title};
 use crate::modify::page_string;
@@ -68,6 +67,7 @@ use crate::{
     act, char_to_store, save_char, send_to_char, send_to_room, vnum_mobile, vnum_object,
     DescriptorData, ObjData, TextData, VictimRef,
 };
+use chrono::offset::LocalResult;
 use chrono::{TimeZone, Utc};
 use hmac::Hmac;
 use log::{error, info};
@@ -151,23 +151,20 @@ pub fn do_send(
         send_to_char(&mut game.descriptors, ch, "Send what to who?\r\n");
         return;
     }
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    };
-    if res {
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        vict = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
         return;
     }
-    let vict = vict.unwrap();
     send_to_char(&mut game.descriptors, vict, format!("{}\r\n", buf).as_str());
     let ch = chars.get(chid);
     if ch.prf_flagged(PrefFlags::NOREPEAT) {
@@ -194,64 +191,62 @@ fn find_target_room(
     let mut roomstr = String::new();
     one_argument(rawroomstr, &mut roomstr);
 
-    if roomstr.is_empty() {
+    let first_char;
+    if let Some(c) = roomstr.chars().next() {
+        first_char = c;
+    } else {
         send_to_char(descs, ch, "You must supply a room number or name.\r\n");
         return NOWHERE;
     }
 
-    if roomstr.chars().next().unwrap().is_ascii_digit() && !roomstr.contains('.') {
-        let res = {
-            location = db.real_room(roomstr.parse::<i16>().unwrap());
-            location == NOWHERE
-        };
-        if res {
-            send_to_char(descs, ch, "No room exists with that number.\r\n");
+    if first_char.is_ascii_digit() && !roomstr.contains('.') {
+        if let Ok(num) = roomstr.parse::<i16>() {
+            location = db.real_room(num);
+            if location == NOWHERE {
+                send_to_char(descs, ch, "No room exists with that number.\r\n");
+                return NOWHERE;
+            }
+        } else {
             return NOWHERE;
         }
     } else {
-        let target_mob;
-        let target_obj;
         let mut mobobjstr = roomstr;
 
         let mut num = get_number(&mut mobobjstr);
-        let res = {
-            target_mob = get_char_vis(
-                descs,
-                chars,
-                db,
-                ch,
-                &mut mobobjstr,
-                Some(&mut num),
-                FindFlags::CHAR_WORLD,
-            );
-            target_mob.is_some()
-        };
-        #[allow(clippy::blocks_in_conditions)]
-        if res {
-            let res = {
-                location = target_mob.unwrap().in_room();
-                location == NOWHERE
-            };
-            if res {
+        if let Some(target_mob) = get_char_vis(
+            descs,
+            chars,
+            db,
+            ch,
+            &mut mobobjstr,
+            Some(&mut num),
+            FindFlags::CHAR_WORLD,
+        ) {
+            location = target_mob.in_room();
+            if location == NOWHERE {
                 send_to_char(descs, ch, "That character is currently lost.\r\n");
                 return NOWHERE;
             }
-        } else if {
-            target_obj = get_obj_vis(descs, chars, db, objs, ch, &mobobjstr, Some(&mut num));
-            target_obj.is_some()
-        } {
-            if target_obj.unwrap().in_room() != NOWHERE {
-                location = target_obj.unwrap().in_room();
-            } else if target_obj.unwrap().carried_by.borrow().is_some()
-                && chars.get(target_obj.unwrap().carried_by.unwrap()).in_room() != NOWHERE
-            {
-                location = chars.get(target_obj.unwrap().carried_by.unwrap()).in_room();
-            } else if target_obj.unwrap().worn_by.borrow().is_some()
-                && chars.get(target_obj.unwrap().worn_by.unwrap()).in_room() != NOWHERE
-            {
-                location = chars.get(target_obj.unwrap().worn_by.unwrap()).in_room();
+        } else if let Some(target_obj) =
+            get_obj_vis(descs, chars, db, objs, ch, &mobobjstr, Some(&mut num))
+        {
+            let carried_by_room = if let Some(char) = target_obj.carried_by {
+                chars.get(char).in_room()
+            } else {
+                NOWHERE
+            };
+            let worn_by_room = if let Some(char) = target_obj.worn_by {
+                chars.get(char).in_room()
+            } else {
+                NOWHERE
+            };
+            if target_obj.in_room() != NOWHERE {
+                location = target_obj.in_room();
+            } else if carried_by_room != NOWHERE {
+                location = carried_by_room;
+            } else if worn_by_room != NOWHERE {
+                location = worn_by_room;
             }
-
             if location == NOWHERE {
                 send_to_char(descs, ch, "That object is currently not in a room.\r\n");
                 return NOWHERE;
@@ -436,7 +431,6 @@ pub fn do_trans(
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
-    let victim;
     if buf.is_empty() {
         send_to_char(
             &mut game.descriptors,
@@ -444,103 +438,33 @@ pub fn do_trans(
             "Whom do you wish to transfer?\r\n",
         );
     } else if "all" != buf {
-        let res = {
-            victim = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut buf,
-                None,
-                FindFlags::CHAR_WORLD,
-            );
-            victim.is_none()
-        };
-        if res {
-            send_to_char(&mut game.descriptors, ch, NOPERSON);
-        } else if victim.unwrap().id() == chid {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "That doesn't make much sense, does it?\r\n",
-            );
-        } else {
-            let victim = victim.unwrap();
-            if (ch.get_level() < victim.get_level()) && !victim.is_npc() {
+        match get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, NOPERSON);
+            }
+            Some(victim) if victim.id() == chid => {
                 send_to_char(
                     &mut game.descriptors,
                     ch,
-                    "Go transfer someone your own size.\r\n",
+                    "That doesn't make much sense, does it?\r\n",
                 );
-                return;
             }
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n disappears in a mushroom cloud.",
-                false,
-                Some(victim),
-                None,
-                None,
-                TO_ROOM,
-            );
-            let victim_id = victim.id();
-            let victim = chars.get_mut(victim_id);
-            db.char_from_room(objs, victim);
-            let ch = chars.get(chid);
-            db.char_to_room(chars, objs, victim_id, ch.in_room());
-            let victim = chars.get(victim_id);
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n arrives from a puff of smoke.",
-                false,
-                Some(victim),
-                None,
-                None,
-                TO_ROOM,
-            );
-            let ch = chars.get(chid);
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                "$n has transferred you!",
-                false,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(victim)),
-                TO_VICT,
-            );
-            look_at_room(
-                &mut game.descriptors,
-                db,
-                chars,
-                texts,
-                objs,
-                chars.get(victim_id),
-                false,
-            );
-        }
-    } else {
-        /* Trans All */
-        if ch.get_level() < LVL_GRGOD {
-            send_to_char(&mut game.descriptors, ch, "I think not.\r\n");
-            return;
-        }
-
-        let list = game.descriptor_list.clone();
-        for i_id in list {
-            let i = game.desc(i_id);
-            if i.state() == ConPlaying && i.character.is_some() && i.character.unwrap() != chid {
-                let ic = i.character;
-                let victim_id = ic.unwrap();
-                let victim = chars.get(victim_id);
-                let ch = chars.get(chid);
-                if victim.get_level() >= ch.get_level() {
-                    continue;
+            Some(victim) => {
+                if (ch.get_level() < victim.get_level()) && !victim.is_npc() {
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        "Go transfer someone your own size.\r\n",
+                    );
+                    return;
                 }
                 act(
                     &mut game.descriptors,
@@ -553,6 +477,7 @@ pub fn do_trans(
                     None,
                     TO_ROOM,
                 );
+                let victim_id = victim.id();
                 let victim = chars.get_mut(victim_id);
                 db.char_from_room(objs, victim);
                 let ch = chars.get(chid);
@@ -581,7 +506,75 @@ pub fn do_trans(
                     Some(VictimRef::Char(victim)),
                     TO_VICT,
                 );
-                look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
+                look_at_room(
+                    &mut game.descriptors,
+                    db,
+                    chars,
+                    texts,
+                    objs,
+                    chars.get(victim_id),
+                    false,
+                );
+            }
+        }
+    } else {
+        /* Trans All */
+        if ch.get_level() < LVL_GRGOD {
+            send_to_char(&mut game.descriptors, ch, "I think not.\r\n");
+            return;
+        }
+
+        let list = game.descriptor_list.clone();
+        for i_id in list {
+            let i = game.desc(i_id);
+            if let Some(victim_id) = i.character {
+                if i.state() == ConPlaying && victim_id != chid {
+                    let victim = chars.get(victim_id);
+                    let ch = chars.get(chid);
+                    if victim.get_level() >= ch.get_level() {
+                        continue;
+                    }
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n disappears in a mushroom cloud.",
+                        false,
+                        Some(victim),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                    let victim = chars.get_mut(victim_id);
+                    db.char_from_room(objs, victim);
+                    let ch = chars.get(chid);
+                    db.char_to_room(chars, objs, victim_id, ch.in_room());
+                    let victim = chars.get(victim_id);
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n arrives from a puff of smoke.",
+                        false,
+                        Some(victim),
+                        None,
+                        None,
+                        TO_ROOM,
+                    );
+                    let ch = chars.get(chid);
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n has transferred you!",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(victim)),
+                        TO_VICT,
+                    );
+                    look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
+                }
             }
         }
     }
@@ -607,17 +600,15 @@ pub fn do_teleport(
     let mut buf2 = String::new();
 
     two_arguments(argument, &mut buf, &mut buf2);
-    let victim;
     let target;
-    #[allow(clippy::blocks_in_conditions)]
     if buf.is_empty() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Whom do you wish to teleport?\r\n",
         );
-    } else if {
-        victim = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -625,75 +616,82 @@ pub fn do_teleport(
             &mut buf,
             None,
             FindFlags::CHAR_WORLD,
-        );
-        victim.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if victim.unwrap().id() == chid {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Use 'goto' to teleport yourself.\r\n",
-        );
-    } else if victim.as_ref().unwrap().get_level() >= ch.get_level() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Maybe you shouldn't do that.\r\n",
-        );
-    } else if buf2.is_empty() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Where do you wish to send this person?\r\n",
-        );
-    } else if {
-        target = find_target_room(&mut game.descriptors, db, chars, objs, ch, &buf2);
-        target != NOWHERE
-    } {
-        let victim = victim.unwrap();
-        send_to_char(&mut game.descriptors, ch, OK);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n disappears in a puff of smoke.",
-            false,
-            Some(victim),
-            None,
-            None,
-            TO_ROOM,
-        );
-        let victim_id = victim.id();
-        let victim = chars.get_mut(victim_id);
-        db.char_from_room(objs, victim);
-        db.char_to_room(chars, objs, victim_id, target);
-        let victim = chars.get(victim_id);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n arrives from a puff of smoke.",
-            false,
-            Some(victim),
-            None,
-            None,
-            TO_ROOM,
-        );
-        let ch = chars.get(chid);
-        let victim = chars.get(victim_id);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n has teleported you!",
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(victim)),
-            TO_VICT,
-        );
-        look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, NOPERSON);
+            }
+            Some(victim) if victim.id() == chid => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Use 'goto' to teleport yourself.\r\n",
+                );
+            }
+            Some(victim) if victim.get_level() >= ch.get_level() => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Maybe you shouldn't do that.\r\n",
+                );
+            }
+            _ if buf2.is_empty() => {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Where do you wish to send this person?\r\n",
+                );
+            }
+            Some(victim)
+                if {
+                    target = find_target_room(&mut game.descriptors, db, chars, objs, ch, &buf2);
+                    target != NOWHERE
+                } =>
+            {
+                send_to_char(&mut game.descriptors, ch, OK);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n disappears in a puff of smoke.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                let victim_id = victim.id();
+                let victim = chars.get_mut(victim_id);
+                db.char_from_room(objs, victim);
+                db.char_to_room(chars, objs, victim_id, target);
+                let victim = chars.get(victim_id);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n arrives from a puff of smoke.",
+                    false,
+                    Some(victim),
+                    None,
+                    None,
+                    TO_ROOM,
+                );
+                let ch = chars.get(chid);
+                let victim = chars.get(victim_id);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    "$n has teleported you!",
+                    false,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(victim)),
+                    TO_VICT,
+                );
+                look_at_room(&mut game.descriptors, db, chars, texts, objs, victim, false);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -911,53 +909,43 @@ fn do_stat_room(
     }
 
     for i in 0..NUM_OF_DIRS {
-        if rm_dir_option[i].is_none() {
-            continue;
-        }
-        let buf1 = if rm_dir_option[i].as_ref().unwrap().to_room == NOWHERE {
+        if let Some(dir_option) = &rm_dir_option[i] {
+            let buf1 = if dir_option.to_room == NOWHERE {
+                let ch = chars.get(chid);
+                format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM))
+            } else {
+                let ch = chars.get(chid);
+                format!(
+                    "{}{:5}{}",
+                    CCCYN!(ch, C_NRM),
+                    db.get_room_vnum(dir_option.to_room),
+                    CCNRM!(ch, C_NRM)
+                )
+            };
+            let mut buf2 = String::new();
+            sprintbit(dir_option.exit_info.bits().into(), &EXIT_BITS, &mut buf2);
             let ch = chars.get(chid);
-            format!(" {}NONE{}", CCCYN!(ch, C_NRM), CCNRM!(ch, C_NRM))
-        } else {
-            let ch = chars.get(chid);
-            format!(
-                "{}{:5}{}",
+            let msg = format!(
+                "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
                 CCCYN!(ch, C_NRM),
-                db.get_room_vnum(rm_dir_option[i].as_ref().unwrap().to_room),
-                CCNRM!(ch, C_NRM)
-            )
-        };
-        let mut buf2 = String::new();
-        sprintbit(
-            rm_dir_option[i].as_ref().unwrap().exit_info.bits().into(),
-            &EXIT_BITS,
-            &mut buf2,
-        );
-        let ch = chars.get(chid);
-        let msg = format!(
-            "Exit {}{:5}{}:  To: [{}], Key: [{:5}], Keywrd: {}, Type: {}\r\n{}",
-            CCCYN!(ch, C_NRM),
-            DIRS[i],
-            CCNRM!(ch, C_NRM),
-            buf1,
-            rm_dir_option[i].as_ref().unwrap().key,
-            if !rm_dir_option[i].as_ref().unwrap().keyword.is_empty() {
-                &rm_dir_option[i].as_ref().unwrap().keyword
-            } else {
-                "None"
-            },
-            buf2,
-            if !rm_dir_option[i]
-                .as_ref()
-                .unwrap()
-                .general_description
-                .is_empty()
-            {
-                &rm_dir_option[i].as_ref().unwrap().general_description
-            } else {
-                "  No exit description.\r\n"
-            }
-        );
-        send_to_char(descs, ch, msg.as_str());
+                DIRS[i],
+                CCNRM!(ch, C_NRM),
+                buf1,
+                dir_option.key,
+                if !dir_option.keyword.is_empty() {
+                    &dir_option.keyword
+                } else {
+                    "None"
+                },
+                buf2,
+                if !dir_option.general_description.is_empty() {
+                    &dir_option.general_description
+                } else {
+                    "  No exit description.\r\n"
+                }
+            );
+            send_to_char(descs, ch, msg.as_str());
+        }
     }
 }
 
@@ -1060,14 +1048,13 @@ fn do_stat_object(
      * NOTE: In order to make it this far, we must already be able to see the
      *       character holding the object. Therefore, we do not need CAN_SEE().
      */
-    let jio = obj.in_obj.borrow();
     send_to_char(
         descs,
         ch,
         format!(
             "In object: {}, ",
-            if obj.in_obj.borrow().is_some() {
-                objs.get(jio.unwrap()).short_description.as_ref()
+            if let Some(jio) = obj.in_obj {
+                objs.get(jio).short_description.as_ref()
             } else {
                 "None"
             }
@@ -1079,8 +1066,8 @@ fn do_stat_object(
         ch,
         format!(
             "Carried by: {}, ",
-            if obj.carried_by.is_some() {
-                chars.get(obj.carried_by.unwrap()).get_name().as_ref()
+            if let Some(cbo) = obj.carried_by {
+                chars.get(cbo).get_name().as_ref()
             } else {
                 "Nobody"
             }
@@ -1092,8 +1079,8 @@ fn do_stat_object(
         ch,
         format!(
             "Worn by: {}\r\n",
-            if obj.worn_by.is_some() {
-                chars.get(obj.worn_by.unwrap()).get_name().as_ref()
+            if let Some(worn_by) = obj.worn_by {
+                chars.get(worn_by).get_name().as_ref()
             } else {
                 "Nobody"
             }
@@ -1347,17 +1334,15 @@ fn do_stat_character(
             .as_str(),
         );
     }
-    let mut title = &Rc::from("<None>");
-    let mut long_descr = &Rc::from("<None>");
-    {
-        let player = &k.player;
-        if player.title.is_some() {
-            title = player.title.as_ref().unwrap();
-        }
-        if !player.long_descr.is_empty() {
-            long_descr = &player.long_descr;
-        }
-    }
+
+    let player = &k.player;
+    let title = player.title.clone().unwrap_or(Rc::from("<None>"));
+    let long_descr = if !player.long_descr.clone().is_empty() {
+        player.long_descr.clone()
+    } else {
+        Rc::from("<None>")
+    };
+
     let messg_title = format!("Title: {}\r\n", title);
     let messg_descr = format!("L-Des: {}", long_descr);
 
@@ -1509,8 +1494,8 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         format!(
             "Pos: {}, Fighting: {}",
             buf,
-            if k.fighting_id().is_some() {
-                chars.get(k.fighting_id().unwrap()).get_name().as_ref()
+            if let Some(fighting) = k.fighting_id() {
+                chars.get(fighting).get_name().as_ref()
             } else {
                 "Nobody"
             }
@@ -1528,13 +1513,9 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
             .as_str(),
         );
     }
-    if k.desc.is_some() {
+    if let Some(desc) = k.desc {
         buf.clear();
-        sprinttype(
-            descs.get(k.desc.unwrap()).state() as i32,
-            &CONNECTED_TYPES,
-            &mut buf,
-        );
+        sprinttype(descs.get(desc).state() as i32, &CONNECTED_TYPES, &mut buf);
         send_to_char(descs, ch, format!(", Connected: {}", buf).as_str());
     }
     if k.is_npc() {
@@ -1633,8 +1614,8 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
         ch,
         format!(
             "Master is: {}, Followers are:",
-            if k.master.is_some() {
-                chars.get(k.master.unwrap()).get_name().as_ref()
+            if let Some(master) = k.master {
+                chars.get(master).get_name().as_ref()
             } else {
                 "<none>"
             }
@@ -1742,67 +1723,49 @@ pub fn do_stat(
     } else if is_abbrev(&buf1, "mob") {
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which mobile?\r\n");
+        } else if let Some(victim) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf2,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
+            do_stat_character(&mut game.descriptors, db, chars, ch, victim);
         } else {
-            let victim;
-            let res = {
-                victim = get_char_vis(
-                    &game.descriptors,
-                    chars,
-                    db,
-                    ch,
-                    &mut buf2,
-                    None,
-                    FindFlags::CHAR_WORLD,
-                );
-                victim.is_some()
-            };
-            if res {
-                do_stat_character(&mut game.descriptors, db, chars, ch, victim.unwrap());
-            } else {
-                send_to_char(&mut game.descriptors, ch, "No such mobile around.\r\n");
-            }
+            send_to_char(&mut game.descriptors, ch, "No such mobile around.\r\n");
         }
     } else if is_abbrev(&buf1, "player") {
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which player?\r\n");
+        } else if let Some(victim) = get_player_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf2,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
+            do_stat_character(&mut game.descriptors, db, chars, ch, victim);
         } else {
-            let victim;
-            let res = {
-                victim = get_player_vis(
-                    &game.descriptors,
-                    chars,
-                    db,
-                    ch,
-                    &mut buf2,
-                    None,
-                    FindFlags::CHAR_WORLD,
-                );
-                victim.is_some()
-            };
-            if res {
-                do_stat_character(&mut game.descriptors, db, chars, ch, victim.unwrap());
-            } else {
-                send_to_char(&mut game.descriptors, ch, "No such player around.\r\n");
-            }
+            send_to_char(&mut game.descriptors, ch, "No such player around.\r\n");
         }
     } else if is_abbrev(&buf1, "file") {
-        let victim;
         #[allow(clippy::blocks_in_conditions)]
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which player?\r\n");
-        } else if {
-            victim = get_player_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut buf2,
-                None,
-                FindFlags::CHAR_WORLD,
-            );
-            victim.is_some()
-        } {
-            do_stat_character(&mut game.descriptors, db, chars, ch, victim.unwrap());
+        } else if let Some(victim) = get_player_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf2,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
+            do_stat_character(&mut game.descriptors, db, chars, ch, victim);
         } else {
             let mut loaded_victim = CharData::default();
             let mut tmp_store = CharFileU::default();
@@ -1828,106 +1791,78 @@ pub fn do_stat(
     } else if is_abbrev(&buf1, "object") {
         if buf2.is_empty() {
             send_to_char(&mut game.descriptors, ch, "Stats on which object?\r\n");
+        } else if let Some(obj) = get_obj_vis(&game.descriptors, chars, db, objs, ch, &buf2, None) {
+            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
         } else {
-            let obj;
-            let res = {
-                obj = get_obj_vis(&game.descriptors, chars, db, objs, ch, &buf2, None);
-                obj.is_some()
-            };
-            if res {
-                do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj.unwrap());
-            } else {
-                send_to_char(&mut game.descriptors, ch, "No such object around.\r\n");
-            }
+            send_to_char(&mut game.descriptors, ch, "No such object around.\r\n");
         }
     } else {
         let mut name = buf1;
         let mut number = get_number(&mut name);
-        let mut obj;
-        let mut victim;
-        #[allow(clippy::blocks_in_conditions)]
         #[allow(clippy::if_same_then_else)]
-        if {
-            obj = get_obj_in_equip_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-                &ch.equipment,
-            );
-            obj.is_some()
-        } {
-            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj.unwrap());
-        } else if {
-            obj = get_obj_in_list_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-                &ch.carrying,
-            );
-            obj.is_some()
-        } {
-            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj.unwrap());
-        } else if {
-            victim = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut name,
-                Some(&mut number),
-                FindFlags::CHAR_ROOM,
-            );
-            victim.is_some()
-        } {
-            do_stat_character(&mut game.descriptors, db, chars, ch, victim.unwrap());
-        } else if {
-            obj = get_obj_in_list_vis2(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-                &db.world[ch.in_room() as usize].contents,
-            );
-            obj.is_some()
-        } {
-            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj.unwrap());
-        } else if {
-            victim = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut name,
-                Some(&mut number),
-                FindFlags::CHAR_WORLD,
-            );
-            victim.is_some()
-        } {
-            do_stat_character(&mut game.descriptors, db, chars, ch, victim.unwrap());
-        } else if {
-            obj = get_obj_vis(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &name,
-                Some(&mut number),
-            );
-            obj.is_some()
-        } {
-            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj.unwrap());
+        if let Some(obj) = get_obj_in_equip_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+            &ch.equipment,
+        ) {
+            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
+        } else if let Some(obj) = get_obj_in_list_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+            &ch.carrying,
+        ) {
+            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
+        } else if let Some(victim) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut name,
+            Some(&mut number),
+            FindFlags::CHAR_ROOM,
+        ) {
+            do_stat_character(&mut game.descriptors, db, chars, ch, victim);
+        } else if let Some(obj) = get_obj_in_list_vis2(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+            &db.world[ch.in_room() as usize].contents,
+        ) {
+            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
+        } else if let Some(victim) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut name,
+            Some(&mut number),
+            FindFlags::CHAR_WORLD,
+        ) {
+            do_stat_character(&mut game.descriptors, db, chars, ch, victim);
+        } else if let Some(obj) = get_obj_vis(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &name,
+            Some(&mut number),
+        ) {
+            do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
         } else {
             send_to_char(
                 &mut game.descriptors,
@@ -1970,18 +1905,21 @@ pub fn do_shutdown(
     } else if arg == "reboot" {
         info!("(GC) Reboot by {}.", ch.get_name());
         game.send_to_all("Rebooting.. come back in a minute or two.\r\n");
-        touch(Path::new(FASTBOOT_FILE)).unwrap();
+        touch(Path::new(FASTBOOT_FILE))
+            .unwrap_or_else(|_| error!("SYSERR: Failed to create fastboot file."));
         game.circle_shutdown = true;
         game.circle_reboot = true;
     } else if arg == "die" {
         info!("(GC) Shutdown by {}.", ch.get_name());
         game.send_to_all("Shutting down for maintenance.\r\n");
-        touch(Path::new(KILLSCRIPT_FILE)).unwrap();
+        touch(Path::new(KILLSCRIPT_FILE))
+            .unwrap_or_else(|_| error!("SYSERR: Failed to create killscript file."));
         game.circle_shutdown = true;
     } else if arg == "pause" {
         info!("(GC) Shutdown by {}.", ch.get_name());
         game.send_to_all("Shutting down for maintenance.\r\n");
-        touch(Path::new(PAUSE_FILE)).unwrap();
+        touch(Path::new(PAUSE_FILE))
+            .unwrap_or_else(|e| error!("SYSERR: Failed to create pause file: {}", e));
         game.circle_shutdown = true;
     } else {
         send_to_char(&mut game.descriptors, ch, "Unknown shutdown option.\r\n");
@@ -1995,52 +1933,44 @@ pub fn snoop_check(game: &mut Game, chars: &Depot<CharData>, chid: DepotId) {
      *  not be snooping/snooped someone of a higher/lower level (and
      *  thus, not entitled to be snooping.
      */
-    if ch.desc.is_none() {
+    let d_id;
+    if let Some(desc) = ch.desc {
+        d_id = desc;
+    } else {
         return;
     }
-    let d_id = ch.desc.unwrap();
-    if game.desc(d_id).snooping.is_some()
-        && chars
-            .get(
-                game.desc(game.desc(d_id).snooping.unwrap())
-                    .character
-                    .unwrap(),
-            )
-            .get_level()
-            >= ch.get_level()
-    {
-        game.desc_mut(game.desc(d_id).snooping.unwrap()).snoop_by = None;
-        game.desc_mut(d_id).snooping = None;
+    if let Some(snooping) = game.desc(d_id).snooping {
+        if let Some(char) = game.desc(snooping).character {
+            if chars.get(char).get_level() >= ch.get_level() {
+                game.desc_mut(snooping).snoop_by = None;
+                game.desc_mut(d_id).snooping = None;
+            }
+        }
     }
     let ch = chars.get(chid);
-    if game.desc(d_id).snoop_by.is_some()
-        && ch.get_level()
-            >= chars
-                .get(
-                    game.desc(game.desc(d_id).snoop_by.unwrap())
-                        .character
-                        .unwrap(),
-                )
-                .get_level()
-    {
-        game.desc_mut(game.desc(d_id).snoop_by.unwrap()).snooping = None;
-        game.desc_mut(d_id).snoop_by = None;
+    if let Some(snoop_by) = game.desc(d_id).snoop_by {
+        if let Some(char) = game.desc(snoop_by).character {
+            if ch.get_level() >= chars.get(char).get_level() {
+                game.desc_mut(snoop_by).snooping = None;
+                game.desc_mut(d_id).snoop_by = None;
+            }
+        }
     }
 }
 
 fn stop_snooping(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId) {
     let ch = chars.get(chid);
 
-    if game.desc(ch.desc.unwrap()).snooping.is_none() {
-        send_to_char(&mut game.descriptors, ch, "You aren't snooping anyone.\r\n");
+    if let Some(desc) = ch.desc {
+        if let Some(snooping) = game.desc(desc).snooping {
+            send_to_char(&mut game.descriptors, ch, "You stop snooping.\r\n");
+            game.desc_mut(snooping).snoop_by = None;
+            game.desc_mut(desc).snooping = None;
+        } else {
+            send_to_char(&mut game.descriptors, ch, "You aren't snooping anyone.\r\n");
+        }
     } else {
-        send_to_char(&mut game.descriptors, ch, "You stop snooping.\r\n");
-        let ch = chars.get(chid);
-        let desc_id = game.desc(ch.desc.unwrap()).snooping.unwrap();
-        game.desc_mut(desc_id).snoop_by = None;
-        let ch = chars.get(chid);
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).snooping = None;
+        error!("SYSERR: stop_snooping: ch.desc is None")
     }
 }
 
@@ -2059,8 +1989,10 @@ pub fn do_snoop(
     let ch = chars.get(chid);
 
     let mut arg = String::new();
-
-    if ch.desc.is_none() {
+    let ch_desc;
+    if let Some(d) = ch.desc {
+        ch_desc = d;
+    } else {
         return;
     }
 
@@ -2068,67 +2000,65 @@ pub fn do_snoop(
     let victim;
     let voriginal_id;
     let tch;
-    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         stop_snooping(game, chars, chid);
-    } else if {
-        victim = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        victim.is_none()
-    } {
+        return;
+    }
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        victim = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "No such person around.\r\n");
-    } else if victim.as_ref().unwrap().desc.is_none() {
+        return;
+    }
+    let victim_desc;
+    if let Some(d) = victim.desc {
+        victim_desc = d;
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
             "There's no link.. nothing to snoop.\r\n",
         );
-    } else if victim.unwrap().id() == chid {
+        return;
+    }
+    if victim.id() == chid {
         stop_snooping(game, chars, chid);
-    } else if game
-        .desc(victim.as_ref().unwrap().desc.unwrap())
-        .snoop_by
-        .is_some()
-    {
+        return;
+    }
+    if game.desc(victim_desc).snoop_by.is_some() {
         send_to_char(&mut game.descriptors, ch, "Busy already. \r\n");
-    } else if game
-        .desc(victim.as_ref().unwrap().desc.unwrap())
-        .snooping
-        .unwrap()
-        == ch.desc.unwrap()
-    {
-        send_to_char(&mut game.descriptors, ch, "Don't be stupid.\r\n");
-    } else {
-        if game
-            .desc(victim.as_ref().unwrap().desc.unwrap())
-            .original
-            .is_some()
-        {
-            voriginal_id = game.desc(victim.as_ref().unwrap().desc.unwrap()).original;
-            tch = voriginal_id.map(|v| chars.get(v));
-        } else {
-            tch = victim;
-        }
-        if tch.as_ref().unwrap().get_level() >= ch.get_level() {
-            send_to_char(&mut game.descriptors, ch, "You can't.\r\n");
+        return;
+    }
+    if let Some(victim_snooping) = game.desc(victim_desc).snooping {
+        if victim_snooping == ch_desc {
+            send_to_char(&mut game.descriptors, ch, "Don't be stupid.\r\n");
             return;
         }
-        send_to_char(&mut game.descriptors, ch, OK);
-        if game.desc(ch.desc.unwrap()).snooping.is_some() {
-            let desc_id = ch.desc.unwrap();
-            let snooping_desc_id = game.desc(desc_id).snooping.unwrap();
-            game.desc_mut(snooping_desc_id).snoop_by = None;
-        }
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).snooping = victim.as_ref().unwrap().desc;
     }
+
+    if let Some(victim_original) = game.desc(victim_desc).original {
+        voriginal_id = victim_original;
+        tch = chars.get(voriginal_id);
+    } else {
+        tch = victim;
+    }
+    if tch.get_level() >= ch.get_level() {
+        send_to_char(&mut game.descriptors, ch, "You can't.\r\n");
+        return;
+    }
+    send_to_char(&mut game.descriptors, ch, OK);
+    if let Some(snooping) = game.desc(ch_desc).snooping {
+        game.desc_mut(snooping).snoop_by = None;
+    }
+    game.desc_mut(ch_desc).snooping = victim.desc;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2147,55 +2077,64 @@ pub fn do_switch(
 
     let mut arg = String::new();
 
+    let ch_desc;
+    if let Some(d) = ch.desc {
+        ch_desc = d;
+    } else {
+        return;
+    }
+
     one_argument(argument, &mut arg);
     let victim;
-    #[allow(clippy::blocks_in_conditions)]
-    if game.desc(ch.desc.unwrap()).original.is_some() {
+    if game.desc(ch_desc).original.is_some() {
         send_to_char(&mut game.descriptors, ch, "You're already switched.\r\n");
-    } else if arg.is_empty() {
+        return;
+    }
+    if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Switch with who?\r\n");
-    } else if {
-        victim = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        victim.is_none()
-    } {
+        return;
+    }
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        victim = char;
+    } else {
         send_to_char(&mut game.descriptors, ch, "No such character.\r\n");
-    } else if chid == victim.unwrap().id() {
+        return;
+    }
+    if chid == victim.id() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Hee hee... we are jolly funny today, eh?\r\n",
         );
-    } else if victim.as_ref().unwrap().desc.is_some() {
+    } else if victim.desc.is_some() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You can't do that, the body is already in use!\r\n",
         );
-    } else if ch.get_level() < LVL_IMPL && !victim.as_ref().unwrap().is_npc() {
+    } else if ch.get_level() < LVL_IMPL && !victim.is_npc() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You aren't holy enough to use a mortal's body.\r\n",
         );
-    } else if ch.get_level() < LVL_GRGOD
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::GODROOM)
-    {
+    } else if ch.get_level() < LVL_GRGOD && db.room_flagged(victim.in_room(), RoomFlags::GODROOM) {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You are not godly enough to use that room!\r\n",
         );
     } else if ch.get_level() < LVL_GRGOD
-        && db.room_flagged(victim.as_ref().unwrap().in_room(), RoomFlags::HOUSE)
-        && !house_can_enter(db, ch, db.get_room_vnum(victim.as_ref().unwrap().in_room()))
+        && db.room_flagged(victim.in_room(), RoomFlags::HOUSE)
+        && !house_can_enter(db, ch, db.get_room_vnum(victim.in_room()))
     {
         send_to_char(
             &mut game.descriptors,
@@ -2204,15 +2143,11 @@ pub fn do_switch(
         );
     } else {
         send_to_char(&mut game.descriptors, ch, OK);
-        let ch = chars.get(chid);
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).character = victim.map(|c| c.id());
-        let ch = chars.get(chid);
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).original = Some(chid);
+        game.desc_mut(ch_desc).character = Some(victim.id());
+        game.desc_mut(ch_desc).original = Some(chid);
         let ch = chars.get(chid);
         let val = ch.desc;
-        let victim_id = victim.as_ref().unwrap().id();
+        let victim_id = victim.id();
         let victim = chars.get_mut(victim_id);
         victim.desc = val;
         let ch = chars.get_mut(chid);
@@ -2234,52 +2169,39 @@ pub fn do_return(
 ) {
     let ch = chars.get(chid);
 
-    if ch.desc.is_some() && game.desc(ch.desc.unwrap()).original.is_some() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "You return to your original body.\r\n",
-        );
-        let ch = chars.get(chid);
-        /*
-         * If someone switched into your original body, disconnect them.
-         *   - JE 2/22/95
-         *
-         * Zmey: here we put someone switched in our body to disconnect state
-         * but we must also None his pointer to our character, otherwise
-         * close_socket() will damage our character's pointer to our descriptor
-         * (which is assigned below in this function). 12/17/99
-         */
-        if chars
-            .get(game.desc(ch.desc.unwrap()).original.unwrap())
-            .desc
-            .borrow()
-            .is_some()
-        {
-            let dorig_id = chars
-                .get(game.desc(ch.desc.unwrap()).original.unwrap())
-                .desc
-                .unwrap();
-            game.desc_mut(dorig_id).character = None;
-            game.desc_mut(dorig_id).set_state(ConDisconnect);
+    if let Some(ch_desc) = ch.desc {
+        if let Some(original) = game.desc(ch_desc).original {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You return to your original body.\r\n",
+            );
+            /*
+             * If someone switched into your original body, disconnect them.
+             *   - JE 2/22/95
+             *
+             * Zmey: here we put someone switched in our body to disconnect state
+             * but we must also None his pointer to our character, otherwise
+             * close_socket() will damage our character's pointer to our descriptor
+             * (which is assigned below in this function). 12/17/99
+             */
+            if let Some(original) = chars.get(original).desc {
+                game.desc_mut(original).character = None;
+                game.desc_mut(original).set_state(ConDisconnect);
+            }
+
+            /* Now our descriptor points to our original body. */
+            game.desc_mut(ch_desc).character = game.desc(ch_desc).original;
+            game.desc_mut(ch_desc).original = None;
+
+            /* And our body's pointer to descriptor now points to our descriptor. */
+            let ch = chars.get(chid);
+            if let Some(character) = game.desc(ch_desc).character {
+                chars.get_mut(character).desc = ch.desc;
+            }
+            let ch = chars.get_mut(chid);
+            ch.desc = None;
         }
-
-        /* Now our descriptor points to our original body. */
-        let ch = chars.get(chid);
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).character = game.desc(desc_id).original;
-        let ch = chars.get(chid);
-        let desc_id = ch.desc.unwrap();
-        game.desc_mut(desc_id).original = None;
-
-        /* And our body's pointer to descriptor now points to our descriptor. */
-        let ch = chars.get(chid);
-
-        chars
-            .get_mut(game.desc(ch.desc.unwrap()).character.unwrap())
-            .desc = ch.desc;
-        let ch = chars.get_mut(chid);
-        ch.desc = None;
     }
 }
 
@@ -2301,7 +2223,13 @@ pub fn do_load(
 
     two_arguments(argument, &mut buf, &mut buf2);
 
-    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_ascii_digit() {
+    let first_is_not_digit = if let Some(first) = buf2.chars().next() {
+        !first.is_ascii_digit()
+    } else {
+        true
+    };
+
+    if buf.is_empty() || first_is_not_digit {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2309,7 +2237,10 @@ pub fn do_load(
         );
         return;
     }
-    if !is_number(&buf2) {
+    let buf2_parsed;
+    if let Ok(parsed) = buf2.parse::<i16>() {
+        buf2_parsed = parsed;
+    } else {
         send_to_char(&mut game.descriptors, ch, "That is not a number.\r\n");
         return;
     }
@@ -2318,7 +2249,7 @@ pub fn do_load(
         let r_num;
 
         let res = {
-            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num = db.real_mobile(buf2_parsed);
             r_num == NOBODY
         };
         if res {
@@ -2329,7 +2260,13 @@ pub fn do_load(
             );
             return;
         }
-        let mob_id = db.read_mobile(chars, r_num, LoadType::Real).unwrap();
+        let mob_id;
+        if let Some(id) = db.read_mobile(chars, r_num, LoadType::Real) {
+            mob_id = id;
+        } else {
+            error!("SYSERR: do_load: read_mobile failed for vnum {}", r_num);
+            return;
+        }
         let ch = chars.get(chid);
         db.char_to_room(chars, objs, mob_id, ch.in_room());
         let mob = chars.get(mob_id);
@@ -2368,13 +2305,8 @@ pub fn do_load(
             TO_CHAR,
         );
     } else if is_abbrev(&buf, "obj") {
-        let r_num;
-
-        let res = {
-            r_num = db.real_object(buf2.parse::<i16>().unwrap());
-            r_num == NOTHING
-        };
-        if res {
+        let r_num = db.real_object(buf2_parsed);
+        if r_num == NOTHING {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -2382,7 +2314,13 @@ pub fn do_load(
             );
             return;
         }
-        let oid = db.read_object(objs, r_num, LoadType::Real).unwrap();
+        let oid;
+        if let Some(id) = db.read_object(objs, r_num, LoadType::Real) {
+            oid = id;
+        } else {
+            error!("SYSERR: do_load: read_object failed for vnum {}", r_num);
+            return;
+        }
         let obj = objs.get_mut(oid);
         let ch = chars.get_mut(chid);
         if LOAD_INTO_INVENTORY {
@@ -2452,7 +2390,13 @@ pub fn do_vstat(
 
     two_arguments(argument, &mut buf, &mut buf2);
 
-    if buf.is_empty() || buf2.is_empty() || !buf2.chars().next().unwrap().is_ascii_digit() {
+    let first_is_not_digit = if let Some(first) = buf2.chars().next() {
+        !first.is_ascii_digit()
+    } else {
+        true
+    };
+
+    if buf.is_empty() || first_is_not_digit {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2460,7 +2404,10 @@ pub fn do_vstat(
         );
         return;
     }
-    if !is_number(&buf2) {
+    let buf2_parsed;
+    if let Ok(parsed) = buf2.parse::<i16>() {
+        buf2_parsed = parsed;
+    } else {
         send_to_char(&mut game.descriptors, ch, "That's not a valid number.\r\n");
         return;
     }
@@ -2469,7 +2416,7 @@ pub fn do_vstat(
         let r_num;
 
         let res = {
-            r_num = db.real_mobile(buf2.parse::<i16>().unwrap());
+            r_num = db.real_mobile(buf2_parsed);
             r_num == NOBODY
         };
         if res {
@@ -2480,17 +2427,23 @@ pub fn do_vstat(
             );
             return;
         }
-        let mob_id = db.read_mobile(chars, r_num, LoadType::Real);
-        db.char_to_room(chars, objs, mob_id.unwrap(), 0);
-        let mob = chars.get(mob_id.unwrap());
+        let mob_id;
+        if let Some(id) = db.read_mobile(chars, r_num, LoadType::Real) {
+            mob_id = id;
+        } else {
+            error!("SYSERR: do_vstat: read_mobile failed for vnum {}", r_num);
+            return;
+        }
+        db.char_to_room(chars, objs, mob_id, 0);
+        let mob = chars.get(mob_id);
         let ch = chars.get(chid);
         do_stat_character(&mut game.descriptors, db, chars, ch, mob);
-        db.extract_char(chars, mob_id.unwrap());
+        db.extract_char(chars, mob_id);
     } else if is_abbrev(&buf, "obj") {
         let r_num;
 
         let res = {
-            r_num = db.real_object(buf2.parse::<i16>().unwrap());
+            r_num = db.real_object(buf2_parsed);
             r_num == NOTHING
         };
         if res {
@@ -2501,11 +2454,17 @@ pub fn do_vstat(
             );
             return;
         }
-        let oid = db.read_object(objs, r_num, LoadType::Real);
-        let obj = objs.get(oid.unwrap());
+        let oid;
+        if let Some(id) = db.read_object(objs, r_num, LoadType::Real) {
+            oid = id;
+        } else {
+            error!("SYSERR: do_vstat: read_object failed for vnum {}", r_num);
+            return;
+        }
+        let obj = objs.get(oid);
         let ch = chars.get(chid);
         do_stat_object(&mut game.descriptors, db, chars, objs, ch, obj);
-        db.extract_obj(chars, objs, oid.unwrap());
+        db.extract_obj(chars, objs, oid);
     } else {
         send_to_char(
             &mut game.descriptors,
@@ -2532,29 +2491,21 @@ pub fn do_purge(
     /* clean a room of all mobiles and objects */
     let mut buf = String::new();
     one_argument(argument, &mut buf);
-    let vict;
-    let obj;
     /* argument supplied. destroy single object or char */
     if !buf.is_empty() {
-        let res = {
-            vict = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut buf,
-                None,
-                FindFlags::CHAR_ROOM,
-            );
-            vict.is_some()
-        };
-        #[allow(clippy::blocks_in_conditions)]
-        if res {
-            if !vict.unwrap().is_npc() && ch.get_level() <= vict.unwrap().get_level() {
+        if let Some(vict) = get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut buf,
+            None,
+            FindFlags::CHAR_ROOM,
+        ) {
+            if !vict.is_npc() && ch.get_level() <= vict.get_level() {
                 send_to_char(&mut game.descriptors, ch, "Fuuuuuuuuu!\r\n");
                 return;
             }
-            let vict = vict.unwrap();
             act(
                 &mut game.descriptors,
                 chars,
@@ -2576,30 +2527,24 @@ pub fn do_purge(
                     true,
                     format!("(GC) {} has purged {}.", ch.get_name(), vict.get_name()).as_str(),
                 );
-                if vict.desc.is_some() {
-                    let desc_id = vict.desc.unwrap();
-                    game.desc_mut(desc_id).set_state(ConClose);
-                    let desc_id = vict.desc.unwrap();
-                    game.desc_mut(desc_id).character = None;
-                    let vict = chars.get_mut(vict_id);
+                if let Some(vict_desc) = vict.desc {
+                    game.desc_mut(vict_desc).set_state(ConClose);
+                    game.desc_mut(vict_desc).character = None;
+                    let vict = chars.get_mut(vict_desc);
                     vict.desc = None;
                 }
             }
             db.extract_char(chars, vict_id);
-        } else if {
-            obj = get_obj_in_list_vis2(
-                &game.descriptors,
-                chars,
-                db,
-                objs,
-                ch,
-                &buf,
-                None,
-                &db.world[ch.in_room() as usize].contents,
-            );
-            obj.is_some()
-        } {
-            let obj = obj.unwrap();
+        } else if let Some(obj) = get_obj_in_list_vis2(
+            &game.descriptors,
+            chars,
+            db,
+            objs,
+            ch,
+            &buf,
+            None,
+            &db.world[ch.in_room() as usize].contents,
+        ) {
             let oid = obj.id();
             act(
                 &mut game.descriptors,
@@ -2661,9 +2606,8 @@ pub fn do_purge(
             /* Dump equipment. */
             for i in 0..NUM_WEARS {
                 let vict = chars.get(vict_id);
-                if vict.get_eq(i).is_some() {
-                    let oid = vict.get_eq(i).unwrap();
-                    db.extract_obj(chars, objs, oid)
+                if let Some(eq) = vict.get_eq(i) {
+                    db.extract_obj(chars, objs, eq)
                 }
             }
 
@@ -2724,11 +2668,9 @@ pub fn do_syslog(
         return;
     }
     let tp;
-    let res = {
-        tp = search_block(&arg, &LOGTYPES, false);
-        tp.is_none()
-    };
-    if res {
+    if let Some(found) = search_block(&arg, &LOGTYPES, false) {
+        tp = found;
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -2736,7 +2678,6 @@ pub fn do_syslog(
         );
         return;
     }
-    let tp = tp.unwrap();
     let ch = chars.get_mut(chid);
     ch.remove_prf_flags_bits(PrefFlags::LOG1 | PrefFlags::LOG2);
     if (tp & 1) != 0 {
@@ -2769,31 +2710,28 @@ pub fn do_advance(
 
     let mut name = String::new();
     let mut level = String::new();
-    let victim;
     two_arguments(argument, &mut name, &mut level);
 
-    if !name.is_empty() {
-        let res = {
-            victim = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut name,
-                None,
-                FindFlags::CHAR_WORLD,
-            );
-            victim.is_none()
-        };
-        if res {
-            send_to_char(&mut game.descriptors, ch, "That player is not here.\r\n");
-            return;
-        }
-    } else {
+    if name.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Advance who?\r\n");
         return;
     }
-    let victim = victim.unwrap();
+    let victim;
+    if let Some(char) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut name,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        victim = char
+    } else {
+        send_to_char(&mut game.descriptors, ch, "That player is not here.\r\n");
+        return;
+    }
+
     let victim_id = victim.id();
 
     if ch.get_level() <= victim.get_level() {
@@ -2808,12 +2746,14 @@ pub fn do_advance(
         send_to_char(&mut game.descriptors, ch, "NO!  Not on NPC's.\r\n");
         return;
     }
-    let r = level.parse::<u8>();
-    let mut newlevel = 255;
-    if r.is_err() || {
-        newlevel = r.unwrap();
-        newlevel == 0
-    } {
+    let newlevel;
+    if let Ok(r) = level.parse::<u8>() {
+        if r == 0 {
+            send_to_char(&mut game.descriptors, ch, "That's not a level!\r\n");
+            return;
+        }
+        newlevel = r;
+    } else {
         send_to_char(&mut game.descriptors, ch, "That's not a level!\r\n");
         return;
     }
@@ -2936,77 +2876,75 @@ pub fn do_restore(
     let mut buf = String::new();
 
     one_argument(argument, &mut buf);
-    let vict;
-    #[allow(clippy::blocks_in_conditions)]
     if buf.is_empty() {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Whom do you wish to restore?\r\n",
         );
-    } else if {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut buf,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, NOPERSON);
-    } else if !vict.unwrap().is_npc()
-        && chid != vict.unwrap().id()
-        && vict.unwrap().get_level() >= ch.get_level()
-    {
-        send_to_char(&mut game.descriptors, ch, "They don't need your help.\r\n");
-    } else {
-        let vict_id = vict.unwrap().id();
-        let vict = chars.get_mut(vict_id);
-        vict.set_hit(vict.get_max_hit());
-        vict.set_mana(vict.get_max_mana());
-        vict.set_move(vict.get_move());
-        let ch = chars.get(chid);
-        let vict = chars.get(vict_id);
-        if !vict.is_npc() && ch.get_level() >= LVL_GRGOD {
-            if vict.get_level() >= LVL_IMMORT {
-                for i in 1..MAX_SKILLS + 1 {
+        return;
+    }
+    match get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut buf,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) {
+        None => {
+            send_to_char(&mut game.descriptors, ch, NOPERSON);
+        }
+        Some(vict) if !vict.is_npc() && chid != vict.id() && vict.get_level() >= ch.get_level() => {
+            send_to_char(&mut game.descriptors, ch, "They don't need your help.\r\n");
+        }
+        Some(vict) => {
+            let vict_id = vict.id();
+            let vict = chars.get_mut(vict_id);
+            vict.set_hit(vict.get_max_hit());
+            vict.set_mana(vict.get_max_mana());
+            vict.set_move(vict.get_move());
+            let ch = chars.get(chid);
+            let vict = chars.get(vict_id);
+            if !vict.is_npc() && ch.get_level() >= LVL_GRGOD {
+                if vict.get_level() >= LVL_IMMORT {
+                    for i in 1..MAX_SKILLS + 1 {
+                        let vict = chars.get_mut(vict_id);
+                        vict.set_skill(i as i32, 100);
+                    }
+                }
+
+                let vict = chars.get(vict_id);
+                if vict.get_level() >= LVL_GRGOD {
                     let vict = chars.get_mut(vict_id);
-                    vict.set_skill(i as i32, 100);
+                    vict.real_abils.str_add = 100;
+                    vict.real_abils.intel = 25;
+                    vict.real_abils.wis = 25;
+                    vict.real_abils.dex = 25;
+                    vict.real_abils.str = 25;
+                    vict.real_abils.con = 25;
+                    vict.real_abils.cha = 25;
                 }
             }
-
+            let vict = chars.get_mut(vict_id);
+            update_pos(vict);
+            affect_total(objs, vict);
             let vict = chars.get(vict_id);
-            if vict.get_level() >= LVL_GRGOD {
-                let vict = chars.get_mut(vict_id);
-                vict.real_abils.str_add = 100;
-                vict.real_abils.intel = 25;
-                vict.real_abils.wis = 25;
-                vict.real_abils.dex = 25;
-                vict.real_abils.str = 25;
-                vict.real_abils.con = 25;
-                vict.real_abils.cha = 25;
-            }
+            let ch = chars.get(chid);
+            send_to_char(&mut game.descriptors, ch, OK);
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "You have been fully healed by $N!",
+                false,
+                Some(vict),
+                None,
+                Some(VictimRef::Char(ch)),
+                TO_CHAR,
+            );
         }
-        let vict = chars.get_mut(vict_id);
-        update_pos(vict);
-        affect_total(objs, vict);
-        let vict = chars.get(vict_id);
-        let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, ch, OK);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "You have been fully healed by $N!",
-            false,
-            Some(vict),
-            None,
-            Some(VictimRef::Char(ch)),
-            TO_CHAR,
-        );
     }
 }
 
@@ -3023,9 +2961,7 @@ pub fn perform_immort_vis(
         return;
     }
     let ch = chars.get_mut(chid);
-
     ch.set_invis_lev(0);
-
     appear(descs, chars, db, objs, chid);
     let ch = chars.get(chid);
     send_to_char(descs, ch, "You are now fully visible.\r\n");
@@ -3156,14 +3092,15 @@ pub fn do_gecho(
     } else {
         for pt_id in game.descriptor_list.clone() {
             let pt = game.desc(pt_id);
-            if pt.state() == ConPlaying && pt.character.is_some() && pt.character.unwrap() != chid {
-                let chid = pt.character.unwrap();
-                let ch = chars.get(chid);
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    format!("{}\r\n", argument).as_str(),
-                );
+            if let Some(pt_chid) = pt.character {
+                if pt.state() == ConPlaying && pt_chid != chid {
+                    let ch = chars.get(pt_chid);
+                    send_to_char(
+                        &mut game.descriptors,
+                        ch,
+                        format!("{}\r\n", argument).as_str(),
+                    );
+                }
             }
         }
         let ch = chars.get(chid);
@@ -3226,8 +3163,10 @@ pub fn do_dc(
     let mut arg = String::new();
 
     one_argument(argument, &mut arg);
-    let num_to_dc = arg.parse::<u32>();
-    if num_to_dc.is_err() {
+    let num_to_dc;
+    if let Ok(num) = arg.parse::<u32>() {
+        num_to_dc = num;
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -3235,40 +3174,34 @@ pub fn do_dc(
         );
         return;
     }
-    let num_to_dc = num_to_dc.unwrap();
-    let mut d_id = None;
+    let mut d_ido = None;
     {
         for &cd_id in &game.descriptor_list {
             if game.desc(cd_id).desc_num == num_to_dc as usize {
-                d_id = Some(cd_id);
+                d_ido = Some(cd_id);
             }
         }
     }
-
-    if d_id.is_none() {
+    let d_id;
+    if let Some(id) = d_ido {
+        d_id = id;
+    } else {
         send_to_char(&mut game.descriptors, ch, "No such connection.\r\n");
         return;
     }
-    let d_id = d_id.unwrap();
-    if game.desc(d_id).character.is_some()
-        && chars.get(game.desc(d_id).character.unwrap()).get_level() >= ch.get_level()
-    {
-        if !can_see(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            chars.get(game.desc(d_id).character.unwrap()),
-        ) {
-            send_to_char(&mut game.descriptors, ch, "No such connection.\r\n");
-        } else {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "Umm.. maybe that's not such a good idea...\r\n",
-            );
+    if let Some(char_id) = game.desc(d_id).character {
+        if chars.get(char_id).get_level() >= ch.get_level() {
+            if !can_see(&game.descriptors, chars, db, ch, chars.get(char_id)) {
+                send_to_char(&mut game.descriptors, ch, "No such connection.\r\n");
+            } else {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "Umm.. maybe that's not such a good idea...\r\n",
+                );
+            }
+            return;
         }
-        return;
     }
 
     /* We used to just close the socket here using close_socket(), but
@@ -3392,7 +3325,17 @@ pub fn do_date(
         db.boot_time
     };
 
-    let date_time = Utc.timestamp_millis_opt(mytime as i64 * 1000).unwrap();
+    #[allow(clippy::needless_late_init)]
+    let date_time;
+    match Utc.timestamp_millis_opt(mytime as i64 * 1000) {
+        LocalResult::Single(dt) => {
+            date_time = dt;
+        }
+        _ => {
+            error!("SYSERR: do_date: Failed to get date time");
+            return;
+        }
+    };
     let tmstr = date_time.to_rfc2822();
 
     if subcmd == SCMD_DATE {
@@ -3500,7 +3443,6 @@ pub fn do_force(
     half_chop(&mut argument, &mut arg, &mut to_force);
 
     let buf1 = format!("$n has forced you to '{}'.", to_force);
-    let vict;
     if arg.is_empty() || to_force.is_empty() {
         send_to_char(
             &mut game.descriptors,
@@ -3508,51 +3450,50 @@ pub fn do_force(
             "Whom do you wish to force do what?\r\n",
         );
     } else if ch.get_level() < LVL_GRGOD || "all" != arg && "room" != arg {
-        let res = {
-            vict = get_char_vis(
-                &game.descriptors,
-                chars,
-                db,
-                ch,
-                &mut arg,
-                None,
-                FindFlags::CHAR_WORLD,
-            );
-            vict.is_none()
-        };
-        if res {
-            send_to_char(&mut game.descriptors, ch, NOPERSON);
-        } else if !vict.unwrap().is_npc() && ch.get_level() <= vict.unwrap().get_level() {
-            send_to_char(&mut game.descriptors, ch, "No, no, no!\r\n");
-        } else {
-            let vict = vict.unwrap();
-            send_to_char(&mut game.descriptors, ch, OK);
-            act(
-                &mut game.descriptors,
-                chars,
-                db,
-                &buf1,
-                true,
-                Some(ch),
-                None,
-                Some(VictimRef::Char(vict)),
-                TO_VICT,
-            );
-            let ch = chars.get(chid);
-            game.mudlog(
-                chars,
-                DisplayMode::Normal,
-                max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                true,
-                format!(
-                    "(GC) {} forced {} to {}",
-                    ch.get_name(),
-                    vict.get_name(),
-                    to_force
-                )
-                .as_str(),
-            );
-            command_interpreter(game, db, chars, texts, objs, vict.id(), &to_force);
+        match get_char_vis(
+            &game.descriptors,
+            chars,
+            db,
+            ch,
+            &mut arg,
+            None,
+            FindFlags::CHAR_WORLD,
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, NOPERSON);
+            }
+            Some(vict) if !vict.is_npc() && ch.get_level() <= vict.get_level() => {
+                send_to_char(&mut game.descriptors, ch, "No, no, no!\r\n");
+            }
+            Some(vict) => {
+                send_to_char(&mut game.descriptors, ch, OK);
+                act(
+                    &mut game.descriptors,
+                    chars,
+                    db,
+                    &buf1,
+                    true,
+                    Some(ch),
+                    None,
+                    Some(VictimRef::Char(vict)),
+                    TO_VICT,
+                );
+                let ch = chars.get(chid);
+                game.mudlog(
+                    chars,
+                    DisplayMode::Normal,
+                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                    true,
+                    format!(
+                        "(GC) {} forced {} to {}",
+                        ch.get_name(),
+                        vict.get_name(),
+                        to_force
+                    )
+                    .as_str(),
+                );
+                command_interpreter(game, db, chars, texts, objs, vict.id(), &to_force);
+            }
         }
     } else if arg == "room" {
         send_to_char(&mut game.descriptors, ch, OK);
@@ -3602,20 +3543,20 @@ pub fn do_force(
             format!("(GC) {} forced all to {}", ch.get_name(), to_force).as_str(),
         );
         for i_id in game.descriptor_list.clone() {
-            let mut vict_id = None;
+            let vict_id;
             let ch = chars.get(chid);
             let i = game.desc(i_id);
+            if let Some(char) = i.character {
+                vict_id = char;
+            } else {
+                continue;
+            }
             if i.state() != ConPlaying
-                || {
-                    vict_id = i.character;
-                    vict_id.is_none()
-                }
-                || !chars.get(vict_id.unwrap()).is_npc()
-                    && chars.get(vict_id.unwrap()).get_level() >= ch.get_level()
+                || !chars.get(vict_id).is_npc() && chars.get(vict_id).get_level() >= ch.get_level()
             {
                 continue;
             }
-            let vict = chars.get(vict_id.unwrap());
+            let vict = chars.get(vict_id);
             act(
                 &mut game.descriptors,
                 chars,
@@ -3627,7 +3568,7 @@ pub fn do_force(
                 Some(VictimRef::Char(vict)),
                 TO_VICT,
             );
-            command_interpreter(game, db, chars, texts, objs, vict_id.unwrap(), &to_force);
+            command_interpreter(game, db, chars, texts, objs, vict_id, &to_force);
         }
     }
 }
@@ -3656,16 +3597,16 @@ pub fn do_wiznet(
         send_to_char(&mut game.descriptors, ch, "Usage: wiznet <text> | #<level> <text> | *<emotetext> |\r\n        wiznet @<level> *<emotetext> | wiz @\r\n");
         return;
     }
-    match argument.chars().next().unwrap() {
-        '*' | '#' => {
+    match argument.chars().next() {
+        Some('*') | Some('#') => {
             if argument.remove(0) == '*' {
                 emote = true;
             }
             one_argument(&argument, &mut buf1);
-            if is_number(&buf1) {
+            if let Ok(buf1_num) = buf1.parse::<u8>() {
                 let mut arg_left = argument.clone();
                 half_chop(&mut arg_left, &mut buf1, &mut argument);
-                level = max(buf1.parse::<u8>().unwrap(), LVL_IMMORT);
+                level = max(buf1_num, LVL_IMMORT);
                 if level > ch.get_level() {
                     send_to_char(
                         &mut game.descriptors,
@@ -3677,28 +3618,26 @@ pub fn do_wiznet(
             } else if emote {
             }
         }
-
-        '@' => {
+        Some('@') => {
             send_to_char(&mut game.descriptors, ch, "God channel status:\r\n");
             for d_id in game.descriptor_list.clone() {
                 let d = game.desc(d_id);
-                if d.state() != ConPlaying
-                    || chars.get(d.character.unwrap()).get_level() < LVL_IMMORT
-                {
+                if d.state() != ConPlaying {
+                    continue;
+                }
+                let dc_id;
+                if let Some(char) = d.character {
+                    if chars.get(char).get_level() < LVL_IMMORT {
+                        continue;
+                    }
+                    dc_id = char;
+                } else {
                     continue;
                 }
                 let ch = chars.get(chid);
-                if !can_see(
-                    &game.descriptors,
-                    chars,
-                    db,
-                    ch,
-                    chars.get(d.character.unwrap()),
-                ) {
+                if !can_see(&game.descriptors, chars, db, ch, chars.get(dc_id)) {
                     continue;
                 }
-                let dco = d.character;
-                let dc_id = dco.unwrap();
                 let dc = chars.get(dc_id);
                 send_to_char(
                     &mut game.descriptors,
@@ -3728,7 +3667,7 @@ pub fn do_wiznet(
             return;
         }
 
-        '\\' => {
+        Some('\\') => {
             argument.remove(0);
         }
 
@@ -3777,37 +3716,34 @@ pub fn do_wiznet(
             argument
         );
     }
+    let ch_desc;
+    if let Some(desc) = ch.desc {
+        ch_desc = desc;
+    } else {
+        error!("SYSERR: do_wiznet: ch.desc is None");
+        return;
+    }
     for d_id in game.descriptor_list.clone() {
-        let res = {
-            let ch = chars.get(chid);
-            let d = game.desc(d_id);
-            d.state() == ConPlaying
-                && chars.get(d.character.unwrap()).get_level() >= level
-                && !chars
-                    .get(d.character.unwrap())
-                    .prf_flagged(PrefFlags::NOWIZ)
-                && !chars
-                    .get(d.character.unwrap())
-                    .plr_flagged(PLR_WRITING | PLR_MAILING)
-                && d_id == ch.desc.unwrap()
-                || !chars
-                    .get(d.character.unwrap())
-                    .prf_flagged(PrefFlags::NOREPEAT)
-        };
-        if res {
-            let d = game.desc(d_id);
-            let chid = d.character.unwrap();
-            let dc_id = d.character.unwrap();
-            let msg = CCCYN!(chars.get(d.character.unwrap()), C_NRM);
-            send_to_char(&mut game.descriptors, ch, msg);
-            let dc = chars.get(dc_id);
-            let ch = chars.get(chid);
-            if can_see(&game.descriptors, chars, db, dc, ch) {
-                send_to_char(&mut game.descriptors, dc, &buf1);
-            } else {
-                send_to_char(&mut game.descriptors, dc, &buf2);
+        let d = game.desc(d_id);
+        if let Some(dc_id) = d.character {
+            if d.state() == ConPlaying
+                && chars.get(dc_id).get_level() >= level
+                && !chars.get(dc_id).prf_flagged(PrefFlags::NOWIZ)
+                && !chars.get(dc_id).plr_flagged(PLR_WRITING | PLR_MAILING)
+                && d_id == ch_desc
+                || !chars.get(dc_id).prf_flagged(PrefFlags::NOREPEAT)
+            {
+                let msg = CCCYN!(chars.get(dc_id), C_NRM);
+                send_to_char(&mut game.descriptors, ch, msg);
+                let dc = chars.get(dc_id);
+                let ch = chars.get(chid);
+                if can_see(&game.descriptors, chars, db, dc, ch) {
+                    send_to_char(&mut game.descriptors, dc, &buf1);
+                } else {
+                    send_to_char(&mut game.descriptors, dc, &buf2);
+                }
+                send_to_char(&mut game.descriptors, dc, CCNRM!(dc, C_NRM));
             }
-            send_to_char(&mut game.descriptors, dc, CCNRM!(dc, C_NRM));
         }
     }
     let ch = chars.get(chid);
@@ -3855,18 +3791,15 @@ pub fn do_zreset(
         return;
     } else if arg.starts_with('.') {
         i = db.world[ch.in_room() as usize].zone as usize;
-    } else {
-        let j = arg.parse::<i32>();
-        if j.is_err() {
-            return;
-        };
-        let j = j.unwrap();
+    } else if let Ok(j) = arg.parse::<i32>() {
         for ii in 0..db.zone_table.len() {
             if db.zone_table[ii].number == j as i16 {
                 i = ii;
                 break;
             }
         }
+    } else {
+        return;
     }
     if i < db.zone_table.len() {
         game.reset_zone(db, chars, objs, i);
@@ -3917,12 +3850,11 @@ pub fn do_wizutil(
 
     let mut arg = String::new();
     one_argument(argument, &mut arg);
-    let vict;
     #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Yes, but for whom?!?\r\n");
-    } else if {
-        vict = get_char_vis(
+    } else {
+        match get_char_vis(
             &game.descriptors,
             chars,
             db,
@@ -3930,255 +3862,265 @@ pub fn do_wizutil(
             &mut arg,
             None,
             FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
-    } else if vict.unwrap().is_npc() {
-        send_to_char(&mut game.descriptors, ch, "You can't do that to a mob!\r\n");
-    } else if vict.unwrap().get_level() > ch.get_level() {
-        send_to_char(&mut game.descriptors, ch, "Hmmm...you'd better not.\r\n");
-    } else {
-        let vict = vict.unwrap();
-        let vict_id = vict.id();
-        match subcmd {
-            SCMD_REROLL => {
-                send_to_char(&mut game.descriptors, ch, "Rerolled...\r\n");
-                let vict = chars.get_mut(vict_id);
-                roll_real_abils(vict);
-                let ch = chars.get(chid);
-                let vict = chars.get(vict_id);
-                info!("(GC) {} has rerolled {}.", ch.get_name(), vict.get_name());
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    format!(
-                        "New stats: Str {}/{}, Int {}, Wis {}, Dex {}, Con {}, Cha {}\r\n",
-                        vict.get_str(),
-                        vict.get_add(),
-                        vict.get_int(),
-                        vict.get_wis(),
-                        vict.get_dex(),
-                        vict.get_con(),
-                        vict.get_cha()
-                    )
-                    .as_str(),
-                );
+        ) {
+            None => {
+                send_to_char(&mut game.descriptors, ch, "There is no such player.\r\n");
             }
-            SCMD_PARDON => {
-                if !vict.plr_flagged(PLR_THIEF | PLR_KILLER) {
-                    send_to_char(&mut game.descriptors, ch, "Your victim is not flagged.\r\n");
-                    return;
-                }
-                let vict = chars.get_mut(vict_id);
-                vict.remove_plr_flag(PLR_THIEF | PLR_KILLER);
-                send_to_char(
-                    &mut game.descriptors,
-                    vict,
-                    "You have been pardoned by the Gods!\r\n",
-                );
-                let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, ch, "Pardoned.\r\n");
-                let ch = chars.get(chid);
-                let vict = chars.get(vict_id);
-                game.mudlog(
-                    chars,
-                    DisplayMode::Brief,
-                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                    true,
-                    format!("(GC) {} pardoned by {}", vict.get_name(), ch.get_name()).as_str(),
-                );
+            Some(vict) if vict.is_npc() => {
+                send_to_char(&mut game.descriptors, ch, "You can't do that to a mob!\r\n");
             }
-            SCMD_NOTITLE => {
-                let vict = chars.get_mut(vict_id);
-                let result = vict.plr_tog_chk(PLR_NOTITLE);
-                let ch = chars.get(chid);
-                let vict = chars.get(vict_id);
-                game.mudlog(
-                    chars,
-                    DisplayMode::Normal,
-                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                    true,
-                    format!(
-                        "(GC) Notitle {} for {} by {}.",
-                        onoff!(result != 0),
-                        vict.get_name(),
-                        ch.get_name()
-                    )
-                    .as_str(),
-                );
-                let vict = chars.get(vict_id);
-                let ch = chars.get(chid);
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    format!(
-                        "(GC) Notitle {} for {} by {}.\r\n",
-                        onoff!(result != 0),
-                        vict.get_name(),
-                        ch.get_name()
-                    )
-                    .as_str(),
-                );
+            Some(vict) if vict.get_level() > ch.get_level() => {
+                send_to_char(&mut game.descriptors, ch, "Hmmm...you'd better not.\r\n");
             }
-            SCMD_SQUELCH => {
-                let vict = chars.get_mut(vict_id);
-                let result = vict.plr_tog_chk(PLR_NOSHOUT);
-                let ch = chars.get(chid);
-                let vict = chars.get(vict_id);
-                game.mudlog(
-                    chars,
-                    DisplayMode::Brief,
-                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                    true,
-                    format!(
-                        "(GC) Squelch {} for {} by {}.",
-                        onoff!(result != 0),
-                        vict.get_name(),
-                        ch.get_name()
-                    )
-                    .as_str(),
-                );
-                let vict = chars.get(vict_id);
-                let ch = chars.get(chid);
-                send_to_char(
-                    &mut game.descriptors,
-                    ch,
-                    format!(
-                        "(GC) Squelch {} for {} by {}.\r\n",
-                        onoff!(result != 0),
-                        vict.get_name(),
-                        ch.get_name()
-                    )
-                    .as_str(),
-                );
-            }
-            SCMD_FREEZE => {
-                if chid == vict_id {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "Oh, yeah, THAT'S real smart...\r\n",
-                    );
-                    return;
-                }
-                if vict.plr_flagged(PLR_FROZEN) {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "Your victim is already pretty cold.\r\n",
-                    );
-                    return;
-                }
-                let vict = chars.get_mut(vict_id);
-                vict.set_plr_flag_bit(PLR_FROZEN);
-                let ch = chars.get(chid);
-                let val = ch.get_level();
-                let vict = chars.get_mut(vict_id);
-                vict.set_freeze_lev(val as i8);
-                let vict = chars.get(vict_id);
-                send_to_char(&mut game.descriptors, vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
-                let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, ch, "Frozen.\r\n");
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "A sudden cold wind conjured from nowhere freezes $n!",
-                    false,
-                    Some(vict),
-                    None,
-                    None,
-                    TO_ROOM,
-                );
-                let vict = chars.get(vict_id);
-                let ch = chars.get(chid);
-                game.mudlog(
-                    chars,
-                    DisplayMode::Brief,
-                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                    true,
-                    format!("(GC) {} frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
-                );
-            }
-            SCMD_THAW => {
-                if !vict.plr_flagged(PLR_FROZEN) {
-                    send_to_char(
+            Some(vict) => {
+                let vict_id = vict.id();
+                match subcmd {
+                    SCMD_REROLL => {
+                        send_to_char(&mut game.descriptors, ch, "Rerolled...\r\n");
+                        let vict = chars.get_mut(vict_id);
+                        roll_real_abils(vict);
+                        let ch = chars.get(chid);
+                        let vict = chars.get(vict_id);
+                        info!("(GC) {} has rerolled {}.", ch.get_name(), vict.get_name());
+                        send_to_char(
+                            &mut game.descriptors,
+                            ch,
+                            format!(
+                                "New stats: Str {}/{}, Int {}, Wis {}, Dex {}, Con {}, Cha {}\r\n",
+                                vict.get_str(),
+                                vict.get_add(),
+                                vict.get_int(),
+                                vict.get_wis(),
+                                vict.get_dex(),
+                                vict.get_con(),
+                                vict.get_cha()
+                            )
+                            .as_str(),
+                        );
+                    }
+                    SCMD_PARDON => {
+                        if !vict.plr_flagged(PLR_THIEF | PLR_KILLER) {
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                "Your victim is not flagged.\r\n",
+                            );
+                            return;
+                        }
+                        let vict = chars.get_mut(vict_id);
+                        vict.remove_plr_flag(PLR_THIEF | PLR_KILLER);
+                        send_to_char(
+                            &mut game.descriptors,
+                            vict,
+                            "You have been pardoned by the Gods!\r\n",
+                        );
+                        let ch = chars.get(chid);
+                        send_to_char(&mut game.descriptors, ch, "Pardoned.\r\n");
+                        let ch = chars.get(chid);
+                        let vict = chars.get(vict_id);
+                        game.mudlog(
+                            chars,
+                            DisplayMode::Brief,
+                            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                            true,
+                            format!("(GC) {} pardoned by {}", vict.get_name(), ch.get_name())
+                                .as_str(),
+                        );
+                    }
+                    SCMD_NOTITLE => {
+                        let vict = chars.get_mut(vict_id);
+                        let result = vict.plr_tog_chk(PLR_NOTITLE);
+                        let ch = chars.get(chid);
+                        let vict = chars.get(vict_id);
+                        game.mudlog(
+                            chars,
+                            DisplayMode::Normal,
+                            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                            true,
+                            format!(
+                                "(GC) Notitle {} for {} by {}.",
+                                onoff!(result != 0),
+                                vict.get_name(),
+                                ch.get_name()
+                            )
+                            .as_str(),
+                        );
+                        let vict = chars.get(vict_id);
+                        let ch = chars.get(chid);
+                        send_to_char(
+                            &mut game.descriptors,
+                            ch,
+                            format!(
+                                "(GC) Notitle {} for {} by {}.\r\n",
+                                onoff!(result != 0),
+                                vict.get_name(),
+                                ch.get_name()
+                            )
+                            .as_str(),
+                        );
+                    }
+                    SCMD_SQUELCH => {
+                        let vict = chars.get_mut(vict_id);
+                        let result = vict.plr_tog_chk(PLR_NOSHOUT);
+                        let ch = chars.get(chid);
+                        let vict = chars.get(vict_id);
+                        game.mudlog(
+                            chars,
+                            DisplayMode::Brief,
+                            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                            true,
+                            format!(
+                                "(GC) Squelch {} for {} by {}.",
+                                onoff!(result != 0),
+                                vict.get_name(),
+                                ch.get_name()
+                            )
+                            .as_str(),
+                        );
+                        let vict = chars.get(vict_id);
+                        let ch = chars.get(chid);
+                        send_to_char(
+                            &mut game.descriptors,
+                            ch,
+                            format!(
+                                "(GC) Squelch {} for {} by {}.\r\n",
+                                onoff!(result != 0),
+                                vict.get_name(),
+                                ch.get_name()
+                            )
+                            .as_str(),
+                        );
+                    }
+                    SCMD_FREEZE => {
+                        if chid == vict_id {
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                "Oh, yeah, THAT'S real smart...\r\n",
+                            );
+                            return;
+                        }
+                        if vict.plr_flagged(PLR_FROZEN) {
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                "Your victim is already pretty cold.\r\n",
+                            );
+                            return;
+                        }
+                        let vict = chars.get_mut(vict_id);
+                        vict.set_plr_flag_bit(PLR_FROZEN);
+                        let ch = chars.get(chid);
+                        let val = ch.get_level();
+                        let vict = chars.get_mut(vict_id);
+                        vict.set_freeze_lev(val as i8);
+                        let vict = chars.get(vict_id);
+                        send_to_char(&mut game.descriptors, vict, "A bitter wind suddenly rises and drains every erg of heat from your body!\r\nYou feel frozen!\r\n");
+                        let ch = chars.get(chid);
+                        send_to_char(&mut game.descriptors, ch, "Frozen.\r\n");
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "A sudden cold wind conjured from nowhere freezes $n!",
+                            false,
+                            Some(vict),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                        let vict = chars.get(vict_id);
+                        let ch = chars.get(chid);
+                        game.mudlog(
+                            chars,
+                            DisplayMode::Brief,
+                            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                            true,
+                            format!("(GC) {} frozen by {}.", vict.get_name(), ch.get_name())
+                                .as_str(),
+                        );
+                    }
+                    SCMD_THAW => {
+                        if !vict.plr_flagged(PLR_FROZEN) {
+                            send_to_char(
                         &mut game.descriptors,
                         ch,
                         "Sorry, your victim is not morbidly encased in ice at the moment.\r\n",
                     );
-                    return;
-                }
-                if vict.get_freeze_lev() > ch.get_level() as i8 {
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        format!(
-                            "Sorry, a level {} God froze {}... you can't unfreeze {}.\r\n",
-                            vict.get_freeze_lev(),
-                            vict.get_name(),
-                            hmhr(vict)
-                        )
-                        .as_str(),
-                    );
-                    return;
-                }
-                game.mudlog(
-                    chars,
-                    DisplayMode::Brief,
-                    max(LVL_GOD as i32, ch.get_invis_lev() as i32),
-                    true,
-                    format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name()).as_str(),
-                );
-                let vict = chars.get_mut(vict_id);
-                vict.remove_plr_flag(PLR_FROZEN);
-                let vict = chars.get(vict_id);
-                send_to_char(&mut game.descriptors, vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
-                let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, ch, "Thawed.\r\n");
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "A sudden fireball conjured from nowhere thaws $n!",
-                    false,
-                    Some(vict),
-                    None,
-                    None,
-                    TO_ROOM,
-                );
-            }
-            SCMD_UNAFFECT => {
-                let vict = chars.get_mut(vict_id);
-                if !vict.affected.is_empty() {
-                    while !vict.affected.is_empty() {
-                        let af = vict.affected[0];
-                        affect_remove(objs, vict, af);
+                            return;
+                        }
+                        if vict.get_freeze_lev() > ch.get_level() as i8 {
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                format!(
+                                    "Sorry, a level {} God froze {}... you can't unfreeze {}.\r\n",
+                                    vict.get_freeze_lev(),
+                                    vict.get_name(),
+                                    hmhr(vict)
+                                )
+                                .as_str(),
+                            );
+                            return;
+                        }
+                        game.mudlog(
+                            chars,
+                            DisplayMode::Brief,
+                            max(LVL_GOD as i32, ch.get_invis_lev() as i32),
+                            true,
+                            format!("(GC) {} un-frozen by {}.", vict.get_name(), ch.get_name())
+                                .as_str(),
+                        );
+                        let vict = chars.get_mut(vict_id);
+                        vict.remove_plr_flag(PLR_FROZEN);
+                        let vict = chars.get(vict_id);
+                        send_to_char(&mut game.descriptors, vict, "A fireball suddenly explodes in front of you, melting the ice!\r\nYou feel thawed.\r\n");
+                        let ch = chars.get(chid);
+                        send_to_char(&mut game.descriptors, ch, "Thawed.\r\n");
+                        act(
+                            &mut game.descriptors,
+                            chars,
+                            db,
+                            "A sudden fireball conjured from nowhere thaws $n!",
+                            false,
+                            Some(vict),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
                     }
-                    let ch = chars.get(chid);
-                    let vict = chars.get(vict_id);
-                    send_to_char(
+                    SCMD_UNAFFECT => {
+                        let vict = chars.get_mut(vict_id);
+                        if !vict.affected.is_empty() {
+                            while !vict.affected.is_empty() {
+                                let af = vict.affected[0];
+                                affect_remove(objs, vict, af);
+                            }
+                            let ch = chars.get(chid);
+                            let vict = chars.get(vict_id);
+                            send_to_char(
                         &mut game.descriptors,
                         vict,
                         "There is a brief flash of light!\r\nYou feel slightly different.\r\n",
                     );
-                    send_to_char(&mut game.descriptors, ch, "All spells removed.\r\n");
-                } else {
-                    let ch = chars.get(chid);
-                    send_to_char(
-                        &mut game.descriptors,
-                        ch,
-                        "Your victim does not have any affections!\r\n",
-                    );
-                    return;
+                            send_to_char(&mut game.descriptors, ch, "All spells removed.\r\n");
+                        } else {
+                            let ch = chars.get(chid);
+                            send_to_char(
+                                &mut game.descriptors,
+                                ch,
+                                "Your victim does not have any affections!\r\n",
+                            );
+                            return;
+                        }
+                    }
+                    _ => {
+                        error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
+                    }
                 }
-            }
-            _ => {
-                error!("SYSERR: Unknown subcmd {} passed to do_wizutil ", subcmd);
+                save_char(&mut game.descriptors, db, chars, texts, objs, vict_id);
             }
         }
-        save_char(&mut game.descriptors, db, chars, texts, objs, vict_id);
     }
 }
 
@@ -4326,8 +4268,7 @@ pub fn do_show(
             /* tightened up by JE 4/6/93 */
             if self_ {
                 print_zone_to_buf(db, &mut buf, db.world[ch.in_room() as usize].zone);
-            } else if !value.is_empty() && is_number(&value) {
-                let value = value.parse::<i32>().unwrap();
+            } else if let Ok(value) = value.parse::<i32>() {
                 let zrn = db.zone_table.iter().position(|z| z.number == value as i16);
                 if let Some(zrn) = zrn {
                     print_zone_to_buf(db, &mut buf, zrn as ZoneRnum);
@@ -4340,8 +4281,11 @@ pub fn do_show(
                     print_zone_to_buf(db, &mut buf, i as ZoneRnum);
                 }
             }
-            let desc_id = ch.desc.unwrap();
-            page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            if let Some(desc_id) = ch.desc {
+                page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            } else {
+                error!("SYSERR: No descriptor for ch {}", ch.id());
+            }
         }
 
         /* show player */
@@ -4462,25 +4406,28 @@ pub fn do_show(
             let mut k = 0;
             for i in 0..db.world.len() {
                 for j in 0..NUM_OF_DIRS {
-                    if db.world[i].dir_option[j].is_some()
-                        && db.world[i].dir_option[j].as_ref().unwrap().to_room == 0
-                    {
-                        k += 1;
+                    if let Some(dir_option) = &db.world[i].dir_option[j] {
+                        if dir_option.to_room == 0 {
+                            k += 1;
 
-                        buf.push_str(
-                            format!(
-                                "{:2}: [{:5}] {}\r\n",
-                                k,
-                                db.get_room_vnum(i as RoomVnum),
-                                db.world[i].name
+                            buf.push_str(
+                                format!(
+                                    "{:2}: [{:5}] {}\r\n",
+                                    k,
+                                    db.get_room_vnum(i as RoomVnum),
+                                    db.world[i].name
+                                )
+                                .as_str(),
                             )
-                            .as_str(),
-                        )
+                        }
                     }
                 }
             }
-            let desc_id = ch.desc.unwrap();
-            page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            if let Some(desc_id) = ch.desc {
+                page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            } else {
+                error!("SYSERR: No descriptor for ch {}", ch.id());
+            }
         }
 
         /* show death */
@@ -4501,8 +4448,11 @@ pub fn do_show(
                     );
                 }
             }
-            let desc_id = ch.desc.unwrap();
-            page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            if let Some(desc_id) = ch.desc {
+                page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            } else {
+                error!("SYSERR: No descriptor for ch {}", ch.id());
+            }
         }
 
         /* show godrooms */
@@ -4523,8 +4473,11 @@ pub fn do_show(
                     );
                 }
             }
-            let desc_id = ch.desc.unwrap();
-            page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            if let Some(desc_id) = ch.desc {
+                page_string(&mut game.descriptors, chars, desc_id, &buf, true);
+            } else {
+                error!("SYSERR: No descriptor for ch {}", ch.id());
+            }
         }
 
         /* show shops */
@@ -4547,28 +4500,30 @@ pub fn do_show(
             );
             for d_id in game.descriptor_list.clone() {
                 let d = game.desc(d_id);
-                if d.snooping.borrow().is_none() || d.character.is_none() {
-                    continue;
+                if let Some(snooping) = d.snooping {
+                    if let Some(dc_id) = d.character {
+                        let dc = chars.get(dc_id);
+                        let ch = chars.get(chid);
+                        if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
+                            continue;
+                        }
+                        if !can_see(&game.descriptors, chars, db, ch, dc) || dc.in_room() == NOWHERE
+                        {
+                            continue;
+                        }
+                        if let Some(snooping_chid) = game.desc(snooping).character {
+                            i += 1;
+                            let msg = format!(
+                                "{:10} - snooped by {}.\r\n",
+                                chars.get(snooping_chid).get_name(),
+                                dc.get_name()
+                            );
+                            send_to_char(&mut game.descriptors, ch, msg.as_str());
+                        } else {
+                            error!("SYSERR: No character for snooping {}", snooping)
+                        }
+                    }
                 }
-                let dco = d.character;
-                let dc_id = dco.unwrap();
-                let dc = chars.get(dc_id);
-                let ch = chars.get(chid);
-                if d.state() != ConPlaying || ch.get_level() < dc.get_level() {
-                    continue;
-                }
-                if !can_see(&game.descriptors, chars, db, ch, dc) || dc.in_room() == NOWHERE {
-                    continue;
-                }
-                i += 1;
-                let msg = format!(
-                    "{:10} - snooped by {}.\r\n",
-                    chars
-                        .get(game.desc(d.snooping.unwrap()).character.unwrap())
-                        .get_name(),
-                    dc.get_name()
-                );
-                send_to_char(&mut game.descriptors, ch, msg.as_str());
             }
             if i == 0 {
                 send_to_char(
@@ -5222,8 +5177,7 @@ fn perform_set(
                     )
                     .as_str(),
                 );
-            } else if is_number(val_arg) {
-                value = val_arg.parse::<i32>().unwrap();
+            } else if let Ok(mut value) = val_arg.parse::<i32>() {
                 value = range!(value, 0, 24);
                 vict.set_cond(mode - 29, value as i16); /* and here too */
                 let vict = chars.get(vict_id);
@@ -5307,17 +5261,17 @@ fn perform_set(
             }
         }
         39 => {
-            let i;
-            let res = {
-                i = parse_class(val_arg.chars().next().unwrap());
-                i == Class::Undefined
+            let new_class = if let Some(c) = val_arg.chars().next() {
+                parse_class(c)
+            } else {
+                Class::Undefined
             };
-            if res {
+            if new_class == Class::Undefined {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "That is not a class.\r\n");
                 return false;
             }
-            vict.set_class(i);
+            vict.set_class(new_class);
         }
         40 => {
             if on {
@@ -5336,8 +5290,7 @@ fn perform_set(
         42 => {
             if val_arg == "off" {
                 vict.remove_plr_flag(PLR_LOADROOM);
-            } else if is_number(val_arg) {
-                let rvnum = val_arg.parse::<i32>().unwrap() as RoomRnum;
+            } else if let Ok(rvnum) = val_arg.parse::<i16>() {
                 let ch = chars.get(chid);
                 if db.real_room(rvnum) != NOWHERE {
                     let vict = chars.get_mut(vict_id);
@@ -5413,17 +5366,13 @@ fn perform_set(
             }
         }
         47 => {
-            let i;
-            let res = {
-                i = search_block(val_arg, &GENDERS, false);
-                i.is_none()
-            };
-            if res {
+            if let Some(new_sex) = search_block(val_arg, &GENDERS, false) {
+                vict.set_sex((new_sex as u8).into());
+            } else {
                 let ch = chars.get(chid);
                 send_to_char(descs, ch, "Must be 'male', 'female', or 'neutral'.\r\n");
                 return false;
             }
-            vict.set_sex((i.unwrap() as u8).into());
         }
         48 => {
             /* set age */
@@ -5582,53 +5531,63 @@ pub fn do_set(
     let mode = mode.unwrap_or(SET_FIELDS.len() - 1);
 
     /* perform the set */
-    let vict_id = vict.unwrap().id();
-    let retval = perform_set(
-        &mut game.descriptors,
-        db,
-        chars,
-        objs,
-        chid,
-        vict_id,
-        mode as i32,
-        &buf,
-    );
+    if let Some(vict) = vict {
+        let vict_id = vict.id();
+        let retval = perform_set(
+            &mut game.descriptors,
+            db,
+            chars,
+            objs,
+            chid,
+            vict_id,
+            mode as i32,
+            &buf,
+        );
 
-    /* save the character if a change was made */
-    if retval {
-        if !is_file && !chars.get(vict_id).is_npc() {
-            save_char(&mut game.descriptors, db, chars, texts, objs, vict_id);
+        /* save the character if a change was made */
+        if retval {
+            if !is_file && !chars.get(vict_id).is_npc() {
+                save_char(&mut game.descriptors, db, chars, texts, objs, vict_id);
+            }
+            if is_file {
+                char_to_store(
+                    &mut game.descriptors,
+                    texts,
+                    objs,
+                    db,
+                    chars,
+                    vict_id,
+                    &mut tmp_store,
+                );
+
+                unsafe {
+                    let player_slice = slice::from_raw_parts(
+                        &mut tmp_store as *mut _ as *mut u8,
+                        mem::size_of::<CharFileU>(),
+                    );
+                    if let Some(player_file) = &mut db.player_fl {
+                        if let Some(player_i) = player_i {
+                            player_file
+                                .write_all_at(
+                                    player_slice,
+                                    (player_i * mem::size_of::<CharFileU>()) as u64,
+                                )
+                                .expect("Error while writing player record to file");
+                        } else {
+                            error!("SYSERR do_set: no player_i !");
+                        }
+                    } else {
+                        error!("SYSERR do_set: no player file");
+                    }
+                }
+                let ch = chars.get(chid);
+                send_to_char(&mut game.descriptors, ch, "Saved in file.\r\n");
+            }
         }
         if is_file {
-            char_to_store(
-                &mut game.descriptors,
-                texts,
-                objs,
-                db,
-                chars,
-                vict_id,
-                &mut tmp_store,
-            );
-
-            unsafe {
-                let player_slice = slice::from_raw_parts(
-                    &mut tmp_store as *mut _ as *mut u8,
-                    mem::size_of::<CharFileU>(),
-                );
-                db.player_fl
-                    .as_mut()
-                    .unwrap()
-                    .write_all_at(
-                        player_slice,
-                        (player_i.unwrap() * mem::size_of::<CharFileU>()) as u64,
-                    )
-                    .expect("Error while writing player record to file");
-            }
-            let ch = chars.get(chid);
-            send_to_char(&mut game.descriptors, ch, "Saved in file.\r\n");
+            db.free_char(&mut game.descriptors, chars, objs, vict_id);
         }
-    }
-    if is_file {
-        db.free_char(&mut game.descriptors, chars, objs, vict_id);
+    } else {
+        error!("SYSERR do_set: no vict!");
     }
 }
