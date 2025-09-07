@@ -7,7 +7,7 @@
 *								                                     	 *
 * Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 * CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.		         *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                           *
+*  Rust port Copyright (C) 2024 - 2025 Laurent Pautet                    *
 *********************************************************************** */
 
 use std::fs;
@@ -37,23 +37,24 @@ pub fn write_aliases(ch: &CharData) {
         return;
     }
 
-    let file = OpenOptions::new()
+    let mut file;
+    match OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&fname);
-
-    if file.is_err() {
-        error!(
-            "SYSERR: Couldn't save aliases for {} in '{}': {}.",
-            ch.get_name(),
-            fname,
-            file.err().unwrap()
-        );
-        return;
+        .open(&fname)
+    {
+        Ok(f) => file = f,
+        Err(e) => {
+            error!(
+                "SYSERR: Couldn't save aliases for {} in '{}': {}.",
+                ch.get_name(),
+                fname,
+                e
+            );
+            return;
+        }
     }
-
-    let mut file = file.unwrap();
 
     for temp in ch.player_specials.aliases.iter() {
         let aliaslen = temp.alias.len();
@@ -75,22 +76,27 @@ pub fn read_aliases(ch: &mut CharData) {
     let mut xbuf = String::new();
     get_filename(&mut xbuf, FileType::Alias, ch.get_name());
 
-    let r = OpenOptions::new().read(true).open(&xbuf);
+    #[allow(clippy::needless_late_init)]
+    let alias_file;
 
-    if r.is_err() {
-        let err = r.err().unwrap();
-        if err.kind() != ErrorKind::NotFound {
-            error!(
-                "SYSERR: Couldn't open alias file '{}' for {}. {}",
-                &xbuf,
-                ch.get_name(),
-                err
-            );
+    match OpenOptions::new().read(true).open(&xbuf) {
+        Ok(file) => {
+            alias_file = file;
         }
-        return;
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                error!(
+                    "SYSERR: Couldn't open alias file '{}' for {}. {}",
+                    &xbuf,
+                    ch.get_name(),
+                    err
+                );
+            }
+            return;
+        }
     }
 
-    let mut reader = BufReader::new(r.unwrap());
+    let mut reader = BufReader::new(alias_file);
     loop {
         let mut t2 = AliasData {
             alias: Rc::from(""),
@@ -134,17 +140,23 @@ pub fn read_aliases(ch: &mut CharData) {
         if line.is_err() {
             break;
         }
-        let r = buf.trim_end().parse::<i32>();
-        if r.is_err() {
-            error!(
-                "Error with alias '{}' type: '{}' ({})",
-                t2.alias,
-                buf.trim_end(),
-                t2.replacement
-            );
-            break;
+        #[allow(clippy::needless_late_init)]
+        let buf_parsed;
+        match buf.trim_end().parse::<i32>() {
+            Err(_) => {
+                error!(
+                    "Error with alias '{}' type: '{}' ({})",
+                    t2.alias,
+                    buf.trim_end(),
+                    t2.replacement
+                );
+                break;
+            }
+            Ok(n) => {
+                buf_parsed = n;
+            }
         }
-        t2.type_ = r.unwrap();
+        t2.type_ = buf_parsed;
         ch.player_specials.aliases.push(t2);
     }
 }
@@ -156,10 +168,7 @@ pub fn delete_aliases(charname: &str) {
         return;
     }
 
-    let r = fs::remove_file(&filename);
-
-    if r.is_err() {
-        let err = r.err().unwrap();
+    if let Err(err) = fs::remove_file(&filename) {
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: deleting alias file {}: {}", filename, err);
         }
