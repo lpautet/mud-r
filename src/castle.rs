@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 /* IMPORTANT!
@@ -65,23 +65,19 @@ fn castle_mob_spec(db: &mut DB, mobnum: MobVnum, specproc: Special) {
 }
 
 fn castle_virtual(db: &DB, offset: MobVnum) -> MobVnum {
-    let zon = db.real_zone(Z_KINGS_C as RoomVnum);
-
-    if zon.is_none() {
-        return NOBODY;
+    if let Some(num) = db.real_zone(Z_KINGS_C as RoomVnum) {
+        db.zone_table[num].bot + offset
+    } else {
+        NOBODY
     }
-
-    db.zone_table[zon.unwrap()].bot + offset
 }
 
 fn castle_real_room(db: &DB, roomoffset: RoomVnum) -> RoomRnum {
-    let zon = db.real_zone(Z_KINGS_C as RoomVnum);
-
-    if zon.is_none() {
-        return NOWHERE;
+    if let Some(num) = db.real_zone(Z_KINGS_C as RoomVnum) {
+        db.real_room(db.zone_table[num].bot + roomoffset)
+    } else {
+        NOWHERE
     }
-
-    db.real_room(db.zone_table[zon.unwrap()].bot + roomoffset)
 }
 
 /*
@@ -224,10 +220,10 @@ fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
     let mut num_bad_guys = 0;
 
     for chid in db.world[ch_at.in_room() as usize].peoples.iter() {
-        if chars.get(*chid).fighting_id().is_some()
-            && member_of_staff(db, chars.get(chars.get(*chid).fighting_id().unwrap()))
-        {
-            num_bad_guys += 1;
+        if let Some(fighting) = chars.get(*chid).fighting_id() {
+            if member_of_staff(db, chars.get(fighting)) {
+                num_bad_guys += 1;
+            }
         }
     }
 
@@ -243,21 +239,19 @@ fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
     num_bad_guys = 0;
 
     for chid in db.world[ch_at.in_room() as usize].peoples.iter() {
-        if chars.get(*chid).fighting_id().is_none() {
-            continue;
+        if let Some(fighting) = chars.get(*chid).fighting_id() {
+            if !member_of_staff(db, chars.get(fighting)) {
+                continue;
+            }
+
+            num_bad_guys += 1;
+
+            if num_bad_guys != victim {
+                continue;
+            }
+
+            return Some(*chid);
         }
-
-        if !member_of_staff(db, chars.get(chars.get(*chid).fighting_id().unwrap())) {
-            continue;
-        }
-
-        num_bad_guys += 1;
-
-        if num_bad_guys != victim {
-            continue;
-        }
-
-        return Some(*chid);
     }
     None
 }
@@ -277,8 +271,13 @@ fn banzaii(
     chid: DepotId,
 ) -> bool {
     let ch = chars.get(chid);
-    let opponent_id = get_victim(chars, db, ch);
-    if !ch.awake() || ch.get_pos() == Position::Fighting || opponent_id.is_none() {
+    let opponent_id;
+    if let Some(id) = get_victim(chars, db, ch) {
+        opponent_id = id;
+    } else {
+        return false;
+    }
+    if !ch.awake() || ch.get_pos() == Position::Fighting {
         return false;
     }
 
@@ -293,15 +292,7 @@ fn banzaii(
         None,
         TO_ROOM,
     );
-    game.hit(
-        chars,
-        db,
-        texts,
-        objs,
-        chid,
-        opponent_id.unwrap(),
-        TYPE_UNDEFINED,
-    );
+    game.hit(chars, db, texts, objs, chid, opponent_id, TYPE_UNDEFINED);
     true
 }
 
@@ -319,13 +310,18 @@ fn do_npc_rescue(
     chid_hero_id: DepotId,
     ch_victim_id: DepotId,
 ) -> bool {
-    let chid_bad_guy = db.world[chars.get(chid_hero_id).in_room() as usize]
+    let chid_bad_guy;
+    if let Some(id) = db.world[chars.get(chid_hero_id).in_room() as usize]
         .peoples
         .iter()
-        .find(|id| matches!(chars.get(**id).fighting_id(), Some(fighting_id) if fighting_id != ch_victim_id)).copied();
+        .find(|id| matches!(chars.get(**id).fighting_id(), Some(fighting_id) if fighting_id != ch_victim_id)) {
+            chid_bad_guy = *id
+    } else {
+        return false;
+    }
 
     /* NO WAY I'll rescue the one I'm fighting! */
-    if chid_bad_guy.is_none() || chid_bad_guy.unwrap() == chid_hero_id {
+    if chid_bad_guy == chid_hero_id {
         return false;
     }
     let ch_hero = chars.get(chid_hero_id);
@@ -363,15 +359,15 @@ fn do_npc_rescue(
         Some(VictimRef::Char(ch_victim)),
         TO_NOTVICT,
     );
-    if chars.get(chid_bad_guy.unwrap()).fighting_id().is_some() {
-        db.stop_fighting(chars.get_mut(chid_bad_guy.unwrap()));
+    if chars.get(chid_bad_guy).fighting_id().is_some() {
+        db.stop_fighting(chars.get_mut(chid_bad_guy));
     }
     if chars.get(chid_hero_id).fighting_id().is_some() {
         db.stop_fighting(chars.get_mut(chid_hero_id));
     }
 
-    game.set_fighting(chars, db, objs, chid_hero_id, chid_bad_guy.unwrap());
-    game.set_fighting(chars, db, objs, chid_bad_guy.unwrap(), chid_hero_id);
+    game.set_fighting(chars, db, objs, chid_hero_id, chid_bad_guy);
+    game.set_fighting(chars, db, objs, chid_bad_guy, chid_hero_id);
     true
 }
 
@@ -460,12 +456,12 @@ fn fry_victim(
     if ch.points.mana < 10 {
         return;
     }
-    let tchid = get_victim(chars, db, ch);
-    /* Find someone suitable to fry ! */
-    if tchid.is_none() {
+    let tchid;
+    if let Some(id) = get_victim(chars, db, ch) {
+        tchid = id;
+    } else {
         return;
     }
-    let tchid = tchid.unwrap();
     let tch = chars.get(tchid);
 
     match rand_number(0, 8) {
@@ -855,16 +851,18 @@ pub fn training_master(
 
     let db = &db;
     let ch = chars.get(chid);
-    let pupil1 = find_npc_by_name(chars, db, ch, "Brian");
-    if pupil1.is_none() {
+    let mut pupil1_id;
+    if let Some(id) = find_npc_by_name(chars, db, ch, "Brian") {
+        pupil1_id = id;
+    } else {
         return false;
     }
-    let mut pupil1_id = pupil1.unwrap();
-    let pupil2 = find_npc_by_name(chars, db, ch, "Mick");
-    if pupil2.is_none() {
+    let mut pupil2_id;
+    if let Some(id) = find_npc_by_name(chars, db, ch, "Mick") {
+        pupil2_id = id;
+    } else {
         return false;
     }
-    let mut pupil2_id = pupil2.unwrap();
     if chars.get(pupil1_id).fighting_id().is_some() || chars.get(pupil2_id).fighting_id().is_some()
     {
         return false;
@@ -1475,253 +1473,253 @@ fn peter(
     let db = &db;
     let ch = chars.get(chid);
     let ch_guard = find_guard(chars, db, ch);
-    #[allow(clippy::unnecessary_unwrap)]
-    if rand_number(0, 3) == 0 && ch_guard.is_some() {
-        let chid_guard = ch_guard.unwrap();
-        let ch_guard = chars.get(chid_guard);
-        match rand_number(0, 5) {
-            0 => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$N comes sharply into attention as $n inspects $M.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$N comes sharply into attention as you inspect $M.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You go sharply into attention as $n inspects you.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-            }
-            1 => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$N looks very small, as $n roars at $M.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$N looks very small as you roar at $M.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You feel very small as $N roars at you.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-            }
-            2 => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n gives $N some Royal directions.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You give $N some Royal directions.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n gives you some Royal directions.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-            }
-            3 => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at you.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n growls: 'Those boots need polishing!'",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_ROOM,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You growl at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
-            }
-            4 => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at you.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n growls: 'Straighten that collar!'",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_ROOM,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You growl at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
-            }
-            _ => {
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at you.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_VICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n looks at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_NOTVICT,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "$n growls: 'That chain mail looks rusty!  CLEAN IT !!!'",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_ROOM,
-                );
-                act(
-                    &mut game.descriptors,
-                    chars,
-                    db,
-                    "You growl at $N.",
-                    false,
-                    Some(ch),
-                    None,
-                    Some(VictimRef::Char(ch_guard)),
-                    TO_CHAR,
-                );
+    if let Some(chid_guard) = ch_guard {
+        if rand_number(0, 3) == 0 {
+            let ch_guard = chars.get(chid_guard);
+            match rand_number(0, 5) {
+                0 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$N comes sharply into attention as $n inspects $M.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$N comes sharply into attention as you inspect $M.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You go sharply into attention as $n inspects you.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                }
+                1 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$N looks very small, as $n roars at $M.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$N looks very small as you roar at $M.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You feel very small as $N roars at you.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                }
+                2 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n gives $N some Royal directions.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You give $N some Royal directions.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n gives you some Royal directions.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                }
+                3 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at you.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n growls: 'Those boots need polishing!'",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_ROOM,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You growl at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                }
+                4 => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at you.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n growls: 'Straighten that collar!'",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_ROOM,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You growl at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                }
+                _ => {
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at you.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_VICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n looks at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_NOTVICT,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "$n growls: 'That chain mail looks rusty!  CLEAN IT !!!'",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_ROOM,
+                    );
+                    act(
+                        &mut game.descriptors,
+                        chars,
+                        db,
+                        "You growl at $N.",
+                        false,
+                        Some(ch),
+                        None,
+                        Some(VictimRef::Char(ch_guard)),
+                        TO_CHAR,
+                    );
+                }
             }
         }
     }
@@ -1761,13 +1759,14 @@ fn jerry(
 
     let gambler1_id = chid;
     let ch = chars.get(chid);
-    let gambler2_id = find_npc_by_name(chars, db, ch, "Michael");
-
-    if gambler2_id.is_none() {
+    let gambler2_id;
+    if let Some(id) = find_npc_by_name(chars, db, ch, "Michael") {
+        gambler2_id = id;
+    } else {
         return false;
     }
     let mut gambler1 = chars.get(gambler1_id);
-    let mut gambler2 = chars.get(gambler2_id.unwrap());
+    let mut gambler2 = chars.get(gambler2_id);
 
     if gambler1.fighting_id().is_some() || gambler2.fighting_id().is_some() {
         return false;
