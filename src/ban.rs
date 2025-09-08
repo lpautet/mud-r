@@ -6,13 +6,12 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2024 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::max;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Write};
-use std::process;
 use std::rc::Rc;
 
 use log::{error, info};
@@ -30,21 +29,24 @@ const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 const BAN_TYPES_VALUES: [BanType; 4] = [BanType::None, BanType::New, BanType::Select, BanType::All];
 
 pub fn load_banned(db: &mut DB) {
-    let fl = OpenOptions::new().read(true).open(BAN_FILE);
-
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        if err.kind() != ErrorKind::NotFound {
-            error!("SYSERR: Unable to open banfile '{}': {}", BAN_FILE, err);
-        } else {
-            info!("   Ban file '{}' doesn't exist.", BAN_FILE);
+    #[allow(clippy::needless_late_init)]
+    let fl;
+    match OpenOptions::new().read(true).open(BAN_FILE) {
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                error!("SYSERR: Unable to open banfile '{}': {}", BAN_FILE, err);
+            } else {
+                info!("   Ban file '{}' doesn't exist.", BAN_FILE);
+            }
+            return;
         }
-        return;
+        Ok(f) => fl = f,
     }
 
-    let mut reader = BufReader::new(fl.unwrap());
+    let mut reader = BufReader::new(fl);
 
-    let regex: Regex = Regex::new(r"(\S+)\s(\S+)\s#(\d{1,9})\s(\S+)").unwrap();
+    let regex: Regex = Regex::new(r"(\S+)\s(\S+)\s#(\d{1,9})\s(\S+)")
+        .unwrap_or_else(|e| panic!("regex error: {}", e));
     loop {
         let mut line = String::new();
         let r = reader
@@ -54,17 +56,16 @@ pub fn load_banned(db: &mut DB) {
             break;
         }
 
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error in ban file");
-            process::exit(1);
-        }
-        let f = f.unwrap();
+        let f = regex
+            .captures(line.as_str())
+            .unwrap_or_else(|| panic!("SYSERR: Format error in ban file"));
         let ban_type = &f[1];
         let mut ble = BanListElement {
             site: Rc::from(&f[2]),
             type_: BanType::None,
-            date: f[3].parse::<u64>().unwrap(),
+            date: f[3]
+                .parse::<u64>()
+                .unwrap_or_else(|e| panic!("SYSERR: Format error in ban file: {}", e)),
             name: Rc::from(&f[4]),
         };
 
@@ -108,14 +109,16 @@ fn write_ban_list(db: &DB) {
         .truncate(true)
         .open(BAN_FILE);
 
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        error!("SYSERR: Unable to open '{BAN_FILE}' for writing {err}");
-        return;
-    }
-    let mut writer = BufWriter::new(fl.unwrap());
-    for ban_node in db.ban_list.iter() {
-        _write_one_node(&mut writer, ban_node); /* recursively write from end to start */
+    match fl {
+        Err(err) => {
+            error!("SYSERR: Unable to open '{BAN_FILE}' for writing {err}");
+        }
+        Ok(fl) => {
+            let mut writer = BufWriter::new(fl);
+            for ban_node in db.ban_list.iter() {
+                _write_one_node(&mut writer, ban_node); /* recursively write from end to start */
+            }
+        }
     }
 }
 
@@ -268,9 +271,10 @@ pub fn do_unban(
         send_to_char(&mut game.descriptors, ch, "A site to unban might help.\r\n");
         return;
     }
-    let p = db.ban_list.iter().position(|b| b.site.as_ref() == site);
-
-    if p.is_none() {
+    let p;
+    if let Some(i) = db.ban_list.iter().position(|b| b.site.as_ref() == site) {
+        p = i;
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -279,7 +283,7 @@ pub fn do_unban(
         return;
     }
 
-    let ban_node = db.ban_list.remove(p.unwrap());
+    let ban_node = db.ban_list.remove(p);
     let ch = chars.get(chid);
     send_to_char(&mut game.descriptors, ch, "Site unbanned.\r\n");
     let ch = chars.get(chid);
@@ -314,17 +318,12 @@ pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db: &DB, newname: &s
      */
     for &dt_id in &game.descriptor_list {
         let dt = game.desc(dt_id);
-        let character_id = dt.character;
+        if let Some(character_id) = dt.character {
+            let character = chars.get(character_id);
 
-        if character_id.is_none() {
-            continue;
-        }
-
-        let character_id = character_id.unwrap();
-        let character = chars.get(character_id);
-
-        if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
-            return dt.state() == ConPlaying;
+            if character.get_name().as_ref() != "" && character.get_name().as_ref() == newname {
+                return dt.state() == ConPlaying;
+            }
         }
     }
 
@@ -352,26 +351,28 @@ pub fn free_invalid_list(db: &mut DB) {
 }
 
 pub fn read_invalid_list(db: &mut DB) {
-    let fp = OpenOptions::new().read(true).open(XNAME_FILE);
-
-    if fp.is_err() {
-        let err = fp.err().unwrap();
-        error!("SYSERR: Unable to open '{XNAME_FILE}' for reading {err}");
-        return;
-    }
-
-    let mut reader = BufReader::new(fp.unwrap());
-
-    loop {
-        let mut line = String::new();
-        let r = reader.read_line(&mut line);
-        if r.is_err() {
-            error!("Error while reading ban file! {}", r.err().unwrap());
-            break;
+    match OpenOptions::new().read(true).open(XNAME_FILE) {
+        Err(err) => {
+            error!("SYSERR: Unable to open '{XNAME_FILE}' for reading {err}");
         }
-        if r.unwrap() == 0 {
-            break;
+        Ok(fl) => {
+            let mut reader = BufReader::new(fl);
+
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Err(err) => {
+                        error!("Error while reading ban file! {}", err);
+                        break;
+                    }
+                    Ok(r) => {
+                        if r == 0 {
+                            break;
+                        }
+                        db.invalid_list.push(Rc::from(line));
+                    }
+                }
+            }
         }
-        db.invalid_list.push(Rc::from(line));
     }
 }
