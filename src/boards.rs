@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 /* FEATURES & INSTALLATION INSTRUCTIONS ***********************************
@@ -53,7 +53,7 @@ use log::error;
 use crate::db::{parse_c_string, DB};
 use crate::depot::{Depot, DepotId};
 use crate::handler::isname;
-use crate::interpreter::{delete_doubledollar, find_command, is_number, one_argument};
+use crate::interpreter::{delete_doubledollar, find_command, one_argument};
 use crate::modify::page_string;
 use crate::structs::ConState::ConPlaying;
 use crate::structs::{
@@ -251,11 +251,16 @@ fn init_boards(db: &mut DB, texts: &mut Depot<TextData>) {
         board_load_board(&mut db.boards, texts, i);
     }
 
-    db.boards.acmd_read = find_command("read").unwrap();
-    db.boards.acmd_write = find_command("write").unwrap();
-    db.boards.acmd_remove = find_command("remove").unwrap();
-    db.boards.acmd_look = find_command("look").unwrap();
-    db.boards.acmd_examine = find_command("examine").unwrap();
+    db.boards.acmd_read =
+        find_command("read").unwrap_or_else(|| panic!("Command 'read' not found"));
+    db.boards.acmd_write =
+        find_command("write").unwrap_or_else(|| panic!("Command 'write' not found"));
+    db.boards.acmd_remove =
+        find_command("remove").unwrap_or_else(|| panic!("Command 'remove' not found"));
+    db.boards.acmd_look =
+        find_command("look").unwrap_or_else(|| panic!("Command 'look' not found"));
+    db.boards.acmd_examine =
+        find_command("examine").unwrap_or_else(|| panic!("Command 'examine' not found"));
 
     if fatal_error != 0 {
         process::exit(1);
@@ -297,15 +302,12 @@ pub fn gen_board(
     }
 
     let board_type;
-    let res = {
-        board_type = find_board(chars, db, objs, chid);
-        board_type.is_none()
-    };
-    if res {
+    if let Some(found) = find_board(chars, db, objs, chid) {
+        board_type = found;
+    } else {
         error!("SYSERR:  degenerate board!  (what the hell...)");
         return false;
     }
-    let board_type = board_type.unwrap();
 
     if cmd == db.boards.acmd_write {
         board_write_message(&mut game.descriptors, chars, db, board_type, chid, argument)
@@ -362,18 +364,16 @@ fn board_write_message(
         return true;
     }
     let slot;
-    let res = {
-        slot = find_slot(&mut db.boards);
-        slot.is_none()
-    };
-    if res {
+    if let Some(i) = find_slot(&mut db.boards) {
+        slot = i;
+    } else {
         let ch = chars.get(chid);
         send_to_char(descs, ch, "The board is malfunctioning - sorry.\r\n");
         error!("SYSERR: Board: failed to find empty slot on write.");
         return false;
     }
 
-    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]].slot_num = slot;
+    db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]].slot_num = Some(slot);
     /* skip blanks */
     let mut arg = arg.trim_start().to_string();
     delete_doubledollar(&mut arg);
@@ -414,18 +414,17 @@ fn board_write_message(
         TO_ROOM,
     );
     let ch = chars.get(chid);
-    let desc_id = ch.desc.unwrap();
-    let desc = descs.get_mut(desc_id);
-    desc.string_write(
-        chars,
-        db.boards.msg_storage[db.boards.msg_index[board_type][db.boards.num_of_msgs[board_type]]
-            .slot_num
-            .unwrap()],
-        MAX_MESSAGE_LENGTH,
-        board_type as i64 + BOARD_MAGIC,
-    );
+    if let Some(desc_id) = ch.desc {
+        let desc = descs.get_mut(desc_id);
+        desc.string_write(
+            chars,
+            db.boards.msg_storage[slot],
+            MAX_MESSAGE_LENGTH,
+            board_type as i64 + BOARD_MAGIC,
+        );
 
-    db.boards.num_of_msgs[board_type] += 1;
+        db.boards.num_of_msgs[board_type] += 1;
+    }
     true
 }
 
@@ -442,7 +441,10 @@ fn board_show_board(
 ) -> bool {
     let ch = chars.get(chid);
 
-    if ch.desc.is_none() {
+    let d_id;
+    if let Some(d) = ch.desc {
+        d_id = d;
+    } else {
         return false;
     }
     let mut tmp = String::new();
@@ -483,41 +485,25 @@ There are {} messages on the board.\r\n",
         );
         if NEWEST_AT_TOP {
             for i in (0..db.boards.num_of_msgs[board_type]).rev() {
-                if db.boards.msg_index[board_type][i].heading.clone().is_none() {
+                if let Some(heading) = &db.boards.msg_index[board_type][i].heading {
+                    buf.push_str(format!("{:2} : {}\r\n", i + 1, heading).as_str());
+                } else {
                     error!("SYSERR: Board {} is fubar'd.", board_type);
                     send_to_char(descs, ch, "Sorry, the board isn't working.\r\n");
                     return true;
                 }
-
-                buf.push_str(
-                    format!(
-                        "{:2} : {}\r\n",
-                        i + 1,
-                        db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
-                    )
-                    .as_str(),
-                );
             }
         } else {
             for i in 0..db.boards.num_of_msgs[board_type] {
-                if db.boards.msg_index[board_type][i].heading.is_none() {
+                if let Some(heading) = &db.boards.msg_index[board_type][i].heading {
+                    buf.push_str(format!("{:2} : {}\r\n", i + 1, heading).as_str());
+                } else {
                     error!("SYSERR: Board {} is fubar'd.", board_type);
                     send_to_char(descs, ch, "Sorry, the board isn't working.\r\n");
                     return true;
                 }
-
-                buf.push_str(
-                    format!(
-                        "{:2} : {}\r\n",
-                        i + 1,
-                        db.boards.msg_index[board_type][i].heading.as_ref().unwrap()
-                    )
-                    .as_str(),
-                );
             }
         }
-        let ch = chars.get(chid);
-        let d_id = ch.desc.unwrap();
         page_string(descs, chars, d_id, &buf, true);
     }
     true
@@ -546,12 +532,14 @@ fn board_display_msg(
         /* so "read board" works */
         return board_show_board(descs, chars, db, objs, board_type, chid, arg, board_id);
     }
-    if !is_number(&number) {
+    let msg;
+    if let Ok(i) = number.parse::<i32>() {
+        msg = i;
+        if msg == 0 {
+            return false;
+        }
+    } else {
         /* read 2.mail, look 2.sword */
-        return false;
-    }
-    let msg = number.parse::<i32>().unwrap();
-    if msg == 0 {
         return false;
     }
 
@@ -582,10 +570,13 @@ fn board_display_msg(
     };
     let msg_slot_numo = db.boards.msg_index[board_type][ind].slot_num;
     let mut msg_slot_num = 0;
-    if msg_slot_numo.is_none() || {
-        msg_slot_num = msg_slot_numo.unwrap();
-        msg_slot_num >= INDEX_SIZE
-    } {
+    let bad_slot_num = if let Some(slot_num) = msg_slot_numo {
+        msg_slot_num = slot_num;
+        slot_num >= INDEX_SIZE
+    } else {
+        true
+    };
+    if bad_slot_num {
         send_to_char(descs, ch, "Sorry, the board is not working.\r\n");
         let ch = chars.get(chid);
         error!(
@@ -595,7 +586,10 @@ fn board_display_msg(
         return true;
     }
 
-    if db.boards.msg_index[board_type][ind].heading.is_none() {
+    let heading;
+    if let Some(t) = &db.boards.msg_index[board_type][ind].heading {
+        heading = t;
+    } else {
         send_to_char(descs, ch, "That message appears to be screwed up.\r\n");
         return true;
     }
@@ -605,18 +599,11 @@ fn board_display_msg(
         send_to_char(descs, ch, "That message seems to be empty.\r\n");
         return true;
     }
-    let buffer = format!(
-        "Message {} : {}\r\n\r\n{}\r\n",
-        msg,
-        db.boards.msg_index[board_type][ind]
-            .heading
-            .as_ref()
-            .unwrap(),
-        text
-    );
+    let buffer = format!("Message {} : {}\r\n\r\n{}\r\n", msg, heading, text);
 
-    let d_id = ch.desc.unwrap();
-    page_string(descs, chars, d_id, &buffer, true);
+    if let Some(d_id) = ch.desc {
+        page_string(descs, chars, d_id, &buffer, true);
+    }
 
     true
 }
@@ -634,11 +621,10 @@ fn board_remove_msg(
     let mut number = String::new();
     one_argument(arg, &mut number);
 
-    if number.is_empty() || !is_number(&number) {
-        return false;
-    }
-    let msg = number.parse::<i32>().unwrap();
-    if msg == 0 {
+    let msg;
+    if let Ok(i) = number.parse::<i32>() {
+        msg = i;
+    } else {
         return false;
     }
 
@@ -660,7 +646,17 @@ fn board_remove_msg(
         msg as usize - 1
     };
 
-    if db.boards.msg_index[board_type][ind].heading.is_none() {
+    if let Some(heading) = &db.boards.msg_index[board_type][ind].heading {
+        let buf = format!("({})", ch.get_name());
+        if ch.get_level() < db.boards.boardinfo[board_type].remove_lvl && !heading.contains(&buf) {
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "You are not holy enough to remove other people's messages.\r\n",
+            );
+            return true;
+        }
+    } else {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -668,21 +664,7 @@ fn board_remove_msg(
         );
         return true;
     }
-    let buf = format!("({})", ch.get_name());
-    if ch.get_level() < db.boards.boardinfo[board_type].remove_lvl
-        && !db.boards.msg_index[board_type][ind]
-            .heading
-            .as_ref()
-            .unwrap()
-            .contains(&buf)
-    {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "You are not holy enough to remove other people's messages.\r\n",
-        );
-        return true;
-    }
+
     if ch.get_level() < db.boards.msg_index[board_type][ind].level as u8 {
         send_to_char(
             &mut game.descriptors,
@@ -691,12 +673,14 @@ fn board_remove_msg(
         );
         return true;
     }
-    let slot_numo = db.boards.msg_index[board_type][ind].slot_num;
     let mut slot_num = 0;
-    if slot_numo.is_none() || {
-        slot_num = slot_numo.unwrap();
+    let bad_slot_num = if let Some(i) = db.boards.msg_index[board_type][ind].slot_num {
+        slot_num = i;
         slot_num >= INDEX_SIZE
-    } {
+    } else {
+        true
+    };
+    if bad_slot_num {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -711,16 +695,15 @@ fn board_remove_msg(
     }
     for d_id in game.descriptor_list.clone() {
         let d = game.desc(d_id);
-        if d.state() == ConPlaying
-            && d.str.is_some()
-            && d.str.unwrap() == db.boards.msg_storage[slot_num]
-        {
-            send_to_char(
-                &mut game.descriptors,
-                ch,
-                "At least wait until the author is finished before removing it!\r\n",
-            );
-            return true;
+        if let Some(d_str) = d.str {
+            if d.state() == ConPlaying && d_str == db.boards.msg_storage[slot_num] {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    "At least wait until the author is finished before removing it!\r\n",
+                );
+                return true;
+            }
         }
     }
     let text = &mut (texts.get_mut(db.boards.msg_storage[slot_num]).text);
@@ -769,18 +752,19 @@ pub fn board_save_board(b: &mut BoardSystem, texts: &Depot<TextData>, board_type
         fs::remove_file(filename).expect("removing board file");
         return;
     }
-    let fl = OpenOptions::new()
+    let mut fl;
+    match OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(filename);
-
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        error!("SYSERR: Error writing board {}", err);
-        return;
-    }
-    let mut fl = fl.unwrap();
+        .open(filename)
+    {
+        Err(err) => {
+            error!("SYSERR: Error writing board {}", err);
+            return;
+        }
+        Ok(f) => fl = f,
+    };
     unsafe {
         let num_slice = slice::from_raw_parts(
             &mut b.num_of_msgs[board_type] as *mut _ as *mut u8,
@@ -798,64 +782,67 @@ pub fn board_save_board(b: &mut BoardSystem, texts: &Depot<TextData>, board_type
             b.msg_index[board_type][i].heading_len = 0;
         }
 
-        let msg_slotnum = b.msg_index[board_type][i].slot_num.unwrap();
-        let tmp2 = b.msg_storage[msg_slotnum];
-        let text = &texts.get(tmp2).text;
+        if let Some(msg_slotnum) = b.msg_index[board_type][i].slot_num {
+            let tmp2 = b.msg_storage[msg_slotnum];
+            let text = &texts.get(tmp2).text;
 
-        if !text.is_empty() {
-            b.msg_index[board_type][i].message_len = text.len();
+            if !text.is_empty() {
+                b.msg_index[board_type][i].message_len = text.len();
+            } else {
+                b.msg_index[board_type][i].message_len = 0;
+            }
+
+            let mut record = BoardMsgInfoRecord {
+                slot_num: msg_slotnum,
+                level: b.msg_index[board_type][i].level,
+                heading_len: b.msg_index[board_type][i].heading_len,
+                message_len: b.msg_index[board_type][i].message_len,
+            };
+
+            unsafe {
+                let msginfo_slice = slice::from_raw_parts(
+                    &mut record as *mut _ as *mut u8,
+                    mem::size_of::<BoardMsgInfoRecord>(),
+                );
+                fl.write_all(msginfo_slice)
+                    .expect("Error while number of messages in board");
+            }
+
+            if b.msg_index[board_type][i].heading_len != 0 {
+                if let Some(heading) = &b.msg_index[board_type][i].heading {
+                    fl.write_all(heading.as_bytes())
+                        .expect("writing board message heading");
+                } else {
+                    error!("SYSERR: missing heading in board {}[{}]", board_type, i);
+                }
+            }
+
+            if !text.is_empty() {
+                fl.write_all(text.as_bytes())
+                    .expect("writing board message");
+            }
         } else {
-            b.msg_index[board_type][i].message_len = 0;
-        }
-
-        let mut record = BoardMsgInfoRecord {
-            slot_num: msg_slotnum,
-            level: b.msg_index[board_type][i].level,
-            heading_len: b.msg_index[board_type][i].heading_len,
-            message_len: b.msg_index[board_type][i].message_len,
-        };
-
-        unsafe {
-            let msginfo_slice = slice::from_raw_parts(
-                &mut record as *mut _ as *mut u8,
-                mem::size_of::<BoardMsgInfoRecord>(),
-            );
-            fl.write_all(msginfo_slice)
-                .expect("Error while number of messages in board");
-        }
-
-        if b.msg_index[board_type][i].heading_len != 0 {
-            fl.write_all(
-                b.msg_index[board_type][i]
-                    .heading
-                    .as_ref()
-                    .unwrap()
-                    .as_bytes(),
-            )
-            .expect("writing board message heading");
-        }
-
-        if !text.is_empty() {
-            fl.write_all(text.as_bytes())
-                .expect("writing board message");
+            error!("SYSERR: missing slot number in board {}[{}]", board_type, i);
+            return;
         }
     }
 }
 
 fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type: usize) {
-    let fl = OpenOptions::new()
+    let mut fl;
+    match OpenOptions::new()
         .read(true)
-        .open(b.boardinfo[board_type].filename);
-
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        error!(
-            "SYSERR: Error reading board ({}): {}",
-            b.boardinfo[board_type].filename, err
-        );
-        return;
+        .open(b.boardinfo[board_type].filename)
+    {
+        Err(err) => {
+            error!(
+                "SYSERR: Error reading board ({}): {}",
+                b.boardinfo[board_type].filename, err
+            );
+            return;
+        }
+        Ok(f) => fl = f,
     }
-    let mut fl = fl.unwrap();
 
     unsafe {
         let config_slice = slice::from_raw_parts_mut(
@@ -863,10 +850,8 @@ fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type
             mem::size_of::<usize>(),
         );
         // `read_exact(db,)` comes from `Read` impl for `&[u8]`
-        let r = fl.read_exact(config_slice);
-        if r.is_err() {
-            let r = r.err().unwrap();
-            error!("[SYSERR] Error while board file {} {r}", board_type);
+        if let Err(err) = fl.read_exact(config_slice) {
+            error!("[SYSERR] Error while board file {} {err}", board_type);
             board_reset_board(b, texts, board_type);
             return;
         }
@@ -890,11 +875,9 @@ fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type
                 &mut record as *mut _ as *mut u8,
                 mem::size_of::<BoardMsgInfoRecord>(),
             );
-            let r = fl.read_exact(config_slice);
-            if r.is_err() {
-                let r = r.err().unwrap();
+            if let Err(err) = fl.read_exact(config_slice) {
                 error!(
-                    "[SYSERR] Error while board file record, Resetting. {} {r}",
+                    "[SYSERR] Error while board file record, Resetting. {} {err}",
                     board_type
                 );
                 board_reset_board(b, texts, board_type);
@@ -924,11 +907,9 @@ fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type
         let heading: Option<Rc<str>> = Some(Rc::from(parse_c_string(tmp1).as_str()));
         b.msg_index[board_type][i].heading = heading;
         let sn;
-        let res = {
-            sn = find_slot(b);
-            sn.is_none()
-        };
-        if res {
+        if let Some(found) = find_slot(b) {
+            sn = found;
+        } else {
             error!(
                 "SYSERR: Out of slots booting board {}!  Resetting...",
                 board_type
@@ -936,11 +917,9 @@ fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type
             board_reset_board(b, texts, board_type);
             return;
         }
-        b.msg_index[board_type][i].slot_num = sn;
+        b.msg_index[board_type][i].slot_num = Some(sn);
         let len2;
-        let text = &mut texts
-            .get_mut(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()])
-            .text;
+        let text = &mut texts.get_mut(b.msg_storage[sn]).text;
         let res = {
             len2 = b.msg_index[board_type][i].message_len;
             len2 > 0
@@ -969,19 +948,12 @@ fn board_clear_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_typ
         if b.msg_index[board_type][i].heading.is_some() {
             b.msg_index[board_type][i].heading = None;
         }
-        if b.msg_index[board_type][i].slot_num.is_some()
-            && !texts
-                .get(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()])
-                .text
-                .is_empty()
-        {
-            texts
-                .get_mut(b.msg_storage[b.msg_index[board_type][i].slot_num.unwrap()])
-                .text
-                .clear();
-            b.msg_storage_taken[b.msg_index[board_type][i].slot_num.unwrap()] = false;
+        if let Some(slot_num) = b.msg_index[board_type][i].slot_num {
+            if !texts.get(b.msg_storage[slot_num]).text.is_empty() {
+                texts.get_mut(b.msg_storage[slot_num]).text.clear();
+                b.msg_storage_taken[slot_num] = false;
+            }
         }
-
         b.msg_index[board_type][i].slot_num = None;
     }
     b.num_of_msgs[board_type] = 0;
