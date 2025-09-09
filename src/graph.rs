@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use log::error;
@@ -40,13 +40,13 @@ fn is_marked(db: &DB, room: RoomRnum) -> bool {
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
-    db.world[x as usize].dir_option[y].as_ref().unwrap().to_room
+    db.world[x as usize].dir_option[y].as_ref().expect("No direction option").to_room
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
     db.world[x as usize].dir_option[y]
         .as_ref()
-        .unwrap()
+        .expect("No direction option")
         .exit_info
         .intersects(ExitFlags::CLOSED)
 }
@@ -177,29 +177,23 @@ pub fn do_track(
         );
         return;
     }
-    let vict;
     /* The person can't see the victim. */
-    let res = {
-        vict = get_char_vis(
-            &game.descriptors,
-            chars,
-            db,
-            ch,
-            &mut arg,
-            None,
-            FindFlags::CHAR_WORLD,
-        );
-        vict.is_none()
-    };
-    if res {
+    let Some(vict) = get_char_vis(
+        &game.descriptors,
+        chars,
+        db,
+        ch,
+        &mut arg,
+        None,
+        FindFlags::CHAR_WORLD,
+    ) else {
         send_to_char(
             &mut game.descriptors,
             ch,
             "No one is around by that name.\r\n",
         );
         return;
-    }
-    let vict = vict.unwrap();
+    };
     let vict_id = vict.id();
     /* We can't track the victim. */
     if vict.aff_flagged(AffectFlags::NOTRACK) {

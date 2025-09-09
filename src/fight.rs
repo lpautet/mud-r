@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use log::error;
@@ -405,10 +405,19 @@ pub fn make_corpse(
     }
     /* transfer character's equipment to the corpse */
     for i in 0..NUM_WEARS {
-        let ch = chars.get(chid);
+        let ch = chars.get_mut(chid);
         if ch.get_eq(i).is_some() {
-            let oid = db.unequip_char(chars, objs, chid, i).unwrap();
-            obj_to_obj(chars, objs, oid, corpse_id);
+            if let Some(oid) = db.unequip_char(chars, objs, chid, i) {
+                obj_to_obj(chars, objs, oid, corpse_id);
+            } else {
+                let ch = chars.get_mut(chid);
+                error!(
+                    "Failed to unequip character {} at position {}",
+                    ch.get_name(),
+                    i
+                );
+                return;
+            }
         }
     }
     let ch = chars.get(chid);
@@ -422,8 +431,13 @@ pub fn make_corpse(
          * test below shall live on, for a while. -gg 3/3/2002
          */
         if ch.is_npc() || ch.desc.is_some() {
-            let money_id = db.create_money(objs, ch.get_gold());
-            obj_to_obj(chars, objs, money_id.unwrap(), corpse_id);
+            if let Some(money_id) = db.create_money(objs, ch.get_gold()) {
+                obj_to_obj(chars, objs, money_id, corpse_id);
+            } else {
+                let ch = chars.get_mut(chid);
+                error!("Failed to create money for character {}", ch.get_name());
+                return;
+            }
         }
         let ch = chars.get_mut(chid);
         ch.set_gold(0);
@@ -468,16 +482,20 @@ pub fn death_cry(
     let ch_in_room = ch.in_room();
     for door in 0..NUM_OF_DIRS {
         if db.can_go(ch, door) {
-            send_to_room(
-                descs,
-                chars,
-                db,
-                db.world[ch_in_room as usize].dir_option[door]
-                    .as_ref()
-                    .unwrap()
-                    .to_room,
-                "Your blood freezes as you hear someone's death cry.\r\n",
-            );
+            if let Some(dir_option) = &db.world[ch_in_room as usize].dir_option[door] {
+                send_to_room(
+                    descs,
+                    chars,
+                    db,
+                    dir_option.to_room,
+                    "Your blood freezes as you hear someone's death cry.\r\n",
+                );
+            } else {
+                error!(
+                    "Failed to send death cry from room {}, door {}",
+                    ch_in_room, door
+                );
+            }
         }
     }
 }
@@ -570,18 +588,13 @@ pub fn group_gain(
 ) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
-    let k_id = if ch.master.is_none() {
-        chid
-    } else {
-        ch.master.unwrap()
-    };
+    let k_id = ch.master.unwrap_or(chid);
     let k = chars.get(k_id);
-    let mut tot_members;
-    if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
-        tot_members = 1;
+    let mut tot_members = if k.aff_flagged(AffectFlags::GROUP) && k.in_room() == ch.in_room() {
+        1
     } else {
-        tot_members = 0;
-    }
+        0
+    };
 
     for f in k.followers.iter() {
         let follower = chars.get(f.follower);
@@ -666,26 +679,24 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 
     let mut iter = str.chars();
     loop {
-        let c = iter.next();
-        if c.is_none() {
-            break;
-        }
-        let mut c = c.unwrap();
-        if c == '#' {
-            c = iter.next().unwrap();
-            match c {
-                'W' => {
+        match iter.next() {
+            None => {
+                break;
+            }
+            Some('#') => match iter.next() {
+                Some('W') => {
                     buf.push_str(weapon_plural);
                 }
-                'w' => {
+                Some('w') => {
                     buf.push_str(weapon_singular);
                 }
                 _ => {
                     buf.push('#');
                 }
+            },
+            Some(c) => {
+                buf.push(c);
             }
-        } else {
-            buf.push(c);
         }
     } /* For */
     buf
@@ -1127,20 +1138,20 @@ impl Game {
         }
 
         /* If you attack a pet, it hates your guts */
-        let victim = chars.get(victim_id);
-        if victim.master.is_some() && victim.master.unwrap() == chid {
+        if chars.get(victim_id).master == Some(chid) {
             stop_follower(&mut self.descriptors, chars, db, objs, victim_id);
         }
 
         /* If the attacker is invisible, he becomes visible */
-        let ch = chars.get(chid);
-        if ch.aff_flagged(AffectFlags::INVISIBLE | AffectFlags::HIDE) {
+        if chars
+            .get(chid)
+            .aff_flagged(AffectFlags::INVISIBLE | AffectFlags::HIDE)
+        {
             appear(&mut self.descriptors, chars, db, objs, chid);
         }
 
         /* Cut damage in half if victim has sanct, to a minimum 1 */
-        let victim = chars.get(victim_id);
-        if victim.aff_flagged(AffectFlags::SANCTUARY) && dam >= 2 {
+        if chars.get(victim_id).aff_flagged(AffectFlags::SANCTUARY) && dam >= 2 {
             dam /= 2;
         }
 
@@ -1453,19 +1464,21 @@ impl Game {
         let wielded = ch.get_eq(WEAR_WIELD);
 
         /* Do some sanity checking, in case someone flees, etc. */
-        if ch.in_room() != victim.in_room()
-            && ch.fighting_id().is_some()
-            && ch.fighting_id().unwrap() == victim_id
-        {
+        if ch.in_room() != victim.in_room() && ch.fighting_id() == Some(victim_id) {
             db.stop_fighting(chars.get_mut(chid));
             return;
         }
 
         let w_type;
         /* Find the weapon type (for display purposes only) */
-        #[allow(clippy::unnecessary_unwrap)]
-        if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
-            w_type = objs.get(wielded.unwrap()).get_obj_val(3) + TYPE_HIT;
+        if let Some(wielded_id) = wielded {
+            if objs.get(wielded_id).get_obj_type() == ItemType::Weapon {
+                w_type = objs.get(wielded_id).get_obj_val(3) + TYPE_HIT;
+            } else if ch.is_npc() && ch.mob_specials.attack_type != 0 {
+                w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
+            } else {
+                w_type = TYPE_HIT;
+            }
         } else if ch.is_npc() && ch.mob_specials.attack_type != 0 {
             w_type = ch.mob_specials.attack_type as i32 + TYPE_HIT;
         } else {
@@ -1525,15 +1538,19 @@ impl Game {
             dam = STR_APP[ch.strength_apply_index()].todam as i32;
             dam += ch.get_damroll() as i32;
 
+            let mut has_weapon = false;
             /* Maybe holding arrow? */
-            #[allow(clippy::unnecessary_unwrap)]
-            if wielded.is_some() && objs.get(wielded.unwrap()).get_obj_type() == ItemType::Weapon {
-                /* Add weapon-based damage if a weapon is being wielded */
-                dam += dice(
-                    objs.get(wielded.unwrap()).get_obj_val(1),
-                    objs.get(wielded.unwrap()).get_obj_val(2),
-                );
-            } else {
+            if let Some(wielded_id) = wielded {
+                if objs.get(wielded_id).get_obj_type() == ItemType::Weapon {
+                    /* Add weapon-based damage if a weapon is being wielded */
+                    dam += dice(
+                        objs.get(wielded_id).get_obj_val(1),
+                        objs.get(wielded_id).get_obj_val(2),
+                    );
+                    has_weapon = true;
+                }
+            }
+            if !has_weapon {
                 /* If no weapon, add bare hand damage instead */
                 if ch.is_npc() {
                     dam += dice(
@@ -1598,9 +1615,12 @@ impl Game {
         for chid in old_combat_list.into_iter() {
             //next_combat_list = ch->next_fighting;
             let ch = chars.get(chid);
-            if ch.fighting_id().is_none()
-                || ch.in_room() != chars.get(ch.fighting_id().unwrap()).in_room()
-            {
+            let not_fighting_in_room = if let Some(fighting_id) = ch.fighting_id() {
+                ch.in_room() != chars.get(fighting_id).in_room()
+            } else {
+                true
+            };
+            if not_fighting_in_room {
                 db.stop_fighting(chars.get_mut(chid));
                 continue;
             }
@@ -1645,26 +1665,25 @@ impl Game {
                 texts,
                 objs,
                 chid,
-                ch.fighting_id().unwrap(),
+                ch.fighting_id().expect("No fighting id"),
                 TYPE_UNDEFINED,
             );
             let ch = chars.get(chid);
-            if ch.mob_flagged(MOB_SPEC)
-                && db.get_mob_spec(ch).is_some()
-                && !ch.mob_flagged(MOB_NOTDEADYET)
-            {
-                let actbuf = String::new();
-                db.get_mob_spec(ch).as_ref().unwrap()(
-                    self,
-                    chars,
-                    db,
-                    texts,
-                    objs,
-                    chid,
-                    MeRef::Char(chid),
-                    0,
-                    actbuf.as_str(),
-                );
+            if let Some(mob_spec) = db.get_mob_spec(ch) {
+                if ch.mob_flagged(MOB_SPEC) && !ch.mob_flagged(MOB_NOTDEADYET) {
+                    let actbuf = String::new();
+                    mob_spec(
+                        self,
+                        chars,
+                        db,
+                        texts,
+                        objs,
+                        chid,
+                        MeRef::Char(chid),
+                        0,
+                        actbuf.as_str(),
+                    );
+                }
             }
         }
     }
