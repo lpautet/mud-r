@@ -737,9 +737,9 @@ pub struct TimeData {
     /* This is the total accumulated time played in secs */
 }
 
-pub const NOWHERE: i16 = -1;
-pub const NOTHING: i16 = -1;
-pub const NOBODY: i16 = -1;
+pub const NOWHERE: RoomRnum = -1;
+pub const NOTHING: ObjRnum = -1;
+pub const NOBODY: MobRnum = -1;
 
 /* PC classes */
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

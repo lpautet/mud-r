@@ -810,10 +810,9 @@ impl DB {
 }
 
 pub fn parse_c_string(cstr: &[u8]) -> String {
-    let mut ret: String = std::str::from_utf8(cstr)
+    let mut ret = std::str::from_utf8(cstr)
         .unwrap_or_else(|_| panic!("Error while parsing C string {:?}", cstr))
-        .parse()
-        .unwrap();
+        .to_string();
     let p = ret.find('\0');
     if let Some(p) = p {
         ret.truncate(p);
@@ -824,7 +823,7 @@ pub fn parse_c_string(cstr: &[u8]) -> String {
 impl DB {
     /* generate index table for the player file */
     fn build_player_index(&mut self) {
-        let player_file = OpenOptions::new()
+        let mut player_file = OpenOptions::new()
             .write(true)
             .read(true)
             .open(PLAYER_FILE)
@@ -843,13 +842,10 @@ impl DB {
                 }
             });
 
-        self.player_fl = Some(player_file);
-
-        let file_mut = self.player_fl.as_mut().unwrap();
-        let size = file_mut
+        let size = player_file
             .seek(SeekFrom::End(0))
             .expect("SYSERR: fatal error seeking playerfile");
-        file_mut
+        player_file
             .rewind()
             .expect("SYSERR: fatal error rewinding playerfile");
 
@@ -862,6 +858,7 @@ impl DB {
             self.player_table.reserve_exact(recs as usize);
         } else {
             self.player_table.clear();
+            self.player_fl = Some(player_file);
             return;
         }
 
@@ -873,15 +870,13 @@ impl DB {
                     &mut dummy as *mut _ as *mut u8,
                     mem::size_of::<CharFileU>(),
                 );
-                let r = file_mut.read_exact(config_slice);
-                if r.is_err() {
-                    let r = r.err().unwrap();
-                    if r.kind() == ErrorKind::UnexpectedEof {
+                if let Err(err) = player_file.read_exact(config_slice) {
+                    if err.kind() == ErrorKind::UnexpectedEof {
                         break;
                     }
                     error!(
                         "[SYSERR] Error while reading player file for indexing: {}",
-                        r
+                        err
                     );
                     process::exit(1);
                 }
@@ -894,6 +889,7 @@ impl DB {
             self.player_table.push(pie);
             self.top_idnum = max(self.top_idnum, dummy.char_specials_saved.idnum as i32);
         }
+        self.player_fl = Some(player_file);
     }
 }
 
@@ -944,8 +940,8 @@ fn count_alias_records(fl: File) -> i32 {
 fn count_hash_records(fl: File) -> i32 {
     let mut count = 0;
     let reader = BufReader::new(fl);
-    for l in reader.lines() {
-        if l.is_ok() && l.unwrap().starts_with('#') {
+    for line in reader.lines().map_while(Result::ok) {
+        if line.starts_with('#') {
             count += 1;
         }
     }
@@ -1007,29 +1003,31 @@ impl DB {
         buf1 = buf1.trim_end().to_string();
         while !buf1.starts_with('$') {
             let buf2 = format!("{}{}", prefix, buf1.as_str());
-            let db_file = File::open(buf2.as_str());
-            if let Ok(dbfile) = db_file {
-                if mode == DbBootMode::Zone {
-                    rec_count += 1;
-                } else if mode == DbBootMode::Help {
-                    rec_count += count_alias_records(dbfile);
-                } else {
-                    rec_count += count_hash_records(dbfile);
+            match File::open(buf2.as_str()) {
+                Ok(dbfile) => {
+                    if mode == DbBootMode::Zone {
+                        rec_count += 1;
+                    } else if mode == DbBootMode::Help {
+                        rec_count += count_alias_records(dbfile);
+                    } else {
+                        rec_count += count_hash_records(dbfile);
+                    }
                 }
-            } else {
-                error!(
-                    "SYSERR: File '{}' listed in '{}{}': {}",
-                    buf2.as_str(),
-                    prefix,
-                    index_filename,
-                    db_file.err().unwrap()
-                );
-                buf1.clear();
-                reader
-                    .read_line(&mut buf1)
-                    .expect("Error while reading index file #2");
-                buf1 = buf1.trim_end().to_string();
-                continue;
+                Err(err) => {
+                    error!(
+                        "SYSERR: File '{}' listed in '{}{}': {}",
+                        buf2.as_str(),
+                        prefix,
+                        index_filename,
+                        err
+                    );
+                    buf1.clear();
+                    reader
+                        .read_line(&mut buf1)
+                        .expect("Error while reading index file #2");
+                    buf1 = buf1.trim_end().to_string();
+                    continue;
+                }
             }
             buf1.clear();
             reader
@@ -1097,28 +1095,30 @@ impl DB {
         buf1 = buf1.trim_end().to_string();
         while !buf1.starts_with('$') {
             buf2 = format!("{}{}", prefix, buf1.as_str());
-            let db_file = File::open(buf2.as_str());
-            if db_file.is_err() {
-                error!("SYSERR: {}: {}", buf2.as_str(), db_file.err().unwrap());
-                process::exit(1);
-            }
+            let db_file = match File::open(buf2.as_str()) {
+                Err(err) => {
+                    error!("SYSERR: {}: {}", buf2.as_str(), err);
+                    process::exit(1);
+                }
+                Ok(file) => file,
+            };
 
             match mode {
                 DbBootMode::World | DbBootMode::Object | DbBootMode::Mob => {
-                    self.discrete_load(texts, db_file.unwrap(), mode, buf2.as_str());
+                    self.discrete_load(texts, db_file, mode, buf2.as_str());
                 }
                 DbBootMode::Zone => {
-                    self.load_zones(db_file.unwrap(), buf2.as_str());
+                    self.load_zones(db_file, buf2.as_str());
                 }
                 DbBootMode::Help => {
                     /*
                      * If you think about it, we have a race here.  Although, this is the
                      * "point-the-gun-at-your-own-foot" type of race.
                      */
-                    self.load_help(db_file.unwrap());
+                    self.load_help(db_file);
                 }
                 DbBootMode::Shop => {
-                    boot_the_shops(self, db_file.unwrap(), &buf2, rec_count);
+                    boot_the_shops(self, db_file, &buf2, rec_count);
                 }
             }
 
@@ -1149,7 +1149,7 @@ impl DB {
         let mut reader = BufReader::new(file);
 
         const MODES: [&str; 3] = ["world", "mob", "obj"];
-        let regex = Regex::new(r"^#(\d{1,9})").unwrap();
+        let regex = Regex::new(r"^#(\d{1,9})").unwrap_or_else(|e| panic!("Regex error: {}", e));
 
         loop {
             /*
@@ -1174,17 +1174,19 @@ impl DB {
 
             if line.starts_with('#') {
                 last = nr;
-                let f = regex.captures(line.as_str());
-                if f.is_none() {
+                if let Some(f) = regex.captures(line.as_str()) {
+                    if let Ok(n) = f[1].parse::<i32>() {
+                        nr = n;
+                    } else {
+                        panic!("parse error: {}", &f[1])
+                    }
+                } else {
                     error!(
                         "SYSERR: Format error after {} #{}",
                         MODES[mode as usize], last
                     );
                     process::exit(1);
                 }
-                let f = f.unwrap();
-                nr = f[1].parse::<i32>().unwrap();
-
                 if nr >= 99999 {
                     return;
                 } else {
@@ -1196,10 +1198,7 @@ impl DB {
                             self.parse_mobile(texts, &mut reader, nr);
                         }
                         DbBootMode::Object => {
-                            line = self
-                                .parse_object(texts, &mut reader, nr as MobVnum)
-                                .parse()
-                                .unwrap();
+                            line = self.parse_object(texts, &mut reader, nr as MobVnum)
                         }
                         _ => {}
                     }
@@ -1233,7 +1232,9 @@ fn asciiflag_conv(flag: &str) -> i64 {
     }
 
     if is_num {
-        flags = flag.parse::<i64>().unwrap();
+        flags = flag
+            .parse::<i64>()
+            .unwrap_or_else(|e| panic!("parse error: {}", e));
     }
 
     flags
@@ -1283,25 +1284,30 @@ impl DB {
             process::exit(1);
         }
 
-        let regex = Regex::new(r"^(\d{1,9})\s(\S*)\s(\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error in roomflags/sector type of room #{}",
-                virtual_nr,
-            );
-            process::exit(1);
+        let regex = Regex::new(r"^(\d{1,9})\s(\S*)\s(\d{1,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!(
+                    "SYSERR: Format error in roomflags/sector type of room #{}",
+                    virtual_nr,
+                );
+                process::exit(1);
+            }
+            Some(f) => {
+                t[0] = f[1]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                rd.room_flags = RoomFlags::from_bits_truncate(asciiflag_conv(&f[2]));
+                t[2] = f[3]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+            }
         }
-        let f = f.unwrap();
-        t[0] = f[1].parse::<i32>().unwrap();
-        let flags = &f[2];
-        t[2] = f[3].parse::<i32>().unwrap();
 
         /* t[0] is the zone number; ignored with the zone-file system */
-
-        rd.room_flags = RoomFlags::from_bits_truncate(asciiflag_conv(flags));
         let msg = format!("object #{}", virtual_nr); /* sprintf: OK (until 399-bit integers) */
-        check_bitvector_names(rd.room_flags.bits(), ROOM_BITS_COUNT, msg.as_str(), "room");
+        check_bitvector_names(rd.room_flags.bits(), ROOM_BITS_COUNT, &msg, "room");
 
         rd.sector_type = SectorType::from_i32(t[2]);
 
@@ -1317,7 +1323,12 @@ impl DB {
             }
             match line.remove(0) {
                 'D' => {
-                    DB::setup_dir(reader, &mut rd, line.parse::<i32>().unwrap());
+                    DB::setup_dir(
+                        reader,
+                        &mut rd,
+                        line.parse::<i32>()
+                            .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                    );
                 }
                 'E' => {
                     rd.ex_descriptions.push(ExtraDescrData {
@@ -1358,27 +1369,36 @@ impl DB {
             process::exit(1);
         }
 
-        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error, {}", buf2);
-            process::exit(1);
-        }
-        let f = f.unwrap();
-        t[0] = f[1].parse::<i32>().unwrap();
-        t[1] = f[2].parse::<i32>().unwrap();
-        t[2] = f[3].parse::<i32>().unwrap();
-        if t[0] == 1 {
-            rdr.exit_info = ExitFlags::ISDOOR;
-        } else if t[0] == 2 {
-            rdr.exit_info = ExitFlags::ISDOOR | ExitFlags::PICKPROOF;
-        } else {
-            rdr.exit_info = ExitFlags::empty();
-        }
+        let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!("SYSERR: Format error, {}", buf2);
+                process::exit(1);
+            }
+            Some(f) => {
+                t[0] = f[1]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                t[1] = f[2]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                t[2] = f[3]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                if t[0] == 1 {
+                    rdr.exit_info = ExitFlags::ISDOOR;
+                } else if t[0] == 2 {
+                    rdr.exit_info = ExitFlags::ISDOOR | ExitFlags::PICKPROOF;
+                } else {
+                    rdr.exit_info = ExitFlags::empty();
+                }
 
-        rdr.key = t[1] as ObjVnum;
-        rdr.to_room = t[2] as RoomRnum;
-        room.dir_option[dir as usize] = Some(rdr);
+                rdr.key = t[1] as ObjVnum;
+                rdr.to_room = t[2] as RoomRnum;
+                room.dir_option[dir as usize] = Some(rdr);
+            }
+        }
     }
 
     // /* make sure the start rooms exist & resolve their vnums to rnums */
@@ -1404,16 +1424,13 @@ impl DB {
     fn renum_world(&mut self) {
         for i in 0..self.world.len() {
             for door in 0..NUM_OF_DIRS {
-                let to_room: RoomRnum;
-                {
-                    if self.world[i].dir_option[door].is_none() {
-                        continue;
+                if let Some(dir) = &self.world[i].dir_option[door] {
+                    if dir.to_room != NOWHERE {
+                        let rn = self.real_room(dir.to_room);
+                        if let Some(dir) = &mut self.world[i].dir_option[door] {
+                            dir.to_room = rn;
+                        }
                     }
-                    to_room = self.world[i].dir_option[door].as_ref().unwrap().to_room;
-                }
-                if to_room != NOWHERE {
-                    let rn = self.real_room(to_room);
-                    self.world[i].dir_option[door].as_mut().unwrap().to_room = rn;
                 }
             }
         }
@@ -1542,70 +1559,120 @@ fn parse_simple_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i32)
         process::exit(1);
     }
 
-    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})").unwrap();
-    let f = regex.captures(line.as_str());
-    if f.is_none() {
-        error!("SYSERR: Format error in mob #{}, first line after S flag\n...expecting line of form '# # # #d#+# #d#+#'", nr);
-        process::exit(1);
+    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})\s(-?\d{1,9})d(-?\d{1,9})\+(-?\d{1,9})").unwrap_or_else(|e| panic!("regex error: {}", e));
+    match regex.captures(line.as_str()) {
+        None => {
+            error!("SYSERR: Format error in mob #{}, first line after S flag\n...expecting line of form '# # # #d#+# #d#+#'", nr);
+            process::exit(1);
+        }
+        Some(t) => {
+            mobch.set_level(
+                t[1].parse::<u8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+            mobch.set_hitroll(
+                20 - t[2]
+                    .parse::<i8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+            mobch.set_ac(
+                10 * t[3]
+                    .parse::<i16>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+
+            /* max hit = 0 is a flag that H, M, V is xdy+z */
+            mobch.set_max_hit(0);
+            mobch.set_hit(
+                t[4].parse::<i16>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+            mobch.set_mana(
+                t[5].parse::<i16>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+            mobch.set_move(
+                t[6].parse::<i16>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+
+            mobch.set_max_mana(10);
+            mobch.set_max_move(50);
+
+            mobch.mob_specials.damnodice = t[7]
+                .parse::<u8>()
+                .unwrap_or_else(|e| panic!("parse error: {}", e));
+            mobch.mob_specials.damsizedice = t[8]
+                .parse::<u8>()
+                .unwrap_or_else(|e| panic!("parse error: {}", e));
+            mobch.set_damroll(
+                t[9].parse::<i8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+        }
     }
-    let t = f.unwrap();
-
-    mobch.set_level(t[1].parse::<u8>().unwrap());
-    mobch.set_hitroll(20 - t[2].parse::<i8>().unwrap());
-    mobch.set_ac(10 * t[3].parse::<i16>().unwrap());
-
-    /* max hit = 0 is a flag that H, M, V is xdy+z */
-    mobch.set_max_hit(0);
-    mobch.set_hit(t[4].parse::<i16>().unwrap());
-    mobch.set_mana(t[5].parse::<i16>().unwrap());
-    mobch.set_move(t[6].parse::<i16>().unwrap());
-
-    mobch.set_max_mana(10);
-    mobch.set_max_move(50);
-
-    mobch.mob_specials.damnodice = t[7].parse::<u8>().unwrap();
-    mobch.mob_specials.damsizedice = t[8].parse::<u8>().unwrap();
-    mobch.set_damroll(t[9].parse::<i8>().unwrap());
 
     if get_line(reader, &mut line) == 0 {
         error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #', but file ended!", nr);
         process::exit(1);
     }
 
-    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})").unwrap();
-    let f = regex.captures(line.as_str());
-    if f.is_none() {
-        error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #'", nr);
-        process::exit(1);
+    let regex =
+        Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})").unwrap_or_else(|e| panic!("regex error: {}", e));
+    match regex.captures(line.as_str()) {
+        None => {
+            error!("SYSERR: Format error in mob #{}, second line after S flag\n...expecting line of form '# #'", nr);
+            process::exit(1);
+        }
+        Some(t) => {
+            mobch.set_gold(
+                t[1].parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+            mobch.set_exp(
+                t[2].parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+            );
+        }
     }
-    let t = f.unwrap();
-
-    mobch.set_gold(t[1].parse::<i32>().unwrap());
-    mobch.set_exp(t[2].parse::<i32>().unwrap());
 
     if get_line(reader, &mut line) == 0 {
         error!("SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #', but file ended!", nr);
         process::exit(1);
     }
 
-    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})").unwrap();
-    let f = regex.captures(line.as_str());
-    if f.is_none() {
-        error!(
-            "SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #'",
-            nr
-        );
-        process::exit(1);
+    let regex = Regex::new(r"^(-?\d{1,9})\s(-?\d{1,9})\s(-?\d{1,9})")
+        .unwrap_or_else(|e| panic!("regex error: {}", e));
+    match regex.captures(line.as_str()) {
+        None => {
+            error!(
+                "SYSERR: Format error in last line of mob #{}\n...expecting line of form '# # #'",
+                nr
+            );
+            process::exit(1);
+        }
+        Some(t) => {
+            mobch.set_pos(
+                t[1].parse::<u8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e))
+                    .into(),
+            );
+            mobch.set_default_pos(
+                t[2].parse::<u8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e))
+                    .into(),
+            );
+            mobch.set_sex(
+                t[3].parse::<u8>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e))
+                    .into(),
+            );
+
+            mobch.set_class(Class::Undefined);
+            mobch.set_weight(200);
+            mobch.set_height(198);
+        }
     }
-    let t = f.unwrap();
-
-    mobch.set_pos(t[1].parse::<u8>().unwrap().into());
-    mobch.set_default_pos(t[2].parse::<u8>().unwrap().into());
-    mobch.set_sex(t[3].parse::<u8>().unwrap().into());
-
-    mobch.set_class(Class::Undefined);
-    mobch.set_weight(200);
-    mobch.set_height(198);
 
     /*
      * these are now save applies; base save numbers for MOBs are now from
@@ -1762,74 +1829,79 @@ impl DB {
             process::exit(1);
         }
 
-        let regex = Regex::new(r"^(\S+)\s(\S+)\s(-?\+?\d{1,9})\s([SE])").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error after string section of mob #{}\n...expecting line of form '# # # {{S | E}}'", nr);
-            process::exit(1);
-        }
-        let f = f.unwrap();
-
-        mobch.set_mob_flags(asciiflag_conv(&f[1]));
-        mobch.set_mob_flags_bit(MOB_ISNPC);
-        if mobch.mob_flagged(MOB_NOTDEADYET) {
-            /* Rather bad to load mobiles with this bit already set. */
-            error!("SYSERR: Mob #{} has reserved bit MOB_NOTDEADYET set.", nr);
-            mobch.remove_mob_flags_bit(MOB_NOTDEADYET);
-        }
-        check_bitvector_names(
-            mobch.mob_flags(),
-            ACTION_BITS_COUNT,
-            buf2.as_str(),
-            "mobile",
-        );
-
-        mobch.set_aff_flags(AffectFlags::from_bits_truncate(asciiflag_conv(&f[2])));
-        check_bitvector_names(
-            mobch.aff_flags().bits(),
-            AFFECTED_BITS_COUNT,
-            buf2.as_str(),
-            "mobile affect",
-        );
-
-        mobch.set_alignment(f[3].parse::<i32>().unwrap());
-
-        /* AGGR_TO_ALIGN is ignored if the mob is AGGRESSIVE. */
-        if mobch.mob_flagged(MOB_AGGRESSIVE)
-            && mobch.mob_flagged(MOB_AGGR_GOOD | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL)
-        {
-            error!(
-                "SYSERR: Mob #{} both Aggressive and Aggressive_to_Alignment.",
-                nr
-            );
-        }
-
-        match f[4].to_uppercase().as_str() {
-            "S" => {
-                /* Simple monsters */
-                parse_simple_mob(reader, &mut mobch, nr);
-            }
-            "E" => {
-                /* Circle3 Enhanced monsters */
-                parse_enhanced_mob(reader, &mut mobch, nr);
-            }
-            /* add new mob types here.. */
-            _ => {
-                error!("SYSERR: Unsupported mob type '{}' in mob #{}", &f[4], nr);
+        let regex = Regex::new(r"^(\S+)\s(\S+)\s(-?\+?\d{1,9})\s([SE])")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!("SYSERR: Format error after string section of mob #{}\n...expecting line of form '# # # {{S | E}}'", nr);
                 process::exit(1);
             }
+            Some(f) => {
+                mobch.set_mob_flags(asciiflag_conv(&f[1]));
+                mobch.set_mob_flags_bit(MOB_ISNPC);
+                if mobch.mob_flagged(MOB_NOTDEADYET) {
+                    /* Rather bad to load mobiles with this bit already set. */
+                    error!("SYSERR: Mob #{} has reserved bit MOB_NOTDEADYET set.", nr);
+                    mobch.remove_mob_flags_bit(MOB_NOTDEADYET);
+                }
+                check_bitvector_names(
+                    mobch.mob_flags(),
+                    ACTION_BITS_COUNT,
+                    buf2.as_str(),
+                    "mobile",
+                );
+
+                mobch.set_aff_flags(AffectFlags::from_bits_truncate(asciiflag_conv(&f[2])));
+                check_bitvector_names(
+                    mobch.aff_flags().bits(),
+                    AFFECTED_BITS_COUNT,
+                    buf2.as_str(),
+                    "mobile affect",
+                );
+
+                mobch.set_alignment(
+                    f[3].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+
+                /* AGGR_TO_ALIGN is ignored if the mob is AGGRESSIVE. */
+                if mobch.mob_flagged(MOB_AGGRESSIVE)
+                    && mobch.mob_flagged(MOB_AGGR_GOOD | MOB_AGGR_EVIL | MOB_AGGR_NEUTRAL)
+                {
+                    error!(
+                        "SYSERR: Mob #{} both Aggressive and Aggressive_to_Alignment.",
+                        nr
+                    );
+                }
+
+                match f[4].to_uppercase().as_str() {
+                    "S" => {
+                        /* Simple monsters */
+                        parse_simple_mob(reader, &mut mobch, nr);
+                    }
+                    "E" => {
+                        /* Circle3 Enhanced monsters */
+                        parse_enhanced_mob(reader, &mut mobch, nr);
+                    }
+                    /* add new mob types here.. */
+                    _ => {
+                        error!("SYSERR: Unsupported mob type '{}' in mob #{}", &f[4], nr);
+                        process::exit(1);
+                    }
+                }
+
+                mobch.aff_abils = mobch.real_abils;
+
+                for j in 0..NUM_WEARS {
+                    mobch.equipment[j] = None;
+                }
+
+                mobch.nr = self.mob_protos.len() as MobRnum;
+                mobch.desc = None;
+
+                self.mob_protos.push(mobch);
+            }
         }
-
-        mobch.aff_abils = mobch.real_abils;
-
-        for j in 0..NUM_WEARS {
-            mobch.equipment[j] = None;
-        }
-
-        mobch.nr = self.mob_protos.len() as MobRnum;
-        mobch.desc = None;
-
-        self.mob_protos.push(mobch);
     }
 
     /* read all objects from obj file; generate index and prototypes */
@@ -1935,22 +2007,26 @@ impl DB {
             process::exit(1);
         }
 
-        let regex = Regex::new(r"^(\d{1,9})\s(\S+)\s(\S+)").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error in first numeric line (expecting 3 args), {}",
-                buf2
-            );
-            process::exit(1);
+        let regex = Regex::new(r"^(\d{1,9})\s(\S+)\s(\S+)")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!(
+                    "SYSERR: Format error in first numeric line (expecting 3 args), {}",
+                    buf2
+                );
+                process::exit(1);
+            }
+            Some(f) => {
+                /* Object flags checked in check_object(). */
+                obj.set_obj_type(ItemType::from_u8(
+                    f[1].parse::<u8>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                ));
+                obj.set_obj_extra(ExtraFlags::from_bits_truncate(asciiflag_conv(&f[2]) as i32));
+                obj.set_obj_wear(WearFlags::from_bits_truncate(asciiflag_conv(&f[3]) as i32));
+            }
         }
-        let f = f.unwrap();
-
-        /* Object flags checked in check_object(). */
-        obj.set_obj_type(ItemType::from_u8(f[1].parse::<u8>().unwrap()));
-        obj.set_obj_extra(ExtraFlags::from_bits_truncate(asciiflag_conv(&f[2]) as i32));
-        obj.set_obj_wear(WearFlags::from_bits_truncate(asciiflag_conv(&f[3]) as i32));
-
         if get_line(reader, &mut line) == 0 {
             error!(
                 "SYSERR: Expecting second numeric line of {}, but file ended!",
@@ -1958,22 +2034,39 @@ impl DB {
             );
             process::exit(1);
         }
-        let regex =
-            Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error in second numeric line (expecting 4 args), {}",
-                buf2
-            );
-            process::exit(1);
+        let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!(
+                    "SYSERR: Format error in second numeric line (expecting 4 args), {}",
+                    buf2
+                );
+                process::exit(1);
+            }
+            Some(f) => {
+                obj.set_obj_val(
+                    0,
+                    f[1].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+                obj.set_obj_val(
+                    1,
+                    f[2].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+                obj.set_obj_val(
+                    2,
+                    f[3].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+                obj.set_obj_val(
+                    3,
+                    f[4].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+            }
         }
-        let f = f.unwrap();
-        obj.set_obj_val(0, f[1].parse::<i32>().unwrap());
-        obj.set_obj_val(1, f[2].parse::<i32>().unwrap());
-        obj.set_obj_val(2, f[3].parse::<i32>().unwrap());
-        obj.set_obj_val(3, f[4].parse::<i32>().unwrap());
-
         if get_line(reader, &mut line) == 0 {
             error!(
                 "SYSERR: Expecting third numeric line of {}, but file ended!",
@@ -1981,20 +2074,31 @@ impl DB {
             );
             process::exit(1);
         }
-        let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})").unwrap();
-        let f = regex.captures(line.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error in third numeric line (expecting 3 args), {}",
-                buf2
-            );
-            process::exit(1);
+        let regex = Regex::new(r"^(-?\+?\d{1,9})\s(-?\+?\d{1,9})\s(-?\+?\d{1,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(line.as_str()) {
+            None => {
+                error!(
+                    "SYSERR: Format error in third numeric line (expecting 3 args), {}",
+                    buf2
+                );
+                process::exit(1);
+            }
+            Some(f) => {
+                obj.set_obj_weight(
+                    f[1].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+                obj.set_obj_cost(
+                    f[2].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+                obj.set_obj_rent(
+                    f[3].parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                );
+            }
         }
-        let f = f.unwrap();
-        obj.set_obj_weight(f[1].parse::<i32>().unwrap());
-        obj.set_obj_cost(f[2].parse::<i32>().unwrap());
-        obj.set_obj_rent(f[3].parse::<i32>().unwrap());
-
         /* check to make sure that weight of containers exceeds curr. quantity */
         if (obj.get_obj_type() == ItemType::Drinkcon || obj.get_obj_type() == ItemType::Fountain)
             && obj.get_obj_weight() < obj.get_obj_val(1)
@@ -2011,21 +2115,22 @@ impl DB {
         let buf2 = ", after numeric constants\n...expecting 'E', 'A', '$', or next object number";
         let mut j = 0;
 
-        let regex = Regex::new(r"^(-?\+?\d{1,9})\s+(-?\+?\d{1,9})").unwrap();
+        let regex = Regex::new(r"^(-?\+?\d{1,9})\s+(-?\+?\d{1,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
         loop {
             if get_line(reader, &mut line) == 0 {
                 error!("SYSERR: Format error in {}", buf2);
                 process::exit(1);
             }
-            match line.chars().next().unwrap() {
-                'E' => {
+            match line.chars().next() {
+                Some('E') => {
                     let new_descr = ExtraDescrData {
                         keyword: Rc::from(fread_string(reader, buf2).as_str()),
                         description: Rc::from(fread_string(reader, buf2).as_str()),
                     };
                     obj.ex_descriptions.push(new_descr);
                 }
-                'A' => {
+                Some('A') => {
                     if obj.ex_descriptions.len() >= MAX_OBJ_AFFECT as usize {
                         error!(
                             "SYSERR: Too many A fields ({} max), {}",
@@ -2037,18 +2142,24 @@ impl DB {
                         error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric constants but file ended!", buf2);
                         process::exit(1);
                     }
-                    let f = regex.captures(line.as_str());
-                    if f.is_none() {
-                        error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric arguments\n...offending line: '{}'", buf2, line);
-                        process::exit(1);
+                    match regex.captures(line.as_str()) {
+                        None => {
+                            error!("SYSERR: Format error in 'A' field, {}\n...expecting 2 numeric arguments\n...offending line: '{}'", buf2, line);
+                            process::exit(1);
+                        }
+                        Some(f) => {
+                            obj.affected[j].location = ApplyType::from_u8(
+                                f[1].parse::<u8>()
+                                    .unwrap_or_else(|e| panic!("parse error: {}", e)),
+                            );
+                            obj.affected[j].modifier = f[2]
+                                .parse()
+                                .unwrap_or_else(|e| panic!("parse error: {}", e));
+                            j += 1;
+                        }
                     }
-                    let f = f.unwrap();
-
-                    obj.affected[j].location = ApplyType::from_u8(f[1].parse::<u8>().unwrap());
-                    obj.affected[j].modifier = f[2].parse().unwrap();
-                    j += 1;
                 }
-                '$' | '#' => {
+                Some('$') | Some('#') => {
                     self.check_object(&obj);
                     self.obj_proto.push(obj);
                     return line.clone();
@@ -2096,12 +2207,14 @@ impl DB {
         buf.clear();
         while reader.read_line(&mut buf).is_ok() {
             buf = buf.trim_end().to_string();
-            if buf.is_empty() {
+            if let Some(c) = buf.chars().next() {
+                if "MOPGERD".contains(c) || buf == "S" {
+                    num_of_cmds += 1;
+                }
+            } else {
                 break;
             }
-            if "MOPGERD".contains(buf.chars().next().unwrap()) || buf == "S" {
-                num_of_cmds += 1;
-            }
+
             buf.clear();
         }
 
@@ -2116,14 +2229,18 @@ impl DB {
 
         line_num += get_line(&mut reader, &mut buf);
 
-        let regex = Regex::new(r"^#(\d{1,9})").unwrap();
-        let f = regex.captures(buf.as_str());
-        if f.is_none() {
-            error!("SYSERR: Format error #1 in {}, line {}", zname, line_num);
-            process::exit(1);
+        let regex = Regex::new(r"^#(\d{1,9})").unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(buf.as_str()) {
+            None => {
+                error!("SYSERR: Format error #1 in {}, line {}", zname, line_num);
+                process::exit(1);
+            }
+            Some(f) => {
+                z.number = f[1]
+                    .parse::<ZoneVnum>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+            }
         }
-        let f = f.unwrap();
-        z.number = f[1].parse::<ZoneVnum>().unwrap();
 
         line_num += get_line(&mut reader, &mut buf);
         let r = buf.find('~');
@@ -2133,20 +2250,31 @@ impl DB {
         z.name = buf.clone();
 
         line_num += get_line(&mut reader, &mut buf);
-        let regex = Regex::new(r"^(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
-        let f = regex.captures(buf.as_str());
-        if f.is_none() {
-            error!(
-                "SYSERR: Format error #1 in numeric constant line of {}",
-                zname,
-            );
-            process::exit(1);
+        let regex = Regex::new(r"^(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        match regex.captures(buf.as_str()) {
+            None => {
+                error!(
+                    "SYSERR: Format error #1 in numeric constant line of {}",
+                    zname,
+                );
+                process::exit(1);
+            }
+            Some(f) => {
+                z.bot = f[1]
+                    .parse::<RoomRnum>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                z.top = f[2]
+                    .parse::<RoomRnum>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                z.lifespan = f[3]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+                z.reset_mode = f[4]
+                    .parse::<i32>()
+                    .unwrap_or_else(|e| panic!("parse error: {}", e));
+            }
         }
-        let f = f.unwrap();
-        z.bot = f[1].parse::<RoomRnum>().unwrap();
-        z.top = f[2].parse::<RoomRnum>().unwrap();
-        z.lifespan = f[3].parse::<i32>().unwrap();
-        z.reset_mode = f[4].parse::<i32>().unwrap();
 
         if z.bot > z.top {
             error!(
@@ -2157,8 +2285,10 @@ impl DB {
         }
 
         let mut cmd_no = 0;
-        let regex3 = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
-        let regex4 = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})").unwrap();
+        let regex3 = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
+        let regex4 = Regex::new(r"^\s(\d{1,9})\s(\d{0,9})\s(\d{0,9})\s(\d{0,9})")
+            .unwrap_or_else(|e| panic!("regex error: {}", e));
         loop {
             let tmp = get_line(&mut reader, &mut buf);
             if tmp == 0 {
@@ -2194,19 +2324,33 @@ impl DB {
                 /* a 3-arg command */
                 let f = regex3.captures(buf.as_str());
                 if let Some(f) = f {
-                    tmp = f[1].parse::<i32>().unwrap();
-                    zcmd.arg1 = f[2].parse::<i32>().unwrap();
-                    zcmd.arg2 = f[3].parse::<i32>().unwrap();
+                    tmp = f[1]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
+                    zcmd.arg1 = f[2]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
+                    zcmd.arg2 = f[3]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
                 } else {
                     error = 1;
                 }
             } else {
                 let f = regex4.captures(buf.as_str());
                 if let Some(f) = f {
-                    tmp = f[1].parse::<i32>().unwrap();
-                    zcmd.arg1 = f[2].parse::<i32>().unwrap();
-                    zcmd.arg2 = f[3].parse::<i32>().unwrap();
-                    zcmd.arg3 = f[4].parse::<i32>().unwrap();
+                    tmp = f[1]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
+                    zcmd.arg1 = f[2]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
+                    zcmd.arg2 = f[3]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
+                    zcmd.arg3 = f[4]
+                        .parse::<i32>()
+                        .unwrap_or_else(|e| panic!("parse error: {}", e));
                 } else {
                     error = 1;
                 }
@@ -2583,7 +2727,6 @@ impl Game {
         zone: usize,
     ) {
         let mut last_cmd = 0;
-        let mut oid;
         let mut mob_id = None;
         let cmd_count = db.zone_table[zone].cmd.len();
         for cmd_no in 0..cmd_count {
@@ -2613,9 +2756,11 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as MobVnum;
-                        mob_id = db.read_mobile(chars, nr, LoadType::Real);
-                        let room = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                        db.char_to_room(chars, objs, mob_id.unwrap(), room);
+                        if let Some(id) = db.read_mobile(chars, nr, LoadType::Real) {
+                            mob_id = Some(id);
+                            let room = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
+                            db.char_to_room(chars, objs, id, room);
+                        }
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2630,14 +2775,16 @@ impl Game {
                         if db.zone_table[zone].cmd[cmd_no].arg3 != NOWHERE as i32 {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
                             let room_nr = db.zone_table[zone].cmd[cmd_no].arg3 as RoomRnum;
-                            oid = db.read_object(objs, nr, LoadType::Real);
-                            let obj = objs.get_mut(oid.unwrap());
-                            db.obj_to_room(obj, room_nr);
+                            if let Some(id) = db.read_object(objs, nr, LoadType::Real) {
+                                let obj = objs.get_mut(id);
+                                db.obj_to_room(obj, room_nr);
+                            }
                             last_cmd = 1;
                         } else {
                             let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = db.read_object(objs, nr, LoadType::Real);
-                            objs.get_mut(oid.unwrap()).in_room = NOWHERE;
+                            if let Some(id) = db.read_object(objs, nr, LoadType::Real) {
+                                objs.get_mut(id).in_room = NOWHERE;
+                            }
                             last_cmd = 1;
                         }
                     } else {
@@ -2651,24 +2798,26 @@ impl Game {
                         < db.zone_table[zone].cmd[cmd_no].arg2
                     {
                         let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = db.read_object(objs, nr, LoadType::Real);
-                        let obj_to =
-                            db.get_obj_num(objs, db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum);
-                        if obj_to.is_none() {
-                            let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
-                            let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
-                                chars,
-                                zone,
-                                zcmd_command,
-                                zcmd_line,
-                                "target obj not found, command disabled",
-                                &mut last_cmd,
-                            );
-                            db.zone_table[zone].cmd[cmd_no].command = '*';
-                            continue;
+                        if let Some(id) = db.read_object(objs, nr, LoadType::Real) {
+                            if let Some(obj_to) = db
+                                .get_obj_num(objs, db.zone_table[zone].cmd[cmd_no].arg3 as ObjRnum)
+                            {
+                                obj_to_obj(chars, objs, id, obj_to.id());
+                            } else {
+                                let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                                let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                                self.log_zone_error(
+                                    chars,
+                                    zone,
+                                    zcmd_command,
+                                    zcmd_line,
+                                    "target obj not found, command disabled",
+                                    &mut last_cmd,
+                                );
+                                db.zone_table[zone].cmd[cmd_no].command = '*';
+                                continue;
+                            }
                         }
-                        obj_to_obj(chars, objs, oid.unwrap(), obj_to.unwrap().id());
                         last_cmd = 1;
                     } else {
                         last_cmd = 0;
@@ -2677,7 +2826,21 @@ impl Game {
 
                 'G' => {
                     /* obj_to_char */
-                    if mob_id.is_none() {
+                    if let Some(mob_id) = mob_id {
+                        if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                            < db.zone_table[zone].cmd[cmd_no].arg2
+                        {
+                            let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                            if let Some(oid) = db.read_object(objs, nr, LoadType::Real) {
+                                let obj = objs.get_mut(oid);
+                                let mob = chars.get_mut(mob_id);
+                                obj_to_char(obj, mob);
+                            }
+                            last_cmd = 1;
+                        } else {
+                            last_cmd = 0;
+                        }
+                    } else {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
@@ -2692,23 +2855,47 @@ impl Game {
                         db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
                     }
-                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < db.zone_table[zone].cmd[cmd_no].arg2
-                    {
-                        let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                        oid = db.read_object(objs, nr, LoadType::Real);
-                        let obj = objs.get_mut(oid.unwrap());
-                        let mob = chars.get_mut(mob_id.unwrap());
-                        obj_to_char(obj, mob);
-                        last_cmd = 1;
-                    } else {
-                        last_cmd = 0;
-                    }
                 }
 
                 'E' => {
                     /* object to equipment list */
-                    if mob_id.is_none() {
+                    if let Some(mob_id) = mob_id {
+                        if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
+                            < db.zone_table[zone].cmd[cmd_no].arg2
+                        {
+                            if db.zone_table[zone].cmd[cmd_no].arg3 < 0
+                                || db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
+                            {
+                                let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
+                                let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
+                                self.log_zone_error(
+                                    chars,
+                                    zone,
+                                    zcmd_command,
+                                    zcmd_line,
+                                    "invalid equipment pos number",
+                                    &mut last_cmd,
+                                );
+                            } else {
+                                let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
+                                if let Some(id) = db.read_object(objs, nr, LoadType::Real) {
+                                    let pos = db.zone_table[zone].cmd[cmd_no].arg3 as usize;
+                                    equip_char(
+                                        &mut self.descriptors,
+                                        chars,
+                                        db,
+                                        objs,
+                                        mob_id,
+                                        id,
+                                        pos,
+                                    );
+                                }
+                                last_cmd = 1;
+                            }
+                        } else {
+                            last_cmd = 0;
+                        }
+                    } else {
                         let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
                         let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
                         self.log_zone_error(
@@ -2722,40 +2909,6 @@ impl Game {
 
                         db.zone_table[zone].cmd[cmd_no].command = '*';
                         continue;
-                    }
-                    if db.obj_index[db.zone_table[zone].cmd[cmd_no].arg1 as usize].number
-                        < db.zone_table[zone].cmd[cmd_no].arg2
-                    {
-                        if db.zone_table[zone].cmd[cmd_no].arg3 < 0
-                            || db.zone_table[zone].cmd[cmd_no].arg3 >= NUM_WEARS as i32
-                        {
-                            let zcmd_command = db.zone_table[zone].cmd[cmd_no].command;
-                            let zcmd_line = db.zone_table[zone].cmd[cmd_no].line;
-                            self.log_zone_error(
-                                chars,
-                                zone,
-                                zcmd_command,
-                                zcmd_line,
-                                "invalid equipment pos number",
-                                &mut last_cmd,
-                            );
-                        } else {
-                            let nr = db.zone_table[zone].cmd[cmd_no].arg1 as ObjVnum;
-                            oid = db.read_object(objs, nr, LoadType::Real);
-                            let pos = db.zone_table[zone].cmd[cmd_no].arg3 as usize;
-                            equip_char(
-                                &mut self.descriptors,
-                                chars,
-                                db,
-                                objs,
-                                mob_id.unwrap(),
-                                oid.unwrap(),
-                                pos,
-                            );
-                            last_cmd = 1;
-                        }
-                    } else {
-                        last_cmd = 0;
                     }
                 }
 
@@ -2797,42 +2950,36 @@ impl Game {
                     } else {
                         match db.zone_table[zone].cmd[cmd_no].arg3 {
                             0 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                if let Some(exit) = &mut db.world
+                                    [db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .remove_exit_info_bit(ExitFlags::LOCKED);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
-                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .remove_exit_info_bit(ExitFlags::CLOSED);
+                                {
+                                    exit.remove_exit_info_bit(ExitFlags::LOCKED);
+                                    exit.remove_exit_info_bit(ExitFlags::CLOSED);
+                                }
                             }
 
                             1 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                if let Some(exit) = &mut db.world
+                                    [db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .set_exit_info_bit(ExitFlags::LOCKED);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
-                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .remove_exit_info_bit(ExitFlags::CLOSED);
+                                {
+                                    exit.set_exit_info_bit(ExitFlags::LOCKED);
+                                    exit.remove_exit_info_bit(ExitFlags::CLOSED);
+                                }
                             }
 
                             2 => {
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
+                                if let Some(exit) = &mut db.world
+                                    [db.zone_table[zone].cmd[cmd_no].arg1 as usize]
+                                    .dir_option
                                     [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .set_exit_info_bit(ExitFlags::LOCKED);
-                                db.world[db.zone_table[zone].cmd[cmd_no].arg1 as usize].dir_option
-                                    [db.zone_table[zone].cmd[cmd_no].arg2 as usize]
-                                    .as_mut()
-                                    .unwrap()
-                                    .set_exit_info_bit(ExitFlags::CLOSED);
+                                {
+                                    exit.set_exit_info_bit(ExitFlags::LOCKED);
+                                    exit.set_exit_info_bit(ExitFlags::CLOSED);
+                                }
                             }
                             _ => {}
                         }
@@ -2867,14 +3014,16 @@ fn is_empty(game: &Game, db: &DB, chars: &Depot<CharData>, zone_nr: ZoneRnum) ->
         if i.state() != ConPlaying {
             continue;
         }
-        if chars.get(i.character.unwrap()).in_room() == NOWHERE {
-            continue;
-        }
-        if chars.get(i.character.unwrap()).get_level() >= LVL_IMMORT {
-            continue;
-        }
-        if db.world[chars.get(i.character.unwrap()).in_room() as usize].zone != zone_nr {
-            continue;
+        if let Some(id) = i.character {
+            if chars.get(id).in_room() == NOWHERE {
+                continue;
+            }
+            if chars.get(id).get_level() >= LVL_IMMORT {
+                continue;
+            }
+            if db.world[chars.get(id).in_room() as usize].zone != zone_nr {
+                continue;
+            }
         }
         return false;
     }
@@ -2894,22 +3043,20 @@ impl DB {
 
     /* Load a char, TRUE if loaded, FALSE if not */
     pub fn load_char(&mut self, name: &str, char_element: &mut CharFileU) -> Option<usize> {
-        let player_i = self.get_ptable_by_name(name);
-        if player_i.is_none() {
-            return player_i;
-        }
-        let player_i = player_i.unwrap();
-        let pfile = self.player_fl.as_mut().unwrap();
+        let player_i = self.get_ptable_by_name(name)?;
+        let pfile = self.player_fl.as_mut()?;
 
         let record_size = mem::size_of::<CharFileU>();
         pfile
             .seek(SeekFrom::Start((player_i * record_size) as u64))
-            .expect("Error while reading player file");
+            .expect("Error while reading player file [seek]");
         unsafe {
             let config_slice =
                 slice::from_raw_parts_mut(char_element as *mut _ as *mut u8, record_size);
             // `read_exact()` comes from `Read` impl for `&[u8]`
-            pfile.read_exact(config_slice).unwrap();
+            pfile
+                .read_exact(config_slice)
+                .expect("Error while reading player file records [read records]");
         }
         Some(player_i)
     }
@@ -2931,24 +3078,32 @@ pub fn save_char(
 ) {
     let ch = chars.get(chid);
     let mut st: CharFileU = CharFileU::default();
+    let ch_desc;
+    if let Some(desc) = ch.desc {
+        ch_desc = desc;
+    } else {
+        return;
+    }
 
-    if ch.is_npc() || ch.desc.is_none() || ch.get_pfilepos() < 0 {
+    if ch.is_npc() || ch.get_pfilepos() < 0 {
         return;
     }
 
     char_to_store(descs, texts, objs, db, chars, chid, &mut st);
     let ch = chars.get(chid);
-    copy_to_stored(&mut st.host, descs.get(ch.desc.unwrap()).host.as_ref());
+    copy_to_stored(&mut st.host, descs.get(ch_desc).host.as_ref());
 
     unsafe {
         let player_slice =
             slice::from_raw_parts(&mut st as *mut _ as *mut u8, mem::size_of::<CharFileU>());
         let offset = ch.get_pfilepos() as usize * mem::size_of::<CharFileU>();
-        db.player_fl
-            .as_mut()
-            .unwrap()
-            .write_all_at(player_slice, offset as u64)
-            .expect("Error while writing player record to file");
+        if let Some(player_file) = &mut db.player_fl {
+            player_file
+                .write_all_at(player_slice, offset as u64)
+                .expect("Error while writing player record to file");
+        } else {
+            panic!("Player file not found");
+        }
     }
 }
 
@@ -3215,8 +3370,8 @@ pub fn char_to_store(
     }
 
     for (i, char_eq) in char_eq.iter().enumerate() {
-        if char_eq.is_some() {
-            equip_char(descs, chars, db, objs, chid, char_eq.unwrap(), i);
+        if let Some(char_eq) = char_eq {
+            equip_char(descs, chars, db, objs, chid, *char_eq, i);
         }
     }
     /*   affect_total(ch); unnecessary, I think !?! */
@@ -3242,14 +3397,17 @@ impl DB {
         let i: usize;
         let pos = self.get_ptable_by_name(name);
         if let Some(pos) = pos {
-            let mut pie = self.player_table.get_mut(pos);
-            pie.as_mut().unwrap().name = Rc::from(name.to_lowercase().as_str());
+            if let Some(pie) = self.player_table.get_mut(pos) {
+                pie.name = Rc::from(name.to_lowercase());
+            } else {
+                panic!("Player index element not found");
+            }
             pos
         } else {
             /* new name */
             i = self.player_table.len();
             self.player_table.push(PlayerIndexElement {
-                name: Rc::from(name.to_lowercase().as_str()),
+                name: Rc::from(name.to_lowercase()),
                 id: i as i64,
             });
             i
@@ -3268,15 +3426,12 @@ pub fn fread_string(reader: &mut BufReader<File>, error: &str) -> String {
     let mut done = false;
     loop {
         tmp.clear();
-        let r = reader.read_line(&mut tmp);
-        if r.is_err() {
-            error!(
+        reader.read_line(&mut tmp).unwrap_or_else(|e| {
+            panic!(
                 "SYSERR: fread_string: format error at or near {}: {}",
-                error,
-                r.err().unwrap()
-            );
-            process::exit(1);
-        }
+                error, e
+            )
+        });
 
         /* If there is a '~', end the string; else put an "\r\n" over the '\n'. */
         let point = tmp.find('~');
@@ -3312,8 +3467,8 @@ impl DB {
             affect_remove(objs, &mut ch, af);
         }
 
-        if ch.desc.is_some() {
-            descs.get_mut(ch.desc.unwrap()).character = None;
+        if let Some(ch_desc) = ch.desc {
+            descs.get_mut(ch_desc).character = None;
         }
     }
 
@@ -3350,11 +3505,12 @@ impl Game {
         }
 
         /* Lets not free() what used to be there unless we succeeded. */
-        let r = file_to_string(name);
-        if r.is_err() {
-            return -1;
-        }
-        let temp = r.unwrap();
+        let temp = match file_to_string(name) {
+            Err(_) => {
+                return -1;
+            }
+            Ok(r) => r,
+        };
 
         for in_use_id in self.descriptor_list.clone() {
             let in_use = self.desc_mut(in_use_id);
@@ -3365,8 +3521,7 @@ impl Game {
             let temppage = in_use.showstr_page;
             in_use.showstr_head = Some(in_use.showstr_vector[0].clone());
             in_use.showstr_page = temppage;
-            let msg = in_use.showstr_head.as_ref().unwrap().clone();
-            paginate_string(msg.as_ref(), in_use);
+            paginate_string(&in_use.showstr_vector[0].clone(), in_use);
         }
         *buf = Rc::from(temp);
         0
@@ -3375,11 +3530,13 @@ impl Game {
 
 /* read contents of a text file, and place in buf */
 fn file_to_string(name: &str) -> io::Result<String> {
-    let r = fs::read_to_string(name);
-    if r.is_err() {
-        error!("SYSERR: reading {}: {}", name, r.as_ref().err().unwrap());
+    match fs::read_to_string(name) {
+        Err(e) => {
+            error!("SYSERR: reading {}: {}", name, e);
+            Err(e)
+        }
+        Ok(r) => Ok(r),
     }
-    r
 }
 
 /* clear some of the the working variables of a char */
@@ -3535,29 +3692,23 @@ impl DB {
 
     // /* returns the real number of the room with given virtual number */
     pub fn real_room(&self, vnum: RoomRnum) -> RoomRnum {
-        let r = self.world.binary_search_by_key(&vnum, |idx| idx.number);
-        if r.is_err() {
-            return NOWHERE;
-        }
-        r.unwrap() as RoomRnum
+        self.world
+            .binary_search_by_key(&vnum, |idx| idx.number)
+            .unwrap_or(NOWHERE as usize) as RoomRnum
     }
 
     /* returns the real number of the monster with given virtual number */
     pub fn real_mobile(&self, vnum: MobVnum) -> MobRnum {
-        let r = self.mob_index.binary_search_by_key(&vnum, |idx| idx.vnum);
-        if r.is_err() {
-            return NOBODY;
-        }
-        r.unwrap() as MobRnum
+        self.mob_index
+            .binary_search_by_key(&vnum, |idx| idx.vnum)
+            .unwrap_or(NOBODY as usize) as MobRnum
     }
 
     /* returns the real number of the object with given virtual number */
     pub fn real_object(&self, vnum: ObjVnum) -> ObjRnum {
-        let r = self.obj_index.binary_search_by_key(&vnum, |idx| idx.vnum);
-        if r.is_err() {
-            return NOTHING;
-        }
-        r.unwrap() as ObjRnum
+        self.obj_index
+            .binary_search_by_key(&vnum, |idx| idx.vnum)
+            .unwrap_or(NOTHING as usize) as ObjRnum
     }
 
     /* returns the real number of the zone with given virtual number */
