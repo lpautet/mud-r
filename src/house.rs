@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -88,11 +88,9 @@ impl HouseControlRec {
 }
 
 fn toroom(db: &DB, room: usize, dir: usize) -> RoomRnum {
-    if db.world[room].dir_option[dir].is_some() {
-        db.world[room].dir_option[dir].as_ref().unwrap().to_room
-    } else {
-        NOWHERE
-    }
+    db.world[room].dir_option[dir]
+        .as_ref()
+        .map_or(NOWHERE, |exit| exit.to_room)
 }
 
 /* First, the basics: finding the filename; loading/saving objects */
@@ -121,16 +119,10 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
     if !house_get_filename(vnum, &mut filename) {
         return false;
     }
-    let fl;
-    let res = {
-        fl = OpenOptions::new().read(true).open(&filename);
-        fl.is_err()
-    };
-    if res {
+    let Ok(mut fl) = OpenOptions::new().read(true).open(&filename) else {
         /* no file found */
         return false;
-    }
-    let mut fl = fl.unwrap();
+    };
 
     loop {
         let mut object = ObjFileElem::new();
@@ -140,9 +132,7 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
                 mem::size_of::<ObjFileElem>(),
             );
             // `read_exact()` comes from `Read` impl for `&[u8]`
-            let r = fl.read_exact(obj_elem_slice);
-            if r.is_err() {
-                let err = r.err().unwrap();
+            if let Err(err) = fl.read_exact(obj_elem_slice) {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     break;
                 }
@@ -150,8 +140,11 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
                 return false;
             }
             let mut i = -1;
-            let newobjid = obj_from_store(db, objs, &object, &mut i).unwrap();
-            db.obj_to_room(objs.get_mut(newobjid), rnum);
+            if let Some(newobjid) = obj_from_store(db, objs, &object, &mut i) {
+                db.obj_to_room(objs.get_mut(newobjid), rnum);
+            } else {
+                error!("[SYSERR] getting obj from store");
+            }
         }
     }
 
@@ -169,8 +162,7 @@ fn house_save(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>, fp: &m
         if !result {
             return false;
         }
-        if objs.get(oid).in_obj.is_some() {
-            let tmp_id = objs.get(oid).in_obj.unwrap();
+        if let Some(tmp_id) = objs.get(oid).in_obj {
             let val = objs.get(tmp_id).get_obj_weight() - objs.get(oid).get_obj_weight();
             objs.get_mut(tmp_id).set_obj_weight(val);
         }
@@ -185,11 +177,9 @@ fn house_restore_weight(objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
             house_restore_weight(objs, objs.get(coid).contains.clone());
         }
 
-        if objs.get(oid).in_obj.is_some() {
-            let val = objs.get(objs.get(oid).in_obj.unwrap()).get_obj_weight()
-                + objs.get(oid).get_obj_weight();
-            objs.get_mut(objs.get(oid).in_obj.unwrap())
-                .set_obj_weight(val);
+        if let Some(tmp_id) = objs.get(oid).in_obj {
+            let val = objs.get(tmp_id).get_obj_weight() + objs.get(oid).get_obj_weight();
+            objs.get_mut(tmp_id).set_obj_weight(val);
         }
     }
 }
@@ -208,20 +198,18 @@ pub fn house_crashsave(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
     if !house_get_filename(vnum, &mut buf) {
         return;
     }
-    let fp;
-    let res = {
-        fp = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&buf);
-        fp.is_err()
+    let mut fp = match OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&buf)
+    {
+        Ok(file) => file,
+        Err(err) => {
+            error!("SYSERR: Error saving house file {}: {}", buf, err);
+            return;
+        }
     };
-    if res {
-        error!("SYSERR: Error saving house file {}", fp.err().unwrap());
-        return;
-    }
-    let mut fp = fp.unwrap();
     if !house_save(db, objs, db.world[rnum as usize].contents.clone(), &mut fp) {
         return;
     }
@@ -236,29 +224,14 @@ fn house_delete_file(vnum: RoomVnum) {
     if !house_get_filename(vnum, &mut filename) {
         return;
     }
-    let fl;
-    let res = {
-        fl = OpenOptions::new().read(true).open(&filename);
-        fl.is_err()
-    };
-    if res {
-        let err = fl.err().unwrap();
+    if let Err(err) = OpenOptions::new().read(true).open(&filename) {
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: Error deleting house file #{}. (1): {}", vnum, err);
             return;
         }
-    }
-    let r;
-    let res = {
-        r = fs::remove_file(&filename);
-        r.is_err()
     };
-    if res {
-        error!(
-            "SYSERR: Error deleting house file #{}. (2): {}",
-            vnum,
-            r.err().unwrap()
-        );
+    if let Err(err) = fs::remove_file(&filename) {
+        error!("SYSERR: Error deleting house file #{}. (2): {}", vnum, err);
     }
 }
 
@@ -279,7 +252,7 @@ fn house_delete_file(vnum: RoomVnum) {
 //         );
 //         return;
 //     }
-//     let mut fl = fl.unwrap();
+//     let mut fl = fl.unwrap__();
 //
 //     loop {
 //         let mut object = ObjFileElem::new();
@@ -291,7 +264,7 @@ fn house_delete_file(vnum: RoomVnum) {
 //             // `read_exact()` comes from `Read` impl for `&[u8]`
 //             let r = fl.read_exact(object_slice);
 //             if r.is_err() {
-//                 let err = r.err().unwrap();
+//                 let err = r.err().unwrap__();
 //                 if err.kind() == ErrorKind::UnexpectedEof {
 //                     break;
 //                 }
@@ -301,7 +274,7 @@ fn house_delete_file(vnum: RoomVnum) {
 //         let mut i = -1;
 //         let obj = obj_from_store(chars, db, &object, &mut i);
 //         if obj.is_some() {
-//             let obj = obj.as_ref().unwrap();
+//             let obj = obj.as_ref().unwrap__();
 //             send_to_char(&mut game.descriptors, db,
 //                 ch,
 //                 format!(
@@ -326,24 +299,19 @@ fn find_house(db: &DB, vnum: RoomVnum) -> Option<usize> {
 
 /* Save the house control information */
 fn house_save_control(db: &mut DB) {
-    let fl;
-
-    let res = {
-        fl = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(HCONTROL_FILE);
-        fl.is_err()
+    let mut fl = match OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(HCONTROL_FILE)
+    {
+        Ok(f) => f,
+        Err(err) => {
+            error!("SYSERR: Unable to open house control file. {}", err);
+            return;
+        }
     };
-    if res {
-        error!(
-            "SYSERR: Unable to open house control file. {}",
-            fl.err().unwrap()
-        );
-        return;
-    }
-    let mut fl = fl.unwrap();
+
     for i in 0..db.num_of_houses {
         let slice;
         unsafe {
@@ -352,9 +320,8 @@ fn house_save_control(db: &mut DB) {
                 mem::size_of::<HouseControlRec>(),
             );
         }
-        let r = fl.write_all(slice);
-        if r.is_err() {
-            error!("{}", r.err().unwrap());
+        if let Err(err) = fl.write_all(slice) {
+            error!("write_all: {}", err);
             return;
         }
     }
@@ -365,21 +332,17 @@ fn house_save_control(db: &mut DB) {
 pub fn house_boot(db: &mut DB, objs: &mut Depot<ObjData>) {
     let mut temp_house = HouseControlRec::new();
 
-    let fl;
-    let res = {
-        fl = OpenOptions::new().read(true).open(HCONTROL_FILE);
-        fl.is_err()
-    };
-    if res {
-        let err = fl.err().unwrap();
-        if err.kind() == ErrorKind::NotFound {
-            info!("   House control file '{}' does not exist.", HCONTROL_FILE);
-        } else {
-            error!("SYSERR: {} {} ", HCONTROL_FILE, err);
+    let mut fl = match OpenOptions::new().read(true).open(HCONTROL_FILE) {
+        Err(err) => {
+            if err.kind() == ErrorKind::NotFound {
+                info!("   House control file '{}' does not exist.", HCONTROL_FILE);
+            } else {
+                error!("SYSERR: {} {} ", HCONTROL_FILE, err);
+            }
+            return;
         }
-        return;
-    }
-    let mut fl = fl.unwrap();
+        Ok(f) => f,
+    };
     while db.num_of_houses < MAX_HOUSES {
         unsafe {
             let hc_slice = slice::from_raw_parts_mut(
@@ -387,9 +350,7 @@ pub fn house_boot(db: &mut DB, objs: &mut Depot<ObjData>) {
                 mem::size_of::<HouseControlRec>(),
             );
             // `read_exact()` comes from `Read` impl for `&[u8]`
-            let r = fl.read_exact(hc_slice);
-            if r.is_err() {
-                let err = r.err().unwrap();
+            if let Err(err) = fl.read_exact(hc_slice) {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     break;
                 }
@@ -468,14 +429,9 @@ pub fn hcontrol_list_houses(
     let house_control = db.house_control;
     for (i, house_control) in house_control.iter().enumerate().take(db.num_of_houses) {
         /* Avoid seeing <UNDEF> entries from self-deleted people. -gg 6/21/98 */
-        let temp;
-        let res = {
-            temp = db.get_name_by_id(house_control.owner);
-            temp.is_none()
-        };
-        if res {
+        let Some(temp) = db.get_name_by_id(house_control.owner) else {
             continue;
-        }
+        };
         let built_on = if house_control.built_on != 0 {
             ctime(house_control.built_on)
         } else {
@@ -499,7 +455,7 @@ pub fn hcontrol_list_houses(
                 house_control.atrium,
                 built_on,
                 house_control.num_of_guests,
-                temp.unwrap().to_lowercase(),
+                temp.to_lowercase(),
                 last_pay
             )
             .as_str(),
@@ -531,12 +487,10 @@ fn hcontrol_build_house(
         send_to_char(descs, ch, HCONTROL_FORMAT);
         return;
     }
-    let virt_house = arg.parse::<i16>();
-    if virt_house.is_err() {
+    let Ok(virt_house) = arg.parse::<i16>() else {
         send_to_char(descs, ch, "No such room exists.\r\n");
         return;
-    }
-    let virt_house = virt_house.unwrap();
+    };
     let real_house;
     let res = {
         real_house = db.real_room(virt_house);
@@ -558,20 +512,14 @@ fn hcontrol_build_house(
         send_to_char(descs, ch, HCONTROL_FORMAT);
         return;
     }
-    let exit_num;
-    let res = {
-        exit_num = search_block(&arg1, &DIRS, false);
-        exit_num.is_none()
-    };
-    if res {
+    let Some(exit_num) = search_block(&arg1, &DIRS, false) else {
         send_to_char(
             descs,
             ch,
             format!("'{}' is not a valid direction.\r\n", arg1).as_str(),
         );
         return;
-    }
-    let exit_num = exit_num.unwrap();
+    };
     if toroom(db, real_house as usize, exit_num) == NOWHERE {
         send_to_char(
             descs,
@@ -657,16 +605,10 @@ fn hcontrol_destroy_house(
     }
     let argi = arg.parse::<i16>();
     let argi = argi.unwrap_or(-1);
-    let i;
-    let res = {
-        i = find_house(db, argi);
-        i.is_none()
-    };
-    if res {
+    let Some(i) = find_house(db, argi) else {
         send_to_char(descs, ch, "Unknown house.\r\n");
         return;
-    }
-    let i = i.unwrap();
+    };
     let real_atrium;
     let res = {
         real_atrium = db.real_room(db.house_control[i].atrium);
@@ -736,16 +678,9 @@ fn hcontrol_pay_house(
 
     let argi = arg.parse::<i16>();
     let argi = argi.unwrap_or(-1);
-    let i;
-    #[allow(clippy::blocks_in_conditions)]
     if arg.is_empty() {
         send_to_char(&mut game.descriptors, ch, HCONTROL_FORMAT);
-    } else if {
-        i = find_house(db, argi);
-        i.is_none()
-    } {
-        send_to_char(&mut game.descriptors, ch, "Unknown house.\r\n");
-    } else {
+    } else if let Some(i) = find_house(db, argi) {
         game.mudlog(
             chars,
             DisplayMode::Normal,
@@ -754,11 +689,12 @@ fn hcontrol_pay_house(
             format!("Payment for house {} collected by {}.", arg, ch.get_name()).as_str(),
         );
 
-        let i = i.unwrap();
         db.house_control[i].last_payment = time_now();
         house_save_control(db);
         let ch = chars.get(chid);
         send_to_char(&mut game.descriptors, ch, "Payment recorded.\r\n");
+    } else {
+        send_to_char(&mut game.descriptors, ch, "Unknown house.\r\n");
     }
 }
 
@@ -812,66 +748,75 @@ pub fn do_house(
 
     let mut arg = String::new();
     one_argument(argument, &mut arg);
-    let i;
-    let id;
-    #[allow(clippy::blocks_in_conditions)]
     if !db.room_flagged(ch.in_room(), RoomFlags::HOUSE) {
         send_to_char(
             &mut game.descriptors,
             ch,
             "You must be in your house to set guests.\r\n",
         );
-    } else if {
-        i = find_house(db, db.get_room_vnum(ch.in_room()));
-        i.is_none()
-    } {
+        return;
+    }
+
+    let Some(i) = find_house(db, db.get_room_vnum(ch.in_room())) else {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Um.. this house seems to be screwed up.\r\n",
         );
-    } else if ch.get_idnum() != db.house_control[i.unwrap()].owner {
+        return;
+    };
+
+    if ch.get_idnum() != db.house_control[i].owner {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Only the primary owner can set guests.\r\n",
         );
-    } else if arg.is_empty() {
-        house_list_guests(&mut game.descriptors, chars, db, chid, i.unwrap(), false);
-    } else if {
-        id = db.get_id_by_name(&arg);
-        id < 0
-    } {
-        send_to_char(&mut game.descriptors, ch, "No such player.\r\n");
-    } else if id == ch.get_idnum() {
-        send_to_char(&mut game.descriptors, ch, "It's your house!\r\n");
-    } else {
-        let i = i.unwrap();
-        for j in 0..db.house_control[i].num_of_guests {
-            if db.house_control[i].guests[j as usize] == id {
-                for j in j..db.house_control[i].num_of_guests {
-                    db.house_control[i].guests[j as usize] =
-                        db.house_control[i].guests[j as usize + 1];
-                }
-                db.house_control[i].num_of_guests += 1;
-                house_save_control(db);
-                let ch = chars.get(chid);
-                send_to_char(&mut game.descriptors, ch, "Guest deleted.\r\n");
-                return;
-            }
-        }
+        return;
+    }
 
-        if db.house_control[i].num_of_guests == MAX_GUESTS as i32 {
-            send_to_char(&mut game.descriptors, ch, "You have too many guests.\r\n");
+    if arg.is_empty() {
+        house_list_guests(&mut game.descriptors, chars, db, chid, i, false);
+        return;
+    }
+
+    let id = db.get_id_by_name(&arg);
+    if id < 0 {
+        send_to_char(&mut game.descriptors, ch, "No such player.\r\n");
+        return;
+    }
+
+    if id == ch.get_idnum() {
+        send_to_char(&mut game.descriptors, ch, "It's your house!\r\n");
+        return;
+    }
+
+    // Check if guest already exists and remove them
+    for j in 0..db.house_control[i].num_of_guests {
+        if db.house_control[i].guests[j as usize] == id {
+            for k in j..db.house_control[i].num_of_guests - 1 {
+                db.house_control[i].guests[k as usize] = db.house_control[i].guests[k as usize + 1];
+            }
+            db.house_control[i].num_of_guests -= 1;
+            house_save_control(db);
+            let ch = chars.get(chid);
+            send_to_char(&mut game.descriptors, ch, "Guest deleted.\r\n");
             return;
         }
-        db.house_control[i].num_of_guests += 1;
-        let j = db.house_control[i].num_of_guests;
-        db.house_control[i].guests[j as usize] = id;
-        house_save_control(db);
-        let ch = chars.get(chid);
-        send_to_char(&mut game.descriptors, ch, "Guest added.\r\n");
     }
+
+    // Add new guest
+    if db.house_control[i].num_of_guests == MAX_GUESTS as i32 {
+        send_to_char(&mut game.descriptors, ch, "You have too many guests.\r\n");
+        return;
+    }
+
+    let j = db.house_control[i].num_of_guests;
+    db.house_control[i].guests[j as usize] = id;
+    db.house_control[i].num_of_guests += 1;
+    house_save_control(db);
+    let ch = chars.get(chid);
+    send_to_char(&mut game.descriptors, ch, "Guest added.\r\n");
 }
 
 /* Misc. administrative functions */
@@ -889,28 +834,21 @@ pub fn house_save_all(db: &mut DB, objs: &mut Depot<ObjData>) {
 
 /* note: arg passed must be house vnum, so there. */
 pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
-    let mut i = None;
-
-    if ch.get_level() >= LVL_GRGOD || {
-        i = find_house(db, house);
-        i.is_none()
-    } {
+    if ch.get_level() >= LVL_GRGOD {
         return true;
     }
-    let i = i.unwrap();
-    #[allow(clippy::single_match)]
-    match db.house_control[i].mode {
-        HOUSE_PRIVATE => {
-            if ch.get_idnum() == db.house_control[i].owner {
+    let Some(i) = find_house(db, house) else {
+        return true;
+    };
+    if db.house_control[i].mode == HOUSE_PRIVATE {
+        if ch.get_idnum() == db.house_control[i].owner {
+            return true;
+        }
+        for j in 0..db.house_control[i].num_of_guests as usize {
+            if ch.get_idnum() == db.house_control[i].guests[j] {
                 return true;
             }
-            for j in 0..db.house_control[i].num_of_guests as usize {
-                if ch.get_idnum() == db.house_control[i].guests[j] {
-                    return true;
-                }
-            }
         }
-        _ => {}
     }
     false
 }
@@ -936,26 +874,17 @@ fn house_list_guests(
     let mut num_printed = 0;
     for j in 0..house_control[i].num_of_guests as usize {
         /* Avoid <UNDEF>. -gg 6/21/98 */
-        let temp;
-        let res = {
-            temp = db.get_name_by_id(house_control[i].guests[j]);
-            temp.is_none()
-        };
-        if res {
+        let Some(temp) = db.get_name_by_id(house_control[i].guests[j]) else {
             continue;
+        };
+        if let Some(c) = temp.chars().next() {
+            num_printed += 1;
+            send_to_char(
+                descs,
+                ch,
+                format!("{}{} ", c.to_uppercase(), &temp[1..]).as_str(),
+            );
         }
-        let temp = temp.unwrap();
-        num_printed += 1;
-        send_to_char(
-            descs,
-            ch,
-            format!(
-                "{}{} ",
-                temp.chars().next().unwrap().to_uppercase(),
-                &temp[1..]
-            )
-            .as_str(),
-        );
     }
 
     if num_printed == 0 {

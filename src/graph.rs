@@ -40,7 +40,10 @@ fn is_marked(db: &DB, room: RoomRnum) -> bool {
 }
 
 fn toroom(db: &DB, x: RoomRnum, y: usize) -> RoomRnum {
-    db.world[x as usize].dir_option[y].as_ref().expect("No direction option").to_room
+    db.world[x as usize].dir_option[y]
+        .as_ref()
+        .expect("No direction option")
+        .to_room
 }
 
 fn is_closed(db: &DB, x: RoomRnum, y: usize) -> bool {
