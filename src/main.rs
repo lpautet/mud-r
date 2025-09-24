@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 use std::borrow::Borrow;
 use std::cmp::max;
@@ -383,15 +383,17 @@ fn main() -> ExitCode {
      */
     info!("{}", CIRCLEMUD_VERSION);
 
-    env::set_current_dir(Path::new(&dir)).unwrap_or_else(|error| {
+    if let Err(err) = env::set_current_dir(Path::new(&dir)) {
         eprint!(
             "SYSERR: Fatal error changing to data directory {}/{}: {}",
-            env::current_dir().unwrap().display(),
+            env::current_dir()
+                .expect("Failed to get current directory")
+                .display(),
             dir,
-            error
+            err
         );
         process::exit(1);
-    });
+    }
 
     info!("Using {} as data directory.", dir);
 
@@ -449,7 +451,7 @@ impl Game {
             error!("Failed to setup signal handlers: {}", e);
         }
         /* If we made it this far, we will be able to restart without problem. */
-        fs::remove_file(Path::new(KILLSCRIPT_FILE)).unwrap();
+        fs::remove_file(Path::new(KILLSCRIPT_FILE)).expect("Cannot remove KILLSCRIPT path");
 
         info!("Entering game loop.");
 
@@ -633,54 +635,51 @@ impl Game {
                  * state then 1 is subtracted. Therefore we don't go less
                  * than 0 ever and don't require an 'if' bracket. -gg 2/27/99
                  */
-                {
-                    if let Some(character_id) = self.desc(d_id).character {
-                        let character = chars.get_mut(character_id);
-                        let wait_state = character.get_wait_state();
-                        if wait_state > 0 {
-                            character.decr_wait_state(1);
-                        }
-                        if character.get_wait_state() != 0 {
-                            continue;
-                        }
-                    }
 
-                    if !get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased) {
+                if let Some(character_id) = self.desc(d_id).character {
+                    let character = chars.get_mut(character_id);
+                    let wait_state = character.get_wait_state();
+                    if wait_state > 0 {
+                        character.decr_wait_state(1);
+                    }
+                    if character.get_wait_state() != 0 {
                         continue;
                     }
-
-                    if let Some(character_id) = self.desc(d_id).character {
-                        /* Reset the idle timer & pull char back from void if necessary */
-                        let character = chars.get_mut(character_id);
-                        character.char_specials.timer = 0;
-                        if self.desc(d_id).state() == ConPlaying
-                            && character.get_was_in() != NOWHERE
-                        {
-                            if character.in_room != NOWHERE {
-                                db.char_from_room(objs, character);
-                            }
-                            let room = character.get_was_in();
-                            db.char_to_room(chars, objs, character_id, room);
-                            let character = chars.get_mut(character_id);
-                            character.set_was_in(NOWHERE);
-                            let character = chars.get(character_id);
-                            act(
-                                &mut self.descriptors,
-                                chars,
-                                db,
-                                "$n has returned.",
-                                true,
-                                Some(character),
-                                None,
-                                None,
-                                TO_ROOM,
-                            );
-                        }
-                        let character = chars.get_mut(character_id);
-                        character.set_wait_state(1);
-                    }
-                    self.desc_mut(d_id).has_prompt = false;
                 }
+
+                if !get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased) {
+                    continue;
+                }
+
+                if let Some(character_id) = self.desc(d_id).character {
+                    /* Reset the idle timer & pull char back from void if necessary */
+                    let character = chars.get_mut(character_id);
+                    character.char_specials.timer = 0;
+                    if self.desc(d_id).state() == ConPlaying && character.get_was_in() != NOWHERE {
+                        if character.in_room != NOWHERE {
+                            db.char_from_room(objs, character);
+                        }
+                        let room = character.get_was_in();
+                        db.char_to_room(chars, objs, character_id, room);
+                        let character = chars.get_mut(character_id);
+                        character.set_was_in(NOWHERE);
+                        let character = chars.get(character_id);
+                        act(
+                            &mut self.descriptors,
+                            chars,
+                            db,
+                            "$n has returned.",
+                            true,
+                            Some(character),
+                            None,
+                            None,
+                            TO_ROOM,
+                        );
+                    }
+                    let character = chars.get_mut(character_id);
+                    character.set_wait_state(1);
+                }
+                self.desc_mut(d_id).has_prompt = false;
 
                 if self.desc(d_id).str.is_some() {
                     /* Writing boards, mail, etc. */
@@ -701,7 +700,10 @@ impl Game {
                         get_from_q(&mut self.desc_mut(d_id).input, &mut comm, &mut aliased);
                     }
                     /* Send it to interpreter */
-                    let chid = self.desc(d_id).character.unwrap();
+                    let Some(chid) = self.desc(d_id).character else {
+                        error!("SYSERR: no charcter for descriptor in game loop !");
+                        continue;
+                    };
                     command_interpreter(self, db, chars, texts, objs, chid, &comm);
                 }
             }
@@ -923,6 +925,10 @@ impl DescriptorData {
     }
 
     fn make_prompt(&mut self, chars: &Depot<CharData>) -> String {
+        let Some(character_id) = self.character else {
+            error!("SYSERR: make_prompt: no character");
+            return "".to_string();
+        };
         let mut prompt = "".to_string();
 
         /* Note, prompt is truncated at MAX_PROMPT_LENGTH chars (structs.h) */
@@ -934,8 +940,7 @@ impl DescriptorData {
                 "\r\n[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number ({}/{}) ]",
                 self.showstr_page, self.showstr_count
             ));
-        } else if self.connected == ConPlaying && !chars.get(self.character.unwrap()).is_npc() {
-            let character_id = self.character.unwrap();
+        } else if self.connected == ConPlaying && !chars.get(character_id).is_npc() {
             let character = chars.get(character_id);
             if character.get_invis_lev() != 0 && prompt.len() < MAX_PROMPT_LENGTH {
                 let il = character.get_invis_lev();
@@ -958,9 +963,8 @@ impl DescriptorData {
             }
 
             prompt.push_str("> ");
-        } else if self.connected == ConPlaying && chars.get(self.character.unwrap()).is_npc() {
-            prompt
-                .push_str(format!("{}s>", chars.get(self.character.unwrap()).get_name()).as_str());
+        } else if self.connected == ConPlaying && chars.get(character_id).is_npc() {
+            prompt.push_str(format!("{}s>", chars.get(character_id).get_name()).as_str());
         }
 
         prompt
@@ -1019,17 +1023,22 @@ fn get_bind_addr() -> IpAddr {
     let mut use_any = true;
     /* If DLFT_IP is unspecified, use INADDR_ANY */
     match DFLT_IP {
-        None => bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap(),
+        None => {
+            bind_addr = "0.0.0.0"
+                .parse::<IpAddr>()
+                .expect("Failed to parse INADDR_ANY")
+        }
         Some(ip) => {
             match ip.parse::<IpAddr>() {
                 Err(err) => {
                     error!(
                         "SYSERR: DFLT_IP of {} appears to be an invalid IP address: {}",
-                        DFLT_IP.unwrap(),
-                        err
+                        ip, err
                     );
                     /* If the parsing fails, use INADDR_ANY */
-                    bind_addr = "0.0.0.0".parse::<IpAddr>().unwrap();
+                    bind_addr = "0.0.0.0"
+                        .parse::<IpAddr>()
+                        .expect("Failed to parse INADDR_ANY");
                 }
                 Ok(parsed_ip) => {
                     use_any = false;
@@ -1078,12 +1087,14 @@ impl Game {
 
         /* find the sitename */
         if !self.config.nameserver_is_slow {
-            let r = dns_lookup::lookup_addr(&addr.ip());
-            if let Ok(host) = r {
-                newd.host = Rc::from(host);
-            } else {
-                error!("Error resolving address: {}", r.err().unwrap());
-                newd.host = Rc::from(addr.ip().to_string());
+            match dns_lookup::lookup_addr(&addr.ip()) {
+                Ok(host) => {
+                    newd.host = Rc::from(host);
+                }
+                Err(err) => {
+                    error!("Error resolving address: {}", err);
+                    newd.host = Rc::from(addr.ip().to_string());
+                }
             }
         } else {
             newd.host = Rc::from(addr.ip().to_string());
@@ -1150,12 +1161,14 @@ impl Game {
 
                 /* find the sitename */
                 if !self.config.nameserver_is_slow {
-                    let r = dns_lookup::lookup_addr(&addr.ip());
-                    if let Ok(host) = r {
-                        newd.host = Rc::from(host);
-                    } else {
-                        error!("Error resolving address: {}", r.err().unwrap());
-                        newd.host = Rc::from(addr.ip().to_string());
+                    match dns_lookup::lookup_addr(&addr.ip()) {
+                        Ok(host) => {
+                            newd.host = Rc::from(host);
+                        }
+                        Err(err) => {
+                            error!("Error resolving address: {}", err);
+                            newd.host = Rc::from(addr.ip().to_string());
+                        }
                     }
                 } else {
                     newd.host = Rc::from(addr.ip().to_string());
@@ -1260,14 +1273,13 @@ fn process_output(
     i.append(&mut desc.output);
 
     /* add the extra CRLF if the person isn't in compact mode */
-    if desc.connected == ConPlaying
-        && desc.character.is_some()
-        && !chars.get(desc.character.unwrap()).is_npc()
-        && chars
-            .get(desc.character.unwrap())
-            .prf_flagged(PrefFlags::COMPACT)
-    {
-        i.extend_from_slice("\r\n".as_bytes());
+    if let Some(chid) = desc.character {
+        if desc.connected == ConPlaying
+            && !chars.get(chid).is_npc()
+            && chars.get(chid).prf_flagged(PrefFlags::COMPACT)
+        {
+            i.extend_from_slice("\r\n".as_bytes());
+        }
     }
 
     /* add a prompt */
@@ -1309,7 +1321,7 @@ fn process_output(
         };
     }
 
-    match result {
+    let result_len = match result {
         Err(_) => {
             /* Oops, fatal error. Bye! */
             if let Some(ConnectionType::Telnet(ref mut stream)) = desc.connection {
@@ -1321,13 +1333,10 @@ fn process_output(
             /* Socket buffer full. Try later. */
             return result;
         }
-        _ => {}
-    }
-
-    let result_len = result.unwrap();
+        Ok(result_len) => result_len,
+    };
     /* Handle snooping: prepend "% " and send to snooper. */
-    if desc.snoop_by.is_some() {
-        let snooper_id = descs.get_mut(desc_id).snoop_by.unwrap();
+    if let Some(snooper_id) = desc.snoop_by {
         let snooper = descs.get_mut(snooper_id);
         snooper.write_to_output(format!("% {}%%", result_len).as_str());
     }
@@ -1476,13 +1485,16 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
 
         /* search for a newline in the data we just read */
         for i in read_point..read_point + bytes_read {
-            let x = desc.inbuf.chars().nth(i).unwrap();
-
-            if nl_pos.is_some() {
+            if let Some(x) = desc.inbuf.chars().nth(i) {
+                if nl_pos.is_some() {
+                    break;
+                }
+                if isnewl!(x) {
+                    nl_pos = Some(i);
+                }
+            } else {
+                error!("SYSERR: process_input: invalid character at position {}", i);
                 break;
-            }
-            if isnewl!(x) {
-                nl_pos = Some(i);
             }
         }
 
@@ -1501,15 +1513,21 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
     let mut read_point = 0;
 
     let ptr = 0usize;
-    while nl_pos.is_some() {
+    while let Some(mut nl_pos_val) = nl_pos {
         tmp.truncate(0);
         space_left = MAX_INPUT_LENGTH as i128 - 1;
 
         /* The '> 1' reserves room for a '$ => $$' expansion. */
         let desc = descs.get_mut(d_id);
         for ptr in 0..desc.inbuf.len() {
-            let x = desc.inbuf.chars().nth(ptr).unwrap();
-            if space_left <= 1 || ptr >= nl_pos.unwrap() {
+            let Some(x) = desc.inbuf.chars().nth(ptr) else {
+                error!(
+                    "SYSERR: process_input: invalid character at position {} of {}",
+                    ptr, desc.inbuf
+                );
+                break;
+            };
+            if space_left <= 1 || ptr >= nl_pos_val {
                 break;
             }
             if x == 8 as char /* \b */ || x == 127 as char {
@@ -1534,7 +1552,7 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
             }
         }
 
-        if (space_left <= 0) && (ptr < nl_pos.unwrap()) {
+        if (space_left <= 0) && (ptr < nl_pos_val) {
             let write_result = match &mut desc.connection {
                 Some(ConnectionType::Telnet(ref mut stream)) => {
                     write_to_descriptor(stream, tmp.as_bytes())
@@ -1550,8 +1568,7 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
             write_result?;
         }
 
-        if desc.snoop_by.is_some() {
-            let snooper_id = desc.snoop_by.unwrap();
+        if let Some(snooper_id) = desc.snoop_by {
             let snooper = descs.get_mut(snooper_id);
             snooper.write_to_output(format!("% {}\r\n", tmp).as_str());
         }
@@ -1606,17 +1623,21 @@ fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<boo
         }
 
         /* find the end of this line */
-        while nl_pos.unwrap() < desc.inbuf.len()
-            && isnewl!(desc.inbuf.chars().nth(nl_pos.unwrap()).unwrap())
+        while nl_pos_val < desc.inbuf.len()
+            && isnewl!(desc
+                .inbuf
+                .chars()
+                .nth(nl_pos_val)
+                .expect("position is valid !"))
         {
-            nl_pos = Some(nl_pos.unwrap() + 1);
+            nl_pos_val += 1;
         }
 
         /* see if there's another newline in the input buffer */
-        read_point = nl_pos.unwrap();
+        read_point = nl_pos_val;
         nl_pos = None;
         for i in read_point..desc.inbuf.len() {
-            if isnewl!(desc.inbuf.chars().nth(i).unwrap()) {
+            if isnewl!(desc.inbuf.chars().nth(i).expect("position is valid !")) {
                 nl_pos = Some(i);
                 break;
             }
@@ -1640,25 +1661,22 @@ impl DescriptorData {
          * to be replaced
          */
         let first = subst.as_str()[1..].to_string();
-        let second = first.find('^');
         /* now find the second '^' */
 
-        if second.is_none() {
+        let Some(second) = first.find('^') else {
             self.write_to_output("Invalid substitution.\r\n");
             return true;
-        }
+        };
         /* terminate "first" at the position of the '^' and make 'second' point
          * to the beginning of the second string */
-        let (first, mut second) = first.split_at(second.unwrap());
+        let (first, mut second) = first.split_at(second);
         second = &second[1..];
 
         /* now, see if the contents of the first string appear in the original */
-        let strpos = orig.find(first);
-        if strpos.is_none() {
+        let Some(strpos) = orig.find(first) else {
             self.write_to_output("Invalid substitution.\r\n");
             return true;
-        }
-        let strpos = strpos.unwrap();
+        };
         /* now, we construct the new string for output. */
 
         /* first, everything in the original, up to the string to be replaced */
@@ -1699,32 +1717,26 @@ impl Game {
         desc.flush_queues();
 
         /* Forget snooping */
-        if desc.snooping.is_some() {
-            let snooping_id = desc.snooping.unwrap();
+        if let Some(snooping_id) = desc.snooping {
             self.desc_mut(snooping_id).snoop_by = None;
         }
         let desc = self.descriptors.get_mut(d_id);
-        if desc.snoop_by.is_some() {
-            let snooper_id = self.desc(d_id).snoop_by.unwrap();
+        if let Some(snooper_id) = desc.snoop_by {
             let snooper = self.desc_mut(snooper_id);
             snooper.write_to_output("Your victim is no longer among us.\r\n");
             let desc = self.descriptors.get_mut(d_id);
             desc.snoop_by = None;
         }
         let desc = self.descriptors.get_mut(d_id);
-        match desc.character.as_ref() {
+        match desc.character {
             Some(character_id) => {
                 /* If we're switched, this resets the mobile taken. */
-                chars.get_mut(*character_id).desc = None;
+                chars.get_mut(character_id).desc = None;
 
                 match desc.state() {
                     ConPlaying | ConDisconnect => {
                         let original = desc.original;
-                        let link_challenged_id = if let Some(orig) = original {
-                            orig
-                        } else {
-                            desc.character.unwrap()
-                        };
+                        let link_challenged_id = original.unwrap_or(character_id);
 
                         /* We are guaranteed to have a person. */
                         act(
@@ -1762,8 +1774,7 @@ impl Game {
                         );
                     }
                     _ => {
-                        let name = chars.get(desc.character.unwrap()).get_name();
-                        let char_id = desc.character.unwrap();
+                        let name = chars.get(character_id).get_name();
                         self.mudlog(
                             chars,
                             DisplayMode::Complete,
@@ -1779,7 +1790,7 @@ impl Game {
                             )
                             .as_str(),
                         );
-                        db.free_char(&mut self.descriptors, chars, objs, char_id);
+                        db.free_char(&mut self.descriptors, chars, objs, character_id);
                     }
                 }
             }
@@ -1795,8 +1806,10 @@ impl Game {
         }
         let desc = self.descriptors.get_mut(d_id);
         /* JE 2/22/95 -- part of my unending quest to make switch stable */
-        if desc.original.is_some() && chars.get(desc.original.unwrap()).desc.is_some() {
-            chars.get_mut(desc.original.unwrap()).desc = None;
+        if let Some(original_id) = desc.original {
+            if chars.get(original_id).desc.is_some() {
+                chars.get_mut(original_id).desc = None;
+            }
         }
 
         self.descriptors.take(d_id);
@@ -1901,8 +1914,11 @@ fn setup_signal_handlers() -> Result<(), Box<dyn std::error::Error>> {
  **************************************************************** */
 
 pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
-    if ch.desc.is_some() && !messg.is_empty() {
-        let desc = descs.get_mut(ch.desc.unwrap());
+    let Some(desc_id) = ch.desc else {
+        return 0;
+    };
+    if !messg.is_empty() {
+        let desc = descs.get_mut(desc_id);
         desc.write_to_output(messg)
     } else {
         0
@@ -1930,10 +1946,12 @@ impl Game {
 
         for desc_id in self.descriptor_list.clone() {
             let desc = self.desc(desc_id);
-            if desc.state() != ConPlaying || desc.character.borrow().is_none() {
+            if desc.state() != ConPlaying {
                 continue;
             }
-            let character_id = desc.character.unwrap();
+            let Some(character_id) = desc.character else {
+                continue;
+            };
             let character = chars.get(character_id);
             if !character.awake() || !db.outside(character) {
                 continue;
@@ -1953,11 +1971,10 @@ pub fn send_to_room(
 ) {
     for &chid in &db.world[room as usize].peoples {
         let ch = chars.get(chid);
-        if ch.desc.is_none() {
-            continue;
+        if let Some(desc_id) = ch.desc {
+            let desc = descs.get_mut(desc_id);
+            desc.write_to_output(msg);
         }
-        let desc = descs.get_mut(ch.desc.unwrap());
-        desc.write_to_output(msg);
     }
 }
 
@@ -1983,13 +2000,13 @@ fn perform_act(
     loop {
         if orig.starts_with('$') {
             orig.remove(0);
-            match if !orig.is_empty() {
-                orig.chars().next().unwrap()
-            } else {
-                '\0'
-            } {
+            match orig.chars().next().unwrap_or('\0') {
                 'n' => {
-                    i = pers(descs, chars, db, ch.unwrap(), to);
+                    if let Some(ch) = ch {
+                        i = pers(descs, chars, db, ch, to);
+                    } else {
+                        i = ACTNULL.into();
+                    }
                 }
                 'N' => {
                     i = if vict_obj.is_none() {
@@ -2001,7 +2018,11 @@ fn perform_act(
                     };
                 }
                 'm' => {
-                    i = Rc::from(hmhr(ch.unwrap()));
+                    if let Some(ch) = ch {
+                        i = Rc::from(hmhr(ch));
+                    } else {
+                        i = ACTNULL.into();
+                    }
                 }
                 'M' => {
                     i = if vict_obj.is_none() {
@@ -2013,7 +2034,11 @@ fn perform_act(
                     };
                 }
                 's' => {
-                    i = Rc::from(hshr(ch.unwrap()));
+                    if let Some(ch) = ch {
+                        i = Rc::from(hshr(ch));
+                    } else {
+                        i = ACTNULL.into();
+                    }
                 }
                 'S' => {
                     i = if vict_obj.is_none() {
@@ -2025,7 +2050,11 @@ fn perform_act(
                     };
                 }
                 'e' => {
-                    i = Rc::from(hssh(ch.unwrap()));
+                    if let Some(ch) = ch {
+                        i = Rc::from(hssh(ch));
+                    } else {
+                        i = ACTNULL.into();
+                    }
                 }
                 'E' => {
                     i = if vict_obj.is_none() {
@@ -2150,9 +2179,9 @@ fn perform_act(
 
     buf.push_str("\r\n");
 
-    let desc_id = to.desc.unwrap();
-    let desc = descs.get_mut(desc_id);
-    desc.write_to_output(buf.to_string().as_str());
+    if let Some(desc_id) = to.desc {
+        descs.get_mut(desc_id).write_to_output(&buf);
+    }
 }
 
 macro_rules! sendok {
@@ -2228,11 +2257,20 @@ pub fn act(
     }
     /* ASSUMPTION: at this point we know type must be TO_NOTVICT or TO_ROOM */
     let char_list;
-    #[allow(clippy::unnecessary_unwrap)]
-    if ch.is_some() && ch.unwrap().in_room() != NOWHERE {
-        char_list = &db.world[ch.unwrap().in_room() as usize].peoples;
-    } else if obj.is_some() && obj.as_ref().unwrap().in_room() != NOWHERE {
-        char_list = &db.world[obj.as_ref().unwrap().in_room() as usize].peoples;
+    let ch_in_room = if let Some(c) = ch {
+        c.in_room()
+    } else {
+        NOWHERE
+    };
+    let obj_in_room = if let Some(o) = obj {
+        o.in_room()
+    } else {
+        NOWHERE
+    };
+    if ch_in_room != NOWHERE {
+        char_list = &db.world[ch_in_room as usize].peoples;
+    } else if obj_in_room != NOWHERE {
+        char_list = &db.world[obj_in_room as usize].peoples;
     } else {
         error!("SYSERR: no valid target to act()!");
         return;
@@ -2240,10 +2278,20 @@ pub fn act(
 
     for &to_id in char_list {
         let to = chars.get(to_id);
-        if !sendok!(to, to_sleeping) || (ch.is_some() && to_id == ch.unwrap().id()) {
+        let same_id = if let Some(c) = ch {
+            c.id() == to_id
+        } else {
+            false
+        };
+        if !sendok!(to, to_sleeping) || same_id {
             continue;
         }
-        if hide_invisible && ch.is_some() && !can_see(descs, chars, db, to, ch.unwrap()) {
+        let cannot_see = if let Some(c) = ch {
+            !can_see(descs, chars, db, to, c)
+        } else {
+            false
+        };
+        if hide_invisible && cannot_see {
             continue;
         }
         if _type != TO_ROOM && vict_obj.is_none() {
@@ -2278,13 +2326,13 @@ fn setup_log(logfile: Option<&str>) {
         let file = FileAppender::builder()
             .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
             .build(logfile)
-            .unwrap();
+            .expect("Failed to create file appender");
 
         config_builder = config_builder.appender(Appender::builder().build("file", Box::new(file)));
     }
     let config = config_builder
         .build(Root::builder().appender("stdout").build(LevelFilter::Info))
-        .unwrap();
+        .expect("Failed to create config");
 
-    log4rs::init_config(config).unwrap();
+    log4rs::init_config(config).expect("Failed to initialize logger");
 }
