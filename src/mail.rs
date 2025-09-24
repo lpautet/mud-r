@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 /******* MUD MAIL SYSTEM HEADER FILE **********************
@@ -231,23 +231,20 @@ impl DB {
             self.no_mail = true;
             return;
         }
-        let mail_file = OpenOptions::new()
+        let mut mail_file = match OpenOptions::new()
             .create(true)
             .truncate(true)
             .write(true)
             .read(true)
-            .open(MAIL_FILE);
-        if mail_file.is_err() {
-            error!(
-                "SYSERR: Unable to open mail file '{}': {}",
-                MAIL_FILE,
-                mail_file.err().unwrap()
-            );
-            self.no_mail = true;
-            return;
-        }
-        let mut mail_file = mail_file.unwrap();
-
+            .open(MAIL_FILE)
+        {
+            Err(err) => {
+                error!("SYSERR: Unable to open mail file '{}': {}", MAIL_FILE, err);
+                self.no_mail = true;
+                return;
+            }
+            Ok(mail_file) => mail_file,
+        };
         mail_file
             .write_all_at(slice, filepos)
             .expect("Writing mail file");
@@ -278,17 +275,14 @@ impl DB {
             self.no_mail = true;
             return;
         }
-        let mail_file = OpenOptions::new().read(true).open(MAIL_FILE);
-        if mail_file.is_err() {
-            error!(
-                "SYSERR: Unable to open mail file '{}': {}",
-                MAIL_FILE,
-                mail_file.err().unwrap()
-            );
-            self.no_mail = true;
-            return;
-        }
-        let mail_file = mail_file.unwrap();
+        let mail_file = match OpenOptions::new().read(true).open(MAIL_FILE) {
+            Err(err) => {
+                error!("SYSERR: Unable to open mail file '{}': {}", MAIL_FILE, err);
+                self.no_mail = true;
+                return;
+            }
+            Ok(mail_file) => mail_file,
+        };
 
         mail_file
             .read_exact_at(slice, filepos)
@@ -330,13 +324,14 @@ impl MailSystem {
         let mut total_messages = 0;
         let mut block_num = 0_u64;
 
-        let mail_file = OpenOptions::new().read(true).open(MAIL_FILE);
-        if mail_file.is_err() {
-            info!("   Mail file non-existant... creating new file.");
-            touch(Path::new(MAIL_FILE)).expect("Creating mail file");
-            return true;
-        }
-        let mut mail_file = mail_file.unwrap();
+        let mut mail_file = match OpenOptions::new().read(true).open(MAIL_FILE) {
+            Err(_) => {
+                info!("   Mail file non-existant... creating new file.");
+                touch(Path::new(MAIL_FILE)).expect("Creating mail file");
+                return true;
+            }
+            Ok(mail_file) => mail_file,
+        };
         loop {
             let mut next_block = HeaderBlockType {
                 block_type: 0,
@@ -356,9 +351,7 @@ impl MailSystem {
                     mem::size_of::<HeaderBlockType>(),
                 );
             }
-            let r = mail_file.read_exact(header_slice);
-            if r.is_err() {
-                let err = r.err().unwrap();
+            if let Err(err) = mail_file.read_exact(header_slice) {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     break;
                 }
@@ -375,7 +368,9 @@ impl MailSystem {
             block_num += 1;
         }
 
-        self.file_end_pos = mail_file.stream_position().unwrap();
+        self.file_end_pos = mail_file
+            .stream_position()
+            .expect("Getting stream position of mail file");
         info!("   {} bytes read.", self.file_end_pos);
         if self.file_end_pos % BLOCK_SIZE as u64 != 0 {
             error!("SYSERR: Error booting mail system -- Mail file corrupt!");
@@ -554,19 +549,15 @@ impl DB {
             );
             return None;
         }
-        let mail_idx = self.mails.find_char_in_index(recipient);
-        if mail_idx.is_none() {
+        let Some(mail_idx) = self.mails.find_char_in_index(recipient) else {
             error!("SYSERR: Mail system -- post office spec_proc error?  Error #7. (invalid character in index)");
             return None;
-        }
-        let mail_idx = mail_idx.unwrap();
+        };
         let mail_pointer = &mut self.mails.mail_index[mail_idx];
-        let position_pointer = mail_pointer.position_list.first();
-        if position_pointer.is_none() {
+        let Some(position_pointer) = mail_pointer.position_list.first() else {
             error!("SYSERR: Mail system -- non-fatal error #8. (invalid position pointer)");
             return None;
-        }
-        let position_pointer = position_pointer.unwrap();
+        };
         let mut mail_address;
         if mail_pointer.position_list.len() == 1 {
             /* just 1 entry in list. */
@@ -620,12 +611,8 @@ From: {}\r\n\
 \r\n\
 {}",
             tmstr,
-            if to.is_some() { to.unwrap() } else { "Unknown" },
-            if from.is_some() {
-                from.unwrap()
-            } else {
-                "Unknown"
-            },
+            to.unwrap_or("Unknown"),
+            from.unwrap_or("Unknown"),
             parse_c_string(&header.txt)
         );
 
@@ -860,7 +847,7 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
     ch.set_plr_flag_bit(PLR_MAILING); /* string_write() sets writing. */
 
     /* Start writing! */
-    let desc_id = ch.desc.unwrap();
+    let desc_id = ch.desc.expect("Player writing email has no descriptor !");
     let desc = game.desc_mut(desc_id);
     desc.string_write(
         chars,
