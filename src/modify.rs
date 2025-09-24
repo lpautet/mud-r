@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 //
 // const char *string_fields[] =
@@ -41,6 +41,8 @@
 use std::cmp::{max, min};
 use std::rc::Rc;
 
+use log::error;
+
 use crate::boards::{board_save_board, BOARD_MAGIC};
 use crate::config::{MENU, NOPERSON};
 use crate::depot::{Depot, DepotId, HasId};
@@ -63,10 +65,10 @@ impl DescriptorData {
         len: usize,
         mailto: i64,
     ) {
-        if self.character.is_some() && !chars.get(self.character.unwrap()).is_npc() {
-            chars
-                .get_mut(self.character.unwrap())
-                .set_plr_flag_bit(PLR_WRITING);
+        if let Some(chid) = self.character {
+            if !chars.get(chid).is_npc() {
+                chars.get_mut(chid).set_plr_flag_bit(PLR_WRITING);
+            }
         }
 
         self.str = Some(writeto);
@@ -97,12 +99,18 @@ pub fn string_add(
         str_ = "".to_string();
     }
 
-    // smash_tilde(str_);
-    let the_str_id = *game.desc_mut(d_id).str.as_ref().unwrap();
+    // TODO: smash_tilde(str_);
+    let Some(the_str_id) = game.desc(d_id).str else {
+        error!("SYSERR: No string to add to.");
+        return;
+    };
     let text = &mut texts.get_mut(the_str_id).text;
     if text.is_empty() {
         if str_.len() + 3 > game.desc_mut(d_id).max_str {
-            let chid = game.desc_mut(d_id).character.unwrap();
+            let Some(chid) = game.desc(d_id).character else {
+                error!("SYSERR: No character to send string to.");
+                return;
+            };
             let ch = chars.get(chid);
             send_to_char(
                 &mut game.descriptors,
@@ -117,7 +125,10 @@ pub fn string_add(
             *text = str_;
         }
     } else if str_.len() + text.len() + 3 > game.desc_mut(d_id).max_str {
-        let chid = game.desc_mut(d_id).character.unwrap();
+        let Some(chid) = game.desc(d_id).character else {
+            error!("SYSERR: No character to send string to.");
+            return;
+        };
         let ch = chars.get(chid);
         send_to_char(
             &mut game.descriptors,
@@ -129,19 +140,22 @@ pub fn string_add(
         text.push_str(str_.as_str());
     }
 
+    let Some(chid) = game.desc(d_id).character else {
+        error!("SYSERR: No character to send string to.");
+        return;
+    };
     let desc = game.desc_mut(d_id);
     if terminator {
-        if desc.state() == ConPlaying && chars.get(desc.character.unwrap()).plr_flagged(PLR_MAILING)
-        {
+        if desc.state() == ConPlaying && chars.get(chid).plr_flagged(PLR_MAILING) {
             let mail_to = desc.mail_to;
-            let from = chars.get(desc.character.unwrap()).get_idnum();
+            let from = chars.get(chid).get_idnum();
             db.store_mail(mail_to, from, text);
             desc.mail_to = 0;
             desc.str = None;
             desc.write_to_output("Message sent!\r\n");
-            if !chars.get(desc.character.unwrap()).is_npc() {
+            if !chars.get(chid).is_npc() {
                 chars
-                    .get_mut(desc.character.unwrap())
+                    .get_mut(chid)
                     .remove_plr_flag(PLR_MAILING | PLR_WRITING);
             }
         }
@@ -157,13 +171,8 @@ pub fn string_add(
             desc.write_to_output(MENU);
             desc.set_state(ConMenu);
         }
-        if game.desc(d_id).state() == ConPlaying
-            && game.desc(d_id).character.is_some()
-            && !chars.get(game.desc(d_id).character.unwrap()).is_npc()
-        {
-            chars
-                .get_mut(game.desc(d_id).character.unwrap())
-                .remove_plr_flag(PLR_WRITING);
+        if game.desc(d_id).state() == ConPlaying && !chars.get(chid).is_npc() {
+            chars.get_mut(chid).remove_plr_flag(PLR_WRITING);
         }
     } else {
         text.push_str("\r\n");
@@ -221,7 +230,7 @@ Skill being one of the following:\r\n",
 
         return;
     }
-    let vict = get_char_vis(
+    let Some(vict) = get_char_vis(
         &game.descriptors,
         chars,
         db,
@@ -229,12 +238,10 @@ Skill being one of the following:\r\n",
         &mut name,
         None,
         FindFlags::CHAR_WORLD,
-    );
-    if vict.is_none() {
+    ) else {
         send_to_char(&mut game.descriptors, ch, NOPERSON);
         return;
-    }
-    let vict = vict.unwrap();
+    };
     let vict_id = vict.id();
     let mut argument = argument.trim_start().to_string();
 
@@ -275,25 +282,21 @@ Skill being one of the following:\r\n",
     let help = argument.to_lowercase();
     let help = &help.as_str()[0..qend];
 
-    let skill = find_skill_num(db, help);
-    if skill.is_none() {
+    let Some(skill) = find_skill_num(db, help) else {
         send_to_char(&mut game.descriptors, ch, "Unrecognized skill.\r\n");
         return;
-    }
+    };
     let buf = String::new();
-    let skill = skill.unwrap();
 
     if buf.is_empty() {
         send_to_char(&mut game.descriptors, ch, "Learned value expected.\r\n");
         return;
     }
-    let value = buf.parse::<i8>();
-    if value.is_err() {
+    let Ok(value) = buf.parse::<i8>() else {
         send_to_char(&mut game.descriptors, ch, "Invalid value.\r\n");
         return;
-    }
+    };
 
-    let value = value.unwrap();
     if value < 0 {
         send_to_char(
             &mut game.descriptors,
@@ -409,11 +412,10 @@ fn count_pages(msg: &str) -> i32 {
     let mut msg = msg;
     let mut pages = 1;
     loop {
-        let r = next_page(msg);
-        if r.is_none() {
+        let Some(r) = next_page(msg) else {
             break;
-        }
-        msg = r.unwrap();
+        };
+        msg = r;
         pages += 1;
     }
     pages
@@ -462,10 +464,9 @@ pub fn page_string(
 
     if keep_internal {
         desc.showstr_head = Some(Rc::from(msg));
-        let msg = desc.showstr_head.as_ref().unwrap().clone();
-        paginate_string(msg.as_ref(), desc);
+        paginate_string(msg, desc);
     } else {
-        paginate_string(msg, descs.get_mut(d_id));
+        paginate_string(msg, desc);
     }
 
     let actbuf = "";
@@ -481,10 +482,18 @@ pub fn show_string(
 ) {
     let mut buf = String::new();
     any_one_arg(input, &mut buf);
+    let Some(chid) = descs.get_mut(d_id).character else {
+        error!("SYSERR: show_string: Failed to get character id");
+        return;
+    };
 
     if !buf.is_empty() {
         /* Q is for quit. :) */
-        let cmd = buf.chars().next().unwrap().to_ascii_lowercase();
+        let cmd = buf
+            .chars()
+            .next()
+            .expect("Failed to get char")
+            .to_ascii_lowercase();
         if cmd == 'q' {
             descs.get_mut(d_id).showstr_vector.clear();
             descs.get_mut(d_id).showstr_count = 0;
@@ -506,25 +515,21 @@ pub fn show_string(
          * are there!
          */
         else if cmd.is_ascii_digit() {
-            let nr = buf.parse::<i32>();
-            if nr.is_err() {
-                let chid = descs.get_mut(d_id).character.unwrap();
+            let Ok(nr) = buf.parse::<i32>() else {
                 let ch = chars.get(chid);
                 send_to_char(
                     descs,
                     ch,
                     "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
                 );
-            }
-            descs.get_mut(d_id).showstr_page = max(
-                0,
-                min(nr.unwrap() - 1, descs.get_mut(d_id).showstr_count - 1),
-            );
+                return;
+            };
+            descs.get_mut(d_id).showstr_page =
+                max(0, min(nr - 1, descs.get_mut(d_id).showstr_count - 1));
         } else if !buf.is_empty() {
-            let to_char_id = descs.get_mut(d_id).character.unwrap();
             send_to_char(
                 descs,
-                chars.get(to_char_id),
+                chars.get(chid),
                 "Valid commands while paging are RETURN, Q, R, B, or a numeric value.\r\n",
             );
             return;
@@ -534,7 +539,6 @@ pub fn show_string(
      * then free up the space we used.
      */
     if descs.get_mut(d_id).showstr_page + 1 >= descs.get_mut(d_id).showstr_count {
-        let chid = descs.get_mut(d_id).character.unwrap();
         let showstr_page = descs.get_mut(d_id).showstr_page as usize;
         let msg = descs.get_mut(d_id).showstr_vector[showstr_page].clone();
         let ch = chars.get(chid);
@@ -551,7 +555,6 @@ pub fn show_string(
         let diff = descs.get_mut(d_id).showstr_vector[showstr_page].len()
             - descs.get_mut(d_id).showstr_vector[showstr_page + 1].len();
         let buffer = &descs.get_mut(d_id).showstr_vector[showstr_page].as_ref()[..diff].to_string();
-        let chid = descs.get_mut(d_id).character.unwrap();
         let ch = chars.get(chid);
         send_to_char(descs, ch, buffer);
         descs.get_mut(d_id).showstr_page = showstr_page as i32 + 1;

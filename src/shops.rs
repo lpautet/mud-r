@@ -1332,25 +1332,29 @@ fn shopping_sell(
     let ch = chars.get(chid);
     let keeper = chars.get(keeper_id);
     if sold < sellnum {
-        let buf;
-        if oid.is_none() {
-            let ch = chars.get(chid);
-            buf = format!("{} You only have {} of those.", ch.get_name(), sold);
-        } else if keeper.get_gold() + db.shop_index[shop_nr].bank_account
-            < sell_price(objs.get(oid.unwrap()), &db.shop_index[shop_nr], keeper, ch)
-        {
-            buf = format!(
-                "{} I can only afford to buy {} of those.",
-                ch.get_name(),
-                sold
-            );
-        } else {
-            buf = format!(
-                "{} Something really screwy made me buy {}.",
-                ch.get_name(),
-                sold
-            );
-        }
+        let buf = match oid {
+            None => {
+                let ch = chars.get(chid);
+                format!("{} You only have {} of those.", ch.get_name(), sold)
+            }
+            Some(oid)
+                if keeper.get_gold() + db.shop_index[shop_nr].bank_account
+                    < sell_price(objs.get(oid), &db.shop_index[shop_nr], keeper, ch) =>
+            {
+                format!(
+                    "{} I can only afford to buy {} of those.",
+                    ch.get_name(),
+                    sold
+                )
+            }
+            _ => {
+                format!(
+                    "{} Something really screwy made me buy {}.",
+                    ch.get_name(),
+                    sold
+                )
+            }
+        };
 
         do_tell(
             game,

@@ -338,7 +338,9 @@ impl Game {
     ) -> bool {
         let snarl_cmd: AtomicUsize = AtomicUsize::new(0);
         let slave = chars.get(slave_id);
-        let Some(master_id) = master_id else { return false; };
+        let Some(master_id) = master_id else {
+            return false;
+        };
         if slave.aff_flagged(AffectFlags::CHARM) {
             return false;
         }
@@ -346,7 +348,10 @@ impl Game {
         let attack = chars.get(attack_id);
 
         if snarl_cmd.load(Ordering::Acquire) == 0 {
-            snarl_cmd.store(find_command("snarl").expect("No snarl command"), Ordering::Release)
+            snarl_cmd.store(
+                find_command("snarl").expect("No snarl command"),
+                Ordering::Release,
+            )
         }
 
         /* Sit. Down boy! HEEEEeeeel! */
