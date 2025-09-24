@@ -223,7 +223,7 @@ impl DB {
      * Writes a mail block back into the database at the given location.
      */
     fn write_to_file(&mut self, slice: &[u8], filepos: u64) {
-        if filepos % BLOCK_SIZE as u64 != 0 {
+        if !filepos.is_multiple_of(BLOCK_SIZE as u64) {
             error!(
                 "SYSERR: Mail system -- fatal error #2!!! (invalid file position {})",
                 filepos
@@ -267,7 +267,7 @@ impl DB {
      * This reads a block from the mail database file.
      */
     fn read_from_file(&mut self, slice: &mut [u8], filepos: u64) {
-        if filepos % BLOCK_SIZE as u64 != 0 {
+        if !filepos.is_multiple_of(BLOCK_SIZE as u64) {
             error!(
                 "SYSERR: Mail system -- fatal error #2!!! (invalid file position {})",
                 filepos
@@ -372,7 +372,7 @@ impl MailSystem {
             .stream_position()
             .expect("Getting stream position of mail file");
         info!("   {} bytes read.", self.file_end_pos);
-        if self.file_end_pos % BLOCK_SIZE as u64 != 0 {
+        if !self.file_end_pos.is_multiple_of(BLOCK_SIZE as u64) {
             error!("SYSERR: Error booting mail system -- Mail file corrupt!");
             error!("SYSERR: Mail disabled!");
             return false;

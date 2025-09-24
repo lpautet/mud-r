@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use log::error;
@@ -51,18 +51,10 @@ impl Game {
                         ch.get_name(),
                         db.get_mob_vnum(ch)
                     );
-                } else if db.mob_index[ch.get_mob_rnum() as usize].func.unwrap()(
-                    self,
-                    chars,
-                    db,
-                    texts,
-                    objs,
-                    chid,
-                    MeRef::Char(chid),
-                    0,
-                    "",
-                ) {
-                    continue; /* go to next char */
+                } else if let Some(func) = db.mob_index[ch.get_mob_rnum() as usize].func {
+                    if func(self, chars, db, texts, objs, chid, MeRef::Char(chid), 0, "") {
+                        continue; /* go to next char */
+                    }
                 }
             }
 
@@ -113,19 +105,18 @@ impl Game {
             /* Mob Movement */
             let door = rand_number(0, 18);
             let ch = chars.get(chid);
-            if !ch.mob_flagged(MOB_SENTINEL)
-                && ch.get_pos() == Position::Standing
-                && door < NUM_OF_DIRS as u32
-                && db.can_go(ch, door as usize)
-                && !db.room_flagged(
-                    db.exit(ch, door as usize).unwrap().to_room,
-                    RoomFlags::NOMOB | RoomFlags::DEATH,
-                )
-                && (!ch.mob_flagged(MOB_STAY_ZONE)
-                    || db.world[db.exit(ch, door as usize).unwrap().to_room as usize].zone
-                        == db.world[ch.in_room() as usize].zone)
-            {
-                perform_move(self, db, chars, texts, objs, chid, door as i32, true);
+            if let Some(exit) = db.exit(ch, door as usize) {
+                if !ch.mob_flagged(MOB_SENTINEL)
+                    && ch.get_pos() == Position::Standing
+                    && door < NUM_OF_DIRS as u32
+                    && db.can_go(ch, door as usize)
+                    && !db.room_flagged(exit.to_room, RoomFlags::NOMOB | RoomFlags::DEATH)
+                    && (!ch.mob_flagged(MOB_STAY_ZONE)
+                        || db.world[exit.to_room as usize].zone
+                            == db.world[ch.in_room() as usize].zone)
+                {
+                    perform_move(self, db, chars, texts, objs, chid, door as i32, true);
+                }
             }
 
             /* Aggressive Mobs */
@@ -225,33 +216,25 @@ impl Game {
              * 1-4 = 0, 5-7 = 1, 8-10 = 2, 11-13 = 3, 14-16 = 4, 17-19 = 5, etc.
              */
             let ch = chars.get(chid);
-            if ch.aff_flagged(AffectFlags::CHARM)
-                && ch.master.is_some()
-                && num_followers_charmed(chars, ch.master.unwrap())
-                    > ((chars.get(ch.master.unwrap()).get_cha() - 2) / 3) as i32
-            {
-                let master_id = ch.master.unwrap();
-                if !self.aggressive_mob_on_a_leash(
-                    chars,
-                    db,
-                    texts,
-                    objs,
-                    chid,
-                    Some(master_id),
-                    master_id,
-                ) {
-                    let ch = chars.get(chid);
-                    if can_see(
-                        &self.descriptors,
+            if let Some(master_id) = ch.master {
+                if ch.aff_flagged(AffectFlags::CHARM)
+                    && num_followers_charmed(chars, master_id)
+                        > ((chars.get(master_id).get_cha() - 2) / 3) as i32
+                    && !self.aggressive_mob_on_a_leash(
                         chars,
                         db,
-                        ch,
-                        chars.get(ch.master.unwrap()),
-                    ) && !chars
-                        .get(ch.master.unwrap())
-                        .prf_flagged(PrefFlags::NOHASSLE)
+                        texts,
+                        objs,
+                        chid,
+                        Some(master_id),
+                        master_id,
+                    )
+                {
+                    let ch = chars.get(chid);
+                    if can_see(&self.descriptors, chars, db, ch, chars.get(master_id))
+                        && !chars.get(master_id).prf_flagged(PrefFlags::NOHASSLE)
                     {
-                        let victim_id = ch.master.unwrap();
+                        let victim_id = master_id;
                         self.hit(chars, db, texts, objs, chid, victim_id, TYPE_UNDEFINED);
                         stop_follower(&mut self.descriptors, chars, db, objs, chid);
                     }
@@ -269,12 +252,13 @@ impl Game {
                     if found {
                         break;
                     }
-                    if vict_id == chid || !vict.is_npc() || vict.fighting_id().is_none() {
+                    if vict_id == chid || !vict.is_npc() {
                         continue;
                     }
-                    if chars.get(vict.fighting_id().unwrap()).is_npc()
-                        || chid == vict.fighting_id().unwrap()
-                    {
+                    let Some(fighting_id) = vict.fighting_id() else {
+                        continue;
+                    };
+                    if chars.get(fighting_id).is_npc() || chid == fighting_id {
                         continue;
                     }
                     let ch = chars.get(chid);
@@ -291,15 +275,7 @@ impl Game {
                         Some(VictimRef::Char(vict)),
                         TO_ROOM,
                     );
-                    self.hit(
-                        chars,
-                        db,
-                        texts,
-                        objs,
-                        chid,
-                        vict.fighting_id().unwrap(),
-                        TYPE_UNDEFINED,
-                    );
+                    self.hit(chars, db, texts, objs, chid, fighting_id, TYPE_UNDEFINED);
                     found = true;
                 }
             }
@@ -362,15 +338,15 @@ impl Game {
     ) -> bool {
         let snarl_cmd: AtomicUsize = AtomicUsize::new(0);
         let slave = chars.get(slave_id);
-        if master_id.is_none() || slave.aff_flagged(AffectFlags::CHARM) {
+        let Some(master_id) = master_id else { return false; };
+        if slave.aff_flagged(AffectFlags::CHARM) {
             return false;
         }
-        let master_id = master_id.unwrap();
         let master = chars.get(master_id);
         let attack = chars.get(attack_id);
 
         if snarl_cmd.load(Ordering::Acquire) == 0 {
-            snarl_cmd.store(find_command("snarl").unwrap(), Ordering::Release)
+            snarl_cmd.store(find_command("snarl").expect("No snarl command"), Ordering::Release)
         }
 
         /* Sit. Down boy! HEEEEeeeel! */

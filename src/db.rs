@@ -849,7 +849,7 @@ impl DB {
             .rewind()
             .expect("SYSERR: fatal error rewinding playerfile");
 
-        if size % mem::size_of::<CharFileU>() as u64 != 0 {
+        if !size.is_multiple_of(mem::size_of::<CharFileU>() as u64) {
             warn!("WARNING:  PLAYERFILE IS PROBABLY CORRUPT!");
         }
         let recs = size / mem::size_of::<CharFileU>() as u64;

@@ -815,31 +815,31 @@ impl Game {
         objs: &mut Depot<ObjData>,
         pulse: u128,
     ) {
-        if pulse % PULSE_ZONE == 0 {
+        if pulse.is_multiple_of(PULSE_ZONE) {
             self.zone_update(db, chars, objs);
         }
 
-        if pulse % PULSE_IDLEPWD == 0 {
+        if pulse.is_multiple_of(PULSE_IDLEPWD) {
             /* 15 seconds */
             self.check_idle_passwords();
         }
 
-        if pulse % PULSE_MOBILE == 0 {
+        if pulse.is_multiple_of(PULSE_MOBILE) {
             self.mobile_activity(chars, db, texts, objs);
         }
 
-        if pulse % PULSE_VIOLENCE == 0 {
+        if pulse.is_multiple_of(PULSE_VIOLENCE) {
             self.perform_violence(chars, db, texts, objs);
         }
 
-        if pulse as u64 % (SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) == 0 {
+        if (pulse as u64).is_multiple_of(SECS_PER_MUD_HOUR * PASSES_PER_SEC as u64) {
             self.weather_and_time(chars, db, 1);
             affect_update(self, chars, db, objs);
             self.point_update(chars, db, texts, objs);
             //fflush(player_fl);
         }
 
-        if AUTO_SAVE && (pulse % PULSE_AUTOSAVE) != 0 {
+        if AUTO_SAVE && !pulse.is_multiple_of(PULSE_AUTOSAVE) {
             /* 1 minute */
             self.mins_since_crashsave += 1;
             if self.mins_since_crashsave >= AUTOSAVE_TIME as u32 {
@@ -849,11 +849,11 @@ impl Game {
             }
         }
 
-        if pulse % PULSE_USAGE == 0 {
+        if pulse.is_multiple_of(PULSE_USAGE) {
             self.record_usage();
         }
 
-        if pulse % PULSE_TIMESAVE == 0 {
+        if pulse.is_multiple_of(PULSE_TIMESAVE) {
             save_mud_time(&db.time_info);
         }
 
