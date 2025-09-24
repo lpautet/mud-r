@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -2810,19 +2810,20 @@ pub fn command_interpreter(
     /* just drop to next line for hitting CR */
     let argument = argument.trim_start();
 
-    if argument.is_empty() {
-        return;
-    }
     /*
      * special case to handle one-character, non-alphanumeric commands;
      * requested by many people so "'hi" or ";godnet test" is possible.
      * Patch sent by Eric Green and Stefan Wasilewski.
      */
-    if !argument.chars().next().unwrap().is_alphanumeric() {
-        arg = argument.chars().next().unwrap().to_string();
-        line = &argument[1..];
+    if let Some(c) = argument.chars().next() {
+        if !c.is_alphanumeric() {
+            arg = c.to_string();
+            line = &argument[1..];
+        } else {
+            line = any_one_arg(argument, &mut arg);
+        }
     } else {
-        line = any_one_arg(argument, &mut arg);
+        return;
     }
 
     /* otherwise, find the command */
@@ -3009,21 +3010,24 @@ pub fn do_alias(
  * is "$*", which stands for the entire original line after the alias.
  * ";" is used to delimit commands.
  */
-const NUM_TOKENS: i32 = 9;
+const NUM_TOKENS: usize = 9;
 
 fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &AliasData) {
-    let mut num_of_tokens = 0;
-    let mut tokens = [0_usize; NUM_TOKENS as usize];
+    let mut num_of_tokens = 0_usize;
+    let mut tokens = [0_usize; NUM_TOKENS];
 
     /* First, parse the original string */
     let mut buf = String::new();
     let buf2 = orig.to_string();
     let mut temp = buf2.find(' ');
 
-    while temp.is_some() && num_of_tokens < NUM_TOKENS {
-        tokens[num_of_tokens as usize] = temp.unwrap();
+    while let Some(value) = temp {
+        if num_of_tokens >= NUM_TOKENS {
+            break;
+        }
+        tokens[num_of_tokens] = value;
         num_of_tokens += 1;
-        temp = buf2.as_str()[temp.unwrap() + 1..].find(' ');
+        temp = buf2.as_str()[value + 1..].find(' ');
     }
 
     /* initialize */
@@ -3036,23 +3040,22 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
             buf.clear();
         } else if temp.starts_with(ALIAS_VAR_CHAR) {
             temp = &temp[1..];
-            let res = {
-                num = temp.chars().next().unwrap() as u32 - '1' as u32;
-                num < num_of_tokens as u32 /*&& num >= 0*/
-            };
-            #[allow(clippy::blocks_in_conditions)]
-            if res {
-                buf.push_str(&buf2[tokens[num as usize]..]);
-            } else if temp.starts_with(ALIAS_GLOB_CHAR) {
-                buf.push_str(orig);
-            } else if {
-                buf.push(temp.chars().next().unwrap());
-                temp.starts_with('$')
-            } {
-                /* redouble $ for act safety */
-                buf.push('$');
-            } else {
-                buf.push(temp.chars().next().unwrap());
+            if let Some(c) = temp.chars().next() {
+                num = c as i32 - '1' as i32;
+
+                if num >= 0 && num < num_of_tokens as i32 {
+                    buf.push_str(&buf2[tokens[num as usize]..]);
+                } else if temp.starts_with(ALIAS_GLOB_CHAR) {
+                    buf.push_str(orig);
+                } else {
+                    buf.push(c);
+                    if temp.starts_with('$') {
+                        /* redouble $ for act safety */
+                        buf.push('$');
+                    } else {
+                        buf.push(c);
+                    }
+                }
             }
         }
 
@@ -3077,8 +3080,11 @@ pub fn perform_alias(
     orig: &mut String,
 ) -> bool {
     let d = game.desc(d_id);
+    let chid = d
+        .character
+        .expect("perform_alias has descriptor with no character !");
     /* Mobs don't have aliases. */
-    let character = chars.get(d.character.unwrap());
+    let character = chars.get(chid);
     if character.is_npc() {
         return false;
     }
@@ -3095,25 +3101,20 @@ pub fn perform_alias(
     if first_arg.is_empty() {
         return false;
     }
-    let a;
     /* if the first arg is not an alias, return without doing anything */
     let dcps = &character.player_specials;
-    let res = {
-        a = find_alias(&dcps.aliases, &first_arg);
-        a.is_none()
-    };
-    if res {
-        return false;
-    }
-    let a = a.unwrap();
-    if a.type_ == ALIAS_SIMPLE {
-        orig.clear();
-        orig.push_str(a.replacement.as_ref());
-        false
-    } else {
-        let d = game.desc_mut(d_id);
-        perform_complex_alias(&mut d.input, ptr, a);
-        true
+    match find_alias(&dcps.aliases, &first_arg) {
+        None => false,
+        Some(a) if a.type_ == ALIAS_SIMPLE => {
+            orig.clear();
+            orig.push_str(a.replacement.as_ref());
+            false
+        }
+        Some(a) => {
+            let d = game.desc_mut(d_id);
+            perform_complex_alias(&mut d.input, ptr, a);
+            true
+        }
     }
 }
 
@@ -3224,14 +3225,20 @@ pub fn one_word<'a>(argument: &'a str, first_arg: &mut String) -> &'a str {
         if argument.starts_with('\"') {
             argument = &argument[1..];
 
-            while !argument.is_empty() && !argument.starts_with('\"') {
-                first_arg.push(argument.chars().next().unwrap().to_ascii_lowercase());
+            while let Some(c) = argument.chars().next() {
+                if c == '\"' {
+                    break;
+                }
+                first_arg.push(c.to_ascii_lowercase());
                 argument = &argument[1..];
             }
             argument = &argument[1..];
         } else {
-            while !argument.is_empty() && !argument.chars().next().unwrap().is_whitespace() {
-                first_arg.push(argument.chars().next().unwrap().to_ascii_lowercase());
+            while let Some(c) = argument.chars().next() {
+                if c.is_whitespace() {
+                    break;
+                }
+                first_arg.push(c.to_ascii_lowercase());
                 argument = &argument[1..];
             }
         }
@@ -3362,21 +3369,22 @@ pub fn special(
     let ch = chars.get(chid);
     for k_id in db.world[ch.in_room() as usize].peoples.clone() {
         let k = chars.get(k_id);
-        if !k.mob_flagged(MOB_NOTDEADYET)
-            && db.get_mob_spec(k).is_some()
-            && db.get_mob_spec(k).as_ref().unwrap()(
-                game,
-                chars,
-                db,
-                texts,
-                objs,
-                chid,
-                MeRef::Char(k_id),
-                cmd,
-                arg,
-            )
-        {
-            return true;
+        if !k.mob_flagged(MOB_NOTDEADYET) {
+            if let Some(spec) = db.get_mob_spec(k) {
+                if spec(
+                    game,
+                    chars,
+                    db,
+                    texts,
+                    objs,
+                    chid,
+                    MeRef::Char(k_id),
+                    cmd,
+                    arg,
+                ) {
+                    return true;
+                }
+            }
         }
     }
     let ch = chars.get(chid);
@@ -3431,7 +3439,13 @@ fn perform_dupe_check(
     let mut target_id = None;
     let mut mode = None::<DupeCheckMode>;
 
-    let id: i64 = chars.get(game.desc(d_id).character.unwrap()).get_idnum();
+    let id: i64 = chars
+        .get(
+            game.desc(d_id)
+                .character
+                .expect("No character for descriptor"),
+        )
+        .get_idnum();
 
     /*
      * Now that this descriptor has successfully logged in, disconnect all
@@ -3442,49 +3456,50 @@ fn perform_dupe_check(
             continue;
         }
 
-        if game.desc(k_id).original.is_some()
-            && chars.get(game.desc(k_id).original.unwrap()).get_idnum() == id
-        {
-            /* Original descriptor was switched, booting it and restoring normal body control. */
-            game.desc_mut(d_id)
-                .write_to_output("\r\nMultiple login detected -- disconnecting.\r\n");
-            let k = game.desc_mut(k_id);
-            k.set_state(ConClose);
-            if target_id.is_none() {
-                target_id = k.original;
-                mode = Some(DupeCheckMode::Unswitch);
-            }
+        let mut found_original = false;
+        if let Some(original_id) = game.desc(k_id).original {
+            if chars.get(original_id).get_idnum() == id {
+                found_original = true;
+                /* Original descriptor was switched, booting it and restoring normal body control. */
+                game.desc_mut(d_id)
+                    .write_to_output("\r\nMultiple login detected -- disconnecting.\r\n");
+                let k = game.desc_mut(k_id);
+                k.set_state(ConClose);
+                if target_id.is_none() {
+                    target_id = k.original;
+                    mode = Some(DupeCheckMode::Unswitch);
+                }
 
-            if k.character.is_some() {
-                let id = k.character.unwrap();
-                chars.get_mut(id).desc = None;
+                if let Some(id) = k.character {
+                    chars.get_mut(id).desc = None;
+                }
+                let k = game.desc_mut(k_id);
+                k.character = None;
+                k.original = None;
             }
-            let k = game.desc_mut(k_id);
-            k.character = None;
-            k.original = None;
-        } else if game.desc(k_id).character.is_some()
-            && chars.get(game.desc(k_id).character.unwrap()).get_idnum() == id
-            && game.desc(k_id).original.is_some()
-        {
-            /* Character taking over their own body, while an immortal was switched to it. */
-            let chid = game.desc(k_id).character.unwrap();
-            do_return(game, db, chars, texts, objs, chid, "", 0, 0);
-        } else if game.desc(k_id).character.is_some()
-            && chars.get(game.desc(k_id).character.unwrap()).get_idnum() == id
-        {
-            /* Character taking over their own body. */
-            let k = game.desc_mut(k_id);
-            if target_id.is_none() && k.state() == ConPlaying {
-                k.write_to_output("\r\nThis body has been usurped!\r\n");
-                target_id = Some(k.character.unwrap());
-                mode = Some(DupeCheckMode::Usurp);
+        }
+        if !found_original {
+            if let Some(chid) = game.desc(k_id).character {
+                if chars.get(chid).get_idnum() == id && game.desc(k_id).original.is_some() {
+                    /* Character taking over their own body, while an immortal was switched to it. */
+                    do_return(game, db, chars, texts, objs, chid, "", 0, 0);
+                } else if chars.get(chid).get_idnum() == id {
+                    /* Character taking over their own body. */
+                    let k = game.desc_mut(k_id);
+                    if target_id.is_none() && k.state() == ConPlaying {
+                        k.write_to_output("\r\nThis body has been usurped!\r\n");
+                        target_id = k.character;
+                        mode = Some(DupeCheckMode::Usurp);
+                    }
+                    if let Some(k_chid) = k.character {
+                        chars.get_mut(k_chid).desc = None;
+                        k.character = None;
+                    }
+                    k.original = None;
+                    k.write_to_output("\r\nMultiple login detected -- disconnecting.\r\n");
+                    k.set_state(ConClose);
+                }
             }
-
-            chars.get_mut(k.character.unwrap()).desc = None;
-            k.character = None;
-            k.original = None;
-            k.write_to_output("\r\nMultiple login detected -- disconnecting.\r\n");
-            k.set_state(ConClose);
         }
     }
 
@@ -3511,8 +3526,10 @@ fn perform_dupe_check(
         }
 
         /* don't extract the target char we've found one already */
-        if target_id.is_some() && chid == target_id.unwrap() {
-            continue;
+        if let Some(target) = target_id {
+            if chid == target {
+                continue;
+            }
         }
 
         /* we don't already have a target and found a candidate for switching */
@@ -3532,20 +3549,20 @@ fn perform_dupe_check(
 
     /* no target for switching into was found - allow login to continue */
 
-    if target_id.is_none() {
-        return false;
-    }
-    let target_id = target_id.unwrap();
+    let target_id = match target_id {
+        Some(t) => t,
+        None => return false,
+    };
 
     /* Okay, we've found a target.  Connect d to target. */
     let desc = game.desc_mut(d_id);
-    let desc_char_id = desc.character.unwrap();
-    db.free_char(&mut game.descriptors, chars, objs, desc_char_id);
+    if let Some(desc_char_id) = desc.character {
+        db.free_char(&mut game.descriptors, chars, objs, desc_char_id);
+    }
     let desc = game.desc_mut(d_id);
     desc.character = Some(target_id);
     {
-        let character_id = desc.character.unwrap();
-        let character = chars.get_mut(character_id);
+        let character = chars.get_mut(target_id);
         character.desc = Some(d_id);
         desc.original = None;
         character.char_specials.timer = 0;
@@ -3557,8 +3574,7 @@ fn perform_dupe_check(
     match mode {
         Some(DupeCheckMode::Recon) => {
             desc.write_to_output("Reconnecting.\r\n");
-            let chid = desc.character.unwrap();
-            let ch = chars.get(chid);
+            let ch = chars.get(target_id);
             act(
                 &mut game.descriptors,
                 chars,
@@ -3570,11 +3586,10 @@ fn perform_dupe_check(
                 None,
                 TO_ROOM,
             );
-            let desc = game.desc_mut(d_id);
-            let v2 = chars.get(desc.character.unwrap()).get_invis_lev() as i32;
+            let v2 = chars.get(target_id).get_invis_lev() as i32;
             let msg = format!(
                 "{} [{}] has reconnected.",
-                chars.get(desc.character.unwrap()).get_name(),
+                chars.get(target_id).get_name(),
                 game.desc(d_id).host
             );
             game.mudlog(
@@ -3587,15 +3602,13 @@ fn perform_dupe_check(
         }
         Some(DupeCheckMode::Usurp) => {
             desc.write_to_output("You take over your own body, already in use!\r\n");
-            let chid = desc.character.unwrap();
-            let ch = chars.get(chid);
+            let ch = chars.get(target_id);
             act(&mut game.descriptors, chars, db, "$n suddenly keels over in pain, surrounded by a white aura...\r\n$n's body has been taken over by a new spirit!",
              true, Some(ch), None, None, TO_ROOM);
-            let desc = game.desc_mut(d_id);
-            let v2 = chars.get(desc.character.unwrap()).get_invis_lev() as i32;
+            let v2 = chars.get(target_id).get_invis_lev() as i32;
             let msg = format!(
                 "{} has re-logged in ... disconnecting old socket.",
-                chars.get(desc.character.unwrap()).get_name()
+                chars.get(target_id).get_name()
             );
 
             game.mudlog(
@@ -3608,10 +3621,10 @@ fn perform_dupe_check(
         }
         Some(DupeCheckMode::Unswitch) => {
             desc.write_to_output("Reconnecting to unswitched char.");
-            let v2 = chars.get(desc.character.unwrap()).get_invis_lev() as i32;
+            let v2 = chars.get(target_id).get_invis_lev() as i32;
             let msg = format!(
                 "{} [{}] has reconnected.",
-                chars.get(desc.character.unwrap()).get_name(),
+                chars.get(target_id).get_name(),
                 desc.host
             );
             game.mudlog(
@@ -3654,14 +3667,18 @@ pub fn nanny(
             if arg.is_empty() {
                 desc.set_state(ConClose);
             } else {
-                let tmp_name = _parse_name(arg);
+                let Some(tmp_name) = _parse_name(arg) else {
+                    let desc = game.desc_mut(d_id);
 
-                if tmp_name.is_none()
-                    || tmp_name.unwrap().len() < 2
-                    || tmp_name.unwrap().len() > MAX_NAME_LENGTH
-                    || !valid_name(game, chars, db, tmp_name.unwrap())
-                    || fill_word(tmp_name.unwrap())
-                    || reserved_word(tmp_name.unwrap())
+                    desc.write_to_output("Invalid name, please try another.\r\nName: ");
+                    return;
+                };
+
+                if tmp_name.len() < 2
+                    || tmp_name.len() > MAX_NAME_LENGTH
+                    || !valid_name(game, chars, db, tmp_name)
+                    || fill_word(tmp_name)
+                    || reserved_word(tmp_name)
                 {
                     let desc = game.desc_mut(d_id);
 
@@ -3669,9 +3686,9 @@ pub fn nanny(
                     return;
                 }
                 let desc = game.desc_mut(d_id);
-                let character_id = desc.character.unwrap();
+                let character_id = desc.character.expect("descriptor with no character !");
                 let mut tmp_store = CharFileU::default();
-                let player_i = db.load_char(tmp_name.unwrap(), &mut tmp_store);
+                let player_i = db.load_char(tmp_name, &mut tmp_store);
                 if let Some(player_i) = player_i {
                     let character = chars.get_mut(character_id);
                     store_to_char(texts, &tmp_store, character);
@@ -3682,7 +3699,7 @@ pub fn nanny(
                         desc.character = None;
                         db.free_char(&mut game.descriptors, chars, objs, character_id);
                         /* Check for multiple creations... */
-                        if !valid_name(game, chars, db, tmp_name.unwrap()) {
+                        if !valid_name(game, chars, db, tmp_name) {
                             let desc = game.desc_mut(d_id);
 
                             desc.write_to_output("Invalid name, please try another.\r\nName: ");
@@ -3693,12 +3710,12 @@ pub fn nanny(
                         let mut new_char = CharData::default();
                         clear_char(&mut new_char);
                         new_char.desc = Some(d_id);
-                        new_char.player.name = Rc::from(tmp_name.unwrap());
+                        new_char.player.name = Rc::from(tmp_name);
                         new_char.pfilepos = player_i as i32;
                         let new_char_id = chars.push(new_char);
                         desc.character = Some(new_char_id);
                         desc.write_to_output(
-                            format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
+                            format!("Did I get that right, {} (Y/N)? ", tmp_name).as_str(),
                         );
                         desc.set_state(ConNameCnfrm);
                     } else {
@@ -3714,18 +3731,18 @@ pub fn nanny(
                     /* player unknown -- make new character */
 
                     /* Check for multiple creations of a character. */
-                    if !valid_name(game, chars, db, tmp_name.unwrap()) {
+                    if !valid_name(game, chars, db, tmp_name) {
                         let desc = game.desc_mut(d_id);
                         desc.write_to_output("Invalid name, please try another.\r\nName: ");
                         return;
                     }
                     let desc = game.desc_mut(d_id);
-                    let character_id = desc.character.unwrap();
+                    let character_id = desc.character.expect("descriptor with no character !");
                     let character = chars.get_mut(character_id);
-                    character.player.name = Rc::from(tmp_name.unwrap());
+                    character.player.name = Rc::from(tmp_name);
 
                     desc.write_to_output(
-                        format!("Did I get that right, {} (Y/N)? ", tmp_name.unwrap()).as_str(),
+                        format!("Did I get that right, {} (Y/N)? ", tmp_name).as_str(),
                     );
                     desc.set_state(ConNameCnfrm);
                 }
@@ -3737,7 +3754,9 @@ pub fn nanny(
                 if isbanned(db, &desc.host) >= BanType::New {
                     let msg = format!(
                         "Request for new char {} denied from [{}] (siteban)",
-                        chars.get(desc.character.unwrap()).get_pc_name(),
+                        chars
+                            .get(desc.character.expect("descriptor with no character !"))
+                            .get_pc_name(),
                         desc.host
                     );
                     game.mudlog(
@@ -3759,7 +3778,9 @@ pub fn nanny(
                     desc.write_to_output("Sorry, new players can't be created at the moment.\r\n");
                     let msg = format!(
                         "Request for new char {} denied from [{}] (wizlock)",
-                        chars.get(desc.character.unwrap()).get_pc_name(),
+                        chars
+                            .get(desc.character.expect("descriptor with no character !"))
+                            .get_pc_name(),
                         desc.host
                     );
                     game.mudlog(
@@ -3777,7 +3798,9 @@ pub fn nanny(
 
                 let msg = format!(
                     "New character.\r\nGive me a password for {}: ",
-                    chars.get(desc.character.unwrap()).get_pc_name()
+                    chars
+                        .get(desc.character.expect("descriptor with no character !"))
+                        .get_pc_name()
                 );
                 desc.write_to_output(msg.as_str());
                 desc.echo_off();
@@ -3785,7 +3808,7 @@ pub fn nanny(
             } else if arg.starts_with('n') || arg.starts_with('N') {
                 desc.write_to_output("Okay, what IS it, then? ");
                 desc.set_state(ConGetName);
-                let chid = desc.character.unwrap();
+                let chid = desc.character.expect("descriptor with no character !");
                 db.free_char(&mut game.descriptors, chars, objs, chid);
             } else {
                 desc.write_to_output("Please type Yes or No: ");
@@ -3814,7 +3837,7 @@ pub fn nanny(
             } else {
                 let matching_pwd: bool;
                 {
-                    let character_id = desc.character.unwrap();
+                    let character_id = desc.character.expect("descriptor with no character !");
                     let character = chars.get(character_id);
                     let mut passwd2 = [0_u8; 16];
                     let salt = character.get_pc_name();
@@ -3841,7 +3864,7 @@ pub fn nanny(
                         character.incr_bad_pws();
                         let desc = game.desc_mut(d_id);
 
-                        let chid = desc.character.unwrap();
+                        let chid = desc.character.expect("descriptor with no character !");
                         save_char(&mut game.descriptors, db, chars, texts, objs, chid);
                         let desc = game.desc_mut(d_id);
 
@@ -3863,7 +3886,9 @@ pub fn nanny(
                     character.reset_bad_pws();
                     desc.bad_pws = 0;
                     if isbanned(db, &desc.host) == BanType::Select
-                        && !chars.get(desc.character.unwrap()).plr_flagged(PLR_SITEOK)
+                        && !chars
+                            .get(desc.character.expect("descriptor with no character !"))
+                            .plr_flagged(PLR_SITEOK)
                     {
                         desc.write_to_output(
                             "Sorry, this char has not been cleared for login from your site!\r\n",
@@ -3871,7 +3896,9 @@ pub fn nanny(
                         desc.set_state(ConClose);
                         let msg = format!(
                             "Connection attempt for {} denied from {}",
-                            chars.get(desc.character.unwrap()).get_name(),
+                            chars
+                                .get(desc.character.expect("descriptor with no character !"))
+                                .get_name(),
                             desc.host
                         );
                         game.mudlog(
@@ -3885,14 +3912,20 @@ pub fn nanny(
                     }
                     let desc = game.desc_mut(d_id);
 
-                    if chars.get(desc.character.unwrap()).get_level() < db.circle_restrict {
+                    if chars
+                        .get(desc.character.expect("descriptor with no character !"))
+                        .get_level()
+                        < db.circle_restrict
+                    {
                         desc.write_to_output(
                             "The game is temporarily restricted.. try again later.\r\n",
                         );
                         desc.set_state(ConClose);
                         let msg = format!(
                             "Request for login denied for {} [{}] (wizlock)",
-                            chars.get(desc.character.unwrap()).get_name(),
+                            chars
+                                .get(desc.character.expect("descriptor with no character !"))
+                                .get_name(),
                             desc.host
                         );
                         game.mudlog(
@@ -3911,7 +3944,7 @@ pub fn nanny(
                 }
                 let desc = game.desc_mut(d_id);
 
-                let character_id = desc.character.unwrap();
+                let character_id = desc.character.expect("descriptor with no character !");
                 let character = chars.get(character_id);
 
                 let level: u8;
@@ -3957,7 +3990,7 @@ pub fn nanny(
             }
         }
         ConNewpasswd | ConChpwdGetnew => {
-            let character_id = desc.character.unwrap();
+            let character_id = desc.character.expect("descriptor with no character !");
             let character = chars.get(character_id);
             if arg.is_empty()
                 || arg.len() > MAX_PWD_LENGTH
@@ -3983,7 +4016,7 @@ pub fn nanny(
             }
         }
         ConCnfpasswd | ConChpwdVrfy => {
-            let character_id = desc.character.unwrap();
+            let character_id = desc.character.expect("descriptor with no character !");
             let character = chars.get(character_id);
             let pwd_equals: bool;
             {
@@ -4013,14 +4046,14 @@ pub fn nanny(
             }
         }
         ConQsex => {
-            let character_id = desc.character.unwrap();
+            let character_id = desc.character.expect("descriptor with no character !");
             let character = chars.get_mut(character_id);
             /* query sex of new user         */
-            match arg.chars().next().unwrap() {
-                'm' | 'M' => {
+            match arg.chars().next() {
+                Some('m') | Some('M') => {
                     character.player.sex = Sex::Male;
                 }
-                'f' | 'F' => {
+                Some('f') | Some('F') => {
                     character.player.sex = Sex::Female;
                 }
                 _ => {
@@ -4033,9 +4066,13 @@ pub fn nanny(
             desc.set_state(ConQclass);
         }
         ConQclass => {
-            let character_id = desc.character.unwrap();
+            let character_id = desc.character.expect("descriptor with no character !");
 
-            let load_result = parse_class(arg.chars().next().unwrap());
+            let Some(c) = arg.chars().next() else {
+                desc.write_to_output("\r\nThat's not a class.\r\nClass: ");
+                return;
+            };
+            let load_result = parse_class(c);
             if load_result == Class::Undefined {
                 desc.write_to_output("\r\nThat's not a class.\r\nClass: ");
                 return;
@@ -4080,7 +4117,7 @@ pub fn nanny(
         ConMenu => {
             let load_result;
             /* get selection from main menu  */
-            let character_id = desc.character.unwrap();
+            let character_id = desc.character.expect("descriptor with no character !");
             let character = chars.get(character_id);
             match arg.chars().last().unwrap_or('\0') {
                 '0' => {
@@ -4170,18 +4207,19 @@ pub fn nanny(
                         );
                     }
                     let desc = game.desc_mut(d_id);
-                    if db
-                        .mails
-                        .has_mail(chars.get(desc.character.unwrap()).get_idnum())
-                    {
-                        let chid = desc.character.unwrap();
+                    if db.mails.has_mail(
+                        chars
+                            .get(desc.character.expect("descriptor with no character !"))
+                            .get_idnum(),
+                    ) {
+                        let chid = desc.character.expect("descriptor with no character !");
                         let ch = chars.get(chid);
                         send_to_char(&mut game.descriptors, ch, "You have mail waiting.\r\n");
                     }
                     let desc = game.desc_mut(d_id);
                     if load_result == 2 {
                         /* rented items lost */
-                        let chid = desc.character.unwrap();
+                        let chid = desc.character.expect("descriptor with no character");
                         let ch = chars.get(chid);
                         send_to_char(&mut game.descriptors, ch, "\r\n\x07You could not afford your rent!\r\nYour possesions have been donated to the Salvation Army!\r\n");
                     }
@@ -4228,7 +4266,7 @@ pub fn nanny(
         ConChpwdGetold => {
             let matching_pwd: bool;
             {
-                let character_id = desc.character.unwrap();
+                let character_id = desc.character.expect("descriptor with no character !");
                 let character = chars.get(character_id);
                 let mut passwd2 = [0_u8; 16];
                 let salt = character.get_pc_name();
@@ -4252,7 +4290,7 @@ pub fn nanny(
             desc.echo_on();
             let matching_pwd: bool;
             {
-                let character_id = desc.character.unwrap();
+                let character_id = desc.character.expect("descriptor with no character !");
                 let character = chars.get(character_id);
                 let mut passwd2 = [0_u8; 16];
                 let salt = character.get_pc_name();
@@ -4276,7 +4314,7 @@ pub fn nanny(
 
         ConDelcnf2 => {
             if arg == "yes" || arg == "YES" {
-                let d_chid = desc.character.unwrap();
+                let d_chid = desc.character.expect("descriptor with no character !");
                 let d_ch = chars.get(d_chid);
                 if d_ch.plr_flagged(PLR_FROZEN) {
                     desc.write_to_output(
@@ -4331,7 +4369,7 @@ pub fn nanny(
 
         _ => {
             let char_name = if desc.character.is_some() {
-                let character_id = desc.character.unwrap();
+                let character_id = desc.character.expect("descriptor with no character !");
                 let character = chars.get(character_id);
                 String::from(character.get_name().as_ref())
             } else {
