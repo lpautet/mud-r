@@ -596,9 +596,11 @@ pub fn call_magic(
         return -1; /* Successful and target died, don't cast again. */
     }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
-        mag_affects(
-            game, chars, db, objs, level, caster_id, cvict_id, spellnum, savetype,
-        );
+        if let Some(cvict_id) = cvict_id {
+            mag_affects(
+                game, chars, db, objs, level, caster_id, cvict_id, spellnum, savetype,
+            );
+        }
     }
 
     if is_set!(sinfo_routines, MAG_UNAFFECTS) {
@@ -616,26 +618,22 @@ pub fn call_magic(
     }
 
     if is_set!(sinfo_routines, MAG_POINTS) {
-        mag_points(game, chars, level, caster_id, cvict_id, spellnum, savetype);
+        if let Some(cvict_id) = cvict_id {
+            mag_points(game, chars, level, caster_id, cvict_id, spellnum, savetype);
+        }
     }
 
     if is_set!(sinfo_routines, MAG_ALTER_OBJS) {
-        mag_alter_objs(
-            game, chars, db, objs, level, caster_id, ovict, spellnum, savetype,
-        );
+        if let Some(ovict) = ovict {
+            mag_alter_objs(
+                game, chars, db, objs, level, caster_id, ovict, spellnum, savetype,
+            );
+        }
     }
 
     if is_set!(sinfo_routines, MAG_GROUPS) {
         mag_groups(
-            game,
-            chars,
-            db,
-            texts,
-            objs,
-            level,
-            Some(caster_id),
-            spellnum,
-            savetype,
+            game, chars, db, texts, objs, level, caster_id, spellnum, savetype,
         );
     }
     if is_set!(sinfo_routines, MAG_MASSES) {
@@ -644,34 +642,18 @@ pub fn call_magic(
 
     if is_set!(sinfo_routines, MAG_AREAS) {
         mag_areas(
-            game,
-            chars,
-            db,
-            texts,
-            objs,
-            level,
-            Some(caster_id),
-            spellnum,
-            savetype,
+            game, chars, db, texts, objs, level, caster_id, spellnum, savetype,
         );
     }
 
     if is_set!(sinfo_routines, MAG_SUMMONS) {
         mag_summons(
-            game,
-            chars,
-            db,
-            objs,
-            level,
-            Some(caster_id),
-            ovict,
-            spellnum,
-            savetype,
+            game, chars, db, objs, level, caster_id, ovict, spellnum, savetype,
         );
     }
 
     if is_set!(sinfo_routines, MAG_CREATIONS) {
-        mag_creations(game, chars, db, objs, level, Some(caster_id), spellnum);
+        mag_creations(game, chars, db, objs, level, caster_id, spellnum);
     }
 
     if is_set!(sinfo_routines, MAG_MANUAL) {
