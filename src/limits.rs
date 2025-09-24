@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -185,7 +185,12 @@ pub fn move_gain(ch: &CharData) -> u8 {
 
 pub fn set_title(ch: &mut CharData, title: Option<&str>) {
     let mut title = title;
-    if title.is_none() || title.unwrap().is_empty() {
+    let use_default_title = if let Some(title) = title {
+        title.is_empty()
+    } else {
+        true
+    };
+    if use_default_title {
         if ch.get_sex() == Sex::Female {
             title = Some(title_female(ch.get_class(), ch.get_level()));
         } else {
@@ -423,8 +428,8 @@ impl Game {
                 let ch_in_room = ch.in_room();
                 chars.get_mut(chid).set_was_in(ch_in_room);
                 let ch = chars.get(chid);
-                if ch.fighting_id().is_some() {
-                    db.stop_fighting(chars.get_mut(ch.fighting_id().unwrap()));
+                if let Some(fighting_id) = ch.fighting_id() {
+                    db.stop_fighting(chars.get_mut(fighting_id));
                     db.stop_fighting(chars.get_mut(chid));
                 }
                 let ch = chars.get(chid);
@@ -455,8 +460,7 @@ impl Game {
                 }
                 db.char_to_room(chars, objs, chid, 3);
                 let ch = chars.get(chid);
-                if ch.desc.is_some() {
-                    let desc_id = ch.desc.unwrap();
+                if let Some(desc_id) = ch.desc {
                     self.desc_mut(desc_id).set_state(ConDisconnect);
 
                     /*
@@ -464,10 +468,11 @@ impl Game {
                      * -gg 3/1/98 (Happy anniversary.)
                      */
                     let ch = chars.get(chid);
-                    let desc_id = ch.desc.unwrap();
-                    self.desc_mut(desc_id).character = None;
-                    let ch = chars.get_mut(chid);
-                    ch.desc = None;
+                    if let Some(desc_id) = ch.desc {
+                        self.desc_mut(desc_id).character = None;
+                        let ch = chars.get_mut(chid);
+                        ch.desc = None;
+                    }
                 }
                 if FREE_RENT {
                     crash_rentsave(chars, db, objs, chid, 0);
@@ -549,8 +554,7 @@ impl Game {
                 }
                 let j_obj = objs.get(j_id);
                 if j_obj.get_obj_timer() == 0 {
-                    if j_obj.carried_by.is_some() {
-                        let chid = j_obj.carried_by.unwrap();
+                    if let Some(chid) = j_obj.carried_by {
                         let ch = chars.get(chid);
                         act(
                             &mut self.descriptors,
@@ -599,11 +603,10 @@ impl Game {
                     for contained_id in old_contains.into_iter() {
                         obj_from_obj(chars, objs, contained_id);
                         let j = objs.get_mut(j_id);
-                        if j.in_obj.is_some() {
-                            let to_obj_id = j.in_obj.unwrap();
+                        if let Some(to_obj_id) = j.in_obj {
                             obj_to_obj(chars, objs, contained_id, to_obj_id);
-                        } else if j.carried_by.is_some() {
-                            let to_room = chars.get(j.carried_by.unwrap()).in_room();
+                        } else if let Some(chid) = j.carried_by {
+                            let to_room = chars.get(chid).in_room();
                             db.obj_to_room(j, to_room);
                         } else if j.in_room() != NOWHERE {
                             db.obj_to_room(j, j.in_room());
