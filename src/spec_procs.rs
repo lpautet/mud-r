@@ -6,8 +6,10 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
+
+use log::error;
 
 use crate::depot::{Depot, DepotId};
 use crate::handler::{obj_from_obj, obj_to_char};
@@ -141,8 +143,9 @@ pub fn list_skills(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, ch
             );
         }
     }
-    let d_id = ch.desc.unwrap();
-    page_string(&mut game.descriptors, chars, d_id, &buf, true);
+    if let Some(d_id) = ch.desc {
+        page_string(&mut game.descriptors, chars, d_id, &buf, true);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -178,12 +181,11 @@ pub fn guild(
         return true;
     }
 
-    let skill_num = find_skill_num(db, argument);
-
-    if skill_num.is_none()
-        || ch.get_level()
-            < db.spell_info[skill_num.unwrap() as usize].min_level[ch.get_class() as usize] as u8
-    {
+    let mut skill_num = 0;
+    if find_skill_num(db, argument).is_none_or(|sn| {
+        skill_num = sn;
+        ch.get_level() < db.spell_info[skill_num as usize].min_level[ch.get_class() as usize] as u8
+    }) {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -191,7 +193,7 @@ pub fn guild(
         );
         return true;
     }
-    if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
+    if ch.get_skill(skill_num) >= learned(ch) {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -203,15 +205,15 @@ pub fn guild(
     let ch = chars.get_mut(chid);
     ch.set_practices(ch.get_practices() - 1);
 
-    let mut percent = ch.get_skill(skill_num.unwrap());
+    let mut percent = ch.get_skill(skill_num);
     percent += min(
         maxgain(ch),
         max(mingain(ch), INT_APP[ch.get_int() as usize].learn as i32),
     ) as i8;
 
-    ch.set_skill(skill_num.unwrap(), min(learned(ch), percent));
+    ch.set_skill(skill_num, min(learned(ch), percent));
 
-    if ch.get_skill(skill_num.unwrap()) >= learned(ch) {
+    if ch.get_skill(skill_num) >= learned(ch) {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -367,17 +369,16 @@ pub fn mayor(
 
     let a = &db.mayor.path[db.mayor.path_index..db.mayor.path_index + 1]
         .chars()
-        .next()
-        .unwrap();
+        .next();
     match a {
-        '0' | '1' | '2' | '3' => {
+        Some('0' | '1' | '2' | '3') => {
             let dir = db.mayor.path[db.mayor.path_index..db.mayor.path_index + 1]
                 .parse::<u8>()
-                .unwrap();
+                .expect("cannot parse an int ?");
             perform_move(game, db, chars, texts, objs, chid, dir as i32, true);
         }
 
-        'W' => {
+        Some('W') => {
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Standing);
             let ch = chars.get(chid);
@@ -394,7 +395,7 @@ pub fn mayor(
             );
         }
 
-        'S' => {
+        Some('S') => {
             let ch = chars.get_mut(chid);
             ch.set_pos(Position::Sleeping);
             let ch = chars.get(chid);
@@ -411,7 +412,7 @@ pub fn mayor(
             );
         }
 
-        'a' => {
+        Some('a') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -436,7 +437,7 @@ pub fn mayor(
             );
         }
 
-        'b' => {
+        Some('b') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -450,7 +451,7 @@ pub fn mayor(
             );
         }
 
-        'c' => {
+        Some('c') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -464,7 +465,7 @@ pub fn mayor(
             );
         }
 
-        'd' => {
+        Some('d') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -478,7 +479,7 @@ pub fn mayor(
             );
         }
 
-        'e' => {
+        Some('e') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -492,7 +493,7 @@ pub fn mayor(
             );
         }
 
-        'E' => {
+        Some('E') => {
             act(
                 &mut game.descriptors,
                 chars,
@@ -506,17 +507,17 @@ pub fn mayor(
             );
         }
 
-        'O' => {
+        Some('O') => {
             do_gen_door(game, db, chars, texts, objs, chid, "gate", 0, SCMD_UNLOCK);
             do_gen_door(game, db, chars, texts, objs, chid, "gate", 0, SCMD_OPEN);
         }
 
-        'C' => {
+        Some('C') => {
             do_gen_door(game, db, chars, texts, objs, chid, "gate", 0, SCMD_CLOSE);
             do_gen_door(game, db, chars, texts, objs, chid, "gate", 0, SCMD_LOCK);
         }
 
-        '.' => {
+        Some('.') => {
             db.mayor.move_ = false;
         }
         _ => {}
@@ -602,17 +603,20 @@ pub fn snake(
     _argument: &str,
 ) -> bool {
     let ch = chars.get(chid);
+    let Some(fighting_id) = ch.fighting_id() else {
+        return false;
+    };
 
-    if cmd != 0 || ch.get_pos() != Position::Fighting || ch.fighting_id().is_none() {
+    if cmd != 0 || ch.get_pos() != Position::Fighting {
         return false;
     }
 
-    if chars.get(ch.fighting_id().unwrap()).in_room() != ch.in_room()
+    if chars.get(fighting_id).in_room() != ch.in_room()
         || rand_number(0, ch.get_level() as u32) != 0
     {
         return false;
     }
-    let fighting = chars.get(ch.fighting_id().unwrap());
+    let fighting = chars.get(fighting_id);
     act(
         &mut game.descriptors,
         chars,
@@ -695,14 +699,17 @@ pub fn magic_user(
     if cmd != 0 || ch.get_pos() != Position::Fighting {
         return false;
     }
+    let Some(fighting_id) = ch.fighting_id() else {
+        error!("SYSERR: Thief {} has no fighting id", chid);
+        return false;
+    };
     /* pseudo-randomly choose someone in the room who is fighting me */
     let mut vict_id = None;
     {
         for &v_id in &db.world[ch.in_room() as usize].peoples {
             let v = chars.get(v_id);
-            if v.fighting_id().is_some()
-                && v.fighting_id().unwrap() == chid
-                && rand_number(0, 4) == 0
+            if v.fighting_id()
+                .is_some_and(|fighting_id| fighting_id == chid && rand_number(0, 4) == 0)
             {
                 vict_id = Some(v_id);
                 break;
@@ -712,7 +719,7 @@ pub fn magic_user(
 
     let mut my_vict_id = None;
     /* if I didn't pick any of those, then just slam the guy I'm fighting */
-    if vict_id.is_none() && chars.get(ch.fighting_id().unwrap()).in_room() == ch.in_room() {
+    if vict_id.is_none() && chars.get(fighting_id).in_room() == ch.in_room() {
         my_vict_id = ch.fighting_id();
     }
     if my_vict_id.is_some() {
@@ -1170,9 +1177,9 @@ pub fn cityguard(
             return true;
         }
 
-        if tch.fighting_id().is_some()
-            && tch.get_alignment() < max_evil
-            && (tch.is_npc() || chars.get(tch.fighting_id().unwrap()).is_npc())
+        if tch.fighting_id().is_some_and(|fighting_id|
+             tch.get_alignment() < max_evil
+            && (tch.is_npc() || chars.get(fighting_id).is_npc()))
         {
             max_evil = tch.get_alignment();
             evil_id = Some(tch_id);
@@ -1184,13 +1191,10 @@ pub fn cityguard(
         }
     }
 
-    #[allow(clippy::unnecessary_unwrap)]
-    if evil_id.is_some()
-        && chars
-            .get(chars.get(evil_id.unwrap()).fighting_id().unwrap())
-            .get_alignment()
-            >= 0
-    {
+    if let Some(evil_id) = evil_id {
+        if chars.get(evil_id).fighting_id().is_some_and(|fighting_id|
+            chars.get(fighting_id).get_alignment() >= 0
+        ) {
         act(
             &mut game.descriptors,
             chars,
@@ -1208,18 +1212,18 @@ pub fn cityguard(
             texts,
             objs,
             chid,
-            evil_id.unwrap(),
+            evil_id,
             TYPE_UNDEFINED,
         );
         return true;
-    }
+    }}
 
     /* Reward the socially inept. */
-    if spittle.is_some() && rand_number(0, 9) == 0 {
+    if let Some(spittle) = spittle {
+        if rand_number(0, 9) == 0 {
         let spit_social = find_command("spit");
 
         if let Some(spit_social) = spit_social {
-            #[allow(clippy::unnecessary_unwrap)]
             do_action(
                 game,
                 db,
@@ -1227,12 +1231,12 @@ pub fn cityguard(
                 texts,
                 objs,
                 chid,
-                &spittle.as_ref().unwrap().get_name().clone(),
+                &spittle.get_name().clone(),
                 spit_social,
                 0,
             );
             return true;
-        }
+        }}
     }
 
     false
@@ -1279,11 +1283,11 @@ pub fn pet_shops(
         let mut pet_name = String::new();
         two_arguments(argument, &mut buf, &mut pet_name);
         let pet = db.get_char_room(chars, &buf, None, pet_room);
-        if pet.is_none() || !pet.unwrap().is_npc() {
+        if pet.is_none_or(|pet| !pet.is_npc()) {
             send_to_char(&mut game.descriptors, ch, "There is no such pet!\r\n");
             return true;
         }
-        let pet = pet.unwrap();
+        let pet = pet.expect("pet");
         if ch.get_gold() < pet_price(pet) {
             send_to_char(&mut game.descriptors, ch, "You don't have enough gold!\r\n");
             return true;
@@ -1293,7 +1297,7 @@ pub fn pet_shops(
         let ch = chars.get_mut(chid);
         ch.set_gold(ch.get_gold() - pet_price);
 
-        let pet_id = db.read_mobile(chars, pet_mob_rnum, LoadType::Real).unwrap();
+        let pet_id = db.read_mobile(chars, pet_mob_rnum, LoadType::Real).expect("pet cannot be read");
         let pet = chars.get_mut(pet_id);
         pet.set_exp(0);
         pet.set_aff_flags_bits(AffectFlags::CHARM);
