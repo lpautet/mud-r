@@ -572,12 +572,14 @@ impl DB {
     ) -> Option<DepotId> {
         let ch = chars.get_mut(chid);
         if pos > NUM_WEARS {
-            panic!("Invalid position in unequip_char: {}", pos);
+            error!("Invalid position in unequip_char: {}", pos);
+            return None;
         }
 
-        let oid = ch
-            .get_eq(pos)
-            .unwrap_or_else(|| panic!("Invalid position in unequip_char: {}", pos));
+        let Some(oid) = ch.get_eq(pos) else {
+            error!("Invalid position in unequip_char: {}", pos);
+            return None;
+        };
         let obj = objs.get_mut(oid);
         obj.worn_by = None;
         obj.worn_on = -1;

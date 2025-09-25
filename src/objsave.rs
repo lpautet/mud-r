@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2024 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::max;
@@ -60,7 +60,7 @@ pub fn obj_from_store(
         return None;
     }
 
-    let oid = db.read_object(objs, itemnum, LoadType::Real).unwrap();
+    let oid = db.read_object(objs, itemnum, LoadType::Real)?;
     let obj = objs.get_mut(oid);
     *location = object.location as i32;
     obj.set_obj_val(0, object.value[0]);
@@ -270,21 +270,17 @@ pub fn crash_delete_file(name: &str) -> bool {
     if !get_filename(&mut filename, FileType::Crash, name) {
         return false;
     }
-    {
-        let fl = OpenOptions::new().read(true).open(&filename);
-        if fl.is_err() {
-            let err = fl.err().unwrap();
-            if err.kind() != ErrorKind::NotFound {
-                /* if it fails but NOT because of no file */
-                error!("SYSERR: deleting crash file {} (1): {}", &filename, err);
-            }
-            return false;
+
+    if let Err(err) = OpenOptions::new().read(true).open(&filename) {
+        if err.kind() != ErrorKind::NotFound {
+            /* if it fails but NOT because of no file */
+            error!("SYSERR: deleting crash file {} (1): {}", &filename, err);
         }
+        return false;
     }
-    let r = fs::remove_file(Path::new(&filename));
-    /* if it fails, NOT because of no file */
-    if r.is_err() {
-        let err = r.err().unwrap();
+
+    if let Err(err) = fs::remove_file(Path::new(&filename)) {
+        /* if it fails, NOT because of no file */
         if err.kind() != ErrorKind::NotFound {
             error!("SYSERR: deleting crash file {} (2): {}", filename, err);
         }
@@ -299,15 +295,16 @@ pub fn crash_delete_crashfile(ch: &CharData) -> bool {
     if !get_filename(&mut filename, FileType::Crash, ch.get_name().as_ref()) {
         return false;
     }
-    let fl = OpenOptions::new().read(true).open(&filename);
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        if err.kind() != ErrorKind::NotFound {
-            /* if it fails, NOT because of no file */
-            error!("SYSERR: checking for crash file {} (3): {}", &filename, err);
+    let mut fl = match OpenOptions::new().read(true).open(&filename) {
+        Ok(fl) => fl,
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                /* if it fails, NOT because of no file */
+                error!("SYSERR: checking for crash file {} (3): {}", &filename, err);
+            }
+            return false;
         }
-        return false;
-    }
+    };
     let mut rent_info = RentInfo::new();
     let slice;
     unsafe {
@@ -316,9 +313,8 @@ pub fn crash_delete_crashfile(ch: &CharData) -> bool {
             mem::size_of::<RentInfo>(),
         );
     }
-    let r = fl.unwrap().read_exact(slice);
 
-    if r.is_err() {
+    if fl.read_exact(slice).is_err() {
         return false;
     }
 
@@ -341,15 +337,16 @@ fn crash_clean_file(name: &str) -> bool {
      * open for write so that permission problems will be flagged now, at boot
      * time.
      */
-    let fl = OpenOptions::new().read(true).open(&filename);
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        if err.kind() != ErrorKind::NotFound {
-            /* if it fails, NOT because of no file */
-            error!("SYSERR: OPENING OBJECT FILE {} (4): {}", &filename, err);
+    let mut fl = match OpenOptions::new().read(true).open(&filename) {
+        Ok(fl) => fl,
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                /* if it fails, NOT because of no file */
+                error!("SYSERR: OPENING OBJECT FILE {} (4): {}", &filename, err);
+            }
+            return false;
         }
-        return false;
-    }
+    };
 
     let slice;
     unsafe {
@@ -357,9 +354,7 @@ fn crash_clean_file(name: &str) -> bool {
             slice::from_raw_parts_mut(&mut rent as *mut _ as *mut u8, mem::size_of::<RentInfo>());
     }
 
-    let r = fl.unwrap().read_exact(slice);
-
-    if r.is_err() {
+    if fl.read_exact(slice).is_err() {
         return false;
     }
 
@@ -409,17 +404,23 @@ pub fn crash_listrent(
     if !get_filename(&mut filename, FileType::Crash, name) {
         return;
     }
-    let fl = OpenOptions::new().read(true).open(&filename);
-    if fl.is_err() {
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            format!("{} has no rent file.\r\n", name).as_str(),
-        );
-        return;
-    }
+    let mut fl = match OpenOptions::new().read(true).open(&filename) {
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                /* if it fails, NOT because of no file */
+                error!("SYSERR: OPENING OBJECT FILE {} (4): {}", &filename, err);
+            } else {
+                send_to_char(
+                    &mut game.descriptors,
+                    ch,
+                    format!("{} has no rent file.\r\n", name).as_str(),
+                );
+            }
+            return;
+        }
+        Ok(fl) => fl,
+    };
     let mut rent = RentInfo::new();
-    let mut fl = fl.unwrap();
     let slice;
     unsafe {
         slice =
@@ -476,8 +477,12 @@ pub fn crash_listrent(
         }
 
         if db.real_object(object.item_number) != NOTHING {
-            let oid = db.read_object(objs, object.item_number, LoadType::Virtual);
-            let obj = objs.get(oid.unwrap());
+            let Some(oid) = db.read_object(objs, object.item_number, LoadType::Virtual) else {
+                let oin = object.item_number;
+                error!("SYSERR: cannot read object {}", oin);
+                return;
+            };
+            let obj = objs.get(oid);
             // #if USE_AUTOEQ
             // send_to_char(&mut game.descriptors, ch, " [%5d] (%5dau) <%2d> %-20s\r\n",
             // object.item_number, obj.get_obj_rent(),
@@ -497,7 +502,7 @@ pub fn crash_listrent(
                 .as_str(),
             );
             // #endif
-            db.extract_obj(chars, objs, oid.unwrap());
+            db.extract_obj(chars, objs, oid);
         }
     }
 }
@@ -509,10 +514,9 @@ fn crash_write_rentcode(_chid: DepotId, fl: &mut File, rent: &mut RentInfo) -> b
     unsafe {
         rent_slice = slice::from_raw_parts(rent as *mut _ as *mut u8, record_size);
     }
-    let r = fl.write_all(rent_slice);
 
-    if r.is_err() {
-        error!("SYSERR: writing rent code {}", r.err().unwrap());
+    if let Err(err) = fl.write_all(rent_slice) {
+        error!("SYSERR: writing rent code {}", err);
         return false;
     }
     true
@@ -583,34 +587,33 @@ pub fn crash_load(
     if !get_filename(&mut filename, FileType::Crash, ch.get_name()) {
         return 1;
     }
-    let fl = OpenOptions::new().read(true).write(true).open(&filename);
-    if fl.is_err() {
-        let err = fl.err().unwrap();
-        if err.kind() != ErrorKind::NotFound {
-            error!("SYSERR: READING OBJECT FILE {} (5) {}", filename, err);
-            send_to_char(&mut game.descriptors, ch,
+    let mut fl = match OpenOptions::new().read(true).write(true).open(&filename) {
+        Ok(fl) => fl,
+        Err(err) => {
+            if err.kind() != ErrorKind::NotFound {
+                error!("SYSERR: READING OBJECT FILE {} (5) {}", filename, err);
+                send_to_char(&mut game.descriptors, ch,
                          "\r\n********************* NOTICE *********************\r\nThere was a problem loading your objects from disk.\r\nContact a God for assistance.\r\n");
+            }
+            let ch = chars.get(chid);
+            game.mudlog(
+                chars,
+                DisplayMode::Normal,
+                max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
+                true,
+                format!("{} entering game with no equipment.", ch.get_name()).as_str(),
+            );
+            return 1;
         }
-        let ch = chars.get(chid);
-        game.mudlog(
-            chars,
-            DisplayMode::Normal,
-            max(LVL_IMMORT as i32, ch.get_invis_lev() as i32),
-            true,
-            format!("{} entering game with no equipment.", ch.get_name()).as_str(),
-        );
-        return 1;
-    }
-    let mut fl = fl.unwrap();
+    };
     let mut rent = RentInfo::new();
     let slice;
     unsafe {
         slice =
             slice::from_raw_parts_mut(&mut rent as *mut _ as *mut u8, mem::size_of::<RentInfo>());
     }
-    let r = fl.read_exact(slice);
 
-    if r.is_err() {
+    if fl.read_exact(slice).is_err() {
         error!(
             "SYSERR: Crash_load: {}'s rent file was empty!",
             ch.get_name()
@@ -717,9 +720,7 @@ pub fn crash_load(
                 mem::size_of::<ObjFileElem>(),
             );
         }
-        let r = fl.read_exact(slice);
-        if r.is_err() {
-            let err = r.err().unwrap();
+        if let Err(err) = fl.read_exact(slice) {
             if err.kind() == ErrorKind::UnexpectedEof {
                 break;
             }
@@ -728,11 +729,9 @@ pub fn crash_load(
         }
 
         num_objs += 1;
-        let oid = obj_from_store(db, objs, &object, &mut location);
-        if oid.is_none() {
+        let Some(mut oid) = obj_from_store(db, objs, &object, &mut location) else {
             continue;
-        }
-        let mut oid = oid.unwrap();
+        };
 
         auto_equip(game, chars, db, objs, chid, oid, location);
         /*
@@ -781,7 +780,7 @@ pub fn crash_load(
                     /* Remove object, fill it, equip again. */
                     oid = db
                         .unequip_char(chars, objs, chid, (location - 1) as usize)
-                        .unwrap();
+                        .expect("unequip_char failed");
                     objs.get_mut(oid).contains.clear(); /* Should be empty anyway, but just in case. */
                     for oid2 in cont_row[0].iter() {
                         obj_to_obj(chars, objs, *oid2, oid);
@@ -880,7 +879,7 @@ pub fn crash_load(
     /* turn this into a crash file by re-writing the control block */
     rent.rentcode = RentCode::Crash;
     rent.time = time_now() as i64;
-    fl.rewind().expect("Cannot unwrap file");
+    fl.rewind().expect("Cannot rewind file");
     crash_write_rentcode(chid, &mut fl, &mut rent);
 
     if (orig_rent_code == RentCode::Rented) || (orig_rent_code == RentCode::Cryo) {
@@ -905,17 +904,10 @@ fn crash_save(
         }
 
         let mut toid = oid;
-
-        loop {
-            if objs.get(toid).in_obj.is_none() {
-                break;
-            }
-
+        while let Some(in_objid) = objs.get(toid).in_obj {
             let obj_weight = objs.get(toid).get_obj_weight();
-            objs.get_mut(objs.get(toid).in_obj.unwrap())
-                .incr_obj_weight(-obj_weight);
-
-            toid = objs.get(toid).in_obj.unwrap();
+            objs.get_mut(in_objid).incr_obj_weight(-obj_weight);
+            toid = in_objid;
         }
 
         if !result {
@@ -929,10 +921,9 @@ fn crash_restore_weight(objs: &mut Depot<ObjData>, oid: DepotId) {
     for o in objs.get(oid).contains.clone() {
         crash_restore_weight(objs, o);
     }
-    if objs.get(oid).in_obj.is_some() {
+    if let Some(in_objid) = objs.get(oid).in_obj {
         let obj_weight = objs.get(oid).get_obj_weight();
-        objs.get_mut(objs.get(oid).in_obj.unwrap())
-            .incr_obj_weight(obj_weight);
+        objs.get_mut(in_objid).incr_obj_weight(obj_weight);
     }
 }
 
@@ -948,14 +939,15 @@ fn crash_extract_norent_eq(
 ) {
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_none() {
-            continue;
-        }
-        if crash_is_unrentable(objs.get(ch.get_eq(j).unwrap())) {
-            let eqid = db.unequip_char(chars, objs, chid, j).unwrap();
-            obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
-        } else {
-            crash_extract_norents(chars, db, objs, ch.get_eq(j).unwrap());
+        if let Some(eqid) = ch.get_eq(j) {
+            if crash_is_unrentable(objs.get(eqid)) {
+                let eqid = db
+                    .unequip_char(chars, objs, chid, j)
+                    .expect("unequip_char failed");
+                obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
+            } else {
+                crash_extract_norents(chars, db, objs, eqid);
+            }
         }
     }
 }
@@ -964,11 +956,10 @@ fn crash_extract_objs(
     chars: &mut Depot<CharData>,
     db: &mut DB,
     objs: &mut Depot<ObjData>,
-    oid: Option<DepotId>,
+    oid: DepotId,
 ) {
-    let oid = oid.unwrap();
     for o in objs.get(oid).contains.clone() {
-        crash_extract_objs(chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, o);
     }
     db.extract_obj(chars, objs, oid);
 }
@@ -1073,12 +1064,11 @@ pub fn crash_crashsave(
 
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_some() {
-            if !crash_save(db, objs, ch.get_eq(j), &mut fp, (j + 1) as i32) {
+        if let Some(eqid) = ch.get_eq(j) {
+            if !crash_save(db, objs, Some(eqid), &mut fp, (j + 1) as i32) {
                 return;
             }
-            let ch = chars.get(chid);
-            crash_restore_weight(objs, ch.get_eq(j).unwrap());
+            crash_restore_weight(objs, eqid);
         }
     }
     let ch = chars.get(chid);
@@ -1111,14 +1101,14 @@ pub fn crash_idlesave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
-    let fp = OpenOptions::new()
+    let Ok(mut fp) = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(buf);
-    if fp.is_err() {
+        .open(buf)
+    else {
         return;
-    }
+    };
 
     crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
@@ -1145,7 +1135,9 @@ pub fn crash_idlesave(
             /* Unequip players with low gold. */
             let ch = chars.get(chid);
             if ch.get_eq(j).is_some() {
-                let eqid = db.unequip_char(chars, objs, chid, j).unwrap();
+                let eqid = db
+                    .unequip_char(chars, objs, chid, j)
+                    .expect("unequip_char failed");
                 obj_to_char(objs.get_mut(eqid), chars.get_mut(chid));
             }
         }
@@ -1187,23 +1179,16 @@ pub fn crash_idlesave(
     rent.time = time_now() as i64;
     rent.gold = ch.get_gold();
     rent.account = ch.get_bank_gold();
-    let mut fp = fp.unwrap();
     if !crash_write_rentcode(chid, &mut fp, &mut rent) {
         return;
     }
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_some() {
-            let ch = chars.get(chid);
-            let oid = ch.get_eq(j);
-            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
+        if let Some(oid) = ch.get_eq(j) {
+            if !crash_save(db, objs, Some(oid), &mut fp, (j + 1) as i32) {
                 return;
             }
-            let ch = chars.get(chid);
-            let oid = ch.get_eq(j).unwrap();
             crash_restore_weight(objs, oid);
-            let ch = chars.get(chid);
-            let oid = ch.get_eq(j);
             crash_extract_objs(chars, db, objs, oid);
         }
     }
@@ -1215,7 +1200,7 @@ pub fn crash_idlesave(
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, o);
     }
 }
 
@@ -1234,15 +1219,14 @@ pub fn crash_rentsave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name()) {
         return;
     }
-    let fpo = OpenOptions::new()
+    let Ok(mut fp) = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(buf);
-    if fpo.is_err() {
+        .open(buf)
+    else {
         return;
-    }
-    let mut fp = fpo.unwrap();
+    };
 
     crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
@@ -1273,16 +1257,12 @@ pub fn crash_rentsave(
 
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_some() {
-            let oid = ch.get_eq(j);
-            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
+        if let Some(oid) = ch.get_eq(j) {
+            if !crash_save(db, objs, Some(oid), &mut fp, (j + 1) as i32) {
                 return;
             }
-            let ch = chars.get(chid);
-            let oid = ch.get_eq(j).unwrap();
             crash_restore_weight(objs, oid);
-            let ch = chars.get(chid);
-            crash_extract_objs(chars, db, objs, ch.get_eq(j));
+            crash_extract_objs(chars, db, objs, oid);
         }
     }
     let ch = chars.get(chid);
@@ -1293,7 +1273,7 @@ pub fn crash_rentsave(
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, o);
     }
 }
 
@@ -1316,15 +1296,14 @@ fn crash_cryosave(
     if !get_filename(&mut buf, FileType::Crash, ch.get_name().as_ref()) {
         return;
     }
-    let fp = OpenOptions::new()
+    let Ok(mut fp) = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(buf);
-    if fp.is_err() {
+        .open(buf)
+    else {
         return;
-    }
-    let mut fp = fp.unwrap();
+    };
 
     crash_extract_norent_eq(chars, db, objs, chid);
     let ch = chars.get(chid);
@@ -1344,16 +1323,12 @@ fn crash_cryosave(
     }
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        if ch.get_eq(j).is_some() {
-            let oid = ch.get_eq(j);
-            if !crash_save(db, objs, oid, &mut fp, (j + 1) as i32) {
+        if let Some(oid) = ch.get_eq(j) {
+            if !crash_save(db, objs, Some(oid), &mut fp, (j + 1) as i32) {
                 return;
             }
-            let ch = chars.get(chid);
-            let oid = ch.get_eq(j).unwrap();
             crash_restore_weight(objs, oid);
-            let ch = chars.get(chid);
-            crash_extract_objs(chars, db, objs, ch.get_eq(j));
+            crash_extract_objs(chars, db, objs, oid);
         }
     }
     let ch = chars.get(chid);
@@ -1364,7 +1339,7 @@ fn crash_cryosave(
     }
     let ch = chars.get(chid);
     for o in ch.carrying.clone() {
-        crash_extract_objs(chars, db, objs, Some(o));
+        crash_extract_objs(chars, db, objs, o);
     }
     let ch = chars.get_mut(chid);
     ch.set_plr_flag_bit(PLR_CRYO);
@@ -1512,11 +1487,9 @@ fn crash_offer_rent(
     }
     for i in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        let eqi = ch.get_eq(i);
-        if eqi.is_none() {
-            continue;
+        if let Some(eqi) = ch.get_eq(i) {
+            norent += crash_report_unrentables(game, chars, db, objs, chid, recep_id, eqi);
         }
-        norent += crash_report_unrentables(game, chars, db, objs, chid, recep_id, eqi.unwrap());
     }
     if norent != 0 {
         return 0;
@@ -1541,23 +1514,21 @@ fn crash_offer_rent(
     }
     for i in 0..NUM_WEARS {
         let ch = chars.get(chid);
-        let eqi = ch.get_eq(i);
-        if eqi.is_none() {
-            continue;
+        if let Some(eqi) = ch.get_eq(i) {
+            crash_report_rent(
+                game,
+                chars,
+                db,
+                objs,
+                chid,
+                recep_id,
+                eqi,
+                &mut totalcost,
+                &mut numitems,
+                display,
+                factor,
+            );
         }
-        crash_report_rent(
-            game,
-            chars,
-            db,
-            objs,
-            chid,
-            recep_id,
-            ch.get_eq(i).unwrap(),
-            &mut totalcost,
-            &mut numitems,
-            display,
-            factor,
-        );
     }
 
     if numitems == 0 {
@@ -1679,7 +1650,7 @@ fn gen_receptionist(
             objs,
             recep_id,
             "",
-            find_command(ACTION_TABLE[rand_number(0, 8) as usize]).unwrap(),
+            find_command(ACTION_TABLE[rand_number(0, 8) as usize]).expect("Invalid command"),
             0,
         );
         return false;
@@ -1942,14 +1913,15 @@ pub fn crash_save_all(
 ) {
     for &d in &game.descriptor_list {
         let d = game.desc(d);
+        let Some(chid) = d.character else {
+            continue;
+        };
         if d.state() == ConPlaying
-            && !chars.get(d.character.unwrap()).is_npc()
-            && chars.get(d.character.unwrap()).plr_flagged(PLR_CRASH)
+            && !chars.get(chid).is_npc()
+            && chars.get(chid).plr_flagged(PLR_CRASH)
         {
-            crash_crashsave(chars, db, objs, d.character.unwrap());
-            chars
-                .get_mut(d.character.unwrap())
-                .remove_plr_flag(PLR_CRASH);
+            crash_crashsave(chars, db, objs, chid);
+            chars.get_mut(chid).remove_plr_flag(PLR_CRASH);
         }
     }
 }
