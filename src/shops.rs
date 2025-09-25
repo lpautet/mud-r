@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::min;
@@ -569,7 +569,9 @@ fn transaction_amt(arg: &mut String) -> i32 {
     let buywhat = one_argument(arg, &mut buf);
     if !buywhat.is_empty() && !buf.is_empty() && is_number(&buf) {
         arg.truncate(buf.len() + 1);
-        return buf.parse::<i32>().unwrap();
+        return buf
+            .parse::<i32>()
+            .expect("should be an int (is_number said it is)");
     }
     1
 }
@@ -617,7 +619,7 @@ fn get_slide_obj_vis(
         }
         if isname(&tmpname, objs.get(*i).name.as_ref())
             && can_see_obj(&game.descriptors, chars, db, ch, objs.get(*i))
-            && (last_match.is_none() || !same_obj(objs.get(last_match.unwrap()), objs.get(*i)))
+            && last_match.is_none_or(|lm| !same_obj(objs.get(lm), objs.get(*i)))
         {
             if j == number {
                 return Some(*i);
@@ -640,10 +642,10 @@ fn get_hash_obj_vis(
 ) -> Option<DepotId> {
     let ch = chars.get(chid);
     let mut qindex;
-    if is_number(name) {
-        qindex = name.parse::<i32>().unwrap();
-    } else if is_number(&name[1..]) {
-        qindex = name[1..].parse::<i32>().unwrap();
+    if let Ok(num) = name.parse::<i32>() {
+        qindex = num;
+    } else if let Ok(num) = name[1..].parse::<i32>() {
+        qindex = num;
     } else {
         return None;
     }
@@ -651,8 +653,7 @@ fn get_hash_obj_vis(
     for l in list.iter() {
         if can_see_obj(&game.descriptors, chars, db, ch, objs.get(*l))
             && objs.get(*l).get_obj_cost() > 0
-            && last_obj.is_some()
-            && !same_obj(objs.get(last_obj.unwrap()), objs.get(*l))
+            && last_obj.is_some_and(|last_obj| !same_obj(objs.get(last_obj), objs.get(*l)))
         {
             let res = {
                 qindex -= 1;
@@ -690,7 +691,7 @@ fn get_purchase_obj(
         } else {
             oid = get_slide_obj_vis(game, chars, db, objs, chid, &name, &keeper.carrying.clone());
         }
-        if oid.is_none() {
+        let Some(oidv) = oid else {
             if msg {
                 let ch = chars.get(chid);
                 let buf = db.shop_index[shop_nr]
@@ -709,9 +710,9 @@ fn get_purchase_obj(
                 );
             }
             return None;
-        }
-        if objs.get(oid.unwrap()).get_obj_cost() <= 0 {
-            db.extract_obj(chars, objs, oid.unwrap());
+        };
+        if objs.get(oidv).get_obj_cost() <= 0 {
+            db.extract_obj(chars, objs, oidv);
             oid = None;
         }
         if oid.is_some() {
@@ -835,20 +836,14 @@ fn shopping_buy(
         );
         return;
     }
-    let mut oid: Option<DepotId>;
-    let res = {
-        oid = get_purchase_obj(
-            game, chars, db, texts, objs, chid, &arg, keeper_id, shop_nr, true,
-        );
-        oid.is_none()
-    };
-    if res {
+    let mut oido = get_purchase_obj(
+        game, chars, db, texts, objs, chid, &arg, keeper_id, shop_nr, true,
+    );
+    let Some(mut oid) = oido else {
         return;
-    }
+    };
     let ch = chars.get(chid);
-    if buy_price(chars, db, objs, oid.unwrap(), shop_nr, keeper_id, chid) > ch.get_gold()
-        && !ch.is_god()
-    {
+    if buy_price(chars, db, objs, oid, shop_nr, keeper_id, chid) > ch.get_gold() && !ch.is_god() {
         let actbuf = db.shop_index[shop_nr]
             .missing_cash2
             .replace("%s", ch.get_name());
@@ -907,19 +902,19 @@ fn shopping_buy(
             ch,
             format!(
                 "{}: You can't carry any more items.\r\n",
-                fname(objs.get(oid.unwrap()).name.as_ref())
+                fname(objs.get(oid).name.as_ref())
             )
             .as_str(),
         );
         return;
     }
-    if ch.is_carrying_w() + objs.get(oid.unwrap()).get_obj_weight() > ch.can_carry_w() as i32 {
+    if ch.is_carrying_w() + objs.get(oid).get_obj_weight() > ch.can_carry_w() as i32 {
         send_to_char(
             &mut game.descriptors,
             ch,
             format!(
                 "{}: You can't carry that much weight.\r\n",
-                fname(objs.get(oid.unwrap()).name.as_ref())
+                fname(objs.get(oid).name.as_ref())
             )
             .as_str(),
         );
@@ -927,29 +922,29 @@ fn shopping_buy(
     }
     let mut bought = 0;
     let mut goldamt = 0;
-    let mut last_oid: Option<DepotId> = None;
+    let mut last_oid = oid;
     while {
         let ch = chars.get(chid);
-        oid.is_some()
-            && (ch.get_gold() >= buy_price(chars, db, objs, oid.unwrap(), shop_nr, keeper_id, chid)
+        oido.is_some()
+            && (ch.get_gold() >= buy_price(chars, db, objs, oid, shop_nr, keeper_id, chid)
                 || ch.is_god())
             && ch.is_carrying_n() < ch.can_carry_n() as u8
             && bought < buynum
-            && ch.is_carrying_w() + objs.get(oid.unwrap()).get_obj_weight()
-                <= ch.can_carry_w() as i32
+            && ch.is_carrying_w() + objs.get(oid).get_obj_weight() <= ch.can_carry_w() as i32
     } {
         bought += 1;
 
         /* Test if producing shop ! */
-        if shop_producing(db, objs, oid.unwrap(), shop_nr) {
-            oid = db.read_object(objs, objs.get(oid.unwrap()).get_obj_rnum(), LoadType::Real);
+        if shop_producing(db, objs, oid, shop_nr) {
+            oido = db.read_object(objs, objs.get(oid).get_obj_rnum(), LoadType::Real);
+            oid = oido.expect("Failed to read object");
         } else {
-            obj_from_char(chars, objs.get_mut(oid.unwrap()));
+            obj_from_char(chars, objs.get_mut(oid));
             db.shop_index[shop_nr].lastsort -= 1;
         }
-        obj_to_char(objs.get_mut(oid.unwrap()), chars.get_mut(chid));
+        obj_to_char(objs.get_mut(oid), chars.get_mut(chid));
 
-        let charged = buy_price(chars, db, objs, oid.unwrap(), shop_nr, keeper_id, chid);
+        let charged = buy_price(chars, db, objs, oid, shop_nr, keeper_id, chid);
         goldamt += charged;
         let ch = chars.get(chid);
         if !ch.is_god() {
@@ -957,27 +952,27 @@ fn shopping_buy(
             ch.set_gold(ch.get_gold() - charged);
         }
 
-        last_oid = Some(oid.unwrap());
-        oid = get_purchase_obj(
+        last_oid = oid;
+        oido = get_purchase_obj(
             game, chars, db, texts, objs, chid, &arg, keeper_id, shop_nr, false,
         );
-        if oid.is_some() && !same_obj(objs.get(oid.unwrap()), objs.get(last_oid.unwrap())) {
+        if oido.is_some_and(|id| {
+            oid = id;
+            !same_obj(objs.get(oid), objs.get(last_oid))
+        }) {
             break;
         }
     }
     let buf;
     if bought < buynum {
         let ch = chars.get(chid);
-        if oid.is_none() || !same_obj(objs.get(last_oid.unwrap()), objs.get(oid.unwrap())) {
+        if oido.is_none_or(|oid| !same_obj(objs.get(last_oid), objs.get(oid))) {
             buf = format!("{} I only have {} to sell you.", ch.get_name(), bought);
-        } else if ch.get_gold() < buy_price(chars, db, objs, oid.unwrap(), shop_nr, keeper_id, chid)
-        {
+        } else if ch.get_gold() < buy_price(chars, db, objs, oid, shop_nr, keeper_id, chid) {
             buf = format!("{} You can only afford {}.", ch.get_name(), bought);
         } else if ch.is_carrying_n() >= ch.can_carry_n() as u8 {
             buf = format!("{} You can only hold {}.", ch.get_name(), bought);
-        } else if ch.is_carrying_w() + objs.get(oid.unwrap()).get_obj_weight()
-            > ch.can_carry_w() as i32
-        {
+        } else if ch.is_carrying_w() + objs.get(oid).get_obj_weight() > ch.can_carry_w() as i32 {
             buf = format!("{} You can only carry {}.", ch.get_name(), bought);
         } else {
             buf = format!(
@@ -1007,7 +1002,7 @@ fn shopping_buy(
     let tempstr = times_message(Some(objs.get(ch.carrying[0])), "", bought);
 
     let tempbuf = format!("$n buys {}.", tempstr);
-    let obj = oid.map(|id| objs.get(id));
+    let obj = oido.map(|id| objs.get(id));
     act(
         &mut game.descriptors,
         chars,
@@ -1066,7 +1061,7 @@ fn get_selling_obj(
     msg: i32,
 ) -> Option<DepotId> {
     let ch = chars.get(chid);
-    let obj = get_obj_in_list_vis(
+    let Some(obj) = get_obj_in_list_vis(
         &game.descriptors,
         chars,
         db,
@@ -1075,8 +1070,7 @@ fn get_selling_obj(
         name,
         None,
         &ch.carrying,
-    );
-    if obj.is_none() {
+    ) else {
         if msg != 0 {
             let tbuf = db.shop_index[0].no_such_item2.replace("%s", ch.get_name());
 
@@ -1093,8 +1087,7 @@ fn get_selling_obj(
             );
         }
         return None;
-    }
-    let obj = obj.unwrap();
+    };
     let result = trade_with(obj, &db.shop_index[shop_nr]);
     if result == OBJECT_OK {
         return Some(obj.id());
@@ -1277,13 +1270,11 @@ fn shopping_sell(
     }
     let mut name = String::new();
     one_argument(&arg, &mut name);
-    let oid = get_selling_obj(
+    let Some(oid) = get_selling_obj(
         game, chars, db, texts, objs, chid, &name, keeper_id, shop_nr, 1,
-    );
-    if oid.is_none() {
+    ) else {
         return;
-    }
-    let oid = oid.unwrap();
+    };
     let ch = chars.get(chid);
     let keeper = chars.get(keeper_id);
     if keeper.get_gold() + db.shop_index[shop_nr].bank_account
@@ -1306,28 +1297,28 @@ fn shopping_sell(
         return;
     }
     let mut oid = Some(oid);
-    while {
+    while let Some(oidv) = oid {
         let keeper = chars.get(keeper_id);
         let ch = chars.get(chid);
-        oid.is_some()
-            && keeper.get_gold() + db.shop_index[shop_nr].bank_account
-                >= sell_price(objs.get(oid.unwrap()), &db.shop_index[shop_nr], keeper, ch)
+        if keeper.get_gold() + db.shop_index[shop_nr].bank_account
+            >= sell_price(objs.get(oidv), &db.shop_index[shop_nr], keeper, ch)
             && sold < sellnum
-    } {
-        let ch = chars.get(chid);
-        let keeper = chars.get(keeper_id);
-        let charged = sell_price(objs.get(oid.unwrap()), &db.shop_index[shop_nr], keeper, ch);
+        {
+            let ch = chars.get(chid);
+            let keeper = chars.get(keeper_id);
+            let charged = sell_price(objs.get(oidv), &db.shop_index[shop_nr], keeper, ch);
 
-        goldamt += charged;
-        let keeper = chars.get_mut(keeper_id);
-        keeper.set_gold(keeper.get_gold() - charged);
+            goldamt += charged;
+            let keeper = chars.get_mut(keeper_id);
+            keeper.set_gold(keeper.get_gold() - charged);
 
-        sold += 1;
-        obj_from_char(chars, objs.get_mut(oid.unwrap()));
-        slide_obj(game, chars, db, objs, oid.unwrap(), keeper_id, shop_nr); /* Seems we don't use return value. */
-        oid = get_selling_obj(
-            game, chars, db, texts, objs, chid, &name, keeper_id, shop_nr, 0,
-        );
+            sold += 1;
+            obj_from_char(chars, objs.get_mut(oidv));
+            slide_obj(game, chars, db, objs, oidv, keeper_id, shop_nr); /* Seems we don't use return value. */
+            oid = get_selling_obj(
+                game, chars, db, texts, objs, chid, &name, keeper_id, shop_nr, 0,
+            );
+        }
     }
     let ch = chars.get(chid);
     let keeper = chars.get(keeper_id);
@@ -1454,18 +1445,17 @@ fn shopping_value(
     }
     let mut name = String::new();
     one_argument(arg, &mut name);
-    let oid = get_selling_obj(
+    let Some(oid) = get_selling_obj(
         game, chars, db, texts, objs, chid, &name, keeper_id, shop_nr, 1,
-    );
-    if oid.is_none() {
+    ) else {
         return;
-    }
+    };
     let ch = chars.get(chid);
     let keeper = chars.get(keeper_id);
     let buf = format!(
         "{} I'll give you {} gold coins for that!",
         ch.get_name(),
-        sell_price(objs.get(oid.unwrap()), &db.shop_index[shop_nr], keeper, ch)
+        sell_price(objs.get(oid), &db.shop_index[shop_nr], keeper, ch)
     );
     do_tell(
         game,
@@ -1587,68 +1577,60 @@ pub fn shopping_list(
             if can_see_obj(&game.descriptors, chars, db, ch, objs.get(oid))
                 && objs.get(oid).get_obj_cost() > 0
             {
-                if last_oid.is_none() {
-                    last_oid = Some(oid);
-                    cnt = 1;
-                } else if last_oid.is_some() && same_obj(objs.get(last_oid.unwrap()), objs.get(oid))
-                {
-                    cnt += 1;
-                } else {
-                    lindex += 1;
-                    if name.is_empty() || isname(&name, objs.get(last_oid.unwrap()).name.as_ref()) {
-                        buf.push_str(&list_object(
-                            db,
-                            chars,
-                            last_oid.unwrap(),
-                            objs,
-                            cnt,
-                            lindex,
-                            shop_nr,
-                            keeper_id,
-                            chid,
-                        ));
-                        found = true;
+                match last_oid {
+                    None => {
+                        last_oid = Some(oid);
+                        cnt = 1;
                     }
-                    cnt = 1;
-                    last_oid = Some(oid);
+                    Some(last_oidv) if same_obj(objs.get(last_oidv), objs.get(oid)) => {
+                        cnt += 1;
+                    }
+                    Some(last_oidv) => {
+                        lindex += 1;
+                        if name.is_empty() || isname(&name, objs.get(last_oidv).name.as_ref()) {
+                            buf.push_str(&list_object(
+                                db, chars, last_oidv, objs, cnt, lindex, shop_nr, keeper_id, chid,
+                            ));
+                            found = true;
+                        }
+                        cnt = 1;
+                        last_oid = Some(oid);
+                    }
                 }
             }
         }
     }
     let ch = chars.get(chid);
     lindex += 1;
-    #[allow(clippy::unnecessary_unwrap)]
-    if last_oid.is_none() {
-        /* we actually have nothing in our list for sale, period */
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Currently, there is nothing for sale.\r\n",
-        );
-    } else if !name.is_empty() && !found {
-        /* nothing the char was looking for was found */
-        send_to_char(
-            &mut game.descriptors,
-            ch,
-            "Presently, none of those are for sale.\r\n",
-        );
-    } else if name.is_empty() || isname(&name, objs.get(last_oid.unwrap()).name.as_ref()) {
-        /* show last obj */
-        buf.push_str(&list_object(
-            db,
-            chars,
-            last_oid.unwrap(),
-            objs,
-            cnt,
-            lindex,
-            shop_nr,
-            keeper_id,
-            chid,
-        ));
-        let ch = chars.get(chid);
-        let d_id = ch.desc.unwrap();
-        page_string(&mut game.descriptors, chars, d_id, &buf, true);
-    }
+    match last_oid {
+        None => {
+            /* we actually have nothing in our list for sale, period */
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Currently, there is nothing for sale.\r\n",
+            );
+        }
+        _ if !name.is_empty() && !found => {
+            /* nothing the char was looking for was found */
+            send_to_char(
+                &mut game.descriptors,
+                ch,
+                "Presently, none of those are for sale.\r\n",
+            );
+        }
+        Some(last_oid) => {
+            if name.is_empty() || isname(&name, objs.get(last_oid).name.as_ref()) {
+                /* show last obj */
+                buf.push_str(&list_object(
+                    db, chars, last_oid, objs, cnt, lindex, shop_nr, keeper_id, chid,
+                ));
+            }
+            let ch = chars.get(chid);
+            let d_id = ch.desc.expect("Character has no descriptor");
+            page_string(&mut game.descriptors, chars, d_id, &buf, true);
+        }
+    };
 }
 
 fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
@@ -1682,15 +1664,14 @@ pub fn shop_keeper(
         let shops = &db.shop_index;
         let shopo = shops.iter().position(|s| s.keeper == keeper.nr);
 
-        if shopo.is_none() {
+        if let Some(nr) = shopo {
+            shop_nr = nr;
+        } else {
             return false;
-        }
-
-        shop_nr = shopo.unwrap();
+        };
     }
 
-    if db.shop_index[shop_nr].func.is_some() {
-        let func = db.shop_index[shop_nr].func.unwrap();
+    if let Some(func) = db.shop_index[shop_nr].func {
         if func(game, chars, db, texts, objs, chid, me, cmd, argument) {
             return true;
         }
@@ -1779,9 +1760,9 @@ pub fn ok_damage_shopkeeper(
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
     if !db.is_mob(victim)
-        || db.mob_index[victim.get_mob_rnum() as usize].func.is_some()
-            && db.mob_index[victim.get_mob_rnum() as usize].func.unwrap() as usize
-                != shop_keeper as usize
+        || db.mob_index[victim.get_mob_rnum() as usize]
+            .func
+            .is_some_and(|func| func as usize != shop_keeper as usize)
     {
         return true;
     }
@@ -2043,14 +2024,14 @@ pub fn boot_the_shops(db: &mut DB, shop_f: File, filename: &str, _rec_count: i32
     let mut done = false;
     let mut buf2 = format!("beginning of shop file {}", filename);
 
-    let regex = Regex::new(r"^#(-?\+?\d{1,9})").unwrap();
+    let regex = Regex::new(r"^#(-?\+?\d{1,9})").expect("Regex compilation failed");
     while !done {
         let buf = fread_string(&mut reader, &buf2);
         if buf.starts_with('#') {
             /* New shop */
 
-            let f = regex.captures(&buf).unwrap();
-            let mut temp = f[1].parse::<i32>().unwrap();
+            let f = regex.captures(&buf).expect("Regex capture failed");
+            let mut temp = f[1].parse::<i32>().expect("should be an int");
             buf2 = format!("shop #{} in shop file {}", temp, filename);
 
             let mut shop = ShopData {
@@ -2151,11 +2132,26 @@ static CMD_SLAP: AtomicUsize = AtomicUsize::new(0);
 static CMD_PUKE: AtomicUsize = AtomicUsize::new(0);
 
 pub fn assign_the_shopkeepers(db: &mut DB) {
-    CMD_SAY.store(find_command("say").unwrap(), Ordering::Relaxed);
-    CMD_TELL.store(find_command("tell").unwrap(), Ordering::Relaxed);
-    CMD_TELL.store(find_command("emote").unwrap(), Ordering::Relaxed);
-    CMD_SLAP.store(find_command("slap").unwrap(), Ordering::Relaxed);
-    CMD_PUKE.store(find_command("puke").unwrap(), Ordering::Relaxed);
+    CMD_SAY.store(
+        find_command("say").expect("Command 'say' not found"),
+        Ordering::Relaxed,
+    );
+    CMD_TELL.store(
+        find_command("tell").expect("Command 'tell' not found"),
+        Ordering::Relaxed,
+    );
+    CMD_TELL.store(
+        find_command("emote").expect("Command 'emote' not found"),
+        Ordering::Relaxed,
+    );
+    CMD_SLAP.store(
+        find_command("slap").expect("Command 'slap' not found"),
+        Ordering::Relaxed,
+    );
+    CMD_PUKE.store(
+        find_command("puke").expect("Command 'puke' not found"),
+        Ordering::Relaxed,
+    );
 
     for shop in db.shop_index.iter_mut() {
         if shop.keeper == NOBODY {
@@ -2163,8 +2159,9 @@ pub fn assign_the_shopkeepers(db: &mut DB) {
         }
         db.mob_index[shop.keeper as usize].func = Some(shop_keeper);
         /* Having SHOP_FUNC() as 'shop_keeper' will cause infinite recursion. */
-        if db.mob_index[shop.keeper as usize].func.is_some()
-            && db.mob_index[shop.keeper as usize].func.unwrap() as usize != shop_keeper as usize
+        if db.mob_index[shop.keeper as usize]
+            .func
+            .is_some_and(|func| func as usize != shop_keeper as usize)
         {
             shop.func = db.mob_index[shop.keeper as usize].func;
         }
@@ -2184,7 +2181,10 @@ fn customer_string(shop: &ShopData, detailed: bool) -> String {
             buf.push(if !is_set!(flag, shop.with_who) {
                 '_'
             } else {
-                TRADE_LETTERS[sindex].chars().next().unwrap()
+                TRADE_LETTERS[sindex]
+                    .chars()
+                    .next()
+                    .expect("Trade letter not found")
             });
         }
         sindex += 1;
@@ -2231,7 +2231,7 @@ fn list_all_shops(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chi
             .as_str(),
         );
     }
-    let d_id = ch.desc.unwrap();
+    let d_id = ch.desc.expect("should have a descriptor");
     page_string(&mut game.descriptors, chars, d_id, &buf, true);
 }
 
@@ -2309,13 +2309,7 @@ fn list_detailed_shop(
             )
             .as_str(),
         );
-        let k;
-        let res = {
-            k = db.get_char_num(chars, db.shop_index[shop_nr as usize].keeper);
-            k.is_some()
-        };
-        if res {
-            let k = k.unwrap();
+        if let Some(k) = db.get_char_num(chars, db.shop_index[shop_nr as usize].keeper) {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -2487,11 +2481,11 @@ pub fn show_shops(
                 shop_nr = Some(ap - 1);
             }
         }
-        if shop_nr.is_none() {
+        if let Some(shop_nr) = shop_nr {
+            list_detailed_shop(game, chars, db, chid, shop_nr);
+        } else {
             send_to_char(&mut game.descriptors, ch, "Illegal shop number.\r\n");
-            return;
         }
-        list_detailed_shop(game, chars, db, chid, shop_nr.unwrap());
     }
 }
 
