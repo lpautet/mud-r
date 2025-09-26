@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 use std::cmp::{max, min};
@@ -336,9 +336,8 @@ fn say_spell(
     }
     let mut buf1 = String::new();
     let mut buf2 = String::new();
-    #[allow(clippy::unnecessary_unwrap)]
-    if tch_id.is_some() && chars.get(tch_id.unwrap()).in_room() == ch.in_room() {
-        if tch_id.unwrap() == chid {
+    if tch_id.is_some_and(|tch_id| chars.get(tch_id).in_room() == ch.in_room()) {
+        if tch_id.is_some_and(|tch_id| tch_id == chid) {
             buf1.push_str(
                 format!(
                     "$n closes $s eyes and utters the words, '{}'.",
@@ -357,9 +356,10 @@ fn say_spell(
             );
             buf2.push_str(format!("$n stares at $N and utters the words, '{}'.", buf).as_str());
         }
-    } else if tobj_id.is_some() && objs.get(tobj_id.unwrap()).in_room() == ch.in_room()
-        || objs.get(tobj_id.unwrap()).carried_by.unwrap() == chid
-    {
+    } else if tobj_id.is_some_and(|tobj_id| {
+        objs.get(tobj_id).in_room() == ch.in_room()
+            || objs.get(tobj_id).carried_by.is_some_and(|id| id == chid)
+    }) {
         buf1.push_str(
             format!(
                 "$n stares at $p and utters the words, '{}'.",
@@ -375,22 +375,16 @@ fn say_spell(
 
     for &i_id in &db.world[ch.in_room() as usize].peoples {
         if i_id == chid
-            || (tch_id.is_some() && i_id == tch_id.unwrap())
+            || tch_id.is_some_and(|tch_id| tch_id == i_id)
             || chars.get(i_id).desc.is_none()
             || !chars.get(i_id).awake()
         {
             continue;
         }
-        #[allow(clippy::unnecessary_unwrap)]
-        let tch2_id = if tch_id.is_some() {
-            Some(tch_id.unwrap())
-        } else {
-            None
-        };
         let ch = chars.get(chid);
         let i = chars.get(i_id);
         let toobj = tobj_id.map(|id| objs.get(id));
-        let tch2 = chars.get(tch2_id.unwrap());
+        let toch = tch_id.map(|id| VictimRef::Char(chars.get(id)));
         if ch.get_class() == chars.get(i_id).get_class() {
             perform_act(
                 &mut game.descriptors,
@@ -399,7 +393,7 @@ fn say_spell(
                 &buf1,
                 Some(ch),
                 toobj,
-                Some(VictimRef::Char(tch2)),
+                toch,
                 i,
             );
         } else {
@@ -410,41 +404,38 @@ fn say_spell(
                 &buf2,
                 Some(ch),
                 toobj,
-                Some(VictimRef::Char(tch2)),
+                toch,
                 i,
             );
         }
     }
     let ch = chars.get(chid);
-    if tch_id.is_some()
-        && tch_id.unwrap() != chid
-        && chars.get(tch_id.unwrap()).in_room() == ch.in_room()
-    {
-        buf1.push_str(
-            format!(
-                "$n stares at you and utters the words, '{}'.",
-                if ch.get_class() == chars.get(tch_id.unwrap()).get_class() {
-                    skill_name(db, spellnum)
-                } else {
-                    &buf
-                }
-            )
-            .as_str(),
-        );
-        #[allow(clippy::unnecessary_unwrap)]
-        let tch2_id = tch_id.unwrap();
-        let tch2 = chars.get(tch2_id);
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            &buf1,
-            false,
-            Some(ch),
-            None,
-            Some(VictimRef::Char(tch2)),
-            TO_VICT,
-        );
+    if let Some(tch_id) = tch_id {
+        if tch_id != chid && chars.get(tch_id).in_room() == ch.in_room() {
+            buf1.push_str(
+                format!(
+                    "$n stares at you and utters the words, '{}'.",
+                    if ch.get_class() == chars.get(tch_id).get_class() {
+                        skill_name(db, spellnum)
+                    } else {
+                        &buf
+                    }
+                )
+                .as_str(),
+            );
+            let tch = chars.get(tch_id);
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                &buf1,
+                false,
+                Some(ch),
+                None,
+                Some(VictimRef::Char(tch)),
+                TO_VICT,
+            );
+        }
     }
 }
 
@@ -579,21 +570,14 @@ pub fn call_magic(
         }
     };
 
-    if is_set!(sinfo_routines, MAG_DAMAGE)
-        && mag_damage(
-            game,
-            chars,
-            db,
-            texts,
-            objs,
-            level,
-            caster_id,
-            cvict_id.unwrap(),
-            spellnum,
-            savetype,
-        ) == -1
-    {
-        return -1; /* Successful and target died, don't cast again. */
+    if let Some(cvict_id) = cvict_id {
+        if is_set!(sinfo_routines, MAG_DAMAGE)
+            && mag_damage(
+                game, chars, db, texts, objs, level, caster_id, cvict_id, spellnum, savetype,
+            ) == -1
+        {
+            return -1; /* Successful and target died, don't cast again. */
+        }
     }
     if is_set!(sinfo_routines, MAG_AFFECTS) {
         if let Some(cvict_id) = cvict_id {
@@ -603,18 +587,12 @@ pub fn call_magic(
         }
     }
 
-    if is_set!(sinfo_routines, MAG_UNAFFECTS) {
-        mag_unaffects(
-            game,
-            chars,
-            db,
-            objs,
-            level,
-            caster_id,
-            cvict_id.unwrap(),
-            spellnum,
-            savetype,
-        );
+    if let Some(cvict_id) = cvict_id {
+        if is_set!(sinfo_routines, MAG_UNAFFECTS) {
+            mag_unaffects(
+                game, chars, db, objs, level, caster_id, cvict_id, spellnum, savetype,
+            );
+        }
     }
 
     if is_set!(sinfo_routines, MAG_POINTS) {
@@ -913,7 +891,7 @@ pub fn mag_objectmagic(
         }
         ItemType::Wand => {
             if k == FindFlags::CHAR_ROOM {
-                if tch.unwrap().id() == chid {
+                if tch.is_some_and(|tch| tch.id() == chid) {
                     act(
                         &mut game.descriptors,
                         chars,
@@ -937,7 +915,7 @@ pub fn mag_objectmagic(
                         TO_ROOM,
                     );
                 } else {
-                    let tch = tch.unwrap();
+                    let tch = tch.map(VictimRef::Char);
                     act(
                         &mut game.descriptors,
                         chars,
@@ -946,7 +924,7 @@ pub fn mag_objectmagic(
                         false,
                         Some(ch),
                         Some(obj),
-                        Some(VictimRef::Char(tch)),
+                        tch,
                         TO_CHAR,
                     );
                     if !texts.get(obj.action_description).text.is_empty() {
@@ -958,7 +936,7 @@ pub fn mag_objectmagic(
                             false,
                             Some(ch),
                             Some(obj),
-                            Some(VictimRef::Char(tch)),
+                            tch,
                             TO_ROOM,
                         );
                     } else {
@@ -970,13 +948,12 @@ pub fn mag_objectmagic(
                             true,
                             Some(ch),
                             Some(obj),
-                            Some(VictimRef::Char(tch)),
+                            tch,
                             TO_ROOM,
                         );
                     }
                 }
-            } else if tobj.is_some() {
-                let tobj = tobj.unwrap();
+            } else if let Some(tobj) = tobj {
                 act(
                     &mut game.descriptors,
                     chars,
@@ -1329,8 +1306,7 @@ pub fn cast_spell(
         return 0;
     }
     if ch.aff_flagged(AffectFlags::CHARM)
-        && tch_id.is_some()
-        && ch.master.unwrap() == tch_id.unwrap()
+        && tch_id.is_some_and(|tch_id| ch.master.is_some_and(|master_id| master_id == tch_id))
     {
         send_to_char(
             &mut game.descriptors,
@@ -1339,7 +1315,7 @@ pub fn cast_spell(
         );
         return 0;
     }
-    if (tch_id.is_none() || chid != tch_id.unwrap()) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
+    if (tch_id.is_none_or(|tch_id| chid != tch_id)) && is_set!(sinfo.targets, TAR_SELF_ONLY) {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -1347,7 +1323,7 @@ pub fn cast_spell(
         );
         return 0;
     }
-    if tch_id.is_some() && chid == tch_id.unwrap() && is_set!(sinfo.targets, TAR_NOT_SELF) {
+    if tch_id.is_some_and(|tch_id| chid == tch_id) && is_set!(sinfo.targets, TAR_NOT_SELF) {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -1405,31 +1381,27 @@ pub fn do_cast(
     }
 
     /* get: blank, spell name, target name */
-    let mut i = argument.splitn(3, '\'');
-
-    if i.next().is_none() {
+    let Some((_, i)) = argument.split_once('\'') else {
         send_to_char(&mut game.descriptors, ch, "Cast what where?\r\n");
         return;
-    }
-    let s = i.next();
-    if s.is_none() {
+    };
+    let Some((s, mut t)) = i.split_once('\'') else {
         send_to_char(
             &mut game.descriptors,
             ch,
             "Spell names must be enclosed in the Holy Magic Symbols: '\r\n",
         );
         return;
-    }
-    let s = s.unwrap();
-    let mut t = i.next();
+    };
     /* spellnum = search_block(s, spells, 0); */
-    let spellnum = find_skill_num(db, s);
-
-    if spellnum.is_none() || spellnum.unwrap() > MAX_SPELLS {
+    let Some(spellnum) = find_skill_num(db, s) else {
+        send_to_char(&mut game.descriptors, ch, "Cast what?!?\r\n");
+        return;
+    };
+    if spellnum > MAX_SPELLS {
         send_to_char(&mut game.descriptors, ch, "Cast what?!?\r\n");
         return;
     }
-    let spellnum = spellnum.unwrap();
     let sinfo = db.spell_info[spellnum as usize];
     if ch.get_level() < sinfo.min_level[ch.get_class() as usize] as u8 {
         send_to_char(&mut game.descriptors, ch, "You do not know that spell!\r\n");
@@ -1443,16 +1415,13 @@ pub fn do_cast(
         );
         return;
     }
-    let arg;
     /* Find the target */
     let mut nt;
-    if t.is_some() {
-        arg = t.unwrap();
+    if !t.is_empty() {
         nt = String::new();
-        one_argument(arg, &mut nt);
-        t = Some(&nt);
+        one_argument(t, &mut nt);
+        t = &nt;
     }
-    let mut t = t.unwrap().to_string();
     let mut target = false;
     let mut tch = None;
     let mut tobj = None;
@@ -1465,7 +1434,7 @@ pub fn do_cast(
                 chars,
                 db,
                 ch,
-                &mut t,
+                &mut t.to_string(),
                 None,
                 FindFlags::CHAR_ROOM,
             );
@@ -1479,7 +1448,7 @@ pub fn do_cast(
                 chars,
                 db,
                 ch,
-                &mut t,
+                &mut t.to_string(),
                 None,
                 FindFlags::CHAR_WORLD,
             );
@@ -1495,7 +1464,7 @@ pub fn do_cast(
                 db,
                 objs,
                 ch,
-                &t,
+                t,
                 None,
                 &ch.carrying,
             );
@@ -1506,11 +1475,11 @@ pub fn do_cast(
 
         if !target && is_set!(sinfo.targets, TAR_OBJ_EQUIP) {
             for i in 0..NUM_WEARS {
-                if ch.get_eq(i).is_some()
-                    && isname(&t, objs.get(ch.get_eq(i).unwrap()).name.as_ref())
-                {
-                    tobj = Some(objs.get(ch.get_eq(i).unwrap()));
-                    target = true;
+                if let Some(eq_id) = ch.get_eq(i) {
+                    if isname(t, objs.get(eq_id).name.as_ref()) {
+                        tobj = Some(objs.get(eq_id));
+                        target = true;
+                    }
                 }
             }
         }
@@ -1521,7 +1490,7 @@ pub fn do_cast(
                 db,
                 objs,
                 ch,
-                &t,
+                t,
                 None,
                 &db.world[ch.in_room as usize].contents,
             );
@@ -1530,7 +1499,7 @@ pub fn do_cast(
             target = true;
         }
         if !target && is_set!(sinfo.targets, TAR_OBJ_WORLD) && {
-            tobj = get_obj_vis(&game.descriptors, chars, db, objs, ch, &t, None);
+            tobj = get_obj_vis(&game.descriptors, chars, db, objs, ch, t, None);
             tobj.is_some()
         } {
             target = true;
@@ -1542,7 +1511,7 @@ pub fn do_cast(
             target = true;
         }
         if !target && is_set!(sinfo.targets, TAR_FIGHT_VICT) && ch.fighting_id().is_some() {
-            tch = Some(chars.get(ch.fighting_id().unwrap()));
+            tch = ch.fighting_id().map(|id| chars.get(id));
             target = true;
         }
         /* if no target specified, and the spell isn't violent, default to self */
@@ -1572,7 +1541,7 @@ pub fn do_cast(
     }
 
     let tch_id = tch.map(|c| c.id());
-    if target && tch.unwrap().id() == chid && sinfo.violent {
+    if target && tch_id == Some(chid) && sinfo.violent {
         send_to_char(
             &mut game.descriptors,
             ch,
@@ -1604,18 +1573,9 @@ pub fn do_cast(
         ch.set_wait_state(PULSE_VIOLENCE as i32);
         let ch = chars.get(chid);
         let tch = tch_id.map(|i| chars.get(i));
-        if tch.is_none()
-            || skill_message(
-                &mut game.descriptors,
-                chars,
-                db,
-                objs,
-                0,
-                ch,
-                tch.unwrap(),
-                spellnum,
-            ) == 0
-        {
+        if tch.is_none_or(|tch| {
+            skill_message(&mut game.descriptors, chars, db, objs, 0, ch, tch, spellnum) == 0
+        }) {
             send_to_char(
                 &mut game.descriptors,
                 ch,
@@ -1626,17 +1586,11 @@ pub fn do_cast(
             let ch = chars.get_mut(chid);
             ch.set_mana(max(0, min(ch.get_mana(), ch.get_mana() - (mana / 2))));
         }
-        let tch = tch_id.map(|i| chars.get(i));
-        if sinfo.violent && tch.is_some() && tch.unwrap().is_npc() {
-            game.hit(
-                chars,
-                db,
-                texts,
-                objs,
-                tch_id.unwrap(),
-                chid,
-                TYPE_UNDEFINED,
-            );
+        if let Some(tch_id) = tch_id {
+            let tch = chars.get(tch_id);
+            if sinfo.violent && tch.is_npc() {
+                game.hit(chars, db, texts, objs, tch_id, chid, TYPE_UNDEFINED);
+            }
         }
     } else {
         /* cast spell returns 1 on success; subtract mana & set waitstate */

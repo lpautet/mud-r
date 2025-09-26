@@ -1177,10 +1177,9 @@ pub fn cityguard(
             return true;
         }
 
-        if tch.fighting_id().is_some_and(|fighting_id|
-             tch.get_alignment() < max_evil
-            && (tch.is_npc() || chars.get(fighting_id).is_npc()))
-        {
+        if tch.fighting_id().is_some_and(|fighting_id| {
+            tch.get_alignment() < max_evil && (tch.is_npc() || chars.get(fighting_id).is_npc())
+        }) {
             max_evil = tch.get_alignment();
             evil_id = Some(tch_id);
         }
@@ -1192,51 +1191,47 @@ pub fn cityguard(
     }
 
     if let Some(evil_id) = evil_id {
-        if chars.get(evil_id).fighting_id().is_some_and(|fighting_id|
-            chars.get(fighting_id).get_alignment() >= 0
-        ) {
-        act(
-            &mut game.descriptors,
-            chars,
-            db,
-            "$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'",
-            false,
-            Some(ch),
-            None,
-            None,
-            TO_ROOM,
-        );
-        game.hit(
-            chars,
-            db,
-            texts,
-            objs,
-            chid,
-            evil_id,
-            TYPE_UNDEFINED,
-        );
-        return true;
-    }}
+        if chars
+            .get(evil_id)
+            .fighting_id()
+            .is_some_and(|fighting_id| chars.get(fighting_id).get_alignment() >= 0)
+        {
+            act(
+                &mut game.descriptors,
+                chars,
+                db,
+                "$n screams 'PROTECT THE INNOCENT!  BANZAI!  CHARGE!  ARARARAGGGHH!'",
+                false,
+                Some(ch),
+                None,
+                None,
+                TO_ROOM,
+            );
+            game.hit(chars, db, texts, objs, chid, evil_id, TYPE_UNDEFINED);
+            return true;
+        }
+    }
 
     /* Reward the socially inept. */
     if let Some(spittle) = spittle {
         if rand_number(0, 9) == 0 {
-        let spit_social = find_command("spit");
+            let spit_social = find_command("spit");
 
-        if let Some(spit_social) = spit_social {
-            do_action(
-                game,
-                db,
-                chars,
-                texts,
-                objs,
-                chid,
-                &spittle.get_name().clone(),
-                spit_social,
-                0,
-            );
-            return true;
-        }}
+            if let Some(spit_social) = spit_social {
+                do_action(
+                    game,
+                    db,
+                    chars,
+                    texts,
+                    objs,
+                    chid,
+                    &spittle.get_name().clone(),
+                    spit_social,
+                    0,
+                );
+                return true;
+            }
+        }
     }
 
     false
@@ -1297,7 +1292,9 @@ pub fn pet_shops(
         let ch = chars.get_mut(chid);
         ch.set_gold(ch.get_gold() - pet_price);
 
-        let pet_id = db.read_mobile(chars, pet_mob_rnum, LoadType::Real).expect("pet cannot be read");
+        let pet_id = db
+            .read_mobile(chars, pet_mob_rnum, LoadType::Real)
+            .expect("pet cannot be read");
         let pet = chars.get_mut(pet_id);
         pet.set_exp(0);
         pet.set_aff_flags_bits(AffectFlags::CHARM);
