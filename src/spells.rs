@@ -268,8 +268,12 @@ pub fn spell_create_water(
     _victim_id: Option<DepotId>,
     obj_id: Option<DepotId>,
 ) {
-    let Some(chid) = chid else { return; };
-    let Some(obj_id) = obj_id else { return; };
+    let Some(chid) = chid else {
+        return;
+    };
+    let Some(obj_id) = obj_id else {
+        return;
+    };
 
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
@@ -324,7 +328,9 @@ pub fn spell_recall(
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    let Some(victim_id) = victim_id else { return; };
+    let Some(victim_id) = victim_id else {
+        return;
+    };
     let victim = chars.get(victim_id);
     if victim.is_npc() {
         return;
@@ -372,7 +378,9 @@ pub fn spell_teleport(
     _obj: Option<DepotId>,
 ) {
     let mut to_room;
-    let Some(victim_id) = victim_id else { return; };
+    let Some(victim_id) = victim_id else {
+        return;
+    };
     let victim = chars.get(victim_id);
     if victim.is_npc() {
         return;
@@ -430,8 +438,8 @@ pub fn spell_summon(
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    let Some(chid) = chid else {return};
-    let Some(victim_id) = victim_id else {return};
+    let Some(chid) = chid else { return };
+    let Some(victim_id) = victim_id else { return };
     let victim = chars.get(victim_id);
 
     let ch = chars.get(chid);
@@ -548,8 +556,8 @@ pub fn spell_locate_object(
      * Since we're passed the object and not the keyword we can only guess
      * at what the player originally meant to search for. -gg
      */
-    let Some(chid) = chid else {return};
-    let Some(oid) = oid else {return};
+    let Some(chid) = chid else { return };
+    let Some(oid) = oid else { return };
     let ch = chars.get(chid);
     let mut name = String::new();
     name.push_str(&objs.get(oid).name);
@@ -597,11 +605,7 @@ pub fn spell_locate_object(
             send_to_char(
                 &mut game.descriptors,
                 ch,
-                format!(
-                    " is in {}.\r\n",
-                    objs.get(in_obj).short_description
-                )
-                .as_str(),
+                format!(" is in {}.\r\n", objs.get(in_obj).short_description).as_str(),
             );
         } else if let Some(worn_by) = objs.get(i).worn_by {
             let msg = format!(
@@ -638,8 +642,8 @@ pub fn spell_charm(
     victim_id: Option<DepotId>,
     _oid: Option<DepotId>,
 ) {
-    let Some(victim_id) = victim_id else {return};
-    let Some(chid) = chid else {return};
+    let Some(victim_id) = victim_id else { return };
+    let Some(chid) = chid else { return };
     let victim = chars.get(victim_id);
     let ch = chars.get(chid);
 
@@ -739,7 +743,7 @@ pub fn spell_identify(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    let Some(chid) = chid else {return};
+    let Some(chid) = chid else { return };
     let ch = chars.get(chid);
 
     if let Some(oid) = oid {
@@ -981,8 +985,8 @@ pub fn spell_enchant_weapon(
     _victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    let Some(chid) = chid else {return};
-    let Some(oid) = oid else {return};
+    let Some(chid) = chid else { return };
+    let Some(oid) = oid else { return };
 
     /* Either already enchanted or not a weapon. */
     let obj = objs.get_mut(oid);
@@ -1068,8 +1072,8 @@ pub fn spell_detect_poison(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    let Some(chid) = chid else {return};
-    
+    let Some(chid) = chid else { return };
+
     if let Some(victim_id) = victim_id {
         let victim = chars.get(victim_id);
         let ch = chars.get(chid);
