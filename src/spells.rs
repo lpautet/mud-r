@@ -6,7 +6,7 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 use crate::depot::{Depot, DepotId};
 use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
@@ -268,11 +268,9 @@ pub fn spell_create_water(
     _victim_id: Option<DepotId>,
     obj_id: Option<DepotId>,
 ) {
-    if chid.is_none() || obj_id.is_none() {
-        return;
-    }
-    let chid = chid.unwrap();
-    let obj_id = obj_id.unwrap();
+    let Some(chid) = chid else { return; };
+    let Some(obj_id) = obj_id else { return; };
+
     /* level = MAX(MIN(level, LVL_IMPL), 1);	 - not used */
 
     if objs.get(obj_id).get_obj_type() == ItemType::Drinkcon {
@@ -326,12 +324,11 @@ pub fn spell_recall(
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    if victim_id.is_none() || chars.get(victim_id.unwrap()).is_npc() {
+    let Some(victim_id) = victim_id else { return; };
+    let victim = chars.get(victim_id);
+    if victim.is_npc() {
         return;
     }
-
-    let victim_id = victim_id.unwrap();
-    let victim = chars.get(victim_id);
 
     act(
         &mut game.descriptors,
@@ -375,12 +372,11 @@ pub fn spell_teleport(
     _obj: Option<DepotId>,
 ) {
     let mut to_room;
-
-    if victim_id.is_none() || chars.get(victim_id.unwrap()).is_npc() {
+    let Some(victim_id) = victim_id else { return; };
+    let victim = chars.get(victim_id);
+    if victim.is_npc() {
         return;
     }
-    let victim_id = victim_id.unwrap();
-    let victim = chars.get(victim_id);
     loop {
         to_room = rand_number(0, db.world.len() as u32);
         if !db.room_flagged(
@@ -434,13 +430,10 @@ pub fn spell_summon(
     victim_id: Option<DepotId>,
     _obj: Option<DepotId>,
 ) {
-    if chid.is_none() || victim_id.is_none() {
-        return;
-    }
-    let victim_id = victim_id.unwrap();
+    let Some(chid) = chid else {return};
+    let Some(victim_id) = victim_id else {return};
     let victim = chars.get(victim_id);
 
-    let chid = chid.unwrap();
     let ch = chars.get(chid);
     if victim.get_level() > min(LVL_IMMORT - 1, level + 3) {
         send_to_char(&mut game.descriptors, ch, SUMMON_FAIL);
@@ -555,8 +548,9 @@ pub fn spell_locate_object(
      * Since we're passed the object and not the keyword we can only guess
      * at what the player originally meant to search for. -gg
      */
-    let ch = chars.get(chid.unwrap());
-    let oid = oid.unwrap();
+    let Some(chid) = chid else {return};
+    let Some(oid) = oid else {return};
+    let ch = chars.get(chid);
     let mut name = String::new();
     name.push_str(&objs.get(oid).name);
     let mut j = level / 2;
@@ -577,15 +571,15 @@ pub fn spell_locate_object(
             .as_str(),
         );
 
-        if objs.get(i).carried_by.is_some() {
+        if let Some(carried_by) = objs.get(i).carried_by {
             let msg = format!(
                 " is being carried by {}.\r\n",
                 pers(
                     &game.descriptors,
                     chars,
                     db,
-                    chars.get(objs.get(i).carried_by.unwrap()),
-                    chars.get(chid.unwrap())
+                    chars.get(carried_by),
+                    chars.get(chid)
                 )
             );
             send_to_char(&mut game.descriptors, ch, msg.as_str());
@@ -599,25 +593,25 @@ pub fn spell_locate_object(
                 )
                 .as_str(),
             );
-        } else if objs.get(i).in_obj.is_some() {
+        } else if let Some(in_obj) = objs.get(i).in_obj {
             send_to_char(
                 &mut game.descriptors,
                 ch,
                 format!(
                     " is in {}.\r\n",
-                    objs.get(objs.get(i).in_obj.unwrap()).short_description
+                    objs.get(in_obj).short_description
                 )
                 .as_str(),
             );
-        } else if objs.get(i).worn_by.is_some() {
+        } else if let Some(worn_by) = objs.get(i).worn_by {
             let msg = format!(
                 " is being worn by {}.\r\n",
                 pers(
                     &game.descriptors,
                     chars,
                     db,
-                    chars.get(objs.get(i).worn_by.unwrap()),
-                    chars.get(chid.unwrap())
+                    chars.get(worn_by),
+                    chars.get(chid)
                 )
             );
             send_to_char(&mut game.descriptors, ch, msg.as_str());
@@ -644,13 +638,9 @@ pub fn spell_charm(
     victim_id: Option<DepotId>,
     _oid: Option<DepotId>,
 ) {
-    if victim_id.is_none() || chid.is_none() {
-        return;
-    }
-    let victim_id = victim_id.unwrap();
+    let Some(victim_id) = victim_id else {return};
+    let Some(chid) = chid else {return};
     let victim = chars.get(victim_id);
-
-    let chid = chid.unwrap();
     let ch = chars.get(chid);
 
     if victim_id == chid {
@@ -749,7 +739,8 @@ pub fn spell_identify(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    let ch = chars.get(chid.unwrap());
+    let Some(chid) = chid else {return};
+    let ch = chars.get(chid);
 
     if let Some(oid) = oid {
         let mut bitbuf = String::new();
@@ -990,11 +981,8 @@ pub fn spell_enchant_weapon(
     _victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
-    if chid.is_none() || oid.is_none() {
-        return;
-    }
-    let chid = chid.unwrap();
-    let oid = oid.unwrap();
+    let Some(chid) = chid else {return};
+    let Some(oid) = oid else {return};
 
     /* Either already enchanted or not a weapon. */
     let obj = objs.get_mut(oid);
@@ -1080,9 +1068,10 @@ pub fn spell_detect_poison(
     victim_id: Option<DepotId>,
     oid: Option<DepotId>,
 ) {
+    let Some(chid) = chid else {return};
+    
     if let Some(victim_id) = victim_id {
         let victim = chars.get(victim_id);
-        let chid = chid.unwrap();
         let ch = chars.get(chid);
         if chid == victim_id {
             if victim.aff_flagged(AffectFlags::POISON) {
