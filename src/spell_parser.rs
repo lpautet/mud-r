@@ -11,9 +11,9 @@
 
 use std::cmp::{max, min};
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
 use crate::fight::skill_message;
-use crate::{act, perform_act, send_to_char, ObjData, TextData, VictimRef};
+use crate::{act, perform_act, send_to_char, VictimRef};
 use log::error;
 
 use crate::config::OK;
@@ -305,13 +305,13 @@ fn mag_manacost(ch: &CharData, sinfo: &SpellInfoType) -> i16 {
 #[allow(clippy::too_many_arguments)]
 fn say_spell(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
+    objs: &ObjDepot,
+    chid: CharId,
     spellnum: i32,
-    tch_id: Option<DepotId>,
-    tobj_id: Option<DepotId>,
+    tch_id: Option<CharId>,
+    tobj_id: Option<ObjId>,
 ) {
     let ch = chars.get(chid);
     let mut lbuf = String::new();
@@ -494,13 +494,13 @@ pub fn find_skill_num(db: &DB, name: &str) -> Option<i32> {
 #[allow(clippy::too_many_arguments)]
 pub fn call_magic(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    caster_id: DepotId,
-    cvict_id: Option<DepotId>,
-    ovict: Option<DepotId>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    caster_id: CharId,
+    cvict_id: Option<CharId>,
+    ovict: Option<ObjId>,
     spellnum: i32,
     level: u8,
     casttype: i32,
@@ -757,12 +757,12 @@ pub fn call_magic(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_objectmagic(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     argument: &str,
 ) {
     let ch = chars.get(chid);
@@ -1251,13 +1251,13 @@ pub fn mag_objectmagic(
 #[allow(clippy::too_many_arguments)]
 pub fn cast_spell(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    tch_id: Option<DepotId>,
-    tobj_id: Option<DepotId>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    tch_id: Option<CharId>,
+    tobj_id: Option<ObjId>,
     spellnum: i32,
 ) -> i32 {
     let ch = chars.get(chid);
@@ -1367,10 +1367,10 @@ pub fn cast_spell(
 pub fn do_cast(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1680,7 +1680,7 @@ fn spello(
     };
 }
 
-// fn unused_spell(chars: &mut Depot<CharData>, db: &mut DB, spl: usize) {
+// fn unused_spell(chars: &mut CharDepot, db: &mut DB, spl: usize) {
 //     for i in 0..NUM_CLASSES as usize {
 //         db.spell_info[spl].min_level[i] = (LVL_IMPL + 1) as i32;
 //         db.spell_info[spl].mana_max = 0;

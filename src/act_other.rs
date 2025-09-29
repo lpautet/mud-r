@@ -15,10 +15,8 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::depot::{Depot, DepotId, HasId};
-use crate::{
-    act, save_char, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB,
-};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
+use crate::{act, save_char, send_to_char, DescriptorDepot, VictimRef, DB};
 use log::error;
 
 use crate::act_wizard::perform_immort_vis;
@@ -55,10 +53,10 @@ use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 pub fn do_quit(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -135,10 +133,10 @@ pub fn do_quit(
 pub fn do_save(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     cmd: usize,
     _subcmd: i32,
@@ -186,10 +184,10 @@ special procedures - i.e., shop commands, mail commands, etc. */
 pub fn do_not_here(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -206,10 +204,10 @@ pub fn do_not_here(
 pub fn do_sneak(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -254,10 +252,10 @@ pub fn do_sneak(
 pub fn do_hide(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -296,10 +294,10 @@ pub fn do_hide(
 pub fn do_steal(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -569,10 +567,10 @@ pub fn do_steal(
 pub fn do_practice(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -599,10 +597,10 @@ pub fn do_practice(
 pub fn do_visible(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -630,10 +628,10 @@ pub fn do_visible(
 pub fn do_title(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -684,11 +682,11 @@ pub fn do_title(
 }
 
 fn perform_group(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
-    vict_id: DepotId,
+    chars: &mut CharDepot,
+    chid: CharId,
+    vict_id: CharId,
 ) -> i32 {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
@@ -737,12 +735,7 @@ fn perform_group(
     1
 }
 
-fn print_group(
-    descs: &mut Depot<DescriptorData>,
-    db: &mut DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
-) {
+fn print_group(descs: &mut DescriptorDepot, db: &mut DB, chars: &mut CharDepot, chid: CharId) {
     let ch = chars.get(chid);
     if !ch.aff_flagged(AffectFlags::GROUP) {
         send_to_char(descs, ch, "But you are not the member of a group!\r\n");
@@ -806,10 +799,10 @@ fn print_group(
 pub fn do_group(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -940,10 +933,10 @@ pub fn do_group(
 pub fn do_ungroup(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1073,10 +1066,10 @@ pub fn do_ungroup(
 pub fn do_report(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1140,10 +1133,10 @@ pub fn do_report(
 pub fn do_split(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1285,10 +1278,10 @@ pub fn do_split(
 pub fn do_use(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     cmd: usize,
     subcmd: i32,
@@ -1394,10 +1387,10 @@ pub fn do_use(
 pub fn do_wimpy(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1488,10 +1481,10 @@ pub fn do_wimpy(
 pub fn do_display(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1574,10 +1567,10 @@ pub fn do_display(
 pub fn do_gen_write(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     cmd: usize,
     subcmd: i32,
@@ -1681,10 +1674,10 @@ macro_rules! prf_tog_chk {
 pub fn do_gen_tog(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     subcmd: i32,

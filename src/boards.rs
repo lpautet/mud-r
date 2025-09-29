@@ -51,7 +51,7 @@ use std::{fs, mem, process, slice};
 use log::error;
 
 use crate::db::{parse_c_string, DB};
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, ObjId, TextDepot, TextId};
 use crate::handler::isname;
 use crate::interpreter::{delete_doubledollar, find_command, one_argument};
 use crate::modify::page_string;
@@ -60,7 +60,7 @@ use crate::structs::{
     MeRef, ObjRnum, ObjVnum, LVL_FREEZE, LVL_GOD, LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOTHING,
 };
 use crate::util::{ctime, time_now};
-use crate::{act, send_to_char, CharData, DescriptorData, Game, ObjData, TextData, TO_ROOM};
+use crate::{act, send_to_char, CharData, DescriptorDepot, Game, TO_ROOM};
 
 const NUM_OF_BOARDS: usize = 4; /* change if needed! */
 const MAX_BOARD_MESSAGES: usize = 60; /* arbitrary -- change if needed */
@@ -112,7 +112,7 @@ const NEWEST_AT_TOP: bool = false;
 
 pub struct BoardSystem {
     loaded: bool,
-    msg_storage: [DepotId; INDEX_SIZE],
+    msg_storage: [TextId; INDEX_SIZE],
     msg_storage_taken: [bool; INDEX_SIZE],
     num_of_msgs: [usize; NUM_OF_BOARDS],
     acmd_read: usize,
@@ -125,7 +125,7 @@ pub struct BoardSystem {
 }
 
 impl BoardSystem {
-    pub(crate) fn new(texts: &mut Depot<TextData>) -> BoardSystem {
+    pub(crate) fn new(texts: &mut TextDepot) -> BoardSystem {
         BoardSystem {
             loaded: false,
             msg_storage: [(); INDEX_SIZE].map(|_| texts.add_text("".into())),
@@ -194,12 +194,7 @@ fn find_slot(b: &mut BoardSystem) -> Option<usize> {
 }
 
 /* search the room ch is standing in to find which board he's looking at */
-fn find_board(
-    chars: &Depot<CharData>,
-    db: &DB,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
-) -> Option<usize> {
+fn find_board(chars: &CharDepot, db: &DB, objs: &ObjDepot, chid: CharId) -> Option<usize> {
     let ch = chars.get(chid);
 
     for oid in db.world[ch.in_room() as usize].contents.iter() {
@@ -223,7 +218,7 @@ fn find_board(
     None
 }
 
-fn init_boards(db: &mut DB, texts: &mut Depot<TextData>) {
+fn init_boards(db: &mut DB, texts: &mut TextDepot) {
     let mut fatal_error = 0;
     for i in 0..INDEX_SIZE {
         texts.get_mut(db.boards.msg_storage[i]).text.clear();
@@ -270,11 +265,11 @@ fn init_boards(db: &mut DB, texts: &mut Depot<TextData>) {
 #[allow(clippy::too_many_arguments)]
 pub fn gen_board(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -342,11 +337,11 @@ pub fn gen_board(
 }
 
 fn board_write_message(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
     board_type: usize,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -430,14 +425,14 @@ fn board_write_message(
 
 #[allow(clippy::too_many_arguments)]
 fn board_show_board(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &mut DB,
-    objs: &Depot<ObjData>,
+    objs: &ObjDepot,
     board_type: usize,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
-    board_id: DepotId,
+    board_id: ObjId,
 ) -> bool {
     let ch = chars.get(chid);
 
@@ -511,15 +506,15 @@ There are {} messages on the board.\r\n",
 
 #[allow(clippy::too_many_arguments)]
 fn board_display_msg(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &mut DB,
-    texts: &Depot<TextData>,
-    objs: &Depot<ObjData>,
+    texts: &TextDepot,
+    objs: &ObjDepot,
     board_type: usize,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
-    board_id: DepotId,
+    board_id: ObjId,
 ) -> bool {
     let ch = chars.get(chid);
 
@@ -610,11 +605,11 @@ fn board_display_msg(
 
 fn board_remove_msg(
     game: &mut Game,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
+    texts: &mut TextDepot,
     board_type: usize,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
 ) -> bool {
     let ch = chars.get(chid);
@@ -745,7 +740,7 @@ fn board_remove_msg(
     true
 }
 
-pub fn board_save_board(b: &mut BoardSystem, texts: &Depot<TextData>, board_type: usize) {
+pub fn board_save_board(b: &mut BoardSystem, texts: &TextDepot, board_type: usize) {
     let filename = b.boardinfo[board_type].filename;
 
     if b.num_of_msgs[board_type] == 0 {
@@ -828,7 +823,7 @@ pub fn board_save_board(b: &mut BoardSystem, texts: &Depot<TextData>, board_type
     }
 }
 
-fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type: usize) {
+fn board_load_board(b: &mut BoardSystem, texts: &mut TextDepot, board_type: usize) {
     let mut fl;
     match OpenOptions::new()
         .read(true)
@@ -936,14 +931,14 @@ fn board_load_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type
 }
 
 /* When shutting down, clear all boards. */
-pub fn board_clear_all(b: &mut BoardSystem, texts: &mut Depot<TextData>) {
+pub fn board_clear_all(b: &mut BoardSystem, texts: &mut TextDepot) {
     for i in 0..NUM_OF_BOARDS {
         board_clear_board(b, texts, i);
     }
 }
 
 /* Clear the in-memory structures. */
-fn board_clear_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type: usize) {
+fn board_clear_board(b: &mut BoardSystem, texts: &mut TextDepot, board_type: usize) {
     for i in 0..MAX_BOARD_MESSAGES {
         if b.msg_index[board_type][i].heading.is_some() {
             b.msg_index[board_type][i].heading = None;
@@ -960,7 +955,7 @@ fn board_clear_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_typ
 }
 
 /* Destroy the on-disk and in-memory board. */
-fn board_reset_board(b: &mut BoardSystem, texts: &mut Depot<TextData>, board_type: usize) {
+fn board_reset_board(b: &mut BoardSystem, texts: &mut TextDepot, board_type: usize) {
     board_clear_board(b, texts, board_type);
     fs::remove_file(b.boardinfo[board_type].filename).expect("Removing board file");
 }

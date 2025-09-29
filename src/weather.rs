@@ -9,21 +9,21 @@
 *  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
-use crate::depot::Depot;
+use crate::depot::CharDepot;
 use crate::structs::{SkyCondition, SunState};
 use crate::util::dice;
-use crate::{CharData, Game, DB};
+use crate::{Game, DB};
 use std::cmp::{max, min};
 
 impl Game {
-    pub(crate) fn weather_and_time(&mut self, chars: &Depot<CharData>, db: &mut DB, mode: i32) {
+    pub(crate) fn weather_and_time(&mut self, chars: &CharDepot, db: &mut DB, mode: i32) {
         self.another_hour(chars, db, mode);
         if mode != 0 {
             self.weather_change(chars, db);
         }
     }
 
-    fn another_hour(&mut self, chars: &Depot<CharData>, db: &mut DB, mode: i32) {
+    fn another_hour(&mut self, chars: &CharDepot, db: &mut DB, mode: i32) {
         db.time_info.hours += 1;
 
         if mode != 0 {
@@ -65,7 +65,7 @@ impl Game {
         }
     }
 
-    fn weather_change(&mut self, chars: &Depot<CharData>, db: &mut DB) {
+    fn weather_change(&mut self, chars: &CharDepot, db: &mut DB) {
         let diff = if (db.time_info.month >= 9) && (db.time_info.month <= 16) {
             if db.weather_info.pressure > 985 {
                 -2

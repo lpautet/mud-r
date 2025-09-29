@@ -18,12 +18,12 @@ use log::{error, info};
 use regex::Regex;
 
 use crate::db::{BanListElement, BanType, BAN_FILE, DB, XNAME_FILE};
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::interpreter::{one_argument, two_arguments};
 use crate::structs::ConState::ConPlaying;
 use crate::structs::LVL_GOD;
 use crate::util::{ctime, time_now, DisplayMode};
-use crate::{send_to_char, CharData, Game, ObjData, TextData};
+use crate::{send_to_char, Game};
 
 const BAN_TYPES: [&str; 5] = ["no", "new", "select", "all", "ERROR"];
 const BAN_TYPES_VALUES: [BanType; 4] = [BanType::None, BanType::New, BanType::Select, BanType::All];
@@ -132,10 +132,10 @@ macro_rules! ban_list_format {
 pub fn do_ban(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -256,10 +256,10 @@ pub fn do_ban(
 pub fn do_unban(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -309,7 +309,7 @@ pub fn do_unban(
  *  Written by Sharon P. Goza						  *
  **************************************************************************/
 
-pub fn valid_name(game: &mut Game, chars: &Depot<CharData>, db: &DB, newname: &str) -> bool {
+pub fn valid_name(game: &mut Game, chars: &CharDepot, db: &DB, newname: &str) -> bool {
     /*
      * Make sure someone isn't trying to create this same name.  We want to
      * do a 'str_cmp' so people can't do 'Bob' and 'BoB'.  The creating login

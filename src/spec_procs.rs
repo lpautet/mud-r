@@ -11,9 +11,9 @@
 
 use log::error;
 
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::handler::{obj_from_obj, obj_to_char};
-use crate::{act, send_to_char, ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, VictimRef};
 use std::cmp::{max, min};
 use std::rc::Rc;
 
@@ -112,7 +112,7 @@ fn splskl(ch: &CharData) -> &str {
     PRAC_TYPES[PRAC_PARAMS[PRAC_TYPE][ch.get_class() as usize] as usize]
 }
 
-pub fn list_skills(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId) {
+pub fn list_skills(game: &mut Game, chars: &mut CharDepot, db: &mut DB, chid: CharId) {
     let ch = chars.get(chid);
     if ch.get_practices() == 0 {
         send_to_char(
@@ -151,11 +151,11 @@ pub fn list_skills(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, ch
 #[allow(clippy::too_many_arguments)]
 pub fn guild(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -227,11 +227,11 @@ pub fn guild(
 #[allow(clippy::too_many_arguments)]
 pub fn dump(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -338,11 +338,11 @@ const CLOSE_PATH: &str = "W3a3003b33000c111d0d111CE333333CE22c222112212111a1S.";
 #[allow(clippy::too_many_arguments)]
 pub fn mayor(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -531,13 +531,7 @@ pub fn mayor(
 *  General special procedures for mobiles                             *
 ******************************************************************** */
 
-fn npc_steal(
-    game: &mut Game,
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    chid: DepotId,
-    victim_id: DepotId,
-) {
+fn npc_steal(game: &mut Game, chars: &mut CharDepot, db: &mut DB, chid: CharId, victim_id: CharId) {
     let victim = chars.get(victim_id);
     let ch = chars.get(chid);
 
@@ -593,11 +587,11 @@ fn npc_steal(
 #[allow(clippy::too_many_arguments)]
 pub fn snake(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -658,11 +652,11 @@ pub fn snake(
 #[allow(clippy::too_many_arguments)]
 pub fn thief(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -685,11 +679,11 @@ pub fn thief(
 #[allow(clippy::too_many_arguments)]
 pub fn magic_user(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -893,11 +887,11 @@ pub fn magic_user(
 #[allow(clippy::too_many_arguments)]
 pub fn guild_guard(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -953,11 +947,11 @@ pub fn guild_guard(
 #[allow(clippy::too_many_arguments)]
 pub fn puff(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1030,11 +1024,11 @@ pub fn puff(
 #[allow(clippy::too_many_arguments)]
 pub fn fido(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1076,11 +1070,11 @@ pub fn fido(
 #[allow(clippy::too_many_arguments)]
 pub fn janitor(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1120,11 +1114,11 @@ pub fn janitor(
 #[allow(clippy::too_many_arguments)]
 pub fn cityguard(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1244,11 +1238,11 @@ fn pet_price(pet: &CharData) -> i32 {
 #[allow(clippy::too_many_arguments)]
 pub fn pet_shops(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1348,11 +1342,11 @@ pub fn pet_shops(
 #[allow(clippy::too_many_arguments)]
 pub fn bank(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,

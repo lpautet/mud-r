@@ -20,7 +20,7 @@ use crate::act_wizard::do_return;
 use crate::class::invalid_class;
 use crate::config::MENU;
 use crate::db::DB;
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
 use crate::interpreter::one_argument;
 use crate::objsave::crash_delete_crashfile;
 use crate::spells::{SAVING_BREATH, SAVING_PARA, SAVING_PETRI, SAVING_ROD, SAVING_SPELL};
@@ -32,7 +32,7 @@ use crate::structs::{
     WEAR_LIGHT,
 };
 use crate::util::{can_see, can_see_obj, die_follower, rand_number, SECS_PER_MUD_YEAR};
-use crate::{act, save_char, send_to_char, DescriptorData, Game, TextData, TO_CHAR, TO_ROOM};
+use crate::{act, save_char, send_to_char, DescriptorDepot, Game, TO_CHAR, TO_ROOM};
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -196,7 +196,7 @@ fn affect_modify(ch: &mut CharData, loc: ApplyType, _mod: i16, bitv: AffectFlags
 
 /* This updates a character by subtracting everything he is affected by */
 /* restoring original abilities, and then affecting all again           */
-pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
+pub fn affect_total(objs: &ObjDepot, ch: &mut CharData) {
     for i in 0..NUM_WEARS {
         if let Some(eq_id) = ch.get_eq(i) {
             for j in 0..MAX_OBJ_AFFECT {
@@ -255,7 +255,7 @@ pub fn affect_total(objs: &Depot<ObjData>, ch: &mut CharData) {
 
 /* Insert an affect_type in a char_data structure
 Automatically sets apropriate bits and apply's */
-pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType) {
+pub fn affect_to_char(objs: &ObjDepot, ch: &mut CharData, af: AffectedType) {
     ch.affected.push(af);
 
     affect_modify(ch, af.location, af.modifier as i16, af.bitvector, true);
@@ -267,13 +267,13 @@ pub fn affect_to_char(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType
  * reaches zero). Pointer *af must never be NIL!  Frees mem and calls
  * affect_location_apply
  */
-pub fn affect_remove(objs: &Depot<ObjData>, ch: &mut CharData, af: AffectedType) {
+pub fn affect_remove(objs: &ObjDepot, ch: &mut CharData, af: AffectedType) {
     affect_modify(ch, af.location, af.modifier as i16, af.bitvector, false);
     affect_total(objs, ch);
 }
 
 /* Call affect_remove with every spell of spelltype "skill" */
-pub fn affect_from_char(objs: &mut Depot<ObjData>, ch: &mut CharData, type_: i16) {
+pub fn affect_from_char(objs: &mut ObjDepot, ch: &mut CharData, type_: i16) {
     let mut list = ch.affected.clone();
     list.retain(|hjp| {
         if hjp._type == type_ {
@@ -301,7 +301,7 @@ pub fn affected_by_spell(ch: &CharData, type_: i16) -> bool {
 }
 
 pub fn affect_join(
-    objs: &Depot<ObjData>,
+    objs: &ObjDepot,
     ch: &mut CharData,
     af: &AffectedType,
     add_dur: bool,
@@ -338,7 +338,7 @@ pub fn affect_join(
 }
 impl DB {
     /* move a player out of a room */
-    pub fn char_from_room(&mut self, objs: &Depot<ObjData>, ch: &mut CharData) {
+    pub fn char_from_room(&mut self, objs: &ObjDepot, ch: &mut CharData) {
         if ch.in_room() == NOWHERE {
             error!("SYSERR: NULL character or NOWHERE in char_from_room");
             process::exit(1);
@@ -360,9 +360,9 @@ impl DB {
     /* place a character in a room */
     pub(crate) fn char_to_room(
         &mut self,
-        chars: &mut Depot<CharData>,
-        objs: &Depot<ObjData>,
-        chid: DepotId,
+        chars: &mut CharDepot,
+        objs: &ObjDepot,
+        chid: CharId,
         room: RoomRnum,
     ) {
         if room == NOWHERE || room >= self.world.len() as i16 {
@@ -412,7 +412,7 @@ pub fn obj_to_char(obj: &mut ObjData, ch: &mut CharData) {
 }
 
 /* take an object from a char */
-pub fn obj_from_char(chars: &mut Depot<CharData>, obj: &mut ObjData) {
+pub fn obj_from_char(chars: &mut CharDepot, obj: &mut ObjData) {
     let obj_weight = obj.get_obj_weight();
     let carried_by_id = obj
         .carried_by
@@ -431,7 +431,7 @@ pub fn obj_from_char(chars: &mut Depot<CharData>, obj: &mut ObjData) {
 }
 
 /* Return the effect of a piece of armor in position eq_pos */
-fn apply_ac(objs: &Depot<ObjData>, ch: &CharData, eq_pos: usize) -> i32 {
+fn apply_ac(objs: &ObjDepot, ch: &CharData, eq_pos: usize) -> i32 {
     let eq_id = ch.get_eq(eq_pos).unwrap_or_else(|| {
         panic!(
             "apply_ac cannot find eq at pos {} for {}",
@@ -468,12 +468,12 @@ pub fn invalid_align(ch: &CharData, obj: &ObjData) -> bool {
 }
 
 pub(crate) fn equip_char(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     pos: usize,
 ) {
     let ch = chars.get_mut(chid);
@@ -565,11 +565,11 @@ pub(crate) fn equip_char(
 impl DB {
     pub fn unequip_char(
         &mut self,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
+        chars: &mut CharDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
         pos: usize,
-    ) -> Option<DepotId> {
+    ) -> Option<ObjId> {
         let ch = chars.get_mut(chid);
         if pos > NUM_WEARS {
             error!("Invalid position in unequip_char: {}", pos);
@@ -625,9 +625,9 @@ pub fn get_number(name: &mut String) -> i32 {
 
 /* Search a given list for an object number, and return a ptr to that obj */
 pub fn get_obj_in_list_num<'a>(
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     num: i16,
-    list: &Vec<DepotId>,
+    list: &Vec<ObjId>,
 ) -> Option<&'a ObjData> {
     for o in list {
         let obj = objs.get(*o);
@@ -639,11 +639,7 @@ pub fn get_obj_in_list_num<'a>(
 }
 impl DB {
     /* search the entire world for an object number, and return a pointer  */
-    pub(crate) fn get_obj_num<'a>(
-        &self,
-        objs: &'a Depot<ObjData>,
-        nr: ObjRnum,
-    ) -> Option<&'a ObjData> {
+    pub(crate) fn get_obj_num<'a>(&self, objs: &'a ObjDepot, nr: ObjRnum) -> Option<&'a ObjData> {
         for &oid in self.object_list.iter() {
             let o = objs.get(oid);
             if o.get_obj_rnum() == nr {
@@ -656,7 +652,7 @@ impl DB {
     /* search a room for a char, and return a pointer if found..  */
     pub fn get_char_room<'a>(
         &self,
-        chars: &'a Depot<CharData>,
+        chars: &'a CharDepot,
         name: &str,
         number: Option<&mut i32>,
         room: RoomRnum,
@@ -688,11 +684,7 @@ impl DB {
     }
 
     /* search all over the world for a char num, and return a pointer if found */
-    pub fn get_char_num<'a>(
-        &self,
-        chars: &'a Depot<CharData>,
-        nr: MobRnum,
-    ) -> Option<&'a CharData> {
+    pub fn get_char_num<'a>(&self, chars: &'a CharDepot, nr: MobRnum) -> Option<&'a CharData> {
         for &i_id in &self.character_list {
             let i = chars.get(i_id);
             if i.get_mob_rnum() == nr {
@@ -742,12 +734,7 @@ impl DB {
     }
 }
 /* put an object in an object (quaint)  */
-pub fn obj_to_obj(
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-    oid_to: DepotId,
-) {
+pub fn obj_to_obj(chars: &mut CharDepot, objs: &mut ObjDepot, oid: ObjId, oid_to: ObjId) {
     if oid == oid_to {
         error!("SYSERR: same source and target  obj passed to obj_to_obj.");
         return;
@@ -777,7 +764,7 @@ pub fn obj_to_obj(
 }
 
 /* remove an object from an object */
-pub(crate) fn obj_from_obj(chars: &mut Depot<CharData>, objs: &mut Depot<ObjData>, oid: DepotId) {
+pub(crate) fn obj_from_obj(chars: &mut CharDepot, objs: &mut ObjDepot, oid: ObjId) {
     let oid_from = match objs.get(oid).in_obj {
         None => {
             error!("SYSERR:  trying to illegally extract obj from obj.");
@@ -812,7 +799,7 @@ pub(crate) fn obj_from_obj(chars: &mut Depot<CharData>, objs: &mut Depot<ObjData
 }
 
 /* Set all carried_by to point to new owner */
-pub fn object_list_new_owner(objs: &mut Depot<ObjData>, oid: DepotId, chid: Option<DepotId>) {
+pub fn object_list_new_owner(objs: &mut ObjDepot, oid: ObjId, chid: Option<CharId>) {
     for o in objs.get(oid).contains.clone() {
         object_list_new_owner(objs, o, chid);
         objs.get_mut(oid).carried_by = chid;
@@ -820,12 +807,7 @@ pub fn object_list_new_owner(objs: &mut Depot<ObjData>, oid: DepotId, chid: Opti
 }
 impl DB {
     /* Extract an object from the world */
-    pub fn extract_obj(
-        &mut self,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
-        oid: DepotId,
-    ) {
+    pub fn extract_obj(&mut self, chars: &mut CharDepot, objs: &mut ObjDepot, oid: ObjId) {
         let tch_id = objs.get(oid).worn_by;
         if let Some(tch_id) = tch_id {
             if let Some(eq_oid) =
@@ -866,13 +848,13 @@ impl DB {
         self.free_obj(objs, oid);
     }
 }
-fn update_object_list(objs: &mut Depot<ObjData>, list: Vec<DepotId>, _use: i32) {
+fn update_object_list(objs: &mut ObjDepot, list: Vec<ObjId>, _use: i32) {
     for oid in list {
         update_object(objs, oid, _use);
     }
 }
 
-fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
+fn update_object(objs: &mut ObjDepot, oid: ObjId, _use: i32) {
     if objs.get(oid).get_obj_timer() > 0 {
         objs.get_mut(oid).decr_obj_timer(_use);
     }
@@ -880,11 +862,11 @@ fn update_object(objs: &mut Depot<ObjData>, oid: DepotId, _use: i32) {
 }
 
 pub(crate) fn update_char_objects(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
-    objs: &mut Depot<ObjData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
+    objs: &mut ObjDepot,
     db: &mut DB,
-    chid: DepotId,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     let i;
@@ -944,11 +926,11 @@ impl Game {
     /* Extract a ch completely from the world, and leave his stuff behind */
     pub fn extract_char_final(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
     ) {
         let ch = chars.get(chid);
         if ch.in_room() == NOWHERE {
@@ -1114,7 +1096,7 @@ impl DB {
      * A: Because code doing 'vict = vict.next' would
      *    get really confused otherwise.
      */
-    pub fn extract_char(&mut self, chars: &mut Depot<CharData>, chid: DepotId) {
+    pub fn extract_char(&mut self, chars: &mut CharDepot, chid: CharId) {
         let ch = chars.get_mut(chid);
         if ch.is_npc() {
             ch.set_mob_flags_bit(MOB_NOTDEADYET);
@@ -1139,10 +1121,10 @@ impl DB {
 impl Game {
     pub fn extract_pending_chars(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         if db.extractions_pending < 0 {
             error!(
@@ -1183,8 +1165,8 @@ impl Game {
 * which incorporate the actual player-data                               *.
 *********************************************************************** */
 pub fn get_player_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &'a Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &'a CharDepot,
     db: &'a DB,
     ch: &CharData,
     name: &mut String,
@@ -1226,8 +1208,8 @@ pub fn get_player_vis<'a>(
 }
 
 pub fn get_char_room_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &'a Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &'a CharDepot,
     db: &'a DB,
     ch: &'a CharData,
     name: &mut String,
@@ -1267,8 +1249,8 @@ pub fn get_char_room_vis<'a>(
 }
 
 pub fn get_char_world_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &'a Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &'a CharDepot,
     db: &'a DB,
     ch: &'a CharData,
     name: &mut String,
@@ -1315,8 +1297,8 @@ pub fn get_char_world_vis<'a>(
 }
 
 pub fn get_char_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &'a Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &'a CharDepot,
     db: &'a DB,
     ch: &'a CharData,
     name: &mut String,
@@ -1334,14 +1316,14 @@ pub fn get_char_vis<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_obj_in_list_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &'a DB,
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     ch: &'a CharData,
     name: &str,
     number: Option<&mut i32>,
-    list: &[DepotId],
+    list: &[ObjId],
 ) -> Option<&'a ObjData> {
     let mut num;
     let t: &mut i32;
@@ -1374,14 +1356,14 @@ pub fn get_obj_in_list_vis<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_obj_in_list_vis2<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &'a DB,
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     ch: &'a CharData,
     name: &str,
     number: Option<&mut i32>,
-    list: &[DepotId],
+    list: &[ObjId],
 ) -> Option<&'a ObjData> {
     let mut num;
     let t: &mut i32;
@@ -1414,10 +1396,10 @@ pub fn get_obj_in_list_vis2<'a>(
 
 /* search the entire world for an object, and return a pointer  */
 pub fn get_obj_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &'a DB,
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     ch: &'a CharData,
     name: &str,
     number: Option<&mut i32>,
@@ -1481,14 +1463,14 @@ pub fn get_obj_vis<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_obj_in_equip_vis<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &'a DB,
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     ch: &'a CharData,
     arg: &str,
     number: Option<&mut i32>,
-    equipment: &[Option<DepotId>],
+    equipment: &[Option<ObjId>],
 ) -> Option<&'a ObjData> {
     let mut num;
     let t: &mut i32;
@@ -1523,14 +1505,14 @@ pub fn get_obj_in_equip_vis<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_obj_pos_in_equip_vis(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
-    objs: &Depot<ObjData>,
+    objs: &ObjDepot,
     ch: &CharData,
     arg: &str,
     number: Option<&mut i32>,
-    equipment: &[Option<DepotId>],
+    equipment: &[Option<ObjId>],
 ) -> Option<usize> {
     let mut num;
     let t: &mut i32;
@@ -1645,7 +1627,7 @@ pub fn money_desc(amount: i32) -> &'static str {
 }
 
 impl DB {
-    pub fn create_money(&mut self, objs: &mut Depot<ObjData>, amount: i32) -> Option<DepotId> {
+    pub fn create_money(&mut self, objs: &mut ObjDepot, amount: i32) -> Option<ObjId> {
         if amount <= 0 {
             error!("SYSERR: Try to create negative or 0 money. ({})", amount);
             return None;
@@ -1713,10 +1695,10 @@ impl DB {
  */
 #[allow(clippy::too_many_arguments)]
 pub fn generic_find<'a>(
-    descs: &Depot<DescriptorData>,
-    chars: &'a Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &'a CharDepot,
     db: &'a DB,
-    objs: &'a Depot<ObjData>,
+    objs: &'a ObjDepot,
     arg: &str,
     bitvector: FindFlags,
     ch: &'a CharData,

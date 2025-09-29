@@ -23,9 +23,9 @@ use std::path::Path;
 use std::rc::Rc;
 use std::{mem, process, slice};
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::handler::obj_to_char;
-use crate::{act, send_to_char, ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, VictimRef};
 use log::{error, info};
 
 use crate::db::{clear_char, copy_to_stored, parse_c_string, store_to_char, DB, MAIL_FILE};
@@ -135,10 +135,10 @@ impl MailSystem {
 
 fn mail_recip_ok(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     name: &str,
 ) -> bool {
     let mut ret = false;
@@ -671,11 +671,11 @@ From: {}\r\n\
 #[allow(clippy::too_many_arguments)]
 pub fn postmaster(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -729,12 +729,12 @@ pub fn postmaster(
 #[allow(clippy::too_many_arguments)]
 fn postmaster_send_mail(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    mailman_id: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    mailman_id: CharId,
     _cmd: usize,
     arg: &str,
 ) {
@@ -859,10 +859,10 @@ $n tells you, 'Write your message, use @ on a new line when done.'",
 
 fn postmaster_check_mail(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
-    mailman_id: DepotId,
+    chid: CharId,
+    mailman_id: CharId,
     _cmd: usize,
     _arg: &str,
 ) {
@@ -901,12 +901,12 @@ fn postmaster_check_mail(
 #[allow(clippy::too_many_arguments)]
 fn postmaster_receive_mail(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    mailman_id: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    mailman_id: CharId,
     _cmd: usize,
     _arg: &str,
 ) {

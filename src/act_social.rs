@@ -14,9 +14,9 @@ use std::io::{BufRead, BufReader};
 use std::process;
 use std::rc::Rc;
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::structs::{Position, Sex};
-use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, VictimRef};
 use log::error;
 use regex::Regex;
 
@@ -58,10 +58,10 @@ fn find_action(db: &DB, cmd: usize) -> Option<usize> {
 pub fn do_action(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     cmd: usize,
     _subcmd: i32,
@@ -204,10 +204,10 @@ pub fn do_action(
 pub fn do_insult(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,

@@ -10,8 +10,8 @@
 ************************************************************************ */
 
 /* defines for mudlog() */
-use crate::depot::{Depot, DepotId, HasId};
-use crate::{act, send_to_char, VictimRef};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId};
+use crate::{act, send_to_char, DescriptorDepot, VictimRef};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufRead, BufReader};
@@ -565,10 +565,10 @@ impl CharData {
     pub fn set_idnum(&mut self, val: i64) {
         self.char_specials.saved.idnum = val;
     }
-    pub fn fighting_id(&self) -> Option<DepotId> {
+    pub fn fighting_id(&self) -> Option<CharId> {
         self.char_specials.fighting_chid
     }
-    pub fn set_fighting(&mut self, val: Option<DepotId>) {
+    pub fn set_fighting(&mut self, val: Option<CharId>) {
         self.char_specials.fighting_chid = val;
     }
     pub fn get_alignment(&self) -> i32 {
@@ -705,10 +705,10 @@ impl CharData {
     pub fn is_warrior(&self) -> bool {
         self.is_npc() && self.get_class() == Class::Warrior
     }
-    pub fn get_eq(&self, pos: usize) -> Option<DepotId> {
+    pub fn get_eq(&self, pos: usize) -> Option<ObjId> {
         self.equipment[pos]
     }
-    pub fn set_eq(&mut self, pos: usize, val: Option<DepotId>) {
+    pub fn set_eq(&mut self, pos: usize, val: Option<ObjId>) {
         self.equipment[pos] = val;
     }
     pub fn is_good(&self) -> bool {
@@ -749,7 +749,7 @@ impl CharData {
     }
 }
 
-pub fn get_real_level(descs: &Depot<DescriptorData>, chars: &Depot<CharData>, ch: &CharData) -> u8 {
+pub fn get_real_level(descs: &DescriptorDepot, chars: &CharDepot, ch: &CharData) -> u8 {
     if let Some(desc) = ch.desc {
         if let Some(original) = descs.get(desc).original {
             chars.get(original).get_level()
@@ -966,8 +966,8 @@ impl DB {
 }
 
 pub fn can_get_obj(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     ch: &CharData,
     obj: &ObjData,
@@ -975,8 +975,8 @@ pub fn can_get_obj(
     obj.can_wear(WearFlags::TAKE) && ch.can_carry_obj(obj) && can_see_obj(descs, chars, db, ch, obj)
 }
 pub fn mort_can_see_obj(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     sub: &CharData,
     obj: &ObjData,
@@ -984,8 +984,8 @@ pub fn mort_can_see_obj(
     db.light_ok(sub) && invis_ok_obj(sub, obj) && can_see_obj_carrier(descs, chars, db, sub, obj)
 }
 pub fn can_see(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     sub: &CharData,
     obj: &CharData,
@@ -1000,8 +1000,8 @@ pub fn can_see(
             && db.imm_can_see(sub, obj))
 }
 pub fn can_see_obj_carrier(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     sub: &CharData,
     obj: &ObjData,
@@ -1013,8 +1013,8 @@ pub fn can_see_obj_carrier(
             .is_none_or(|worn_by| can_see(descs, chars, db, sub, chars.get(worn_by)))
 }
 pub fn pers(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     ch: &CharData,
     vict: &CharData,
@@ -1026,8 +1026,8 @@ pub fn pers(
     }
 }
 pub fn objs(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     obj: &ObjData,
     vict: &CharData,
@@ -1040,8 +1040,8 @@ pub fn objs(
 }
 
 pub fn objn(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     obj: &ObjData,
     vict: &CharData,
@@ -1053,8 +1053,8 @@ pub fn objn(
     }
 }
 pub fn can_see_obj(
-    descs: &Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     sub: &CharData,
     obj: &ObjData,
@@ -1252,7 +1252,7 @@ pub fn prune_crlf(text: &mut Rc<str>) {
 }
 
 /* log a death trap hit */
-pub fn log_death_trap(game: &mut Game, chars: &Depot<CharData>, db: &DB, chid: DepotId) {
+pub fn log_death_trap(game: &mut Game, chars: &CharDepot, db: &DB, chid: CharId) {
     let ch = chars.get(chid);
     let mesg = format!(
         "{} hit death trap #{} ({})",
@@ -1325,7 +1325,7 @@ pub fn touch(path: &Path) -> io::Result<()> {
 impl Game {
     pub(crate) fn mudlog(
         &mut self,
-        chars: &Depot<CharData>,
+        chars: &CharDepot,
         log_type: DisplayMode,
         level: i32,
         file: bool,
@@ -1510,7 +1510,7 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
-pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&CharData>) -> bool {
+pub fn circle_follow(chars: &CharDepot, ch: &CharData, victim: Option<&CharData>) -> bool {
     let Some(mut k) = victim else {
         return false;
     };
@@ -1533,11 +1533,11 @@ pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&Cha
 /* Called when stop following persons, or stopping charm */
 /* This will NOT do if a character quits/dies!!          */
 pub fn stop_follower(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     let Some(master_id) = ch.master else {
@@ -1627,7 +1627,7 @@ pub fn stop_follower(
     ch.remove_aff_flags(AffectFlags::CHARM | AffectFlags::GROUP);
 }
 
-pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
+pub fn num_followers_charmed(chars: &CharDepot, chid: CharId) -> i32 {
     let ch = chars.get(chid);
     let mut total = 0;
 
@@ -1646,11 +1646,11 @@ pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
 
 /* Called when a character that follows/is followed dies */
 pub fn die_follower(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     if ch.master.is_some() {
@@ -1665,11 +1665,11 @@ pub fn die_follower(
 /* Do NOT call this before having checked if a circle of followers */
 /* will arise. CH will follow leader                               */
 pub fn add_follower(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
-    leader_id: DepotId,
+    chid: CharId,
+    leader_id: CharId,
 ) {
     let ch = chars.get_mut(chid);
     if ch.master.is_some() {

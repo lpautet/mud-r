@@ -53,7 +53,7 @@ use crate::ban::{do_ban, do_unban, isbanned, valid_name};
 use crate::class::{do_start, parse_class, CLASS_MENU};
 use crate::config::{MAX_BAD_PWS, MENU, START_MESSG, WELC_MESSG};
 use crate::db::{clear_char, do_reboot, reset_char, store_to_char, BanType};
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, DescriptorId, HasId, ObjDepot, TextDepot};
 use crate::graph::do_track;
 use crate::house::{do_hcontrol, do_house};
 use crate::modify::{do_skillset, page_string};
@@ -77,8 +77,8 @@ use crate::structs::{
 };
 use crate::util::DisplayMode;
 use crate::{
-    _clrlevel, act, clr, save_char, send_to_char, write_to_q, Game, ObjData, TextData, CCNRM,
-    CCRED, DB, PLR_DELETED, TO_ROOM,
+    _clrlevel, act, clr, save_char, send_to_char, write_to_q, Game, CCNRM, CCRED, DB,
+    PLR_DELETED, TO_ROOM,
 };
 
 /*
@@ -255,10 +255,10 @@ pub fn cmd_is(cmd: usize, cmd_name: &str) -> bool {
 type Command = fn(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     cmd: usize,
     subcmd: i32,
@@ -276,10 +276,10 @@ pub struct CommandInfo {
 pub fn do_nothing(
     _game: &mut Game,
     _db: &mut DB,
-    _chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    _chid: DepotId,
+    _chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    _chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2795,10 +2795,10 @@ const RESERVED: [&str; 9] = [
 pub fn command_interpreter(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
 ) {
     let ch = chars.get_mut(chid);
@@ -2926,10 +2926,10 @@ fn find_alias<'a>(alias_list: &'a [AliasData], alias: &str) -> Option<&'a AliasD
 pub fn do_alias(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3075,8 +3075,8 @@ fn perform_complex_alias(input_q: &mut LinkedList<TxtBlock>, orig: &str, a: &Ali
  */
 pub fn perform_alias(
     game: &mut Game,
-    chars: &Depot<CharData>,
-    d_id: DepotId,
+    chars: &CharDepot,
+    d_id: DescriptorId,
     orig: &mut String,
 ) -> bool {
     let d = game.desc(d_id);
@@ -3316,10 +3316,10 @@ pub fn is_move(cmdnum: usize) -> bool {
 pub fn special(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     cmd: usize,
     arg: &str,
 ) -> bool {
@@ -3431,10 +3431,10 @@ enum DupeCheckMode {
 fn perform_dupe_check(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    d_id: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    d_id: DescriptorId,
 ) -> bool {
     let mut target_id = None;
     let mut mode = None::<DupeCheckMode>;
@@ -3644,10 +3644,10 @@ fn perform_dupe_check(
 pub fn nanny(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    d_id: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    d_id: DescriptorId,
     arg: &str,
 ) {
     let arg = arg.trim();

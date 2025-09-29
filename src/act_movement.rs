@@ -11,9 +11,9 @@
 
 use log::error;
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
 use crate::fight::death_cry;
-use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
+use crate::{act, send_to_char, send_to_room, DescriptorDepot, VictimRef};
 use std::borrow::Borrow;
 
 use crate::act_informative::look_at_room;
@@ -39,7 +39,7 @@ use crate::util::{
 use crate::{an, is_set, Game, TO_CHAR, TO_ROOM, TO_SLEEP, TO_VICT};
 
 /* simple function to determine if char can walk on water */
-fn has_boat(descs: &mut Depot<DescriptorData>, objs: &Depot<ObjData>, ch: &CharData) -> bool {
+fn has_boat(descs: &mut DescriptorDepot, objs: &ObjDepot, ch: &CharData) -> bool {
     if ch.get_level() > LVL_IMMORT {
         return true;
     }
@@ -81,10 +81,10 @@ fn has_boat(descs: &mut Depot<DescriptorData>, objs: &Depot<ObjData>, ch: &CharD
 pub fn perform_move(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     dir: i32,
     need_specials_check: bool,
 ) -> bool {
@@ -170,10 +170,10 @@ pub fn perform_move(
 pub fn do_simple_move(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     dir: i32,
     need_specials_check: bool,
 ) -> bool {
@@ -356,10 +356,10 @@ pub fn do_simple_move(
 pub fn do_move(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -373,7 +373,7 @@ pub fn do_move(
 }
 
 fn find_door(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
     ch: &CharData,
     type_: &str,
@@ -444,7 +444,7 @@ fn find_door(
     }
 }
 
-fn has_key(db: &DB, objs: &Depot<ObjData>, ch: &CharData, key: ObjVnum) -> bool {
+fn has_key(db: &DB, objs: &ObjDepot, ch: &CharData, key: ObjVnum) -> bool {
     for o in ch.carrying.iter() {
         if db.get_obj_vnum(objs.get(*o)) == key {
             return true;
@@ -476,9 +476,9 @@ const FLAGS_DOOR: [i32; 5] = [
 
 fn open_door(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     room: RoomRnum,
-    oid: Option<DepotId>,
+    oid: Option<ObjId>,
     door: Option<usize>,
 ) {
     if let Some(oid) = oid {
@@ -496,9 +496,9 @@ fn open_door(
 
 fn close_door(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     room: RoomRnum,
-    oid: Option<DepotId>,
+    oid: Option<ObjId>,
     door: Option<usize>,
 ) {
     if let Some(oid) = oid {
@@ -516,9 +516,9 @@ fn close_door(
 
 fn lock_door(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     room: RoomRnum,
-    oid: Option<DepotId>,
+    oid: Option<ObjId>,
     door: Option<usize>,
 ) {
     if let Some(oid) = oid {
@@ -536,9 +536,9 @@ fn lock_door(
 
 fn unlock_door(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     room: RoomRnum,
-    oid: Option<DepotId>,
+    oid: Option<ObjId>,
     door: Option<usize>,
 ) {
     if let Some(oid) = oid {
@@ -556,9 +556,9 @@ fn unlock_door(
 
 fn togle_lock(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     room: RoomRnum,
-    oid: Option<DepotId>,
+    oid: Option<ObjId>,
     door: Option<usize>,
 ) {
     if let Some(oid) = oid {
@@ -577,13 +577,13 @@ fn togle_lock(
 
 #[allow(clippy::too_many_arguments)]
 fn do_doorcmd(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: Option<DepotId>,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: Option<ObjId>,
     door: Option<usize>,
     scmd: i32,
 ) {
@@ -781,9 +781,9 @@ fn do_doorcmd(
 }
 
 fn ok_pick(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
+    chid: CharId,
     keynum: ObjVnum,
     pickproof: bool,
     scmd: i32,
@@ -901,10 +901,10 @@ fn door_key(db: &DB, ch: &CharData, obj: Option<&ObjData>, door: Option<usize>) 
 pub fn do_gen_door(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -1030,10 +1030,10 @@ pub fn do_gen_door(
 pub fn do_enter(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1084,10 +1084,10 @@ pub fn do_enter(
 pub fn do_leave(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1123,10 +1123,10 @@ pub fn do_leave(
 pub fn do_stand(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1214,10 +1214,10 @@ pub fn do_stand(
 pub fn do_sit(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1300,10 +1300,10 @@ pub fn do_sit(
 pub fn do_rest(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1386,10 +1386,10 @@ pub fn do_rest(
 pub fn do_sleep(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1453,10 +1453,10 @@ pub fn do_sleep(
 pub fn do_wake(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1587,10 +1587,10 @@ pub fn do_wake(
 pub fn do_follow(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,

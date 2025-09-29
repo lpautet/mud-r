@@ -11,8 +11,8 @@
 
 use std::cmp::{max, min};
 
-use crate::depot::{Depot, DepotId};
-use crate::{act, send_to_char, ObjData, TextData, VictimRef};
+use crate::depot::{CharDepot, CharId, ObjDepot, ObjId, TextDepot};
+use crate::{act, send_to_char, VictimRef};
 use log::error;
 
 use crate::class::saving_throws;
@@ -69,12 +69,7 @@ pub fn mag_savingthrow(ch: &CharData, type_: i32, modifier: i32) -> bool {
 }
 
 /* affect_update: called from main.rs (causes spells to wear off) */
-pub fn affect_update(
-    game: &mut Game,
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-) {
+pub fn affect_update(game: &mut Game, chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot) {
     for &i_id in &db.character_list.clone() {
         let i = chars.get(i_id);
         let mut last_type_notification = -1;
@@ -181,13 +176,13 @@ pub fn affect_update(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_damage(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: DepotId,
-    victim_id: DepotId,
+    chid: CharId,
+    victim_id: CharId,
     spellnum: i32,
     savetype: i32,
 ) -> i32 {
@@ -329,12 +324,12 @@ const MAX_SPELL_AFFECTS: i32 = 5; /* change if more needed */
 #[allow(clippy::too_many_arguments)]
 pub fn mag_affects(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: DepotId,
-    victim_id: DepotId,
+    chid: CharId,
+    victim_id: CharId,
     spellnum: i32,
     savetype: i32,
 ) {
@@ -624,13 +619,13 @@ pub fn mag_affects(
 #[allow(clippy::too_many_arguments)]
 fn perform_mag_groups(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: DepotId,
-    tch_id: DepotId,
+    chid: CharId,
+    tch_id: CharId,
     spellnum: i32,
     savetype: i32,
 ) {
@@ -682,12 +677,12 @@ fn perform_mag_groups(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_groups(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: DepotId,
+    chid: CharId,
     spellnum: i32,
     savetype: i32,
 ) {
@@ -732,10 +727,10 @@ pub fn mag_groups(
  * No spells of this class currently implemented.
  */
 pub fn mag_masses(
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &DB,
     _level: u8,
-    chid: DepotId,
+    chid: CharId,
     _spellnum: i32,
     _savetype: i32,
 ) {
@@ -760,12 +755,12 @@ pub fn mag_masses(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_areas(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: DepotId,
+    chid: CharId,
     spellnum: i32,
     _savetype: i32,
 ) {
@@ -889,12 +884,12 @@ const MOB_ZOMBIE: i32 = 11;
 #[allow(clippy::too_many_arguments)]
 pub fn mag_summons(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: DepotId,
-    oid: Option<DepotId>,
+    chid: CharId,
+    oid: Option<ObjId>,
     spellnum: i32,
     _savetype: i32,
 ) {
@@ -1017,10 +1012,10 @@ pub fn mag_summons(
 
 pub fn mag_points(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     level: u8,
-    _chid: DepotId,
-    victim_id: DepotId,
+    _chid: CharId,
+    victim_id: CharId,
     spellnum: i32,
     _savetype: i32,
 ) {
@@ -1057,12 +1052,12 @@ pub fn mag_points(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_unaffects(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: DepotId,
-    victim_id: DepotId,
+    chid: CharId,
+    victim_id: CharId,
     spellnum: i32,
     _type_: i32,
 ) {
@@ -1149,12 +1144,12 @@ pub fn mag_unaffects(
 #[allow(clippy::too_many_arguments)]
 pub fn mag_alter_objs(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: DepotId,
-    oid: DepotId,
+    chid: CharId,
+    oid: ObjId,
     spellnum: i32,
     _savetype: i32,
 ) {
@@ -1269,11 +1264,11 @@ pub fn mag_alter_objs(
 
 pub fn mag_creations(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: DepotId,
+    chid: CharId,
     spellnum: i32,
 ) {
     let ch = chars.get(chid);

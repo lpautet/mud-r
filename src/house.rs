@@ -18,7 +18,7 @@ use log::{error, info};
 
 use crate::constants::{DIRS, REV_DIR};
 use crate::db::{DB, HCONTROL_FILE};
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, ObjId, TextDepot};
 use crate::interpreter::{half_chop, is_abbrev, one_argument, search_block};
 use crate::objsave::{obj_from_store, obj_to_store};
 use crate::structs::{
@@ -26,7 +26,7 @@ use crate::structs::{
     NUM_OF_DIRS,
 };
 use crate::util::{ctime, time_now, DisplayMode};
-use crate::{send_to_char, DescriptorData, Game, ObjData, TextData};
+use crate::{send_to_char, DescriptorDepot, Game};
 
 pub const MAX_HOUSES: usize = 100;
 pub const MAX_GUESTS: usize = 10;
@@ -106,7 +106,7 @@ fn house_get_filename(vnum: RoomVnum, filename: &mut String) -> bool {
 }
 
 /* Load all objects for a house */
-fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
+fn house_load(db: &mut DB, objs: &mut ObjDepot, vnum: RoomVnum) -> bool {
     let rnum;
     let res = {
         rnum = db.real_room(vnum);
@@ -153,7 +153,7 @@ fn house_load(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) -> bool {
 
 /* Save all objects for a house (recursive; initial call must be followed
 by a call to House_restore_weight)  Assumes file is open already. */
-fn house_save(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>, fp: &mut File) -> bool {
+fn house_save(db: &mut DB, objs: &mut ObjDepot, oids: Vec<ObjId>, fp: &mut File) -> bool {
     for oid in oids {
         for coid in objs.get(oid).contains.clone() {
             house_save(db, objs, objs.get(coid).contains.clone(), fp);
@@ -171,7 +171,7 @@ fn house_save(db: &mut DB, objs: &mut Depot<ObjData>, oids: Vec<DepotId>, fp: &m
 }
 
 /* restore weight of containers after House_save has changed them for saving */
-fn house_restore_weight(objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
+fn house_restore_weight(objs: &mut ObjDepot, oids: Vec<ObjId>) {
     for oid in oids {
         for coid in objs.get(oid).contains.clone() {
             house_restore_weight(objs, objs.get(coid).contains.clone());
@@ -185,7 +185,7 @@ fn house_restore_weight(objs: &mut Depot<ObjData>, oids: Vec<DepotId>) {
 }
 
 /* Save all objects in a house */
-pub fn house_crashsave(db: &mut DB, objs: &mut Depot<ObjData>, vnum: RoomVnum) {
+pub fn house_crashsave(db: &mut DB, objs: &mut ObjDepot, vnum: RoomVnum) {
     let rnum;
     let res = {
         rnum = db.real_room(vnum);
@@ -236,7 +236,7 @@ fn house_delete_file(vnum: RoomVnum) {
 }
 
 /* List all objects in a house file */
-// fn house_listrent(db: &DB, chid: DepotId, vnum: RoomVnum) {
+// fn house_listrent(db: &DB, chid: CharId, vnum: RoomVnum) {
 //     let mut filename = String::new();
 //     if !house_get_filename(vnum, &mut filename) {
 //         return;
@@ -329,7 +329,7 @@ fn house_save_control(db: &mut DB) {
 
 /* call from boot_db - will load control recs, load objs, set atrium bits */
 /* should do sanity checks on vnums & remove invalid records */
-pub fn house_boot(db: &mut DB, objs: &mut Depot<ObjData>) {
+pub fn house_boot(db: &mut DB, objs: &mut ObjDepot) {
     let mut temp_house = HouseControlRec::new();
 
     let mut fl = match OpenOptions::new().read(true).open(HCONTROL_FILE) {
@@ -410,10 +410,10 @@ const HCONTROL_FORMAT: &str =
        hcontrol show\r\n";
 
 pub fn hcontrol_list_houses(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     if db.num_of_houses == 0 {
@@ -466,11 +466,11 @@ pub fn hcontrol_list_houses(
 }
 
 fn hcontrol_build_house(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     arg: &mut str,
 ) {
     let ch = chars.get(chid);
@@ -592,10 +592,10 @@ fn hcontrol_build_house(
 }
 
 fn hcontrol_destroy_house(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
 ) {
     let ch = chars.get(chid);
@@ -669,9 +669,9 @@ fn hcontrol_destroy_house(
 
 fn hcontrol_pay_house(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
+    chid: CharId,
     arg: &str,
 ) {
     let ch = chars.get(chid);
@@ -703,10 +703,10 @@ fn hcontrol_pay_house(
 pub fn do_hcontrol(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -736,10 +736,10 @@ pub fn do_hcontrol(
 pub fn do_house(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -822,7 +822,7 @@ pub fn do_house(
 /* Misc. administrative functions */
 
 /* crash-save all the houses */
-pub fn house_save_all(db: &mut DB, objs: &mut Depot<ObjData>) {
+pub fn house_save_all(db: &mut DB, objs: &mut ObjDepot) {
     for i in 0..db.num_of_houses {
         let real_house = db.real_room(db.house_control[i].vnum);
         if real_house != NOWHERE && db.room_flagged(real_house, RoomFlags::HOUSE_CRASH) {
@@ -854,10 +854,10 @@ pub fn house_can_enter(db: &DB, ch: &CharData, house: RoomVnum) -> bool {
 }
 
 fn house_list_guests(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
-    chid: DepotId,
+    chid: CharId,
     i: usize,
     quiet: bool,
 ) {

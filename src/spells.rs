@@ -8,8 +8,8 @@
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
 *  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
-use crate::depot::{Depot, DepotId};
-use crate::{act, send_to_char, CharData, ObjData, TextData, VictimRef, DB};
+use crate::depot::{CharDepot, CharId, ObjDepot, ObjId, TextDepot};
+use crate::{act, send_to_char, VictimRef, DB};
 use std::cmp::{max, min};
 
 use crate::act_informative::look_at_room;
@@ -260,13 +260,13 @@ pub struct AttackHitType {
 #[allow(clippy::too_many_arguments)]
 pub fn spell_create_water(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: Option<DepotId>,
-    _victim_id: Option<DepotId>,
-    obj_id: Option<DepotId>,
+    chid: Option<CharId>,
+    _victim_id: Option<CharId>,
+    obj_id: Option<ObjId>,
 ) {
     let Some(chid) = chid else {
         return;
@@ -319,14 +319,14 @@ pub fn spell_create_water(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_recall(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     _level: u8,
-    _chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    _obj: Option<DepotId>,
+    _chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    _obj: Option<ObjId>,
 ) {
     let Some(victim_id) = victim_id else {
         return;
@@ -368,14 +368,14 @@ pub fn spell_recall(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_teleport(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     _level: u8,
-    _chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    _obj: Option<DepotId>,
+    _chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    _obj: Option<ObjId>,
 ) {
     let mut to_room;
     let Some(victim_id) = victim_id else {
@@ -429,14 +429,14 @@ const SUMMON_FAIL: &str = "You failed.\r\n";
 #[allow(clippy::too_many_arguments)]
 pub fn spell_summon(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    _obj: Option<DepotId>,
+    chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    _obj: Option<ObjId>,
 ) {
     let Some(chid) = chid else { return };
     let Some(victim_id) = victim_id else { return };
@@ -542,13 +542,13 @@ pub fn spell_summon(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_locate_object(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: Option<DepotId>,
-    _victim_id: Option<DepotId>,
-    oid: Option<DepotId>,
+    chid: Option<CharId>,
+    _victim_id: Option<CharId>,
+    oid: Option<ObjId>,
 ) {
     /*
      * FIXME: This is broken.  The spell parser routines took the argument
@@ -634,13 +634,13 @@ pub fn spell_locate_object(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_charm(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    _oid: Option<DepotId>,
+    chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    _oid: Option<ObjId>,
 ) {
     let Some(victim_id) = victim_id else { return };
     let Some(chid) = chid else { return };
@@ -735,13 +735,13 @@ pub fn spell_charm(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_identify(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    oid: Option<DepotId>,
+    chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    oid: Option<ObjId>,
 ) {
     let Some(chid) = chid else { return };
     let ch = chars.get(chid);
@@ -977,13 +977,13 @@ pub fn spell_identify(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_enchant_weapon(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     level: u8,
-    chid: Option<DepotId>,
-    _victim_id: Option<DepotId>,
-    oid: Option<DepotId>,
+    chid: Option<CharId>,
+    _victim_id: Option<CharId>,
+    oid: Option<ObjId>,
 ) {
     let Some(chid) = chid else { return };
     let Some(oid) = oid else { return };
@@ -1064,13 +1064,13 @@ pub fn spell_enchant_weapon(
 #[allow(clippy::too_many_arguments)]
 pub fn spell_detect_poison(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     _level: u8,
-    chid: Option<DepotId>,
-    victim_id: Option<DepotId>,
-    oid: Option<DepotId>,
+    chid: Option<CharId>,
+    victim_id: Option<CharId>,
+    oid: Option<ObjId>,
 ) {
     let Some(chid) = chid else { return };
 

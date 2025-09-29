@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::act_movement::perform_move;
 use crate::act_social::do_action;
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::handler::obj_to_char;
 use crate::interpreter::find_command;
 use crate::spells::TYPE_UNDEFINED;
@@ -24,16 +24,16 @@ use crate::structs::{
     MOB_STAY_ZONE, MOB_WIMPY, NUM_OF_DIRS,
 };
 use crate::util::{can_get_obj, can_see, num_followers_charmed, rand_number, stop_follower};
-use crate::{act, Game, ObjData, DB, TO_ROOM};
-use crate::{TextData, VictimRef};
+use crate::{act, Game, DB, TO_ROOM};
+use crate::{ VictimRef};
 
 impl Game {
     pub fn mobile_activity(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         for &chid in &db.character_list.clone() {
             let ch = chars.get(chid);
@@ -105,17 +105,18 @@ impl Game {
             /* Mob Movement */
             let door = rand_number(0, 18);
             let ch = chars.get(chid);
-            if let Some(exit) = db.exit(ch, door as usize) {
-                if !ch.mob_flagged(MOB_SENTINEL)
-                    && ch.get_pos() == Position::Standing
-                    && door < NUM_OF_DIRS as u32
-                    && db.can_go(ch, door as usize)
-                    && !db.room_flagged(exit.to_room, RoomFlags::NOMOB | RoomFlags::DEATH)
-                    && (!ch.mob_flagged(MOB_STAY_ZONE)
-                        || db.world[exit.to_room as usize].zone
-                            == db.world[ch.in_room() as usize].zone)
-                {
-                    perform_move(self, db, chars, texts, objs, chid, door as i32, true);
+            if door < NUM_OF_DIRS as u32 {
+                if let Some(exit) = db.exit(ch, door as usize) {
+                    if !ch.mob_flagged(MOB_SENTINEL)
+                        && ch.get_pos() == Position::Standing
+                        && db.can_go(ch, door as usize)
+                        && !db.room_flagged(exit.to_room, RoomFlags::NOMOB | RoomFlags::DEATH)
+                        && (!ch.mob_flagged(MOB_STAY_ZONE)
+                            || db.world[exit.to_room as usize].zone
+                                == db.world[ch.in_room() as usize].zone)
+                    {
+                        perform_move(self, db, chars, texts, objs, chid, door as i32, true);
+                    }
                 }
             }
 
@@ -289,7 +290,7 @@ impl Game {
 
 /* make ch remember victim */
 
-pub fn remember(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
+pub fn remember(chars: &mut CharDepot, chid: CharId, victim_id: CharId) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
     if !ch.is_npc() || victim.is_npc() || victim.prf_flagged(PrefFlags::NOHASSLE) {
@@ -303,7 +304,7 @@ pub fn remember(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) 
 }
 
 /* make ch forget victim */
-pub fn forget(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
+pub fn forget(chars: &mut CharDepot, chid: CharId, victim_id: CharId) {
     let victim = chars.get(victim_id);
     let victim_idnum = victim.get_idnum();
     let ch = chars.get_mut(chid);
@@ -328,13 +329,13 @@ impl Game {
     #[allow(clippy::too_many_arguments)]
     fn aggressive_mob_on_a_leash(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        slave_id: DepotId,
-        master_id: Option<DepotId>,
-        attack_id: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        slave_id: CharId,
+        master_id: Option<CharId>,
+        attack_id: CharId,
     ) -> bool {
         let snarl_cmd: AtomicUsize = AtomicUsize::new(0);
         let slave = chars.get(slave_id);

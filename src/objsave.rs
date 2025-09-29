@@ -15,8 +15,8 @@ use std::io::{ErrorKind, Read, Seek, Write};
 use std::path::Path;
 use std::{fs, mem, slice};
 
-use crate::depot::{Depot, DepotId, HasId};
-use crate::{act, save_char, send_to_char, TextData, VictimRef};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
+use crate::{act, save_char, send_to_char, VictimRef};
 use log::{error, info};
 
 use crate::act_social::do_action;
@@ -50,10 +50,10 @@ pub const MAX_BAG_ROWS: i32 = 5;
 
 pub fn obj_from_store(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
+    objs: &mut ObjDepot,
     object: &ObjFileElem,
     location: &mut i32,
-) -> Option<DepotId> {
+) -> Option<ObjId> {
     *location = 0;
     let itemnum = db.real_object(object.item_number);
     if itemnum == NOTHING {
@@ -119,11 +119,11 @@ pub fn obj_to_store(db: &DB, obj: &ObjData, fl: &mut File, location: i32) -> boo
  */
 fn auto_equip(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     location: i32,
 ) {
     let ch = chars.get(chid);
@@ -393,10 +393,10 @@ pub fn update_obj_file(db: &DB) {
 
 pub fn crash_listrent(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     name: &str,
 ) {
     let ch = chars.get(chid);
@@ -507,7 +507,7 @@ pub fn crash_listrent(
     }
 }
 
-fn crash_write_rentcode(_chid: DepotId, fl: &mut File, rent: &mut RentInfo) -> bool {
+fn crash_write_rentcode(_chid: CharId, fl: &mut File, rent: &mut RentInfo) -> bool {
     let record_size = mem::size_of::<RentInfo>();
 
     let rent_slice;
@@ -569,18 +569,18 @@ impl ObjFileElem {
  */
 pub fn crash_load(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) -> i32 {
     let ch = chars.get(chid);
 
     /* AutoEQ addition. */
     let mut location = 0;
     let mut j;
-    let mut cont_row: [Vec<DepotId>; MAX_BAG_ROWS as usize] =
+    let mut cont_row: [Vec<ObjId>; MAX_BAG_ROWS as usize] =
         [vec![], vec![], vec![], vec![], vec![]];
 
     let mut filename = String::new();
@@ -891,8 +891,8 @@ pub fn crash_load(
 
 fn crash_save(
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    oid: Option<DepotId>,
+    objs: &mut ObjDepot,
+    oid: Option<ObjId>,
     fp: &mut File,
     location: i32,
 ) -> bool {
@@ -917,7 +917,7 @@ fn crash_save(
     true
 }
 
-fn crash_restore_weight(objs: &mut Depot<ObjData>, oid: DepotId) {
+fn crash_restore_weight(objs: &mut ObjDepot, oid: ObjId) {
     for o in objs.get(oid).contains.clone() {
         crash_restore_weight(objs, o);
     }
@@ -931,12 +931,7 @@ fn crash_restore_weight(objs: &mut Depot<ObjData>, oid: DepotId) {
  * Get !RENT items from equipment to inventory and
  * extract !RENT out of worn containers.
  */
-fn crash_extract_norent_eq(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-) {
+fn crash_extract_norent_eq(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, chid: CharId) {
     for j in 0..NUM_WEARS {
         let ch = chars.get(chid);
         if let Some(eqid) = ch.get_eq(j) {
@@ -952,12 +947,7 @@ fn crash_extract_norent_eq(
     }
 }
 
-fn crash_extract_objs(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-) {
+fn crash_extract_objs(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, oid: ObjId) {
     for o in objs.get(oid).contains.clone() {
         crash_extract_objs(chars, db, objs, o);
     }
@@ -975,12 +965,7 @@ fn crash_is_unrentable(obj: &ObjData) -> bool {
     false
 }
 
-fn crash_extract_norents(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-) {
+fn crash_extract_norents(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, oid: ObjId) {
     for o in objs.get(oid).contains.clone() {
         crash_extract_norents(chars, db, objs, o);
     }
@@ -991,10 +976,10 @@ fn crash_extract_norents(
 }
 
 fn crash_extract_expensive(
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    oids: Vec<DepotId>,
+    objs: &mut ObjDepot,
+    oids: Vec<ObjId>,
 ) {
     if oids.is_empty() {
         return;
@@ -1010,7 +995,7 @@ fn crash_extract_expensive(
     db.extract_obj(chars, objs, max);
 }
 
-fn crash_calculate_rent(objs: &Depot<ObjData>, oid: Option<DepotId>, cost: &mut i32) {
+fn crash_calculate_rent(objs: &ObjDepot, oid: Option<ObjId>, cost: &mut i32) {
     if let Some(oid) = oid {
         *cost += max(0, objs.get(oid).get_obj_rent());
         for o in objs.get(oid).contains.iter() {
@@ -1019,12 +1004,7 @@ fn crash_calculate_rent(objs: &Depot<ObjData>, oid: Option<DepotId>, cost: &mut 
     }
 }
 
-pub fn crash_crashsave(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-) {
+pub fn crash_crashsave(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, chid: CharId) {
     let ch = chars.get(chid);
     if ch.is_npc() {
         return;
@@ -1085,12 +1065,7 @@ pub fn crash_crashsave(
     ch.remove_plr_flag(PLR_CRASH);
 }
 
-pub fn crash_idlesave(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-) {
+pub fn crash_idlesave(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, chid: CharId) {
     let ch = chars.get(chid);
     let mut rent = RentInfo::new();
 
@@ -1205,10 +1180,10 @@ pub fn crash_idlesave(
 }
 
 pub fn crash_rentsave(
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     cost: i32,
 ) {
     let ch = chars.get(chid);
@@ -1278,10 +1253,10 @@ pub fn crash_rentsave(
 }
 
 fn crash_cryosave(
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     cost: i32,
 ) {
     let ch = chars.get(chid);
@@ -1351,10 +1326,10 @@ fn crash_cryosave(
 
 fn crash_rent_deadline(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
-    recep_id: DepotId,
+    chid: CharId,
+    recep_id: CharId,
     cost: i32,
 ) {
     let recep = chars.get(recep_id);
@@ -1385,12 +1360,12 @@ on hand and in the bank.'\r\n",
 
 fn crash_report_unrentables(
     game: &mut Game,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &DB,
-    objs_: &Depot<ObjData>,
-    chid: DepotId,
-    recep_id: DepotId,
-    oid: DepotId,
+    objs_: &ObjDepot,
+    chid: CharId,
+    recep_id: CharId,
+    oid: ObjId,
 ) -> i32 {
     let ch = chars.get(chid);
     let recep = chars.get(recep_id);
@@ -1424,12 +1399,12 @@ fn crash_report_unrentables(
 #[allow(clippy::too_many_arguments)]
 fn crash_report_rent(
     game: &mut Game,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &DB,
-    objs_: &Depot<ObjData>,
-    chid: DepotId,
-    recep_id: DepotId,
-    oid: DepotId,
+    objs_: &ObjDepot,
+    chid: CharId,
+    recep_id: CharId,
+    oid: ObjId,
     cost: &mut i32,
     nitems: &mut i64,
     display: bool,
@@ -1469,11 +1444,11 @@ fn crash_report_rent(
 #[allow(clippy::too_many_arguments)]
 fn crash_offer_rent(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
-    recep_id: DepotId,
+    objs: &ObjDepot,
+    chid: CharId,
+    recep_id: CharId,
     display: bool,
     factor: i32,
 ) -> i32 {
@@ -1625,12 +1600,12 @@ fn crash_offer_rent(
 #[allow(clippy::too_many_arguments)]
 fn gen_receptionist(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    recep_id: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    recep_id: CharId,
     cmd: usize,
     _arg: &str,
     mode: i32,
@@ -1850,11 +1825,11 @@ You begin to lose consciousness...",
 #[allow(clippy::too_many_arguments)]
 pub fn receptionist(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1879,11 +1854,11 @@ pub fn receptionist(
 #[allow(clippy::too_many_arguments)]
 pub fn cryogenicist(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1905,12 +1880,7 @@ pub fn cryogenicist(
     }
 }
 
-pub fn crash_save_all(
-    game: &mut Game,
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-) {
+pub fn crash_save_all(game: &mut Game, chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot) {
     for &d in &game.descriptor_list {
         let d = game.desc(d);
         let Some(chid) = d.character else {

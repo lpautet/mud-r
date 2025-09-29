@@ -1,9 +1,96 @@
-//use std::marker::PhantomData;
+use std::marker::PhantomData;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct DepotId {
     index: u32,
     seq: u32,
+}
+
+// Type-safe wrapper types for different entity kinds
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct CharId(pub DepotId);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct ObjId(pub DepotId);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct TextId(pub DepotId);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct DescriptorId(pub DepotId);
+
+// Conversion traits for type-safe IDs
+impl From<DepotId> for CharId {
+    fn from(id: DepotId) -> Self {
+        CharId(id)
+    }
+}
+
+impl From<CharId> for DepotId {
+    fn from(id: CharId) -> Self {
+        id.0
+    }
+}
+
+impl From<DepotId> for ObjId {
+    fn from(id: DepotId) -> Self {
+        ObjId(id)
+    }
+}
+
+impl From<ObjId> for DepotId {
+    fn from(id: ObjId) -> Self {
+        id.0
+    }
+}
+
+impl From<DepotId> for DescriptorId {
+    fn from(id: DepotId) -> Self {
+        DescriptorId(id)
+    }
+}
+
+impl From<DescriptorId> for DepotId {
+    fn from(id: DescriptorId) -> Self {
+        id.0
+    }
+}
+
+impl From<DepotId> for TextId {
+    fn from(id: DepotId) -> Self {
+        TextId(id)
+    }
+}
+
+impl From<TextId> for DepotId {
+    fn from(id: TextId) -> Self {
+        id.0
+    }
+}
+
+// Display implementations for type-safe IDs
+impl std::fmt::Display for CharId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "char:{}", self.0)
+    }
+}
+
+impl std::fmt::Display for ObjId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "obj:{}", self.0)
+    }
+}
+
+impl std::fmt::Display for TextId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "text:{}", self.0)
+    }
+}
+
+impl std::fmt::Display for DescriptorId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "desc:{}", self.0)
+    }
 }
 
 impl std::fmt::Display for DepotId {
@@ -12,9 +99,14 @@ impl std::fmt::Display for DepotId {
     }
 }
 
-pub trait HasId {
-    fn id(&self) -> DepotId;
-    fn set_id(&mut self, id: DepotId);
+// Type aliases for backwards compatibility and convenience
+pub type CharDepot = Depot<crate::structs::CharData, CharId>;
+pub type ObjDepot = Depot<crate::structs::ObjData, ObjId>;
+pub type TextDepot = Depot<crate::TextData, TextId>;
+
+pub trait HasId<ID = DepotId> {
+    fn id(&self) -> ID;
+    fn set_id(&mut self, id: ID);
 }
 
 struct Slot<T> {
@@ -23,24 +115,28 @@ struct Slot<T> {
     value: T,
 }
 
-pub struct Depot<T>
+pub struct Depot<T, ID = DepotId>
 where
-    T: Default + HasId,
+    T: Default + HasId<ID>,
+    ID: Copy + From<DepotId> + Into<DepotId> + PartialEq,
 {
     slots: Vec<Slot<T>>,
     size: usize,
     seq: u32,
+    _phantom: PhantomData<ID>,
 }
 
-impl<T> Depot<T>
+impl<T, ID> Depot<T, ID>
 where
-    T: Default + HasId,
+    T: Default + HasId<ID>,
+    ID: Copy + From<DepotId> + Into<DepotId> + PartialEq,
 {
-    pub fn default() -> Depot<T> {
+    pub fn default() -> Depot<T, ID> {
         Depot {
             slots: vec![],
             size: 0,
             seq: 0,
+            _phantom: PhantomData,
         }
     }
 
@@ -57,12 +153,12 @@ where
         self.size
     }
 
-    pub fn push(&mut self, item: T) -> DepotId {
-        if item.id() != DepotId::default() {
+    pub fn push(&mut self, item: T) -> ID {
+        if item.id() != ID::from(DepotId::default()) {
+            let depot_id: DepotId = item.id().into();
             panic!(
                 "GURU MEDITATION inserting with existing ID ! id.index={} id.seq={}",
-                item.id().index,
-                item.id().seq
+                depot_id.index, depot_id.seq
             );
         }
         self.seq += 1;
@@ -87,73 +183,78 @@ where
             index: idx,
             seq: self.seq,
         };
-        self.get_mut(ret).set_id(ret);
-        ret
+        let typed_ret = ID::from(ret);
+        self.get_mut(typed_ret).set_id(typed_ret);
+        typed_ret
     }
 
-    pub fn take(&mut self, id: DepotId) -> T {
-        if id.index as usize >= self.slots.len() {
+    pub fn take(&mut self, id: ID) -> T {
+        let depot_id: DepotId = id.into();
+        if depot_id.index as usize >= self.slots.len() {
             panic!(
                 "GURU MEDITATION id.index > slots.len {} {}",
-                id.index,
+                depot_id.index,
                 self.slots.len()
             );
         }
-        if self.slots[id.index as usize].seq != id.seq {
+        if self.slots[depot_id.index as usize].seq != depot_id.seq {
             panic!(
                 "GURU MEDITATION invalid seq in take expected:{} got:{}-{}",
-                self.slots[id.index as usize].seq, id.index, id.seq
+                self.slots[depot_id.index as usize].seq, depot_id.index, depot_id.seq
             );
         }
-        self.slots[id.index as usize].free = true;
-        self.slots[id.index as usize].seq = 0; // so that old DepotId are now invalid
+        self.slots[depot_id.index as usize].free = true;
+        self.slots[depot_id.index as usize].seq = 0; // so that old DepotId are now invalid
         self.size -= 1;
-        std::mem::take(&mut self.slots[id.index as usize].value)
+        std::mem::take(&mut self.slots[depot_id.index as usize].value)
     }
 
-    pub fn get(&self, id: DepotId) -> &T {
-        if id.index as usize >= self.slots.len() {
+    pub fn get(&self, id: ID) -> &T {
+        let depot_id: DepotId = id.into();
+        if depot_id.index as usize >= self.slots.len() {
             panic!(
                 "GURU MEDITATION id.index > slots.len {} {}",
-                id.index,
+                depot_id.index,
                 self.slots.len()
             );
         }
-        if self.slots[id.index as usize].seq != id.seq {
+        if self.slots[depot_id.index as usize].seq != depot_id.seq {
             panic!(
                 "GURU MEDITATION invalid seq in get expected:{} got:{}-{}",
-                self.slots[id.index as usize].seq, id.index, id.seq
+                self.slots[depot_id.index as usize].seq, depot_id.index, depot_id.seq
             );
         }
-        &self.slots[id.index as usize].value
+        &self.slots[depot_id.index as usize].value
     }
 
-    pub fn get_mut(&mut self, id: DepotId) -> &mut T {
-        if id.index as usize >= self.slots.len() {
+    pub fn get_mut(&mut self, id: ID) -> &mut T {
+        let depot_id: DepotId = id.into();
+        if depot_id.index as usize >= self.slots.len() {
             panic!(
                 "GURU MEDITATION id.index > slots.len {} {}",
-                id.index,
+                depot_id.index,
                 self.slots.len()
             );
         }
-        if self.slots[id.index as usize].seq != id.seq {
+        if self.slots[depot_id.index as usize].seq != depot_id.seq {
             panic!(
                 "GURU MEDITATION invalid seq in get_mut expected:{} got:{}-{}",
-                self.slots[id.index as usize].seq, id.index, id.seq
+                self.slots[depot_id.index as usize].seq, depot_id.index, depot_id.seq
             );
         }
-        &mut self.slots[id.index as usize].value
+        &mut self.slots[depot_id.index as usize].value
     }
 
-    pub fn ids(&self) -> Vec<DepotId> {
+    pub fn ids(&self) -> Vec<ID> {
         let mut index = 0;
         let mut ret = vec![];
         while index < self.slots.len() {
             if !self.slots[index].free {
-                ret.push(DepotId {
+                let depot_id = DepotId {
                     index: index as u32,
                     seq: self.slots[index].seq,
-                });
+                };
+                ret.push(ID::from(depot_id));
             }
             index += 1;
         }
@@ -168,10 +269,11 @@ where
     //     }
     // }
 
-    pub fn iter(&self) -> DepotRefIterator<'_, T> {
+    pub fn iter(&self) -> DepotRefIterator<'_, T, ID> {
         DepotRefIterator {
             depot: self,
             index: 0,
+            _phantom: PhantomData,
         }
     }
 
@@ -184,17 +286,20 @@ where
     // }
 }
 
-pub struct DepotRefIterator<'a, T>
+pub struct DepotRefIterator<'a, T, ID>
 where
-    T: Default + HasId,
+    T: Default + HasId<ID>,
+    ID: Copy + From<DepotId> + Into<DepotId> + PartialEq,
 {
-    depot: &'a Depot<T>,
+    depot: &'a Depot<T, ID>,
     index: usize,
+    _phantom: PhantomData<ID>,
 }
 
-impl<'a, T> Iterator for DepotRefIterator<'a, T>
+impl<'a, T, ID> Iterator for DepotRefIterator<'a, T, ID>
 where
-    T: Default + HasId,
+    T: Default + HasId<ID>,
+    ID: Copy + From<DepotId> + Into<DepotId> + PartialEq,
 {
     type Item = &'a T;
 
@@ -273,7 +378,7 @@ mod depot_tests {
         value: i32,
     }
 
-    impl HasId for TestItem {
+    impl HasId<DepotId> for TestItem {
         fn id(&self) -> DepotId {
             self.id
         }

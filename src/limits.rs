@@ -16,7 +16,7 @@ use crate::config::{
     FREE_RENT, IDLE_MAX_LEVEL, IDLE_RENT_TIME, IDLE_VOID, IMMORT_LEVEL_OK, MAX_EXP_GAIN,
     MAX_EXP_LOSS,
 };
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::fight::update_pos;
 use crate::handler::{obj_from_obj, obj_to_obj, update_char_objects};
 use crate::objsave::{crash_crashsave, crash_idlesave, crash_rentsave};
@@ -27,9 +27,7 @@ use crate::structs::{
 };
 use crate::structs::{DRUNK, PLR_WRITING};
 use crate::util::{age, DisplayMode};
-use crate::{
-    act, save_char, send_to_char, DescriptorData, Game, ObjData, TextData, DB, TO_CHAR, TO_ROOM,
-};
+use crate::{act, save_char, send_to_char, DescriptorDepot, Game, DB, TO_CHAR, TO_ROOM};
 
 /* When age < 15 return the value p0 */
 /* When age in 15..29 calculate the line between p1 & p2 */
@@ -228,13 +226,13 @@ pub fn set_title(ch: &mut CharData, title: Option<&str>) {
 // }
 
 pub fn gain_exp(
-    chid: DepotId,
+    chid: CharId,
     gain: i32,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get(chid);
     let mut is_altered = false;
@@ -311,12 +309,12 @@ pub fn gain_exp(
 
 pub fn gain_exp_regardless(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    chid: DepotId,
+    chid: CharId,
     gain: i32,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get_mut(chid);
     let mut is_altered = false;
@@ -375,7 +373,7 @@ pub fn gain_exp_regardless(
 }
 
 pub(crate) fn gain_condition(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     ch: &mut CharData,
     condition: usize,
     value: i32,
@@ -415,11 +413,11 @@ pub(crate) fn gain_condition(
 impl Game {
     fn check_idling(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
     ) {
         let ch = chars.get_mut(chid);
         ch.char_specials.timer += 1;
@@ -495,10 +493,10 @@ impl Game {
     /* Update PCs, NPCs, and objects */
     pub fn point_update(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         /* characters */
         for &i_id in &db.character_list.clone() {

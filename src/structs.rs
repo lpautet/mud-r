@@ -11,23 +11,23 @@
 
 use std::rc::Rc;
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, DescriptorId, HasId, ObjDepot, ObjId, TextDepot, TextId};
 use crate::interpreter::AliasData;
-use crate::{Game, TextData, DB};
+use crate::{Game, DB};
 
 pub enum MeRef {
     None,
-    Char(DepotId),
-    Obj(DepotId),
+    Char(CharId),
+    Obj(ObjId),
 }
 
 pub type Special = fn(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -470,7 +470,7 @@ pub const MAX_NOTE_LENGTH: usize = 1000; /* arbitrary */
 
 /* ================== Structure for player/non-player ===================== */
 pub struct CharData {
-    pub id: DepotId,
+    pub id: CharId,
     pub(crate) pfilepos: i32,
     /* playerfile pos		  */
     pub nr: MobRnum,
@@ -497,24 +497,24 @@ pub struct CharData {
     /* NPC specials		  */
     pub affected: Vec<AffectedType>,
     /* affected by what spells       */
-    pub equipment: [Option<DepotId>; NUM_WEARS],
+    pub equipment: [Option<ObjId>; NUM_WEARS],
     /* Equipment array               */
-    pub carrying: Vec<DepotId>,
+    pub carrying: Vec<ObjId>,
     /* Head of list                  */
-    pub desc: Option<DepotId>,
+    pub desc: Option<DescriptorId>,
     /* NULL for mobiles              */
     pub followers: Vec<FollowType>,
     /* List of chars followers       */
-    pub master: Option<DepotId>,
+    pub master: Option<CharId>,
     /* Who is char following?        */
 }
 
-impl HasId for CharData {
-    fn id(&self) -> DepotId {
+impl HasId<CharId> for CharData {
+    fn id(&self) -> CharId {
         self.id
     }
 
-    fn set_id(&mut self, id: DepotId) {
+    fn set_id(&mut self, id: CharId) {
         self.id = id;
     }
 }
@@ -551,14 +551,14 @@ pub struct CharPointData {
 /* Structure used for chars following other chars */
 #[derive(Clone)]
 pub struct FollowType {
-    pub follower: DepotId,
+    pub follower: CharId,
 }
 
 /* Special playing constants shared by PCs and NPCs which aren't in pfile */
 pub struct CharSpecialData {
-    pub fighting_chid: Option<DepotId>,
+    pub fighting_chid: Option<CharId>,
     /* Opponent				*/
-    pub hunting_chid: Option<DepotId>,
+    pub hunting_chid: Option<CharId>,
     /* Char hunted by this char		*/
     pub position: Position,
     /* Standing, fighting, sleeping, etc.	*/
@@ -706,7 +706,7 @@ pub struct CharPlayerData {
     /* for NPC 'actions'                    */
     pub long_descr: Rc<str>,
     /* for 'look'			       */
-    pub description: DepotId,
+    pub description: TextId,
     /* Extra descriptions                   */
     pub title: Option<Rc<str>>,
     /* PC / NPC's title                     */
@@ -802,7 +802,7 @@ pub struct ObjAffectedType {
 
 /* ================== Memory Structure for Objects ================== */
 pub struct ObjData {
-    pub id: DepotId,
+    pub id: ObjId,
     pub item_number: ObjVnum,
     /* Where in data-base			*/
     pub in_room: RoomRnum,
@@ -817,29 +817,29 @@ pub struct ObjData {
     /* When in room                     */
     pub(crate) short_description: Rc<str>,
     /* when worn/carry/in cont.         */
-    pub action_description: DepotId,
+    pub action_description: TextId,
     /* What to write when used          */
     pub ex_descriptions: Vec<ExtraDescrData>,
     /* extra descriptions     */
-    pub carried_by: Option<DepotId>,
+    pub carried_by: Option<CharId>,
     /* Carried by :NULL in room/conta   */
-    pub worn_by: Option<DepotId>,
+    pub worn_by: Option<CharId>,
     /* Worn by?			      */
     pub worn_on: i16,
     /* Worn where?		      */
-    pub in_obj: Option<DepotId>,
+    pub in_obj: Option<ObjId>,
     /* In what object NULL when none    */
-    pub contains: Vec<DepotId>,
+    pub contains: Vec<ObjId>,
     /* Contains objects                 */
 }
 /* ======================================================================= */
 
-impl HasId for ObjData {
-    fn id(&self) -> DepotId {
+impl HasId<ObjId> for ObjData {
+    fn id(&self) -> ObjId {
         self.id
     }
 
-    fn set_id(&mut self, id: DepotId) {
+    fn set_id(&mut self, id: ObjId) {
         self.id = id;
     }
 }
@@ -1112,9 +1112,9 @@ pub struct RoomData {
     pub light: u8,
     /* Number of lightsources in room     */
     pub func: Option<Special>,
-    pub contents: Vec<DepotId>,
+    pub contents: Vec<ObjId>,
     /* List of items in room              */
-    pub peoples: Vec<DepotId>,
+    pub peoples: Vec<CharId>,
     /* List of NPC / PC in room           */
 }
 /* ====================================================================== */

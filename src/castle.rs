@@ -17,9 +17,9 @@ in the 8000 series... */
 
 use std::iter::Iterator;
 
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::handler::obj_to_char;
-use crate::{act, send_to_char, DescriptorData, TextData, VictimRef};
+use crate::{act, send_to_char, DescriptorDepot, VictimRef};
 use log::error;
 
 use crate::act_movement::{do_follow, do_gen_door, perform_move};
@@ -180,12 +180,7 @@ fn member_of_royal_guard(db: &DB, ch: &CharData) -> bool {
  * Returns a pointer to an npc by the given name.
  * Used by Tim and Tom
  */
-fn find_npc_by_name(
-    chars: &Depot<CharData>,
-    db: &DB,
-    ch_at: &CharData,
-    name: &str,
-) -> Option<DepotId> {
+fn find_npc_by_name(chars: &CharDepot, db: &DB, ch_at: &CharData, name: &str) -> Option<CharId> {
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
@@ -199,7 +194,7 @@ fn find_npc_by_name(
  * Returns the pointer to a guard on duty.
  * Used by Peter the Captain of the Royal Guard
  */
-fn find_guard(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<DepotId> {
+fn find_guard(chars: &CharDepot, db: &DB, ch_at: &CharData) -> Option<CharId> {
     db.world[ch_at.in_room() as usize]
         .peoples
         .iter()
@@ -216,7 +211,7 @@ fn find_guard(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
  * fighting someone in the castle staff...
  * Used by BANZAII-ing characters and King Welmar...
  */
-fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<DepotId> {
+fn get_victim(chars: &CharDepot, db: &DB, ch_at: &CharData) -> Option<CharId> {
     let mut num_bad_guys = 0;
 
     for chid in db.world[ch_at.in_room() as usize].peoples.iter() {
@@ -264,11 +259,11 @@ fn get_victim(chars: &Depot<CharData>, db: &DB, ch_at: &CharData) -> Option<Depo
  */
 fn banzaii(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) -> bool {
     let ch = chars.get(chid);
     let opponent_id;
@@ -304,11 +299,11 @@ fn banzaii(
  */
 fn do_npc_rescue(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid_hero_id: DepotId,
-    ch_victim_id: DepotId,
+    objs: &mut ObjDepot,
+    chid_hero_id: CharId,
+    ch_victim_id: CharId,
 ) -> bool {
     let chid_bad_guy;
     if let Some(id) = db.world[chars.get(chid_hero_id).in_room() as usize]
@@ -377,10 +372,10 @@ fn do_npc_rescue(
  */
 #[allow(clippy::too_many_arguments)]
 fn block_way(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
-    chid: DepotId,
+    chid: CharId,
     cmd: usize,
     _arg: &str,
     in_room: RoomVnum,
@@ -446,11 +441,11 @@ fn is_trash(i: &ObjData) -> bool {
  */
 fn fry_victim(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     if ch.points.mana < 10 {
@@ -625,11 +620,11 @@ const MONOLOG: [&str; 4] = [
 #[allow(clippy::too_many_arguments)]
 pub fn king_welmar(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -827,11 +822,11 @@ pub fn king_welmar(
 #[allow(clippy::too_many_arguments)]
 pub fn training_master(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1196,11 +1191,11 @@ pub fn training_master(
 #[allow(clippy::too_many_arguments)]
 pub fn tom(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1211,11 +1206,11 @@ pub fn tom(
 #[allow(clippy::too_many_arguments)]
 pub fn tim(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1229,11 +1224,11 @@ pub fn tim(
 #[allow(clippy::too_many_arguments)]
 fn castle_twin_proc(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     cmd: usize,
     arg: &str,
     ctlnum: MobVnum,
@@ -1292,11 +1287,11 @@ fn castle_twin_proc(
 #[allow(clippy::too_many_arguments)]
 fn james(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1309,10 +1304,10 @@ fn james(
  */
 fn castle_cleaner(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     cmd: usize,
     gripe: bool,
 ) -> bool {
@@ -1368,11 +1363,11 @@ fn castle_cleaner(
 #[allow(clippy::too_many_arguments)]
 fn cleaning(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1388,11 +1383,11 @@ fn cleaning(
 #[allow(clippy::too_many_arguments)]
 fn castle_guard(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1414,11 +1409,11 @@ fn castle_guard(
 #[allow(clippy::too_many_arguments)]
 fn dick_n_david(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1452,11 +1447,11 @@ fn dick_n_david(
 #[allow(clippy::too_many_arguments)]
 fn peter(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,
@@ -1734,11 +1729,11 @@ fn peter(
 #[allow(clippy::too_many_arguments)]
 fn jerry(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     _me: MeRef,
     cmd: usize,
     _argument: &str,

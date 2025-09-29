@@ -10,7 +10,7 @@
 ************************************************************************ */
 
 use crate::config::{HOLLER_MOVE_COST, LEVEL_CAN_SHOUT, NOPERSON, OK};
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::handler::{get_char_vis, get_obj_in_list_vis, get_player_vis, FindFlags};
 use crate::interpreter::{
     delete_doubledollar, half_chop, two_arguments, CMD_INFO, SCMD_ASK, SCMD_HOLLER, SCMD_QSAY,
@@ -24,19 +24,18 @@ use crate::structs::{
 };
 use crate::util::can_see_obj;
 use crate::{
-    _clrlevel, an, clr, Game, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP,
-    TO_VICT,
+    _clrlevel, an, clr, DescriptorDepot, Game, VictimRef, CCNRM, CCRED, COLOR_LEV, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT
 };
-use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef, DB};
+use crate::{act, send_to_char, CharData, DB};
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_say(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -80,10 +79,10 @@ pub fn do_say(
 pub fn do_gsay(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -106,7 +105,7 @@ pub fn do_gsay(
             "Yes, but WHAT do you want to group-say?\r\n",
         );
     } else {
-        let k_id: DepotId = ch.master.unwrap_or(chid);
+        let k_id: CharId = ch.master.unwrap_or(chid);
 
         let buf = format!("$n tells the group, '{}'", argument);
         let k = chars.get(k_id);
@@ -153,11 +152,11 @@ pub fn do_gsay(
 }
 
 fn perform_tell(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
-    vict_id: DepotId,
+    chars: &mut CharDepot,
+    chid: CharId,
+    vict_id: CharId,
     arg: &str,
 ) {
     let ch = chars.get(chid);
@@ -201,8 +200,8 @@ fn perform_tell(
 }
 
 fn is_tell_ok(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     ch: &CharData,
     vict: &CharData,
@@ -271,10 +270,10 @@ fn is_tell_ok(
 pub fn do_tell(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -332,10 +331,10 @@ pub fn do_tell(
 pub fn do_reply(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -395,10 +394,10 @@ pub fn do_reply(
 pub fn do_spec_comm(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -502,10 +501,10 @@ pub fn do_spec_comm(
 pub fn do_write(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -697,10 +696,10 @@ pub fn do_write(
 pub fn do_page(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -802,10 +801,10 @@ pub fn do_page(
 pub fn do_gen_comm(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -988,10 +987,10 @@ pub fn do_gen_comm(
 pub fn do_qcomm(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     cmd: usize,
     subcmd: i32,

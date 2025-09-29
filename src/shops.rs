@@ -16,8 +16,8 @@ use std::process;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::depot::{Depot, DepotId, HasId};
-use crate::{act, send_to_char, TextData, VictimRef};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
+use crate::{act, send_to_char, VictimRef};
 use log::error;
 use regex::Regex;
 
@@ -228,12 +228,12 @@ const SHOP_BITS: [&str; 3] = ["WILL_FIGHT", "USES_BANK", "\n"];
 #[allow(clippy::too_many_arguments)]
 fn is_ok_char(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    keeper_id: DepotId,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    keeper_id: CharId,
+    chid: CharId,
     shop_nr: usize,
 ) -> bool {
     let ch = chars.get(chid);
@@ -304,11 +304,11 @@ fn is_ok_char(
 #[allow(clippy::too_many_arguments)]
 fn is_open(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    keeper_id: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    keeper_id: CharId,
     shop_nr: usize,
     msg: bool,
 ) -> bool {
@@ -345,12 +345,12 @@ fn is_open(
 #[allow(clippy::too_many_arguments)]
 fn is_ok(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    keeper_id: DepotId,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    keeper_id: CharId,
+    chid: CharId,
     shop_nr: usize,
 ) -> bool {
     if is_open(game, chars, db, texts, objs, keeper_id, shop_nr, true) {
@@ -541,7 +541,7 @@ fn same_obj(obj1: &ObjData, obj2: &ObjData) -> bool {
     true
 }
 
-fn shop_producing(db: &DB, objs: &Depot<ObjData>, item_id: DepotId, shop_nr: usize) -> bool {
+fn shop_producing(db: &DB, objs: &ObjDepot, item_id: ObjId, shop_nr: usize) -> bool {
     if objs.get(item_id).get_obj_rnum() == NOTHING {
         return false;
     }
@@ -594,13 +594,13 @@ fn times_message(obj: Option<&ObjData>, name: &str, num: i32) -> String {
 
 fn get_slide_obj_vis(
     game: &Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
     name: &str,
-    list: &Vec<DepotId>,
-) -> Option<DepotId> {
+    list: &Vec<ObjId>,
+) -> Option<ObjId> {
     let ch = chars.get(chid);
     let mut tmpname = name.to_string();
     let number;
@@ -633,13 +633,13 @@ fn get_slide_obj_vis(
 
 fn get_hash_obj_vis(
     game: &Game,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &DB,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
+    objs: &ObjDepot,
+    chid: CharId,
     name: &str,
-    list: &[DepotId],
-) -> Option<DepotId> {
+    list: &[ObjId],
+) -> Option<ObjId> {
     let ch = chars.get(chid);
     let mut qindex;
     if let Ok(num) = name.parse::<i32>() {
@@ -649,7 +649,7 @@ fn get_hash_obj_vis(
     } else {
         return None;
     }
-    let mut last_obj: Option<DepotId> = None;
+    let mut last_obj = None;
     for l in list.iter() {
         if can_see_obj(&game.descriptors, chars, db, ch, objs.get(*l))
             && objs.get(*l).get_obj_cost() > 0
@@ -671,19 +671,19 @@ fn get_hash_obj_vis(
 #[allow(clippy::too_many_arguments)]
 fn get_purchase_obj(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     arg: &str,
-    keeper_id: DepotId,
+    keeper_id: CharId,
     shop_nr: usize,
     msg: bool,
-) -> Option<DepotId> {
+) -> Option<ObjId> {
     let mut name = String::new();
     one_argument(arg, &mut name);
-    let mut oid: Option<DepotId>;
+    let mut oid: Option<ObjId>;
     loop {
         let keeper = chars.get(keeper_id);
         if name.starts_with('#') || is_number(&name) {
@@ -744,13 +744,13 @@ fn get_purchase_obj(
  * having a 3.
  */
 fn buy_price(
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     db: &DB,
-    objs: &Depot<ObjData>,
-    oid: DepotId,
+    objs: &ObjDepot,
+    oid: ObjId,
     shop_nr: usize,
-    keeper_id: DepotId,
-    buyer_id: DepotId,
+    keeper_id: CharId,
+    buyer_id: CharId,
 ) -> i32 {
     let keeper = chars.get(keeper_id);
     let buyer = chars.get(buyer_id);
@@ -780,13 +780,13 @@ fn sell_price(obj: &ObjData, shop: &ShopData, keeper: &CharData, seller: &CharDa
 #[allow(clippy::too_many_arguments)]
 fn shopping_buy(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     arg: &str,
-    chid: DepotId,
-    keeper_id: DepotId,
+    chid: CharId,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
     if !is_ok(game, chars, db, texts, objs, keeper_id, chid, shop_nr) {
@@ -1050,16 +1050,16 @@ fn shopping_buy(
 #[allow(clippy::too_many_arguments)]
 fn get_selling_obj(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     name: &str,
-    keeper_id: DepotId,
+    keeper_id: CharId,
     shop_nr: usize,
     msg: i32,
-) -> Option<DepotId> {
+) -> Option<ObjId> {
     let ch = chars.get(chid);
     let Some(obj) = get_obj_in_list_vis(
         &game.descriptors,
@@ -1133,11 +1133,11 @@ fn get_selling_obj(
 
 fn slide_obj(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-    keeper_id: DepotId,
+    objs: &mut ObjDepot,
+    oid: ObjId,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
     let keeper = chars.get(keeper_id);
@@ -1181,13 +1181,13 @@ fn slide_obj(
 
 fn sort_keeper_objs(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    keeper_id: DepotId,
+    objs: &mut ObjDepot,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
-    let mut list: Vec<DepotId> = vec![];
+    let mut list: Vec<ObjId> = vec![];
     while {
         let keeper = chars.get(keeper_id);
         db.shop_index[shop_nr].lastsort < keeper.is_carrying_n() as i32
@@ -1216,13 +1216,13 @@ fn sort_keeper_objs(
 #[allow(clippy::too_many_arguments)]
 fn shopping_sell(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     arg: &str,
-    chid: DepotId,
-    keeper_id: DepotId,
+    chid: CharId,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
     let mut sold = 0;
@@ -1414,13 +1414,13 @@ fn shopping_sell(
 #[allow(clippy::too_many_arguments)]
 fn shopping_value(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     arg: &str,
-    chid: DepotId,
-    keeper_id: DepotId,
+    chid: CharId,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
     if !is_ok(game, chars, db, texts, objs, keeper_id, chid, shop_nr) {
@@ -1473,14 +1473,14 @@ fn shopping_value(
 #[allow(clippy::too_many_arguments)]
 fn list_object(
     db: &DB,
-    chars: &Depot<CharData>,
-    oid: DepotId,
-    objs: &Depot<ObjData>,
+    chars: &CharDepot,
+    oid: ObjId,
+    objs: &ObjDepot,
     cnt: i32,
     aindex: i32,
     shop_nr: usize,
-    keeper_id: DepotId,
-    chid: DepotId,
+    keeper_id: CharId,
+    chid: CharId,
 ) -> String {
     let mut result = String::new();
     let mut quantity = String::new();
@@ -1542,13 +1542,13 @@ fn list_object(
 #[allow(clippy::too_many_arguments)]
 pub fn shopping_list(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     arg: &str,
-    chid: DepotId,
-    keeper_id: DepotId,
+    chid: CharId,
+    keeper_id: CharId,
     shop_nr: usize,
 ) {
     let mut cnt = 0;
@@ -1569,7 +1569,7 @@ pub fn shopping_list(
     one_argument(arg, &mut name);
 
     let mut buf = String::from(" ##   Available   Item                                               Cost\r\n-------------------------------------------------------------------------\r\n");
-    let mut last_oid: Option<DepotId> = None;
+    let mut last_oid: Option<ObjId> = None;
     let keeper = chars.get(keeper_id);
     if !keeper.carrying.is_empty() {
         for &oid in &keeper.carrying {
@@ -1645,11 +1645,11 @@ fn ok_shop_room(shop: &ShopData, room: RoomVnum) -> bool {
 #[allow(clippy::too_many_arguments)]
 pub fn shop_keeper(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     me: MeRef,
     cmd: usize,
     argument: &str,
@@ -1750,12 +1750,12 @@ pub fn shop_keeper(
 
 pub fn ok_damage_shopkeeper(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    victim_id: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    victim_id: CharId,
 ) -> bool {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
@@ -2194,7 +2194,7 @@ fn customer_string(shop: &ShopData, detailed: bool) -> String {
 }
 
 // /* END_OF inefficient */
-fn list_all_shops(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chid: DepotId) {
+fn list_all_shops(game: &mut Game, chars: &mut CharDepot, db: &mut DB, chid: CharId) {
     let ch = chars.get(chid);
     const LIST_ALL_SHOPS_HEADER: &str =
         " ##   Virtual   Where    Keeper    Buy   Sell   Customers\r\n\
@@ -2235,13 +2235,7 @@ fn list_all_shops(game: &mut Game, chars: &mut Depot<CharData>, db: &mut DB, chi
     page_string(&mut game.descriptors, chars, d_id, &buf, true);
 }
 
-fn list_detailed_shop(
-    game: &mut Game,
-    chars: &Depot<CharData>,
-    db: &DB,
-    chid: DepotId,
-    shop_nr: i32,
-) {
+fn list_detailed_shop(game: &mut Game, chars: &CharDepot, db: &DB, chid: CharId, shop_nr: i32) {
     let ch = chars.get(chid);
     send_to_char(
         &mut game.descriptors,
@@ -2450,13 +2444,7 @@ fn list_detailed_shop(
     );
 }
 
-pub fn show_shops(
-    game: &mut Game,
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    chid: DepotId,
-    arg: &str,
-) {
+pub fn show_shops(game: &mut Game, chars: &mut CharDepot, db: &mut DB, chid: CharId, arg: &str) {
     let ch = chars.get(chid);
 
     if arg.is_empty() {

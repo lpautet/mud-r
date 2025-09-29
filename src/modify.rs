@@ -45,7 +45,7 @@ use log::error;
 
 use crate::boards::{board_save_board, BOARD_MAGIC};
 use crate::config::{MENU, NOPERSON};
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharId, DescriptorId, HasId, ObjDepot, TextDepot, TextId};
 use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::{any_one_arg, delete_doubledollar, one_argument};
 use crate::spell_parser::{find_skill_num, UNUSED_SPELLNAME};
@@ -54,14 +54,15 @@ use crate::structs::ConState::{ConExdesc, ConMenu, ConPlaying};
 use crate::structs::{LVL_IMMORT, PLR_MAILING, PLR_WRITING};
 use crate::util::DisplayMode;
 use crate::{
-    send_to_char, CharData, DescriptorData, Game, ObjData, TextData, DB, PAGE_LENGTH, PAGE_WIDTH,
+    send_to_char, CharDepot, DescriptorData, DescriptorDepot, Game, DB, PAGE_LENGTH,
+    PAGE_WIDTH,
 };
 
 impl DescriptorData {
     pub fn string_write(
         &mut self,
-        chars: &mut Depot<CharData>,
-        writeto: DepotId,
+        chars: &mut CharDepot,
+        writeto: TextId,
         len: usize,
         mailto: i64,
     ) {
@@ -80,10 +81,10 @@ impl DescriptorData {
 /* Add user input to the 'current' string (as defined by d->str) */
 pub fn string_add(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    d_id: DepotId,
+    texts: &mut TextDepot,
+    d_id: DescriptorId,
     str_: &str,
 ) {
     /* determine if this is the terminal string, and truncate if so */
@@ -186,10 +187,10 @@ pub fn string_add(
 pub fn do_skillset(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -447,9 +448,9 @@ pub fn paginate_string<'a>(msg: &'a str, d: &'a mut DescriptorData) -> &'a str {
 
 /* The call that gets the paging ball rolling... */
 pub fn page_string(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
-    d_id: DepotId,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
+    d_id: DescriptorId,
     msg: &str,
     keep_internal: bool,
 ) {
@@ -475,9 +476,9 @@ pub fn page_string(
 
 /* The call that displays the next page. */
 pub fn show_string(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
-    d_id: DepotId,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
+    d_id: DescriptorId,
     input: &str,
 ) {
     let mut buf = String::new();

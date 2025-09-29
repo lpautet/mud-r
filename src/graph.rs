@@ -13,13 +13,13 @@ use log::error;
 
 use crate::constants::DIRS;
 use crate::db::DB;
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::handler::{get_char_vis, FindFlags};
 use crate::interpreter::one_argument;
 use crate::spells::SKILL_TRACK;
 use crate::structs::{AffectFlags, ExitFlags, RoomFlags, RoomRnum, NOWHERE, NUM_OF_DIRS};
 use crate::util::{hmhr, rand_number, BFS_ALREADY_THERE, BFS_ERROR, BFS_NO_PATH};
-use crate::{send_to_char, CharData, Game, ObjData, TextData};
+use crate::{send_to_char, Game};
 
 struct BfsQueueStruct {
     room: RoomRnum,
@@ -156,10 +156,10 @@ fn find_first_step(game: &Game, db: &mut DB, src: RoomRnum, target: RoomRnum) ->
 pub fn do_track(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,

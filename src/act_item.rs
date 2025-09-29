@@ -12,9 +12,9 @@
 use std::cmp::min;
 use std::rc::Rc;
 
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot};
 use crate::limits::gain_condition;
-use crate::{act, send_to_char, CharData, DescriptorData, ObjData, TextData, VictimRef};
+use crate::{act, send_to_char, CharData, DescriptorDepot, ObjData, VictimRef};
 use log::error;
 
 use crate::config::{DONATION_ROOM_1, NOPERSON, OK};
@@ -40,13 +40,13 @@ use crate::util::{can_see_obj, rand_number};
 use crate::{an, Game, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_VICT};
 
 fn perform_put(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
-    cid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
+    cid: ObjId,
 ) {
     let ch = chars.get(chid);
     let obj = objs.get(oid);
@@ -141,10 +141,10 @@ fn perform_put(
 pub fn do_put(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -332,12 +332,12 @@ pub fn do_put(
 }
 
 fn can_take_obj(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    objs: &ObjDepot,
+    chid: CharId,
+    oid: ObjId,
 ) -> bool {
     let ch = chars.get(chid);
     let obj = objs.get(oid);
@@ -385,12 +385,12 @@ fn can_take_obj(
 }
 
 fn get_check_money(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
 ) {
     let value = objs.get(oid).get_obj_val(0);
 
@@ -415,13 +415,13 @@ fn get_check_money(
 
 #[allow(clippy::too_many_arguments)]
 fn perform_get_from_container(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
-    cid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
+    cid: ObjId,
     mode: FindFlags,
 ) {
     if mode == FindFlags::OBJ_INV || can_take_obj(descs, chars, db, objs, chid, oid) {
@@ -476,12 +476,12 @@ fn perform_get_from_container(
 
 #[allow(clippy::too_many_arguments)]
 fn get_from_container(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    cid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    cid: ObjId,
     arg: &str,
     mode: FindFlags,
     howmany: i32,
@@ -583,12 +583,12 @@ fn get_from_container(
 }
 
 fn perform_get_from_room(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
 ) -> bool {
     if can_take_obj(descs, chars, db, objs, chid, oid) {
         let obj = objs.get_mut(oid);
@@ -625,11 +625,11 @@ fn perform_get_from_room(
 }
 
 fn get_from_room(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     arg: &str,
     howmany: i32,
 ) {
@@ -713,10 +713,10 @@ fn get_from_room(
 pub fn do_get(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -901,11 +901,11 @@ pub fn do_get(
 
 #[allow(clippy::too_many_arguments)]
 fn perform_drop_gold(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     amount: i32,
     mode: u8,
     rdr: RoomRnum,
@@ -993,12 +993,12 @@ macro_rules! vanish {
 
 #[allow(clippy::too_many_arguments)]
 fn perform_drop(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     mut mode: u8,
     sname: &str,
     rdr: RoomRnum,
@@ -1092,10 +1092,10 @@ fn perform_drop(
 pub fn do_drop(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -1377,13 +1377,13 @@ pub fn do_drop(
 }
 
 fn perform_give(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    vict_id: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    vict_id: CharId,
+    oid: ObjId,
 ) {
     let ch = chars.get(chid);
     let vict = chars.get(vict_id);
@@ -1473,9 +1473,9 @@ fn perform_give(
 
 /* utility function for give */
 fn give_find_vict<'a>(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &'a DB,
-    chars: &'a Depot<CharData>,
+    chars: &'a CharDepot,
     ch: &'a CharData,
     arg: &str,
 ) -> Option<&'a CharData> {
@@ -1501,11 +1501,11 @@ fn give_find_vict<'a>(
 }
 
 fn perform_give_gold(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
-    vict_id: DepotId,
+    chars: &mut CharDepot,
+    chid: CharId,
+    vict_id: CharId,
     amount: i32,
 ) {
     let ch = chars.get(chid);
@@ -1569,10 +1569,10 @@ fn perform_give_gold(
 pub fn do_give(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1724,12 +1724,7 @@ pub fn do_give(
     }
 }
 
-pub fn weight_change_object(
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    oid: DepotId,
-    weight: i32,
-) {
+pub fn weight_change_object(chars: &mut CharDepot, objs: &mut ObjDepot, oid: ObjId, weight: i32) {
     let obj = objs.get_mut(oid);
     if obj.in_room() != NOWHERE {
         obj.incr_obj_weight(weight);
@@ -1746,7 +1741,7 @@ pub fn weight_change_object(
     }
 }
 
-pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
+pub fn name_from_drinkcon(objs: &mut ObjDepot, oid: Option<ObjId>) {
     if let Some(oid) = oid {
         if objs.get(oid).get_obj_type() != ItemType::Drinkcon
             && objs.get(oid).get_obj_type() != ItemType::Fountain
@@ -1793,7 +1788,7 @@ pub fn name_from_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>) {
     }
 }
 
-pub fn name_to_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>, type_: i32) {
+pub fn name_to_drinkcon(objs: &mut ObjDepot, oid: Option<ObjId>, type_: i32) {
     let mut new_name = String::new();
     if let Some(oid) = oid {
         if objs.get(oid).get_obj_type() != ItemType::Drinkcon
@@ -1818,10 +1813,10 @@ pub fn name_to_drinkcon(objs: &mut Depot<ObjData>, oid: Option<DepotId>, type_: 
 pub fn do_drink(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -2066,10 +2061,10 @@ pub fn do_drink(
 pub fn do_eat(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -2234,10 +2229,10 @@ pub fn do_eat(
 pub fn do_pour(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -2557,12 +2552,12 @@ pub fn do_pour(
 }
 
 fn wear_message(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     _where: usize,
 ) {
     let ch = chars.get(chid);
@@ -2640,12 +2635,12 @@ fn wear_message(
 }
 
 fn perform_wear(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    oid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    oid: ObjId,
     _where: usize,
 ) {
     /*
@@ -2730,12 +2725,7 @@ fn perform_wear(
     equip_char(descs, chars, db, objs, chid, oid, _where);
 }
 
-pub fn find_eq_pos(
-    descs: &mut Depot<DescriptorData>,
-    ch: &CharData,
-    obj: &ObjData,
-    arg: &str,
-) -> i16 {
+pub fn find_eq_pos(descs: &mut DescriptorDepot, ch: &CharData, obj: &ObjData, arg: &str) -> i16 {
     let mut _where: i16 = -1; // TODO change return type to Option<i16>
 
     const KEYWORDS: [&str; 19] = [
@@ -2813,10 +2803,10 @@ pub fn find_eq_pos(
 pub fn do_wear(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2986,10 +2976,10 @@ pub fn do_wear(
 pub fn do_wield(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3043,10 +3033,10 @@ pub fn do_wield(
 pub fn do_grab(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3106,11 +3096,11 @@ pub fn do_grab(
 }
 
 fn perform_remove(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     pos: usize,
 ) {
     let ch = chars.get(chid);
@@ -3182,10 +3172,10 @@ fn perform_remove(
 pub fn do_remove(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,

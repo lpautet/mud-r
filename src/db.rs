@@ -31,7 +31,7 @@ use crate::constants::{
     ACTION_BITS_COUNT, AFFECTED_BITS_COUNT, DRINKNAMES, EXTRA_BITS_COUNT, ROOM_BITS_COUNT,
     WEAR_BITS_COUNT,
 };
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, ObjId, TextDepot, TextId};
 use crate::handler::{
     affect_remove, equip_char, fname, get_obj_in_list_num, isname, obj_to_char, obj_to_obj,
 };
@@ -63,7 +63,7 @@ use crate::util::{
     DisplayMode, SECS_PER_REAL_HOUR,
 };
 use crate::{
-    check_player_special, get_last_tell_mut, send_to_char, DescriptorData, Game, TextData,
+    check_player_special, get_last_tell_mut, send_to_char, DescriptorDepot, Game,
 };
 
 const CREDITS_FILE: &str = "./text/credits";
@@ -118,13 +118,13 @@ pub struct HelpIndexElement {
 
 pub struct DB {
     pub world: Vec<RoomData>,
-    pub character_list: Vec<DepotId>,
+    pub character_list: Vec<CharId>,
     /* global linked list of * chars	 */
     pub mob_index: Vec<IndexData>,
     /* index table for mobile file	 */
     pub mob_protos: Vec<CharData>,
     /* prototypes for mobs		 */
-    pub object_list: Vec<DepotId>,
+    pub object_list: Vec<ObjId>,
     /* global linked list of objs	 */
     pub obj_index: Vec<IndexData>,
     /* index table for object file	 */
@@ -192,7 +192,7 @@ pub struct DB {
     pub extractions_pending: i32,
     pub timer: u128,
     pub cmd_sort_info: Vec<usize>,
-    pub combat_list: Vec<DepotId>,
+    pub combat_list: Vec<CharId>,
     pub shop_index: Vec<ShopData>,
     pub spell_sort_info: [i32; MAX_SKILLS + 1],
     pub spell_info: [SpellInfoType; TOP_SPELL_DEFINE + 1],
@@ -350,10 +350,10 @@ impl DB {
 pub fn do_reboot(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -458,8 +458,8 @@ pub fn do_reboot(
 pub(crate) fn boot_world(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
 ) {
     info!("Loading zone table.");
     db.index_boot(texts, DbBootMode::Zone);
@@ -491,9 +491,9 @@ impl DB {
     /* Free the world, in a memory allocation sense. */
     pub fn destroy_db(
         &mut self,
-        descs: &mut Depot<DescriptorData>,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
+        descs: &mut DescriptorDepot,
+        chars: &mut CharDepot,
+        objs: &mut ObjDepot,
     ) {
         /* Active Mobiles & Players */
         for &chid in &self.character_list.clone() {
@@ -502,7 +502,7 @@ impl DB {
         self.character_list.clear();
 
         /* Active Objects */
-        for oid in self.character_list.clone() {
+        for oid in self.object_list.clone() {
             self.free_obj(objs, oid);
         }
         self.object_list.clear();
@@ -543,7 +543,7 @@ impl DB {
         self.zone_table.clear();
     }
 
-    pub fn new(texts: &mut Depot<TextData>) -> DB {
+    pub fn new(texts: &mut TextDepot) -> DB {
         DB {
             world: vec![],
             character_list: vec![],
@@ -616,9 +616,9 @@ impl DB {
     pub fn boot_db(
         &mut self,
         game: &mut Game,
-        chars: &mut Depot<CharData>,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        chars: &mut CharDepot,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         info!("Boot db -- BEGIN.");
 
@@ -969,7 +969,7 @@ enum DbBootMode {
 }
 
 impl DB {
-    fn index_boot(&mut self, texts: &mut Depot<TextData>, mode: DbBootMode) {
+    fn index_boot(&mut self, texts: &mut TextDepot, mode: DbBootMode) {
         let mut rec_count = 0;
         let mut size: [usize; 2] = [0; 2];
 
@@ -1138,7 +1138,7 @@ impl DB {
 
     fn discrete_load(
         &mut self,
-        texts: &mut Depot<TextData>,
+        texts: &mut TextDepot,
         file: File,
         mode: DbBootMode,
         filename: &str,
@@ -1448,7 +1448,7 @@ impl DB {
      * NOTE 2: Assumes sizeof(RoomRnum) >= (sizeof(mob_rnum) and sizeof(obj_rnum))
      */
 }
-fn renum_zone_table(game: &mut Game, db: &mut DB, chars: &mut Depot<CharData>) {
+fn renum_zone_table(game: &mut Game, db: &mut DB, chars: &mut CharDepot) {
     let mut olda;
     let mut oldb;
     let mut oldc;
@@ -1787,7 +1787,7 @@ fn parse_enhanced_mob(reader: &mut BufReader<File>, mobch: &mut CharData, nr: i3
     process::exit(1);
 }
 impl DB {
-    fn parse_mobile(&mut self, texts: &mut Depot<TextData>, reader: &mut BufReader<File>, nr: i32) {
+    fn parse_mobile(&mut self, texts: &mut TextDepot, reader: &mut BufReader<File>, nr: i32) {
         let mut line = String::new();
 
         self.mob_index.push(IndexData {
@@ -1907,7 +1907,7 @@ impl DB {
     /* read all objects from obj file; generate index and prototypes */
     fn parse_object(
         &mut self,
-        texts: &mut Depot<TextData>,
+        texts: &mut TextDepot,
         reader: &mut BufReader<File>,
         nr: MobVnum,
     ) -> String {
@@ -1964,7 +1964,7 @@ impl DB {
             name: Rc::from(""),
             description: Rc::from(""),
             short_description: Rc::from(""),
-            action_description: DepotId::default(),
+            action_description: TextId::default(),
             ex_descriptions: vec![],
             carried_by: None,
             worn_by: None,
@@ -2452,11 +2452,11 @@ impl DB {
      *************************************************************************/
 }
 pub fn vnum_mobile(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     searchname: &str,
-    chid: DepotId,
+    chid: CharId,
 ) -> i32 {
     let ch = chars.get(chid);
     let mut found = 0;
@@ -2479,11 +2479,11 @@ pub fn vnum_mobile(
 }
 
 pub fn vnum_object(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     searchname: &str,
-    chid: DepotId,
+    chid: CharId,
 ) -> i32 {
     let ch = chars.get(chid);
     let mut found = 0;
@@ -2522,10 +2522,10 @@ impl DB {
     /* create a new mobile from a prototype */
     pub(crate) fn read_mobile(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         nr: MobVnum,
         read_type: LoadType,
-    ) -> Option<DepotId> /* and mob_rnum */ {
+    ) -> Option<CharId> /* and mob_rnum */ {
         let i;
         if read_type == LoadType::Virtual {
             i = self.real_mobile(nr);
@@ -2569,7 +2569,7 @@ impl DB {
     #[allow(clippy::too_many_arguments)]
     pub fn create_obj(
         &mut self,
-        objs: &mut Depot<ObjData>,
+        objs: &mut ObjDepot,
         num: ObjVnum,
         name: &str,
         short_description: &str,
@@ -2579,7 +2579,7 @@ impl DB {
         weight: i32,
         cost: i32,
         rent: i32,
-    ) -> DepotId {
+    ) -> ObjId {
         let mut obj = ObjData::default();
 
         clear_object(&mut obj);
@@ -2600,10 +2600,10 @@ impl DB {
     /* create a new object from a prototype */
     pub fn read_object(
         &mut self,
-        objs: &mut Depot<ObjData>,
+        objs: &mut ObjDepot,
         nr: ObjVnum,
         read_type: LoadType,
-    ) -> Option<DepotId> /* and obj_rnum */ {
+    ) -> Option<ObjId> /* and obj_rnum */ {
         let i = if read_type == LoadType::Virtual {
             self.real_object(nr)
         } else {
@@ -2637,12 +2637,7 @@ const ZO_DEAD: i32 = 999;
 
 impl Game {
     /* update zone ages, queue for reset if necessary, and dequeue when possible */
-    pub(crate) fn zone_update(
-        &mut self,
-        db: &mut DB,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
-    ) {
+    pub(crate) fn zone_update(&mut self, db: &mut DB, chars: &mut CharDepot, objs: &mut ObjDepot) {
         /* jelson 10/22/92 */
         db.timer += 1;
         if (db.timer * PULSE_ZONE / PASSES_PER_SEC) >= 60 {
@@ -2691,7 +2686,7 @@ impl Game {
     /* execute the reset command table of a given zone */
     fn log_zone_error(
         &mut self,
-        chars: &Depot<CharData>,
+        chars: &CharDepot,
         zone: usize,
         zcmd_command: char,
         zcmd_line: i32,
@@ -2722,8 +2717,8 @@ impl Game {
     pub(crate) fn reset_zone(
         &mut self,
         db: &mut DB,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
+        chars: &mut CharDepot,
+        objs: &mut ObjDepot,
         zone: usize,
     ) {
         let mut last_cmd = 0;
@@ -3008,7 +3003,7 @@ impl Game {
 }
 
 /* for use in reset_zone; return TRUE if zone 'nr' is free of PC's  */
-fn is_empty(game: &Game, db: &DB, chars: &Depot<CharData>, zone_nr: ZoneRnum) -> bool {
+fn is_empty(game: &Game, db: &DB, chars: &CharDepot, zone_nr: ZoneRnum) -> bool {
     for &i_id in &game.descriptor_list {
         let i = game.desc(i_id);
         if i.state() != ConPlaying {
@@ -3069,12 +3064,12 @@ impl DB {
  * of that variable in the char_data structure.
  */
 pub fn save_char(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     let mut st: CharFileU = CharFileU::default();
@@ -3200,7 +3195,7 @@ impl CharFileU {
 }
 
 /* copy data from the file structure to a char struct */
-pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharData) {
+pub fn store_to_char(texts: &mut TextDepot, st: &CharFileU, ch: &mut CharData) {
     ch.set_sex(st.sex);
     ch.set_class(st.chclass);
     ch.set_level(st.level);
@@ -3261,16 +3256,16 @@ pub fn store_to_char(texts: &mut Depot<TextData>, st: &CharFileU, ch: &mut CharD
 
 /* copy vital data from a players char-structure to the file structure */
 pub fn char_to_store(
-    descs: &mut Depot<DescriptorData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    descs: &mut DescriptorDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    chid: CharId,
     st: &mut CharFileU,
 ) {
     /* Unaffect everything a character can be affected by */
-    let mut char_eq: [Option<DepotId>; NUM_WEARS] = [(); NUM_WEARS].map(|_| None);
+    let mut char_eq: [Option<ObjId>; NUM_WEARS] = [(); NUM_WEARS].map(|_| None);
 
     for (i, char_eq) in char_eq.iter_mut().enumerate() {
         let ch = chars.get(chid);
@@ -3453,10 +3448,10 @@ impl DB {
     /* release memory allocated for a char struct */
     pub fn free_char(
         &mut self,
-        descs: &mut Depot<DescriptorData>,
-        chars: &mut Depot<CharData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
+        descs: &mut DescriptorDepot,
+        chars: &mut CharDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
     ) {
         let mut ch = chars.take(chid);
 
@@ -3472,7 +3467,7 @@ impl DB {
         }
     }
 
-    pub fn free_obj(&mut self, objs: &mut Depot<ObjData>, oid: DepotId) {
+    pub fn free_obj(&mut self, objs: &mut ObjDepot, oid: ObjId) {
         objs.take(oid);
     }
 }
@@ -3596,9 +3591,9 @@ fn clear_object(obj: &mut ObjData) {
 impl DB {
     pub(crate) fn init_char(
         &mut self,
-        chars: &mut Depot<CharData>,
-        texts: &mut Depot<TextData>,
-        chid: DepotId,
+        chars: &mut CharDepot,
+        texts: &mut TextDepot,
+        chid: CharId,
     ) {
         /* *** if this is our first player --- he be God *** */
         if self.player_table.len() == 1 {
@@ -3952,7 +3947,7 @@ impl Default for CharData {
                 name: Rc::from(""),
                 short_descr: Rc::from(""),
                 long_descr: Rc::from(""),
-                description: DepotId::default(),
+                description: TextId::default(),
                 title: Option::from(Rc::from("")),
                 sex: Sex::Neutral,
                 chclass: Class::Undefined,
@@ -4210,7 +4205,7 @@ impl Default for ObjData {
             name: Rc::from(""),
             description: Rc::from(""),
             short_description: Rc::from(""),
-            action_description: DepotId::default(),
+            action_description: TextId::default(),
             ex_descriptions: vec![],
             carried_by: None,
             worn_by: None,

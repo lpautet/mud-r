@@ -23,7 +23,7 @@ use crate::config::{
 };
 use crate::constants::{DEX_APP, STR_APP};
 use crate::db::{DB, MESS_FILE};
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::handler::{
     affect_from_char, affect_remove, affected_by_spell, obj_to_obj, object_list_new_owner,
 };
@@ -43,9 +43,10 @@ use crate::structs::{
 };
 use crate::util::{dice, rand_number, stop_follower, DisplayMode};
 use crate::{
-    _clrlevel, clr, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM, TO_SLEEP, TO_VICT,
+    _clrlevel, clr, DescriptorDepot, Game, CCNRM, CCRED, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
+    TO_SLEEP, TO_VICT,
 };
-use crate::{act, send_to_char, send_to_room, DescriptorData, TextData, VictimRef};
+use crate::{act, send_to_char, send_to_room, VictimRef};
 
 /* Weapon attack texts */
 pub const ATTACK_HIT_TEXT: [AttackHitType; 15] = [
@@ -119,11 +120,11 @@ macro_rules! is_weapon {
 
 /* The Fight related routines */
 pub fn appear(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get_mut(chid);
     if affected_by_spell(ch, SPELL_INVISIBLE as i16) {
@@ -273,10 +274,10 @@ pub fn update_pos(victim: &mut CharData) {
 }
 
 pub fn check_killer(
-    chid: DepotId,
-    vict_id: DepotId,
+    chid: CharId,
+    vict_id: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &DB,
 ) {
     let ch = chars.get(chid);
@@ -316,11 +317,11 @@ pub fn check_killer(
 impl Game {
     pub(crate) fn set_fighting(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-        victid: DepotId,
+        objs: &mut ObjDepot,
+        chid: CharId,
+        victid: CharId,
     ) {
         if chid == victid {
             return;
@@ -358,12 +359,7 @@ impl DB {
         update_pos(ch);
     }
 }
-pub fn make_corpse(
-    chars: &mut Depot<CharData>,
-    db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-) {
+pub fn make_corpse(chars: &mut CharDepot, db: &mut DB, objs: &mut ObjDepot, chid: CharId) {
     let ch = chars.get(chid);
     let mut corpse = ObjData {
         item_number: NOTHING,
@@ -451,7 +447,7 @@ pub fn make_corpse(
 }
 
 /* When ch kills victim */
-pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: DepotId) {
+pub fn change_alignment(chars: &mut CharDepot, chid: CharId, victim_id: CharId) {
     /*
      * new alignment change algorithm: if you kill a monster with alignment A,
      * you move 1/16th of the way to having alignment -A.  Simple and fast.
@@ -462,12 +458,7 @@ pub fn change_alignment(chars: &mut Depot<CharData>, chid: DepotId, victim_id: D
     chars.get_mut(chid).set_alignment(alignment);
 }
 
-pub fn death_cry(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
-    db: &DB,
-    ch: &CharData,
-) {
+pub fn death_cry(descs: &mut DescriptorDepot, chars: &CharDepot, db: &DB, ch: &CharData) {
     act(
         descs,
         chars,
@@ -501,11 +492,11 @@ pub fn death_cry(
 }
 
 pub fn raw_kill(
-    descs: &mut Depot<DescriptorData>,
-    chars: &mut Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &mut CharDepot,
     db: &mut DB,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get_mut(chid);
     if ch.fighting_id().is_some() {
@@ -526,12 +517,12 @@ pub fn raw_kill(
 }
 
 pub fn die(
-    chid: DepotId,
+    chid: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get(chid);
     gain_exp(chid, -(ch.get_exp() / 2), game, chars, db, texts, objs);
@@ -544,14 +535,14 @@ pub fn die(
 
 #[allow(clippy::too_many_arguments)]
 pub fn perform_group_gain(
-    chid: DepotId,
+    chid: CharId,
     base: i32,
-    victim_id: DepotId,
+    victim_id: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get(chid);
     let share = base.clamp(1, MAX_EXP_GAIN);
@@ -578,13 +569,13 @@ pub fn perform_group_gain(
 }
 
 pub fn group_gain(
-    chid: DepotId,
-    victim_id: DepotId,
+    chid: CharId,
+    victim_id: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
@@ -631,13 +622,13 @@ pub fn group_gain(
 }
 
 pub fn solo_gain(
-    chid: DepotId,
-    victim_id: DepotId,
+    chid: CharId,
+    victim_id: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get(chid);
     let victim = chars.get(victim_id);
@@ -704,8 +695,8 @@ pub fn replace_string(str: &str, weapon_singular: &str, weapon_plural: &str) -> 
 
 /* message for doing damage with a weapon */
 pub fn dam_message(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     dam: i32,
     ch: &CharData,
@@ -854,10 +845,10 @@ pub fn dam_message(
  */
 #[allow(clippy::too_many_arguments)]
 pub fn skill_message(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
-    objs: &Depot<ObjData>,
+    objs: &ObjDepot,
     dam: i32,
     ch: &CharData,
     vict: &CharData,
@@ -1068,12 +1059,12 @@ impl Game {
     #[allow(clippy::too_many_arguments)]
     pub fn damage(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-        victim_id: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
+        victim_id: CharId,
         dam: i32,
         attacktype: i32,
     ) -> i32 {
@@ -1451,12 +1442,12 @@ impl Game {
     #[allow(clippy::too_many_arguments)]
     pub fn hit(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        chid: DepotId,
-        victim_id: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        chid: CharId,
+        victim_id: CharId,
         _type: i32,
     ) {
         let ch = chars.get(chid);
@@ -1602,10 +1593,10 @@ impl Game {
     /* control the fights going on.  Called every 2 seconds from comm.c. */
     pub fn perform_violence(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         let mut old_combat_list = vec![];
         for c in db.combat_list.iter() {

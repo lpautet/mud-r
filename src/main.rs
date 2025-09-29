@@ -28,7 +28,8 @@ use signal_hook::{
 };
 use tungstenite::{accept, Message, WebSocket};
 
-use depot::{Depot, DepotId, HasId};
+use depot::{CharId, Depot, DescriptorId, HasId, TextId};
+
 use log::{debug, error, info, warn, LevelFilter};
 
 use log4rs::append::console::ConsoleAppender;
@@ -44,6 +45,7 @@ use crate::boards::board_clear_all;
 use crate::config::*;
 use crate::constants::*;
 use crate::db::*;
+use crate::depot::{CharDepot, ObjDepot, TextDepot};
 use crate::fight::free_messages;
 use crate::handler::fname;
 use crate::house::house_save_all;
@@ -152,31 +154,31 @@ pub enum ConnectionType {
 
 #[derive(Default)]
 pub struct TextData {
-    id: DepotId,
+    id: TextId,
     pub text: String,
 }
 
-impl Depot<TextData> {
-    pub fn add_text(&mut self, text: String) -> DepotId {
+impl Depot<TextData, TextId> {
+    pub fn add_text(&mut self, text: String) -> TextId {
         self.push(TextData {
-            id: DepotId::default(),
+            id: TextId::default(),
             text,
         })
     }
 }
 
-impl HasId for TextData {
-    fn id(&self) -> DepotId {
+impl HasId<TextId> for TextData {
+    fn id(&self) -> TextId {
         self.id
     }
 
-    fn set_id(&mut self, id: DepotId) {
+    fn set_id(&mut self, id: TextId) {
         self.id = id;
     }
 }
 
 pub struct DescriptorData {
-    id: DepotId,
+    id: DescriptorId,
     connection: Option<ConnectionType>,
     // connection type (telnet or websocket)
     host: Rc<str>,
@@ -199,7 +201,7 @@ pub struct DescriptorData {
     /* number of pages to page through	*/
     showstr_page: i32,
     /* which page are we currently showing?	*/
-    str: Option<DepotId>,
+    str: Option<TextId>,
     /* for the modify-str system		*/
     pub max_str: usize,
     /*		-			*/
@@ -217,24 +219,26 @@ pub struct DescriptorData {
     /* Circular array position.		*/
     output: Vec<u8>,
     input: LinkedList<TxtBlock>,
-    character: Option<DepotId>,
+    character: Option<CharId>,
     /* linked to char			*/
-    original: Option<DepotId>,
+    original: Option<CharId>,
     /* original char if switched		*/
-    snooping: Option<DepotId>,
+    snooping: Option<DescriptorId>,
     /* Who is this char snooping	*/
-    snoop_by: Option<DepotId>,
+    snoop_by: Option<DescriptorId>,
     /* And who is snooping this char	*/
     websocket_input_buffer: Vec<u8>,
     /* Buffer for WebSocket input messages */
 }
 
-impl HasId for DescriptorData {
-    fn id(&self) -> DepotId {
+pub type DescriptorDepot = Depot<DescriptorData, DescriptorId>;
+
+impl HasId<DescriptorId> for DescriptorData {
+    fn id(&self) -> DescriptorId {
         self.id
     }
 
-    fn set_id(&mut self, id: DepotId) {
+    fn set_id(&mut self, id: DescriptorId) {
         self.id = id;
     }
 }
@@ -282,8 +286,8 @@ static TICS: AtomicI32 = AtomicI32::new(0);
 pub struct Game {
     mother_desc: Option<TcpListener>,
     websocket_listener: Option<TcpListener>,
-    descriptors: Depot<DescriptorData>,
-    descriptor_list: Vec<DepotId>,
+    descriptors: DescriptorDepot,
+    descriptor_list: Vec<DescriptorId>,
     last_desc: usize,
     circle_shutdown: bool,
     /* clean shutdown */
@@ -320,9 +324,9 @@ fn main() -> ExitCode {
         },
         max_players: 0,
     };
-    let mut texts: Depot<TextData> = Depot::default();
-    let mut objs: Depot<ObjData> = Depot::default();
-    let mut chars: Depot<CharData> = Depot::default();
+    let mut texts: TextDepot = Depot::default();
+    let mut objs: ObjDepot = ObjDepot::default();
+    let mut chars: CharDepot = CharDepot::default();
 
     let mut db = DB::new(&mut texts);
 
@@ -431,10 +435,10 @@ impl Game {
     /* Init sockets, run game, and cleanup sockets */
     fn init_game(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
         _port: u16,
     ) {
         /* We don't want to restart if we crash before we get up. */
@@ -505,20 +509,20 @@ fn get_max_players() -> i32 {
  * such as mobile_activity().
  */
 impl Game {
-    pub fn desc(&self, desc_id: DepotId) -> &DescriptorData {
+    pub fn desc(&self, desc_id: DescriptorId) -> &DescriptorData {
         self.descriptors.get(desc_id)
     }
 
-    pub fn desc_mut(&mut self, desc_id: DepotId) -> &mut DescriptorData {
+    pub fn desc_mut(&mut self, desc_id: DescriptorId) -> &mut DescriptorData {
         self.descriptors.get_mut(desc_id)
     }
 
     fn game_loop(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
     ) {
         let opt_time = Duration::from_micros(OPT_USEC as u64);
         let mut process_time;
@@ -809,10 +813,10 @@ impl Game {
 
     fn heartbeat(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
         pulse: u128,
     ) {
         if pulse.is_multiple_of(PULSE_ZONE) {
@@ -924,7 +928,7 @@ impl DescriptorData {
         }
     }
 
-    fn make_prompt(&mut self, chars: &Depot<CharData>) -> String {
+    fn make_prompt(&mut self, chars: &CharDepot) -> String {
         let Some(character_id) = self.character else {
             error!("SYSERR: make_prompt: no character");
             return "".to_string();
@@ -1060,7 +1064,7 @@ fn get_bind_addr() -> IpAddr {
 impl Game {
     fn new_descriptor(
         &mut self,
-        chars: &Depot<CharData>,
+        chars: &CharDepot,
         db: &DB,
         mut stream: TcpStream,
         addr: SocketAddr,
@@ -1132,7 +1136,7 @@ impl Game {
 
     fn new_websocket_descriptor(
         &mut self,
-        chars: &Depot<CharData>,
+        chars: &CharDepot,
         db: &DB,
         stream: TcpStream,
         addr: SocketAddr,
@@ -1216,7 +1220,7 @@ impl Game {
         }
     }
 
-    fn poll_websocket_input(&mut self, d_id: DepotId) {
+    fn poll_websocket_input(&mut self, d_id: DescriptorId) {
         if let Some(ConnectionType::WebSocket(ref mut ws)) = self.desc_mut(d_id).connection.as_mut()
         {
             match ws.read() {
@@ -1260,9 +1264,9 @@ impl Game {
  *      14 bytes: unused
  */
 fn process_output(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
-    desc_id: DepotId,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
+    desc_id: DescriptorId,
 ) -> Result<usize, Error> {
     /* we may need this \r\n for later -- see below */
     let mut i = "\r\n".as_bytes().to_vec();
@@ -1457,7 +1461,7 @@ fn perform_socket_read(d: &mut DescriptorData) -> std::io::Result<usize> {
  * character. (Do you really need 256 characters on a line?)
  * -gg 1/21/2000
  */
-fn process_input(descs: &mut Depot<DescriptorData>, d_id: DepotId) -> Result<bool, Error> {
+fn process_input(descs: &mut DescriptorDepot, d_id: DescriptorId) -> Result<bool, Error> {
     let mut failed_subst;
     let mut bytes_read;
     let mut read_point = 0;
@@ -1700,11 +1704,11 @@ impl DescriptorData {
 impl Game {
     pub fn close_socket(
         &mut self,
-        chars: &mut Depot<CharData>,
+        chars: &mut CharDepot,
         db: &mut DB,
-        texts: &mut Depot<TextData>,
-        objs: &mut Depot<ObjData>,
-        d_id: DepotId,
+        texts: &mut TextDepot,
+        objs: &mut ObjDepot,
+        d_id: DescriptorId,
     ) {
         self.descriptor_list.retain(|&i| i != d_id);
         let desc = self.descriptors.get_mut(d_id);
@@ -1913,7 +1917,7 @@ fn setup_signal_handlers() -> Result<(), Box<dyn std::error::Error>> {
  *       Public routines for system-to-player-communication        *
  **************************************************************** */
 
-pub fn send_to_char(descs: &mut Depot<DescriptorData>, ch: &CharData, messg: &str) -> usize {
+pub fn send_to_char(descs: &mut DescriptorDepot, ch: &CharData, messg: &str) -> usize {
     let Some(desc_id) = ch.desc else {
         return 0;
     };
@@ -1939,7 +1943,7 @@ impl Game {
         }
     }
 
-    fn send_to_outdoor(&mut self, chars: &Depot<CharData>, db: &DB, messg: &str) {
+    fn send_to_outdoor(&mut self, chars: &CharDepot, db: &DB, messg: &str) {
         if messg.is_empty() {
             return;
         }
@@ -1963,8 +1967,8 @@ impl Game {
     }
 }
 pub fn send_to_room(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     room: RoomRnum,
     msg: &str,
@@ -1983,8 +1987,8 @@ const ACTNULL: &str = "<NULL>";
 /* higher-level communication: the act() function */
 #[allow(clippy::too_many_arguments)]
 fn perform_act(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     orig: &str,
     ch: Option<&CharData>,
@@ -2201,8 +2205,8 @@ pub enum VictimRef<'a> {
 
 #[allow(clippy::too_many_arguments)]
 pub fn act(
-    descs: &mut Depot<DescriptorData>,
-    chars: &Depot<CharData>,
+    descs: &mut DescriptorDepot,
+    chars: &CharDepot,
     db: &DB,
     str: &str,
     hide_invisible: bool,

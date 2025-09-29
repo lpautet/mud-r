@@ -26,7 +26,7 @@ use crate::act_wizard::snoop_check;
 use crate::config::SITEOK_EVERYONE;
 use crate::constants::{CON_APP, WIS_APP};
 use crate::db::DB;
-use crate::depot::{Depot, DepotId};
+use crate::depot::{CharDepot, CharId, ObjDepot, TextDepot};
 use crate::interpreter::{SCMD_EAST, SCMD_NORTH, SCMD_SOUTH, SCMD_WEST};
 use crate::spell_parser::spell_level;
 use crate::spells::{
@@ -48,7 +48,7 @@ use crate::structs::{
     LVL_GRGOD, LVL_IMMORT, LVL_IMPL, NOWHERE, NUM_CLASSES, PLR_SITEOK, THIRST,
 };
 use crate::util::{rand_number, DisplayMode};
-use crate::{check_player_special, save_char, set_skill, Game, TextData};
+use crate::{check_player_special, save_char, set_skill, Game};
 
 pub const CLASS_ABBREVS: [&str; 4] = ["Mu", "Cl", "Th", "Wa"];
 
@@ -3515,11 +3515,11 @@ pub fn roll_real_abils(ch: &mut CharData) {
 /* Some initializations for characters, including initial skills */
 pub fn do_start(
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get_mut(chid);
     ch.set_level(1);
@@ -3578,12 +3578,12 @@ pub fn do_start(
  * each class every time they gain a level.
  */
 pub fn advance_level(
-    chid: DepotId,
+    chid: CharId,
     game: &mut Game,
-    chars: &mut Depot<CharData>,
+    chars: &mut CharDepot,
     db: &mut DB,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
 ) {
     let ch = chars.get_mut(chid);
     let mut add_hp = CON_APP[ch.get_con() as usize].hitp;

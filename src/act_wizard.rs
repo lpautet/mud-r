@@ -29,7 +29,7 @@ use crate::db::{
     clear_char, parse_c_string, store_to_char, LoadType, DB, FASTBOOT_FILE, KILLSCRIPT_FILE,
     PAUSE_FILE,
 };
-use crate::depot::{Depot, DepotId, HasId};
+use crate::depot::{CharDepot, CharId, HasId, ObjDepot, TextDepot};
 use crate::fight::{appear, update_pos, ATTACK_HIT_TEXT};
 use crate::handler::{
     affect_remove, affect_total, get_char_vis, get_number, get_obj_in_equip_vis,
@@ -60,12 +60,12 @@ use crate::util::{
     DisplayMode, SECS_PER_MUD_YEAR,
 };
 use crate::{
-    _clrlevel, clr, onoff, yesno, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR, TO_NOTVICT, TO_ROOM,
-    TO_VICT,
+    _clrlevel, clr, onoff, yesno, DescriptorDepot, Game, CCCYN, CCGRN, CCNRM, CCYEL, TO_CHAR,
+    TO_NOTVICT, TO_ROOM, TO_VICT,
 };
 use crate::{
-    act, char_to_store, save_char, send_to_char, send_to_room, vnum_mobile, vnum_object,
-    DescriptorData, ObjData, TextData, VictimRef,
+    act, char_to_store, save_char, send_to_char, send_to_room, vnum_mobile, vnum_object, ObjData,
+     VictimRef,
 };
 use chrono::offset::LocalResult;
 use chrono::{TimeZone, Utc};
@@ -77,10 +77,10 @@ use sha2::Sha256;
 pub fn do_echo(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -131,10 +131,10 @@ pub fn do_echo(
 pub fn do_send(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -180,10 +180,10 @@ pub fn do_send(
 
 /* take a string, and return an rnum.. used for goto, at, etc.  -je 4/6/93 */
 fn find_target_room(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &Depot<CharData>,
-    objs: &Depot<ObjData>,
+    chars: &CharDepot,
+    objs: &ObjDepot,
     ch: &CharData,
     rawroomstr: &str,
 ) -> RoomRnum {
@@ -289,10 +289,10 @@ fn find_target_room(
 pub fn do_at(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -348,10 +348,10 @@ pub fn do_at(
 pub fn do_goto(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -418,10 +418,10 @@ pub fn do_goto(
 pub fn do_trans(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -586,10 +586,10 @@ pub fn do_trans(
 pub fn do_teleport(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -699,10 +699,10 @@ pub fn do_teleport(
 pub fn do_vnum(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -732,11 +732,11 @@ pub fn do_vnum(
 }
 
 fn do_stat_room(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    objs: &ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
 
@@ -950,10 +950,10 @@ fn do_stat_room(
 }
 
 fn do_stat_object(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &Depot<CharData>,
-    objs: &Depot<ObjData>,
+    chars: &CharDepot,
+    objs: &ObjDepot,
     ch: &CharData,
     obj: &ObjData,
 ) {
@@ -1294,9 +1294,9 @@ fn do_stat_object(
 }
 
 fn do_stat_character(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &DB,
-    chars: &Depot<CharData>,
+    chars: &CharDepot,
     ch: &CharData,
     k: &CharData,
 ) {
@@ -1700,10 +1700,10 @@ Dex: [{}{}{}]  Con: [{}{}{}]  Cha: [{}{}{}]\r\n",
 pub fn do_stat(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -1877,10 +1877,10 @@ pub fn do_stat(
 pub fn do_shutdown(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -1926,7 +1926,7 @@ pub fn do_shutdown(
     }
 }
 
-pub fn snoop_check(game: &mut Game, chars: &Depot<CharData>, chid: DepotId) {
+pub fn snoop_check(game: &mut Game, chars: &CharDepot, chid: CharId) {
     let ch = chars.get(chid);
     /*  This short routine is to ensure that characters that happen
      *  to be snooping (or snooped) and get advanced/demoted will
@@ -1958,7 +1958,7 @@ pub fn snoop_check(game: &mut Game, chars: &Depot<CharData>, chid: DepotId) {
     }
 }
 
-fn stop_snooping(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId) {
+fn stop_snooping(game: &mut Game, chars: &mut CharDepot, chid: CharId) {
     let ch = chars.get(chid);
 
     if let Some(desc) = ch.desc {
@@ -1978,10 +1978,10 @@ fn stop_snooping(game: &mut Game, chars: &mut Depot<CharData>, chid: DepotId) {
 pub fn do_snoop(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2065,10 +2065,10 @@ pub fn do_snoop(
 pub fn do_switch(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2159,10 +2159,10 @@ pub fn do_switch(
 pub fn do_return(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2209,10 +2209,10 @@ pub fn do_return(
 pub fn do_load(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2376,10 +2376,10 @@ pub fn do_load(
 pub fn do_vstat(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2478,10 +2478,10 @@ pub fn do_vstat(
 pub fn do_purge(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2530,7 +2530,7 @@ pub fn do_purge(
                 if let Some(vict_desc) = vict.desc {
                     game.desc_mut(vict_desc).set_state(ConClose);
                     game.desc_mut(vict_desc).character = None;
-                    let vict = chars.get_mut(vict_desc);
+                    let vict = chars.get_mut(vict_id);
                     vict.desc = None;
                 }
             }
@@ -2634,10 +2634,10 @@ const LOGTYPES: [&str; 5] = ["off", "brief", "normal", "complete", "\n"];
 pub fn do_syslog(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2698,10 +2698,10 @@ pub fn do_syslog(
 pub fn do_advance(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2863,10 +2863,10 @@ You feel slightly different.",
 pub fn do_restore(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -2949,11 +2949,11 @@ pub fn do_restore(
 }
 
 pub fn perform_immort_vis(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
 ) {
     let ch = chars.get(chid);
     if ch.get_invis_lev() == 0 && !ch.aff_flagged(AffectFlags::HIDE | AffectFlags::INVISIBLE) {
@@ -2968,10 +2968,10 @@ pub fn perform_immort_vis(
 }
 
 fn perform_immort_invis(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    chid: CharId,
     level: i32,
 ) {
     let ch = chars.get(chid);
@@ -3024,10 +3024,10 @@ fn perform_immort_invis(
 pub fn do_invis(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3075,10 +3075,10 @@ pub fn do_invis(
 pub fn do_gecho(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3120,10 +3120,10 @@ pub fn do_gecho(
 pub fn do_poofset(
     game: &mut Game,
     _db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -3150,10 +3150,10 @@ pub fn do_poofset(
 pub fn do_dc(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3250,10 +3250,10 @@ pub fn do_dc(
 pub fn do_wizlock(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3310,10 +3310,10 @@ pub fn do_wizlock(
 pub fn do_date(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     _argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -3370,10 +3370,10 @@ pub fn do_date(
 pub fn do_last(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3426,10 +3426,10 @@ pub fn do_last(
 pub fn do_force(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3577,10 +3577,10 @@ pub fn do_force(
 pub fn do_wiznet(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    _objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    _objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3756,10 +3756,10 @@ pub fn do_wiznet(
 pub fn do_zreset(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -3838,10 +3838,10 @@ pub fn do_zreset(
 pub fn do_wizutil(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     subcmd: i32,
@@ -4142,10 +4142,10 @@ fn print_zone_to_buf(db: &DB, buf: &mut String, zone: ZoneRnum) {
 pub fn do_show(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    _texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    _texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
@@ -4892,12 +4892,12 @@ const SET_FIELDS: [SetStruct; 52] = [
 
 #[allow(clippy::too_many_arguments)]
 fn perform_set(
-    descs: &mut Depot<DescriptorData>,
+    descs: &mut DescriptorDepot,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
-    vict_id: DepotId,
+    chars: &mut CharDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
+    vict_id: CharId,
     mode: i32,
     val_arg: &str,
 ) -> bool {
@@ -5416,10 +5416,10 @@ fn perform_set(
 pub fn do_set(
     game: &mut Game,
     db: &mut DB,
-    chars: &mut Depot<CharData>,
-    texts: &mut Depot<TextData>,
-    objs: &mut Depot<ObjData>,
-    chid: DepotId,
+    chars: &mut CharDepot,
+    texts: &mut TextDepot,
+    objs: &mut ObjDepot,
+    chid: CharId,
     argument: &str,
     _cmd: usize,
     _subcmd: i32,
