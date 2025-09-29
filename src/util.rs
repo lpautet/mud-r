@@ -6,13 +6,12 @@
 *                                                                         *
 *  Copyright (C) 1993, 94 by the Trustees of the Johns Hopkins University *
 *  CircleMUD is based on DikuMUD, Copyright (C) 1990, 1991.               *
-*  Rust port Copyright (C) 2023, 2024 Laurent Pautet                      *
+*  Rust port Copyright (C) 2023 - 2025 Laurent Pautet                     *
 ************************************************************************ */
 
 /* defines for mudlog() */
 use crate::depot::{Depot, DepotId, HasId};
 use crate::{act, send_to_char, VictimRef};
-use std::borrow::Borrow;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufRead, BufReader};
@@ -247,10 +246,7 @@ impl CharData {
         self.player.title.is_some()
     }
     pub fn get_title(&self) -> Rc<str> {
-        if self.player.title.is_none() {
-            return Rc::from("");
-        }
-        self.player.title.as_ref().unwrap().clone()
+        self.player.title.as_ref().cloned().unwrap_or_default()
     }
     pub fn set_title(&mut self, val: Option<Rc<str>>) {
         self.player.title = val;
@@ -260,10 +256,14 @@ impl CharData {
 #[macro_export]
 macro_rules! an {
     ($string:expr) => {
-        if "aeiouAEIOU".contains($string.chars().next().unwrap()) {
-            "an"
+        if let Some(first_char) = $string.chars().next() {
+            if "aeiouAEIOU".contains(first_char) {
+                "an"
+            } else {
+                "a"
+            }
         } else {
-            "a"
+            ""
         }
     };
 }
@@ -750,10 +750,12 @@ impl CharData {
 }
 
 pub fn get_real_level(descs: &Depot<DescriptorData>, chars: &Depot<CharData>, ch: &CharData) -> u8 {
-    if ch.desc.is_some() && descs.get(ch.desc.unwrap()).original.borrow().is_some() {
-        chars
-            .get(descs.get(ch.desc.unwrap()).original.unwrap())
-            .get_level()
+    if let Some(desc) = ch.desc {
+        if let Some(original) = descs.get(desc).original {
+            chars.get(original).get_level()
+        } else {
+            ch.get_level()
+        }
     } else {
         ch.get_level()
     }
@@ -909,14 +911,11 @@ impl DB {
     }
 
     pub fn can_go(&self, ch: &CharData, door: usize) -> bool {
-        self.exit(ch, door).is_some()
-            && self.exit(ch, door).as_ref().unwrap().to_room != NOWHERE
-            && !self
-                .exit(ch, door)
-                .as_ref()
-                .unwrap()
-                .exit_info
-                .intersects(ExitFlags::CLOSED)
+        if let Some(exit) = self.exit(ch, door) {
+            exit.to_room != NOWHERE && !exit.exit_info.intersects(ExitFlags::CLOSED)
+        } else {
+            false
+        }
     }
 
     pub fn valid_obj_rnum(&self, obj: &ObjData) -> bool {
@@ -1007,10 +1006,11 @@ pub fn can_see_obj_carrier(
     sub: &CharData,
     obj: &ObjData,
 ) -> bool {
-    (obj.carried_by.borrow().is_none()
-        || can_see(descs, chars, db, sub, chars.get(obj.carried_by.unwrap())))
-        && (obj.worn_by.borrow().is_none()
-            || can_see(descs, chars, db, sub, chars.get(obj.worn_by.unwrap())))
+    obj.carried_by
+        .is_none_or(|carried_by| can_see(descs, chars, db, sub, chars.get(carried_by)))
+        && obj
+            .worn_by
+            .is_none_or(|worn_by| can_see(descs, chars, db, sub, chars.get(worn_by)))
 }
 pub fn pers(
     descs: &Depot<DescriptorData>,
@@ -1120,7 +1120,7 @@ pub fn hssh(ch: &CharData) -> &str {
 }
 
 // pub fn ana(obj: &ObjData) -> &str {
-//     if "aeiouAEIOU".contains(obj.name.borrow().chars().next().unwrap()) {
+//     if "aeiouAEIOU".contains(obj.name.borrow().chars().next()) {
 //         "An"
 //     } else {
 //         "A"
@@ -1128,10 +1128,14 @@ pub fn hssh(ch: &CharData) -> &str {
 // }
 
 pub fn sana(obj: &ObjData) -> &str {
-    if "aeiouAEIOU".contains(obj.name.chars().next().unwrap()) {
-        "an"
+    if let Some(first_char) = obj.name.chars().next() {
+        if "aeiouAEIOU".contains(first_char) {
+            "an"
+        } else {
+            "a"
+        }
     } else {
-        "a"
+        ""
     }
 }
 
@@ -1192,7 +1196,7 @@ pub fn ctime(t: u64) -> String {
 pub fn time_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("Time went backwards from EPOCH ?!")
         .as_secs()
 }
 
@@ -1346,7 +1350,9 @@ impl Game {
                 /* switch */
                 continue;
             }
-            let character_id = self.desc(d_id).character.unwrap();
+            let Some(character_id) = self.desc(d_id).character else {
+                continue;
+            };
             let character = chars.get(character_id);
             if character.is_npc() {
                 /* switch */
@@ -1505,24 +1511,21 @@ pub fn age(ch: &CharData) -> TimeInfoData {
 /* Check if making CH follow VICTIM will create an illegal */
 /* Follow "Loop/circle"                                    */
 pub fn circle_follow(chars: &Depot<CharData>, ch: &CharData, victim: Option<&CharData>) -> bool {
-    if victim.is_none() {
+    let Some(mut k) = victim else {
         return false;
-    }
-    let mut k = victim.unwrap();
+    };
     loop {
         if k.id() == ch.id() {
             return true;
         }
 
         let t;
-        {
-            if k.master.is_none() {
-                break;
-            } else {
-                t = chars.get(k.master.unwrap());
-            }
+        if let Some(master) = k.master {
+            t = chars.get(master);
+            k = t;
+        } else {
+            break;
         }
-        k = t;
     }
     false
 }
@@ -1537,12 +1540,11 @@ pub fn stop_follower(
     chid: DepotId,
 ) {
     let ch = chars.get(chid);
-    if ch.master.is_none() {
+    let Some(master_id) = ch.master else {
         return;
-    }
+    };
 
     if ch.aff_flagged(AffectFlags::CHARM) {
-        let master_id = ch.master.unwrap();
         let master = chars.get(master_id);
         act(
             descs,
@@ -1581,7 +1583,6 @@ pub fn stop_follower(
             affect_from_char(objs, chars.get_mut(chid), SPELL_CHARM as i16);
         }
     } else {
-        let master_id: DepotId = ch.master.unwrap();
         let master = chars.get(master_id);
         act(
             descs,
@@ -1617,9 +1618,8 @@ pub fn stop_follower(
             TO_VICT,
         );
     }
-    let ch = chars.get(chid);
     chars
-        .get_mut(ch.master.unwrap())
+        .get_mut(master_id)
         .followers
         .retain(|c| c.follower == chid);
     let ch = chars.get_mut(chid);
@@ -1633,7 +1633,7 @@ pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
 
     for lackey in ch.followers.iter() {
         if chars.get(lackey.follower).aff_flagged(AffectFlags::CHARM)
-            && chars.get(lackey.follower).master.unwrap() == chid
+            && chars.get(lackey.follower).master.is_some_and(|master| master == chid)
         {
             total += 1;
         }
@@ -1778,14 +1778,14 @@ pub fn get_filename(filename: &mut String, mode: FileType, orig_name: &str) -> b
     }
 
     let name = orig_name.to_lowercase();
-    let middle = match name.chars().next().unwrap() {
-        'a' | 'b' | 'c' | 'd' | 'e' => "A-E",
+    let middle = match name.chars().next() {
+        Some('a' | 'b' | 'c' | 'd' | 'e') => "A-E",
 
-        'f' | 'g' | 'h' | 'i' | 'j' => "F-J",
+        Some('f' | 'g' | 'h' | 'i' | 'j') => "F-J",
 
-        'k' | 'l' | 'm' | 'n' | 'o' => "K-O",
-        'p' | 'q' | 'r' | 's' | 't' => "P-T",
-        'u' | 'v' | 'w' | 'X' | 'y' | 'z' => "U-Z",
+        Some('k' | 'l' | 'm' | 'n' | 'o') => "K-O",
+        Some('p' | 'q' | 'r' | 's' | 't') => "P-T",
+        Some('u' | 'v' | 'w' | 'X' | 'y' | 'z') => "U-Z",
         _ => "ZZZ",
     };
 
