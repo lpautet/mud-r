@@ -1633,7 +1633,10 @@ pub fn num_followers_charmed(chars: &Depot<CharData>, chid: DepotId) -> i32 {
 
     for lackey in ch.followers.iter() {
         if chars.get(lackey.follower).aff_flagged(AffectFlags::CHARM)
-            && chars.get(lackey.follower).master.is_some_and(|master| master == chid)
+            && chars
+                .get(lackey.follower)
+                .master
+                .is_some_and(|master| master == chid)
         {
             total += 1;
         }
